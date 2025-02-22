@@ -1,10 +1,6 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.BBSModClient;
-import mchorse.bbs_mod.camera.clips.CameraClipContext;
-import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
-import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -22,7 +18,6 @@ import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
-import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
@@ -49,17 +44,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class FilmController
+public abstract class BaseFilmController
 {
-    public Film film;
+    public final Film film;
 
     protected List<IEntity> entities = new ArrayList<>();
-    protected CameraClipContext context;
-    protected Position position = new Position();
 
     public int exception = -1;
-    public int tick;
-    public int duration;
 
     /* Rendering helpers */
 
@@ -279,12 +270,26 @@ public class FilmController
 
     /* Film controller */
 
-    public FilmController(Film film)
+    public BaseFilmController(Film film)
     {
         this.film = film;
-        this.duration = film.camera.calculateDuration();
+    }
 
-        for (Replay replay : film.replays.getList())
+    public List<IEntity> getEntities()
+    {
+        return this.entities;
+    }
+
+    public void createEntities()
+    {
+        this.entities.clear();
+
+        if (this.film == null)
+        {
+            return;
+        }
+
+        for (Replay replay : this.film.replays.getList())
         {
             World world = MinecraftClient.getInstance().world;
             IEntity entity = new StubEntity(world);
@@ -302,52 +307,38 @@ public class FilmController
 
             this.entities.add(entity);
         }
-
-        this.context = new CameraClipContext();
-        this.context.clips = film.camera;
     }
 
-    public List<IEntity> getEntities()
-    {
-        return this.entities;
-    }
+    public abstract Map<String, Integer> getActors();
+
+    public abstract int getTick();
 
     public boolean hasFinished()
     {
-        return this.tick >= this.duration;
+        return false;
     }
 
     public void update()
     {
-        this.tick += 1;
-
         for (int i = 0; i < this.entities.size(); i++)
         {
-            if (i == this.exception)
+            IEntity entity = this.entities.get(i);
+            List<Replay> replays = this.film.replays.getList();
+            Replay replay = CollectionUtils.getSafe(replays, i);
+
+            if (!this.canUpdate(i, replay, entity))
             {
                 continue;
             }
 
-            IEntity entity = this.entities.get(i);
-
-            entity.update();
-
-            if (entity.getForm() != null)
-            {
-                entity.getForm().update(entity);
-            }
-
-            List<Replay> replays = film.replays.getList();
-            Replay replay = CollectionUtils.getSafe(replays, i);
-
             if (replay != null)
             {
-                int ticks = replay.getTick(this.tick);
+                int ticks = replay.getTick(this.getTick());
 
-                replay.applyFrame(ticks, entity, null);
-                replay.applyClientActions(ticks, entity, this.film);
+                this.updateEntityAndForm(entity, ticks);
+                this.applyReplay(replay, ticks, entity);
 
-                Map<String, Integer> actors = BBSModClient.getFilms().actors.get(this.film.getId());
+                Map<String, Integer> actors = this.getActors();
 
                 if (actors != null)
                 {
@@ -372,23 +363,40 @@ public class FilmController
         }
     }
 
+    protected void updateEntityAndForm(IEntity entity, int tick)
+    {
+        entity.update();
+
+        if (entity.getForm() != null)
+        {
+            entity.getForm().update(entity);
+        }
+    }
+
+    protected void applyReplay(Replay replay, int ticks, IEntity entity)
+    {
+        replay.applyFrame(ticks, entity, null);
+        replay.applyClientActions(ticks, entity, this.film);
+    }
+
     public void startRenderFrame(float transition)
     {
         for (int i = 0; i < this.entities.size(); i++)
         {
-            if (i == this.exception)
+            Replay replay = this.film.replays.getList().get(i);
+            IEntity entity = this.entities.get(i);
+
+            if (!this.canUpdate(i, replay, entity))
             {
                 continue;
             }
 
-            Replay replay = this.film.replays.getList().get(i);
-            IEntity entity = this.entities.get(i);
-            int tick = replay.getTick(this.tick);
+            int tick = replay.getTick(this.getTick());
 
             /* Apply property */
             replay.applyProperties(tick + transition, entity.getForm());
 
-            Map<String, Integer> actors = BBSModClient.getFilms().actors.get(this.film.getId());
+            Map<String, Integer> actors = this.getActors();
 
             if (actors != null)
             {
@@ -407,56 +415,45 @@ public class FilmController
         }
     }
 
+    protected boolean canUpdate(int i, Replay replay, IEntity entity)
+    {
+        return i != this.exception;
+    }
+
     public void render(WorldRenderContext context)
     {
         RenderSystem.enableDepthTest();
 
         for (int i = 0; i < this.entities.size(); i++)
         {
-            if (i == this.exception)
+            Replay replay = this.film.replays.getList().get(i);
+            IEntity entity = this.entities.get(i);
+
+            if (!this.canUpdate(i, replay, entity))
             {
                 continue;
             }
 
-            Replay replay = this.film.replays.getList().get(i);
-            IEntity entity = this.entities.get(i);
-
-            if (!replay.actor.get())
-            {
-                renderEntity(FilmControllerContext.instance
-                    .setup(this.entities, entity, context)
-                    .shadow(replay.shadow.get(), replay.shadowSize.get())
-                    .nameTag(replay.nameTag.get()));
-            }
+            this.renderEntity(context, replay, entity);
         }
+    }
 
-        RenderSystem.disableDepthTest();
-
-        int tick = Math.max(this.tick, 0);
-        List<Clip> clips = this.context.clips.getClips(tick);
-
-        if (clips.isEmpty())
+    protected void renderEntity(WorldRenderContext context, Replay replay, IEntity entity)
+    {
+        if (!replay.actor.get())
         {
-            return;
+            renderEntity(getFilmControllerContext(context, replay, entity));
         }
+    }
 
-        RenderSystem.enableDepthTest();
-
-        this.context.clipData.clear();
-        this.context.setup(tick, context.tickDelta());
-
-        for (Clip clip : clips)
-        {
-            this.context.apply(clip, this.position);
-        }
-
-        this.context.currentLayer = 0;
-
-        AudioClientClip.manageSounds(this.context);
+    protected FilmControllerContext getFilmControllerContext(WorldRenderContext context, Replay replay, IEntity entity)
+    {
+        return FilmControllerContext.instance
+            .setup(this.entities, entity, context)
+            .shadow(replay.shadow.get(), replay.shadowSize.get())
+            .nameTag(replay.nameTag.get());
     }
 
     public void shutdown()
-    {
-        this.context.shutdown();
-    }
+    {}
 }

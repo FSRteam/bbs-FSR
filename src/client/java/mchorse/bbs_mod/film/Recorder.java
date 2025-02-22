@@ -27,7 +27,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector4f;
 
-public class Recorder extends FilmController
+public class Recorder extends WorldFilmController
 {
     public ReplayKeyframes keyframes = new ReplayKeyframes("keyframes");
     public FormProperties properties = new FormProperties("properties");

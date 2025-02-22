@@ -10,16 +10,13 @@ import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.data.types.BaseType;
-import mchorse.bbs_mod.entity.ActorEntity;
+import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
-import mchorse.bbs_mod.film.FilmController;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
-import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
-import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -61,7 +58,6 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
-import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
@@ -70,7 +66,6 @@ import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.world.World;
 import org.joml.Matrix3f;
@@ -99,7 +94,7 @@ public class UIFilmController extends UIElement
 
     public final UIFilmPanel panel;
 
-    public final List<IEntity> entities = new ArrayList<>();
+    public FilmEditorController editorController;
     private Map<String, Integer> actors;
 
     /* Character control */
@@ -240,7 +235,7 @@ public class UIFilmController extends UIElement
 
     public IEntity getCurrentEntity()
     {
-        return CollectionUtils.getSafe(this.entities, this.panel.replayEditor.replays.replays.getIndex());
+        return CollectionUtils.getSafe(this.getEntities(), this.panel.replayEditor.replays.replays.getIndex());
     }
 
     public int getPovMode()
@@ -298,38 +293,23 @@ public class UIFilmController extends UIElement
             this.toggleControl();
         }
 
-        UIContext context = this.panel.dashboard.context;
+        this.editorController = new FilmEditorController(this.panel.getData(), this);
+        this.editorController.createEntities();
 
-        this.entities.clear();
+        List<IEntity> entities = this.panel.getRunner().getContext().entities;
 
-        Film film = this.panel.getData();
+        entities.clear();
+        entities.addAll(this.editorController.getEntities());
+    }
 
-        if (context != null && film != null)
-        {
-            for (Replay replay : film.replays.getList())
-            {
-                World world = MinecraftClient.getInstance().world;
-                IEntity entity = new StubEntity(world);
+    public List<IEntity> getEntities()
+    {
+        return this.editorController == null ? Collections.emptyList() : this.editorController.getEntities();
+    }
 
-                entity.setForm(FormUtils.copy(replay.form.get()));
-                replay.applyFrame(this.getTick(), entity);
-                replay.applyProperties(this.getTick(), entity.getForm());
-                replay.applyClientActions(this.getTick(), entity, film);
-                entity.setPrevX(entity.getX());
-                entity.setPrevY(entity.getY());
-                entity.setPrevZ(entity.getZ());
-
-                entity.setPrevYaw(entity.getYaw());
-                entity.setPrevHeadYaw(entity.getHeadYaw());
-                entity.setPrevPitch(entity.getPitch());
-                entity.setPrevBodyYaw(entity.getBodyYaw());
-
-                this.entities.add(entity);
-            }
-        }
-
-        this.panel.getRunner().getContext().entities.clear();
-        this.panel.getRunner().getContext().entities.addAll(this.entities);
+    public Map<String, Integer> getActors()
+    {
+        return this.actors;
     }
 
     public void updateActors(Map<String, Integer> actors)
@@ -338,6 +318,11 @@ public class UIFilmController extends UIElement
     }
 
     /* Character control state */
+
+    public IEntity getControlled()
+    {
+        return this.controlled;
+    }
 
     public boolean isControlling()
     {
@@ -349,6 +334,7 @@ public class UIFilmController extends UIElement
         this.getContext().unfocus();
 
         boolean replacePlayer = ClientNetwork.isIsBBSModOnServer();
+        List<IEntity> entities = this.getEntities();
 
         if (this.controlled != null)
         {
@@ -356,7 +342,7 @@ public class UIFilmController extends UIElement
             {
                 this.controlled.setForm(this.playerForm);
 
-                this.entities.set(this.entities.indexOf(this.controlled), this.previousEntity);
+                entities.set(entities.indexOf(this.controlled), this.previousEntity);
                 this.previousEntity = null;
             }
 
@@ -374,7 +360,7 @@ public class UIFilmController extends UIElement
                 this.previousEntity = this.controlled;
 
                 player.copy(this.controlled);
-                this.entities.set(this.entities.indexOf(this.controlled), player);
+                entities.set(entities.indexOf(this.controlled), player);
 
                 this.controlled = player;
             }
@@ -413,6 +399,16 @@ public class UIFilmController extends UIElement
     public boolean isRecording()
     {
         return this.recording;
+    }
+
+    public int getRecordingCountdown()
+    {
+        return this.recordingCountdown;
+    }
+
+    public List<String> getRecordingGroups()
+    {
+        return this.recordingGroups;
     }
 
     public void startRecording(List<String> groups)
@@ -554,7 +550,7 @@ public class UIFilmController extends UIElement
 
                     for (IEntity entity : this.hoveredEntities)
                     {
-                        int index = this.entities.indexOf(entity);
+                        int index = this.getEntities().indexOf(entity);
 
                         menu.action(Icons.POSE, IKey.constant(this.panel.getData().replays.getList().get(index).getName()), () -> this.pickEntity(entity));
                     }
@@ -569,7 +565,7 @@ public class UIFilmController extends UIElement
 
     private void pickEntity(IEntity entity)
     {
-        int index = this.entities.indexOf(entity);
+        int index = this.getEntities().indexOf(entity);
 
         this.panel.replayEditor.setReplay(this.panel.getData().replays.getList().get(index));
 
@@ -846,10 +842,13 @@ public class UIFilmController extends UIElement
         }
 
         RunnerCameraController runner = this.panel.getRunner();
-        UIContext context = this.getContext();
 
         this.handleRecording(runner);
-        this.updateEntities(film, runner, context);
+
+        if (this.editorController != null)
+        {
+            this.editorController.update();
+        }
 
         if (this.canControl())
         {
@@ -876,98 +875,6 @@ public class UIFilmController extends UIElement
                 this.stopRecording();
             }
         }
-    }
-
-    private void updateEntities(Film film, RunnerCameraController runner, UIContext context)
-    {
-        /* Plus 1 is necessary because apparently the render ticks comes before
-         * the update tick, so in order to force the correct animation, I have to
-         * increment the tick, so it would appear correctly */
-        boolean isPlaying = this.isPlaying();
-        int tick = runner.ticks + (runner.isRunning() ? 1 : 0);
-
-        for (int i = 0; i < this.entities.size(); i++)
-        {
-            IEntity entity = this.entities.get(i);
-            boolean isActor = !(entity instanceof MCEntity);
-
-            if (isPlaying && isActor)
-            {
-                entity.update();
-
-                if (entity.getForm() != null)
-                {
-                    entity.getForm().update(entity);
-                }
-            }
-
-            List<Replay> replays = film.replays.getList();
-            Replay replay = CollectionUtils.getSafe(replays, i);
-            int ticks = replay.getTick(tick);
-
-            if (replay != null)
-            {
-                if (entity != this.controlled || (this.recording && this.recordingCountdown <= 0 && this.recordingGroups != null))
-                {
-                    replay.applyFrame(ticks, entity, entity == this.controlled ? this.recordingGroups : null);
-                }
-
-                if (entity == this.controlled && this.recording && runner.isRunning())
-                {
-                    replay.keyframes.record(runner.ticks, entity, this.recordingGroups);
-                }
-
-                replay.applyClientActions(ticks, entity, this.panel.getData());
-
-                if (this.actors != null)
-                {
-                    Integer entityId = this.actors.get(replay.getId());
-
-                    if (entityId != null)
-                    {
-                        Entity anEntity = MinecraftClient.getInstance().world.getEntityById(entityId);
-
-                        if (anEntity instanceof ActorEntity actor)
-                        {
-                            /* Force synchronize entity angles */
-                            actor.setYaw(replay.keyframes.yaw.interpolate(ticks).floatValue());
-                            actor.setHeadYaw(replay.keyframes.headYaw.interpolate(ticks).floatValue());
-                            actor.setBodyYaw(replay.keyframes.bodyYaw.interpolate(ticks).floatValue());
-                            actor.setPitch(replay.keyframes.pitch.interpolate(ticks).floatValue());
-                            replay.applyClientActions(ticks, new MCEntity(anEntity), this.panel.getData());
-                        }
-                    }
-                }
-            }
-
-            /* Special pausing logic */
-            if (!isPlaying && isActor)
-            {
-                entity.setPrevX(entity.getX());
-                entity.setPrevY(entity.getY());
-                entity.setPrevZ(entity.getZ());
-                entity.setPrevYaw(entity.getYaw());
-                entity.setPrevHeadYaw(entity.getHeadYaw());
-                entity.setPrevBodyYaw(entity.getBodyYaw());
-                entity.setPrevPitch(entity.getPitch());
-
-                int diff = Math.abs(this.lastTick - tick);
-
-                while (diff > 0)
-                {
-                    entity.update();
-
-                    if (entity.getForm() != null)
-                    {
-                        entity.getForm().update(entity);
-                    }
-
-                    diff -= 1;
-                }
-            }
-        }
-
-        this.lastTick = tick;
     }
 
     private void updateControls()
@@ -1145,121 +1052,23 @@ public class UIFilmController extends UIElement
 
     public void startRenderFrame(float tickDelta)
     {
-        boolean isPlaying = this.isPlaying();
-        int tick = this.getTick();
-        float transition = isPlaying ? tickDelta : 0F;
-
-        for (int i = 0; i < this.entities.size(); i++)
+        if (this.editorController != null)
         {
-            IEntity entity = this.entities.get(i);
-            boolean isCurrent = entity == this.getCurrentEntity();
-
-            if (this.getPovMode() == CAMERA_MODE_FIRST_PERSON && isCurrent && this.orbit.enabled)
-            {
-                continue;
-            }
-
-            Replay replay = this.panel.getData().replays.getList().get(i);
-            int ticks = replay.getTick(tick);
-
-            replay.applyProperties(ticks + transition, entity.getForm());
-
-            if (this.actors != null)
-            {
-                Integer entityId = this.actors.get(replay.getId());
-
-                if (entityId != null)
-                {
-                    Entity anEntity = MinecraftClient.getInstance().world.getEntityById(entityId);
-
-                    if (anEntity instanceof ActorEntity actor)
-                    {
-                        /* Force synchronize entity angles */
-                        replay.applyProperties(ticks + transition, actor.getForm());
-                    }
-                }
-            }
+            this.editorController.startRenderFrame(tickDelta);
         }
     }
 
     public void renderFrame(WorldRenderContext context)
     {
         boolean isPlaying = this.isPlaying();
-        int tick = this.getTick();
-        float transition = isPlaying ? context.tickDelta() : 0F;
 
         this.worldRenderContext = context;
 
         RenderSystem.enableDepthTest();
 
-        for (int i = 0; i < this.entities.size(); i++)
+        if (this.editorController != null)
         {
-            IEntity entity = this.entities.get(i);
-            boolean isCurrent = entity == this.getCurrentEntity();
-
-            if (this.getPovMode() == CAMERA_MODE_FIRST_PERSON && isCurrent && this.orbit.enabled)
-            {
-                continue;
-            }
-
-            ValueOnionSkin onionSkin = this.getOnionSkin();
-            Replay replay = this.panel.getData().replays.getList().get(i);
-            BaseValue value = replay.properties.get(onionSkin.group.get());
-            int ticks = replay.getTick(tick);
-
-            if (value == null)
-            {
-                value = replay.properties.get("pose");
-            }
-
-            if (!replay.actor.get())
-            {
-                Pair<String, Boolean> bone = isCurrent && !this.panel.recorder.isRecording() ? this.getBone() : null;
-
-                FilmControllerContext filmContext = FilmControllerContext.instance
-                    .setup(this.entities, entity, context)
-                    .transition(transition)
-                    .shadow(replay.shadow.get(), replay.shadowSize.get())
-                    .bone(bone == null ? null : bone.a, bone != null && bone.b)
-                    .nameTag(replay.nameTag.get());
-
-                FilmController.renderEntity(filmContext);
-            }
-
-            if (value instanceof KeyframeChannel<?> pose && entity instanceof StubEntity)
-            {
-                boolean canRender = onionSkin.enabled.get();
-
-                if (!onionSkin.all.get())
-                {
-                    canRender = canRender && isCurrent;
-                }
-
-                if (canRender)
-                {
-                    KeyframeSegment<?> segment = pose.findSegment(ticks);
-
-                    if (segment != null)
-                    {
-                        this.renderOnion(replay, pose.getKeyframes().indexOf(segment.a), -1, pose, onionSkin.preColor.get(), onionSkin.preFrames.get(), context, isPlaying, entity);
-                        this.renderOnion(replay, pose.getKeyframes().indexOf(segment.b), 1, pose, onionSkin.postColor.get(), onionSkin.postFrames.get(), context, isPlaying, entity);
-
-                        replay.applyFrame(ticks, entity, null);
-                        replay.applyProperties(ticks + transition, entity.getForm());
-
-                        if (!isPlaying)
-                        {
-                            entity.setPrevX(entity.getX());
-                            entity.setPrevY(entity.getY());
-                            entity.setPrevZ(entity.getZ());
-                            entity.setPrevYaw(entity.getYaw());
-                            entity.setPrevHeadYaw(entity.getHeadYaw());
-                            entity.setPrevBodyYaw(entity.getBodyYaw());
-                            entity.setPrevPitch(entity.getPitch());
-                        }
-                    }
-                }
-            }
+            this.editorController.render(context);
         }
 
         this.rayTraceEntity(context);
@@ -1353,8 +1162,8 @@ public class UIFilmController extends UIElement
             replay.applyFrame((int) keyframe.getTick(), entity);
             replay.applyProperties((int) keyframe.getTick(), entity.getForm());
 
-            FilmController.renderEntity(FilmControllerContext.instance
-                .setup(this.entities, entity, context)
+            BaseFilmController.renderEntity(FilmControllerContext.instance
+                .setup(this.getEntities(), entity, context)
                 .color(Colors.setA(color, alpha))
                 .transition(0F));
 
@@ -1384,7 +1193,7 @@ public class UIFilmController extends UIElement
         Camera camera = this.panel.getCamera();
         Vector3f mouseDirection = camera.getMouseDirection(c.mouseX, c.mouseY, area.x, area.y, area.w, area.h);
 
-        for (IEntity entity : this.entities)
+        for (IEntity entity : this.getEntities())
         {
             AABB aabb = entity.getPickingHitbox();
 
@@ -1445,8 +1254,8 @@ public class UIFilmController extends UIElement
 
         this.stencilMap.setup();
         this.stencil.apply();
-        FilmController.renderEntity(FilmControllerContext.instance
-            .setup(this.entities, entity, renderContext)
+        BaseFilmController.renderEntity(FilmControllerContext.instance
+            .setup(this.getEntities(), entity, renderContext)
             .transition(isPlaying ? renderContext.tickDelta() : 0)
             .stencil(this.stencilMap));
 

@@ -51,7 +51,7 @@ public class UITrackerClip extends UIClip<TrackerClip>
 
             if (panel != null)
             {
-                UIAnchorKeyframeFactory.displayActors(this.getContext(), panel.getController().entities, this.clip.selector.get(), (i) -> this.clip.selector.set(i));
+                UIAnchorKeyframeFactory.displayActors(this.getContext(), panel.getController().getEntities(), this.clip.selector.get(), (i) -> this.clip.selector.set(i));
             }
         });
         this.selector.tooltip(UIKeys.CAMERA_PANELS_TARGET_TOOLTIP);
@@ -71,7 +71,7 @@ public class UITrackerClip extends UIClip<TrackerClip>
         List<UIFilmPanel> children = this.getContext().menu.main.getChildren(UIFilmPanel.class);
         UIFilmPanel panel = children.isEmpty() ? null : children.get(0);
         int index = this.clip.selector.get();
-        IEntity entity = CollectionUtils.getSafe(panel.getController().entities, index);
+        IEntity entity = CollectionUtils.getSafe(panel.getController().getEntities(), index);
 
         if (entity == null || entity.getForm() == null)
         {

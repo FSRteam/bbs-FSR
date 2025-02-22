@@ -4,7 +4,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.cubic.ModelInstance;
-import mchorse.bbs_mod.film.FilmController;
+import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -249,8 +249,8 @@ public class OrbitFilmCameraController implements ICameraController
                 if (anchor != null)
                 {
                     AnchorProperty.Anchor v = form.anchor.get();
-                    Matrix4f defaultMatrix = FilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
-                    Matrix4f matrix = FilmController.getEntityMatrix(this.controller.entities, x, y, z, v.actor, v.attachment, defaultMatrix, transition);
+                    Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
+                    Matrix4f matrix = BaseFilmController.getEntityMatrix(this.controller.getEntities(), x, y, z, v.actor, v.attachment, defaultMatrix, transition);
 
                     matrix.mul(anchor);
 

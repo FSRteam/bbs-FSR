@@ -40,7 +40,7 @@ import java.util.Map;
 
 public class Films
 {
-    private List<FilmController> controllers = new ArrayList<FilmController>();
+    private List<BaseFilmController> controllers = new ArrayList<BaseFilmController>();
     private Recorder recorder;
 
     public Map<String, Map<String, Integer>> actors = new HashMap<>();
@@ -71,17 +71,17 @@ public class Films
 
     public static void playFilm(Film film, boolean withCamera)
     {
-        FilmController filmController = new FilmController(film);
+        WorldFilmController baseFilmController = new WorldFilmController(film);
 
         if (withCamera)
         {
             PlayCameraController controller = new PlayCameraController(film.camera);
 
-            controller.getContext().entities.addAll(filmController.getEntities());
+            controller.getContext().entities.addAll(baseFilmController.getEntities());
             BBSModClient.getCameraController().add(controller);
         }
 
-        BBSModClient.getFilms().add(filmController);
+        BBSModClient.getFilms().add(baseFilmController);
     }
 
     public static void stopFilm(String filmId)
@@ -129,7 +129,7 @@ public class Films
                     channel.insert(0, channel.getFactory().fromData(property.toData()));
                 }
 
-                channel.insert(this.recorder.tick, channel.getFactory().fromData(trigger.states.get(key)));
+                channel.insert(this.recorder.getTick(), channel.getFactory().fromData(trigger.states.get(key)));
             }
         }
     }
@@ -142,7 +142,7 @@ public class Films
 
         if (ClientNetwork.isIsBBSModOnServer())
         {
-            ClientNetwork.sendActionRecording(film.getId(), replayId, this.recorder.tick, this.recorder.countdown, true);
+            ClientNetwork.sendActionRecording(film.getId(), replayId, this.recorder.getTick(), this.recorder.countdown, true);
         }
 
         Replay replay = CollectionUtils.getSafe(film.replays.getList(), replayId);
@@ -171,7 +171,7 @@ public class Films
 
             if (ClientNetwork.isIsBBSModOnServer())
             {
-                ClientNetwork.sendActionRecording(recorder.film.getId(), recorder.exception, recorder.tick, 0, false);
+                ClientNetwork.sendActionRecording(recorder.film.getId(), recorder.exception, recorder.getTick(), 0, false);
             }
 
             Vector3d pos = recorder.lastPosition;
@@ -188,14 +188,14 @@ public class Films
         return recorder;
     }
 
-    public void add(FilmController controller)
+    public void add(BaseFilmController controller)
     {
         this.controllers.add(controller);
     }
 
     public boolean has(String filmId)
     {
-        for (FilmController controller : this.controllers)
+        for (BaseFilmController controller : this.controllers)
         {
             if (controller.film.getId().equals(filmId))
             {
@@ -208,11 +208,11 @@ public class Films
 
     public Film remove(String id)
     {
-        Iterator<FilmController> it = this.controllers.iterator();
+        Iterator<BaseFilmController> it = this.controllers.iterator();
 
         while (it.hasNext())
         {
-            FilmController next = it.next();
+            BaseFilmController next = it.next();
 
             if (next.film.getId().equals(id))
             {
@@ -233,7 +233,7 @@ public class Films
 
     public void startRenderFrame(float transition)
     {
-        for (FilmController controller : this.controllers)
+        for (BaseFilmController controller : this.controllers)
         {
             controller.startRenderFrame(transition);
         }
@@ -245,14 +245,12 @@ public class Films
         {
             film.update();
 
-            boolean finished = film.hasFinished();
-
-            if (finished)
+            if (film.hasFinished())
             {
                 film.shutdown();
             }
 
-            return finished;
+            return film.hasFinished();
         });
 
         if (this.recorder != null)
@@ -265,7 +263,7 @@ public class Films
     {
         RenderSystem.enableDepthTest();
 
-        for (FilmController controller : this.controllers)
+        for (BaseFilmController controller : this.controllers)
         {
             controller.render(context);
         }
@@ -287,7 +285,7 @@ public class Films
         {
             String label = recorder.hasNotStarted() ?
                 String.valueOf(TimeUtils.toSeconds(recorder.countdown)) :
-                UIKeys.FILM_RECORDING.format(recorder.tick).get();
+                UIKeys.FILM_RECORDING.format(recorder.getTick()).get();
             int x = 5;
             int y = 5;
             int w = batcher2D.getFont().getWidth(label);
@@ -313,7 +311,7 @@ public class Films
             x = sw / 2 - w / 2;
             y = sh / 2 + 100;
 
-            AudioRenderer.renderAll(batcher2D, audioClips, recorder.tick + tickDelta, x, y, w, BBSSettings.audioWaveformHeight.get(), sw, sh);
+            AudioRenderer.renderAll(batcher2D, audioClips, recorder.getTick() + tickDelta, x, y, w, BBSSettings.audioWaveformHeight.get(), sw, sh);
         }
     }
 

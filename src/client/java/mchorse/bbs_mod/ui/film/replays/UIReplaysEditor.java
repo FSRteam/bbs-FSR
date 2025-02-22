@@ -812,7 +812,7 @@ public class UIReplaysEditor extends UIElement
         if (replay != null)
         {
             int index = this.film.replays.getList().indexOf(replay);
-            IEntity entity = this.filmPanel.getController().entities.get(index);
+            IEntity entity = this.filmPanel.getController().getEntities().get(index);
             ClientPlayerEntity player = MinecraftClient.getInstance().player;
 
             PlayerUtils.teleport(entity.getX(), entity.getY(), entity.getZ(), entity.getHeadYaw(), entity.getPitch());

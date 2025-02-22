@@ -68,14 +68,14 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
     {
         UIFilmPanel panel = this.getPanel();
 
-        displayActors(this.getContext(), panel.getController().entities, this.keyframe.getValue().actor, this::setActor);
+        displayActors(this.getContext(), panel.getController().getEntities(), this.keyframe.getValue().actor, this::setActor);
     }
 
     private void displayAttachments()
     {
         UIFilmPanel panel = this.getPanel();
         int index = this.keyframe.getValue().actor;
-        IEntity entity = CollectionUtils.getSafe(panel.getController().entities, index);
+        IEntity entity = CollectionUtils.getSafe(panel.getController().getEntities(), index);
 
         if (entity == null || entity.getForm() == null)
         {

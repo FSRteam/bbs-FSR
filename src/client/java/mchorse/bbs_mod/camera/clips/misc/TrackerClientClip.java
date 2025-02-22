@@ -3,7 +3,7 @@ package mchorse.bbs_mod.camera.clips.misc;
 import mchorse.bbs_mod.camera.clips.modifiers.TrackerClip;
 import mchorse.bbs_mod.camera.data.Angle;
 import mchorse.bbs_mod.camera.data.Position;
-import mchorse.bbs_mod.film.FilmController;
+import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -57,7 +57,7 @@ public class TrackerClientClip extends TrackerClip
             return;
         }
 
-        Matrix4f formTransform = FilmController.getMatrixForRenderWithRotation(entity, position.point.x, position.point.y, position.point.z, context.transition);
+        Matrix4f formTransform = BaseFilmController.getMatrixForRenderWithRotation(entity, position.point.x, position.point.y, position.point.z, context.transition);
 
         formTransform.mul(map.get(targetGroup));
         formTransform.getTranslation(relativeFormPos);
