@@ -166,7 +166,7 @@ public class UIDashboard extends UIBaseMenu
 
         int direction = Window.isShiftPressed() ? -1 : 1;
         int index = panels.indexOf(this.panels.panel);
-        int newIndex = MathUtils.cycler(index + direction, 0, panels.size() - 1);
+        int newIndex = MathUtils.cycler(index + direction, panels);
 
         this.setPanel(panels.get(newIndex));
         UIUtils.playClick();

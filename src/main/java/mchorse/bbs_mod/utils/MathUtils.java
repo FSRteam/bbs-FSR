@@ -2,6 +2,8 @@ package mchorse.bbs_mod.utils;
 
 import org.joml.Vector3i;
 
+import java.util.Collection;
+
 public class MathUtils
 {
     public static final float PI = (float) Math.PI;
@@ -34,6 +36,11 @@ public class MathUtils
     public static long clamp(long x, long min, long max)
     {
         return x < min ? min : (x > max ? max : x);
+    }
+
+    public static int cycler(int x, Collection collection)
+    {
+        return cycler(x, 0, collection.size() - 1);
     }
 
     public static int cycler(int x, int min, int max)

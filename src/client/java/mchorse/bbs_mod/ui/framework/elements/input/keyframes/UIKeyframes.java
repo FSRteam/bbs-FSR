@@ -248,7 +248,7 @@ public class UIKeyframes extends UIElement
         {
             KeyframeChannel channel = (KeyframeChannel) keyframe.getParent();
             int existingIndex = channel.getKeyframes().indexOf(keyframe);
-            int index = MathUtils.cycler(existingIndex + direction, 0, channel.getAll().size() - 1);
+            int index = MathUtils.cycler(existingIndex + direction, channel.getAll());
             Keyframe nextKeyframe = channel.get(index);
 
             graph.clearSelection();

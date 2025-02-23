@@ -371,7 +371,7 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
         {
             List<UIIcon> children = this.iconBar.getChildren(UIIcon.class);
             int i = children.indexOf(this.sections.get(this.currentSection));
-            int newIndex = MathUtils.cycler(i + (Window.isShiftPressed() ? -1 : 1), 0, children.size() - 1);
+            int newIndex = MathUtils.cycler(i + (Window.isShiftPressed() ? -1 : 1), children);
 
             this.setSection(CollectionUtils.getKey(this.sections, children.get(newIndex)));
             UIUtils.playClick();

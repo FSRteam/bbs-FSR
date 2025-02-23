@@ -40,7 +40,7 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     private void cyclePanels()
     {
         int index = this.panels.indexOf(this.view);
-        int newIndex = MathUtils.cycler(index + (Window.isShiftPressed() ? -1 : 1), 0, this.panels.size() - 1);
+        int newIndex = MathUtils.cycler(index + (Window.isShiftPressed() ? -1 : 1), this.panels);
 
         this.setPanel(this.panels.get(newIndex));
         UIUtils.playClick();

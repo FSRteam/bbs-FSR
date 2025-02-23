@@ -310,7 +310,7 @@ public class UIContext implements IViewportStack
 
         if (i >= 0)
         {
-            i = MathUtils.cycler(i + factor, 0, focused.size() - 1);
+            i = MathUtils.cycler(i + factor, focused);
 
             this.focus(focused.get(i), true);
         }

@@ -182,7 +182,7 @@ public class UIFilmController extends UIElement
         List<Replay> list = this.panel.getData().replays.getList();
 
         int index = list.indexOf(this.getReplay());
-        int newIndex = MathUtils.cycler(index + direction, 0, list.size() - 1);
+        int newIndex = MathUtils.cycler(index + direction, list);
         Replay replay = list.get(newIndex);
 
         this.panel.replayEditor.setReplay(replay);
