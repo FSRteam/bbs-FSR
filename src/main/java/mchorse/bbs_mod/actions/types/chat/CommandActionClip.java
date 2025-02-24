@@ -27,7 +27,7 @@ public class CommandActionClip extends ActionClip
         ServerCommandSource source = actor == null
             ? player.getCommandSource()
             : actor.getCommandSource();
-        
+
         player.getServer().getCommandManager().executeWithPrefix(source, command);
     }
 

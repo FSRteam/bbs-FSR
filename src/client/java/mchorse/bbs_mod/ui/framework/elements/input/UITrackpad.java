@@ -354,15 +354,13 @@ public class UITrackpad extends UIBaseTextbox
 
         if (context.mouseButton == 0 && !this.isDraggingTime() && !this.textbox.isFocused())
         {
-            boolean increments = BBSSettings.enableTrackpadIncrements.get();
-
             if (this.wasInside)
             {
-                if (increments && this.plusOne.isInside(context))
+                if (this.plusOne.isInside(context))
                 {
                     this.setValueAndNotify(this.value + this.increment);
                 }
-                else if (increments && this.minusOne.isInside(context))
+                else if (this.minusOne.isInside(context))
                 {
                     this.setValueAndNotify(this.value - this.increment);
                 }
@@ -555,7 +553,7 @@ public class UITrackpad extends UIBaseTextbox
 
             context.batcher.text(label, lx, ly, this.textbox.getColor());
 
-            if (BBSSettings.enableTrackpadIncrements.get())
+            if (BBSSettings.enableTrackpadIncrements.get() || this.area.isInside(context))
             {
                 this.plusOne.render(context.batcher, plus ? 0x22ffffff : 0x0affffff, padding);
                 this.minusOne.render(context.batcher, minus ? 0x22ffffff : 0x0affffff, padding);
