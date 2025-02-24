@@ -196,8 +196,8 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
                 this.selectCurrent(link);
             });
 
-            panel.list.list.sort();
             panel.addValues(list);
+            panel.list.list.sort();
 
             if (this.current != null)
             {
