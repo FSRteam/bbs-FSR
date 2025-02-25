@@ -56,6 +56,8 @@ public class BBSSettings
     public static ValueBoolean videoEncoderLog;
     public static ValueVideoSettings videoSettings;
 
+    public static ValueFloat editorCameraSpeed;
+    public static ValueFloat editorCameraAngleSpeed;
     public static ValueInt duration;
     public static ValueBoolean editorLoop;
     public static ValueInt editorJump;
@@ -161,7 +163,9 @@ public class BBSSettings
         builder.register(videoSettings = new ValueVideoSettings("settings"));
 
         /* Camera editor */
-        duration = builder.category("editor").getInt("duration", 30, 1, 1000);
+        editorCameraSpeed = builder.category("editor").getFloat("speed", 1F, 0F, 100F);
+        editorCameraAngleSpeed = builder.getFloat("angle_speed", 1F, 0F, 100F);
+        duration = builder.getInt("duration", 30, 1, 1000);
         editorJump = builder.getInt("jump", 5, 1, 1000);
         editorLoop = builder.getBoolean("loop", false);
         editorGuidesColor = builder.getInt("guides_color", 0xcccc0000).colorAlpha();

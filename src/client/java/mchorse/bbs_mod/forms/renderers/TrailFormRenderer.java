@@ -229,6 +229,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableBlend();
         BufferRenderer.drawWithGlobalProgram(builder.end());
+        RenderSystem.enableDepthTest();
 
         stack.pop();
     }

@@ -8,7 +8,6 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.client.MinecraftClient;
 import org.joml.Matrix3f;
@@ -171,14 +170,14 @@ public class OrbitCamera
         return Matrices.rotation(this.rotation.x, MathUtils.PI - this.rotation.y);
     }
 
-    protected float getAngleSpeed()
+    public float getAngleSpeed()
     {
-        return (1 / 180F) * Lerps.lerp(1F, (float) this.speed.getValue(), 0.8F);
+        return 1 / 80F * BBSSettings.editorCameraAngleSpeed.get();
     }
 
-    protected float getSpeed()
+    public float getSpeed()
     {
-        return (Window.isCtrlPressed() ? this.high : (Window.isAltPressed() ? this.low : this.normal)) * (float) this.speed.getValue();
+        return (Window.isCtrlPressed() ? this.high : (Window.isAltPressed() ? this.low : this.normal)) * (float) this.speed.getValue() * 0.25F * BBSSettings.editorCameraSpeed.get();
     }
 
     protected Vector3f rotateVector(float x, float y, float z)
