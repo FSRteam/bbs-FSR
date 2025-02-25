@@ -34,6 +34,17 @@ public abstract class BaseTweenProperty <T> extends BaseProperty<T>
     }
 
     @Override
+    public boolean equals(Object obj)
+    {
+        if (obj instanceof BaseTweenProperty<?> property && property.factory == this.factory)
+        {
+            return this.factory.compare(this.value, property.value);
+        }
+
+        return super.equals(obj);
+    }
+
+    @Override
     public BaseType toData()
     {
         return this.factory.toData(this.value);
