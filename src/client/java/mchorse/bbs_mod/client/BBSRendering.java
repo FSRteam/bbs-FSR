@@ -427,6 +427,16 @@ public class BBSRendering
         IrisUtils.trackTexture(texture);
     }
 
+    public static float[] calculateTangents(float[] t, float[] v, float[] n, float[] u)
+    {
+        if (!iris)
+        {
+            return t;
+        }
+
+        return IrisUtils.calculateTangents(t, v, n, u);
+    }
+
     public static float[] calculateTangents(float[] v, float[] n, float[] u)
     {
         if (!iris)

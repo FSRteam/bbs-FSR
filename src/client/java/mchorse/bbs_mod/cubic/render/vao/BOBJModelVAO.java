@@ -2,6 +2,7 @@ package mchorse.bbs_mod.cubic.render.vao;
 
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJLoader;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.util.math.MatrixStack;
@@ -24,10 +25,13 @@ public class BOBJModelVAO
     public int normalBuffer;
     public int lightBuffer;
     public int texCoordBuffer;
+    public int tangentBuffer;
+    public int midTextureBuffer;
 
     private float[] tmpVertices;
     private float[] tmpNormals;
     private int[] tmpLight;
+    private float[] tmpTangents;
 
     public BOBJModelVAO(BOBJLoader.CompiledData data)
     {
@@ -52,11 +56,14 @@ public class BOBJModelVAO
         this.normalBuffer = GL30.glGenBuffers();
         this.lightBuffer = GL30.glGenBuffers();
         this.texCoordBuffer = GL30.glGenBuffers();
+        this.tangentBuffer = GL30.glGenBuffers();
+        this.midTextureBuffer = GL30.glGenBuffers();
 
         this.count = this.data.normData.length / 3;
         this.tmpVertices = new float[this.data.posData.length];
         this.tmpNormals = new float[this.data.normData.length];
-        this.tmpLight = new int[this.data.texData.length];
+        this.tmpLight = new int[this.data.posData.length];
+        this.tmpTangents = new float[this.count * 4];
 
         GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.vertexBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.posData, GL30.GL_DYNAMIC_DRAW);
@@ -73,6 +80,14 @@ public class BOBJModelVAO
         GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.texCoordBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.texData, GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
+
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.tangentBuffer);
+        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.tmpTangents, GL30.GL_STATIC_DRAW);
+        GL30.glVertexAttribPointer(Attributes.TANGENTS, 4, GL30.GL_FLOAT, false, 0, 0);
+
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.texCoordBuffer);
+        GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.texData, GL30.GL_STATIC_DRAW);
+        GL30.glVertexAttribPointer(Attributes.MID_TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
     }
 
     /**
@@ -86,6 +101,8 @@ public class BOBJModelVAO
         GL15.glDeleteBuffers(this.normalBuffer);
         GL15.glDeleteBuffers(this.lightBuffer);
         GL15.glDeleteBuffers(this.texCoordBuffer);
+        GL15.glDeleteBuffers(this.tangentBuffer);
+        GL15.glDeleteBuffers(this.midTextureBuffer);
     }
 
     /**
@@ -175,6 +192,14 @@ public class BOBJModelVAO
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.normalBuffer);
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, newNormals, GL15.GL_DYNAMIC_DRAW);
 
+        if (BBSRendering.isIrisShadersEnabled())
+        {
+            BBSRendering.calculateTangents(this.tmpTangents, newVertices, newNormals, this.data.texData);
+
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.tangentBuffer);
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpTangents, GL15.GL_DYNAMIC_DRAW);
+        }
+
         if (picking)
         {
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.lightBuffer);
@@ -187,6 +212,8 @@ public class BOBJModelVAO
 
     public void render(ShaderProgram shader, MatrixStack stack, float r, float g, float b, float a, boolean picking, int light, int overlay)
     {
+        boolean hasShaders = BBSRendering.isIrisShadersEnabled();
+
         GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);
         GL30.glVertexAttribI2i(Attributes.OVERLAY_UV, overlay & '\uffff', overlay >> 16 & '\uffff');
 
@@ -206,6 +233,8 @@ public class BOBJModelVAO
         GL30.glEnableVertexAttribArray(Attributes.NORMAL);
 
         if (picking) GL30.glEnableVertexAttribArray(Attributes.LIGHTMAP_UV);
+        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
+        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
         GL30.glDrawArrays(GL30.GL_TRIANGLES, 0, this.count);
 
@@ -214,6 +243,8 @@ public class BOBJModelVAO
         GL30.glDisableVertexAttribArray(Attributes.NORMAL);
 
         if (picking) GL30.glDisableVertexAttribArray(Attributes.LIGHTMAP_UV);
+        if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
+        if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
         shader.unbind();
 

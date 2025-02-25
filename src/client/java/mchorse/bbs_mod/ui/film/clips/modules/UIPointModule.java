@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.film.clips.modules;
 
-import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.camera.values.ValuePoint;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.base.BaseValue;

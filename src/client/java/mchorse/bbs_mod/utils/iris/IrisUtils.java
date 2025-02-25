@@ -62,7 +62,19 @@ public class IrisUtils
             return v;
         }
 
-        float[] t = new float[v.length / 3 * 4];
+        return calculateTangents(new float[v.length / 3 * 4], v, n, u);
+    }
+
+    public static float[] calculateTangents(float[] t, float[] v, float[] n, float[] u)
+    {
+        int min = Math.min(v.length / 9, Math.min(u.length / 6, n.length / 9));
+        int max = Math.max(v.length / 9, Math.max(u.length / 6, n.length / 9));
+
+        if (min != max)
+        {
+            return t;
+        }
+
         SuperTriangle triangle = new SuperTriangle();
 
         for (int i = 0, c = v.length / 9; i < c; i++)
