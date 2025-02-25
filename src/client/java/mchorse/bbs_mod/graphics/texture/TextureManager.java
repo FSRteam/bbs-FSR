@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.resources.MultiLink;
 import mchorse.bbs_mod.utils.resources.MultiLinkThread;
@@ -288,11 +289,23 @@ public class TextureManager implements IWatchDogListener
             return;
         }
 
+        if (link.path.endsWith(".mcmeta"))
+        {
+            link = new Link(link.source, StringUtils.removeExtension(link.path));
+        }
+
         Texture texture = this.textures.remove(link);
 
         if (texture != null)
         {
             texture.delete();
+        }
+
+        AnimatedTexture remove = this.animatedTextures.remove(link);
+
+        if (remove != null)
+        {
+            remove.delete();
         }
 
         this.extruder.delete(link);

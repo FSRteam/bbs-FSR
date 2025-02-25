@@ -99,7 +99,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         double baseY = camera.position.y;
         double baseZ = camera.position.z;
 
-        float current = (float)this.tick + context.transition;
+        float current = (float) this.tick + context.transition;
 
         if (!this.form.paused.get())
         {
@@ -173,27 +173,50 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
             if (last != null && !last.stop && !trail.stop)
             {
+                double x1 = trail.top.x - baseX;
+                double x2 = trail.bottom.x - baseX;
+                double x3 = last.bottom.x - baseX;
+                double x4 = last.top.x - baseX;
+
+                double y1 = trail.top.y - baseY;
+                double y2 = trail.bottom.y - baseY;
+                double y3 = last.bottom.y - baseY;
+                double y4 = last.top.y - baseY;
+
+                double z1 = trail.top.z - baseZ;
+                double z2 = trail.bottom.z - baseZ;
+                double z3 = last.bottom.z - baseZ;
+                double z4 = last.top.z - baseZ;
+
                 if (loop)
                 {
-                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(trail.tick / length, 0F).next();
-                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(trail.tick / length, 1F).next();
-                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(last.tick / length, 1F).next();
-                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(last.tick / length, 0F).next();
-                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(last.tick / length, 0F).next();
-                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(last.tick / length, 1F).next();
-                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(trail.tick / length, 1F).next();
-                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(trail.tick / length, 0F).next();
+                    float u1 = trail.tick / length;
+                    float u2 = last.tick / length;
+
+                    builder.vertex(m, (float) x1, (float) y1, (float) z1).texture(u1, 0F).next();
+                    builder.vertex(m, (float) x2, (float) y2, (float) z2).texture(u1, 1F).next();
+                    builder.vertex(m, (float) x3, (float) y3, (float) z3).texture(u2, 1F).next();
+                    builder.vertex(m, (float) x4, (float) y4, (float) z4).texture(u2, 0F).next();
+                    /* Other side */
+                    builder.vertex(m, (float) x4, (float) y4, (float) z4).texture(u2, 0F).next();
+                    builder.vertex(m, (float) x3, (float) y3, (float) z3).texture(u2, 1F).next();
+                    builder.vertex(m, (float) x2, (float) y2, (float) z2).texture(u1, 1F).next();
+                    builder.vertex(m, (float) x1, (float) y1, (float) z1).texture(u1, 0F).next();
                 }
                 else
                 {
-                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(((current - trail.tick) / length), 0F).next();
-                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(((current - trail.tick) / length), 1F).next();
-                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(((current - last.tick) / length), 1F).next();
-                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(((current - last.tick) / length), 0F).next();
-                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(((current - last.tick) / length), 0F).next();
-                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(((current - last.tick) / length), 1F).next();
-                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(((current - trail.tick) / length), 1F).next();
-                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(((current - trail.tick) / length), 0F).next();
+                    float u1 = (current - trail.tick) / length;
+                    float u2 = (current - last.tick) / length;
+
+                    builder.vertex(m, (float) x1, (float) y1, (float) z1).texture(u1, 0F).next();
+                    builder.vertex(m, (float) x2, (float) y2, (float) z2).texture(u1, 1F).next();
+                    builder.vertex(m, (float) x3, (float) y3, (float) z3).texture(u2, 1F).next();
+                    builder.vertex(m, (float) x4, (float) y4, (float) z4).texture(u2, 0F).next();
+                    /* Other side */
+                    builder.vertex(m, (float) x4, (float) y4, (float) z4).texture(u2, 0F).next();
+                    builder.vertex(m, (float) x3, (float) y3, (float) z3).texture(u2, 1F).next();
+                    builder.vertex(m, (float) x2, (float) y2, (float) z2).texture(u1, 1F).next();
+                    builder.vertex(m, (float) x1, (float) y1, (float) z1).texture(u1, 0F).next();
                 }
             }
             else
