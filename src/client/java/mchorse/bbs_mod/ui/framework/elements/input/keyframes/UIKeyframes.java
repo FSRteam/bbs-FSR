@@ -35,6 +35,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -522,7 +523,7 @@ public class UIKeyframes extends UIElement
     {
         if (data == null)
         {
-            return null;
+            return Collections.emptyMap();
         }
 
         Map<String, PastedKeyframes> temp = new HashMap<>();
@@ -543,7 +544,7 @@ public class UIKeyframes extends UIElement
             }
         }
 
-        return temp.isEmpty() ? null : temp;
+        return temp;
     }
 
     private MapType serializeKeyframes()
