@@ -22,7 +22,8 @@ public class UIFormRenderer extends UIModelRenderer
 
         FormRenderingContext formContext = new FormRenderingContext()
             .set(this.entity, context.batcher.getContext().getMatrices(), LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
-            .camera(this.camera);
+            .camera(this.camera)
+            .modelRenderer();
 
         FormUtilsClient.render(this.form, formContext);
     }

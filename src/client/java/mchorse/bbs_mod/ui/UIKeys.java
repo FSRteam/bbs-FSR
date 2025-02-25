@@ -344,14 +344,14 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_GENERAL_HITBOX_SNEAK_MULTIPLIER = L10n.lang("bbs.ui.forms.editors.general.hitbox_sneak_multiplier");
     public static final IKey FORMS_EDITORS_GENERAL_HITBOX_WIDTH = L10n.lang("bbs.ui.forms.editors.general.hitbox_width");
     public static final IKey FORMS_EDITORS_GENERAL_HOTKEY = L10n.lang("bbs.ui.forms.editors.general.hotkey");
+    public static final IKey FORMS_EDITORS_GENERAL_HP = L10n.lang("bbs.ui.forms.editors.general.hp");
     public static final IKey FORMS_EDITORS_GENERAL_LIGHTING = L10n.lang("bbs.ui.forms.editors.general.lighting");
     public static final IKey FORMS_EDITORS_GENERAL_LIGHTING_TOOLTIP = L10n.lang("bbs.ui.forms.editors.general.lighting-tooltip");
-    public static final IKey FORMS_EDITORS_GENERAL_UI_SCALE = L10n.lang("bbs.ui.forms.editors.general.ui_scale");
-    public static final IKey FORMS_EDITORS_GENERAL_VISIBLE = L10n.lang("bbs.ui.forms.editors.general.visible");
-    public static final IKey FORMS_EDITORS_GENERAL_HP = L10n.lang("bbs.ui.forms.editors.general.hp");
     public static final IKey FORMS_EDITORS_GENERAL_MOVEMENT_SPEED = L10n.lang("bbs.ui.forms.editors.general.movement_speed");
     public static final IKey FORMS_EDITORS_GENERAL_MOVEMENT_SPEED_TOOLTIP = L10n.lang("bbs.ui.forms.editors.general.movement_speed-tooltip");
     public static final IKey FORMS_EDITORS_GENERAL_STEP_HEIGHT = L10n.lang("bbs.ui.forms.editors.general.step_height");
+    public static final IKey FORMS_EDITORS_GENERAL_UI_SCALE = L10n.lang("bbs.ui.forms.editors.general.ui_scale");
+    public static final IKey FORMS_EDITORS_GENERAL_VISIBLE = L10n.lang("bbs.ui.forms.editors.general.visible");
     public static final IKey FORMS_EDITORS_ITEM_TITLE = L10n.lang("bbs.ui.forms.editors.item.title");
     public static final IKey FORMS_EDITORS_ITEM_TRANSFORMS = L10n.lang("bbs.ui.forms.editors.item.transforms");
     public static final IKey FORMS_EDITORS_LABEL_ANCHOR = L10n.lang("bbs.ui.forms.editors.label.anchor");
@@ -364,6 +364,9 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MOB_TITLE = L10n.lang("bbs.ui.forms.editors.mob.title");
     public static final IKey FORMS_EDITORS_MODEL_ACTIONS = L10n.lang("bbs.ui.forms.editors.model.actions");
     public static final IKey FORMS_EDITORS_MODEL_POSE = L10n.lang("bbs.ui.forms.editors.model.pose");
+    public static final IKey FORMS_EDITORS_TRAIL_LENGTH = L10n.lang("bbs.ui.forms.editors.trail.length");
+    public static final IKey FORMS_EDITORS_TRAIL_LOOP = L10n.lang("bbs.ui.forms.editors.trail.loop");
+    public static final IKey FORMS_EDITORS_TRAIL_TITLE = L10n.lang("bbs.ui.forms.editors.trail.title");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_COUNT = L10n.lang("bbs.ui.forms.editors.vanilla_particle.count");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_PICK = L10n.lang("bbs.ui.forms.editors.vanilla_particle.editor.pick");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_TITLE = L10n.lang("bbs.ui.forms.editors.vanilla_particle.editor.title");

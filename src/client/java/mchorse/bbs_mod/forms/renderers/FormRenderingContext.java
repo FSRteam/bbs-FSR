@@ -18,6 +18,7 @@ public class FormRenderingContext
     public StencilMap stencilMap;
     public boolean ui;
     public int color;
+    public boolean modelRenderer;
 
     public FormRenderingContext()
     {}
@@ -71,6 +72,13 @@ public class FormRenderingContext
     public FormRenderingContext color(int color)
     {
         this.color = color;
+
+        return this;
+    }
+
+    public FormRenderingContext modelRenderer()
+    {
+        this.modelRenderer = true;
 
         return this;
     }

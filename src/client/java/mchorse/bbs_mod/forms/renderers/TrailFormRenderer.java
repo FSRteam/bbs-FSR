@@ -1,0 +1,226 @@
+package mchorse.bbs_mod.forms.renderers;
+
+import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.forms.ITickable;
+import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.forms.TrailForm;
+import mchorse.bbs_mod.graphics.Draw;
+import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.ui.framework.UIContext;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BufferRenderer;
+import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.util.math.MatrixStack;
+import org.joml.Matrix4f;
+import org.joml.Vector3d;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
+
+import java.util.ArrayDeque;
+import java.util.Iterator;
+
+public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITickable
+{
+    private int tick;
+    private final ArrayDeque<Trail> record = new ArrayDeque<>();
+
+    public TrailFormRenderer(TrailForm form)
+    {
+        super(form);
+    }
+
+    @Override
+    protected void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
+    {
+        Texture texture = context.render.getTextures().getTexture(this.form.texture.get());
+
+        float min = Math.min(texture.width, texture.height);
+        int ow = (x2 - x1) - 4;
+        int oh = (y2 - y1) - 4;
+
+        int w = (int) ((texture.width / min) * ow);
+        int h = (int) ((texture.height / min) * ow);
+
+        int x = x1 + (ow - w) / 2 + 2;
+        int y = y1 + (oh - h) / 2 + 2;
+
+        context.batcher.fullTexturedBox(texture, x, y, w, h);
+    }
+
+    @Override
+    protected void render3D(FormRenderingContext context)
+    {
+        super.render3D(context);
+
+        if (BBSRendering.isIrisShadowPass())
+        {
+            return;
+        }
+
+        if (context.modelRenderer || context.ui)
+        {
+            MatrixStack stack = context.stack;
+            float scale = BBSSettings.axesScale.get();
+            float axisSize = 1F;
+            float axisOffset = 0.01F;
+            float outlineSize = 1.01F;
+            float outlineOffset = 0.02F;
+
+            axisOffset *= scale;
+            outlineOffset *= scale;
+
+            BufferBuilder builder = Tessellator.getInstance().getBuffer();
+
+            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+            Draw.fillBox(builder, stack, -outlineOffset, -outlineSize, -outlineOffset, outlineOffset, outlineSize, outlineOffset, 0, 0, 0);
+            Draw.fillBox(builder, stack, -axisOffset, -axisSize, -axisOffset, axisOffset, axisSize, axisOffset, 0, 1, 0);
+
+            RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+            RenderSystem.disableDepthTest();
+
+            BufferRenderer.drawWithGlobalProgram(builder.end());
+
+            return;
+        }
+
+        MatrixStack stack = context.stack;
+        Matrix4f camInverse = new Matrix4f(RenderSystem.getInverseViewRotationMatrix());
+
+        Camera camera = context.camera;
+        double baseX = camera.position.x;
+        double baseY = camera.position.y;
+        double baseZ = camera.position.z;
+
+        float current = (float)this.tick + context.transition;
+
+        if (!this.form.paused.get())
+        {
+            Matrix4f modelView = stack.peek().getPositionMatrix();
+
+            Vector4f top = new Vector4f(0F, 1F, 0F, 1F);
+            Vector4f bottom = new Vector4f(0F, -1F, 0F, 1F);
+
+            modelView.transform(top);
+            modelView.transform(bottom);
+            camInverse.transform(top);
+            camInverse.transform(bottom);
+
+            top.mul(1F / top.w);
+            bottom.mul(1F / bottom.w);
+
+            Trail record = new Trail();
+
+            record.tick = current;
+            record.top = new Vector3d(top.x + baseX, top.y + baseY, top.z + baseZ);
+            record.bottom = new Vector3d(bottom.x + baseX, bottom.y + baseY, bottom.z + baseZ);
+            record.stop = new Vector3f(top.x - bottom.x, top.y - bottom.y, top.z - bottom.z).lengthSquared() < 1.0E-4D;
+
+            this.record.addLast(record);
+        }
+
+        boolean loop = this.form.loop.get();
+        float length = this.form.length.get();
+        float end = current - length;
+        Iterator<Trail> it = this.record.iterator();
+        boolean render = false;
+        boolean lastStop = true;
+
+        while (it.hasNext())
+        {
+            Trail trail = it.next();
+
+            if (trail.tick < end)
+            {
+                it.remove();
+            }
+            else
+            {
+                render |= !trail.stop && !lastStop;
+                lastStop = trail.stop;
+            }
+        }
+
+        if (!render || this.record.size() <= 1 || !(length > 0.001D))
+        {
+            return;
+        }
+
+        BBSModClient.getTextures().bindTexture(this.form.texture.get());
+
+        stack.push();
+
+        Trail last = null;
+        Trail trail;
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        Matrix4f m = stack.peek().getPositionMatrix();
+
+        m.set(camInverse);
+        m.invert();
+
+        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
+
+        for (it = this.record.iterator(); it.hasNext(); last = trail)
+        {
+            trail = it.next();
+
+            if (last != null && !last.stop && !trail.stop)
+            {
+                if (loop)
+                {
+                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(trail.tick / length, 0F).next();
+                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(trail.tick / length, 1F).next();
+                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(last.tick / length, 1F).next();
+                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(last.tick / length, 0F).next();
+                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(last.tick / length, 0F).next();
+                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(last.tick / length, 1F).next();
+                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(trail.tick / length, 1F).next();
+                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(trail.tick / length, 0F).next();
+                }
+                else
+                {
+                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(((current - trail.tick) / length), 0F).next();
+                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(((current - trail.tick) / length), 1F).next();
+                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(((current - last.tick) / length), 1F).next();
+                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(((current - last.tick) / length), 0F).next();
+                    builder.vertex(m, (float) (last.top.x - baseX), (float) (last.top.y - baseY), (float) (last.top.z - baseZ)).texture(((current - last.tick) / length), 0F).next();
+                    builder.vertex(m, (float) (last.bottom.x - baseX), (float) (last.bottom.y - baseY), (float) (last.bottom.z - baseZ)).texture(((current - last.tick) / length), 1F).next();
+                    builder.vertex(m, (float) (trail.bottom.x - baseX), (float) (trail.bottom.y - baseY), (float) (trail.bottom.z - baseZ)).texture(((current - trail.tick) / length), 1F).next();
+                    builder.vertex(m, (float) (trail.top.x - baseX), (float) (trail.top.y - baseY), (float) (trail.top.z - baseZ)).texture(((current - trail.tick) / length), 0F).next();
+                }
+            }
+            else
+            {
+                length = current - trail.tick;
+            }
+        }
+
+        RenderSystem.setShader(GameRenderer::getPositionTexProgram);
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.enableBlend();
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        stack.pop();
+    }
+
+    @Override
+    public void tick(IEntity entity)
+    {
+        this.tick += 1;
+    }
+
+    public static class Trail
+    {
+        public float tick;
+        public Vector3d top;
+        public Vector3d bottom;
+        public boolean stop;
+    }
+}
