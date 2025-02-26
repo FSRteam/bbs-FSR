@@ -91,6 +91,7 @@ public class UIPathClip extends UIClip<PathClip>
             }
 
             this.editor.setCursor(this.clip.tick.get() + offset);
+            this.editor.setFlight(false);
         }
     }
 

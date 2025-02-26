@@ -19,6 +19,10 @@ public interface IUIClipsDelegate
 
     public void pickClip(Clip clip);
 
+    public void setFlight(boolean flight);
+
+    public boolean isFlying();
+
     public int getCursor();
 
     public void setCursor(int tick);

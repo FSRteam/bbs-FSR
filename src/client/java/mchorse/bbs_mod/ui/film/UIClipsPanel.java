@@ -149,6 +149,18 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     }
 
     @Override
+    public void setFlight(boolean flight)
+    {
+        this.filmPanel.setFlight(flight);
+    }
+
+    @Override
+    public boolean isFlying()
+    {
+        return this.filmPanel.isFlying();
+    }
+
+    @Override
     public int getCursor()
     {
         return this.filmPanel.getCursor();
