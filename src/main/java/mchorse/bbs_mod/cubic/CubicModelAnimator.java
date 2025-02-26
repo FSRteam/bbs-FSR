@@ -83,7 +83,10 @@ public class CubicModelAnimator
 
             current.translate.lerp(initial.translate, blend);
             current.scale.lerp(initial.scale, blend);
-            current.rotate.lerp(initial.rotate, blend);
+
+            current.rotate.x = (float) Lerps.lerpYaw(current.rotate.x, initial.rotate.x, blend);
+            current.rotate.y = (float) Lerps.lerpYaw(current.rotate.y, initial.rotate.y, blend);
+            current.rotate.z = (float) Lerps.lerpYaw(current.rotate.z, initial.rotate.z, blend);
         }
 
         for (ModelGroup childGroup : group.children)
@@ -114,8 +117,8 @@ public class CubicModelAnimator
         current.scale.y = Lerps.lerp(current.scale.y, (float) scale.y + initial.scale.y, blend);
         current.scale.z = Lerps.lerp(current.scale.z, (float) scale.z + initial.scale.z, blend);
 
-        current.rotate.x = Lerps.lerp(current.rotate.x, (float) rotation.x + initial.rotate.x, blend);
-        current.rotate.y = Lerps.lerp(current.rotate.y, (float) rotation.y + initial.rotate.y, blend);
-        current.rotate.z = Lerps.lerp(current.rotate.z, (float) rotation.z + initial.rotate.z, blend);
+        current.rotate.x = (float) Lerps.lerpYaw(current.rotate.x, (float) rotation.x + initial.rotate.x, blend);
+        current.rotate.y = (float) Lerps.lerpYaw(current.rotate.y, (float) rotation.y + initial.rotate.y, blend);
+        current.rotate.z = (float) Lerps.lerpYaw(current.rotate.z, (float) rotation.z + initial.rotate.z, blend);
     }
 }
