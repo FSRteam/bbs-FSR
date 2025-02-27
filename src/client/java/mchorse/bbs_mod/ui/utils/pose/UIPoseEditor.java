@@ -109,7 +109,7 @@ public class UIPoseEditor extends UIElement
         this.group = group;
     }
 
-    public void fillGroups(Collection<String> groups, Map<String, String> flippedParts)
+    public void fillGroups(Collection<String> groups, Map<String, String> flippedParts, boolean reset)
     {
         this.flippedParts = flippedParts;
 
@@ -122,7 +122,7 @@ public class UIPoseEditor extends UIElement
         this.transform.setVisible(!groups.isEmpty());
 
         List<String> list = this.groups.getList();
-        int i = list.indexOf(lastLimb);
+        int i = reset ? 0 : list.indexOf(lastLimb);
 
         this.groups.setIndex(Math.max(i, 0));
         this.pickBone(this.groups.getCurrentFirst());

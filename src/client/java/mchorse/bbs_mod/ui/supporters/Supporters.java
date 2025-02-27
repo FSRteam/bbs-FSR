@@ -598,7 +598,7 @@ public class Supporters
         this.add("Leo A.").withDate(9, 1);
         this.add("marlow").withDate(9, 14);
         this.add("Mr. Blaster").withDate(9, 15);
-        this.add("Paresh Solanki").withDate(9, 21);
+        this.add("ProBoiz95").withDate(9, 21);
         this.add("BALOO").withDate(9, 22);
         this.add("NurDeko").withDate(9, 22);
         this.add("Hakan_Sef").withDate(9, 23);
