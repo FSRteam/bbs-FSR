@@ -2,6 +2,7 @@ package mchorse.bbs_mod.utils;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
+import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
@@ -67,6 +68,13 @@ public class MatrixStackUtils
     public static void multiply(MatrixStack stack, Matrix4f matrix)
     {
         normal.set(matrix);
+        normal.getScale(Vectors.TEMP_3F);
+
+        Vectors.TEMP_3F.x = Vectors.TEMP_3F.x == 0F ? 0F : 1F / Vectors.TEMP_3F.x;
+        Vectors.TEMP_3F.y = Vectors.TEMP_3F.y == 0F ? 0F : 1F / Vectors.TEMP_3F.y;
+        Vectors.TEMP_3F.z = Vectors.TEMP_3F.z == 0F ? 0F : 1F / Vectors.TEMP_3F.z;
+
+        normal.scale(Vectors.TEMP_3F);
 
         stack.peek().getPositionMatrix().mul(matrix);
         stack.peek().getNormalMatrix().mul(normal);
