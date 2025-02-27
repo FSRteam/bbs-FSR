@@ -193,7 +193,7 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
             {
                 gun.projectileForm = FormUtils.copy(f);
                 this.sectionProjectile.getChildren(UINestedEdit.class).get(0).setForm(f);
-            }));
+            })).keybinds();
             UIPropTransform projectileTransform = new UIPropTransform();
             UIToggle useTarget = new UIToggle(UIKeys.GUN_PROJECTILE_USE_TARGET, (b) -> gun.useTarget = b.getValue());
             UITrackpad lifeSpan = new UITrackpad((v) -> gun.lifeSpan = v.intValue());
@@ -241,7 +241,7 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
             {
                 gun.impactForm = FormUtils.copy(f);
                 this.sectionImpact.getChildren(UINestedEdit.class).get(0).setForm(f);
-            }));
+            })).keybinds();
             UITrackpad bounceHits = new UITrackpad((v) -> gun.bounces = v.intValue());
             UITrackpad bounceDamping = new UITrackpad((v) -> gun.bounceDamping = v.floatValue());
             UIToggle vanish = new UIToggle(UIKeys.GUN_IMPACT_VANISH, (b) -> gun.vanish = b.getValue());
@@ -277,7 +277,7 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
             {
                 gun.zoomForm = FormUtils.copy(f);
                 this.sectionZoom.getChildren(UINestedEdit.class).get(0).setForm(f);
-            }));
+            })).keybinds();
             UITextbox cmdZoomOn = new UITextbox(10000, (t) -> gun.cmdZoomOn = t);
             UITextbox cmdZoomOff = new UITextbox(10000, (t) -> gun.cmdZoomOff = t);
             UIIcon fovInterp = new UIIcon(Icons.GRAPH, (b) ->
@@ -385,7 +385,7 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
         {
             formConsumer.accept(FormUtils.copy(f));
             section.getChildren(UINestedEdit.class).get(0).setForm(f);
-        }));
+        })).keybinds();
         UIPropTransform uiTransform = new UIPropTransform();
 
         uiPickEdit.setForm(formSupplier.get());
