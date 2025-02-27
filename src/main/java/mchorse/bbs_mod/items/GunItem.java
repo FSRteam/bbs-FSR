@@ -72,7 +72,7 @@ public class GunItem extends Item
             }
         }
 
-        return new TypedActionResult<>(ActionResult.SUCCESS, stack);
+        return new TypedActionResult<>(ActionResult.PASS, stack);
     }
 
     private GunProperties getProperties(ItemStack stack)
