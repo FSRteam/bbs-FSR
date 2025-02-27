@@ -693,6 +693,7 @@
     "bbs.ui.panels.saved-notification": "%s was saved!",
     "bbs.ui.paste": "Paste",
     "bbs.ui.pick": "Pick",
+    "bbs.ui.pose.context.apply": "Apply to children",
     "bbs.ui.pose.context.copy": "Copy pose",
     "bbs.ui.pose.context.fix": "Fix",
     "bbs.ui.pose.context.fix-tooltip": "When enabled disables the influence of the model's animation",

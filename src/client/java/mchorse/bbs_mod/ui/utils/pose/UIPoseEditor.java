@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils.pose;
 
+import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -12,14 +13,17 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
+import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseManager;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class UIPoseEditor extends UIElement
 {
@@ -33,6 +37,7 @@ public class UIPoseEditor extends UIElement
 
     private String group = "";
     private Pose pose;
+    protected IModel model;
     protected Map<String, String> flippedParts;
 
     public UIPoseEditor()
@@ -59,6 +64,13 @@ public class UIPoseEditor extends UIElement
         });
         this.fix.limit(0D, 1D).increment(1D).values(0.1, 0.05D, 0.2D);
         this.fix.tooltip(UIKeys.POSE_CONTEXT_FIX_TOOLTIP);
+        this.fix.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setFix(p, (float) this.fix.getValue()));
+            });
+        });
         this.color = new UIColor((c) ->
         {
             if (this.transform.getTransform() instanceof PoseTransform poseTransform)
@@ -67,6 +79,13 @@ public class UIPoseEditor extends UIElement
             }
         });
         this.color.withAlpha();
+        this.color.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setColor(p, this.color.picker.color.getARGBColor()));
+            });
+        });
         this.lighting = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING, (b) ->
         {
             if (this.transform.getTransform() instanceof PoseTransform poseTransform)
@@ -75,11 +94,34 @@ public class UIPoseEditor extends UIElement
             }
         });
         this.lighting.h(20);
+        this.lighting.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setLighting(p, this.lighting.getValue()));
+            });
+        });
         this.transform = this.createTransformEditor();
         this.transform.setModel();
 
         this.column().vertical().stretch();
         this.add(this.groups, UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform);
+    }
+
+    private void applyChildren(Consumer<PoseTransform> consumer)
+    {
+        if (this.model == null)
+        {
+            return;
+        }
+
+        PoseTransform t = (PoseTransform) this.transform.getTransform();
+        Collection<String> keys = this.model.getAllChildrenKeys(CollectionUtils.getKey(this.pose.transforms, t));
+
+        for (String key : keys)
+        {
+            consumer.accept(this.pose.get(key));
+        }
     }
 
     public String getGroup()
@@ -109,9 +151,12 @@ public class UIPoseEditor extends UIElement
         this.group = group;
     }
 
-    public void fillGroups(Collection<String> groups, Map<String, String> flippedParts, boolean reset)
+    public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset)
     {
+        this.model = model;
         this.flippedParts = flippedParts;
+
+        Collection<String> groups = model == null ? Collections.emptyList() : model.getAllGroupKeys();
 
         this.groups.clear();
         this.groups.add(groups);

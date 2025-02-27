@@ -157,6 +157,29 @@ public class BOBJModel implements IModel
     }
 
     @Override
+    public Collection<String> getAllChildrenKeys(String key)
+    {
+        BOBJBone group = this.armature.bones.get(key);
+        List<String> groups = new ArrayList<>();
+
+        this.collectChildrenKeys(group, groups);
+
+        return groups;
+    }
+
+    private void collectChildrenKeys(BOBJBone group, List<String> groups)
+    {
+        for (BOBJBone bone : this.armature.orderedBones)
+        {
+            if (bone.parentBone == group)
+            {
+                groups.add(bone.name);
+                this.collectChildrenKeys(bone, groups);
+            }
+        }
+    }
+
+    @Override
     public Collection<ModelGroup> getAllGroups()
     {
         return List.of();

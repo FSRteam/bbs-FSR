@@ -75,7 +75,7 @@ public class UIColor extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.area.isInside(context))
+        if (this.area.isInside(context) && context.mouseButton == 0)
         {
             if (!this.picker.hasParent())
             {

@@ -22,6 +22,8 @@ public interface IModel
 
     public Collection<String> getAllGroupKeys();
 
+    public Collection<String> getAllChildrenKeys(String key);
+
     public Collection<ModelGroup> getAllGroups();
 
     public Collection<String> getAdjacentGroups(String groupName);

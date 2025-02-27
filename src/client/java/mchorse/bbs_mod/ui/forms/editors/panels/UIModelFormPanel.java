@@ -2,7 +2,6 @@ package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.cubic.ModelInstance;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -92,7 +91,7 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         ModelInstance model = ModelFormRenderer.getModel(this.form);
 
         this.poseEditor.setPose(form.pose.get(), model == null ? this.form.model.get() : model.poseGroup);
-        this.poseEditor.fillGroups(FormUtilsClient.getBones(this.form), model == null ? null : model.flippedParts, true);
+        this.poseEditor.fillGroups(model == null ? null : model.model, model == null ? null : model.flippedParts, true);
         this.color.setColor(form.color.get().getARGBColor());
 
         this.shapeKeys.removeFromParent();

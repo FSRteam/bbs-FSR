@@ -183,6 +183,26 @@ public class Model implements IMapSerializable, IModel
     }
 
     @Override
+    public Collection<String> getAllChildrenKeys(String key)
+    {
+        ModelGroup group = this.namedGroups.get(key);
+        List<String> groups = new ArrayList<>();
+
+        this.collectChildrenKeys(group, groups);
+
+        return groups;
+    }
+
+    private void collectChildrenKeys(ModelGroup group, List<String> groups)
+    {
+        for (ModelGroup child : group.children)
+        {
+            groups.add(child.id);
+            this.collectChildrenKeys(child, groups);
+        }
+    }
+
+    @Override
     public Collection<ModelGroup> getAllGroups()
     {
         return this.namedGroups.values();
