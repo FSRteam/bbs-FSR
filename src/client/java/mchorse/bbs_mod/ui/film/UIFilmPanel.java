@@ -474,16 +474,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.open();
 
-        Recorder recorder = BBSModClient.getFilms().stopRecording();
-
-        if (recorder == null || recorder.hasNotStarted())
-        {
-            this.notifyServer(ActionState.RESTART);
-
-            return;
-        }
-
-        this.applyRecordedKeyframes(recorder, this.data);
+        this.notifyServer(ActionState.RESTART);
     }
 
     public void receiveActions(String filmId, int replayId, int tick, BaseType clips)
@@ -497,14 +488,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 Clips newClips = new Clips("", BBSMod.getFactoryActionClips());
 
                 newClips.fromData(clips);
-                replay.actions.copyOver(newClips, 0);
+                replay.actions.copyOver(newClips, tick);
             });
         }
 
-        this.notifyServer(ActionState.RESTART);
+        this.save();
     }
 
-    private void applyRecordedKeyframes(Recorder recorder, Film film)
+    public void applyRecordedKeyframes(Recorder recorder, Film film)
     {
         int replayId = recorder.exception;
         Replay rp = CollectionUtils.getSafe(film.replays.getList(), replayId);
@@ -530,8 +521,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                     }
                 }
             });
-
-            this.save();
         }
     }
 

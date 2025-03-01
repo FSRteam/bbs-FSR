@@ -566,7 +566,14 @@ public class BBSModClient implements ClientModInitializer
 
             if (recorder != null)
             {
-                UIScreen.open(dashboard);
+                recorder = BBSModClient.getFilms().stopRecording();
+
+                if (recorder == null || recorder.hasNotStarted() || panel.getData() == null)
+                {
+                    return;
+                }
+
+                panel.applyRecordedKeyframes(recorder, panel.getData());
             }
             else
             {

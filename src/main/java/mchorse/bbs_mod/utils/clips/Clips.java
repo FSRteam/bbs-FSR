@@ -186,9 +186,7 @@ public class Clips extends ValueGroup
     {
         this.preNotifyParent();
 
-        int start = tick + clips.findNextTick(0);
-
-        this.clips.removeIf((next) -> next.tick.get() >= start);
+        this.clips.removeIf((next) -> next.tick.get() >= tick);
 
         for (Clip clip : clips.clips)
         {

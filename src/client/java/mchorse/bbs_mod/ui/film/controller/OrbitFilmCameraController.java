@@ -137,8 +137,8 @@ public class OrbitFilmCameraController implements ICameraController
             int y = context.mouseY;
 
             this.rotation.add(
-                -(y - this.last.y) / this.controller.panel.dashboard.orbit.getAngleSpeed(),
-                -(x - this.last.x) / this.controller.panel.dashboard.orbit.getAngleSpeed()
+                -(y - this.last.y) * this.controller.panel.dashboard.orbit.getAngleSpeed(),
+                -(x - this.last.x) * this.controller.panel.dashboard.orbit.getAngleSpeed()
             );
 
             this.last.set(x, y);
