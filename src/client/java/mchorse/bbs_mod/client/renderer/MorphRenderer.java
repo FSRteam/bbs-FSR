@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.selectors.ISelectorOwnerProvider;
@@ -51,7 +52,7 @@ public class MorphRenderer
                 matrixStack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
 
                 FormUtilsClient.render(morph.getForm(), new FormRenderingContext()
-                    .set(morph.entity, matrixStack, i, overlay, g)
+                    .set(FormRenderType.ENTITY, morph.entity, matrixStack, i, overlay, g)
                     .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
 
                 matrixStack.pop();
@@ -105,7 +106,7 @@ public class MorphRenderer
             matrixStack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
 
             FormUtilsClient.render(form, new FormRenderingContext()
-                .set(owner.entity, matrixStack, i, o, g)
+                .set(FormRenderType.ENTITY, owner.entity, matrixStack, i, o, g)
                 .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
 
             matrixStack.pop();

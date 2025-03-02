@@ -8,6 +8,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
@@ -67,7 +68,9 @@ public class ModelBlockItemRenderer implements BuiltinItemRendererRegistry.Dynam
                 MatrixStackUtils.applyTransform(matrices, transform);
 
                 RenderSystem.enableDepthTest();
-                FormUtilsClient.render(form, new FormRenderingContext().set(item.formEntity, matrices, light, overlay, MinecraftClient.getInstance().getTickDelta()));
+                FormUtilsClient.render(form, new FormRenderingContext()
+                    .set(FormRenderType.fromModelMode(mode), item.formEntity, matrices, light, overlay, MinecraftClient.getInstance().getTickDelta())
+                    .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
                 RenderSystem.disableDepthTest();
 
                 matrices.pop();

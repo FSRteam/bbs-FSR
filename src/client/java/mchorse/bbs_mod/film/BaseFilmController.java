@@ -11,6 +11,7 @@ import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.properties.AnchorProperty;
+import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -140,7 +141,7 @@ public abstract class BaseFilmController
         int overlay = OverlayTexture.packUv(OverlayTexture.getU(0F), OverlayTexture.getV(entity.getHurtTimer() > 0));
 
         FormRenderingContext formContext = new FormRenderingContext()
-            .set(entity, stack, light, overlay, transition)
+            .set(FormRenderType.ENTITY, entity, stack, light, overlay, transition)
             .camera(camera)
             .stencilMap(context.map)
             .color(context.color);

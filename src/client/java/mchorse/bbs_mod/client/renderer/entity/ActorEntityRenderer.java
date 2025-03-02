@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.cubic.render.vanilla.ArmorRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -54,7 +55,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
         FormUtilsClient.render(livingEntity.getForm(), new FormRenderingContext()
-            .set(livingEntity.getEntity(), matrices, light, overlay, tickDelta)
+            .set(FormRenderType.ENTITY, livingEntity.getEntity(), matrices, light, overlay, tickDelta)
             .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();

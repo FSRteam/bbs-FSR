@@ -24,12 +24,14 @@ import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 
 public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITickable
 {
     private int tick;
-    private final ArrayDeque<Trail> record = new ArrayDeque<>();
+    private final Map<FormRenderType, ArrayDeque<Trail>> record = new HashMap<>();
 
     public TrailFormRenderer(TrailForm form)
     {
@@ -59,7 +61,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
     {
         super.render3D(context);
 
-        if (BBSRendering.isIrisShadowPass())
+        if (BBSRendering.isIrisShadowPass() || context.type == FormRenderType.ITEM_INVENTORY)
         {
             return;
         }
@@ -100,6 +102,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         double baseZ = camera.position.z;
 
         float current = (float) this.tick + context.transition;
+        ArrayDeque<Trail> trails = this.record.computeIfAbsent(context.type, (k) -> new ArrayDeque<>());
 
         if (!this.form.paused.get())
         {
@@ -123,13 +126,13 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             record.bottom = new Vector3d(bottom.x + baseX, bottom.y + baseY, bottom.z + baseZ);
             record.stop = new Vector3f(top.x - bottom.x, top.y - bottom.y, top.z - bottom.z).lengthSquared() < 1.0E-4D;
 
-            this.record.addLast(record);
+            trails.addLast(record);
         }
 
         boolean loop = this.form.loop.get();
         float length = this.form.length.get();
         float end = current - length;
-        Iterator<Trail> it = this.record.iterator();
+        Iterator<Trail> it = trails.iterator();
         boolean render = false;
         boolean lastStop = true;
 
@@ -167,7 +170,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
         builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
 
-        for (it = this.record.iterator(); it.hasNext(); last = trail)
+        for (it = trails.iterator(); it.hasNext(); last = trail)
         {
             trail = it.next();
 

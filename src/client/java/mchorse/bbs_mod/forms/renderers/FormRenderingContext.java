@@ -9,6 +9,7 @@ import net.minecraft.client.util.math.MatrixStack;
 
 public class FormRenderingContext
 {
+    public FormRenderType type;
     public IEntity entity;
     public MatrixStack stack;
     public int light;
@@ -23,8 +24,9 @@ public class FormRenderingContext
     public FormRenderingContext()
     {}
 
-    public FormRenderingContext set(IEntity entity, MatrixStack stack, int light, int overlay, float transition)
+    public FormRenderingContext set(FormRenderType type, IEntity entity, MatrixStack stack, int light, int overlay, float transition)
     {
+        this.type = type == null ? FormRenderType.ENTITY : type;
         this.entity = entity;
         this.stack = stack;
         this.light = light;

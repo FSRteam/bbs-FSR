@@ -7,6 +7,7 @@ import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.mixin.client.EntityRendererDispatcherInvoker;
@@ -94,7 +95,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
             RenderSystem.enableDepthTest();
             FormUtilsClient.render(properties.getForm(), new FormRenderingContext()
-                .set(entity.getEntity(), matrices, lightAbove, overlay, tickDelta)
+                .set(FormRenderType.MODEL_BLOCK, entity.getEntity(), matrices, lightAbove, overlay, tickDelta)
                 .camera(camera));
             RenderSystem.disableDepthTest();
 
