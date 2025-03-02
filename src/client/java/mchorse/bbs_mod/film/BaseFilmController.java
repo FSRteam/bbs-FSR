@@ -320,6 +320,11 @@ public abstract class BaseFilmController
 
     public void update()
     {
+        this.updateEntities(this.getTick());
+    }
+
+    protected void updateEntities(int ticks)
+    {
         for (int i = 0; i < this.entities.size(); i++)
         {
             IEntity entity = this.entities.get(i);
@@ -333,7 +338,7 @@ public abstract class BaseFilmController
 
             if (replay != null)
             {
-                int ticks = replay.getTick(this.getTick());
+                ticks = replay.getTick(ticks);
 
                 this.updateEntityAndForm(entity, ticks);
                 this.applyReplay(replay, ticks, entity);

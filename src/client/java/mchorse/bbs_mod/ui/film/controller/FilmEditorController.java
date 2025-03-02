@@ -46,11 +46,13 @@ public class FilmEditorController extends BaseFilmController
     }
 
     @Override
-    public void update()
+    protected void updateEntities(int ticks)
     {
-        super.update();
+        ticks = this.getTick() + (this.controller.panel.getRunner().isRunning() ? 1 : 0);
 
-        this.lastTick = this.getTick();
+        super.updateEntities(ticks);
+
+        this.lastTick = ticks;
     }
 
     @Override
