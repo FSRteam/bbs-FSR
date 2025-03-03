@@ -60,6 +60,16 @@ public class ValueBlockHitResult extends ValueGroup
         this.direction.set(context.getSide().ordinal());
     }
 
+    public void shift(double x, double y, double z)
+    {
+        this.x.set((int) (this.x.get() + x));
+        this.y.set((int) (this.y.get() + y));
+        this.z.set((int) (this.z.get() + z));
+        this.hitX.set(this.hitX.get() + x);
+        this.hitY.set(this.hitY.get() + y);
+        this.hitZ.set(this.hitZ.get() + z);
+    }
+
     public BlockHitResult getHitResult()
     {
         BlockPos pos = new BlockPos(this.x.get(), this.y.get(), this.z.get());

@@ -17,4 +17,14 @@ public abstract class BlockActionClip extends ActionClip
         this.add(this.y);
         this.add(this.z);
     }
+
+    @Override
+    public void shift(double dx, double dy, double dz)
+    {
+        super.shift(dx, dy, dz);
+
+        this.x.set((int) (this.x.get() + dx));
+        this.y.set((int) (this.y.get() + dy));
+        this.z.set((int) (this.z.get() + dz));
+    }
 }

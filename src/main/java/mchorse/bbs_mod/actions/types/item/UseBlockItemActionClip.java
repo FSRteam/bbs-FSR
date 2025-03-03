@@ -23,6 +23,14 @@ public class UseBlockItemActionClip extends ItemActionClip
     }
 
     @Override
+    public void shift(double dx, double dy, double dz)
+    {
+        super.shift(dx, dy, dz);
+
+        this.hit.shift(dx, dy, dz);
+    }
+
+    @Override
     public void applyAction(ActorEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
         Hand hand = this.hand.get() ? Hand.MAIN_HAND : Hand.OFF_HAND;

@@ -6,6 +6,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.camera.clips.modifiers.TranslateClip;
 import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
@@ -60,6 +61,7 @@ import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Vectors;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
@@ -265,6 +267,47 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.showPanel(MathUtils.cycler(this.getPanelIndex() + (Window.isShiftPressed() ? -1 : 1), this.panels));
             UIUtils.playClick();
         }).category(editor);
+
+        this.openOverlay.context((menu) ->
+        {
+            if (this.data == null)
+            {
+                return;
+            }
+
+            menu.action(Icons.ARROW_RIGHT, UIKeys.FILM_MOVE_TITLE, () ->
+            {
+                UIFilmMoveOverlayPanel panel = new UIFilmMoveOverlayPanel((vector) ->
+                {
+                    int topLayer = this.data.camera.getTopLayer() + 1;
+                    int duration = this.data.camera.calculateDuration();
+                    double dx = vector.x;
+                    double dy = vector.y;
+                    double dz = vector.z;
+
+                    BaseValue.edit(this.data, (__) ->
+                    {
+                        TranslateClip clip = new TranslateClip();
+
+                        clip.layer.set(topLayer);
+                        clip.duration.set(duration);
+                        clip.translate.get().set(dx, dy, dz);
+                        __.camera.addClip(clip);
+
+                        for (Replay replay : __.replays.getList())
+                        {
+                            for (Keyframe<Double> keyframe : replay.keyframes.x.getKeyframes()) keyframe.setValue(keyframe.getValue() + dx);
+                            for (Keyframe<Double> keyframe : replay.keyframes.y.getKeyframes()) keyframe.setValue(keyframe.getValue() + dy);
+                            for (Keyframe<Double> keyframe : replay.keyframes.z.getKeyframes()) keyframe.setValue(keyframe.getValue() + dz);
+
+                            replay.actions.shift(dx, dy, dz);
+                        }
+                    });
+                });
+
+                UIOverlay.addOverlay(this.getContext(), panel, 200, 0.9F);
+            });
+        });
 
         this.fill(null);
 

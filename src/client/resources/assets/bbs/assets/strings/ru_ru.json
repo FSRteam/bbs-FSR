@@ -400,6 +400,8 @@
     "bbs.ui.film.groups.right_stick": "Правый стик",
     "bbs.ui.film.groups.triggers": "Триггеры",
     "bbs.ui.film.history-title": "История изменений",
+    "bbs.ui.film.move-title": "Передвинуть фильм",
+    "bbs.ui.film.move-description": "Введите относительные координаты для передвижения элементов (камера и реплеи) фильма:",
     "bbs.ui.film.no_camera-description": "Вы кажется забыли настроить камеру. Эта фича не работает без камеры. Пожалуйста создайте хотя бы один камера клип в редакторе камеры!",
     "bbs.ui.film.no_camera-title": "Нету камеры...",
     "bbs.ui.film.open_action_editor": "Открыть редактор действий",

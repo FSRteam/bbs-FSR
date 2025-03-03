@@ -30,6 +30,13 @@ public class ItemDropActionClip extends ItemActionClip
         this.add(this.velocityZ);
     }
 
+    public void shift(double dx, double dy, double dz)
+    {
+        this.posX.set(this.posX.get() + dx);
+        this.posY.set(this.posY.get() + dy);
+        this.posZ.set(this.posZ.get() + dz);
+    }
+
     @Override
     public void applyAction(ActorEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {

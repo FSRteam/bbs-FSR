@@ -25,6 +25,14 @@ public class InteractBlockActionClip extends ActionClip
     }
 
     @Override
+    public void shift(double dx, double dy, double dz)
+    {
+        super.shift(dx, dy, dz);
+
+        this.hit.shift(dx, dy, dz);
+    }
+
+    @Override
     public void applyAction(ActorEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
         this.applyPositionRotation(player, replay, tick);

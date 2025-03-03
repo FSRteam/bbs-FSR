@@ -271,6 +271,14 @@ public class Clips extends ValueGroup
         return tick + (output != Integer.MIN_VALUE ? output : 0);
     }
 
+    public void shift(double dx, double dy, double dz)
+    {
+        for (Clip clip : this.clips)
+        {
+            clip.shift(dx, dy, dz);
+        }
+    }
+
     /* Value implementation */
 
     @Override

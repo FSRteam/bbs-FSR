@@ -38,6 +38,9 @@ public abstract class Clip extends ValueGroup
         return tick >= offset && tick < offset + this.duration.get();
     }
 
+    public void shift(double dx, double dy, double dz)
+    {}
+
     public Clip copy()
     {
         Clip clip = this.create();
