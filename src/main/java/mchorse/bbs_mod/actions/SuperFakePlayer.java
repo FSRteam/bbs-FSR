@@ -43,7 +43,7 @@ public class SuperFakePlayer extends ServerPlayerEntity
     @Override
     protected int getPermissionLevel()
     {
-        return 4;
+        return 2;
     }
 
     @Override
