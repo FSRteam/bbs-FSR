@@ -517,7 +517,16 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.open();
 
-        this.notifyServer(ActionState.RESTART);
+        Recorder recorder = BBSModClient.getFilms().stopRecording();
+
+        if (recorder == null || recorder.hasNotStarted())
+        {
+            this.notifyServer(ActionState.RESTART);
+
+            return;
+        }
+
+        this.applyRecordedKeyframes(recorder, this.data);
     }
 
     public void receiveActions(String filmId, int replayId, int tick, BaseType clips)
