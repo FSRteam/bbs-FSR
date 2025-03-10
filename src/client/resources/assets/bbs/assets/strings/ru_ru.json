@@ -21,6 +21,8 @@
     "bbs.config.appearance.trackpad_increments-comment": "Включает видимость кнопок < и > на поле трекпада (которые изменяют значение трекпада)",
     "bbs.config.appearance.ui_scale": "Размер интерфейса",
     "bbs.config.appearance.ui_scale-comment": "Эта опция масштабирует внешний вид элементов пользовательского интерфейса и HUD по заданному коэффициенту.",
+    "bbs.config.appearance.uniform_scale": "Равномерный мастштаб",
+    "bbs.config.appearance.uniform_scale-comment": "Эта опция принуждает равномерный масштаб у поля трансформаций когда все координаты одинаковы",
     "bbs.config.audio.title": "Аудио",
     "bbs.config.audio.tooltip": "Опция для внутриигровой синхронизации аудио",
     "bbs.config.audio.waveform_density": "Толщина аудиодорожки",

@@ -21,6 +21,8 @@
     "bbs.config.appearance.trackpad_increments-comment": "Enable < and > buttons on the trackpad field (which increment the trackpad value)",
     "bbs.config.appearance.ui_scale": "GUI scale",
     "bbs.config.appearance.ui_scale-comment": "This option scales the appearance of UI elements and HUD by given factor",
+    "bbs.config.appearance.uniform_scale": "Uniform scale",
+    "bbs.config.appearance.uniform_scale-comment": "This option forces uniform scaling for transformation fields when all scale coordinates are same",
     "bbs.config.audio.title": "Audio",
     "bbs.config.audio.tooltip": "Options for in-game audio sync feature",
     "bbs.config.audio.waveform_density": "Waveform density",

@@ -34,6 +34,7 @@ public class BBSSettings
     public static ValueBoolean forceQwerty;
     public static ValueBoolean freezeModels;
     public static ValueFloat axesScale;
+    public static ValueBoolean uniformScale;
 
     public static ValueBoolean enableCursorRendering;
     public static ValueBoolean enableMouseButtonRendering;
@@ -135,6 +136,7 @@ public class BBSSettings
         forceQwerty = builder.getBoolean("force_qwerty", false);
         freezeModels = builder.getBoolean("freeze_models", false);
         axesScale = builder.getFloat("axes_scale", 1F, 0F, 2F);
+        uniformScale = builder.getBoolean("uniform_scale", false);
 
         favoriteColors = new ValueColors("favorite_colors");
         disabledSheets = new ValueStringKeys("disabled_sheets");

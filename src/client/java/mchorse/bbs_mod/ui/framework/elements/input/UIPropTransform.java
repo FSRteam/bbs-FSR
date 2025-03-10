@@ -142,11 +142,14 @@ public class UIPropTransform extends UITransform
         float minScale = Math.min(transform.scale.x, Math.min(transform.scale.y, transform.scale.z));
         float maxScale = Math.max(transform.scale.x, Math.max(transform.scale.y, transform.scale.z));
 
-        if (
-            (minScale == maxScale && !this.isUniformScale()) ||
-            (minScale != maxScale && this.isUniformScale())
-        ) {
-            this.toggleUniformScale();
+        if (BBSSettings.uniformScale.get())
+        {
+            if (
+                (minScale == maxScale && !this.isUniformScale()) ||
+                (minScale != maxScale && this.isUniformScale())
+            ) {
+                this.toggleUniformScale();
+            }
         }
 
         this.fillT(transform.translate.x, transform.translate.y, transform.translate.z);
