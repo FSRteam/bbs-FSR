@@ -101,6 +101,7 @@ public class FilmEditorController extends BaseFilmController
         if (entity != this.controller.getControlled() || (this.controller.isRecording() && this.controller.getRecordingCountdown() <= 0 && groups != null))
         {
             replay.applyFrame(ticks, entity, entity == this.controller.getControlled() ? groups : null);
+            replay.applyClientActions(ticks, entity, this.film);
         }
 
         if (entity == this.controller.getControlled() && this.controller.isRecording() && this.controller.panel.getRunner().isRunning())
