@@ -151,7 +151,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             }
         }
 
-        if (!render || this.record.size() <= 1 || !(length > 0.001D))
+        if (!render || trails.size() <= 1 || !(length > 0.001D))
         {
             return;
         }
