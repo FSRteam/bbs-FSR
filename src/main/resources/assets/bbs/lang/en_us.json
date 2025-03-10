@@ -20,5 +20,6 @@
     "key.bbs.record_replay": "Record current replay",
     "key.bbs.record_video": "Record video",
     "key.bbs.teleport": "Teleport to current replay",
+    "key.bbs.zoom": "Zoom (BBS gun)",
     "category.bbs.main": "BBS mod"
 }

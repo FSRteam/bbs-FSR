@@ -139,6 +139,16 @@ public class UIPropTransform extends UITransform
     {
         this.transform = transform;
 
+        float minScale = Math.min(transform.scale.x, Math.min(transform.scale.y, transform.scale.z));
+        float maxScale = Math.max(transform.scale.x, Math.max(transform.scale.y, transform.scale.z));
+
+        if (
+            (minScale == maxScale && !this.isUniformScale()) ||
+            (minScale != maxScale && this.isUniformScale())
+        ) {
+            this.toggleUniformScale();
+        }
+
         this.fillT(transform.translate.x, transform.translate.y, transform.translate.z);
         this.fillS(transform.scale.x, transform.scale.y, transform.scale.z);
         this.fillR(MathUtils.toDeg(transform.rotate.x), MathUtils.toDeg(transform.rotate.y), MathUtils.toDeg(transform.rotate.z));
