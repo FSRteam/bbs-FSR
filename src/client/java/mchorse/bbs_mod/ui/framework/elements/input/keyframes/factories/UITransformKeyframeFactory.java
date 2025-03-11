@@ -4,8 +4,10 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Vector3d;
 
 import java.util.function.Consumer;
 
@@ -52,6 +54,34 @@ public class UITransformKeyframeFactory extends UIKeyframeFactory<Transform>
                     }
                 }
             }
+        }
+
+        @Override
+        public void pasteTranslation(Vector3d translation)
+        {
+            apply(this.editor.editor, this.editor.keyframe, (poseT) -> poseT.translate.set(translation));
+            this.setTransform(this.getTransform());
+        }
+
+        @Override
+        public void pasteScale(Vector3d scale)
+        {
+            apply(this.editor.editor, this.editor.keyframe, (poseT) -> poseT.scale.set(scale));
+            this.setTransform(this.getTransform());
+        }
+
+        @Override
+        public void pasteRotation(Vector3d rotation)
+        {
+            apply(this.editor.editor, this.editor.keyframe, (poseT) -> poseT.rotate.set(Vectors.toRad(rotation)));
+            this.setTransform(this.getTransform());
+        }
+
+        @Override
+        public void pasteRotation2(Vector3d rotation)
+        {
+            apply(this.editor.editor, this.editor.keyframe, (poseT) -> poseT.rotate2.set(Vectors.toRad(rotation)));
+            this.setTransform(this.getTransform());
         }
 
         @Override

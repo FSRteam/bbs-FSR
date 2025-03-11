@@ -139,9 +139,9 @@ public abstract class UITransform extends UIElement
                 final ListType innerList = transforms;
 
                 menu.action(Icons.PASTE, UIKeys.TRANSFORMS_CONTEXT_PASTE, () -> this.pasteAll(innerList));
-                menu.action(Icons.ALL_DIRECTIONS, UIKeys.TRANSFORMS_CONTEXT_PASTE_TRANSLATION, () -> this.pasteTranslation(innerList));
-                menu.action(Icons.MAXIMIZE, UIKeys.TRANSFORMS_CONTEXT_PASTE_SCALE, () -> this.pasteScale(innerList));
-                menu.action(Icons.REFRESH, UIKeys.TRANSFORMS_CONTEXT_PASTE_ROTATION, () -> this.pasteRotation(innerList));
+                menu.action(Icons.ALL_DIRECTIONS, UIKeys.TRANSFORMS_CONTEXT_PASTE_TRANSLATION, () -> this.pasteTranslation(this.getVector(innerList, 0)));
+                menu.action(Icons.MAXIMIZE, UIKeys.TRANSFORMS_CONTEXT_PASTE_SCALE, () -> this.pasteScale(this.getVector(innerList, 3)));
+                menu.action(Icons.REFRESH, UIKeys.TRANSFORMS_CONTEXT_PASTE_ROTATION, () -> this.pasteRotation(this.getVector(innerList, 6)));
             }
 
             menu.action(Icons.CLOSE, UIKeys.TRANSFORMS_CONTEXT_RESET, this::reset);
@@ -358,42 +358,38 @@ public abstract class UITransform extends UIElement
 
     public void pasteAll(ListType list)
     {
-        this.pasteTranslation(list);
-        this.pasteScale(list);
-        this.pasteRotation(list);
-
-        Vector3d rotation = this.getVector(list, 9);
-
-        this.r2x.setValue(rotation.x);
-        this.r2y.setValue(rotation.y * (Window.isShiftPressed() ? -1 : 1));
-        this.r2z.setValueAndNotify(rotation.z * (Window.isShiftPressed() ? -1 : 1));
+        this.pasteTranslation(this.getVector(list, 0));
+        this.pasteScale(this.getVector(list, 3));
+        this.pasteRotation(this.getVector(list, 6));
+        this.pasteRotation2(this.getVector(list, 9));
     }
 
-    public void pasteTranslation(ListType list)
+    public void pasteTranslation(Vector3d translation)
     {
-        Vector3d translation = this.getVector(list, 0);
-
         this.tx.setValue(translation.x * (Window.isShiftPressed() ? -1 : 1));
         this.ty.setValue(translation.y);
         this.tz.setValueAndNotify(translation.z);
     }
 
-    public void pasteScale(ListType list)
+    public void pasteScale(Vector3d scale)
     {
-        Vector3d scale = this.getVector(list, 3);
-
         this.sz.setValue(scale.z);
         this.sy.setValue(scale.y);
         this.sx.setValueAndNotify(scale.x);
     }
 
-    public void pasteRotation(ListType list)
+    public void pasteRotation(Vector3d rotation)
     {
-        Vector3d rotation = this.getVector(list, 6);
-
         this.rx.setValue(rotation.x);
         this.ry.setValue(rotation.y * (Window.isShiftPressed() ? -1 : 1));
         this.rz.setValueAndNotify(rotation.z * (Window.isShiftPressed() ? -1 : 1));
+    }
+
+    public void pasteRotation2(Vector3d rotation)
+    {
+        this.r2x.setValue(rotation.x);
+        this.r2y.setValue(rotation.y * (Window.isShiftPressed() ? -1 : 1));
+        this.r2z.setValueAndNotify(rotation.z * (Window.isShiftPressed() ? -1 : 1));
     }
 
     private Vector3d getVector(ListType list, int offset)

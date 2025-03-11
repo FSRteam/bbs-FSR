@@ -14,9 +14,12 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import net.fabricmc.loader.impl.lib.sat4j.core.Vec;
+import org.joml.Vector3d;
 
 import java.util.function.Consumer;
 
@@ -163,6 +166,34 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         public void setKeyframe(UIPoseFactoryEditor editor)
         {
             this.editor = editor;
+        }
+
+        @Override
+        public void pasteTranslation(Vector3d translation)
+        {
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) -> poseT.translate.set(translation));
+            this.setTransform(this.getTransform());
+        }
+
+        @Override
+        public void pasteScale(Vector3d scale)
+        {
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) -> poseT.scale.set(scale));
+            this.setTransform(this.getTransform());
+        }
+
+        @Override
+        public void pasteRotation(Vector3d rotation)
+        {
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) -> poseT.rotate.set(Vectors.toRad(rotation)));
+            this.setTransform(this.getTransform());
+        }
+
+        @Override
+        public void pasteRotation2(Vector3d rotation)
+        {
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) -> poseT.rotate2.set(Vectors.toRad(rotation)));
+            this.setTransform(this.getTransform());
         }
 
         @Override

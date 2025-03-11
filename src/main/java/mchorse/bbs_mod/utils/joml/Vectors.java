@@ -188,4 +188,9 @@ public class Vectors
 
         return result;
     }
+
+    public static Vector3d toRad(Vector3d v)
+    {
+        return new Vector3d(Math.toRadians(v.x), Math.toRadians(v.y), Math.toRadians(v.z));
+    }
 }
