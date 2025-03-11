@@ -104,6 +104,7 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
@@ -209,6 +210,15 @@ public class BBSMod implements ModInitializer
             entries.add(new ItemStack(GUN_ITEM));
         })
         .build();
+
+    public static final SoundEvent CLICK = registerSound("click");
+
+    private static SoundEvent registerSound(String path)
+    {
+        Identifier id = new Identifier(MOD_ID, path);
+
+        return Registry.register(Registries.SOUND_EVENT, id, SoundEvent.of(id));
+    }
 
     private static File worldFolder;
 

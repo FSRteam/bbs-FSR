@@ -1,6 +1,8 @@
 {
     "bbs.config.appearance.axes_scale": "Масштаб осей",
     "bbs.config.appearance.axes_scale-comment": "Определяет размер осей, если оси слишком большие, Вы можете изменить их размер по Вашему усмотрению",
+    "bbs.config.appearance.click_sound": "Звуки кликов",
+    "bbs.config.appearance.click_sound-comment": "Когда эта опция включена, нажатие по кнопке будет проигрывать звуковой эффект из ББС Студии",
     "bbs.config.appearance.force_qwerty": "Отображать QWERTY",
     "bbs.config.appearance.force_qwerty-comment": "Использовать QWERTY (вместо AZERTY, QWERTZ или ЙЦУКЕ) вне зависимо от того какая раскладка клавиатуры у пользователя включена в данный момент для отображения нажатых клавиш и комбинаций в меню F9",
     "bbs.config.appearance.fov": "Поле зрения",

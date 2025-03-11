@@ -1,6 +1,8 @@
 {
     "bbs.config.appearance.axes_scale": "Axes scale",
     "bbs.config.appearance.axes_scale-comment": "Determines the size of axes, if the axes are too big, you can adjust to your liking",
+    "bbs.config.appearance.click_sound": "Click sounds",
+    "bbs.config.appearance.click_sound-comment": "By enabling this option, button clicks will play BBS Studio's custom clicking sound effect",
     "bbs.config.appearance.force_qwerty": "Force QWERTY",
     "bbs.config.appearance.force_qwerty-comment": "For key codes display, force displaying of QWERTY layout instead of currently used layout (like AZERTY, QWERTZ or ЙЦУКЕ)",
     "bbs.config.appearance.fov": "FOV",

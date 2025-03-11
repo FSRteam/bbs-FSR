@@ -35,6 +35,7 @@ public class BBSSettings
     public static ValueBoolean freezeModels;
     public static ValueFloat axesScale;
     public static ValueBoolean uniformScale;
+    public static ValueBoolean clickSound;
 
     public static ValueBoolean enableCursorRendering;
     public static ValueBoolean enableMouseButtonRendering;
@@ -137,6 +138,7 @@ public class BBSSettings
         freezeModels = builder.getBoolean("freeze_models", false);
         axesScale = builder.getFloat("axes_scale", 1F, 0F, 2F);
         uniformScale = builder.getBoolean("uniform_scale", false);
+        clickSound = builder.getBoolean("click_sound", false);
 
         favoriteColors = new ValueColors("favorite_colors");
         disabledSheets = new ValueStringKeys("disabled_sheets");

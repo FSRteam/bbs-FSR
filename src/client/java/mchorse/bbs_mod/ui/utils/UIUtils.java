@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.utils;
 
+import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.utils.OS;
@@ -97,7 +99,14 @@ public class UIUtils
 
     public static void playClick(float pitch)
     {
-        MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, pitch));
+        if (BBSSettings.clickSound.get())
+        {
+            MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(BBSMod.CLICK, pitch));
+        }
+        else
+        {
+            MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, pitch));
+        }
     }
 
     public static KeyCombo createCombo(IKey label, int base, int index)
