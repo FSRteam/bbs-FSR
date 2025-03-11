@@ -53,6 +53,7 @@ import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
@@ -360,6 +361,7 @@ public class UIFilmController extends UIElement
                 this.previousEntity = this.controlled;
 
                 player.copy(this.controlled);
+                PlayerUtils.teleport(this.controlled.getX(), this.controlled.getY(), this.controlled.getZ(), this.controlled.getHeadYaw(), this.controlled.getPitch());
                 entities.set(entities.indexOf(this.controlled), player);
 
                 this.controlled = player;
