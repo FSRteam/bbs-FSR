@@ -250,12 +250,12 @@ public class Supporters
         this.add("李来福AnlBE").withDate(2025, 1, 6);
         this.add("酋长_chief").withDate(2025, 1, 14);
         this.add("Wi2ter").withDate(2025, 1, 21);
-        this.add("Wi2ter").withDate(2025, 1, 21);
         this.add("清歌栀耳").withDate(2025, 1, 22);
         this.add("臻选黄昏蛋").withDate(2025, 1, 29);
         this.add("Nootviri").withDate(2025, 1, 31);
         this.add("shuai123").withDate(2025, 2, 9);
         this.add("李世言", "...").withDate(2025, 2, 10);
+        this.add("PoraMoya", "https://space.bilibili.com/1564552580", "textures/banners/PoraMoya.png").withDate(2025, 2, 23);
 
         /* Patreon */
         this.add("terbin", "https://www.youtube.com/channel/UCD4X2slLdD_WJxlW03JPVQQ", "...").withDate(2, 23);
@@ -637,7 +637,7 @@ public class Supporters
         this.add("유튜브 댕댕이", "...").withDate(2025, 1, 8);
         this.add("Pizzaronee", "https://www.youtube.com/@pizzaroneee").withDate(2025, 1, 22);
         this.add("ณัฐวุฒิ ทวาแสน").withDate(2025, 1, 31);
-        this.add("Kubilay Kaan A.").withDate(2025, 2, 3);
+        this.add("DedektifBedrock").withDate(2025, 2, 3);
         this.add("Why Not").withDate(2025, 2, 3);
         this.add("DorikiTheSimp").withDate(2025, 2, 4);
         this.add("Mayjk").withDate(2025, 2, 5);
@@ -646,6 +646,10 @@ public class Supporters
         this.add("Cujo").withDate(2025, 2, 6);
         this.add("SpookGaming").withDate(2025, 2, 7);
         this.add("ImHarry").withDate(2025, 2, 9);
+        this.add("csabee").withDate(2025, 2, 24);
+        this.add("CalDon", "https://www.youtube.com/@CalDonEN").withDate(2025, 2, 25);
+        this.add("Uriah M.").withDate(2025, 2, 25);
+        this.add("Otávio H.").withDate(2025, 3, 2);
 
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod?
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod? Also, you can provide a link to your social media account (like YouTube, Twitter, TikTok, etc.)
