@@ -1,0 +1,24 @@
+{
+    "block.bbs.model": "Modell blokk",
+    "block.bbs.chroma_red": "Vörös színtelítettség",
+    "block.bbs.chroma_green": "Zöld színtelítettség",
+    "block.bbs.chroma_blue": "Kék színtelítettség",
+    "block.bbs.chroma_cyan": "Cián színtelítettség",
+    "block.bbs.chroma_magenta": "Magenta színtelítettség",
+    "block.bbs.chroma_yellow": "Sárga színtelítettség",
+    "block.bbs.chroma_black": "Fekete színtelítettség",
+    "block.bbs.chroma_white": "Fehér színtelítettség",
+    "item.bbs.gun": "BBS fegyver",
+    "itemGroup.bbs.main": "BBS mod",
+
+    "key.bbs.item_editor": "Eszköz szerkesztő",
+    "key.bbs.dashboard": "Irányítópult",
+    "key.bbs.demorph": "Visszaalakítás",
+    "key.bbs.open_replays": "Jelenlegi visszajátszások megnyitása",
+    "key.bbs.open_morphing": "Átalakítás menü megnyitása",
+    "key.bbs.play_film": "Film lejátszása",
+    "key.bbs.record_replay": "Jelenlegi visszajátszás rögzítése",
+    "key.bbs.record_video": "Videó rögzítése",
+    "key.bbs.teleport": "Teleportálás a jelenlegi visszajátszáshoz",
+    "category.bbs.main": "BBS mod"
+}
