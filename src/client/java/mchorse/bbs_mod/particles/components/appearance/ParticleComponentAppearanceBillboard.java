@@ -10,6 +10,7 @@ import mchorse.bbs_mod.particles.components.IComponentParticleRender;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.render.BufferBuilder;
@@ -448,7 +449,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             {
                 float lifetime = particle.lifetime <= 0 ? 0 : (particle.age + transition) / particle.lifetime;
 
-                index = (int) (lifetime * max);
+                index = MathUtils.clamp((int) (lifetime * max), 0, max - 1);
             }
 
             if (this.loop && max != 0)
