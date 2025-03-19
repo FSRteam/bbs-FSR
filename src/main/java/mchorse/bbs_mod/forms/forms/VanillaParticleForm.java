@@ -10,6 +10,7 @@ public class VanillaParticleForm extends Form
 {
     public final ParticleSettingsProperty settings = new ParticleSettingsProperty(this, "settings", new ParticleSettings());
     public final BooleanProperty paused = new BooleanProperty(this, "paused", false);
+    public final BooleanProperty local = new BooleanProperty(this, "local", false);
     public final FloatProperty velocity = new FloatProperty(this, "velocity", 0.1F);
     public final IntegerProperty count = new IntegerProperty(this, "count", 5);
     public final IntegerProperty frequency = new IntegerProperty(this, "frequency", 5);
@@ -23,8 +24,11 @@ public class VanillaParticleForm extends Form
     {
         super();
 
+        this.local.cantAnimate();
+
         this.register(this.settings);
         this.register(this.paused);
+        this.register(this.local);
         this.register(this.velocity);
         this.register(this.count);
         this.register(this.frequency);

@@ -12,6 +12,7 @@ public class UIVanillaParticleFormPanel extends UIFormPanel<VanillaParticleForm>
 {
     public UIParticleSettings settings;
     public UIToggle paused;
+    public UIToggle local;
     public UITrackpad velocity;
     public UITrackpad count;
     public UITrackpad frequency;
@@ -27,6 +28,7 @@ public class UIVanillaParticleFormPanel extends UIFormPanel<VanillaParticleForm>
 
         this.settings = new UIParticleSettings();
         this.paused = new UIToggle(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_PAUSED, (b) -> this.form.paused.set(b.getValue()));
+        this.local = new UIToggle(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_LOCAL, (b) -> this.form.local.set(b.getValue()));
         this.velocity = new UITrackpad((v) -> this.form.velocity.set(v.floatValue()));
         this.count = new UITrackpad((v) -> this.form.count.set(v.intValue())).integer();
         this.count.tooltip(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_COUNT);
@@ -43,7 +45,7 @@ public class UIVanillaParticleFormPanel extends UIFormPanel<VanillaParticleForm>
         this.offsetZ = new UITrackpad((v) -> this.form.offsetZ.set(v.floatValue()));
         this.offsetZ.tooltip(UIKeys.GENERAL_Z);
 
-        this.options.add(this.settings, this.paused.marginTop(6), UI.label(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_VELOCITY).marginTop(6), this.velocity);
+        this.options.add(this.settings, this.paused.marginTop(6), this.local, UI.label(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_VELOCITY).marginTop(6), this.velocity);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_EMISSION).marginTop(6), this.count, this.frequency);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_SCATTER).marginTop(6), this.scatteringYaw, this.scatteringPitch);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_OFFSET).marginTop(6), this.offsetX, this.offsetY, this.offsetZ);
@@ -56,6 +58,7 @@ public class UIVanillaParticleFormPanel extends UIFormPanel<VanillaParticleForm>
 
         this.settings.setSettings(form.settings.get());
         this.paused.setValue(form.paused.get());
+        this.local.setValue(form.local.get());
         this.velocity.setValue(form.velocity.get());
         this.count.setValue(form.count.get());
         this.frequency.setValue(form.frequency.get());

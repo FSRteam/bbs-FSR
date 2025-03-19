@@ -560,6 +560,7 @@
     "bbs.ui.forms.editors.vanilla_particle.emission": "Emission",
     "bbs.ui.forms.editors.vanilla_particle.frequency": "Frequency",
     "bbs.ui.forms.editors.vanilla_particle.horizontal": "Horizontal",
+    "bbs.ui.forms.editors.vanilla_particle.local": "Local",
     "bbs.ui.forms.editors.vanilla_particle.offset": "Offset",
     "bbs.ui.forms.editors.vanilla_particle.paused": "Paused",
     "bbs.ui.forms.editors.vanilla_particle.scatter": "Scatter",

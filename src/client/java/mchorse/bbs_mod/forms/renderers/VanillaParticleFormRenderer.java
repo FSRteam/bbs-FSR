@@ -30,6 +30,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
 
     private Vector3d pos = new Vector3d();
     private Vector3f vel = new Vector3f();
+    private Matrix3f rot = new Matrix3f();
     private int tick;
 
     public VanillaParticleFormRenderer(VanillaParticleForm form)
@@ -74,7 +75,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
 
         this.pos.set(translation);
         this.vel.set(0F, 0F, 1F);
-        Matrices.TEMP_3F.set(matrix).transform(this.vel);
+        this.rot.set(matrix).transform(this.vel);
 
         context.stack.pop();
     }
@@ -122,9 +123,20 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                         .rotateX(sv)
                         .transform(v.set(velocityX, velocityY, velocityZ));
 
-                    double x = this.pos.x + ((Math.random() * 2F - 1F) * this.form.offsetX.get());
-                    double y = this.pos.y + ((Math.random() * 2F - 1F) * this.form.offsetY.get());
-                    double z = this.pos.z + ((Math.random() * 2F - 1F) * this.form.offsetZ.get());
+                    Vectors.TEMP_3F.set(
+                        ((Math.random() * 2F - 1F) * this.form.offsetX.get()),
+                        ((Math.random() * 2F - 1F) * this.form.offsetY.get()),
+                        ((Math.random() * 2F - 1F) * this.form.offsetZ.get())
+                    );
+
+                    if (this.form.local.get())
+                    {
+                        this.rot.transform(Vectors.TEMP_3F);
+                    }
+
+                    double x = this.pos.x + Vectors.TEMP_3F.x;
+                    double y = this.pos.y + Vectors.TEMP_3F.y;
+                    double z = this.pos.z + Vectors.TEMP_3F.z;
 
                     world.addParticle(effect, true, x, y, z, v.x, v.y, v.z);
                 }

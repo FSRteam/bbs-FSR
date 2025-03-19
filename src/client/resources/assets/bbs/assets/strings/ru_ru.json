@@ -559,6 +559,7 @@
     "bbs.ui.forms.editors.vanilla_particle.emission": "Эмиссия",
     "bbs.ui.forms.editors.vanilla_particle.frequency": "Частота",
     "bbs.ui.forms.editors.vanilla_particle.horizontal": "Горизонтальный",
+    "bbs.ui.forms.editors.vanilla_particle.local": "Локальный",
     "bbs.ui.forms.editors.vanilla_particle.offset": "Смещение",
     "bbs.ui.forms.editors.vanilla_particle.paused": "На паузе",
     "bbs.ui.forms.editors.vanilla_particle.scatter": "Разброс",

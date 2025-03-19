@@ -375,6 +375,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_EMISSION = L10n.lang("bbs.ui.forms.editors.vanilla_particle.emission");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_FREQUENCY = L10n.lang("bbs.ui.forms.editors.vanilla_particle.frequency");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_HORIZONTAL = L10n.lang("bbs.ui.forms.editors.vanilla_particle.horizontal");
+    public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_LOCAL = L10n.lang("bbs.ui.forms.editors.vanilla_particle.local");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_OFFSET = L10n.lang("bbs.ui.forms.editors.vanilla_particle.offset");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_PAUSED = L10n.lang("bbs.ui.forms.editors.vanilla_particle.paused");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_SCATTER = L10n.lang("bbs.ui.forms.editors.vanilla_particle.scatter");
