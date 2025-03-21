@@ -105,6 +105,11 @@ public class AudioRenderer
 
         for (AudioClip clip : clips)
         {
+            if (!clip.enabled.get())
+            {
+                continue;
+            }
+
             try
             {
                 map.put(clip, AudioReader.read(BBSMod.getProvider(), clip.audio.get()));
