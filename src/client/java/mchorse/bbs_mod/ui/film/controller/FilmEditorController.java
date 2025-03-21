@@ -65,6 +65,27 @@ public class FilmEditorController extends BaseFilmController
         {
             super.updateEntityAndForm(entity, tick);
         }
+    }
+
+    @Override
+    protected void applyReplay(Replay replay, int ticks, IEntity entity)
+    {
+        List<String> groups = this.controller.getRecordingGroups();
+        boolean isPlaying = this.controller.isPlaying();
+        boolean isActor = !(entity instanceof MCEntity);
+
+        if (entity != this.controller.getControlled() || (this.controller.isRecording() && this.controller.getRecordingCountdown() <= 0 && groups != null))
+        {
+            replay.applyFrame(ticks, entity, entity == this.controller.getControlled() ? groups : null);
+            replay.applyClientActions(ticks, entity, this.film);
+        }
+
+        if (entity == this.controller.getControlled() && this.controller.isRecording() && this.controller.panel.getRunner().isRunning())
+        {
+            replay.keyframes.record(this.controller.panel.getRunner().ticks, entity, groups);
+        }
+
+        ticks = this.getTick() + (this.controller.panel.getRunner().isRunning() ? 1 : 0);
 
         /* Special pausing logic */
         if (!isPlaying && isActor)
@@ -77,7 +98,7 @@ public class FilmEditorController extends BaseFilmController
             entity.setPrevBodyYaw(entity.getBodyYaw());
             entity.setPrevPitch(entity.getPitch());
 
-            int diff = Math.abs(this.lastTick - tick);
+            int diff = Math.abs(this.lastTick - ticks);
 
             while (diff > 0)
             {
@@ -90,23 +111,6 @@ public class FilmEditorController extends BaseFilmController
 
                 diff -= 1;
             }
-        }
-    }
-
-    @Override
-    protected void applyReplay(Replay replay, int ticks, IEntity entity)
-    {
-        List<String> groups = this.controller.getRecordingGroups();
-
-        if (entity != this.controller.getControlled() || (this.controller.isRecording() && this.controller.getRecordingCountdown() <= 0 && groups != null))
-        {
-            replay.applyFrame(ticks, entity, entity == this.controller.getControlled() ? groups : null);
-            replay.applyClientActions(ticks, entity, this.film);
-        }
-
-        if (entity == this.controller.getControlled() && this.controller.isRecording() && this.controller.panel.getRunner().isRunning())
-        {
-            replay.keyframes.record(this.controller.panel.getRunner().ticks, entity, groups);
         }
     }
 
