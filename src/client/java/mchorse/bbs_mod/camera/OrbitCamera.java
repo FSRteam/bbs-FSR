@@ -172,12 +172,16 @@ public class OrbitCamera
 
     public float getAngleSpeed()
     {
-        return 1 / 80F * BBSSettings.editorCameraAngleSpeed.get();
+        float factor = Window.isCtrlPressed() ? this.high : (Window.isAltPressed() ? this.low : this.normal);
+
+        return 1 / 80F * BBSSettings.editorCameraAngleSpeed.get() * factor;
     }
 
     public float getSpeed()
     {
-        return (Window.isCtrlPressed() ? this.high : (Window.isAltPressed() ? this.low : this.normal)) * (float) this.speed.getValue() * 0.25F * BBSSettings.editorCameraSpeed.get();
+        float factor = Window.isCtrlPressed() ? this.high : (Window.isAltPressed() ? this.low : this.normal);
+
+        return factor * (float) this.speed.getValue() * 0.25F * BBSSettings.editorCameraSpeed.get();
     }
 
     protected Vector3f rotateVector(float x, float y, float z)
