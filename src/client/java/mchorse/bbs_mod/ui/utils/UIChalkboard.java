@@ -40,6 +40,7 @@ public class UIChalkboard extends UIElement
         this.picker = new UIColor((c) -> this.color = c).withAlpha();
         this.picker.direction(Direction.TOP).withTarget(this).setColor(this.color);
         this.picker.relative(this).x(10).y(1F, -30).wh(60, 20);
+        this.picker.setEnabled(false);
 
         this.add(this.picker);
 
@@ -50,6 +51,7 @@ public class UIChalkboard extends UIElement
     private void toggleChalk()
     {
         this.isChalkEnabled = !this.isChalkEnabled;
+        this.picker.setEnabled(this.isChalkEnabled);
     }
 
     public boolean isChalkDisabled()
