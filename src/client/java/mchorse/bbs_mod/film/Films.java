@@ -174,15 +174,7 @@ public class Films
                 ClientNetwork.sendActionRecording(recorder.film.getId(), recorder.exception, recorder.getTick(), 0, false);
             }
 
-            Vector3d pos = recorder.lastPosition;
-
-            if (pos != null)
-            {
-                Vector4f rot = recorder.lastRotation;
-
-                PlayerUtils.teleport(pos.x, pos.y, pos.z, rot.z, rot.y);
-                ClientNetwork.sendPlayerForm(recorder.lastForm);
-            }
+            recorder.shutdown();
         }
 
         return recorder;

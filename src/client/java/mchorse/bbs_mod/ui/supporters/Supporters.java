@@ -256,6 +256,7 @@ public class Supporters
         this.add("shuai123").withDate(2025, 2, 9);
         this.add("李世言", "...").withDate(2025, 2, 10);
         this.add("PoraMoya", "https://space.bilibili.com/1564552580", "textures/banners/PoraMoya.png").withDate(2025, 2, 23);
+        this.add("ppun255").withDate(2025, 3, 5);
 
         /* Patreon */
         this.add("terbin", "https://www.youtube.com/channel/UCD4X2slLdD_WJxlW03JPVQQ", "...").withDate(2, 23);
@@ -650,6 +651,8 @@ public class Supporters
         this.add("CalDon", "https://www.youtube.com/@CalDonEN").withDate(2025, 2, 25);
         this.add("Uriah M.").withDate(2025, 2, 25);
         this.add("Otávio H.").withDate(2025, 3, 2);
+        this.add("csabee").withDate(2025, 3, 15);
+        this.add("AnimalMace", "https://www.youtube.com/@animalmace", "textures/banners/sequencer_morph_lover.png").withDate(2025, 3, 20);
 
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod?
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod? Also, you can provide a link to your social media account (like YouTube, Twitter, TikTok, etc.)
@@ -761,7 +764,8 @@ public class Supporters
         this.add("Agleepi", "https://www.youtube.com/@agleepi", "...").withDate(2025, 1, 20);
         this.add("AGGRESSIVE-COOVIR-21!").withDate(2025, 2, 10); /* <3 */
         this.add("osmiq", "https://twitter.com/osmiq0", "textures/banners/osmiqtop1modeler.png").withDate(2025, 2, 19); /* <3 */
-        this.add("Never", "https://www.youtube.com/@SerialsNever", "...").withDate(2025, 2, 19); /* <3 */
+        this.add("Never", "https://www.youtube.com/@SerialsNever", "...").withDate(2025, 3, 3);
+        this.add("Flatron").withDate(2025, 3, 18);
 
         /* Custom */
         this.add("Hrymka", "...", "textures/banners/hrymka.png").withDate(3, 6);

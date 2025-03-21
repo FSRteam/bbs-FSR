@@ -10,7 +10,9 @@ import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.morphing.Morph;
+import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
@@ -142,5 +144,21 @@ public class Recorder extends WorldFilmController
         vector.normalize().mul(100F);
         vector.w = 1F;
         vector.mul(matrix);
+    }
+
+    @Override
+    public void shutdown()
+    {
+        Vector3d pos = this.lastPosition;
+
+        if (pos != null)
+        {
+            Vector4f rot = this.lastRotation;
+
+            PlayerUtils.teleport(pos.x, pos.y, pos.z, rot.z, rot.y);
+            ClientNetwork.sendPlayerForm(this.lastForm);
+        }
+
+        super.shutdown();
     }
 }
