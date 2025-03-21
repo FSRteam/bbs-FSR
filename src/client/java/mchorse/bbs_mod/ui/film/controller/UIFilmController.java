@@ -1062,8 +1062,6 @@ public class UIFilmController extends UIElement
 
     public void renderFrame(WorldRenderContext context)
     {
-        boolean isPlaying = this.isPlaying();
-
         this.worldRenderContext = context;
 
         RenderSystem.enableDepthTest();
@@ -1244,7 +1242,7 @@ public class UIFilmController extends UIElement
 
         IEntity entity = this.getCurrentEntity();
 
-        if (entity == null)
+        if (entity == null || (this.pov == CAMERA_MODE_FIRST_PERSON && entity == this.getCurrentEntity()))
         {
             return;
         }

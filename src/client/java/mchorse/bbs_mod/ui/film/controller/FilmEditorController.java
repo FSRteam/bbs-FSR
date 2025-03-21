@@ -137,7 +137,10 @@ public class FilmEditorController extends BaseFilmController
     @Override
     protected void renderEntity(WorldRenderContext context, Replay replay, IEntity entity)
     {
-        super.renderEntity(context, replay, entity);
+        if (!(this.controller.getPovMode() == UIFilmController.CAMERA_MODE_FIRST_PERSON && this.isCurrent(entity)))
+        {
+            super.renderEntity(context, replay, entity);
+        }
 
         boolean isPlaying = this.controller.isPlaying();
         float transition = isPlaying ? context.tickDelta() : 0F;
