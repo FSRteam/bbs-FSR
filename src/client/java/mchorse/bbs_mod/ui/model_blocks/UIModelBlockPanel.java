@@ -73,7 +73,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         super(dashboard);
 
-        this.keyDude = new UIElement();
+        this.keyDude = new UIElement().noCulling();
         this.keyDude.keys().register(Keys.MODEL_BLOCKS_MOVE_TO, () ->
         {
             MinecraftClient mc = MinecraftClient.getInstance();
