@@ -442,8 +442,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     {
         /* this.bones.clear()? */
         model.captureMatrices(this.bones, target);
-
-        int a = 10;
     }
 
     @Override

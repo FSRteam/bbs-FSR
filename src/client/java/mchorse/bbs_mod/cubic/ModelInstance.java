@@ -276,6 +276,8 @@ public class ModelInstance implements IModelInstance
         }
         else if (this.model instanceof BOBJModel model)
         {
+            model.getArmature().setupMatrices();
+
             for (BOBJBone orderedBone : model.getArmature().orderedBones)
             {
                 Matrix4f value = new Matrix4f();
