@@ -150,6 +150,7 @@ public class BBSMod implements ModInitializer
         FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ActorEntity::new)
             .dimensions(EntityDimensions.fixed(0.6F, 1.8F))
             .trackRangeBlocks(256)
+            .trackedUpdateRate(1)
             .build());
 
     public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = Registry.register(
