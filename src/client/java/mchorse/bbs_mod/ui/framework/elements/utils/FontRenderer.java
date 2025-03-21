@@ -1,9 +1,11 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class FontRenderer
@@ -15,9 +17,17 @@ public class FontRenderer
         return renderer.wrapLines(Text.literal(string), width).stream().map((ot) ->
         {
             StringBuilder builder = new StringBuilder();
+            StyleHolder holder = new StyleHolder(Style.EMPTY);
 
             ot.accept((a, b, c) ->
             {
+                if (!Objects.equals(b, holder.style))
+                {
+                    styleToString(builder, b);
+
+                    holder.style = b;
+                }
+
                 builder.appendCodePoint(c);
 
                 return true;
@@ -25,6 +35,44 @@ public class FontRenderer
 
             return builder.toString();
         }).collect(Collectors.toList());
+    }
+
+    private static void styleToString(StringBuilder b, Style style)
+    {
+        /* Ew... */
+        if (!style.isEmpty())
+        {
+            b.append("\u00A7r");
+        }
+
+        if (style.getColor() != null)
+        {
+            switch (style.getColor().getName())
+            {
+                case "black": b.append("\u00A70"); break;
+                case "dark_blue": b.append("\u00A71"); break;
+                case "dark_green": b.append("\u00A72"); break;
+                case "dark_aqua": b.append("\u00A73"); break;
+                case "dark_red": b.append("\u00A74"); break;
+                case "dark_purple": b.append("\u00A75"); break;
+                case "gold": b.append("\u00A76"); break;
+                case "gray": b.append("\u00A77"); break;
+                case "dark_gray": b.append("\u00A78"); break;
+                case "blue": b.append("\u00A79"); break;
+                case "green": b.append("\u00A7a"); break;
+                case "aqua": b.append("\u00A7b"); break;
+                case "red": b.append("\u00A7c"); break;
+                case "light_purple": b.append("\u00A7d"); break;
+                case "yellow": b.append("\u00A7e"); break;
+                case "white": b.append("\u00A7f"); break;
+            }
+        }
+
+        if (style.isObfuscated()) b.append("\u00A7k");
+        if (style.isBold()) b.append("\u00A7l");
+        if (style.isStrikethrough()) b.append("\u00A7m");
+        if (style.isUnderlined()) b.append("\u00A7n");
+        if (style.isItalic()) b.append("\u00A7o");
     }
 
     public void setRenderer(TextRenderer renderer)
@@ -83,5 +131,15 @@ public class FontRenderer
         str = str.substring(0, i);
 
         return str.isEmpty() ? str : str + suffix;
+    }
+
+    private static class StyleHolder
+    {
+        public Style style;
+
+        public StyleHolder(Style style)
+        {
+            this.style = style;
+        }
     }
 }
