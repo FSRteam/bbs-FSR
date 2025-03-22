@@ -1,5 +1,13 @@
 {
     "block.bbs.model": "Bloco de Modelo",
+    "block.bbs.chroma_red": "Chroma vermelho",
+    "block.bbs.chroma_green": "Chroma verde",
+    "block.bbs.chroma_blue": "Chroma azul",
+    "block.bbs.chroma_cyan": "Chroma ciano",
+    "block.bbs.chroma_magenta": "Chroma magenta",
+    "block.bbs.chroma_yellow": "Chroma amarelo",
+    "block.bbs.chroma_black": "Chroma preto",
+    "block.bbs.chroma_white": "Chroma branco",
     "item.bbs.gun": "Arma BBS",
     "itemGroup.bbs.main": "BBS mod",
 
@@ -11,6 +19,7 @@
     "key.bbs.play_film": "Reproduzir filme",
     "key.bbs.record_replay": "Gravar replay atual",
     "key.bbs.record_video": "Gravar vídeo",
-    "key.bbs.teleport": "Teleporta para a reprodução atual",
+    "key.bbs.teleport": "Teletransportar para a reprodução atual",
+    "key.bbs.zoom": "Zoom (Arma BBS)",
     "category.bbs.main": "BBS mod"
 }
