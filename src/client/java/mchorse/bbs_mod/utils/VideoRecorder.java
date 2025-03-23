@@ -53,7 +53,50 @@ public class VideoRecorder
         return this.counter;
     }
 
-    private int pbo = -1;
+    private int[] pbos;
+    private int pboIndex;
+
+    /**
+     * People usually are not bright enough, even though everything is stated
+     * in the tutorial, they still manage to specify either wrong path to ffmpeg, or
+     * they specify the path to the folder...
+     *
+     * This little method should simplify their lives!
+     */
+    private static File findFFMPEG(String path)
+    {
+        File file = new File(path);
+        boolean isWin = OS.CURRENT == OS.WINDOWS;
+
+        if (file.isDirectory())
+        {
+            String subpath = isWin ? "ffmpeg.exe" : "ffmpeg";
+            File bin = new File(file, subpath);
+
+            if (bin.isFile())
+            {
+                return bin;
+            }
+
+            bin = new File(file, "bin" + File.pathSeparator + subpath);
+
+            if (bin.isFile())
+            {
+                return bin;
+            }
+        }
+        else if (isWin && !file.exists())
+        {
+            File exe = new File(path + ".exe");
+
+            if (exe.exists())
+            {
+                return exe;
+            }
+        }
+
+        return file;
+    }
 
     /**
      * Start recording the video using ffmpeg
@@ -70,15 +113,17 @@ public class VideoRecorder
         this.textureWidth = width;
         this.textureHeight = height;
 
+        int size = width * height * 3;
+
         if (this.buffer == null)
         {
-            this.buffer = MemoryUtil.memAlloc(width * height * 3);
+            this.buffer = MemoryUtil.memAlloc(size);
         }
 
         try
         {
             File movies = BBSRendering.getVideoFolder();
-            File exportPath = new File(BBSSettings.videoSettings.path.get());
+            File exportPath = findFFMPEG(BBSSettings.videoSettings.path.get());
 
             if (exportPath.isDirectory())
             {
@@ -111,9 +156,17 @@ public class VideoRecorder
 
             System.out.println("Recording video with following arguments: " + args);
 
-            this.pbo = GL30.glGenBuffers();
-            GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbo);
-            GL30.glBufferData(GL30.GL_PIXEL_PACK_BUFFER, width * height * 3, GL30.GL_STREAM_READ);
+            this.pbos = new int[2];
+            this.pboIndex = 0;
+
+            for (int i = 0; i < 2; i++)
+            {
+                this.pbos[i] = GL30.glGenBuffers();
+
+                GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbos[i]);
+                GL30.glBufferData(GL30.GL_PIXEL_PACK_BUFFER, size, GL30.GL_STREAM_READ);
+            }
+
             GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, 0);
 
             ProcessBuilder builder = new ProcessBuilder(args);
@@ -174,9 +227,15 @@ public class VideoRecorder
             return;
         }
 
-        GL30.glDeleteBuffers(this.pbo);
+        if (this.pbos != null)
+        {
+            for (int pbo : this.pbos)
+            {
+                GL30.glDeleteBuffers(pbo);
+            }
+        }
 
-        this.pbo = -1;
+        this.pbos = null;
         this.textureId = -1;
 
         if (this.buffer != null)
@@ -235,10 +294,15 @@ public class VideoRecorder
 
         try
         {
+            int pbo = this.pboIndex;
+            int nextPbo = (this.pboIndex + 1) % this.pbos.length;
+
             GL30.glPixelStorei(GL30.GL_PACK_ALIGNMENT, 1);
-            GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbo);
+            GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbos[pbo]);
             GL30.glBindTexture(GL30.GL_TEXTURE_2D, this.textureId);
             GL30.glGetTexImage(GL30.GL_TEXTURE_2D, 0, GL30.GL_BGR, GL30.GL_UNSIGNED_BYTE, 0);
+
+            GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbos[nextPbo]);
 
             ByteBuffer mappedBuffer = GL30.glMapBuffer(GL30.GL_PIXEL_PACK_BUFFER, GL30.GL_READ_ONLY);
 
@@ -250,6 +314,8 @@ public class VideoRecorder
             }
 
             GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, 0);
+
+            this.pboIndex = nextPbo;
         }
         catch (Exception e)
         {
