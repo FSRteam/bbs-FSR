@@ -18,9 +18,12 @@ import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.Settings;
 import mchorse.bbs_mod.settings.values.ValueGroup;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import net.minecraft.block.Blocks;
 import net.minecraft.command.CommandRegistryAccess;
 import net.minecraft.command.EntitySelector;
+import net.minecraft.command.argument.BlockPosArgumentType;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.command.argument.PosArgument;
 import net.minecraft.command.argument.Vec3ArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
@@ -30,6 +33,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.structure.StructureTemplate;
+import net.minecraft.structure.StructureTemplateManager;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.InvalidIdentifierException;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.SaveProperties;
 import net.minecraft.world.World;
@@ -54,8 +63,23 @@ public class BBSCommands
         registerServerCommand(bbs, environment, hasPermissions);
         registerCheatsCommand(bbs, environment);
         registerBoomCommand(bbs, environment, hasPermissions);
+        registerStructureSaveCommand(bbs, environment, hasPermissions);
 
         dispatcher.register(bbs);
+    }
+
+    private static void registerStructureSaveCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    {
+        LiteralArgumentBuilder<ServerCommandSource> structures = CommandManager.literal("structures");
+        LiteralArgumentBuilder<ServerCommandSource> save = CommandManager.literal("save");
+        RequiredArgumentBuilder<ServerCommandSource, String> name = CommandManager.argument("name", StringArgumentType.word());
+        RequiredArgumentBuilder<ServerCommandSource, PosArgument> from = CommandManager.argument("from", BlockPosArgumentType.blockPos());
+        RequiredArgumentBuilder<ServerCommandSource, PosArgument> to = CommandManager.argument("to", BlockPosArgumentType.blockPos());
+
+        bbs.then(structures
+            .then(save.then(name.then(from.then(to
+                .executes(BBSCommands::saveStructure))))
+        ));
     }
 
     private static void registerMorphCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
@@ -425,5 +449,43 @@ public class BBSCommands
         }
 
         return 1;
+    }
+
+    private static int saveStructure(CommandContext<ServerCommandSource> source)
+    {
+        String name = StringArgumentType.getString(source, "name");
+        BlockPos from = BlockPosArgumentType.getBlockPos(source, "from");
+        BlockPos to = BlockPosArgumentType.getBlockPos(source, "to");
+
+        ServerWorld world = source.getSource().getWorld();
+        StructureTemplateManager structureTemplateManager = world.getStructureTemplateManager();
+        StructureTemplate structureTemplate;
+
+        try
+        {
+            structureTemplate = structureTemplateManager.getTemplateOrBlank(new Identifier(name));
+        }
+        catch (InvalidIdentifierException e)
+        {
+            return 0;
+        }
+
+        BlockPos min = new BlockPos(Math.min(from.getX(), to.getX()), Math.min(from.getY(), to.getY()), Math.min(from.getZ(), to.getZ()));
+        BlockPos max = new BlockPos(Math.max(from.getX(), to.getX()), Math.max(from.getY(), to.getY()), Math.max(from.getZ(), to.getZ()));
+        BlockPos size = max.subtract(min).add(1, 1, 1);
+
+        structureTemplate.saveFromWorld(world, min, size, true, Blocks.STRUCTURE_VOID);
+
+        try
+        {
+            if (structureTemplateManager.saveTemplate(new Identifier(name)))
+            {
+                return 1;
+            }
+        }
+        catch (InvalidIdentifierException var7)
+        {}
+
+        return 0;
     }
 }
