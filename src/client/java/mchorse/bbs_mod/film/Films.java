@@ -22,15 +22,12 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.CollectionUtils;
-import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import org.joml.Vector3d;
-import org.joml.Vector4f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -225,6 +222,11 @@ public class Films
 
     public void startRenderFrame(float transition)
     {
+        if (this.recorder != null)
+        {
+            this.recorder.startRenderFrame(transition);
+        }
+
         for (BaseFilmController controller : this.controllers)
         {
             controller.startRenderFrame(transition);
