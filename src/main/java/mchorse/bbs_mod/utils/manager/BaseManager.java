@@ -6,6 +6,8 @@ import mchorse.bbs_mod.utils.manager.storage.IDataStorage;
 import mchorse.bbs_mod.utils.manager.storage.JSONLikeStorage;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.function.Supplier;
 
 /**
@@ -51,11 +53,6 @@ public abstract class BaseManager <T extends ValueGroup> extends FolderManager<T
         return null;
     }
 
-    public boolean save(T data)
-    {
-        return this.save(data.getId(), data.toData().asMap());
-    }
-
     @Override
     public boolean save(String id, MapType data)
     {
@@ -67,9 +64,10 @@ public abstract class BaseManager <T extends ValueGroup> extends FolderManager<T
 
             this.storage.save(otherFile, data);
 
-            tmpFile.delete();
-            file.renameTo(tmpFile);
-            otherFile.renameTo(file);
+            if (tmpFile.exists()) Files.delete(tmpFile.toPath());
+            if (file.exists()) Files.move(file.toPath(), tmpFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+
+            Files.move(otherFile.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE);
 
             return true;
         }
