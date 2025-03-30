@@ -85,6 +85,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     {
         World world = entity.getWorld();
         boolean paused = this.form.paused.get();
+        Vector3f temp3f = new Vector3f();
 
         if (world != null && !paused)
         {
@@ -123,20 +124,20 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                         .rotateX(sv)
                         .transform(v.set(velocityX, velocityY, velocityZ));
 
-                    Vectors.TEMP_3F.set(
-                        ((Math.random() * 2F - 1F) * this.form.offsetX.get()),
-                        ((Math.random() * 2F - 1F) * this.form.offsetY.get()),
-                        ((Math.random() * 2F - 1F) * this.form.offsetZ.get())
+                    temp3f.set(
+                        (Math.random() * 2F - 1F) * this.form.offsetX.get(),
+                        (Math.random() * 2F - 1F) * this.form.offsetY.get(),
+                        (Math.random() * 2F - 1F) * this.form.offsetZ.get()
                     );
 
                     if (this.form.local.get())
                     {
-                        this.rot.transform(Vectors.TEMP_3F);
+                        this.rot.transform(temp3f);
                     }
 
-                    double x = this.pos.x + Vectors.TEMP_3F.x;
-                    double y = this.pos.y + Vectors.TEMP_3F.y;
-                    double z = this.pos.z + Vectors.TEMP_3F.z;
+                    double x = this.pos.x + temp3f.x;
+                    double y = this.pos.y + temp3f.y;
+                    double z = this.pos.z + temp3f.z;
 
                     world.addParticle(effect, true, x, y, z, v.x, v.y, v.z);
                 }
