@@ -140,7 +140,17 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
             stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
-            CustomVertexConsumerProvider.hijackVertexFormat((layer) -> this.bindTexture(context.getTransition()));
+            BooleanHolder first = new BooleanHolder();
+
+            CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
+            {
+                if (!first.bool)
+                {
+                    this.bindTexture(context.getTransition());
+
+                    first.bool = true;
+                }
+            });
 
             consumers.setUI(true);
             MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE);
@@ -178,7 +188,17 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             }
             else
             {
-                CustomVertexConsumerProvider.hijackVertexFormat((layer) -> this.bindTexture(context.getTransition()));
+                BooleanHolder first = new BooleanHolder();
+
+                CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
+                {
+                    if (!first.bool)
+                    {
+                        this.bindTexture(context.getTransition());
+
+                        first.bool = true;
+                    }
+                });
             }
 
             context.stack.push();
@@ -268,5 +288,10 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.prevYawHead = entity.getHeadYaw() - entity.getBodyYaw();
             this.prevPitch = entity.getPitch();
         }
+    }
+
+    private static class BooleanHolder
+    {
+        public boolean bool;
     }
 }
