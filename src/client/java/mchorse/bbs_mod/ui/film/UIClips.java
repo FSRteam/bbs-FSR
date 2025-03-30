@@ -1310,6 +1310,11 @@ public class UIClips extends UIElement
             Vector3i grabbedData = this.grabbedData.get(i);
             SnappingResult newClipData = this.applyGrab(grabbedData.x, grabbedData.y, grabbedData.z, relativeX, relativeY, true);
 
+            if (clip.tick.get() != newClipData.tick && clip.duration.get() != newClipData.duration)
+            {
+                clip.shiftLeft(newClipData.tick);
+            }
+
             clip.tick.set(newClipData.tick);
             clip.duration.set(newClipData.duration);
             clip.layer.set(newClipData.layer);

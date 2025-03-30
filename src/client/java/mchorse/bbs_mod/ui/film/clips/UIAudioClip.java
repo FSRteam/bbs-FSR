@@ -31,7 +31,7 @@ public class UIAudioClip extends UIClip<AudioClip>
         });
 
         this.offset = new UITrackpad((v) -> this.clip.offset.set(v.intValue()));
-        this.offset.integer().limit(0D);
+        this.offset.integer();
     }
 
     @Override

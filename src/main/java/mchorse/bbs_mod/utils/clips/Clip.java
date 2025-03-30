@@ -41,6 +41,9 @@ public abstract class Clip extends ValueGroup
     public void shift(double dx, double dy, double dz)
     {}
 
+    public void shiftLeft(int tick)
+    {}
+
     public Clip copy()
     {
         Clip clip = this.create();

@@ -14,7 +14,7 @@ public class AudioClip extends CameraClip
     public static final Predicate<Clip> NO_AUDIO = (clip) -> !(clip instanceof AudioClip);
 
     public ValueLink audio = new ValueLink("audio", null);
-    public ValueInt offset = new ValueInt("offset", 0);
+    public ValueInt offset = new ValueInt("offset", 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
 
     public AudioClip()
     {
@@ -22,6 +22,14 @@ public class AudioClip extends CameraClip
 
         this.add(this.audio);
         this.add(this.offset);
+    }
+
+    @Override
+    public void shiftLeft(int tick)
+    {
+        super.shiftLeft(tick);
+
+        this.offset.set(this.offset.get() - (this.tick.get() - tick));
     }
 
     @Override
