@@ -150,6 +150,14 @@ public class MathBuilder
      */
     public IExpression parse(String expression) throws Exception
     {
+        String trimmed = expression.trim();
+
+        /* It is what it is */
+        if (trimmed.equals("-") || trimmed.equals("+"))
+        {
+            return new Constant(0D);
+        }
+
         return this.parseSymbols(this.breakdownChars(this.breakdown(expression)));
     }
 
