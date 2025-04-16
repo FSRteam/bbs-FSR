@@ -311,7 +311,7 @@ public class Supporters
         this.add("StarcClans").withDate(3, 24);
         this.add("Jakinho", "https://www.youtube.com/@Jakinho", "textures/banners/jakinho.png").withDate(3, 24);
         this.add("Pimpochka Games", "https://pimpochka.games/", "textures/banners/pimpochka_games.png").withDate(3, 25);
-        this.add("Nioum").withDate(3, 27);
+        this.add("Nioum", "https://www.youtube.com/@NEW-Mattiou", "textures/banners/Nioum.png").withDate(3, 27);
         this.add("D. Janvier").withDate(3, 27);
         this.add("FinalBlock Studios", "https://finalblockstudios.com/", "textures/banners/finalblock_studios.png").withDate(4, 1);
         this.add("FunkyFight", "https://www.youtube.com/@FunkyFight", "textures/banners/funkyfight.png").withDate(4, 2);

@@ -122,6 +122,7 @@ public class UIKeyframes extends UIElement
                 }
             }
 
+            menu.action(Icons.SEARCH, UIKeys.KEYFRAMES_CONTEXT_ADJUST_VALUES, () -> this.adjustValues());
             menu.action(Icons.ARROW_LEFT, UIKeys.KEYFRAMES_KEYS_SELECT_LEFT, () -> this.selectAfter(mouseX, mouseY, -1));
             menu.action(Icons.ARROW_RIGHT, UIKeys.KEYFRAMES_KEYS_SELECT_RIGHT, () -> this.selectAfter(mouseX, mouseY, 1));
 
@@ -201,6 +202,50 @@ public class UIKeyframes extends UIElement
         this.keys().register(Keys.KEYFRAMES_SELECT_PREV, () -> this.selectNextKeyframe(-1)).category(category);
         this.keys().register(Keys.KEYFRAMES_SELECT_NEXT, () -> this.selectNextKeyframe(1)).category(category);
         this.keys().register(Keys.KEYFRAMES_SPREAD, this::spreadKeyframes).category(category);
+        this.keys().register(Keys.KEYFRAMES_ADJUST_VALUES, this::adjustValues).category(category);
+    }
+
+    private void adjustValues()
+    {
+        this.getContext().replaceContextMenu((menu2) ->
+        {
+            menu2.autoKeys();
+            menu2.action(Icons.ARROW_LEFT, UIKeys.KEYFRAMES_CONTEXT_ADJUST_VALUES_LEFT, () -> this.adjustValues(false));
+            menu2.action(Icons.ARROW_RIGHT, UIKeys.KEYFRAMES_CONTEXT_ADJUST_VALUES_RIGHT, () -> this.adjustValues(true));
+        });
+    }
+
+    private void adjustValues(boolean last)
+    {
+        for (UIKeyframeSheet sheet : this.getGraph().getSheets())
+        {
+            List<Keyframe> selected = sheet.selection.getSelected();
+            IKeyframeFactory factory = sheet.channel.getFactory();
+
+            if (selected.size() < 2 || !KeyframeFactories.isNumeric(factory))
+            {
+                continue;
+            }
+
+            sheet.channel.preNotifyParent();
+
+            int index = last ? selected.size() - 1 : 0;
+            int previous = last ? selected.size() - 2 : 1;
+
+            Keyframe kf = selected.get(index);
+            Keyframe prevKf = selected.get(previous);
+
+            double difference = factory.getY(kf.getValue()) - factory.getY(prevKf.getValue());
+
+            selected.remove(index);
+
+            for (Keyframe keyframe : selected)
+            {
+                keyframe.setValue(factory.yToValue(factory.getY(keyframe.getValue()) + difference));
+            }
+
+            sheet.channel.postNotifyParent();
+        }
     }
 
     public UIKeyframes changed(Runnable runnable)
