@@ -124,6 +124,11 @@ public class UIPoseEditor extends UIElement
         }
     }
 
+    public Pose getPose()
+    {
+        return this.pose;
+    }
+
     public String getGroup()
     {
         return this.groups.getCurrentFirst();

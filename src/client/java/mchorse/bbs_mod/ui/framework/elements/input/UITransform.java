@@ -366,7 +366,7 @@ public abstract class UITransform extends UIElement
 
     public void pasteTranslation(Vector3d translation)
     {
-        this.tx.setValue(translation.x * (Window.isShiftPressed() ? -1 : 1));
+        this.tx.setValue(translation.x);
         this.ty.setValue(translation.y);
         this.tz.setValueAndNotify(translation.z);
     }
@@ -381,15 +381,15 @@ public abstract class UITransform extends UIElement
     public void pasteRotation(Vector3d rotation)
     {
         this.rx.setValue(rotation.x);
-        this.ry.setValue(rotation.y * (Window.isShiftPressed() ? -1 : 1));
-        this.rz.setValueAndNotify(rotation.z * (Window.isShiftPressed() ? -1 : 1));
+        this.ry.setValue(rotation.y);
+        this.rz.setValueAndNotify(rotation.z);
     }
 
     public void pasteRotation2(Vector3d rotation)
     {
         this.r2x.setValue(rotation.x);
-        this.r2y.setValue(rotation.y * (Window.isShiftPressed() ? -1 : 1));
-        this.r2z.setValueAndNotify(rotation.z * (Window.isShiftPressed() ? -1 : 1));
+        this.r2y.setValue(rotation.y);
+        this.r2z.setValueAndNotify(rotation.z);
     }
 
     private Vector3d getVector(ListType list, int offset)
@@ -401,6 +401,17 @@ public abstract class UITransform extends UIElement
             result.x = list.get(offset).asNumeric().doubleValue();
             result.y = list.get(offset + 1).asNumeric().doubleValue();
             result.z = list.get(offset + 2).asNumeric().doubleValue();
+        }
+
+        if (offset == 0)
+        {
+            result.x *= Window.isShiftPressed() ? -1 : 1;
+        }
+
+        if (offset >= 6)
+        {
+            result.y *= Window.isShiftPressed() ? -1 : 1;
+            result.z *= Window.isShiftPressed() ? -1 : 1;
         }
 
         return result;

@@ -13,12 +13,12 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
+import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
-import net.fabricmc.loader.impl.lib.sat4j.core.Vec;
 import org.joml.Vector3d;
 
 import java.util.function.Consumer;
@@ -110,6 +110,11 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             ((UIPoseTransforms) this.transform).setKeyframe(this);
         }
 
+        private String getGroup(PoseTransform transform)
+        {
+            return CollectionUtils.getKey(this.getPose().transforms, transform);
+        }
+
         @Override
         protected UIPropTransform createTransformEditor()
         {
@@ -143,19 +148,19 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         @Override
         protected void setFix(PoseTransform transform, float value)
         {
-            apply(this.editor, this.keyframe, this.getGroup(), (poseT) -> poseT.fix = value);
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.fix = value);
         }
 
         @Override
         protected void setColor(PoseTransform transform, int value)
         {
-            apply(this.editor, this.keyframe, this.getGroup(), (poseT) -> poseT.color.set(value));
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.color.set(value));
         }
 
         @Override
         protected void setLighting(PoseTransform poseTransform, boolean value)
         {
-            apply(this.editor, this.keyframe, this.getGroup(), (poseT) -> poseT.lighting = value ? 0F : 1F);
+            apply(this.editor, this.keyframe, this.getGroup(poseTransform), (poseT) -> poseT.lighting = value ? 0F : 1F);
         }
     }
 
