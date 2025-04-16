@@ -611,8 +611,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.replayEditor.close();
 
         this.notifyServer(ActionState.STOP);
-
-        this.secretPlay.removeFromParent();
     }
 
     @Override
@@ -627,6 +625,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.getCameraController().remove(this.runner);
 
         this.disableContext();
+        this.secretPlay.removeFromParent();
     }
 
     private void disableContext()
