@@ -163,7 +163,9 @@ public class UIFormEditor extends UIElement implements IUIFormList
             {
                 current.part.setForm(FormUtils.copy(f));
 
-                if (current.part.getForm().getId().contains("particle"))
+                Form partForm = current.part.getForm();
+
+                if (partForm != null && partForm.getId().contains("particle"))
                 {
                     current.part.useTarget = true;
 
@@ -171,7 +173,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
                 }
 
                 this.refreshFormList();
-                this.switchEditor(current.part.getForm());
+                this.switchEditor(partForm);
             });
         });
 
