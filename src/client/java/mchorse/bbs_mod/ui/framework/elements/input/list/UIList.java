@@ -259,7 +259,7 @@ public abstract class UIList <T> extends UIElement
 
     public void addIndex(int index)
     {
-        if (this.exists(index) && this.current.indexOf(index) == -1)
+        if (this.exists(index) && !this.current.contains(index))
         {
             this.current.add(index);
         }
@@ -512,7 +512,17 @@ public abstract class UIList <T> extends UIElement
 
             if (this.exists(index))
             {
-                if (this.multi && Window.isShiftPressed())
+                if (this.multi && Window.isShiftPressed() && this.isSelected())
+                {
+                    int first = this.current.get(0);
+                    int increment = first > index ? -1 : 1;
+
+                    for (int i = first + increment; i != index + increment; i += increment)
+                    {
+                        this.addIndex(i);
+                    }
+                }
+                else if (this.multi && Window.isCtrlPressed())
                 {
                     this.toggleIndex(index);
                 }

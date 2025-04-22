@@ -100,11 +100,16 @@ public class UIReplayList extends UIList<Replay>
             {
                 MathBuilder builder = new MathBuilder();
 
-                for (Replay replay : this.getCurrent())
+                builder.register("i");
+
+                for (int index : this.current)
                 {
+                    Replay replay = this.list.get(index);
                     double xv = 0D;
                     double yv = 0D;
                     double zv = 0D;
+
+                    builder.variables.get("i").set(index);
 
                     try
                     {
