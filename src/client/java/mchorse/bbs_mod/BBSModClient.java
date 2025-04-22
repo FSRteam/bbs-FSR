@@ -498,6 +498,9 @@ public class BBSModClient implements ClientModInitializer
         BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.MODEL_BLOCK_ITEM, modelBlockItemRenderer);
         BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.GUN_ITEM, gunItemRenderer);
 
+        /* Create folders */
+        BBSMod.getAudioFolder().mkdirs();
+
         for (String path : List.of("alex", "alex_simple", "steve", "steve_simple"))
         {
             BBSMod.getAssetsPath("models/emoticons/" + path + "/").mkdirs();
