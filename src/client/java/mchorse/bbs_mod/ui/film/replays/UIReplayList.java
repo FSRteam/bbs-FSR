@@ -3,6 +3,8 @@ package mchorse.bbs_mod.ui.film.replays;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.data.Position;
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -17,7 +19,6 @@ import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
-import mchorse.bbs_mod.ui.utils.UIDataUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.RayTracing;
@@ -49,6 +50,7 @@ public class UIReplayList extends UIList<Replay>
         this.overlay = overlay;
         this.panel = panel;
 
+        this.multi();
         this.context((menu) ->
         {
             menu.action(Icons.ADD, UIKeys.SCENE_REPLAYS_CONTEXT_ADD, this::addReplay);
@@ -82,21 +84,40 @@ public class UIReplayList extends UIList<Replay>
 
     private void copyReplay()
     {
-        Replay replay = this.panel.replayEditor.getReplay();
+        MapType replays = new MapType();
+        ListType replayList = new ListType();
 
-        Window.setClipboard((MapType) replay.toData(), "_CopyReplay");
+        replays.put("replays", replayList);
+
+        for (Replay replay : this.getCurrent())
+        {
+            replayList.add(replay.toData());
+        }
+
+        Window.setClipboard(replays, "_CopyReplay");
     }
 
     private void pasteReplay(MapType data)
     {
         Film film = this.panel.getData();
-        Replay replay = film.replays.addReplay();
+        ListType replays = data.getList("replays");
+        Replay last = null;
 
-        BaseValue.edit(replay, (r) -> r.fromData(data));
+        for (BaseType replayType : replays)
+        {
+            Replay replay = film.replays.addReplay();
 
-        this.update();
-        this.panel.replayEditor.setReplay(replay);
-        this.updateFilmEditor();
+            BaseValue.edit(replay, (r) -> r.fromData(replayType));
+
+            last = replay;
+        }
+
+        if (last != null)
+        {
+            this.update();
+            this.panel.replayEditor.setReplay(last);
+            this.updateFilmEditor();
+        }
     }
 
     public void openFormEditor(ValueForm form, boolean editing, Consumer<Form> consumer)
@@ -218,15 +239,24 @@ public class UIReplayList extends UIList<Replay>
             return;
         }
 
-        Replay currentFirst = this.getCurrentFirst();
-        Film film = this.panel.getData();
-        Replay replay = film.replays.addReplay();
+        Replay last = null;
 
-        replay.copy(currentFirst);
+        for (Replay replay : this.getCurrent())
+        {
+            Film film = this.panel.getData();
+            Replay newReplay = film.replays.addReplay();
 
-        this.update();
-        this.panel.replayEditor.setReplay(replay);
-        this.updateFilmEditor();
+            newReplay.copy(replay);
+
+            last = newReplay;
+        }
+
+        if (last != null)
+        {
+            this.update();
+            this.panel.replayEditor.setReplay(last);
+            this.updateFilmEditor();
+        }
     }
 
     private void removeReplay()
@@ -239,7 +269,10 @@ public class UIReplayList extends UIList<Replay>
         Film film = this.panel.getData();
         int index = this.getIndex();
 
-        film.replays.remove(this.getCurrentFirst());
+        for (Replay replay : this.getCurrent())
+        {
+            film.replays.remove(replay);
+        }
 
         int size = this.list.size();
         index = MathUtils.clamp(index, 0, size - 1);

@@ -527,9 +527,11 @@ public abstract class UIList <T> extends UIElement
                     this.dragTime = System.currentTimeMillis();
                 }
 
+                List<T> current = this.getCurrent();
+
                 if (this.callback != null)
                 {
-                    this.callback.accept(this.getCurrent());
+                    this.callback.accept(current);
 
                     return true;
                 }

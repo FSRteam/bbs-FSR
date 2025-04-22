@@ -74,7 +74,7 @@ public class UIFilmUndoHandler
             ValueChangeUndo change = (ValueChangeUndo) anotherUndo;
 
             this.panel.showPanel(change.panel);
-            this.panel.replayEditor.setReplay(CollectionUtils.getSafe(this.panel.getData().replays.getList(), change.replay), false);
+            this.panel.replayEditor.setReplay(CollectionUtils.getSafe(this.panel.getData().replays.getList(), change.replay), true, false);
 
             List<Integer> cameraSelection = change.cameraClips.getSelection(redo);
             List<Integer> voiceLineSelection = change.voiceLinesClips.getSelection(redo);

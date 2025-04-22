@@ -66,7 +66,6 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.world.World;
-import org.jetbrains.annotations.NotNull;
 import org.joml.Vector3d;
 
 import java.util.ArrayList;
@@ -293,7 +292,7 @@ public class UIReplaysEditor extends UIElement
     public UIReplaysEditor(UIFilmPanel filmPanel)
     {
         this.filmPanel = filmPanel;
-        this.replays = new UIReplaysOverlayPanel(filmPanel, this::setReplay);
+        this.replays = new UIReplaysOverlayPanel(filmPanel, (replay) -> this.setReplay(replay, false, true));
 
         this.markContainer();
     }
@@ -332,10 +331,10 @@ public class UIReplaysEditor extends UIElement
 
     public void setReplay(Replay replay)
     {
-        this.setReplay(replay, true);
+        this.setReplay(replay, true, true);
     }
 
-    public void setReplay(Replay replay, boolean resetOrbit)
+    public void setReplay(Replay replay, boolean select, boolean resetOrbit)
     {
         this.replay = replay;
 
@@ -347,7 +346,11 @@ public class UIReplaysEditor extends UIElement
         this.replays.setReplay(replay);
         this.filmPanel.actionEditor.setClips(replay == null ? null : replay.actions);
         this.updateChannelsList();
-        this.replays.replays.setCurrentScroll(replay);
+
+        if (select)
+        {
+            this.replays.replays.setCurrentScroll(replay);
+        }
     }
 
     public void moveReplay(double x, double y, double z)
