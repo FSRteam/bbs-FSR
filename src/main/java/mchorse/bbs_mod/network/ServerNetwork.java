@@ -274,7 +274,7 @@ public class ServerNetwork
                 Clips clips = recorder.composeClips();
 
                 /* Send recorded clips to the client */
-                sendRecordedActions(player, filmId, replayId, recorder.getInitialTick(), clips);
+                sendRecordedActions(player, filmId, replayId, 0, clips);
             }
         });
     }
