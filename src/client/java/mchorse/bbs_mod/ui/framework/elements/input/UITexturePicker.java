@@ -8,7 +8,6 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.importers.IImportPathProvider;
-import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -190,10 +189,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
             UIListOverlayPanel panel = new UIListOverlayPanel(UIKeys.TEXTURE_FIND_TITLE, (s) ->
             {
-                Link link = Link.create(s);
-
-                this.fill(link);
-                this.selectCurrent(link);
+                this.selectCurrent(Link.create(s));
             });
 
             panel.addValues(list);
