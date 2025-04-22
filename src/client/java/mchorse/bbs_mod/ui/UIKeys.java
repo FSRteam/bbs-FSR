@@ -590,6 +590,9 @@ public class UIKeys
     public static final IKey SCENE_REPLAYS_CONTEXT_DUPE = L10n.lang("bbs.ui.scene.replays.context.dupe");
     public static final IKey SCENE_REPLAYS_CONTEXT_EDIT_FORM = L10n.lang("bbs.ui.scene.replays.context.edit_form");
     public static final IKey SCENE_REPLAYS_CONTEXT_FROM_CAMERA = L10n.lang("bbs.ui.scene.replays.context.from_camera");
+    public static final IKey SCENE_REPLAYS_CONTEXT_OFFSET = L10n.lang("bbs.ui.scene.replays.context.offset");
+    public static final IKey SCENE_REPLAYS_CONTEXT_OFFSET_TITLE = L10n.lang("bbs.ui.scene.replays.context.offset-title");
+    public static final IKey SCENE_REPLAYS_CONTEXT_OFFSET_DESCRIPTION = L10n.lang("bbs.ui.scene.replays.context.offset-description");
     public static final IKey SCENE_REPLAYS_CONTEXT_PASTE = L10n.lang("bbs.ui.scene.replays.context.paste");
     public static final IKey SCENE_REPLAYS_CONTEXT_PICK_FORM = L10n.lang("bbs.ui.scene.replays.context.pick_form");
     public static final IKey SCENE_REPLAYS_CONTEXT_REMOVE = L10n.lang("bbs.ui.scene.replays.context.remove");

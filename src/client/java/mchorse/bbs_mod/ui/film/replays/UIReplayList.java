@@ -11,6 +11,7 @@ import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.math.MathBuilder;
 import mchorse.bbs_mod.settings.values.ValueForm;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -19,11 +20,16 @@ import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -76,10 +82,66 @@ public class UIReplayList extends UIList<Replay>
 
             if (this.isSelected())
             {
+                menu.action(Icons.ALL_DIRECTIONS, UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET, this::offsetReplays);
                 menu.action(Icons.DUPE, UIKeys.SCENE_REPLAYS_CONTEXT_DUPE, this::dupeReplay);
                 menu.action(Icons.REMOVE, UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE, this::removeReplay);
             }
         });
+    }
+
+    private void offsetReplays()
+    {
+        UITextbox x = new UITextbox();
+        UITextbox y = new UITextbox();
+        UITextbox z = new UITextbox();
+        UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET_DESCRIPTION, (b) ->
+        {
+            if (b)
+            {
+                MathBuilder builder = new MathBuilder();
+
+                for (Replay replay : this.getCurrent())
+                {
+                    double xv = 0D;
+                    double yv = 0D;
+                    double zv = 0D;
+
+                    try
+                    {
+                        xv = builder.parse(x.getText()).doubleValue();
+                    }
+                    catch (Exception e) {}
+
+                    try
+                    {
+                        yv = builder.parse(y.getText()).doubleValue();
+                    }
+                    catch (Exception e) {}
+
+                    try
+                    {
+                        zv = builder.parse(z.getText()).doubleValue();
+                    }
+                    catch (Exception e) {}
+
+                    for (Keyframe<Double> keyframe : replay.keyframes.x.getKeyframes()) keyframe.setValue(keyframe.getValue() + xv, true);
+                    for (Keyframe<Double> keyframe : replay.keyframes.y.getKeyframes()) keyframe.setValue(keyframe.getValue() + yv, true);
+                    for (Keyframe<Double> keyframe : replay.keyframes.z.getKeyframes()) keyframe.setValue(keyframe.getValue() + zv, true);
+                }
+            }
+        });
+
+        UIElement row = UI.row(x, y, z);
+
+        x.setText("0");
+        y.setText("0");
+        z.setText("0");
+        panel.confirm.w(1F, -10);
+        row.relative(panel.confirm).y(-1F, -5).w(1F).h(20);
+        panel.content.add(row);
+
+
+        UIOverlay.addOverlay(this.getContext(), panel);
     }
 
     private void copyReplay()
