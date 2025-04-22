@@ -83,6 +83,7 @@ public class UIReplayList extends UIList<Replay>
             if (this.isSelected())
             {
                 menu.action(Icons.ALL_DIRECTIONS, UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET, this::offsetReplays);
+                menu.action(Icons.TIME, UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET_TIME, this::offsetTimeReplays);
                 menu.action(Icons.DUPE, UIKeys.SCENE_REPLAYS_CONTEXT_DUPE, this::dupeReplay);
                 menu.action(Icons.REMOVE, UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE, this::removeReplay);
             }
@@ -145,6 +146,44 @@ public class UIReplayList extends UIList<Replay>
         row.relative(panel.confirm).y(-1F, -5).w(1F).h(20);
         panel.content.add(row);
 
+        UIOverlay.addOverlay(this.getContext(), panel);
+    }
+
+    private void offsetTimeReplays()
+    {
+        UITextbox tick = new UITextbox();
+        UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET_TIME_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET_TIME_DESCRIPTION, (b) ->
+        {
+            if (b)
+            {
+                MathBuilder builder = new MathBuilder();
+
+                builder.register("i");
+
+                for (int index : this.current)
+                {
+                    Replay replay = this.list.get(index);
+                    double tickv = 0D;
+
+                    builder.variables.get("i").set(index);
+
+                    try
+                    {
+                        tickv = builder.parse(tick.getText()).doubleValue();
+                    }
+                    catch (Exception e) {}
+
+                    float finalTickv = (float) tickv;
+
+                    BaseValue.edit(replay, (r) -> r.shift(finalTickv));
+                }
+            }
+        });
+
+        tick.setText("0");
+        panel.confirm.w(1F, -10);
+        tick.relative(panel.confirm).y(-1F, -5).w(1F).h(20);
+        panel.content.add(tick);
 
         UIOverlay.addOverlay(this.getContext(), panel);
     }

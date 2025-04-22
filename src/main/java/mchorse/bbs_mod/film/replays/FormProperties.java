@@ -23,6 +23,17 @@ public class FormProperties extends ValueGroup
         super(id);
     }
 
+    public void shift(float tick)
+    {
+        for (KeyframeChannel<?> value : this.properties.values())
+        {
+            for (Keyframe<?> keyframe : value.getKeyframes())
+            {
+                keyframe.setTick(keyframe.getTick() + tick);
+            }
+        }
+    }
+
     public KeyframeChannel getOrCreate(Form form, String key)
     {
         BaseValue value = this.get(key);

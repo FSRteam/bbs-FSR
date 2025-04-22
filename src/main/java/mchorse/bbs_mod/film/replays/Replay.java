@@ -75,6 +75,12 @@ public class Replay extends ValueGroup
         return form.getDisplayName();
     }
 
+    public void shift(float tick)
+    {
+        this.keyframes.shift(tick);
+        this.properties.shift(tick);
+    }
+
     public void applyFrame(int tick, IEntity actor)
     {
         this.applyFrame(tick, actor, null);

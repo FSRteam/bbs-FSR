@@ -5,6 +5,7 @@ import mchorse.bbs_mod.settings.values.ValueGroup;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.interps.IInterp;
 import mchorse.bbs_mod.utils.interps.Interpolations;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
@@ -102,6 +103,20 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.armorChest);
         this.add(this.armorLegs);
         this.add(this.armorFeet);
+    }
+
+    public void shift(float tick)
+    {
+        for (BaseValue baseValue : this.getAll())
+        {
+            if (baseValue instanceof KeyframeChannel<?> channel)
+            {
+                for (Keyframe<?> keyframe : channel.getKeyframes())
+                {
+                    keyframe.setTick(keyframe.getTick() + tick);
+                }
+            }
+        }
     }
 
     public void copyOver(ReplayKeyframes keyframes, int tick)
