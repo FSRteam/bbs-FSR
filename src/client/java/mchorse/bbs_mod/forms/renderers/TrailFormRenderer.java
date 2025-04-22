@@ -61,7 +61,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
     {
         super.render3D(context);
 
-        if (BBSRendering.isIrisShadowPass() || context.type == FormRenderType.ITEM_INVENTORY || !BBSRendering.isRenderingWorld())
+        if (BBSRendering.isIrisShadowPass() || context.type == FormRenderType.ITEM_INVENTORY)
         {
             return;
         }
@@ -90,6 +90,11 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
             BufferRenderer.drawWithGlobalProgram(builder.end());
 
+            return;
+        }
+
+        if (!BBSRendering.isRenderingWorld())
+        {
             return;
         }
 
