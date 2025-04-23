@@ -309,10 +309,9 @@ public class VideoRecorder
             if (mappedBuffer != null && this.counter != 0)
             {
                 this.channel.write(mappedBuffer);
-
-                GL30.glUnmapBuffer(GL30.GL_PIXEL_PACK_BUFFER);
             }
 
+            GL30.glUnmapBuffer(GL30.GL_PIXEL_PACK_BUFFER);
             GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, 0);
 
             this.pboIndex = nextPbo;
