@@ -8,6 +8,7 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -290,7 +291,11 @@ public class UIReplayList extends UIList<Replay>
 
         UIFormPalette palette = UIFormPalette.open(target, editing, form.get(), (f) ->
         {
-            form.set(f);
+            for (Replay replay : this.getCurrent())
+            {
+                replay.form.set(FormUtils.copy(f));
+            }
+
             this.updateFilmEditor();
 
             if (consumer != null)
