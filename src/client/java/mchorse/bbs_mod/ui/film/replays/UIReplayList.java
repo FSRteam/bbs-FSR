@@ -40,6 +40,8 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.joml.Vector3d;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -51,6 +53,7 @@ public class UIReplayList extends UIList<Replay>
 {
     private static String LAST_PROCESS = "v";
     private static String LAST_OFFSET = "0";
+    private static List<String> LAST_PROCESS_PROPERTIES = Arrays.asList("x");
 
     public UIFilmPanel panel;
     public UIReplaysOverlayPanel overlay;
@@ -123,6 +126,8 @@ public class UIReplayList extends UIList<Replay>
                     return;
                 }
 
+                LAST_PROCESS_PROPERTIES = new ArrayList<>(properties.getCurrent());
+
                 for (int index : this.current)
                 {
                     min = Math.min(min, index);
@@ -163,8 +168,17 @@ public class UIReplayList extends UIList<Replay>
         }
 
         properties.background().multi().sort();
-        properties.setCurrentScroll("x");
         properties.relative(expression).y(-5).w(1F).h(16 * 9).anchor(0F, 1F);
+
+        if (!LAST_PROCESS_PROPERTIES.isEmpty())
+        {
+            properties.setCurrentScroll(LAST_PROCESS_PROPERTIES.get(0));
+        }
+
+        for (String property : LAST_PROCESS_PROPERTIES)
+        {
+            properties.addIndex(properties.getList().indexOf(property));
+        }
 
         expression.setText(LAST_PROCESS);
         expression.tooltip(UIKeys.SCENE_REPLAYS_CONTEXT_PROCESS_EXPRESSION_TOOLTIP);
