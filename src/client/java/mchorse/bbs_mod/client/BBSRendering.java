@@ -13,13 +13,17 @@ import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
 import mchorse.bbs_mod.utils.sodium.SodiumUtils;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
@@ -374,7 +378,27 @@ public class BBSRendering
 
     public static void renderHud(DrawContext drawContext, float tickDelta)
     {
-        BBSModClient.getFilms().renderHud(drawContext, tickDelta);
+        Batcher2D batcher2D = new Batcher2D(drawContext);
+        VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
+
+        BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+
+        if (videoRecorder.isRecording() && BBSSettings.recordingOverlays.get())
+        {
+            int count = videoRecorder.getCounter();
+            String label = UIKeys.FILM_VIDEO_RECORDING.format(
+                count,
+                BBSModClient.getKeyRecordVideo().getBoundKeyLocalizedText().getString()
+            ).get();
+
+            int x = 5;
+            int y = 5;
+            int w = batcher2D.getFont().getWidth(label);
+
+            batcher2D.box(x, y, x + 18 + w + 3, y + 16, Colors.A50);
+            batcher2D.icon(Icons.SPHERE, Colors.RED | Colors.A100, x, y);
+            batcher2D.textShadow(label, x + 18, y + 4);
+        }
     }
 
     public static void renderCoolStuff(WorldRenderContext worldRenderContext)

@@ -183,6 +183,11 @@ public class BBSModClient implements ClientModInitializer
         return keyZoom;
     }
 
+    public static KeyBinding getKeyRecordVideo()
+    {
+        return keyRecordVideo;
+    }
+
     public static UIDashboard getDashboard()
     {
         if (dashboard == null)

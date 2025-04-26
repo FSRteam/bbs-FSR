@@ -267,22 +267,9 @@ public class Films
         RenderSystem.disableDepthTest();
     }
 
-    public void renderHud(DrawContext drawContext, float tickDelta)
+    public void renderHud(Batcher2D batcher2D, float tickDelta)
     {
-        Batcher2D batcher2D = new Batcher2D(drawContext);
         Recorder recorder = BBSModClient.getFilms().getRecorder();
-        VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
-
-
-        // Video Recording Overlay (F4)
-        if(videoRecorder != null && videoRecorder.isRecording() && BBSSettings.recordingOverlays.get())
-        {
-            int count = videoRecorder.getCounter();
-
-            String label = "Recording (" + count + " ticks)... Press F4 again to stop.";
-
-            batcher2D.textShadow(label, 10, 10);
-        }
 
         if (recorder != null && BBSSettings.recordingOverlays.get())
         {

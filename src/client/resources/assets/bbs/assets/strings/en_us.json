@@ -417,6 +417,7 @@
     "bbs.ui.film.open_replay_editor": "Open replay editor",
     "bbs.ui.film.open_voice_line_editor": "Open voice line editor",
     "bbs.ui.film.recording": "Recording %s",
+    "bbs.ui.film.video_recording": "Recording %s, press %s to stop...",
     "bbs.ui.film.render_audio": "Render audio (from audio clips)",
     "bbs.ui.film.render_audio.error": "Audio clips couldn't be rendered! See the latest.log for more information...",
     "bbs.ui.film.render_audio.success": "The audio clips were successfully rendered!",
