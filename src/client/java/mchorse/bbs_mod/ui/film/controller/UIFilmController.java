@@ -504,12 +504,9 @@ public class UIFilmController extends UIElement
 
         if (replay != null && this.recordingOld != null)
         {
-            for (BaseValue value : replay.keyframes.getAll())
+            for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
             {
-                if (value instanceof KeyframeChannel channel)
-                {
-                    channel.simplify();
-                }
+                channel.simplify();
             }
 
             BaseType newData = replay.keyframes.toData();

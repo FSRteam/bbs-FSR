@@ -45,6 +45,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
@@ -307,6 +308,34 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
                 UIOverlay.addOverlay(this.getContext(), panel, 200, 0.9F);
             });
+
+            menu.action(Icons.TIME, UIKeys.FILM_INSERT_SPACE_TITLE, () ->
+            {
+                UINumberOverlayPanel panel = new UINumberOverlayPanel(UIKeys.FILM_INSERT_SPACE_TITLE, UIKeys.FILM_INSERT_SPACE_DESCRIPTION, (d) ->
+                {
+                    if (d.intValue() <= 0)
+                    {
+                        return;
+                    }
+
+                    for (Replay replay : this.data.replays.getList())
+                    {
+                        for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
+                        {
+                            channel.insertSpace(this.getCursor(), d.intValue());
+                        }
+
+                        for (KeyframeChannel channel : replay.properties.properties.values())
+                        {
+                            channel.insertSpace(this.getCursor(), d.intValue());
+                        }
+                    }
+                });
+
+                panel.value.limit(1).integer().setValue(1D);
+
+                UIOverlay.addOverlay(this.getContext(), panel);
+            });
         });
 
         this.fill(null);
@@ -463,15 +492,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
                 copy.form.set(FormUtils.copy(replay.form.get()));
 
-                for (BaseValue value : replay.keyframes.getAll())
+                for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
                 {
-                    if (!(value instanceof KeyframeChannel<?>))
-                    {
-                        continue;
-                    }
-
-                    KeyframeChannel channel = (KeyframeChannel) value;
-
                     if (!channel.isEmpty())
                     {
                         KeyframeChannel newChannel = (KeyframeChannel) copy.keyframes.get(channel.getId());

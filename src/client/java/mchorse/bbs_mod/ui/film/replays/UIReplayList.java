@@ -160,11 +160,11 @@ public class UIReplayList extends UIList<Replay>
             }
         });
 
-        for (BaseValue baseValue : this.getCurrentFirst().keyframes.getAll())
+        for (KeyframeChannel<?> channel : this.getCurrentFirst().keyframes.getChannels())
         {
-            if (baseValue instanceof KeyframeChannel<?> channel && KeyframeFactories.isNumeric(channel.getFactory()))
+            if (KeyframeFactories.isNumeric(channel.getFactory()))
             {
-                properties.add(baseValue.getId());
+                properties.add(channel.getId());
             }
         }
 

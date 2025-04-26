@@ -13,6 +13,7 @@ import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
 import org.joml.Vector2d;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -105,32 +106,41 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.armorFeet);
     }
 
-    public void shift(float tick)
+    public List<KeyframeChannel<?>> getChannels()
     {
+        ArrayList<KeyframeChannel<?>> channels = new ArrayList<>();
+
         for (BaseValue baseValue : this.getAll())
         {
             if (baseValue instanceof KeyframeChannel<?> channel)
             {
-                for (Keyframe<?> keyframe : channel.getKeyframes())
-                {
-                    keyframe.setTick(keyframe.getTick() + tick);
-                }
+                channels.add(channel);
+            }
+        }
+
+        return channels;
+    }
+
+    public void shift(float tick)
+    {
+        for (KeyframeChannel<?> channel : this.getChannels())
+        {
+            for (Keyframe<?> keyframe : channel.getKeyframes())
+            {
+                keyframe.setTick(keyframe.getTick() + tick);
             }
         }
     }
 
     public void copyOver(ReplayKeyframes keyframes, int tick)
     {
-        for (BaseValue baseValue : this.getAll())
+        for (KeyframeChannel<?> channel : this.getChannels())
         {
-            if (baseValue instanceof KeyframeChannel<?> channel)
-            {
-                BaseValue keyframe = keyframes.get(baseValue.getId());
+            BaseValue keyframe = keyframes.get(channel.getId());
 
-                if (keyframe instanceof KeyframeChannel<?> keyframeChannel)
-                {
-                    channel.copyOver(keyframeChannel, tick);
-                }
+            if (keyframe instanceof KeyframeChannel<?> keyframeChannel)
+            {
+                channel.copyOver(keyframeChannel, tick);
             }
         }
     }

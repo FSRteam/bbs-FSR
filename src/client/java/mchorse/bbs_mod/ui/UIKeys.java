@@ -236,6 +236,8 @@ public class UIKeys
     public static final IKey FILM_GROUPS_RIGHT_STICK = L10n.lang("bbs.ui.film.groups.right_stick");
     public static final IKey FILM_GROUPS_TRIGGERS = L10n.lang("bbs.ui.film.groups.triggers");
     public static final IKey FILM_HISTORY_TITLE = L10n.lang("bbs.ui.film.history-title");
+    public static final IKey FILM_INSERT_SPACE_TITLE = L10n.lang("bbs.ui.film.insert_space-title");
+    public static final IKey FILM_INSERT_SPACE_DESCRIPTION = L10n.lang("bbs.ui.film.insert_space-description");
     public static final IKey FILM_MOVE_TITLE = L10n.lang("bbs.ui.film.move-title");
     public static final IKey FILM_MOVE_DESCRIPTION = L10n.lang("bbs.ui.film.move-description");
     public static final IKey FILM_NO_CAMERA_DESCRIPTION = L10n.lang("bbs.ui.film.no_camera-description");

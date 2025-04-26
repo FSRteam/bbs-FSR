@@ -3,7 +3,9 @@ package mchorse.bbs_mod.utils.keyframes;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.ValueList;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
@@ -179,6 +181,42 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
         this.list.remove(index);
         this.sync();
         this.postNotifyParent();
+    }
+
+    public void insertSpace(int where, int ticks)
+    {
+        KeyframeSegment<T> segment = this.findSegment(where);
+
+        if (segment == null || where > segment.b.getTick())
+        {
+            return;
+        }
+
+        if (where < segment.a.getTick())
+        {
+            this.moveX(ticks);
+        }
+        else
+        {
+            BaseValue.edit(this, (__) ->
+            {
+                T copy = this.factory.copy(segment.createInterpolated());
+                List<Keyframe<T>> keyframes = this.getKeyframes();
+
+                for (int i = keyframes.indexOf(segment.b); i < keyframes.size(); i++)
+                {
+                    Keyframe<T> kf = keyframes.get(i);
+
+                    kf.setTick(kf.getTick() + ticks);
+                }
+
+                Keyframe<T> kfA = keyframes.get(this.insert(where, copy));
+                Keyframe<T> kfB = keyframes.get(this.insert(where + ticks, this.factory.copy(copy)));
+
+                kfA.getInterpolation().setInterp(Interpolations.CONST);
+                kfB.getInterpolation().copy(segment.a.getInterpolation());
+            });
+        }
     }
 
     /**

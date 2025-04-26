@@ -16,7 +16,6 @@ import mchorse.bbs_mod.forms.properties.IFormProperty;
 import mchorse.bbs_mod.forms.triggers.StateTrigger;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ClientNetwork;
-import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.ContentType;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
@@ -158,12 +157,9 @@ public class Films
 
         if (recorder != null)
         {
-            for (BaseValue value : recorder.keyframes.getAll())
+            for (KeyframeChannel<?> channel : recorder.keyframes.getChannels())
             {
-                if (value instanceof KeyframeChannel channel)
-                {
-                    channel.simplify();
-                }
+                channel.simplify();
             }
 
             if (ClientNetwork.isIsBBSModOnServer())
