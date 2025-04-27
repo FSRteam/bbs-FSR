@@ -27,6 +27,7 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
@@ -53,6 +54,7 @@ import org.joml.Vector3d;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -104,9 +106,16 @@ public class UIReplayList extends UIList<Replay>
             if (this.isSelected())
             {
                 boolean shift = Window.isShiftPressed();
+                MapType data = Window.getClipboardMap("_CopyKeyframes");
 
                 menu.action(Icons.ALL_DIRECTIONS, UIKeys.SCENE_REPLAYS_CONTEXT_PROCESS, this::processReplays);
                 menu.action(Icons.TIME, UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET_TIME, this::offsetTimeReplays);
+
+                if (data != null)
+                {
+                    menu.action(Icons.PASTE, UIKeys.SCENE_REPLAYS_CONTEXT_PASTE_KEYFRAMES, () -> this.pasteToReplays(data));
+                }
+
                 menu.action(Icons.DUPE, UIKeys.SCENE_REPLAYS_CONTEXT_DUPE, () ->
                 {
                     if (Window.isShiftPressed() || shift)
@@ -132,6 +141,67 @@ public class UIReplayList extends UIList<Replay>
                 menu.action(Icons.REMOVE, UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE, this::removeReplay);
             }
         });
+    }
+
+    private void pasteToReplays(MapType data)
+    {
+        UIReplaysEditor replayEditor = this.panel.replayEditor;
+        List<Replay> selectedReplays = replayEditor.replays.replays.getCurrent();
+
+        if (data == null)
+        {
+            return;
+        }
+
+        Map<String, UIKeyframes.PastedKeyframes> parsedKeyframes = UIKeyframes.parseKeyframes(data);
+
+        if (parsedKeyframes.isEmpty())
+        {
+            return;
+        }
+
+        UINumberOverlayPanel offsetPanel = new UINumberOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_PASTE_KEYFRAMES_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_PASTE_KEYFRAMES_DESCRIPTION, (n) ->
+        {
+            int tick = this.panel.getCursor();
+
+            for (Replay replay : selectedReplays)
+            {
+                int randomOffset = (int) (n.intValue() * Math.random());
+
+                for (Map.Entry<String, UIKeyframes.PastedKeyframes> entry : parsedKeyframes.entrySet())
+                {
+                    String id = entry.getKey();
+                    UIKeyframes.PastedKeyframes pastedKeyframes = entry.getValue();
+                    KeyframeChannel channel = (KeyframeChannel) replay.keyframes.get(id);
+
+                    if (channel == null || channel.getFactory() != pastedKeyframes.factory)
+                    {
+                        channel = (KeyframeChannel) replay.properties.get(id);
+                    }
+
+                    float min = Integer.MAX_VALUE;
+
+                    for (Keyframe kf : pastedKeyframes.keyframes)
+                    {
+                        min = Math.min(kf.getTick(), min);
+                    }
+
+                    for (Keyframe kf : pastedKeyframes.keyframes)
+                    {
+                        float finalTick = tick + (kf.getTick() - min) + randomOffset;
+                        int index = channel.insert(finalTick, kf.getValue());
+                        Keyframe inserted = channel.get(index);
+
+                        inserted.copy(kf);
+                        inserted.setTick(finalTick);
+                    }
+
+                    channel.sort();
+                }
+            }
+        });
+
+        UIOverlay.addOverlay(this.getContext(), offsetPanel);
     }
 
     private void processReplays()

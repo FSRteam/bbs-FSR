@@ -340,6 +340,7 @@
     "bbs.ui.camera.timeline.context.cut": "Обрезать клип(ы)",
     "bbs.ui.camera.timeline.context.from_player_recording": "Из записи игрока...",
     "bbs.ui.camera.timeline.context.paste": "Вставить клип(ы)",
+
     "bbs.ui.camera.timeline.context.remove_clips": "Удалить клип(ы)",
     "bbs.ui.camera.timeline.context.reorganize": "Реорганизовать клипы",
     "bbs.ui.camera.timeline.context.shift": "Переместить клип к курсору",
@@ -734,6 +735,9 @@
     "bbs.ui.scene.replays.context.offset_time-title": "Сместить время записей",
     "bbs.ui.scene.replays.context.offset_time.expression-tooltip": "Данные переменные доступны:\n§ei§r - индекс записи\n§eo§r - относительный индекс записи",
     "bbs.ui.scene.replays.context.paste": "Вставить запись",
+    "bbs.ui.scene.replays.context.paste_keyframes": "Вставить ключевые кадры...",
+    "bbs.ui.scene.replays.context.paste_keyframes-title": "Вставить ключевые кадры",
+    "bbs.ui.scene.replays.context.paste_keyframes-description": "Введите число с помощью которого вставленные ключевые кадры будут смещены после вставки на месте курсора:",
     "bbs.ui.scene.replays.context.pick_form": "Выбрать форму...",
     "bbs.ui.scene.replays.context.process": "Обработать запись(-и)",
     "bbs.ui.scene.replays.context.process-description": "Введите мат. выражение и выберите свойства которые хортите обработать у ключевых кадров в выделенных записях:",

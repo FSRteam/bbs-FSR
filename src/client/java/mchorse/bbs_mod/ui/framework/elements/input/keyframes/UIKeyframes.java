@@ -93,7 +93,7 @@ public class UIKeyframes extends UIElement
             {
                 double offset = Math.round(this.fromGraphX(mouseX));
 
-                this.pasteKeyframes(this.parseKeyframes(data), (float) offset, mouseY);
+                this.pasteKeyframes(parseKeyframes(data), (float) offset, mouseY);
             })
             .canCopy(() -> this.currentGraph.getSelected() != null);
 
@@ -564,7 +564,16 @@ public class UIKeyframes extends UIElement
 
     /* Copy-pasting */
 
-    private Map<String, PastedKeyframes> parseKeyframes(MapType data)
+    /**
+     * Parses keyframe data from the given map structure into a map of keyframes corresponding to their keys.
+     *
+     * @param data the map data containing keyframe information. Each key in the map represents
+     *             a collection of keyframe data, where the associated value contains type and keyframe details.
+     *             If null, the method returns an empty map.
+     * @return a map where each key corresponds to a collection of parsed {@link PastedKeyframes}.
+     *         If no keyframe data is provided or the input is null, an empty map is returned.
+     */
+    public static Map<String, PastedKeyframes> parseKeyframes(MapType data)
     {
         if (data == null)
         {
@@ -1184,7 +1193,7 @@ public class UIKeyframes extends UIElement
         this.getDopeSheet().getYAxis().copy(lastEditor.getDopeSheet().getYAxis());
     }
 
-    private static class PastedKeyframes
+    public static class PastedKeyframes
     {
         public IKeyframeFactory factory;
         public List<Keyframe> keyframes = new ArrayList<>();

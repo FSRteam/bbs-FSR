@@ -274,7 +274,6 @@ public class VideoRecorder
             ex.printStackTrace();
         }
 
-
         this.recording = false;
 
         UIUtils.playClick(0.5F);
