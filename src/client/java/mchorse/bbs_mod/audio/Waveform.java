@@ -2,6 +2,7 @@ package mchorse.bbs_mod.audio;
 
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import org.lwjgl.opengl.GL11;
@@ -41,6 +42,7 @@ public class Waveform
         int offset = 0;
         float time = 0;
         ColorCode code = this.getColorCode(colorCodes, time);
+        Color tmp = new Color();
 
         for (int t = 0; t < count; t++)
         {
@@ -58,10 +60,15 @@ public class Waveform
                 int avgHeight = (int) (average * (this.h - 1)) + 1;
 
                 int color = Colors.WHITE;
+                boolean background = false;
 
                 if (code != null && !code.isInside(time)) code = null;
                 if (code == null) code = this.getColorCode(colorCodes, time);
-                if (code != null) color = Colors.setA(code.color, 1F);
+                if (code != null)
+                {
+                    color = Colors.setA(code.color, 1F);
+                    background = true;
+                }
 
                 if (this.hasCue(cues, time))
                 {
@@ -70,6 +77,18 @@ public class Waveform
 
                 if (avgHeight > 0)
                 {
+                    if (background)
+                    {
+                        tmp.set(color);
+
+                        for (int k = 0; k < this.h; k++)
+                        {
+                            tmp.a = 0.125F + 0.25F * (k / (float) this.h);
+
+                            pixels.setColor(j, k, tmp);
+                        }
+                    }
+
                     pixels.drawRect(j, this.h / 2 - maxHeight / 2, 1, maxHeight, color);
                     pixels.drawRect(j, this.h / 2 - avgHeight / 2, 1, avgHeight, Colors.mulRGB(color, 0.8F));
                 }
