@@ -409,6 +409,7 @@ public class ServerNetwork
         double y = buf.readDouble();
         double z = buf.readDouble();
         float yaw = buf.readFloat();
+        float bodyYaw = buf.readFloat();
         float pitch = buf.readFloat();
 
         server.execute(() ->
@@ -417,7 +418,7 @@ public class ServerNetwork
 
             player.setYaw(yaw);
             player.setHeadYaw(yaw);
-            player.setBodyYaw(yaw);
+            player.setBodyYaw(bodyYaw);
             player.setPitch(pitch);
         });
     }

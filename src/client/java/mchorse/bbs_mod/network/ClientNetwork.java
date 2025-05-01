@@ -528,10 +528,10 @@ public class ClientNetwork
 
     public static void sendTeleport(PlayerEntity entity, double x, double y, double z)
     {
-        sendTeleport(x, y, z, entity.getHeadYaw(), entity.getPitch());
+        sendTeleport(x, y, z, entity.getHeadYaw(), entity.getHeadYaw(), entity.getPitch());
     }
 
-    public static void sendTeleport(double x, double y, double z, float yaw, float pitch)
+    public static void sendTeleport(double x, double y, double z, float yaw, float bodyYaw, float pitch)
     {
         PacketByteBuf buf = PacketByteBufs.create();
 
@@ -539,6 +539,7 @@ public class ClientNetwork
         buf.writeDouble(y);
         buf.writeDouble(z);
         buf.writeFloat(yaw);
+        buf.writeFloat(bodyYaw);
         buf.writeFloat(pitch);
 
         ClientPlayNetworking.send(ServerNetwork.SERVER_PLAYER_TP, buf);

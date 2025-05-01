@@ -13,6 +13,11 @@ public class PlayerUtils
 {
     public static void teleport(double x, double y, double z, float yaw, float pitch)
     {
+        teleport(x, y, z, yaw, yaw, pitch);
+    }
+
+    public static void teleport(double x, double y, double z, float yaw, float bodyYaw, float pitch)
+    {
         ClientPlayerEntity player = MinecraftClient.getInstance().player;
 
         if (!ClientNetwork.isIsBBSModOnServer())
@@ -23,10 +28,10 @@ public class PlayerUtils
         }
         else
         {
-            ClientNetwork.sendTeleport(x, y, z, yaw, pitch);
+            ClientNetwork.sendTeleport(x, y, z, yaw, bodyYaw, pitch);
             player.setYaw(yaw);
             player.setHeadYaw(yaw);
-            player.setBodyYaw(yaw);
+            player.setBodyYaw(bodyYaw);
             player.setPitch(pitch);
         }
     }
