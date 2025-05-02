@@ -7,6 +7,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
+import mchorse.bbs_mod.forms.forms.Form;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
@@ -26,6 +27,20 @@ public class ModelBlockEntity extends BlockEntity
     public ModelBlockEntity(BlockPos pos, BlockState state)
     {
         super(BBSMod.MODEL_BLOCK_ENTITY, pos, state);
+    }
+
+    public String getName()
+    {
+        BlockPos pos = this.getPos();
+        Form form = this.getProperties().getForm();
+        String s = "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+
+        if (form != null)
+        {
+            s += " " + form.getDisplayName();
+        }
+
+        return s;
     }
 
     public ModelProperties getProperties()
@@ -65,7 +80,9 @@ public class ModelBlockEntity extends BlockEntity
     {
         super.writeNbt(nbt);
 
-        DataStorageUtils.writeToNbtCompound(nbt, "Properties", this.properties.toData());
+        MapType data = this.properties.toData();
+
+        DataStorageUtils.writeToNbtCompound(nbt, "Properties", data);
     }
 
     @Override
@@ -75,9 +92,9 @@ public class ModelBlockEntity extends BlockEntity
 
         BaseType baseType = DataStorageUtils.readFromNbtCompound(nbt, "Properties");
 
-        if (baseType instanceof MapType)
+        if (baseType instanceof MapType mapType)
         {
-            this.properties.fromData(baseType.asMap());
+            this.properties.fromData(mapType);
         }
     }
 

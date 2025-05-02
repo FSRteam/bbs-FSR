@@ -22,16 +22,6 @@ public class UIModelBlockEntityList extends UIList<ModelBlockEntity>
     @Override
     protected String elementToString(UIContext context, int i, ModelBlockEntity element)
     {
-        BlockPos pos = element.getPos();
-        Form form = element.getProperties().getForm();
-
-        String s = "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
-
-        if (form != null)
-        {
-            s += " " + form.getDisplayName();
-        }
-
-        return s;
+        return element.getName();
     }
 }
