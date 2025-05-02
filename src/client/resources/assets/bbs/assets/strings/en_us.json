@@ -728,6 +728,7 @@
     "bbs.ui.scene.replays.context.add": "Add a replay",
     "bbs.ui.scene.replays.context.copy": "Copy replay(s)",
     "bbs.ui.scene.replays.context.dupe": "Duplicate replay(s)",
+    "bbs.ui.scene.replays.context.dupe-description": "Input how many times do you want to duplicate this replay:",
     "bbs.ui.scene.replays.context.edit_form": "Edit form...",
     "bbs.ui.scene.replays.context.from_camera": "From camera...",
     "bbs.ui.scene.replays.context.from_model_block": "From model block...",
