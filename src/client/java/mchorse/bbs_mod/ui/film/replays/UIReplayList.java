@@ -103,22 +103,31 @@ public class UIReplayList extends UIList<Replay>
 
             if (this.isSelected())
             {
+                boolean shift = Window.isShiftPressed();
+
                 menu.action(Icons.ALL_DIRECTIONS, UIKeys.SCENE_REPLAYS_CONTEXT_PROCESS, this::processReplays);
                 menu.action(Icons.TIME, UIKeys.SCENE_REPLAYS_CONTEXT_OFFSET_TIME, this::offsetTimeReplays);
                 menu.action(Icons.DUPE, UIKeys.SCENE_REPLAYS_CONTEXT_DUPE, () ->
                 {
-                    UINumberOverlayPanel numberPanel = new UINumberOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_DUPE, UIKeys.SCENE_REPLAYS_CONTEXT_DUPE_DESCRIPTION, (n) ->
+                    if (Window.isShiftPressed() || shift)
                     {
-                        for (int i = 0; i < n; i++)
+                        this.dupeReplay();
+                    }
+                    else
+                    {
+                        UINumberOverlayPanel numberPanel = new UINumberOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_DUPE, UIKeys.SCENE_REPLAYS_CONTEXT_DUPE_DESCRIPTION, (n) ->
                         {
-                            this.dupeReplay();
-                        }
-                    });
+                            for (int i = 0; i < n; i++)
+                            {
+                                this.dupeReplay();
+                            }
+                        });
 
-                    numberPanel.value.limit(1).integer();
-                    numberPanel.value.setValue(1D);
+                        numberPanel.value.limit(1).integer();
+                        numberPanel.value.setValue(1D);
 
-                    UIOverlay.addOverlay(this.getContext(), numberPanel);
+                        UIOverlay.addOverlay(this.getContext(), numberPanel);
+                    }
                 });
                 menu.action(Icons.REMOVE, UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE, this::removeReplay);
             }
