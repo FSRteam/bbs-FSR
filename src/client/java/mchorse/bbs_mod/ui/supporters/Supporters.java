@@ -655,7 +655,7 @@ public class Supporters
         this.add("BTT GC").withDate(2025, 4, 6);
         this.add("Inspy.").withDate(2025, 4, 21);
         this.add("Mark").withDate(2025, 4, 23);
-        this.add("profishional", "...").withDate(2025, 4, 25);
+        this.add("profishional", "https://www.youtube.com/channel/UCuJYhwn13hW9wv6vB8DYO-A").withDate(2025, 4, 25);
         this.add("Maxym K.", "...", "...").withDate(2025, 5, 1);
 
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod?
@@ -772,9 +772,9 @@ public class Supporters
         this.add("Flatron").withDate(2025, 3, 18);
 
         /* Custom */
-        this.add("Hrymka", "...", "textures/banners/hrymka.png").withDate(3, 6);
+        this.add("Hrymka", "...", "textures/banners/hrymka.png").withDate(3, 6); /* <3 */
         this.add("Rasty", "https://www.youtube.com/@RastyStudio").withDate(3, 6);
-        this.add("Afegor (Alyokhin Dmitrii)", "https://www.youtube.com/@Afegor", "textures/banners/afegor.png").withDate(4, 8);
+        this.add("Afegor (Alyokhin Dmitrii)", "https://www.youtube.com/@Afegor", "textures/banners/afegor.png").withDate(4, 8); /* <3 */
         this.add("ZoGa", "...", "textures/banners/zogatop1animator.png").withDate(4, 22); /* <3 */
         this.add("qualet", "https://www.youtube.com/@qualet", "textures/banners/QUALET_QUALET_QUALET_QUALET_QUALET_QUALET_QUALET_QUALET_QUALET_QUALET.png").withDate(2025, 2, 3); /* <3 */
         this.add("McHorse", "https://www.youtube.com/channel/UCSLuDXxxql4EVK_Ktd6PNbw", "textures/banners/mchorse.png");
