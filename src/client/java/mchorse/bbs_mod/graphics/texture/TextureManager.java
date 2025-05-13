@@ -197,20 +197,23 @@ public class TextureManager implements IWatchDogListener
 
                 if (pixels != null)
                 {
-                    try (InputStream stream = this.provider.getAsset(new Link(link.source, link.path + ".mcmeta")))
+                    if (!link.source.startsWith("http"))
                     {
-                        AnimatedTexture animatedTexture = AnimatedTexture.load(stream, pixels);
+                        try (InputStream stream = this.provider.getAsset(new Link(link.source, link.path + ".mcmeta")))
+                        {
+                            AnimatedTexture animatedTexture = AnimatedTexture.load(stream, pixels);
 
-                        texture = animatedTexture.getTexture(this.tick);
+                            texture = animatedTexture.getTexture(this.tick);
 
-                        System.out.println("Animated texture \"" + link + "\" was loaded!");
+                            System.out.println("Animated texture \"" + link + "\" was loaded!");
 
-                        this.animatedTextures.put(link, animatedTexture);
+                            this.animatedTextures.put(link, animatedTexture);
 
-                        return texture;
+                            return texture;
+                        }
+                        catch (Exception e)
+                        {} 
                     }
-                    catch (Exception e)
-                    {}
 
                     texture = Texture.textureFromPixels(pixels, filter);
 
