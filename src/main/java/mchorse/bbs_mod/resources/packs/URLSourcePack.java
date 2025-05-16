@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Collection;
+import java.util.Set;
 
 public class URLSourcePack implements ISourcePack
 {
@@ -96,5 +97,35 @@ public class URLSourcePack implements ISourcePack
 
     @Override
     public void getLinksFromPath(Collection<Link> links, Link link, boolean recursive)
-    {}
+    {
+        Set<String> strings = this.repository.getCache().keySet();
+
+        for (String string : strings)
+        {
+            if (!string.startsWith(link.source + ":"))
+            {
+                continue;
+            }
+
+            if (recursive)
+            {
+                links.add(Link.create(string));
+            }
+            else
+            {
+                String toString = link.toString();
+
+                if (string.length() > toString.length())
+                {
+                    String newString = string.endsWith("/") ? string : string + "/";
+                    String suffix = newString.substring(toString.length());
+
+                    if (suffix.contains("/"))
+                    {
+                        links.add(Link.create(string));
+                    }
+                }
+            }
+        }
+    }
 }

@@ -28,6 +28,11 @@ public class URLRepository
         this.readCache();
     }
 
+    public Map<String, File> getCache()
+    {
+        return this.cache;
+    }
+
     private void readCache()
     {
         try

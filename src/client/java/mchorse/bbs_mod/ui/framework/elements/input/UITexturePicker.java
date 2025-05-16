@@ -40,7 +40,6 @@ import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -174,17 +173,27 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         this.keys().register(Keys.TEXTURE_PICKER_FIND, () ->
         {
-            Collection<Link> links = BBSMod.getProvider().getLinksFromPath(Link.assets(""));
             List<String> list = new ArrayList<>();
 
-            for (Link link : links)
+            for (Link link : BBSMod.getProvider().getLinksFromPath(Link.assets("")))
             {
                 String string = link.toString();
 
-                if (string.endsWith(".png") && !string.contains(":textures/banners/"))
-                {
-                    list.add(string);
-                }
+                if (string.endsWith(".png") && !string.contains(":textures/banners/")) list.add(string);
+            }
+
+            for (Link link : BBSMod.getProvider().getLinksFromPath(new Link("http", "")))
+            {
+                String string = link.toString();
+
+                if (string.contains(".png")) list.add(string);
+            }
+
+            for (Link link : BBSMod.getProvider().getLinksFromPath(new Link("https", "")))
+            {
+                String string = link.toString();
+
+                if (string.contains(".png")) list.add(string);
             }
 
             UIListOverlayPanel panel = new UIListOverlayPanel(UIKeys.TEXTURE_FIND_TITLE, (s) ->

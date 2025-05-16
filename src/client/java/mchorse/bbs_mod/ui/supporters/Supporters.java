@@ -357,7 +357,7 @@ public class Supporters
         this.add("Shawn H.").withDate(4, 26);
         this.add("LittleLightz").withDate(4, 26);
         this.add("Slightly Insulting").withDate(4, 26);
-        this.add("GarzyField", "https://www.youtube.com/@GarzyField").withDate(4, 26);
+        this.add("T. Choppaa", "https://youtube.com/@mnkydloof?si=mvjloMchToKXtmK1").withDate(4, 26);
         this.add("Gabriel Dametto").withDate(4, 26);
         this.add("Ninja2die").withDate(4, 26);
         this.add("Anniken").withDate(4, 26);
@@ -657,6 +657,9 @@ public class Supporters
         this.add("Mark").withDate(2025, 4, 23);
         this.add("profishional", "https://www.youtube.com/channel/UCuJYhwn13hW9wv6vB8DYO-A").withDate(2025, 4, 25);
         this.add("Maxym K.", "...", "...").withDate(2025, 5, 1);
+        this.add("Googly", "https://www.youtube.com/@googlylegend", "textures/banners/googly.png").withDate(2025, 5, 9);
+        this.add("Jadept", "https://youtube.com/@jadept", "textures/banners/jadept.png").withDate(2025, 5, 10);
+        this.add("Minecraft@Home", "https://www.youtube.com/MinecraftAtHome", "textures/banners/minecraftathome.png").withDate(2025, 5, 12);
 
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod?
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod? Also, you can provide a link to your social media account (like YouTube, Twitter, TikTok, etc.)
@@ -768,8 +771,9 @@ public class Supporters
         this.add("Agleepi", "https://www.youtube.com/@agleepi", "...").withDate(2025, 1, 20);
         this.add("AGGRESSIVE-COOVIR-21!").withDate(2025, 2, 10); /* <3 */
         this.add("osmiq", "https://twitter.com/osmiq0", "textures/banners/osmiqtop1modeler.png").withDate(2025, 2, 19); /* <3 */
-        this.add("Never", "https://www.youtube.com/@SerialsNever", "...").withDate(2025, 3, 3);
+        this.add("Never", "https://www.youtube.com/@SerialsNever", "textures/banners/never.png").withDate(2025, 3, 3);
         this.add("Flatron").withDate(2025, 3, 18);
+        this.add("KarasKiras").withDate(2025, 5, 9);
 
         /* Custom */
         this.add("Hrymka", "...", "textures/banners/hrymka.png").withDate(3, 6); /* <3 */
