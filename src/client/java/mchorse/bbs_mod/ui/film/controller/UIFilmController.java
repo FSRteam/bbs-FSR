@@ -67,7 +67,9 @@ import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.joml.Matrix3f;
 import org.joml.Vector2f;
@@ -120,10 +122,10 @@ public class UIFilmController extends UIElement
 
     public final OrbitFilmCameraController orbit = new OrbitFilmCameraController(this);
     private int pov;
-    private int lastTick;
     private boolean paused;
 
     private WorldRenderContext worldRenderContext;
+    private BlockHitResult blockHitResult;
 
     public UIFilmController(UIFilmPanel panel)
     {
@@ -188,6 +190,11 @@ public class UIFilmController extends UIElement
 
         this.panel.replayEditor.setReplay(replay);
         UIUtils.playClick();
+    }
+
+    public BlockHitResult getBlockHitResult()
+    {
+        return this.blockHitResult;
     }
 
     public boolean isPaused()
@@ -535,7 +542,7 @@ public class UIFilmController extends UIElement
         if (context.mouseButton == 0)
         {
             /* Alt pick the replay */
-            if (this.hoveredEntities.size() == 1)
+            if (this.hoveredEntities.size() == 1 || (!this.hoveredEntities.isEmpty() && Window.isCtrlPressed()))
             {
                 this.pickEntity(this.hoveredEntities.get(0));
 
@@ -1013,6 +1020,22 @@ public class UIFilmController extends UIElement
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
+        if (this.blockHitResult != null)
+        {
+            Vec3d pos = this.blockHitResult.getPos();
+            String label = String.format("X: %.2f\nY: %.2f\nZ: %.2f", pos.x, pos.y, pos.z);
+            int y = context.mouseY + 8;
+
+            for (String s : label.split("\n"))
+            {
+                context.batcher.textCard(s, context.mouseX + 12, y);
+
+                y += 13;
+            }
+
+            return;
+        }
+
         if (!this.stencil.hasPicked())
         {
             return;
@@ -1173,13 +1196,27 @@ public class UIFilmController extends UIElement
     {
         this.hoveredEntities.clear();
 
+        UIContext c = this.getContext();
+        Area area = this.panel.preview.getViewport();
+        Camera camera = this.panel.getCamera();
+        Vector3f mouseDirection = camera.getMouseDirection(c.mouseX, c.mouseY, area.x, area.y, area.w, area.h);
+
+        if (Window.isAltPressed())
+        {
+            this.blockHitResult = RayTracing.rayTrace(worldRenderContext.world(),
+                new Vec3d(camera.position.x, camera.position.y, camera.position.z),
+                new Vec3d(mouseDirection.x, mouseDirection.y, mouseDirection.z), 64F
+            );
+        }
+        else
+        {
+            this.blockHitResult = null;
+        }
+
         if (!Window.isAltPressed() || this.panel.recorder.isRecording() || this.panel.isFlying())
         {
             return;
         }
-
-        UIContext c = this.getContext();
-        Area area = this.panel.preview.getViewport();
 
         if (!area.isInside(c))
         {
@@ -1187,8 +1224,6 @@ public class UIFilmController extends UIElement
         }
 
         List<IEntity> entities = new ArrayList<>();
-        Camera camera = this.panel.getCamera();
-        Vector3f mouseDirection = camera.getMouseDirection(c.mouseX, c.mouseY, area.x, area.y, area.w, area.h);
 
         for (IEntity entity : this.getEntities())
         {
