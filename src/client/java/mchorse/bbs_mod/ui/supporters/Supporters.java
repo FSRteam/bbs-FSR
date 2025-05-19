@@ -195,7 +195,7 @@ public class Supporters
         this.add("咕咚").withDate(6, 18);
         this.add("喵不二本喵").withDate(6, 18);
         this.add("Bit3").withDate(6, 18);
-        this.add("依潮水").withDate(6, 21);
+        this.add("依潮水", "https://space.bilibili.com/250597797").withDate(6, 21);
         this.add("GoldenEggs").withDate(6, 22);
         this.add("QQ-oo~ee~oo").withDate(6, 23);
         this.add("一粒石头", "https://space.bilibili.com/279251784").withDate(6, 24);
@@ -257,6 +257,11 @@ public class Supporters
         this.add("李世言", "...").withDate(2025, 2, 10);
         this.add("PoraMoya", "https://space.bilibili.com/1564552580", "textures/banners/PoraMoya.png").withDate(2025, 2, 23);
         this.add("ppun255").withDate(2025, 3, 5);
+        this.add("酋兽666").withDate(2025, 5, 11);
+        this.add("鱼大少爷").withDate(2025, 5, 11);
+        this.add("雪之星阿雪").withDate(2025, 5, 11);
+        this.add("墨家痕", "https://space.bilibili.com/594917622").withDate(2025, 5, 15);
+        this.add("不可思议极东酱", "https://space.bilibili.com/2099739", "textures/banners/jiguangzi.png").withDate(2025, 5, 16);
 
         /* Patreon */
         this.add("terbin", "https://www.youtube.com/channel/UCD4X2slLdD_WJxlW03JPVQQ", "...").withDate(2, 23);
@@ -660,6 +665,9 @@ public class Supporters
         this.add("Googly", "https://www.youtube.com/@googlylegend", "textures/banners/googly.png").withDate(2025, 5, 9);
         this.add("Jadept", "https://youtube.com/@jadept", "textures/banners/jadept.png").withDate(2025, 5, 10);
         this.add("Minecraft@Home", "https://www.youtube.com/MinecraftAtHome", "textures/banners/minecraftathome.png").withDate(2025, 5, 12);
+        this.add("Nick The Skeleton", "https://www.youtube.com/@NickTheSkeletonn").withDate(2025, 5, 17);
+        this.add("Aethics", "https://www.youtube.com/@AethicsYT", "textures/banners/aesthics.png").withDate(2025, 5, 17);
+        this.add("Strafverfolgung", "https://www.tiktok.com/@httpstrafverfolgung").withDate(2025, 5, 18);
 
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod?
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod? Also, you can provide a link to your social media account (like YouTube, Twitter, TikTok, etc.)
