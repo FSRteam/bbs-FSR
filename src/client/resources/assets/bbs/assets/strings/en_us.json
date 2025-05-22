@@ -877,6 +877,7 @@
     "bbs.ui.snowstorm.shape.title": "Emitter's shape",
     "bbs.ui.snowstorm.space.position": "Local position",
     "bbs.ui.snowstorm.space.rotation": "Local rotation",
+    "bbs.ui.snowstorm.space.velocity": "Local velocity",
     "bbs.ui.snowstorm.space.texture_scale": "Texture scale",
     "bbs.ui.snowstorm.space.title": "Particle space",
     "bbs.ui.snowstorm.title": "Particles",

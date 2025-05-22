@@ -874,6 +874,7 @@
     "bbs.ui.snowstorm.shape.title": "Фигура эммитера",
     "bbs.ui.snowstorm.space.position": "Локальная позиция",
     "bbs.ui.snowstorm.space.rotation": "Локальное вращение",
+    "bbs.ui.snowstorm.space.velocity": "Локальная скорость",
     "bbs.ui.snowstorm.space.texture_scale": "Масштаб текстуры",
     "bbs.ui.snowstorm.space.title": "Пространство частиц",
     "bbs.ui.snowstorm.title": "Частицы",

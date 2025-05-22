@@ -737,6 +737,7 @@ public class UIKeys
     public static final IKey SNOWSTORM_SHAPE_TITLE = L10n.lang("bbs.ui.snowstorm.shape.title");
     public static final IKey SNOWSTORM_SPACE_POSITION = L10n.lang("bbs.ui.snowstorm.space.position");
     public static final IKey SNOWSTORM_SPACE_ROTATION = L10n.lang("bbs.ui.snowstorm.space.rotation");
+    public static final IKey SNOWSTORM_SPACE_VELOCITY = L10n.lang("bbs.ui.snowstorm.space.velocity");
     public static final IKey SNOWSTORM_SPACE_TEXTURE_SCALE = L10n.lang("bbs.ui.snowstorm.space.texture_scale");
     public static final IKey SNOWSTORM_SPACE_TITLE = L10n.lang("bbs.ui.snowstorm.space.title");
     public static final IKey SNOWSTORM_TITLE = L10n.lang("bbs.ui.snowstorm.title");

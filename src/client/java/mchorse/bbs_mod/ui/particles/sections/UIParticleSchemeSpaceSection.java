@@ -11,6 +11,7 @@ public class UIParticleSchemeSpaceSection extends UIParticleSchemeComponentSecti
 {
     public UIToggle position;
     public UIToggle rotation;
+    public UIToggle velocity;
     public UIToggle textureScale;
 
     public UIParticleSchemeSpaceSection(UIParticleSchemePanel parent)
@@ -29,13 +30,19 @@ public class UIParticleSchemeSpaceSection extends UIParticleSchemeComponentSecti
             this.editor.dirty();
         });
 
+        this.velocity = new UIToggle(UIKeys.SNOWSTORM_SPACE_VELOCITY, (b) ->
+        {
+            this.component.velocity = b.getValue();
+            this.editor.dirty();
+        });
+
         this.textureScale = new UIToggle(UIKeys.SNOWSTORM_SPACE_TEXTURE_SCALE, (b) ->
         {
             this.component.textureScale = b.getValue();
             this.editor.dirty();
         });
 
-        this.fields.add(this.position, this.rotation, this.textureScale);
+        this.fields.add(this.position, this.rotation, this.velocity, this.textureScale);
     }
 
     @Override
@@ -55,6 +62,7 @@ public class UIParticleSchemeSpaceSection extends UIParticleSchemeComponentSecti
     {
         this.position.setValue(this.component.position);
         this.rotation.setValue(this.component.rotation);
+        this.velocity.setValue(this.component.velocity);
         this.textureScale.setValue(this.component.textureScale);
     }
 }

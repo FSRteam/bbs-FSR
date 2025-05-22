@@ -23,6 +23,7 @@ public class Particle
     private boolean dead;
     public boolean relativePosition;
     public boolean relativeRotation;
+    public boolean relativeVelocity;
     public boolean textureScale;
     public boolean manual;
 
@@ -122,6 +123,7 @@ public class Particle
         if (!this.manual)
         {
             float rotationAcceleration = this.rotationAcceleration / 20F -this.rotationDrag * this.rotationVelocity;
+
             this.rotationVelocity += rotationAcceleration / 20F;
             this.rotation = this.initialRotation + this.rotationVelocity * this.age;
 
@@ -131,16 +133,35 @@ public class Particle
 
             this.acceleration.add(vec);
             this.acceleration.div(20F);
-            this.speed.add(this.acceleration);
 
-            vec.set(this.speed);
-            vec.x *= this.accelerationFactor.x;
-            vec.y *= this.accelerationFactor.y;
-            vec.z *= this.accelerationFactor.z;
-
-            if (this.relativePosition || this.relativeRotation)
+            if (this.relativeVelocity)
             {
-                this.matrix.transform(vec);
+                if (this.age == 0)
+                {
+                    this.matrix.transform(this.speed);
+                }
+
+                this.speed.add(this.acceleration);
+
+                vec.set(this.speed);
+
+                vec.x *= this.accelerationFactor.x;
+                vec.y *= this.accelerationFactor.y;
+                vec.z *= this.accelerationFactor.z;
+            }
+            else
+            {
+                this.speed.add(this.acceleration);
+
+                vec.set(this.speed);
+                vec.x *= this.accelerationFactor.x;
+                vec.y *= this.accelerationFactor.y;
+                vec.z *= this.accelerationFactor.z;
+
+                if (this.relativePosition || this.relativeRotation)
+                {
+                    this.matrix.transform(vec);
+                }
             }
 
             if (this.age == 0)
@@ -178,6 +199,11 @@ public class Particle
         else if (this.relativeRotation)
         {
             this.matrix.set(emitter.rotation);
+        }
+        else if (this.relativeVelocity && !this.matrixSet)
+        {
+            this.matrix.set(emitter.rotation);
+            this.matrixSet = true;
         }
     }
 }

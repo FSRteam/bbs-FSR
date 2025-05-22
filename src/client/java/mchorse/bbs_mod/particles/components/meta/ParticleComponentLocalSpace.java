@@ -13,6 +13,7 @@ public class ParticleComponentLocalSpace extends ParticleComponentBase implement
 {
     public boolean position;
     public boolean rotation;
+    public boolean velocity;
     public boolean textureScale;
 
     @Override
@@ -20,6 +21,7 @@ public class ParticleComponentLocalSpace extends ParticleComponentBase implement
     {
         if (this.position) data.putBool("position", true);
         if (this.rotation) data.putBool("rotation", true);
+        if (this.velocity) data.putBool("velocity", true);
         if (this.textureScale) data.putBool("texture_scale", true);
     }
 
@@ -34,6 +36,7 @@ public class ParticleComponentLocalSpace extends ParticleComponentBase implement
 
         if (map.has("position")) this.position = map.getBool("position");
         if (map.has("rotation")) this.rotation = map.getBool("rotation");
+        if (map.has("velocity")) this.velocity = map.getBool("velocity");
         if (map.has("texture_scale")) this.textureScale = map.getBool("texture_scale");
 
         return super.fromData(map, parser);
@@ -44,6 +47,7 @@ public class ParticleComponentLocalSpace extends ParticleComponentBase implement
     {
         particle.relativePosition = this.position;
         particle.relativeRotation = this.rotation;
+        particle.relativeVelocity = this.velocity;
         particle.textureScale = this.textureScale;
 
         particle.setupMatrix(emitter);
