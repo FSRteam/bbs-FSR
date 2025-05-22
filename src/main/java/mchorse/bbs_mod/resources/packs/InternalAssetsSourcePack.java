@@ -25,6 +25,8 @@ public class InternalAssetsSourcePack implements ISourcePack
     private String internalPrefix;
     private Class clazz;
 
+    private boolean isForge;
+
     private List<String> zipCache = new ArrayList<>();
 
     public InternalAssetsSourcePack()
@@ -37,6 +39,15 @@ public class InternalAssetsSourcePack implements ISourcePack
         this.prefix = prefix;
         this.internalPrefix = internalPrefix;
         this.clazz = clazz;
+
+        try
+        {
+            Class.forName("net.minecraftforge.common.MinecraftForge");
+
+            isForge = true;
+        }
+        catch (Exception e)
+        {}
     }
 
     @Override
@@ -72,6 +83,13 @@ public class InternalAssetsSourcePack implements ISourcePack
     @Override
     public void getLinksFromPath(Collection<Link> links, Link link, boolean recursive)
     {
+        if (isForge)
+        {
+            this.stupidWorkaround(links, link, recursive);
+
+            return;
+        }
+
         URL url = this.clazz.getProtectionDomain().getCodeSource().getLocation();
 
         try
@@ -91,39 +109,44 @@ public class InternalAssetsSourcePack implements ISourcePack
         {
             e.printStackTrace();
 
-            /* Forge throws some exception due to the way Connector works, it can't find the
-             * jar file for some reason... so I have to resort to such ugly piece of code for
-             * it to work correctly. I should probably ask on Connector's Discord what I can do,
-             * but whatever for now... */
-            String version = "";
+            this.stupidWorkaround(links, link, recursive);
+        }
+    }
 
-            for (ModContainer allMod : FabricLoader.getInstance().getAllMods())
+    private void stupidWorkaround(Collection<Link> links, Link link, boolean recursive)
+    {
+        /* Forge throws some exception due to the way Connector works, it can't find the
+         * jar file for some reason... so I have to resort to such ugly piece of code for
+         * it to work correctly. I should probably ask on Connector's Discord what I can do,
+         * but whatever for now... */
+        String version = "";
+
+        for (ModContainer allMod : FabricLoader.getInstance().getAllMods())
+        {
+            if (allMod.getMetadata().getId().equals(BBSMod.MOD_ID))
             {
-                if (allMod.getMetadata().getId().equals(BBSMod.MOD_ID))
-                {
-                    version = allMod.getMetadata().getVersion().getFriendlyString();
+                version = allMod.getMetadata().getVersion().getFriendlyString();
 
-                    break;
-                }
+                break;
             }
+        }
 
-            if (version.isEmpty())
+        if (version.isEmpty())
+        {
+            return;
+        }
+
+        File mods = new File(FabricLoader.getInstance().getGameDir().toFile(), "mods");
+
+        if (mods.isDirectory())
+        {
+            for (File file : mods.listFiles())
             {
-                return;
-            }
+                String name = file.getName();
 
-            File mods = new File(FabricLoader.getInstance().getGameDir().toFile(), "mods");
-
-            if (mods.isDirectory())
-            {
-                for (File file : mods.listFiles())
+                if (name.startsWith("bbs") && name.contains(version) && name.endsWith(".jar"))
                 {
-                    String name = file.getName();
-
-                    if (name.startsWith("bbs") && name.contains(version) && name.endsWith(".jar"))
-                    {
-                        this.getLinksFromZipFile(file, link, links, recursive);
-                    }
+                    this.getLinksFromZipFile(file, link, links, recursive);
                 }
             }
         }
