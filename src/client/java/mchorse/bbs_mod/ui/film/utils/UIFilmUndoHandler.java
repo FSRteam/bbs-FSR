@@ -2,16 +2,14 @@ package mchorse.bbs_mod.ui.film.utils;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.ValueGroup;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.utils.undo.ValueChangeUndo;
-import mchorse.bbs_mod.ui.framework.elements.input.keyframes.KeyframeState;
-import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Timer;
-import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.undo.CompoundUndo;
 import mchorse.bbs_mod.utils.undo.IUndo;
@@ -30,12 +28,8 @@ public class UIFilmUndoHandler
     private UndoManager<ValueGroup> undoManager;
 
     private Map<BaseValue, BaseType> cachedValues = new HashMap<>();
-    private List<Integer> cachedCameraSelection = new ArrayList<>();
-    private List<Integer> cachedActionSelection = new ArrayList<>();
-    private List<Integer> cachedVoicelineSelection = new ArrayList<>();
-    private KeyframeState cachedKeyframeState;
     private boolean cacheMarkLastUndoNoMerging;
-    private int lastReplay = -2;
+    private MapType uiData;
 
     private Timer undoTimer = new Timer(1000);
     private Timer actionsTimer = new Timer(100);
@@ -73,62 +67,21 @@ public class UIFilmUndoHandler
         {
             ValueChangeUndo change = (ValueChangeUndo) anotherUndo;
 
-            this.panel.showPanel(change.panel);
-            this.panel.replayEditor.setReplay(CollectionUtils.getSafe(this.panel.getData().replays.getList(), change.replay), true, false);
-
-            List<Integer> cameraSelection = change.cameraClips.getSelection(redo);
-            List<Integer> voiceLineSelection = change.voiceLinesClips.getSelection(redo);
-
-            if (cameraSelection.isEmpty())
-            {
-                this.panel.cameraEditor.pickClip(null);
-            }
-            else
-            {
-                this.panel.cameraEditor.clips.setSelection(cameraSelection);
-
-                Clip last = this.panel.getData().camera.get(cameraSelection.get(cameraSelection.size() - 1));
-
-                this.panel.cameraEditor.pickClip(last);
-            }
-
-            if (voiceLineSelection.isEmpty())
-            {
-                this.panel.screenplayEditor.editor.pickClip(null);
-            }
-            else
-            {
-                this.panel.screenplayEditor.editor.clips.setSelection(voiceLineSelection);
-
-                Clip last = this.panel.getData().voiceLines.get(voiceLineSelection.get(voiceLineSelection.size() - 1));
-
-                this.panel.screenplayEditor.editor.pickClip(last);
-            }
-
-            change.cameraClips.apply(this.panel.cameraEditor.clips);
-            change.actionClips.apply(this.panel.actionEditor.clips);
-            change.voiceLinesClips.apply(this.panel.screenplayEditor.editor.clips);
-
-            this.panel.setCursor(change.tick);
-            this.panel.getController().createEntities();
-            this.panel.replayEditor.handleUndo(change, redo);
+            this.panel.applyAllUndoData(change.getUIData(redo));
         }
-
-        this.panel.replayEditor.replays.replays.update();
-        this.panel.cameraEditor.handleUndo(undo, redo);
-        this.panel.actionEditor.handleUndo(undo, redo);
-        this.panel.screenplayEditor.editor.handleUndo(undo, redo);
-        this.panel.fillData();
     }
 
     public void handlePreValues(BaseValue baseValue, int flag)
     {
-        if (this.cachedCameraSelection.isEmpty()) this.cachedCameraSelection.addAll(this.panel.cameraEditor.clips.getSelection());
-        if (this.cachedActionSelection.isEmpty()) this.cachedActionSelection.addAll(this.panel.actionEditor.clips.getSelection());
-        if (this.cachedVoicelineSelection.isEmpty()) this.cachedVoicelineSelection.addAll(this.panel.screenplayEditor.editor.clips.getSelection());
-        if (this.cachedKeyframeState == null && this.panel.replayEditor.keyframeEditor != null) this.cachedKeyframeState = this.panel.replayEditor.keyframeEditor.view.cacheState();
-        if (this.lastReplay == -2) this.lastReplay = this.panel.getData().replays.getList().indexOf(this.panel.replayEditor.getReplay());
-        if (!this.cachedValues.containsKey(baseValue)) this.cachedValues.put(baseValue, baseValue.toData());
+        if (this.uiData == null)
+        {
+            this.uiData = this.panel.collectAllUndoData();
+        }
+
+        if (!this.cachedValues.containsKey(baseValue))
+        {
+            this.cachedValues.put(baseValue, baseValue.toData());
+        }
 
         if ((flag & IValueListener.FLAG_UNMERGEABLE) != 0)
         {
@@ -154,9 +107,8 @@ public class UIFilmUndoHandler
             BaseValue value = entry.getKey();
             ValueChangeUndo undo = new ValueChangeUndo(value.getPath(), entry.getValue(), value.toData());
 
-            undo.replay = this.lastReplay;
-            undo.editor(this.panel);
-            undo.selectedBefore(this.cachedCameraSelection, this.cachedActionSelection, this.cachedVoicelineSelection, this.cachedKeyframeState);
+            undo.cacheAfter(this.panel);
+            undo.cacheBefore(this.uiData);
             changeUndos.add(undo);
 
             if (this.isReplayActions(value))
@@ -176,8 +128,7 @@ public class UIFilmUndoHandler
         }
 
         this.cachedValues.clear();
-        this.cachedKeyframeState = null;
-        this.lastReplay = -2;
+        this.uiData = null;
 
         this.undoTimer.mark();
 

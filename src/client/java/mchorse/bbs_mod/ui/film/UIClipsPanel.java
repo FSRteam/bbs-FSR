@@ -3,8 +3,9 @@ package mchorse.bbs_mod.ui.film;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.data.Position;
+import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
-import mchorse.bbs_mod.settings.values.ValueGroup;
 import mchorse.bbs_mod.settings.values.ValueInt;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.film.clips.UIClip;
@@ -14,7 +15,6 @@ import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.factory.IFactory;
-import mchorse.bbs_mod.utils.undo.IUndo;
 
 import java.util.List;
 import java.util.Map;
@@ -48,14 +48,6 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     {
         this.clips.setClips(clips);
         this.clips.setVisible(clips != null);
-    }
-
-    public void handleUndo(IUndo<ValueGroup> undo, boolean redo)
-    {
-        if (this.panel != null)
-        {
-            this.panel.handleUndo(undo, redo);
-        }
     }
 
     public void editClip(Position position)
@@ -291,5 +283,31 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
 
             clipValue.set(clipValue.get() + difference);
         }
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        List<Integer> selection = DataStorageUtils.intListFromData(data.getList("selection"));
+
+        this.clips.scale.view(data.getDouble("x_min"), data.getDouble("x_max"));
+        this.clips.vertical.setScroll(data.getDouble("scroll"));
+        this.clips.vertical.updateTarget();
+
+        this.clips.setSelection(selection);
+        this.pickClip(selection.isEmpty() ? null : this.clips.getClips().get(selection.get(selection.size() - 1)));
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        data.put("selection", DataStorageUtils.intListToData(this.clips.getSelection()));
+        data.putDouble("x_min", this.clips.scale.getMinValue());
+        data.putDouble("x_max", this.clips.scale.getMaxValue());
+        data.putDouble("scroll", this.clips.vertical.getScroll());
     }
 }

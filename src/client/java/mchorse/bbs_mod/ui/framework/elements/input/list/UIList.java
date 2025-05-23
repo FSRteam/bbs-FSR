@@ -194,6 +194,11 @@ public abstract class UIList <T> extends UIElement
         return true;
     }
 
+    public List<Integer> getCurrentIndices()
+    {
+        return this.current;
+    }
+
     public List<T> getCurrent()
     {
         this.copy.clear();

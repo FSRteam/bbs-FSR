@@ -13,8 +13,7 @@ public class ListType extends BaseType implements Iterable<BaseType>
     public final List<BaseType> elements = new ArrayList<>();
 
     public ListType()
-    {
-    }
+    {}
 
     /* Accessors */
 

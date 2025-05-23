@@ -1,6 +1,10 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes;
 
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
+import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.film.utils.CameraAxisConverter;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
@@ -9,6 +13,7 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -123,5 +128,39 @@ public class UIKeyframeEditor extends UIElement
         }
 
         return null;
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        KeyframeState state = new KeyframeState();
+
+        state.extra = data.getMap("extra");
+
+        for (BaseType type : data.getList("selection"))
+        {
+            state.selected.add(DataStorageUtils.intListFromData(type));
+        }
+
+        this.view.applyState(state);
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        KeyframeState keyframeState = this.view.cacheState();
+        ListType selection = new ListType();
+
+        for (List<Integer> integers : keyframeState.selected)
+        {
+            selection.add(DataStorageUtils.intListToData(integers));
+        }
+
+        data.put("extra", keyframeState.extra);
+        data.put("selection", selection);
     }
 }

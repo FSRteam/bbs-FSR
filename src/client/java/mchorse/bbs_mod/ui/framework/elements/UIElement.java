@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements;
 
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -23,6 +24,7 @@ import mchorse.bbs_mod.ui.utils.resizers.layout.GridResizer;
 import mchorse.bbs_mod.ui.utils.resizers.layout.RowResizer;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.undo.IUndoElement;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,8 +33,10 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class UIElement implements IUIElement
+public class UIElement implements IUIElement, IUndoElement
 {
+    private String undoId = "";
+
     /**
      * Area of this element (i.e. position and size) 
      */
@@ -200,12 +204,12 @@ public class UIElement implements IUIElement
 
     public <T> List<T> getChildren(Class<T> clazz)
     {
-        return getChildren(clazz, new ArrayList<>());
+        return this.getChildren(clazz, new ArrayList<>());
     }
 
     public <T> List<T> getChildren(Class<T> clazz, List<T> list)
     {
-        return getChildren(clazz, list, false);
+        return this.getChildren(clazz, list, false);
     }
 
     public <T> List<T> getChildren(Class<T> clazz, List<T> list, boolean includeItself)
@@ -229,6 +233,32 @@ public class UIElement implements IUIElement
         }
 
         return list;
+    }
+
+    public <T> void visitChildren(Class<T> clazz, boolean includeItself, Consumer<T> consumer)
+    {
+        if (consumer == null)
+        {
+            return;
+        }
+
+        if (includeItself && clazz.isAssignableFrom(this.getClass()))
+        {
+            consumer.accept(clazz.cast(this));
+        }
+
+        for (IUIElement element : this.getChildren())
+        {
+            if (clazz.isAssignableFrom(element.getClass()))
+            {
+                consumer.accept(clazz.cast(element));
+            }
+
+            if (element instanceof UIElement)
+            {
+                ((UIElement) element).visitChildren(clazz, includeItself, consumer);
+            }
+        }
     }
 
     public void prepend(IUIElement element)
@@ -1363,5 +1393,59 @@ public class UIElement implements IUIElement
 
             context.batcher.outlinedIcon(Icons.LOCKED, this.area.mx(), this.area.my(), 0.5F, 0.5F);
         }
+    }
+
+    /* IUndoElement implementation */
+
+    @Override
+    public String getUndoId()
+    {
+        return this.undoId;
+    }
+
+    public void setUndoId(String undoId)
+    {
+        this.undoId = undoId;
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {}
+
+    public void applyAllUndoData(MapType data)
+    {
+        this.visitChildren(IUndoElement.class, true, (child) ->
+        {
+            String id = child.getUndoId();
+
+            if (!id.isEmpty() && data.has(id))
+            {
+                child.applyUndoData(data.getMap(id));
+            }
+        });
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {}
+
+    public MapType collectAllUndoData()
+    {
+        MapType uiData = new MapType();
+
+        this.visitChildren(IUndoElement.class, true, (child) ->
+        {
+            String id = child.getUndoId();
+
+            if (!id.isEmpty())
+            {
+                MapType data = new MapType();
+
+                child.collectUndoData(data);
+                uiData.put(id, data);
+            }
+        });
+
+        return uiData;
     }
 }

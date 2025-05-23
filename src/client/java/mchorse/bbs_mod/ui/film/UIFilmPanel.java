@@ -14,6 +14,7 @@ import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.MorphRenderer;
 import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.VoiceLines;
@@ -352,6 +353,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.secretPlay = new UIElement();
         this.secretPlay.keys().register(Keys.PLAUSE, () -> this.preview.plause.clickItself()).active(() -> !this.isFlying() && !this.canBeSeen() && this.data != null).category(editor);
+
+        this.setUndoId("film_panel");
+        this.cameraEditor.setUndoId("camera_editor");
+        this.replayEditor.setUndoId("replay_editor");
+        this.actionEditor.setUndoId("action_editor");
+        this.screenplayEditor.editor.setUndoId("screenplay_editor");
     }
 
     private void setupEditorFlex(boolean resize)
@@ -1124,5 +1131,24 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public boolean handleKeyPressed(UIContext context)
     {
         return this.preview.area.isInside(context) && this.controller.orbit.keyPressed(context);
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        this.showPanel(data.getInt("panel"));
+        this.setCursor(data.getInt("tick"));
+        this.controller.createEntities();
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        data.putInt("panel", this.getPanelIndex());
+        data.putInt("tick", this.getCursor());
     }
 }

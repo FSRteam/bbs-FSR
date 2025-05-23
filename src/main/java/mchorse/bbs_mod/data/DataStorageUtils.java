@@ -433,4 +433,34 @@ public class DataStorageUtils
 
         return strings;
     }
+
+    public static ListType intListToData(Collection<Integer> ints)
+    {
+        ListType list = new ListType();
+
+        for (Integer i : ints)
+        {
+            list.addInt(i);
+        }
+
+        return list;
+    }
+
+    public static List<Integer> intListFromData(BaseType type)
+    {
+        ArrayList<Integer> ints = new ArrayList<>();
+
+        if (type.isList())
+        {
+            for (BaseType baseType : type.asList())
+            {
+                if (baseType.isNumeric())
+                {
+                    ints.add(baseType.asNumeric().intValue());
+                }
+            }
+        }
+
+        return ints;
+    }
 }

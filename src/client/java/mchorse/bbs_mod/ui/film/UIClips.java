@@ -816,6 +816,11 @@ public class UIClips extends UIElement
 
     /* Getters and setters */
 
+    public Clips getClips()
+    {
+        return this.clips;
+    }
+
     public void setClips(Clips clips)
     {
         this.clips = clips;
