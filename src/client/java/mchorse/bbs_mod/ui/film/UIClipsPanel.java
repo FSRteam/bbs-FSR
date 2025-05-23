@@ -17,6 +17,7 @@ import mchorse.bbs_mod.utils.factory.IFactory;
 import mchorse.bbs_mod.utils.undo.IUndo;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class UIClipsPanel extends UIElement implements IUIClipsDelegate
@@ -61,7 +62,40 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     {
         if (this.panel != null)
         {
-            this.panel.editClip(position);
+            Map<Clip, Position> snapshots = this.filmPanel.getRunner().getContext().getSnapshots();
+            Position newPosition = new Position();
+            Position snapshot = snapshots.get(this.panel.clip);
+
+            newPosition.copy(position);
+
+            if (snapshot != null)
+            {
+                Clip top = this.panel.clip;
+
+                for (Clip clip : snapshots.keySet())
+                {
+                    if (clip.layer.get() > top.layer.get())
+                    {
+                        top = clip;
+                    }
+                }
+
+                Position topPosition = snapshots.get(top);
+
+                if (topPosition != null)
+                {
+                    newPosition.point.x -= topPosition.point.x - snapshot.point.x;
+                    newPosition.point.y -= topPosition.point.y - snapshot.point.y;
+                    newPosition.point.z -= topPosition.point.z - snapshot.point.z;
+
+                    newPosition.angle.yaw -= topPosition.angle.yaw - snapshot.angle.yaw;
+                    newPosition.angle.pitch-= topPosition.angle.pitch - snapshot.angle.pitch;
+                    newPosition.angle.roll -= topPosition.angle.roll - snapshot.angle.roll;
+                    newPosition.angle.fov -= topPosition.angle.fov - snapshot.angle.fov;
+                }
+            }
+
+            this.panel.editClip(newPosition);
         }
     }
 

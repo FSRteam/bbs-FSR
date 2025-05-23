@@ -6,12 +6,34 @@ import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CameraClipContext extends ClipContext<CameraClip, Position>
 {
     public List<IEntity> entities = new ArrayList<>();
     private Position lastPosition = new Position();
+    private Map<Clip, Position> snapshots = new HashMap<>();
+    private boolean captureSnapshots;
+
+    public void captureSnapshots()
+    {
+        this.captureSnapshots = true;
+    }
+
+    public Map<Clip, Position> getSnapshots()
+    {
+        return this.snapshots;
+    }
+
+    @Override
+    public ClipContext setup(int ticks, int relativeTick, float transition, int currentLayer)
+    {
+        this.snapshots.clear();
+
+        return super.setup(ticks, relativeTick, transition, currentLayer);
+    }
 
     @Override
     public boolean apply(Clip clip, Position position)
@@ -22,6 +44,14 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
             this.relativeTick = this.ticks - clip.tick.get();
 
             ((CameraClip) clip).apply(this, position);
+
+            if (this.captureSnapshots)
+            {
+                Position snapshot = new Position();
+
+                snapshot.copy(position);
+                this.snapshots.put(clip, snapshot);
+            }
 
             double dx = position.point.x - this.lastPosition.point.x;
             double dy = position.point.y - this.lastPosition.point.y;

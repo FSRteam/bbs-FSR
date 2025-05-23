@@ -142,6 +142,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.notifyServer(playing ? ActionState.PLAY : ActionState.PAUSE);
         });
+        this.runner.getContext().captureSnapshots();
+
         this.recorder = new UIFilmRecorder(this);
 
         this.main = new UIElement();
