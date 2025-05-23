@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film.clips;
 
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -37,6 +38,7 @@ public class UICurveClip extends UIClip<CurveClip>
             UIReplaysEditor.renderBackground(context, this.keyframes.view, (Clips) this.clip.getParent(), this.clip.tick.get());
         });
         this.keyframes.view.duration(() -> this.clip.duration.get());
+        this.keyframes.setUndoId("curve_keyframes");
 
         this.editKey = new UIButton(UIKeys.CAMERA_PANELS_PICK_KEY, (b) ->
         {
@@ -82,5 +84,29 @@ public class UICurveClip extends UIClip<CurveClip>
         super.updateDuration(duration);
 
         this.keyframes.updateConverter();
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        if (data.getString("embed").equals("curve"))
+        {
+            this.editor.embedView(this.keyframes);
+            this.keyframes.view.editSheet(this.keyframes.view.getGraph().getSheets().get(0));
+            this.keyframes.view.resetView();
+        }
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        if (this.keyframes.hasParent())
+        {
+            data.putString("embed", "curve");
+        }
     }
 }

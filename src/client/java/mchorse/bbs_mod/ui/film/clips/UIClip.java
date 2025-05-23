@@ -33,6 +33,7 @@ import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.clips.overwrite.PathClip;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.ValueGroup;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -172,6 +173,7 @@ public abstract class UIClip <T extends Clip> extends UIElement
         });
         this.duration.limit(1, Integer.MAX_VALUE, true).tooltip(UIKeys.CAMERA_PANELS_DURATION);
         this.envelope = new UIEnvelope(this);
+        this.envelope.channel.setUndoId("envelope_keyframes");
 
         this.panels = UI.scrollView(5, 10);
         this.panels.scroll.cancelScrolling();
@@ -233,6 +235,30 @@ public abstract class UIClip <T extends Clip> extends UIElement
         context.batcher.box(this.area.ex() - 40, this.area.y, this.area.ex(), this.area.ey(), Colors.A25);
 
         super.render(context);
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        if (data.getString("embed").equals("envelope"))
+        {
+            this.editor.embedView(this.envelope.channel);
+            this.envelope.channel.view.editSheet(this.envelope.channel.view.getGraph().getSheets().get(0));
+            this.envelope.channel.view.resetView();
+        }
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        if (this.envelope.channel.hasParent())
+        {
+            data.putString("embed", "envelope");
+        }
     }
 
     public static interface IUIClipFactory <T extends Clip>

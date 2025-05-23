@@ -144,6 +144,7 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
             this.clips.embedView(null);
 
             this.panel = UIClip.createPanel(clip, this);
+            this.panel.setUndoId("clip_panel");
 
             if (this.target == null)
             {

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film.clips;
 
 import mchorse.bbs_mod.camera.clips.modifiers.RemapperClip;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
@@ -32,6 +33,7 @@ public class UIRemapperClip extends UIClip<RemapperClip>
             UIReplaysEditor.renderBackground(context, this.keyframes.view, (Clips) this.clip.getParent(), this.clip.tick.get());
         });
         this.keyframes.view.duration(() -> this.clip.duration.get());
+        this.keyframes.setUndoId("remapper_keyframes");
 
         this.edit = new UIButton(UIKeys.CAMERA_PANELS_EDIT_KEYFRAMES, (b) ->
         {
@@ -65,5 +67,29 @@ public class UIRemapperClip extends UIClip<RemapperClip>
         super.updateDuration(duration);
 
         this.keyframes.updateConverter();
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        if (data.getString("embed").equals("remapper"))
+        {
+            this.editor.embedView(this.keyframes);
+            this.keyframes.view.editSheet(this.keyframes.view.getGraph().getSheets().get(0));
+            this.keyframes.view.resetView();
+        }
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        if (this.keyframes.hasParent())
+        {
+            data.putString("embed", "remapper");
+        }
     }
 }

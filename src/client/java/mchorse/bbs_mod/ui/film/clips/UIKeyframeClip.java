@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.film.clips;
 
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.data.Position;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
@@ -47,6 +48,7 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
             UIReplaysEditor.renderBackground(context, this.keyframes.view, (Clips) this.clip.getParent(), this.clip.tick.get());
         });
         this.keyframes.view.duration(() -> this.clip.duration.get());
+        this.keyframes.setUndoId("keyframe_keyframes");
 
         this.edit = new UIButton(UIKeys.GENERAL_EDIT, (b) ->
         {
@@ -95,5 +97,28 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
         this.updateDuration(this.clip.duration.get());
         this.keyframes.setClip(this.clip);
         this.additive.setValue(this.clip.additive.get());
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        if (data.getString("embed").equals("keyframe"))
+        {
+            this.editor.embedView(this.keyframes);
+            this.keyframes.view.resetView();
+        }
+    }
+
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        if (this.keyframes.hasParent())
+        {
+            data.putString("embed", "keyframe");
+        }
     }
 }
