@@ -123,6 +123,7 @@ public class UIReplaysEditor extends UIElement
 
         COLORS.put("visible", Colors.WHITE & 0xFFFFFF);
         COLORS.put("pose", Colors.RED);
+        COLORS.put("pose_overlay", Colors.ORANGE);
         COLORS.put("transform", Colors.GREEN);
         COLORS.put("color", Colors.INACTIVE);
         COLORS.put("lighting", Colors.YELLOW);
@@ -631,7 +632,15 @@ public class UIReplaysEditor extends UIElement
             return;
         }
 
-        this.pickProperty(bone, StringUtils.combinePaths(path, "pose"), false);
+        Keyframe selected = this.keyframeEditor.view.getGraph().getSelected();
+        String type = "pose";
+
+        if (selected != null && selected.getParent().getId().endsWith("pose_overlay"))
+        {
+            type = "pose_overlay";
+        }
+
+        this.pickProperty(bone, StringUtils.combinePaths(path, type), false);
     }
 
     public void pickFormProperty(Form form, String bone)

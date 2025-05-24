@@ -18,6 +18,7 @@ public class ModelForm extends Form
     public final LinkProperty texture = new LinkProperty(this, "texture", null);
     public final StringProperty model = new StringProperty(this, "model", "");
     public final PoseProperty pose = new PoseProperty(this, "pose", new Pose());
+    public final PoseProperty poseOverlay = new PoseProperty(this, "pose_overlay", new Pose());
     public final ActionsConfigProperty actions = new ActionsConfigProperty(this, "actions", new ActionsConfig());
     public final ColorProperty color = new ColorProperty(this, "color", Color.white());
     public final ShapeKeysProperty shapeKeys = new ShapeKeysProperty(this, "shape_keys", new ShapeKeys());
@@ -30,6 +31,7 @@ public class ModelForm extends Form
         this.register(this.texture);
         this.register(this.model);
         this.register(this.pose);
+        this.register(this.poseOverlay);
         this.register(this.actions);
         this.register(this.color);
         this.register(this.shapeKeys);
