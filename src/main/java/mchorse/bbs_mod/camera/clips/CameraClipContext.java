@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 public class CameraClipContext extends ClipContext<CameraClip, Position>
 {
@@ -33,6 +34,20 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
         this.snapshots.clear();
 
         return super.setup(ticks, relativeTick, transition, currentLayer);
+    }
+
+    @Override
+    public boolean applyUnderneath(int ticks, float transition, Position position, Predicate<Clip> filter)
+    {
+        boolean capture = this.captureSnapshots;
+
+        if (capture) this.captureSnapshots = false;
+
+        boolean result = super.applyUnderneath(ticks, transition, position, filter);
+
+        if (capture) this.captureSnapshots = true;
+
+        return result;
     }
 
     @Override
