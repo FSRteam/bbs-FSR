@@ -627,6 +627,7 @@
     "bbs.ui.gun.zoom.on": "On zoom",
     "bbs.ui.gun.zoom.title": "Zoom options",
     "bbs.ui.importer.aiff": "AIFF to WAV",
+    "bbs.ui.importer.ogg": "OGG to WAV",
     "bbs.ui.importer.ffmpeg-notification": "It seems like FFMPEG wasn't configured properly... check Encoder Path option in Video Settings!",
     "bbs.ui.importer.flac": "FLAC to WAV",
     "bbs.ui.importer.gif": "GIF to PNG sequence",

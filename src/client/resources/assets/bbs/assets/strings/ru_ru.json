@@ -627,6 +627,7 @@
     "bbs.ui.gun.zoom.on": "Во время приближение",
     "bbs.ui.gun.zoom.title": "Опции приближения",
     "bbs.ui.importer.aiff": "AIFF в WAV",
+    "bbs.ui.importer.ogg": "OGG в WAV",
     "bbs.ui.importer.ffmpeg-notification": "Походу FFMPEG был неправильно настроен... проверьте Путь кодировщика в Видео Настройках!",
     "bbs.ui.importer.flac": "FLAC в WAV",
     "bbs.ui.importer.gif": "GIF в последовательность PNG",

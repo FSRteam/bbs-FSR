@@ -37,6 +37,7 @@ public class Importers
         importers.add(new ToWAVImporter(UIKeys.IMPORTER_MPEG, ".mp3", ".mp4"));
         importers.add(new ToWAVImporter(UIKeys.IMPORTER_FLAC, ".flac"));
         importers.add(new ToWAVImporter(UIKeys.IMPORTER_AIFF, ".aiff"));
+        importers.add(new ToWAVImporter(UIKeys.IMPORTER_AIFF, ".ogg"));
         importers.add(new GIFImporter());
         importers.add(new OldSkinImporter());
         importers.add(new PNGImporter());

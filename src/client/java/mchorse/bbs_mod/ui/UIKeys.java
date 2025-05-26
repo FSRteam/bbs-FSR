@@ -483,6 +483,7 @@ public class UIKeys
     public static final IKey GUN_ZOOM_FOV_TARGET = L10n.lang("bbs.ui.gun.zoom.fov_target");
     public static final IKey GUN_ZOOM_TITLE = L10n.lang("bbs.ui.gun.zoom.title");
     public static final IKey IMPORTER_AIFF = L10n.lang("bbs.ui.importer.aiff");
+    public static final IKey IMPORTER_OGG = L10n.lang("bbs.ui.importer.ogg");
     public static final IKey IMPORTER_FFMPEG_NOTIFICATION = L10n.lang("bbs.ui.importer.ffmpeg-notification");
     public static final IKey IMPORTER_FLAC = L10n.lang("bbs.ui.importer.flac");
     public static final IKey IMPORTER_GIF = L10n.lang("bbs.ui.importer.gif");
