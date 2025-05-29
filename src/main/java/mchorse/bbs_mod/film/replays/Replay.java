@@ -30,6 +30,7 @@ public class Replay extends ValueGroup
     public final FormProperties properties = new FormProperties("properties");
     public final Clips actions = new Clips("actions", BBSMod.getFactoryActionClips());
 
+    public final ValueBoolean enabled = new ValueBoolean("enabled", true);
     public final ValueString label = new ValueString("label", "");
     public final ValueString nameTag = new ValueString("name_tag", "");
     public final ValueBoolean shadow = new ValueBoolean("shadow", true);
@@ -47,6 +48,7 @@ public class Replay extends ValueGroup
         this.add(this.properties);
         this.add(this.actions);
 
+        this.add(this.enabled);
         this.add(this.label);
         this.add(this.nameTag);
         this.add(this.shadow);

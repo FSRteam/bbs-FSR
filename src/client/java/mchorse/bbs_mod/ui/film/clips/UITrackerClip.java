@@ -15,7 +15,6 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.CollectionUtils;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
 
@@ -71,7 +70,7 @@ public class UITrackerClip extends UIClip<TrackerClip>
         List<UIFilmPanel> children = this.getContext().menu.main.getChildren(UIFilmPanel.class);
         UIFilmPanel panel = children.isEmpty() ? null : children.get(0);
         int index = this.clip.selector.get();
-        IEntity entity = CollectionUtils.getSafe(panel.getController().getEntities(), index);
+        IEntity entity = panel.getController().getEntities().get(index);
 
         if (entity == null || entity.getForm() == null)
         {

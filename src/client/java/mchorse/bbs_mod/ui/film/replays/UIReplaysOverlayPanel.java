@@ -23,6 +23,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
 
     public UIElement properties;
     public UINestedEdit pickEdit;
+    public UIToggle enabled;
     public UITextbox label;
     public UITextbox nameTag;
     public UIToggle shadow;
@@ -46,6 +47,11 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
         this.pickEdit.keybinds();
         this.pickEdit.pick.tooltip(UIKeys.SCENE_REPLAYS_CONTEXT_PICK_FORM);
         this.pickEdit.edit.tooltip(UIKeys.SCENE_REPLAYS_CONTEXT_EDIT_FORM);
+        this.enabled = new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) ->
+        {
+            this.edit((replay) -> replay.enabled.set(b.getValue()));
+            filmPanel.getController().createEntities();
+        });
         this.label = new UITextbox(1000, (s) -> this.edit((replay) -> replay.label.set(s)));
         this.label.textbox.setPlaceholder(UIKeys.FILM_REPLAY_LABEL);
         this.nameTag = new UITextbox(1000, (s) -> this.edit((replay) -> replay.nameTag.set(s)));
@@ -59,7 +65,9 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
         this.actor.tooltip(UIKeys.FILM_REPLAY_ACTOR_TOOLTIP);
 
         this.properties = UI.column(5, 6,
-            UI.label(UIKeys.FILM_REPLAY_REPLAY), this.pickEdit, this.label, this.nameTag,
+            UI.label(UIKeys.FILM_REPLAY_REPLAY),
+            this.pickEdit, this.enabled,
+            this.label, this.nameTag,
             this.shadow, this.shadowSize,
             UI.label(UIKeys.FILM_REPLAY_LOOPING), this.looping, this.actor
         );
@@ -90,6 +98,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
         if (replay != null)
         {
             this.pickEdit.setForm(replay.form.get());
+            this.enabled.setValue(replay.enabled.get());
             this.label.setText(replay.label.get());
             this.nameTag.setText(replay.nameTag.get());
             this.shadow.setValue(replay.shadow.get());

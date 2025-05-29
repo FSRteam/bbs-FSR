@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import io.netty.util.collection.IntObjectHashMap;
+import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -39,7 +41,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +50,7 @@ public abstract class BaseFilmController
 {
     public final Film film;
 
-    protected List<IEntity> entities = new ArrayList<>();
+    protected IntObjectMap<IEntity> entities = new IntObjectHashMap<>();
 
     public int exception = -1;
 
@@ -57,7 +58,7 @@ public abstract class BaseFilmController
 
     public static void renderEntity(FilmControllerContext context)
     {
-        List<IEntity> entities = context.entities;
+        IntObjectMap<IEntity> entities = context.entities;
         IEntity entity = context.entity;
         Camera camera = context.camera;
         MatrixStack stack = context.stack;
@@ -222,9 +223,9 @@ public abstract class BaseFilmController
         matrices.pop();
     }
 
-    public static Matrix4f getEntityMatrix(List<IEntity> entities, double cameraX, double cameraY, double cameraZ, int actor, String attachment, Matrix4f defaultMatrix, float transition)
+    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, int actor, String attachment, Matrix4f defaultMatrix, float transition)
     {
-        IEntity entity = CollectionUtils.getSafe(entities, actor);
+        IEntity entity = entities.get(actor);
 
         if (entity != null)
         {
@@ -276,7 +277,7 @@ public abstract class BaseFilmController
         this.film = film;
     }
 
-    public List<IEntity> getEntities()
+    public IntObjectMap<IEntity> getEntities()
     {
         return this.entities;
     }
@@ -290,23 +291,30 @@ public abstract class BaseFilmController
             return;
         }
 
+        int i = 0;
+
         for (Replay replay : this.film.replays.getList())
         {
-            World world = MinecraftClient.getInstance().world;
-            IEntity entity = new StubEntity(world);
+            if (replay.enabled.get())
+            {
+                World world = MinecraftClient.getInstance().world;
+                IEntity entity = new StubEntity(world);
 
-            entity.setForm(FormUtils.copy(replay.form.get()));
-            replay.applyFrame(0, entity);
-            entity.setPrevX(entity.getX());
-            entity.setPrevY(entity.getY());
-            entity.setPrevZ(entity.getZ());
+                entity.setForm(FormUtils.copy(replay.form.get()));
+                replay.applyFrame(0, entity);
+                entity.setPrevX(entity.getX());
+                entity.setPrevY(entity.getY());
+                entity.setPrevZ(entity.getZ());
 
-            entity.setPrevYaw(entity.getYaw());
-            entity.setPrevHeadYaw(entity.getHeadYaw());
-            entity.setPrevPitch(entity.getPitch());
-            entity.setPrevBodyYaw(entity.getBodyYaw());
+                entity.setPrevYaw(entity.getYaw());
+                entity.setPrevHeadYaw(entity.getHeadYaw());
+                entity.setPrevPitch(entity.getPitch());
+                entity.setPrevBodyYaw(entity.getBodyYaw());
 
-            this.entities.add(entity);
+                this.entities.put(i, entity);
+            }
+
+            i += 1;
         }
     }
 
@@ -326,9 +334,10 @@ public abstract class BaseFilmController
 
     protected void updateEntities(int ticks)
     {
-        for (int i = 0; i < this.entities.size(); i++)
+        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
-            IEntity entity = this.entities.get(i);
+            int i = entry.getKey();
+            IEntity entity = entry.getValue();
             List<Replay> replays = this.film.replays.getList();
             Replay replay = CollectionUtils.getSafe(replays, i);
 
@@ -387,10 +396,11 @@ public abstract class BaseFilmController
 
     public void startRenderFrame(float transition)
     {
-        for (int i = 0; i < this.entities.size(); i++)
+        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
+            int i = entry.getKey();
+            IEntity entity = entry.getValue();
             Replay replay = this.film.replays.getList().get(i);
-            IEntity entity = this.entities.get(i);
 
             if (!this.canUpdate(i, replay, entity))
             {
@@ -430,10 +440,11 @@ public abstract class BaseFilmController
     {
         RenderSystem.enableDepthTest();
 
-        for (int i = 0; i < this.entities.size(); i++)
+        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
+            int i = entry.getKey();
+            IEntity entity = entry.getValue();
             Replay replay = this.film.replays.getList().get(i);
-            IEntity entity = this.entities.get(i);
 
             if (!this.canUpdate(i, replay, entity))
             {

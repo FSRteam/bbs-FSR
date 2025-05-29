@@ -45,7 +45,7 @@ public abstract class EntityClip extends CameraClip
 
         if (context instanceof CameraClipContext cameraClipContext && index >= 0)
         {
-            if (CollectionUtils.inRange(cameraClipContext.entities, index))
+            if (cameraClipContext.entities.containsKey(index))
             {
                 return Collections.singletonList(cameraClipContext.entities.get(index));
             }

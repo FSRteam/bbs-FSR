@@ -1,19 +1,19 @@
 package mchorse.bbs_mod.camera.clips;
 
+import io.netty.util.collection.IntObjectHashMap;
+import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
 public class CameraClipContext extends ClipContext<CameraClip, Position>
 {
-    public List<IEntity> entities = new ArrayList<>();
+    public IntObjectMap<IEntity> entities = new IntObjectHashMap<>();
     private Position lastPosition = new Position();
     private Map<Clip, Position> snapshots = new HashMap<>();
     private boolean captureSnapshots;

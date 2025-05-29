@@ -175,6 +175,7 @@ public class UIFilmUndoHandler
             path.contains("/keyframes/item_legs") ||
             path.contains("/keyframes/item_feet") ||
             path.endsWith("/actor") ||
+            path.endsWith("/enabled") ||
             path.endsWith("/form")
         ) {
             return true;

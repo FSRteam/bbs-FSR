@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
+import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -13,7 +14,6 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import net.minecraft.client.util.math.MatrixStack;
@@ -30,7 +30,7 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
     private UIButton actor;
     private UIButton attachment;
 
-    public static void displayActors(UIContext context, List<IEntity> entities, int value, Consumer<Integer> callback)
+    public static void displayActors(UIContext context, IntObjectMap<IEntity> entities, int value, Consumer<Integer> callback)
     {
         List<UIFilmPanel> children = context.menu.main.getChildren(UIFilmPanel.class);
         UIFilmPanel panel = children.isEmpty() ? null : children.get(0);
@@ -75,7 +75,7 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
     {
         UIFilmPanel panel = this.getPanel();
         int index = this.keyframe.getValue().actor;
-        IEntity entity = CollectionUtils.getSafe(panel.getController().getEntities(), index);
+        IEntity entity = panel.getController().getEntities().get(index);
 
         if (entity == null || entity.getForm() == null)
         {

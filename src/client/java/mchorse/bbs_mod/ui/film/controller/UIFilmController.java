@@ -2,6 +2,8 @@ package mchorse.bbs_mod.ui.film.controller;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
+import io.netty.util.collection.IntObjectHashMap;
+import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
@@ -243,7 +245,7 @@ public class UIFilmController extends UIElement
 
     public IEntity getCurrentEntity()
     {
-        return CollectionUtils.getSafe(this.getEntities(), this.panel.replayEditor.replays.replays.getIndex());
+        return this.getEntities().get(this.panel.replayEditor.replays.replays.getIndex());
     }
 
     public int getPovMode()
@@ -304,15 +306,15 @@ public class UIFilmController extends UIElement
         this.editorController = new FilmEditorController(this.panel.getData(), this);
         this.editorController.createEntities();
 
-        List<IEntity> entities = this.panel.getRunner().getContext().entities;
+        IntObjectMap<IEntity> entities = this.panel.getRunner().getContext().entities;
 
         entities.clear();
-        entities.addAll(this.editorController.getEntities());
+        entities.putAll(this.editorController.getEntities());
     }
 
-    public List<IEntity> getEntities()
+    public IntObjectMap<IEntity> getEntities()
     {
-        return this.editorController == null ? Collections.emptyList() : this.editorController.getEntities();
+        return this.editorController == null ? new IntObjectHashMap<>() : this.editorController.getEntities();
     }
 
     public Map<String, Integer> getActors()
@@ -342,7 +344,7 @@ public class UIFilmController extends UIElement
         this.getContext().unfocus();
 
         boolean replacePlayer = ClientNetwork.isIsBBSModOnServer();
-        List<IEntity> entities = this.getEntities();
+        IntObjectMap<IEntity> entities = this.getEntities();
 
         if (this.controlled != null)
         {
@@ -350,7 +352,7 @@ public class UIFilmController extends UIElement
             {
                 this.controlled.setForm(this.playerForm);
 
-                entities.set(entities.indexOf(this.controlled), this.previousEntity);
+                entities.put(CollectionUtils.getKey(entities, this.controlled), this.previousEntity);
                 this.previousEntity = null;
             }
 
@@ -369,7 +371,7 @@ public class UIFilmController extends UIElement
 
                 player.copy(this.controlled);
                 PlayerUtils.teleport(this.controlled.getX(), this.controlled.getY(), this.controlled.getZ(), this.controlled.getHeadYaw(), this.controlled.getBodyYaw(), this.controlled.getPitch());
-                entities.set(entities.indexOf(this.controlled), player);
+                entities.put(CollectionUtils.getKey(entities, this.controlled), player);
 
                 this.controlled = player;
             }
@@ -556,7 +558,7 @@ public class UIFilmController extends UIElement
 
                     for (IEntity entity : this.hoveredEntities)
                     {
-                        int index = this.getEntities().indexOf(entity);
+                        int index = CollectionUtils.getKey(this.getEntities(), entity);
 
                         menu.action(Icons.POSE, IKey.constant(this.panel.getData().replays.getList().get(index).getName()), () -> this.pickEntity(entity));
                     }
@@ -571,7 +573,7 @@ public class UIFilmController extends UIElement
 
     private void pickEntity(IEntity entity)
     {
-        int index = this.getEntities().indexOf(entity);
+        int index = CollectionUtils.getKey(this.getEntities(), entity);
 
         this.panel.replayEditor.setReplay(this.panel.getData().replays.getList().get(index));
 
@@ -1225,7 +1227,7 @@ public class UIFilmController extends UIElement
 
         List<IEntity> entities = new ArrayList<>();
 
-        for (IEntity entity : this.getEntities())
+        for (IEntity entity : this.getEntities().values())
         {
             AABB aabb = entity.getPickingHitbox();
 

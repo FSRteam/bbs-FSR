@@ -61,7 +61,7 @@ public class ActionPlayer
         {
             Replay replay = list.get(i);
 
-            if (!replay.actor.get() || i == this.exception)
+            if (i == this.exception || !replay.actor.get() || !replay.enabled.get())
             {
                 continue;
             }
@@ -166,6 +166,12 @@ public class ActionPlayer
             }
 
             Replay replay = list.get(i);
+
+            if (!replay.enabled.get())
+            {
+                continue;
+            }
+
             ActorEntity actor = this.actors.get(replay.getId());
 
             replay.applyActions(actor, fakePlayer, this.film, this.tick);
@@ -180,7 +186,7 @@ public class ActionPlayer
         {
             baseValue.fromData(data);
 
-            if (baseValue.getId().equals("actor") || baseValue.getId().equals("replays"))
+            if (baseValue.getId().equals("actor") || baseValue.getId().equals("enabled") || baseValue.getId().equals("replays"))
             {
                 this.updateReplayEntities();
             }
