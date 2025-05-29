@@ -527,6 +527,8 @@
     "bbs.ui.forms.editors.block.title": "Блок",
     "bbs.ui.forms.editors.extruded.title": "Выпуклый",
     "bbs.ui.forms.editors.general": "Общие",
+    "bbs.ui.forms.editors.general.animatable": "Анимируется",
+    "bbs.ui.forms.editors.general.animatable-tooltip": "Эта опция влияет если эту форму можно анимировать через ключевые кадры",
     "bbs.ui.forms.editors.general.display": "Показывать имя",
     "bbs.ui.forms.editors.general.hitbox": "Хитбокс",
     "bbs.ui.forms.editors.general.hitbox_eye_height": "Высота хитбокса глаза",

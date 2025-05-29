@@ -342,6 +342,8 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_BLOCK_TITLE = L10n.lang("bbs.ui.forms.editors.block.title");
     public static final IKey FORMS_EDITORS_EXTRUDED_TITLE = L10n.lang("bbs.ui.forms.editors.extruded.title");
     public static final IKey FORMS_EDITORS_GENERAL = L10n.lang("bbs.ui.forms.editors.general");
+    public static final IKey FORMS_EDITORS_GENERAL_ANIMATABLE = L10n.lang("bbs.ui.forms.editors.general.animatable");
+    public static final IKey FORMS_EDITORS_GENERAL_ANIMATABLET_TOOLTIP = L10n.lang("bbs.ui.forms.editors.general.animatable-tooltip");
     public static final IKey FORMS_EDITORS_GENERAL_DISPLAY = L10n.lang("bbs.ui.forms.editors.general.display");
     public static final IKey FORMS_EDITORS_GENERAL_HITBOX = L10n.lang("bbs.ui.forms.editors.general.hitbox");
     public static final IKey FORMS_EDITORS_GENERAL_HITBOX_EYE_HEIGHT = L10n.lang("bbs.ui.forms.editors.general.hitbox_eye_height");

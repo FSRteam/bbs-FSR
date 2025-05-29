@@ -17,6 +17,7 @@ public class UIGeneralFormPanel extends UIFormPanel
     public UIKeybind hotkey;
 
     public UIToggle visible;
+    public UIToggle animatable;
     public UIToggle lighting;
     public UITrackpad uiScale;
     public UITextbox name;
@@ -43,6 +44,8 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.hotkey.single().tooltip(UIKeys.FORMS_EDITORS_GENERAL_HOTKEY);
 
         this.visible = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_VISIBLE, (b) -> this.form.visible.set(b.getValue()));
+        this.animatable = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_ANIMATABLE, (b) -> this.form.animatable.set(b.getValue()));
+        this.animatable.tooltip(UIKeys.FORMS_EDITORS_GENERAL_ANIMATABLET_TOOLTIP);
         this.lighting = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING, (b) -> this.form.lighting.set(b.getValue() ? 1F : 0F));
         this.lighting.tooltip(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING_TOOLTIP);
         this.uiScale = new UITrackpad((v) -> this.form.uiScale.set(v.floatValue()));
@@ -69,7 +72,7 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.stepHeight = new UITrackpad((v) -> this.form.stepHeight.set(v.floatValue()));
         this.stepHeight.limit(0F);
 
-        this.options.add(this.hotkey, this.visible, this.lighting);
+        this.options.add(this.hotkey, this.visible, this.animatable, this.lighting);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_GENERAL_UI_SCALE), this.uiScale);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_GENERAL_DISPLAY), this.name, this.transform.marginTop(8));
         this.options.add(this.hitbox.marginTop(12), UI.row(this.hitboxWidth, this.hitboxHeight));
@@ -88,6 +91,7 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.hotkey.setKeyCombo(new KeyCombo(IKey.EMPTY, form.hotkey.get()));
 
         this.visible.setValue(form.visible.get());
+        this.animatable.setValue(form.animatable.get());
         this.lighting.setValue(form.lighting.get() > 0F);
         this.uiScale.setValue(form.uiScale.get());
         this.name.setText(form.name.get());

@@ -527,6 +527,8 @@
     "bbs.ui.forms.editors.block.title": "Block",
     "bbs.ui.forms.editors.extruded.title": "Extruded",
     "bbs.ui.forms.editors.general": "General",
+    "bbs.ui.forms.editors.general.animatable": "Animatable",
+    "bbs.ui.forms.editors.general.animatable-tooltip": "Whether this form provides keyframe tracks for animation",
     "bbs.ui.forms.editors.general.display": "Display name",
     "bbs.ui.forms.editors.general.hitbox": "Hitbox",
     "bbs.ui.forms.editors.general.hitbox_eye_height": "Hitbox eye height",

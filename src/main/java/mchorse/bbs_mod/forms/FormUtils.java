@@ -156,7 +156,7 @@ public class FormUtils
 
     public static void collectPropertyPaths(Form form, List<String> properties, String prefix)
     {
-        if (form == null)
+        if (form == null || !form.animatable.get())
         {
             return;
         }
