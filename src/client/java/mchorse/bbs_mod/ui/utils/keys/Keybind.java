@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.ui.utils.keys;
 
-import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Objects;
@@ -94,16 +94,36 @@ public class Keybind
             }
         }
 
-        if (this.inside)
+        return this.inside ? inside : true;
+    }
+
+    public boolean checkMouse(int mouseButton, boolean inside)
+    {
+        mouseButton = -mouseButton;
+
+        if (mouseButton != this.combo.getMainKey())
         {
-            return inside;
+            return false;
         }
 
-        return true;
+        for (int i = 1; i < this.combo.keys.size(); i++)
+        {
+            if (!this.isKeyDown(this.combo.keys.get(i)))
+            {
+                return false;
+            }
+        }
+
+        return this.inside ? inside : true;
     }
 
     protected boolean isKeyDown(int key)
     {
+        if (key < 0)
+        {
+            return Window.isMouseButtonPressed(-key);
+        }
+
         if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT)
         {
             return Window.isShiftPressed();

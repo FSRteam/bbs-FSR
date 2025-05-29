@@ -1115,7 +1115,7 @@ public class UIElement implements IUIElement, IUndoElement
             return element;
         }
 
-        return this.subMouseClicked(context) || this.mouseClickedContextMenu(context) || this.cantPropagate(this.mousePropagation, context) ? this : null;
+        return this.subMouseClicked(context) || this.keybindsMouseClicked(context) || this.mouseClickedContextMenu(context) || this.cantPropagate(this.mousePropagation, context) ? this : null;
     }
 
     @Override
@@ -1320,6 +1320,14 @@ public class UIElement implements IUIElement, IUndoElement
         }
 
         return false;
+    }
+
+    /**
+     * Handle keybind manager's keybinds
+     */
+    protected boolean keybindsMouseClicked(UIContext context)
+    {
+        return this.keybinds != null && this.keybinds.checkMouse(context, this.area.isInside(context));
     }
 
     /**

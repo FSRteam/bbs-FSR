@@ -55,16 +55,26 @@ public class KeybindManager
 
     public boolean check(UIContext context, boolean inside)
     {
-        if (context.getKeyAction() == KeyAction.RELEASED)
+        if (context.getKeyAction() == KeyAction.RELEASED || (this.focus && context.isFocused()))
         {
             return false;
         }
 
+        return this.checkKeybinds(context, inside, false);
+    }
+
+    public boolean checkMouse(UIContext context, boolean inside)
+    {
         if (this.focus && context.isFocused())
         {
             return false;
         }
 
+        return this.checkKeybinds(context, inside, true);
+    }
+
+    private boolean checkKeybinds(UIContext context, boolean inside, boolean mouse)
+    {
         int keyCode = context.getKeyCode();
         int size = this.keybinds.size();
         int index = -1;
@@ -74,14 +84,21 @@ public class KeybindManager
         {
             Keybind keybind = this.keybinds.get(i);
 
-            if (keybind.callback != null && keybind.isActive() && keybind.check(keyCode, context.getKeyAction(), inside))
+            if (keybind.callback != null && keybind.isActive())
             {
-                int keybindScore = keybind.getScore();
+                boolean condition = mouse
+                    ? keybind.checkMouse(context.mouseButton, inside)
+                    : keybind.check(keyCode, context.getKeyAction(), inside);
 
-                if (index == -1 || keybindScore > score)
+                if (condition)
                 {
-                    index = i;
-                    score = keybindScore;
+                    int keybindScore = keybind.getScore();
+
+                    if (index == -1 || keybindScore > score)
+                    {
+                        index = i;
+                        score = keybindScore;
+                    }
                 }
             }
         }

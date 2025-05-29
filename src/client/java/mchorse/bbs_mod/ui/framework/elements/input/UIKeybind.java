@@ -20,6 +20,9 @@ public class UIKeybind extends UIElement
     public Consumer<KeyCombo> callback;
 
     private boolean single;
+    private boolean mouse;
+
+    private boolean first;
 
     public UIKeybind(Consumer<KeyCombo> callback)
     {
@@ -39,6 +42,13 @@ public class UIKeybind extends UIElement
         return this;
     }
 
+    public UIKeybind mouse()
+    {
+        this.mouse = true;
+
+        return this;
+    }
+
     public void setKeyCombo(KeyCombo combo)
     {
         this.combo.copy(combo);
@@ -52,6 +62,13 @@ public class UIKeybind extends UIElement
         }
     }
 
+    private void finish()
+    {
+        this.reading = false;
+
+        this.callback();
+    }
+
     @Override
     public boolean subMouseClicked(UIContext context)
     {
@@ -59,11 +76,45 @@ public class UIKeybind extends UIElement
         {
             context.unfocus();
 
+            this.first = true;
             this.reading = true;
             this.combo.keys.clear();
         }
+        else if (this.reading && this.mouse)
+        {
+            int key = -context.mouseButton;
+
+            if (!this.combo.keys.contains(key))
+            {
+                if (this.single)
+                {
+                    this.combo.keys.clear();
+                }
+
+                this.combo.keys.add(0, key);
+            }
+
+            return true;
+        }
 
         return this.area.isInside(context);
+    }
+
+    @Override
+    protected boolean subMouseReleased(UIContext context)
+    {
+        if (this.first)
+        {
+            this.first = false;
+        }
+        else if (this.reading && this.mouse)
+        {
+            this.finish();
+
+            return true;
+        }
+
+        return super.subMouseReleased(context);
     }
 
     @Override
@@ -74,9 +125,7 @@ public class UIKeybind extends UIElement
             if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
             {
                 this.combo.keys.clear();
-                this.reading = false;
-
-                this.callback();
+                this.finish();
 
                 return true;
             }
@@ -109,9 +158,7 @@ public class UIKeybind extends UIElement
                 }
             }
 
-            this.reading = false;
-
-            this.callback();
+            this.finish();
 
             return true;
         }

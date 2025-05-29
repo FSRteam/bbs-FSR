@@ -8,9 +8,21 @@ public class KeyCodes
 {
     public static String getName(int keyCode)
     {
-        if (keyCode <= 0)
+        if (keyCode == 0)
         {
             return "N/A";
+        }
+
+        if (keyCode < 0)
+        {
+            switch (keyCode)
+            {
+                case -0: return "LMB";
+                case -1: return "RMB";
+                case -2: return "MMB";
+            }
+
+            return "Mouse " + (-keyCode + 1);
         }
 
         if (BBSSettings.forceQwerty.get())
