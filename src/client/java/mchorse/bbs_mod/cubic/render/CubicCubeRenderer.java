@@ -8,6 +8,7 @@ import mchorse.bbs_mod.cubic.data.model.ModelMesh;
 import mchorse.bbs_mod.cubic.data.model.ModelQuad;
 import mchorse.bbs_mod.cubic.data.model.ModelVertex;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.render.BufferBuilder;
@@ -44,7 +45,7 @@ public class CubicCubeRenderer implements ICubicRenderer
     protected float a = 1F;
     protected int light;
     protected int overlay;
-    protected boolean picking;
+    protected StencilMap stencilMap;
 
     /* Temporary variables to avoid allocating and GC vectors */
     protected Vector3f normal = new Vector3f();
@@ -97,11 +98,11 @@ public class CubicCubeRenderer implements ICubicRenderer
         stack.translate(-pivot.x / 16F, -pivot.y / 16F, -pivot.z / 16F);
     }
 
-    public CubicCubeRenderer(int light, int overlay, boolean picking, ShapeKeys shapeKeys)
+    public CubicCubeRenderer(int light, int overlay, StencilMap stencilMap, ShapeKeys shapeKeys)
     {
         this.light = light;
         this.overlay = overlay;
-        this.picking = picking;
+        this.stencilMap = stencilMap;
         this.shapeKeys = shapeKeys;
     }
 
@@ -244,9 +245,9 @@ public class CubicCubeRenderer implements ICubicRenderer
             .texture(vertex.uv.x, vertex.uv.y)
             .overlay(this.overlay);
 
-        if (this.picking)
+        if (this.stencilMap != null)
         {
-            builder.light(group.index, 0);
+            builder.light(stencilMap.increment ? group.index : 0, 0);
         }
         else
         {

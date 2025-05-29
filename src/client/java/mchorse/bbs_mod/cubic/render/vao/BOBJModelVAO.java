@@ -3,6 +3,7 @@ package mchorse.bbs_mod.cubic.render.vao;
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJLoader;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.util.math.MatrixStack;
@@ -110,7 +111,7 @@ public class BOBJModelVAO
      * matrix transformations to vertices and normals according to its 
      * bone owners and these bone influences.
      */
-    public void updateMesh(boolean picking)
+    public void updateMesh(StencilMap stencilMap)
     {
         Vector4f sum = new Vector4f();
         Vector4f result = new Vector4f(0F, 0F, 0F, 0F);
@@ -177,9 +178,9 @@ public class BOBJModelVAO
             result.set(0F, 0F, 0F, 0F);
             resultNormal.set(0F, 0F, 0F);
 
-            if (picking)
+            if (stencilMap != null)
             {
-                this.tmpLight[i * 2] = Math.max(0, lightBone);
+                this.tmpLight[i * 2] = Math.max(0, stencilMap.increment ? lightBone : 0);
                 this.tmpLight[i * 2 + 1] = 0;
             }
         }
@@ -200,7 +201,7 @@ public class BOBJModelVAO
             GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpTangents, GL15.GL_DYNAMIC_DRAW);
         }
 
-        if (picking)
+        if (stencilMap != null)
         {
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.lightBuffer);
             GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpLight, GL15.GL_DYNAMIC_DRAW);
@@ -210,14 +211,14 @@ public class BOBJModelVAO
     protected void processData(float[] newVertices, float[] newNormals)
     {}
 
-    public void render(ShaderProgram shader, MatrixStack stack, float r, float g, float b, float a, boolean picking, int light, int overlay)
+    public void render(ShaderProgram shader, MatrixStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
     {
         boolean hasShaders = BBSRendering.isIrisShadersEnabled();
 
         GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);
         GL30.glVertexAttribI2i(Attributes.OVERLAY_UV, overlay & '\uffff', overlay >> 16 & '\uffff');
 
-        if (!picking) GL30.glVertexAttribI2i(Attributes.LIGHTMAP_UV, light & '\uffff', light >> 16 & '\uffff');
+        if (stencilMap != null) GL30.glVertexAttribI2i(Attributes.LIGHTMAP_UV, light & '\uffff', light >> 16 & '\uffff');
 
         int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
@@ -232,7 +233,7 @@ public class BOBJModelVAO
         GL30.glEnableVertexAttribArray(Attributes.TEXTURE_UV);
         GL30.glEnableVertexAttribArray(Attributes.NORMAL);
 
-        if (picking) GL30.glEnableVertexAttribArray(Attributes.LIGHTMAP_UV);
+        if (stencilMap != null) GL30.glEnableVertexAttribArray(Attributes.LIGHTMAP_UV);
         if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
         if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
@@ -242,7 +243,7 @@ public class BOBJModelVAO
         GL30.glDisableVertexAttribArray(Attributes.TEXTURE_UV);
         GL30.glDisableVertexAttribArray(Attributes.NORMAL);
 
-        if (picking) GL30.glDisableVertexAttribArray(Attributes.LIGHTMAP_UV);
+        if (stencilMap != null) GL30.glDisableVertexAttribArray(Attributes.LIGHTMAP_UV);
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 

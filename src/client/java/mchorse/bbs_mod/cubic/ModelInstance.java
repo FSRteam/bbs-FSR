@@ -288,14 +288,14 @@ public class ModelInstance implements IModelInstance
         }
     }
 
-    public void render(MatrixStack stack, Supplier<ShaderProgram> program, Color color, int light, int overlay, boolean picking, ShapeKeys keys)
+    public void render(MatrixStack stack, Supplier<ShaderProgram> program, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys)
     {
         if (this.model instanceof Model model)
         {
             boolean isVao = this.isVAORendered();
             CubicCubeRenderer renderProcessor = isVao
-                ? new CubicVAORenderer(program.get(), this, light, overlay, picking, keys)
-                : new CubicCubeRenderer(light, overlay, picking, keys);
+                ? new CubicVAORenderer(program.get(), this, light, overlay, stencilMap, keys)
+                : new CubicCubeRenderer(light, overlay, stencilMap, keys);
 
             renderProcessor.setColor(color.r, color.g, color.b, color.a);
 
@@ -324,8 +324,8 @@ public class ModelInstance implements IModelInstance
                 stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180F));
 
                 vao.armature.setupMatrices();
-                vao.updateMesh(picking);
-                vao.render(program.get(), stack, color.r, color.g, color.b, color.a, picking, light, overlay);
+                vao.updateMesh(stencilMap);
+                vao.render(program.get(), stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
 
                 stack.pop();
             }

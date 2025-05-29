@@ -10,6 +10,12 @@ public class StencilMap
 {
     public int objectIndex;
     public Map<Integer, Pair<Form, String>> indexMap = new HashMap<>();
+    public boolean increment = true;
+
+    public void setIncrement(boolean increment)
+    {
+        this.increment = increment;
+    }
 
     public void setup()
     {
@@ -24,7 +30,15 @@ public class StencilMap
 
     public void addPicking(Form form, String bone)
     {
-        this.indexMap.put(this.objectIndex, new Pair<>(form, bone));
-        this.objectIndex += 1;
+        if (this.increment)
+        {
+            this.indexMap.put(this.objectIndex, new Pair<>(form, bone));
+
+            this.objectIndex += 1;
+        }
+        else
+        {
+            this.indexMap.put(this.objectIndex, new Pair<>(form, ""));
+        }
     }
 }

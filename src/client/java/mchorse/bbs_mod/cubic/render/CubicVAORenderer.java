@@ -1,11 +1,12 @@
 package mchorse.bbs_mod.cubic.render;
 
-import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
-import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
+import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.gl.ShaderProgram;
@@ -18,9 +19,9 @@ public class CubicVAORenderer extends CubicCubeRenderer
     private ShaderProgram program;
     private ModelInstance model;
 
-    public CubicVAORenderer(ShaderProgram program, ModelInstance model, int light, int overlay, boolean picking, ShapeKeys shapeKeys)
+    public CubicVAORenderer(ShaderProgram program, ModelInstance model, int light, int overlay, StencilMap stencilMap, ShapeKeys shapeKeys)
     {
-        super(light, overlay, picking, shapeKeys);
+        super(light, overlay, stencilMap, shapeKeys);
 
         this.program = program;
         this.model = model;
@@ -39,9 +40,9 @@ public class CubicVAORenderer extends CubicCubeRenderer
             float a = this.a * group.color.a;
             int light = this.light;
 
-            if (this.picking)
+            if (this.stencilMap != null)
             {
-                light = group.index;
+                light = this.stencilMap.increment ? group.index : 0;
             }
             else
             {
