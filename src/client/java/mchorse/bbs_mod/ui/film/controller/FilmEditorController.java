@@ -115,12 +115,9 @@ public class FilmEditorController extends BaseFilmController
     }
 
     @Override
-    public void startRenderFrame(float tickDelta)
+    protected float getTransition(IEntity entity, float transition)
     {
-        boolean isPlaying = this.controller.isPlaying();
-        float transition = isPlaying ? tickDelta : 0F;
-
-        super.startRenderFrame(transition);
+        return !this.controller.isPlaying() && !this.isCurrent(entity) ? 0F : transition;
     }
 
     @Override
@@ -141,13 +138,14 @@ public class FilmEditorController extends BaseFilmController
     @Override
     protected void renderEntity(WorldRenderContext context, Replay replay, IEntity entity)
     {
-        if (!(this.controller.getPovMode() == UIFilmController.CAMERA_MODE_FIRST_PERSON && this.isCurrent(entity)))
+        boolean current = this.isCurrent(entity);
+
+        if (!(this.controller.getPovMode() == UIFilmController.CAMERA_MODE_FIRST_PERSON && current))
         {
             super.renderEntity(context, replay, entity);
         }
 
         boolean isPlaying = this.controller.isPlaying();
-        float transition = isPlaying ? context.tickDelta() : 0F;
         int ticks = replay.getTick(this.getTick());
         ValueOnionSkin onionSkin = this.controller.getOnionSkin();
         BaseValue value = replay.properties.get(onionSkin.group.get());
@@ -163,7 +161,7 @@ public class FilmEditorController extends BaseFilmController
 
             if (!onionSkin.all.get())
             {
-                canRender = canRender && this.isCurrent(entity);
+                canRender = canRender && current;
             }
 
             if (canRender)
@@ -176,7 +174,7 @@ public class FilmEditorController extends BaseFilmController
                     this.renderOnion(replay, pose.getKeyframes().indexOf(segment.b), 1, pose, onionSkin.postColor.get(), onionSkin.postFrames.get(), context, isPlaying, entity);
 
                     replay.applyFrame(ticks, entity, null);
-                    replay.applyProperties(ticks + transition, entity.getForm());
+                    replay.applyProperties(ticks + this.getTransition(entity, context.tickDelta()), entity.getForm());
 
                     if (!isPlaying)
                     {
@@ -226,7 +224,7 @@ public class FilmEditorController extends BaseFilmController
         Pair<String, Boolean> bone = this.isCurrent(entity) && !this.controller.panel.recorder.isRecording() ? this.controller.getBone() : null;
 
         return super.getFilmControllerContext(context, replay, entity)
-            .transition(this.controller.isPlaying() ? context.tickDelta() : 0F)
+            .transition(this.getTransition(entity, context.tickDelta()))
             .bone(bone == null ? null : bone.a, bone != null && bone.b);
     }
 

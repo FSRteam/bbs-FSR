@@ -407,10 +407,11 @@ public abstract class BaseFilmController
                 continue;
             }
 
+            float delta = this.getTransition(entity, transition);
             int tick = replay.getTick(this.getTick());
 
             /* Apply property */
-            replay.applyProperties(tick + transition, entity.getForm());
+            replay.applyProperties(tick + delta, entity.getForm());
 
             Map<String, Integer> actors = this.getActors();
 
@@ -424,11 +425,16 @@ public abstract class BaseFilmController
 
                     if (anEntity instanceof ActorEntity actor)
                     {
-                        replay.applyProperties(tick + transition, actor.getForm());
+                        replay.applyProperties(tick + delta, actor.getForm());
                     }
                 }
             }
         }
+    }
+
+    protected float getTransition(IEntity entity, float transition)
+    {
+        return transition;
     }
 
     protected boolean canUpdate(int i, Replay replay, IEntity entity)
