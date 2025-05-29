@@ -735,6 +735,8 @@
     "bbs.ui.scene.replays.context.edit_form": "Edit form...",
     "bbs.ui.scene.replays.context.from_camera": "From camera...",
     "bbs.ui.scene.replays.context.from_model_block": "From model block...",
+    "bbs.ui.scene.replays.context.from_model_block-title": "From model block",
+    "bbs.ui.scene.replays.context.from_model_block-description": "Pick a model block from the list that will be turned into a replay:",
     "bbs.ui.scene.replays.context.offset_time": "Offset replay(s) time",
     "bbs.ui.scene.replays.context.offset_time.expression-tooltip": "Following variables are available:\n§ei§r - replay index\n§eo§r - relative replay index",
     "bbs.ui.scene.replays.context.offset_time-title": "Offset replays time",

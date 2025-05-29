@@ -733,6 +733,8 @@
     "bbs.ui.scene.replays.context.edit_form": "Отредактировать форму...",
     "bbs.ui.scene.replays.context.from_camera": "Из камеры...",
     "bbs.ui.scene.replays.context.from_model_block": "Из блок модели...",
+    "bbs.ui.scene.replays.context.from_model_block-title": "Из блок модели",
+    "bbs.ui.scene.replays.context.from_model_block-description": "Выберите блок модель из списка который хотите превратить в запись:",
     "bbs.ui.scene.replays.context.offset_time": "Сместить время записи(-ей)",
     "bbs.ui.scene.replays.context.offset_time-description": "Введите смещение (в тиках, мат. выражение могут быть использованы) которое сместит данные выбранные записи:",
     "bbs.ui.scene.replays.context.offset_time-title": "Сместить время записей",

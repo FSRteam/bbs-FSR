@@ -17,7 +17,6 @@ import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.window.Window;
-import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.IExpression;
 import mchorse.bbs_mod.math.MathBuilder;
 import mchorse.bbs_mod.settings.values.ValueForm;
@@ -29,12 +28,14 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
+import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -53,6 +54,7 @@ import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -475,13 +477,37 @@ public class UIReplayList extends UIList<Replay>
 
     private void fromModelBlock()
     {
-        this.getContext().replaceContextMenu((menu) ->
+        ArrayList<ModelBlockEntity> modelBlocks = new ArrayList<>(BBSRendering.capturedModelBlocks);
+        UISearchList<String> search = new UISearchList<>(new UIStringList(null));
+        UIList<String> list = search.list;
+        UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_DESCRIPTION, (b) ->
         {
-            for (ModelBlockEntity modelBlock : BBSRendering.capturedModelBlocks)
+            if (b)
             {
-                menu.action(Icons.BLOCK, IKey.constant(modelBlock.getName()), () -> this.fromModelBlock(modelBlock));
+                int index = list.getIndex();
+                ModelBlockEntity modelBlock = CollectionUtils.getSafe(modelBlocks, index);
+
+                if (modelBlock != null)
+                {
+                    this.fromModelBlock(modelBlock);
+                }
             }
         });
+
+        modelBlocks.sort(Comparator.comparing(ModelBlockEntity::getName));
+
+        for (ModelBlockEntity modelBlock : modelBlocks)
+        {
+            list.add(modelBlock.getName());
+        }
+
+        list.background();
+        search.relative(panel.confirm).y(-5).w(1F).h(16 * 9 + 20).anchor(0F, 1F);
+
+        panel.confirm.w(1F, -10);
+        panel.content.add(search);
+
+        UIOverlay.addOverlay(this.getContext(), panel, 240, 300);
     }
 
     private void fromModelBlock(ModelBlockEntity modelBlock)

@@ -598,6 +598,8 @@ public class UIKeys
     public static final IKey SCENE_REPLAYS_CONTEXT_EDIT_FORM = L10n.lang("bbs.ui.scene.replays.context.edit_form");
     public static final IKey SCENE_REPLAYS_CONTEXT_FROM_CAMERA = L10n.lang("bbs.ui.scene.replays.context.from_camera");
     public static final IKey SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK = L10n.lang("bbs.ui.scene.replays.context.from_model_block");
+    public static final IKey SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_TITLE = L10n.lang("bbs.ui.scene.replays.context.from_model_block-title");
+    public static final IKey SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_DESCRIPTION = L10n.lang("bbs.ui.scene.replays.context.from_model_block-description");
     public static final IKey SCENE_REPLAYS_CONTEXT_OFFSET_TIME = L10n.lang("bbs.ui.scene.replays.context.offset_time");
     public static final IKey SCENE_REPLAYS_CONTEXT_OFFSET_TIME_EXPRESSION_TOOLTIP = L10n.lang("bbs.ui.scene.replays.context.offset_time.expression-tooltip");
     public static final IKey SCENE_REPLAYS_CONTEXT_OFFSET_TIME_DESCRIPTION = L10n.lang("bbs.ui.scene.replays.context.offset_time-description");
