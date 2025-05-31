@@ -66,8 +66,14 @@ public class ActionPlayer
         for (int i = 0; i < list.size(); i++)
         {
             Replay replay = list.get(i);
+            boolean isActor = !replay.actor.get();
 
-            if (i == this.exception || !replay.actor.get() || !replay.enabled.get())
+            if (replay.fp.get())
+            {
+                isActor = false;
+            }
+
+            if (i == this.exception || isActor || !replay.enabled.get())
             {
                 continue;
             }
