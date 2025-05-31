@@ -13,7 +13,6 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ByteType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.entity.IEntityFormProvider;
 import mchorse.bbs_mod.film.Film;
@@ -37,6 +36,7 @@ import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketByteBuf;
@@ -265,7 +265,7 @@ public class ServerNetwork
                 if (film != null)
                 {
                     BBSMod.getActions().startRecording(film, player, tick, countdown);
-                    BBSMod.getActions().play(player.getServerWorld(), film, tick, countdown, replayId);
+                    BBSMod.getActions().play(player, player.getServerWorld(), film, tick, countdown, replayId);
                 }
             }
             else
@@ -299,7 +299,7 @@ public class ServerNetwork
             }
             else
             {
-                sendPlayFilm(player.getServerWorld(), filmId, withCamera);
+                sendPlayFilm(player, player.getServerWorld(), filmId, withCamera);
             }
         });
     }
@@ -352,14 +352,14 @@ public class ServerNetwork
 
                     if (film != null)
                     {
-                        actionPlayer = actions.play(player.getServerWorld(), film, tick);
+                        actionPlayer = actions.play(player, player.getServerWorld(), film, tick);
                     }
                 }
                 else
                 {
                     actions.stop(filmId);
 
-                    actionPlayer = actions.play(player.getServerWorld(), actionPlayer.film, tick);
+                    actionPlayer = actions.play(player, player.getServerWorld(), actionPlayer.film, tick);
                 }
 
                 if (actionPlayer != null)
@@ -589,7 +589,7 @@ public class ServerNetwork
         ServerPlayNetworking.send(player, CLIENT_CLICKED_MODEL_BLOCK_PACKET, buf);
     }
 
-    public static void sendPlayFilm(ServerWorld world, String filmId, boolean withCamera)
+    public static void sendPlayFilm(ServerPlayerEntity player, ServerWorld world, String filmId, boolean withCamera)
     {
         try
         {
@@ -597,7 +597,7 @@ public class ServerNetwork
 
             if (film != null)
             {
-                BBSMod.getActions().play(world, film, 0);
+                BBSMod.getActions().play(player, world, film, 0);
 
                 BaseType data = film.toData();
 
@@ -622,7 +622,7 @@ public class ServerNetwork
 
             if (film != null)
             {
-                BBSMod.getActions().play(player.getServerWorld(), film, 0);
+                BBSMod.getActions().play(player, player.getServerWorld(), film, 0);
 
                 crusher.send(player, CLIENT_PLAY_FILM_PACKET, film.toData(), (packetByteBuf) ->
                 {
@@ -791,14 +791,14 @@ public class ServerNetwork
         });
     }
 
-    public static void sendActors(ServerPlayerEntity player, String filmId, Map<String, ActorEntity> actors)
+    public static void sendActors(ServerPlayerEntity player, String filmId, Map<String, LivingEntity> actors)
     {
         PacketByteBuf buf = PacketByteBufs.create();
 
         buf.writeString(filmId);
         buf.writeInt(actors.size());
 
-        for (Map.Entry<String, ActorEntity> entry : actors.entrySet())
+        for (Map.Entry<String, LivingEntity> entry : actors.entrySet())
         {
             buf.writeString(entry.getKey());
             buf.writeInt(entry.getValue().getId());

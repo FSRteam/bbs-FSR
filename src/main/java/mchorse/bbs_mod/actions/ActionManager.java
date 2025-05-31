@@ -4,7 +4,6 @@ import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.utils.DataPath;
-import mchorse.bbs_mod.utils.clips.Clips;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
@@ -79,16 +78,16 @@ public class ActionManager
         return null;
     }
 
-    public ActionPlayer play(ServerWorld world, Film film, int tick)
+    public ActionPlayer play(ServerPlayerEntity serverPlayer, ServerWorld world, Film film, int tick)
     {
-        return this.play(world, film, tick, 0, -1);
+        return this.play(serverPlayer, world, film, tick, 0, -1);
     }
 
-    public ActionPlayer play(ServerWorld world, Film film, int tick, int countdown, int exception)
+    public ActionPlayer play(ServerPlayerEntity serverPlayer, ServerWorld world, Film film, int tick, int countdown, int exception)
     {
         if (film != null)
         {
-            ActionPlayer player = new ActionPlayer(world, film, tick, countdown, exception);
+            ActionPlayer player = new ActionPlayer(serverPlayer, world, film, tick, countdown, exception);
 
             this.players.add(player);
             this.trackDamage(world);

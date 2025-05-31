@@ -30,6 +30,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
     public UITrackpad shadowSize;
     public UITrackpad looping;
     public UIToggle actor;
+    public UIToggle fp;
 
     private Consumer<Replay> callback;
 
@@ -63,16 +64,28 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
         this.looping.limit(0).integer().tooltip(UIKeys.FILM_REPLAY_LOOPING_TOOLTIP);
         this.actor = new UIToggle(UIKeys.FILM_REPLAY_ACTOR, (b) -> this.edit((replay) -> replay.actor.set(b.getValue())));
         this.actor.tooltip(UIKeys.FILM_REPLAY_ACTOR_TOOLTIP);
+        this.fp = new UIToggle(UIKeys.FILM_REPLAY_FP, (b) ->
+        {
+            for (Replay replay : this.replays.getList())
+            {
+                if (replay.fp.get())
+                {
+                    replay.fp.set(false);
+                }
+            }
+
+            this.replays.getCurrentFirst().fp.set(b.getValue());
+        });
 
         this.properties = UI.column(5, 6,
             UI.label(UIKeys.FILM_REPLAY_REPLAY),
             this.pickEdit, this.enabled,
             this.label, this.nameTag,
             this.shadow, this.shadowSize,
-            UI.label(UIKeys.FILM_REPLAY_LOOPING), this.looping, this.actor
+            UI.label(UIKeys.FILM_REPLAY_LOOPING),
+            this.looping, this.actor, this.fp
         );
         this.properties.relative(this.content).y(1F).w(1F).anchorY(1F);
-
         this.replays.relative(this.content).w(1F).hTo(this.properties.area, 0F, -5);
 
         this.content.add(this.properties, this.replays);
@@ -105,6 +118,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
             this.shadowSize.setValue(replay.shadowSize.get());
             this.looping.setValue(replay.looping.get());
             this.actor.setValue(replay.actor.get());
+            this.fp.setValue(replay.fp.get());
         }
     }
 

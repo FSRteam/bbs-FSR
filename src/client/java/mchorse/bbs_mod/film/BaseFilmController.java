@@ -16,6 +16,7 @@ import mchorse.bbs_mod.forms.properties.AnchorProperty;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.graphics.Draw;
+import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -27,14 +28,18 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.MovementType;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.LightType;
 import net.minecraft.world.World;
 import org.joml.Matrix4f;
@@ -372,6 +377,80 @@ public abstract class BaseFilmController
                             actor.setPitch(replay.keyframes.pitch.interpolate(ticks).floatValue());
                             replay.applyClientActions(ticks, new MCEntity(anEntity), this.film);
                         }
+                        else if (anEntity instanceof PlayerEntity player)
+                        {
+                            double x = replay.keyframes.x.interpolate(ticks);
+                            double y = replay.keyframes.y.interpolate(ticks);
+                            double z = replay.keyframes.z.interpolate(ticks);
+                            double prevX = replay.keyframes.x.interpolate(ticks - 1);
+                            double prevY = replay.keyframes.y.interpolate(ticks - 1);
+                            double prevZ = replay.keyframes.z.interpolate(ticks - 1);
+
+                            player.setVelocity(x - prevX, y - prevY, z - prevZ);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public void updateEndWorld()
+    {
+        int ticks = this.getTick();
+
+        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
+        {
+            int i = entry.getKey();
+            IEntity entity = entry.getValue();
+            List<Replay> replays = this.film.replays.getList();
+            Replay replay = CollectionUtils.getSafe(replays, i);
+
+            if (!this.canUpdate(i, replay, entity))
+            {
+                continue;
+            }
+
+            if (replay != null)
+            {
+                ticks = replay.getTick(ticks);
+
+                Map<String, Integer> actors = this.getActors();
+
+                if (actors != null)
+                {
+                    Integer entityId = actors.get(replay.getId());
+
+                    if (entityId != null)
+                    {
+                        Entity anEntity = MinecraftClient.getInstance().world.getEntityById(entityId);
+
+                        if (anEntity instanceof PlayerEntity player)
+                        {
+                            double x = replay.keyframes.x.interpolate(ticks);
+                            double y = replay.keyframes.y.interpolate(ticks);
+                            double z = replay.keyframes.z.interpolate(ticks);
+                            boolean sneaking = replay.keyframes.sneaking.interpolate(ticks) > 0;
+
+                            Vec3d pos = player.getPos();
+
+                            player.move(MovementType.SELF, new Vec3d(x - pos.x, y - pos.y, z - pos.z));
+                            player.setPosition(x, y, z);
+
+                            player.setSneaking(sneaking);
+                            player.setOnGround(replay.keyframes.grounded.interpolate(ticks) > 0);
+
+                            if (player instanceof ClientPlayerEntityAccessor accessor)
+                            {
+                                accessor.bbs$setIsSneakingPose(sneaking);
+                            }
+
+                            if (player instanceof ClientPlayerEntity playerEntity)
+                            {
+                                playerEntity.input.sneaking = sneaking;
+                            }
+
+                            player.fallDistance = replay.keyframes.fall.interpolate(ticks).floatValue();
+                        }
                     }
                 }
             }
@@ -426,6 +505,21 @@ public abstract class BaseFilmController
                     if (anEntity instanceof ActorEntity actor)
                     {
                         replay.applyProperties(tick + delta, actor.getForm());
+                    }
+                    else if (anEntity instanceof PlayerEntity player)
+                    {
+                        float yawHead = replay.keyframes.headYaw.interpolate(tick + transition).floatValue();
+                        float yawBody = replay.keyframes.bodyYaw.interpolate(tick + transition).floatValue();
+                        float pitch = replay.keyframes.pitch.interpolate(tick + transition).floatValue();
+
+                        player.setYaw(yawHead);
+                        player.setHeadYaw(yawHead);
+                        player.setPitch(pitch);
+                        player.setBodyYaw(yawBody);
+                        player.prevYaw = yawHead;
+                        player.prevHeadYaw = yawHead;
+                        player.prevPitch = pitch;
+                        player.prevBodyYaw = yawBody;
                     }
                 }
             }

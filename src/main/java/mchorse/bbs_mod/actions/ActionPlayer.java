@@ -10,6 +10,7 @@ import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.DataPath;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -28,18 +29,20 @@ public class ActionPlayer
     public int exception;
     public boolean syncing;
 
+    private ServerPlayerEntity serverPlayer;
     private ServerWorld world;
     private int duration;
 
-    private Map<String, ActorEntity> actors = new HashMap<>();
+    private Map<String, LivingEntity> actors = new HashMap<>();
 
-    public ActionPlayer(ServerWorld world, Film film, int tick, int countdown, int exception)
+    public ActionPlayer(ServerPlayerEntity serverPlayer, ServerWorld world, Film film, int tick, int countdown, int exception)
     {
         this.world = world;
         this.film = film;
         this.tick = tick;
         this.countdown = countdown;
         this.exception = exception;
+        this.serverPlayer = serverPlayer;
 
         this.duration = film.camera.calculateDuration();
 
@@ -48,9 +51,12 @@ public class ActionPlayer
 
     public void updateReplayEntities()
     {
-        for (ActorEntity entity : this.actors.values())
+        for (LivingEntity entity : this.actors.values())
         {
-            entity.discard();
+            if (!entity.isPlayer())
+            {
+                entity.discard();
+            }
         }
 
         this.actors.clear();
@@ -66,13 +72,20 @@ public class ActionPlayer
                 continue;
             }
 
-            ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.world);
+            if (replay.fp.get() && this.serverPlayer != null)
+            {
+                this.actors.put(replay.getId(), this.serverPlayer);
+            }
+            else
+            {
+                ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.world);
 
-            actor.setForm(FormUtils.copy(replay.form.get()));
+                actor.setForm(FormUtils.copy(replay.form.get()));
 
-            this.apply(actor, replay, this.tick, false);
-            this.actors.put(replay.getId(), actor);
-            this.world.spawnEntity(actor);
+                this.apply(actor, replay, this.tick, false);
+                this.actors.put(replay.getId(), actor);
+                this.world.spawnEntity(actor);
+            }
         }
 
         for (ServerPlayerEntity player : this.world.getPlayers())
@@ -86,7 +99,7 @@ public class ActionPlayer
         return this.world;
     }
 
-    public void apply(ActorEntity actor, Replay replay, float tick, boolean ticking)
+    public void apply(LivingEntity actor, Replay replay, float tick, boolean ticking)
     {
         double x = replay.keyframes.x.interpolate(tick);
         double y = replay.keyframes.y.interpolate(tick);
@@ -128,7 +141,7 @@ public class ActionPlayer
             return false;
         }
 
-        for (Map.Entry<String, ActorEntity> entry : this.actors.entrySet())
+        for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
         {
             Replay replay = (Replay) this.film.replays.get(entry.getKey());
 
@@ -172,7 +185,7 @@ public class ActionPlayer
                 continue;
             }
 
-            ActorEntity actor = this.actors.get(replay.getId());
+            LivingEntity actor = this.actors.get(replay.getId());
 
             replay.applyActions(actor, fakePlayer, this.film, this.tick);
         }
@@ -200,7 +213,7 @@ public class ActionPlayer
 
     public void goTo(int from, int tick)
     {
-        for (Map.Entry<String, ActorEntity> entry : this.actors.entrySet())
+        for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
         {
             Replay replay = (Replay) this.film.replays.get(entry.getKey());
 
@@ -225,9 +238,12 @@ public class ActionPlayer
 
     public void stop()
     {
-        for (ActorEntity value : this.actors.values())
+        for (LivingEntity value : this.actors.values())
         {
-            value.discard();
+            if (!value.isPlayer())
+            {
+                value.discard();
+            }
         }
     }
 }

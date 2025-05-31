@@ -66,17 +66,17 @@ public class Films
 
     public static void playFilm(Film film, boolean withCamera)
     {
-        WorldFilmController baseFilmController = new WorldFilmController(film);
+        FirstPersonFilmController filmController = new FirstPersonFilmController(film);
 
-        if (withCamera)
+        if (withCamera && !film.hasFirstPerson())
         {
             PlayCameraController controller = new PlayCameraController(film.camera);
 
-            controller.getContext().entities.putAll(baseFilmController.getEntities());
+            controller.getContext().entities.putAll(filmController.getEntities());
             BBSModClient.getCameraController().add(controller);
         }
 
-        BBSModClient.getFilms().add(baseFilmController);
+        BBSModClient.getFilms().add(filmController);
     }
 
     public static void stopFilm(String filmId)
@@ -245,6 +245,14 @@ public class Films
         if (this.recorder != null)
         {
             this.recorder.update();
+        }
+    }
+
+    public void updateEndWorld()
+    {
+        for (BaseFilmController controller : this.controllers)
+        {
+            controller.updateEndWorld();
         }
     }
 

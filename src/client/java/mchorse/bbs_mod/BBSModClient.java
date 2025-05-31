@@ -380,6 +380,16 @@ public class BBSModClient implements ClientModInitializer
             BBSRendering.startTick();
         });
 
+        ClientTickEvents.END_WORLD_TICK.register((client) ->
+        {
+            MinecraftClient mc = MinecraftClient.getInstance();
+
+            if (!mc.isPaused())
+            {
+                films.updateEndWorld();
+            }
+        });
+
         ClientTickEvents.END_CLIENT_TICK.register((client) ->
         {
             MinecraftClient mc = MinecraftClient.getInstance();

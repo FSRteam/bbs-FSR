@@ -433,6 +433,7 @@
     "bbs.ui.film.replay.context.move_here": "Переместить запись сюда",
     "bbs.ui.film.replay.filter_sheets": "Отфильтровать треки...",
     "bbs.ui.film.replay.filter_sheets-title": "Треки ключевых кадров",
+    "bbs.ui.film.replay.fp": "От первого лица",
     "bbs.ui.film.replay.label": "Ярлык записи",
     "bbs.ui.film.replay.looping": "Зацикленность",
     "bbs.ui.film.replay.looping-tooltip": "Установив 0, отключает зацикленность у записи. Установив на любое положительное число, включит регион зацикленности у записи. Имейте ввиду что зацикленность не меняет общую длину фильма.",

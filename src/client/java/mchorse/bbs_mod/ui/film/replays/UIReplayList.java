@@ -667,6 +667,11 @@ public class UIReplayList extends UIList<Replay>
             FormUtilsClient.renderUI(form, context, x, y, x + 40, y + 40);
 
             context.batcher.unclip(context);
+
+            if (element.fp.get())
+            {
+                context.batcher.outlinedIcon(Icons.ARROW_UP, x, y + 20, 0.5F, 0.5F);
+            }
         }
     }
 }

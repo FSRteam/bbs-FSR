@@ -1,12 +1,12 @@
 package mchorse.bbs_mod.actions.types;
 
 import mchorse.bbs_mod.actions.SuperFakePlayer;
-import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.settings.values.ValueFloat;
 import mchorse.bbs_mod.utils.clips.Clip;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.projectile.ProjectileUtil;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -25,7 +25,7 @@ public class AttackActionClip extends ActionClip
     }
 
     @Override
-    public void applyAction(ActorEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
         float damage = this.damage.get();
 

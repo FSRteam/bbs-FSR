@@ -1,11 +1,11 @@
 package mchorse.bbs_mod.actions.types;
 
 import mchorse.bbs_mod.actions.SuperFakePlayer;
-import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.clips.Clip;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Hand;
 
 public class SwipeActionClip extends ActionClip
@@ -23,7 +23,7 @@ public class SwipeActionClip extends ActionClip
     }
 
     @Override
-    public void applyAction(ActorEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
         super.applyAction(actor, player, film, replay, tick);
 

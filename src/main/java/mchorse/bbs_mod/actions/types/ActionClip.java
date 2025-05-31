@@ -1,13 +1,13 @@
 package mchorse.bbs_mod.actions.types;
 
 import mchorse.bbs_mod.actions.SuperFakePlayer;
-import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.settings.values.ValueInt;
 import mchorse.bbs_mod.utils.clips.Clip;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
 
@@ -51,7 +51,7 @@ public abstract class ActionClip extends Clip
     protected void applyClientAction(IEntity entity, Film film, Replay replay, int tick)
     {}
 
-    public final void apply(ActorEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    public final void apply(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
         if (!this.enabled.get())
         {
@@ -74,7 +74,7 @@ public abstract class ActionClip extends Clip
         }
     }
 
-    public void applyAction(ActorEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {}
 
     protected void applyPositionRotation(SuperFakePlayer player, Replay replay, int tick)

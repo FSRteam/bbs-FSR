@@ -3,7 +3,6 @@ package mchorse.bbs_mod.film.replays;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.types.ActionClip;
-import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -20,6 +19,7 @@ import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
+import net.minecraft.entity.LivingEntity;
 
 import java.util.List;
 
@@ -38,6 +38,7 @@ public class Replay extends ValueGroup
     public final ValueInt looping = new ValueInt("looping", 0);
 
     public final ValueBoolean actor = new ValueBoolean("actor", false);
+    public final ValueBoolean fp = new ValueBoolean("fp", false);
 
     public Replay(String id)
     {
@@ -56,6 +57,7 @@ public class Replay extends ValueGroup
         this.add(this.looping);
 
         this.add(this.actor);
+        this.add(this.fp);
     }
 
     public String getName()
@@ -140,7 +142,7 @@ public class Replay extends ValueGroup
         }
     }
 
-    public void applyActions(ActorEntity actor, SuperFakePlayer fakePlayer, Film film, int tick)
+    public void applyActions(LivingEntity actor, SuperFakePlayer fakePlayer, Film film, int tick)
     {
         List<Clip> clips = this.actions.getClips(tick);
 

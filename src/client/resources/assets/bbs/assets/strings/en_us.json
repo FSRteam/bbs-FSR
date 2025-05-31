@@ -434,6 +434,7 @@
     "bbs.ui.film.replay.context.move_here": "Move replay here",
     "bbs.ui.film.replay.filter_sheets": "Filter tracks...",
     "bbs.ui.film.replay.filter_sheets-title": "Keyframe tracks",
+    "bbs.ui.film.replay.fp": "First person playback",
     "bbs.ui.film.replay.label": "Replay display name",
     "bbs.ui.film.replay.looping": "Looping",
     "bbs.ui.film.replay.looping-tooltip": "Setting to 0, disables replay's looping. Setting to any positive value, will make the replay loop. Keep in mind that looping doesn't change the duration of the film.",
