@@ -117,7 +117,10 @@ public class FilmEditorController extends BaseFilmController
     @Override
     protected float getTransition(IEntity entity, float transition)
     {
-        return !this.controller.isPlaying() && !this.isCurrent(entity) ? 0F : transition;
+        boolean current = this.isCurrent(entity) && this.controller.isControlling();
+        float delta = !this.controller.isPlaying() && !current ? 0F : transition;
+
+        return delta;
     }
 
     @Override
@@ -127,12 +130,6 @@ public class FilmEditorController extends BaseFilmController
             || this.controller.getPovMode() != UIFilmController.CAMERA_MODE_FIRST_PERSON
             || !this.isCurrent(entity)
             || !this.controller.orbit.enabled;
-    }
-
-    @Override
-    public void render(WorldRenderContext context)
-    {
-        super.render(context);
     }
 
     @Override
