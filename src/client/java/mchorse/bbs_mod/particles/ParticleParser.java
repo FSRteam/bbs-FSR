@@ -31,7 +31,6 @@ import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapePoint;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeSphere;
 import mchorse.bbs_mod.resources.Link;
 
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -174,6 +173,10 @@ public class ParticleParser
             if (!texture.equals("textures/particle/particles"))
             {
                 scheme.texture = Link.create(texture);
+            }
+            else
+            {
+                scheme.texture = Link.create("assets:textures/default_particles.png");
             }
         }
     }
