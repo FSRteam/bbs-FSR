@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.particles;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleScheme;
@@ -153,6 +154,14 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
             this.sectionsView.resize();
         }
+    }
+
+    @Override
+    public void forceSave()
+    {
+        super.forceSave();
+
+        ParticleFormRenderer.lastUpdate = System.currentTimeMillis();
     }
 
     @Override

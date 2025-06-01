@@ -22,9 +22,12 @@ import org.joml.Vector3f;
 
 public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements ITickable
 {
+    public static long lastUpdate = 0L;
+
     private ParticleEmitter emitter;
     private boolean checked;
     private boolean restart;
+    private long lastParticleUpdate = lastUpdate;
 
     public ParticleFormRenderer(ParticleForm form)
     {
@@ -38,6 +41,12 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
     public void ensureEmitter(World world, float transition)
     {
+        if (this.lastParticleUpdate < lastUpdate)
+        {
+            this.lastParticleUpdate = lastUpdate;
+            this.checked = false;
+        }
+
         if (!this.checked)
         {
             ParticleScheme scheme = BBSModClient.getParticles().load(this.form.effect.get());
