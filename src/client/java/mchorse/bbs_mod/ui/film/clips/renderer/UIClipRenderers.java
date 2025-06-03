@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.ui.film.clips.renderer;
 
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
-import mchorse.bbs_mod.camera.clips.misc.VoicelineClip;
 import mchorse.bbs_mod.utils.clips.Clip;
 
 import java.util.HashMap;
@@ -18,7 +17,6 @@ public class UIClipRenderers
         this.defaultRenderer = new UIClipRenderer();
 
         this.register(AudioClientClip.class, new UIAudioClipRenderer());
-        this.register(VoicelineClip.class, new UIVoicelineClipRenderer());
     }
 
     public void register(Class key, IUIClipRenderer renderer)

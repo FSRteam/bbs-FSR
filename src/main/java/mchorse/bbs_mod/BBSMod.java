@@ -28,7 +28,6 @@ import mchorse.bbs_mod.camera.clips.converters.PathToKeyframeConverter;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
-import mchorse.bbs_mod.camera.clips.misc.VoicelineClip;
 import mchorse.bbs_mod.camera.clips.modifiers.AngleClip;
 import mchorse.bbs_mod.camera.clips.modifiers.DollyZoomClip;
 import mchorse.bbs_mod.camera.clips.modifiers.DragClip;
@@ -141,7 +140,6 @@ public class BBSMod implements ModInitializer
     private static List<Runnable> runnables = new ArrayList<>();
 
     private static MapFactory<Clip, ClipFactoryData> factoryCameraClips;
-    private static MapFactory<Clip, ClipFactoryData> factoryScreenplayClips;
     private static MapFactory<Clip, ClipFactoryData> factoryActionClips;
 
     public static final EntityType<ActorEntity> ACTOR_ENTITY = Registry.register(
@@ -357,11 +355,6 @@ public class BBSMod implements ModInitializer
         return factoryCameraClips;
     }
 
-    public static MapFactory<Clip, ClipFactoryData> getFactoryScreenplayClips()
-    {
-        return factoryScreenplayClips;
-    }
-
     public static MapFactory<Clip, ClipFactoryData> getFactoryActionClips()
     {
         return factoryActionClips;
@@ -438,9 +431,6 @@ public class BBSMod implements ModInitializer
             .register(Link.bbs("curve"), CurveClip.class, new ClipFactoryData(Icons.ARC, 0xff1493))
             .register(Link.bbs("tracker"), TrackerClip.class, new ClipFactoryData(Icons.USER, 0xffffff))
             .register(Link.bbs("dolly_zoom"), DollyZoomClip.class, new ClipFactoryData(Icons.FILTER, 0x7d56c9));
-
-        factoryScreenplayClips = new MapFactory<Clip, ClipFactoryData>()
-            .register(Link.bbs("voice_line"), VoicelineClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825));
 
         factoryActionClips = new MapFactory<Clip, ClipFactoryData>()
             .register(Link.bbs("chat"), ChatActionClip.class, new ClipFactoryData(Icons.BUBBLE, Colors.YELLOW))

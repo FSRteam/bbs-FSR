@@ -697,7 +697,7 @@ public class ServerNetwork
             {
                 String extension = StringUtils.extension(link.path);
 
-                if (!extension.equals(link.path) && EXTENSIONS.contains(extension.toLowerCase()) && !link.path.startsWith("audio/elevenlabs/"))
+                if (!extension.equals(link.path) && EXTENSIONS.contains(extension.toLowerCase()))
                 {
                     File file = BBSMod.getProvider().getFile(link);
                     long l = file.lastModified();

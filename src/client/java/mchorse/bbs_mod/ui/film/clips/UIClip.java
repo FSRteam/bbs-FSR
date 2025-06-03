@@ -16,7 +16,6 @@ import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
-import mchorse.bbs_mod.camera.clips.misc.VoicelineClip;
 import mchorse.bbs_mod.camera.clips.modifiers.AngleClip;
 import mchorse.bbs_mod.camera.clips.modifiers.DollyZoomClip;
 import mchorse.bbs_mod.camera.clips.modifiers.DragClip;
@@ -104,8 +103,6 @@ public abstract class UIClip <T extends Clip> extends UIElement
         register(SubtitleClip.class, UISubtitleClip::new);
         register(CurveClip.class, UICurveClip::new);
         register(DollyZoomClip.class, UIDollyZoomClip::new);
-
-        register(VoicelineClip.class, UIVoicelineClip::new);
 
         register(ChatActionClip.class, UIChatActionClip::new);
         register(CommandActionClip.class, UICommandActionClip::new);
