@@ -56,6 +56,7 @@ public class ModelInstance implements IModelInstance
     public String poseGroup;
     public boolean procedural;
     public boolean culling = true;
+    public boolean onCpu;
     public String anchorGroup = "";
 
     public Vector3f scale = new Vector3f(1F);
@@ -123,6 +124,7 @@ public class ModelInstance implements IModelInstance
 
         this.procedural = config.getBool("procedural", this.procedural);
         this.culling = config.getBool("culling", this.culling);
+        this.onCpu = config.getBool("on_cpu", this.onCpu);
         this.poseGroup = config.getString("pose_group", this.poseGroup);
 
         if (config.has("texture"))
@@ -208,7 +210,7 @@ public class ModelInstance implements IModelInstance
             return;
         }
 
-        if (this.model instanceof Model model)
+        if (this.model instanceof Model model && !this.onCpu)
         {
             MinecraftClient.getInstance().execute(() ->
             {
