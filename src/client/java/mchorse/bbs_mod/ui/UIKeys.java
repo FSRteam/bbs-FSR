@@ -71,6 +71,7 @@ public class UIKeys
     public static final IKey CAMERA_FLIGHT_FLIGHT_TILT_DOWN = L10n.lang("bbs.ui.camera.flight.camera_down");
     public static final IKey CAMERA_FLIGHT_FLIGHT_TILT_UP = L10n.lang("bbs.ui.camera.flight.camera_up");
     public static final IKey CAMERA_FLIGHT_FLIGHT_UP = L10n.lang("bbs.ui.camera.flight.up");
+    public static final IKey CAMERA_PANELS_ABSOLUTE = L10n.lang("bbs.ui.camera.panels.absolute");
     public static final IKey CAMERA_PANELS_ADDITIVE = L10n.lang("bbs.ui.camera.panels.additive");
     public static final IKey CAMERA_PANELS_ANGLE = L10n.lang("bbs.ui.camera.panels.angle");
     public static final IKey CAMERA_PANELS_AT_BLOCK = L10n.lang("bbs.ui.camera.panels.at_block");

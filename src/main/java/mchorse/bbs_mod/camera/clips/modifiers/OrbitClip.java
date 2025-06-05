@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.camera.clips.modifiers;
 
-import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.data.Angle;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.camera.data.Position;
@@ -44,6 +43,11 @@ public class OrbitClip extends EntityClip
      */
     public final ValueFloat pitch = new ValueFloat("pitch", 0F);
 
+    /**
+     * Absolute
+     */
+    public final ValueBoolean absolute = new ValueBoolean("absolute", false);
+
     public OrbitClip()
     {
         super();
@@ -52,6 +56,7 @@ public class OrbitClip extends EntityClip
         this.add(this.distance);
         this.add(this.yaw);
         this.add(this.pitch);
+        this.add(this.absolute);
     }
 
     @Override
@@ -72,6 +77,14 @@ public class OrbitClip extends EntityClip
         float yaw = this.yaw.get() + (position.angle.yaw - this.position.angle.yaw);
         float pitch = this.pitch.get() + (position.angle.pitch - this.position.angle.pitch);
         float distance = this.distance.get() + (float) (position.point.z - this.position.point.z);
+
+        if (this.absolute.get())
+        {
+            yaw = position.angle.yaw;
+            pitch = position.angle.pitch;
+            distance = (float) position.point.z;
+        }
+
         IEntity entity = entities.get(0);
         Vector3f vector = Matrices.rotation(MathUtils.toRad(pitch), MathUtils.toRad(-yaw));
 

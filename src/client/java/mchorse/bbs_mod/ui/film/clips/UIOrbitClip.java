@@ -14,6 +14,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 public class UIOrbitClip extends UIClip<OrbitClip>
 {
     public UIButton selector;
+    public UIToggle absolute;
     public UIToggle copy;
     public UITrackpad yaw;
     public UITrackpad pitch;
@@ -41,6 +42,7 @@ public class UIOrbitClip extends UIClip<OrbitClip>
         });
         this.selector.tooltip(UIKeys.CAMERA_PANELS_TARGET_TOOLTIP);
 
+        this.absolute = new UIToggle(UIKeys.CAMERA_PANELS_ABSOLUTE, false, (b) -> this.clip.absolute.set(b.getValue()));
         this.copy = new UIToggle(UIKeys.CAMERA_PANELS_COPY_ENTITY, false, (b) -> this.clip.copy.set(b.getValue()));
         this.copy.tooltip(UIKeys.CAMERA_PANELS_COPY_ENTITY_TOOLTIP);
 
@@ -60,7 +62,8 @@ public class UIOrbitClip extends UIClip<OrbitClip>
         super.registerPanels();
 
         this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_TARGET).marginTop(12), this.selector);
-        this.panels.add(this.copy.marginBottom(12));
+        this.panels.add(this.absolute.marginBottom(12));
+        this.panels.add(this.copy);
         this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_DISTANCE), this.distance);
         this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_ANGLE));
         this.panels.add(UI.row(5, 0, 20, this.yaw, this.pitch));
@@ -72,6 +75,7 @@ public class UIOrbitClip extends UIClip<OrbitClip>
     {
         super.fillData();
 
+        this.absolute.setValue(this.clip.absolute.get());
         this.copy.setValue(this.clip.copy.get());
         this.yaw.setValue(this.clip.yaw.get());
         this.pitch.setValue(this.clip.pitch.get());

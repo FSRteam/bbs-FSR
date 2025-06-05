@@ -232,6 +232,7 @@
     "bbs.ui.camera.flight.orbit": "Удержать орбиту",
     "bbs.ui.camera.flight.right": "Двигаться вправо",
     "bbs.ui.camera.flight.up": "Подниматься",
+    "bbs.ui.camera.panels.absolute": "Абсолютный",
     "bbs.ui.camera.panels.additive": "Наложение",
     "bbs.ui.camera.panels.angle": "Угол",
     "bbs.ui.camera.panels.at_block": "Смотреть на блок",
