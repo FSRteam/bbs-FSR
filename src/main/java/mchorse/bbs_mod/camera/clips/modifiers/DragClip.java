@@ -96,7 +96,7 @@ public class DragClip extends ComponentClip
                 if (isX) position.point.x = Lerps.lerp(position.point.x, this.current.point.x, factor);
                 if (isY) position.point.y = Lerps.lerp(position.point.y, this.current.point.y, factor);
                 if (isZ) position.point.z = Lerps.lerp(position.point.z, this.current.point.z, factor);
-                if (isYaw) position.angle.yaw = Lerps.lerp(position.angle.yaw, this.current.angle.yaw, factor);
+                if (isYaw) position.angle.yaw = (float) Lerps.lerpYaw(position.angle.yaw, this.current.angle.yaw, factor);
                 if (isPitch) position.angle.pitch = Lerps.lerp(position.angle.pitch, this.current.angle.pitch, factor);
                 if (isRoll) position.angle.roll = Lerps.lerp(position.angle.roll, this.current.angle.roll, factor);
                 if (isFov) position.angle.fov = Lerps.lerp(position.angle.fov, this.current.angle.fov, factor);
@@ -117,7 +117,7 @@ public class DragClip extends ComponentClip
             if (isX) position.point.x = this.prevX = Lerps.lerp(this.prevX, this.current.point.x, factor);
             if (isY) position.point.y = this.prevY = Lerps.lerp(this.prevY, this.current.point.y, factor);
             if (isZ) position.point.z = this.prevZ = Lerps.lerp(this.prevZ, this.current.point.z, factor);
-            if (isYaw) position.angle.yaw = this.prevYaw = Lerps.lerp(this.prevYaw, this.current.angle.yaw, factor);
+            if (isYaw) position.angle.yaw = this.prevYaw = (float) Lerps.lerpYaw(this.prevYaw, this.current.angle.yaw, factor);
             if (isPitch) position.angle.pitch = this.prevPitch = Lerps.lerp(this.prevPitch, this.current.angle.pitch, factor);
             if (isRoll) position.angle.roll = this.prevRoll = Lerps.lerp(this.prevRoll, this.current.angle.roll, factor);
             if (isFov) position.angle.fov = this.prevFov = Lerps.lerp(this.prevFov, this.current.angle.fov, factor);
