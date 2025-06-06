@@ -178,6 +178,11 @@ public class ParticleParser
             {
                 scheme.texture = Link.create("assets:textures/default_particles.png");
             }
+
+            if (scheme.texture.source.equals("b.a") || scheme.texture.source.equals("c.s"))
+            {
+                scheme.texture = Link.assets(scheme.texture.path);
+            }
         }
     }
 
