@@ -121,10 +121,11 @@ public class UIReplaysEditor extends UIElement
         COLORS.put("extra2_x", Colors.RED);
         COLORS.put("extra2_y", Colors.GREEN);
 
-        COLORS.put("visible", Colors.WHITE & 0xFFFFFF);
+        COLORS.put("visible", Colors.WHITE & Colors.RGB);
         COLORS.put("pose", Colors.RED);
         COLORS.put("pose_overlay", Colors.ORANGE);
         COLORS.put("transform", Colors.GREEN);
+        COLORS.put("transform_overlay", 0xaaff00);
         COLORS.put("color", Colors.INACTIVE);
         COLORS.put("lighting", Colors.YELLOW);
         COLORS.put("shape_keys", Colors.PINK);

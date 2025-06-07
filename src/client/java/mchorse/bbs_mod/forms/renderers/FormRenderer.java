@@ -12,6 +12,7 @@ import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Lerps;
+import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.LightmapTextureManager;
@@ -114,12 +115,26 @@ public abstract class FormRenderer <T extends Form>
 
     protected void applyTransforms(MatrixStack stack, float transition)
     {
-        MatrixStackUtils.applyTransform(stack, this.form.transform.get());
+        MatrixStackUtils.applyTransform(stack, this.createTransform());
     }
 
     protected void applyTransforms(Matrix4f matrix, float transition)
     {
-        matrix.mul(this.form.transform.get().createMatrix());
+        matrix.mul(this.createTransform().createMatrix());
+    }
+
+    protected Transform createTransform()
+    {
+        Transform transform = new Transform();
+        Transform overlay = this.form.transformOverlay.get();
+
+        transform.copy(this.form.transform.get());
+        transform.translate.add(overlay.translate);
+        transform.scale.add(overlay.scale).sub(1, 1, 1);
+        transform.rotate.add(overlay.rotate);
+        transform.rotate2.add(overlay.rotate2);
+
+        return transform;
     }
 
     protected Supplier<ShaderProgram> getShader(FormRenderingContext context, Supplier<ShaderProgram> normal, Supplier<ShaderProgram> picking)
