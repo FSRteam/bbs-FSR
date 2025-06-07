@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.dashboard.panels.overlay;
 
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.list.UIDataPathList;
@@ -32,7 +33,17 @@ public abstract class UICRUDOverlayPanel extends UIOverlayPanel
 
         this.callback = callback;
 
-        this.add = new UIIcon(Icons.ADD, (b) -> this.addNewData(null));
+        this.add = new UIIcon(Icons.ADD, (b) ->
+        {
+            if (Window.isShiftPressed())
+            {
+                this.addNewData(this.getNextAutoId(), null);
+            }
+            else
+            {
+                this.addNewData(null);
+            }
+        });
         this.add.context((menu) -> menu.action(Icons.FOLDER, UIKeys.PANELS_MODALS_ADD_FOLDER_TITLE, this::addNewFolder));
         this.dupe = new UIIcon(Icons.DUPE, this::dupeData);
         this.rename = new UIIcon(Icons.EDIT, this::renameData);
@@ -51,6 +62,34 @@ public abstract class UICRUDOverlayPanel extends UIOverlayPanel
         this.content.add(this.names);
 
         this.icons.add(this.add, this.dupe, this.rename, this.remove);
+    }
+
+    private String getNextAutoId()
+    {
+        int i = 1;
+
+        while (true)
+        {
+            DataPath copy = this.namesList.getPath().copy();
+
+            copy.combine(new DataPath(String.valueOf(i)));
+
+            if (!this.namesList.getList().contains(copy))
+            {
+                return copy.toString();
+            }
+
+            i += 1;
+
+            if (i >= 10000)
+            {
+                DataPath last = this.namesList.getPath().copy();
+
+                last.combine(new DataPath("afk"));
+
+                return last.toString();
+            }
+        }
     }
 
     /* CRUD */
