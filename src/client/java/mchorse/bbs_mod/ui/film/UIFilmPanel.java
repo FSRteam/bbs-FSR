@@ -676,6 +676,18 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     }
 
     @Override
+    public void fillDefaultData(Film data)
+    {
+        super.fillDefaultData(data);
+
+        IdleClip clip = new IdleClip();
+
+        clip.duration.set(BBSSettings.getDefaultDuration());
+        clip.fromCamera(this.getWorldCamera());
+        data.camera.addClip(clip);
+    }
+
+    @Override
     public void fill(Film data)
     {
         this.notifyServer(ActionState.STOP);
