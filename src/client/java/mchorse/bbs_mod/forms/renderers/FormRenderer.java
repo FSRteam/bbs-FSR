@@ -134,18 +134,6 @@ public abstract class FormRenderer <T extends Form>
         return normal;
     }
 
-    protected ShaderProgram getShader(FormRenderingContext context, ShaderProgram normal, ShaderProgram picking)
-    {
-        if (context.isPicking())
-        {
-            this.setupTarget(context, picking);
-
-            return picking;
-        }
-
-        return normal;
-    }
-
     protected void setupTarget(FormRenderingContext context, ShaderProgram program)
     {
         GlUniform target = program.getUniform("Target");

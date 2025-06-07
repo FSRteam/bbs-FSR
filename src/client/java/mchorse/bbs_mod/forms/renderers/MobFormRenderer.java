@@ -174,22 +174,26 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
             int light = context.light;
+            BooleanHolder first = new BooleanHolder();
 
             if (context.isPicking())
             {
                 CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
                 {
-                    this.bindTexture(context.getTransition());
-                    this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                    RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
+                    if (!first.bool)
+                    {
+                        this.bindTexture(context.getTransition());
+                        this.setupTarget(context, BBSShaders.getPickerModelsProgram());
+                        RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
+
+                        first.bool = true;
+                    }
                 });
 
                 light = 0;
             }
             else
             {
-                BooleanHolder first = new BooleanHolder();
-
                 CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
                 {
                     if (!first.bool)
