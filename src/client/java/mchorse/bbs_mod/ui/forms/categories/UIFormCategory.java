@@ -150,7 +150,7 @@ public class UIFormCategory extends UIElement
 
     public void search(String search)
     {
-        this.search = search;
+        this.search = search.toLowerCase();
 
         this.searched.clear();
 
@@ -161,7 +161,7 @@ public class UIFormCategory extends UIElement
 
         for (Form form : this.category.getForms())
         {
-            if (form.getId().contains(search) || form.getDisplayName().contains(search))
+            if (form.getId().toLowerCase().contains(search) || form.getDisplayName().toLowerCase().contains(search))
             {
                 this.searched.add(form);
             }

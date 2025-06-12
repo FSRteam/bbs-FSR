@@ -34,12 +34,14 @@ import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
+import java.util.List;
 import java.util.UUID;
 
 public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 {
     public static final GameProfile WIDE = new GameProfile(UUID.fromString("b99a2400-28a8-4288-92dc-924beafbf756"), "McHorseYT");
     public static final GameProfile SLIM = new GameProfile(UUID.fromString("5477bd28-e672-4f87-a209-c03cf75f3606"), "osmiq");
+
 
     private Entity entity;
 
@@ -54,6 +56,19 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     public MobFormRenderer(MobForm form)
     {
         super(form);
+    }
+
+    @Override
+    public List<String> getBones()
+    {
+        this.ensureEntity();
+
+        if (this.entity != null)
+        {
+
+        }
+
+        return super.getBones();
     }
 
     private void bindTexture(float transition)
