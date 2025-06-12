@@ -199,32 +199,32 @@ public abstract class UITransform extends UIElement
         if (this.isUniformScale())
         {
             this.fillS(value, value, value);
-            this.setS(value, value, value);
+            this.setS(null, value, value, value);
         }
     }
 
     public void fillSetT(double x, double y, double z)
     {
         this.fillT(x, y, z);
-        this.setT(x, y, z);
+        this.setT(null, x, y, z);
     }
 
     public void fillSetS(double x, double y, double z)
     {
         this.fillS(x, y, z);
-        this.setS(x, y, z);
+        this.setS(null, x, y, z);
     }
 
     public void fillSetR(double x, double y, double z)
     {
         this.fillR(x, y, z);
-        this.setR(x, y, z);
+        this.setR(null, x, y, z);
     }
 
     public void fillSetR2(double x, double y, double z)
     {
         this.fillR2(x, y, z);
-        this.setR2(x, y, z);
+        this.setR2(null, x, y, z);
     }
 
     public void fillT(double x, double y, double z)
@@ -259,7 +259,7 @@ public abstract class UITransform extends UIElement
     {
         try
         {
-            this.setT(
+            this.setT(axis,
                 axis == Axis.X ? x : this.tx.value,
                 axis == Axis.Y ? x : this.ty.value,
                 axis == Axis.Z ? x : this.tz.value
@@ -277,14 +277,14 @@ public abstract class UITransform extends UIElement
         {
             if (this.uniformScale && axis == Axis.X)
             {
-                this.setS(x, x, x);
+                this.setS(axis, x, x, x);
                 this.sy.setValue(x);
                 this.sz.setValue(x);
 
                 return;
             }
 
-            this.setS(
+            this.setS(axis,
                 axis == Axis.X ? x : this.sx.value,
                 axis == Axis.Y ? x : this.sy.value,
                 axis == Axis.Z ? x : this.sz.value
@@ -300,7 +300,7 @@ public abstract class UITransform extends UIElement
     {
         try
         {
-            this.setR(
+            this.setR(axis,
                 axis == Axis.X ? x : this.rx.value,
                 axis == Axis.Y ? x : this.ry.value,
                 axis == Axis.Z ? x : this.rz.value
@@ -316,7 +316,7 @@ public abstract class UITransform extends UIElement
     {
         try
         {
-            this.setR2(
+            this.setR2(axis,
                 axis == Axis.X ? x : this.r2x.value,
                 axis == Axis.Y ? x : this.r2y.value,
                 axis == Axis.Z ? x : this.r2z.value
@@ -328,13 +328,13 @@ public abstract class UITransform extends UIElement
         }
     }
 
-    public abstract void setT(double x, double y, double z);
+    public abstract void setT(Axis axis, double x, double y, double z);
 
-    public abstract void setS(double x, double y, double z);
+    public abstract void setS(Axis axis, double x, double y, double z);
 
-    public abstract void setR(double x, double y, double z);
+    public abstract void setR(Axis axis, double x, double y, double z);
 
-    public abstract void setR2(double x, double y, double z);
+    public abstract void setR2(Axis axis, double x, double y, double z);
 
     private void copyTransformations()
     {

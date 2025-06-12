@@ -4,6 +4,7 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.properties.TransformProperty;
 import mchorse.bbs_mod.forms.triggers.StateTrigger;
 import mchorse.bbs_mod.ui.framework.elements.input.UITransform;
+import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.function.Consumer;
@@ -52,7 +53,7 @@ public class UITransformPropertyEditor extends UIFormPropertyEditor<Transform, T
         }
 
         @Override
-        public void setT(double x, double y, double z)
+        public void setT(Axis axis, double x, double y, double z)
         {
             if (this.callback != null)
             {
@@ -61,7 +62,7 @@ public class UITransformPropertyEditor extends UIFormPropertyEditor<Transform, T
         }
 
         @Override
-        public void setS(double x, double y, double z)
+        public void setS(Axis axis, double x, double y, double z)
         {
             if (this.callback != null)
             {
@@ -70,7 +71,7 @@ public class UITransformPropertyEditor extends UIFormPropertyEditor<Transform, T
         }
 
         @Override
-        public void setR(double x, double y, double z)
+        public void setR(Axis axis, double x, double y, double z)
         {
             if (this.callback != null)
             {
@@ -79,7 +80,7 @@ public class UITransformPropertyEditor extends UIFormPropertyEditor<Transform, T
         }
 
         @Override
-        public void setR2(double x, double y, double z)
+        public void setR2(Axis axis, double x, double y, double z)
         {
             if (this.callback != null)
             {

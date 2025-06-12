@@ -5,6 +5,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -13,6 +14,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
+import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
@@ -215,62 +217,90 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
-        public void setT(double x, double y, double z)
+        public void setT(Axis axis, double x, double y, double z)
         {
             float dx = (float) (x - this.getTransform().translate.x);
             float dy = (float) (y - this.getTransform().translate.y);
             float dz = (float) (z - this.getTransform().translate.z);
+            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                poseT.translate.x += dx;
-                poseT.translate.y += dy;
-                poseT.translate.z += dz;
+                if (altPressed && axis == Axis.X) poseT.translate.x = (float) x;
+                else if (altPressed && axis == Axis.Y) poseT.translate.y = (float) y;
+                else if (altPressed && axis == Axis.Z) poseT.translate.z = (float) z;
+                else
+                {
+                    poseT.translate.x += dx;
+                    poseT.translate.y += dy;
+                    poseT.translate.z += dz;
+                }
             });
         }
 
         @Override
-        public void setS(double x, double y, double z)
+        public void setS(Axis axis, double x, double y, double z)
         {
             float dx = (float) (x - this.getTransform().scale.x);
             float dy = (float) (y - this.getTransform().scale.y);
             float dz = (float) (z - this.getTransform().scale.z);
+            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                poseT.scale.x += dx;
-                poseT.scale.y += dy;
-                poseT.scale.z += dz;
+                if (altPressed && axis == Axis.X) poseT.scale.x = (float) x;
+                else if (altPressed && axis == Axis.Y) poseT.scale.y = (float) y;
+                else if (altPressed && axis == Axis.Z) poseT.scale.z = (float) z;
+                else
+                {
+                    poseT.scale.x += dx;
+                    poseT.scale.y += dy;
+                    poseT.scale.z += dz;
+                }
             });
         }
 
         @Override
-        public void setR(double x, double y, double z)
+        public void setR(Axis axis, double x, double y, double z)
         {
             float dx = MathUtils.toRad((float) x) - this.getTransform().rotate.x;
             float dy = MathUtils.toRad((float) y) - this.getTransform().rotate.y;
             float dz = MathUtils.toRad((float) z) - this.getTransform().rotate.z;
+            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                poseT.rotate.x += dx;
-                poseT.rotate.y += dy;
-                poseT.rotate.z += dz;
+                if (altPressed && axis == Axis.X) poseT.rotate.x = (float) x;
+                else if (altPressed && axis == Axis.Y) poseT.rotate.y = (float) y;
+                else if (altPressed && axis == Axis.Z) poseT.rotate.z = (float) z;
+                else
+                {
+                    poseT.rotate.x += dx;
+                    poseT.rotate.y += dy;
+                    poseT.rotate.z += dz;
+                }
             });
         }
 
         @Override
-        public void setR2(double x, double y, double z)
+        public void setR2(Axis axis, double x, double y, double z)
         {
             float dx = MathUtils.toRad((float) x) - this.getTransform().rotate2.x;
             float dy = MathUtils.toRad((float) y) - this.getTransform().rotate2.y;
             float dz = MathUtils.toRad((float) z) - this.getTransform().rotate2.z;
+            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                poseT.rotate2.x += dx;
-                poseT.rotate2.y += dy;
-                poseT.rotate2.z += dz;
+                if (altPressed && axis == Axis.X) poseT.rotate2.x = (float) x;
+                else if (altPressed && axis == Axis.Y) poseT.rotate2.y = (float) y;
+                else if (altPressed && axis == Axis.Z) poseT.rotate2.z = (float) z;
+                else
+                {
+                    poseT.rotate2.x += dx;
+                    poseT.rotate2.y += dy;
+                    poseT.rotate2.z += dz;
+                }
             });
         }
     }

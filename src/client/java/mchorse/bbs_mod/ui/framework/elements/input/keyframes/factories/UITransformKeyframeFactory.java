@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -85,7 +86,7 @@ public class UITransformKeyframeFactory extends UIKeyframeFactory<Transform>
         }
 
         @Override
-        public void setT(double x, double y, double z)
+        public void setT(Axis axis, double x, double y, double z)
         {
             float dx = (float) (x - this.getTransform().translate.x);
             float dy = (float) (y - this.getTransform().translate.y);
@@ -100,7 +101,7 @@ public class UITransformKeyframeFactory extends UIKeyframeFactory<Transform>
         }
 
         @Override
-        public void setS(double x, double y, double z)
+        public void setS(Axis axis, double x, double y, double z)
         {
             float dx = (float) (x - this.getTransform().scale.x);
             float dy = (float) (y - this.getTransform().scale.y);
@@ -115,7 +116,7 @@ public class UITransformKeyframeFactory extends UIKeyframeFactory<Transform>
         }
 
         @Override
-        public void setR(double x, double y, double z)
+        public void setR(Axis axis, double x, double y, double z)
         {
             float dx = MathUtils.toRad((float) x) - this.getTransform().rotate.x;
             float dy = MathUtils.toRad((float) y) - this.getTransform().rotate.y;
@@ -130,7 +131,7 @@ public class UITransformKeyframeFactory extends UIKeyframeFactory<Transform>
         }
 
         @Override
-        public void setR2(double x, double y, double z)
+        public void setR2(Axis axis, double x, double y, double z)
         {
             float dx = MathUtils.toRad((float) x) - this.getTransform().rotate2.x;
             float dy = MathUtils.toRad((float) y) - this.getTransform().rotate2.y;

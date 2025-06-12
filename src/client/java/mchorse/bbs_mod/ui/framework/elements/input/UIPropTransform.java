@@ -204,9 +204,9 @@ public class UIPropTransform extends UITransform
 
     private void restore(boolean fully)
     {
-        if (this.mode == 0 || fully) this.setT(this.cache.translate.x, this.cache.translate.y, this.cache.translate.z);
-        if (this.mode == 1 || fully) this.setS(this.cache.scale.x, this.cache.scale.y, this.cache.scale.z);
-        if (this.mode == 2 || fully) this.setR(MathUtils.toDeg(this.cache.rotate.x), MathUtils.toDeg(this.cache.rotate.y), MathUtils.toDeg(this.cache.rotate.z));
+        if (this.mode == 0 || fully) this.setT(null, this.cache.translate.x, this.cache.translate.y, this.cache.translate.z);
+        if (this.mode == 1 || fully) this.setS(null, this.cache.scale.x, this.cache.scale.y, this.cache.scale.z);
+        if (this.mode == 2 || fully) this.setR(null, MathUtils.toDeg(this.cache.rotate.x), MathUtils.toDeg(this.cache.rotate.y), MathUtils.toDeg(this.cache.rotate.z));
     }
 
     private void disable()
@@ -243,7 +243,7 @@ public class UIPropTransform extends UITransform
             {
                 Vector3f vector3f = this.calculateLocalVector(x, axis);
 
-                this.setT(
+                this.setT(null,
                     this.transform.translate.x + vector3f.x,
                     this.transform.translate.y + vector3f.y,
                     this.transform.translate.z + vector3f.z
@@ -261,28 +261,28 @@ public class UIPropTransform extends UITransform
     }
 
     @Override
-    public void setT(double x, double y, double z)
+    public void setT(Axis axis, double x, double y, double z)
     {
         this.transform.translate.set((float) x, (float) y, (float) z);
         this.submit();
     }
 
     @Override
-    public void setS(double x, double y, double z)
+    public void setS(Axis axis, double x, double y, double z)
     {
         this.transform.scale.set((float) x, (float) y, (float) z);
         this.submit();
     }
 
     @Override
-    public void setR(double x, double y, double z)
+    public void setR(Axis axis, double x, double y, double z)
     {
         this.transform.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
         this.submit();
     }
 
     @Override
-    public void setR2(double x, double y, double z)
+    public void setR2(Axis axis, double x, double y, double z)
     {
         this.transform.rotate2.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
         this.submit();
@@ -365,7 +365,7 @@ public class UIPropTransform extends UITransform
                 {
                     Vector3f vector3f = this.calculateLocalVector(factor * dx, this.axis);
 
-                    this.setT(vector.x + vector3f.x, vector.y + vector3f.y, vector.z + vector3f.z);
+                    this.setT(null, vector.x + vector3f.x, vector.y + vector3f.y, vector.z + vector3f.z);
                 }
                 else
                 {
@@ -380,9 +380,9 @@ public class UIPropTransform extends UITransform
                     if (this.axis == Axis.Y || all) vector3f.y += factor * dx;
                     if (this.axis == Axis.Z || all) vector3f.z += factor * dx;
 
-                    if (this.mode == 0) this.setT(vector3f.x, vector3f.y, vector3f.z);
-                    if (this.mode == 1) this.setS(vector3f.x, vector3f.y, vector3f.z);
-                    if (this.mode == 2) this.setR(vector3f.x, vector3f.y, vector3f.z);
+                    if (this.mode == 0) this.setT(null, vector3f.x, vector3f.y, vector3f.z);
+                    if (this.mode == 1) this.setS(null, vector3f.x, vector3f.y, vector3f.z);
+                    if (this.mode == 2) this.setR(null, vector3f.x, vector3f.y, vector3f.z);
                 }
 
                 this.setTransform(this.transform);
