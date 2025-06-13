@@ -26,6 +26,7 @@ public class Texture
     private boolean clearable;
 
     private TextureFormat format = TextureFormat.RGBA_U8;
+    private int filter;
 
     public static Pixels pixelsFromTexture(Texture texture)
     {
@@ -116,7 +117,12 @@ public class Texture
 
     public int getFilter()
     {
-        return this.getParameter(GL11.GL_TEXTURE_MIN_FILTER);
+        return this.filter;
+    }
+
+    public boolean isLinear()
+    {
+        return this.filter == GL30.GL_LINEAR || this.filter == GL30.GL_LINEAR_MIPMAP_NEAREST;
     }
 
     public int getParameter(int parameter)
@@ -126,6 +132,8 @@ public class Texture
 
     public void setFilter(int filter)
     {
+        this.filter = filter;
+
         this.setParameter(GL11.GL_TEXTURE_MAG_FILTER, filter);
         this.setParameter(GL11.GL_TEXTURE_MIN_FILTER, filter);
     }

@@ -24,6 +24,7 @@ public class UITextureEditor extends UIPixelsEditor
     public UIElement savebar;
     public UIIcon save;
     public UIIcon resize;
+    public UIIcon extract;
 
     private Link texture;
     private boolean dirty;
@@ -57,9 +58,14 @@ public class UITextureEditor extends UIPixelsEditor
             UIOverlay.addOverlay(this.getContext(), overlayPanel);
         });
         this.resize.tooltip(UIKeys.TEXTURES_RESIZE);
+        this.extract = new UIIcon(Icons.UPLOAD, (b) ->
+        {
+            UIOverlay.addOverlay(this.getContext(), new UITextureExtractOverlayPanel(this.getTexture(), this.getPixels()), 200, 231);
+        });
+        this.extract.tooltip(UIKeys.TEXTURES_EXTRACT_FRAMES_TITLE);
 
         this.savebar.add(this.save);
-        this.toolbar.add(this.resize);
+        this.toolbar.add(this.resize, this.extract);
 
         this.add(this.savebar);
     }

@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIFileLinkList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIFilteredLinkList;
 import mchorse.bbs_mod.ui.framework.elements.input.multilink.UIMultiLinkEditor;
@@ -37,6 +38,8 @@ import mchorse.bbs_mod.utils.resources.FilteredLink;
 import mchorse.bbs_mod.utils.resources.LinkUtils;
 import mchorse.bbs_mod.utils.resources.MultiLink;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -68,6 +71,10 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
     public UIIcon remove;
     public UIIcon edit;
 
+    public UIElement options;
+    public UIToggle linear;
+    public UIToggle mipmap;
+
     public Consumer<Link> callback;
 
     public MultiLink multiLink;
@@ -77,6 +84,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
     private Timer lastTyped = new Timer(1000);
     private Timer lastChecked = new Timer(1000);
     private String typed = "";
+    private boolean canBeClosed = true;
 
     private UICopyPasteController copyPasteController;
 
@@ -119,6 +127,11 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
             menu.custom(new UIPresetContextMenu(this.copyPasteController)
                 .labels(UIKeys.TEXTURE_EDITOR_CONTEXT_COPY, UIKeys.TEXTURE_EDITOR_CONTEXT_PASTE));
 
+            if (this.current != null)
+            {
+                menu.action(Icons.COPY, UIKeys.TEXTURES_COPY, () -> Window.setClipboard(this.current.toString()));
+            }
+
             // TODO: menu.action(Icons.DOWNLOAD, IKey.raw("Download skin..."), null);
         });
         this.close = new UIIcon(Icons.CLOSE, (b) -> this.close());
@@ -136,6 +149,43 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
         };
         this.picker.filter((l) -> l.path.endsWith("/") || l.path.endsWith(".png")).cancelScrollEdge();
 
+        this.linear = new UIToggle(UIKeys.TEXTURES_LINEAR, (b) ->
+        {
+            Link link = this.current;
+
+            /* Draw preview */
+            if (link != null)
+            {
+                Texture texture = BBSModClient.getTextures().getTexture(link);
+
+                texture.bind();
+                texture.setFilter(b.getValue() ? GL11.GL_LINEAR : GL11.GL_NEAREST);
+            }
+        });
+
+        this.mipmap = new UIToggle(UIKeys.TEXTURES_MIPMAP, (b) ->
+        {
+            Link link = this.current;
+
+            /* Draw preview */
+            if (link != null)
+            {
+                Texture texture = BBSModClient.getTextures().getTexture(link);
+
+                texture.bind();
+
+                if (!texture.isMipmap())
+                {
+                    texture.generateMipmap();
+                }
+
+                texture.setParameter(GL30.GL_TEXTURE_BASE_LEVEL, 0);
+                texture.setParameter(GL30.GL_TEXTURE_MAX_LEVEL, b.getValue() ? 4 : 0);
+            }
+        });
+        this.options = UI.column(5, 10, this.linear, this.mipmap);
+        this.options.relative(this).xy(1F, 1F).w(148).anchor(1F, 1F);
+
         this.multi = new UIButton(UIKeys.TEXTURE_MULTISKIN, (b) -> this.toggleMulti());
         this.multiList = new UIFilteredLinkList((list) -> this.setFilteredLink(list.get(0)));
         this.multiList.sorting();
@@ -150,6 +200,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         UIElement icons = UI.row(0, this.pixelEdit, this.folder, this.close);
 
+        icons.row().preferred(0);
         icons.relative(this).x(1F, -10).y(10).w(60).h(20).anchorX(1F);
 
         this.right.full(this);
@@ -167,7 +218,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         this.right.add(icons, this.text, this.picker);
         this.buttons.add(this.add, this.remove, this.edit);
-        this.add(this.multi, this.multiList, this.right, this.editor, this.buttons);
+        this.add(this.multi, this.multiList, this.right, this.editor, this.buttons, this.options);
 
         this.callback = callback;
 
@@ -214,6 +265,16 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         this.fill(null);
         this.markContainer().eventPropagataion(EventPropagation.BLOCK);
+    }
+
+    public UITexturePicker cantBeClosed()
+    {
+        this.close.removeFromParent();
+        this.eventPropagataion(EventPropagation.PASS);
+
+        this.canBeClosed = false;
+
+        return this;
     }
 
     private Link parseLink(MapType map)
@@ -319,6 +380,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         this.right.setVisible(this.pixelEditor == null);
         this.multi.setVisible(this.pixelEditor == null);
+        this.options.setVisible(this.pixelEditor == null);
     }
 
     public void updateFolderButton()
@@ -396,6 +458,8 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         this.picker.setPath(link == null ? null : link.parent());
         this.picker.setCurrent(link);
+
+        this.updateOptions();
     }
 
     /**
@@ -429,6 +493,22 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         this.picker.setCurrent(link);
         this.text.setText(link == null ? "" : link.toString());
+        this.updateOptions();
+    }
+
+    protected void updateOptions()
+    {
+        Texture texture = BBSModClient.getTextures().getTexture(this.current);
+
+        this.options.setVisible(this.current != null);
+
+        if (texture != null)
+        {
+            texture.bind();
+
+            this.linear.setValue(texture.isLinear());
+            this.mipmap.setValue(texture.getParameter(GL30.GL_TEXTURE_MAX_LEVEL) > 0 && texture.isMipmap());
+        }
     }
 
     protected void toggleMulti()
@@ -532,7 +612,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
         {
             return this.moveCurrent(1, Window.isShiftPressed());
         }
-        else if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        else if (context.isPressed(GLFW.GLFW_KEY_ESCAPE) && this.canBeClosed)
         {
             this.close();
 
@@ -665,7 +745,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
                 int h = texture.height;
 
                 int x = this.area.ex();
-                int y = this.area.ey();
+                int y = this.options.area.y;
                 int fw = w;
                 int fh = h;
 
@@ -684,7 +764,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
                 }
 
                 x -= fw + 10;
-                y -= fh + 10;
+                y -= fh;
 
                 context.batcher.iconArea(Icons.CHECKBOARD, x, y, fw, fh);
                 context.batcher.fullTexturedBox(texture, x, y, fw, fh);
