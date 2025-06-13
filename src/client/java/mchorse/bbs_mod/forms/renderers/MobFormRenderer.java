@@ -17,9 +17,14 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
+import mchorse.bbs_mod.utils.pose.Pose;
+import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.OtherClientPlayerEntity;
 import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.entity.LivingEntityRenderer;
+import net.minecraft.client.render.entity.model.EntityModel;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
@@ -34,14 +39,24 @@ import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 {
+    private static final Map<Class, Map<String, ModelPart>> parts = new HashMap<>();
+    private static final Map<ModelPart, Transform> cache = new HashMap<>();
+    private static Pose currentPose;
+    private static Pose currentPoseOverlay;
+
     public static final GameProfile WIDE = new GameProfile(UUID.fromString("b99a2400-28a8-4288-92dc-924beafbf756"), "McHorseYT");
     public static final GameProfile SLIM = new GameProfile(UUID.fromString("5477bd28-e672-4f87-a209-c03cf75f3606"), "osmiq");
-
 
     private Entity entity;
 
@@ -52,6 +67,26 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     public float prevHandSwing;
     private float prevYawHead;
     private float prevPitch;
+
+    public static Pose getCurrentPose()
+    {
+        return currentPose;
+    }
+
+    public static Pose getCurrentPoseOverlay()
+    {
+        return currentPoseOverlay;
+    }
+
+    public static Map<Class, Map<String, ModelPart>> getParts()
+    {
+        return parts;
+    }
+
+    public static Map<ModelPart, Transform> getCache()
+    {
+        return cache;
+    }
 
     public MobFormRenderer(MobForm form)
     {
@@ -65,7 +100,52 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.entity != null)
         {
+            Map<String, ModelPart> stringModelPartMap = parts.get(this.entity.getClass());
 
+            if (stringModelPartMap == null)
+            {
+                stringModelPartMap = new HashMap<>();
+
+                if (MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity) instanceof LivingEntityRenderer renderer)
+                {
+                    EntityModel model = renderer.getModel();
+                    Set<Field> fields = new HashSet<>();
+                    Class aClass = model.getClass();
+
+                    while (aClass != Object.class)
+                    {
+                        for (Field field : aClass.getDeclaredFields())
+                        {
+                            fields.add(field);
+                        }
+
+                        aClass = aClass.getSuperclass();
+                    }
+
+                    for (Field declaredField : fields)
+                    {
+                        if (declaredField.getType().equals(ModelPart.class))
+                        {
+                            try
+                            {
+                                declaredField.setAccessible(true);
+
+                                ModelPart part = (ModelPart) declaredField.get(model);
+
+                                stringModelPartMap.put(declaredField.getName(), part);
+                            }
+                            catch (Exception e)
+                            {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                }
+
+                parts.put(this.entity.getClass(), stringModelPartMap);
+            }
+
+            return new ArrayList<>(stringModelPartMap.keySet());
         }
 
         return super.getBones();
@@ -235,7 +315,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 entity.hurtTime = v != 10 ? 100 : 0;
             }
 
+            currentPose = this.form.pose.get();
+            currentPoseOverlay = this.form.poseOverlay.get();
+
             MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
+
+            currentPose = currentPoseOverlay = null;
+
             consumers.draw();
             CustomVertexConsumerProvider.clearRunnables();
 

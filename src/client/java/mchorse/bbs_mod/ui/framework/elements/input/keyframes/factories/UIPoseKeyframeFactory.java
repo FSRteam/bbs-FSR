@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -23,6 +24,7 @@ import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import org.joml.Vector3d;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
@@ -36,13 +38,23 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         this.poseEditor = new UIPoseFactoryEditor(editor, keyframe);
 
         UIKeyframeSheet sheet = editor.getGraph().getSheet(keyframe);
-        ModelForm form = (ModelForm) sheet.property.getForm();
-        ModelInstance model = ((ModelFormRenderer) FormUtilsClient.getRenderer(form)).getModel();
 
-        if (model != null)
+        if (sheet.property.getForm() instanceof ModelForm modelForm)
         {
-            this.poseEditor.setPose(keyframe.getValue(), model.poseGroup);
-            this.poseEditor.fillGroups(model.model, model.flippedParts, false);
+            ModelInstance model = ((ModelFormRenderer) FormUtilsClient.getRenderer(modelForm)).getModel();
+
+            if (model != null)
+            {
+                this.poseEditor.setPose(keyframe.getValue(), model.poseGroup);
+                this.poseEditor.fillGroups(model.model, model.flippedParts, false);
+            }
+        }
+        else if (sheet.property.getForm() instanceof MobForm mobForm)
+        {
+            List<String> bones = FormUtilsClient.getRenderer(mobForm).getBones();
+
+            this.poseEditor.setPose(keyframe.getValue(), "");
+            this.poseEditor.fillGroups(bones, false);
         }
 
         this.scroll.add(this.poseEditor);
