@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIKeybinds;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.IViewportStack;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIViewportStack;
+import mchorse.bbs_mod.ui.framework.notifications.Notification;
 import mchorse.bbs_mod.ui.framework.notifications.UINotifications;
 import mchorse.bbs_mod.ui.framework.tooltips.UITooltip;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -193,6 +194,23 @@ public class UIContext implements IViewportStack
     }
 
     /* Tooltip */
+
+    public void notifyOrUpdate(IKey message, int background)
+    {
+        List<Notification> list = this.notifications.notifications;
+
+        if (!list.isEmpty() && list.get(list.size() - 1).background == (background | Colors.A100))
+        {
+            Notification last = list.get(list.size() - 1);
+
+            last.message = message;
+            last.tick = Math.max(last.tick, Notification.TOTAL_LENGTH - 20);
+        }
+        else
+        {
+            this.notifications.post(message, background);
+        }
+    }
 
     public void notifyInfo(IKey message)
     {

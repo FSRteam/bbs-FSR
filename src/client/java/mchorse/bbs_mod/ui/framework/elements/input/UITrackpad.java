@@ -14,6 +14,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UIBaseTextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -28,6 +29,15 @@ import java.util.function.Consumer;
 
 public class UITrackpad extends UIBaseTextbox
 {
+    private static final Factor globalFactor = new Factor(20, 1, 40, (x) ->
+    {
+        if (x <= 10) return x / 100D;
+        else if (x <= 20) return (x - 10) / 10D;
+        else if (x <= 30) return (x - 20) / 1D;
+
+        return (x - 30) * 10D;
+    });
+
     private static final DecimalFormat FORMAT;
 
     public Consumer<Double> callback;
@@ -307,6 +317,13 @@ public class UITrackpad extends UIBaseTextbox
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        if (context.mouseButton == 2 && this.area.isInside(context))
+        {
+            this.setValueAndNotify(-this.value);
+
+            return true;
+        }
+
         this.wasInside = this.area.isInside(context);
 
         if (context.mouseButton == 0)
@@ -388,6 +405,33 @@ public class UITrackpad extends UIBaseTextbox
         this.shiftX = 0;
 
         return super.subMouseReleased(context);
+    }
+
+    @Override
+    protected boolean subMouseScrolled(UIContext context)
+    {
+        if (this.dragging)
+        {
+            globalFactor.addX((int) context.mouseWheel);
+            context.notifyOrUpdate(IKey.raw("Updated amplitude, new factor is %.2f").format(globalFactor.getValue()), Colors.BLUE);
+
+            return true;
+        }
+        else if (this.area.isInside(context))
+        {
+            if (context.mouseWheel > 0)
+            {
+                this.setValueAndNotify(this.value + this.getValueModifier());
+            }
+            else
+            {
+                this.setValueAndNotify(this.value - this.getValueModifier());
+            }
+
+            return true;
+        }
+
+        return super.subMouseScrolled(context);
     }
 
     @Override
@@ -486,8 +530,17 @@ public class UITrackpad extends UIBaseTextbox
     @Override
     public boolean subTextInput(UIContext context)
     {
+        char inputCharacter = context.getInputCharacter();
+
+        if (!(Character.isDigit(inputCharacter) || inputCharacter == '.' || inputCharacter == '-'))
+        {
+            context.unfocus();
+
+            return false;
+        }
+
         String old = this.textbox.getText();
-        boolean result = this.textbox.textInput(context.getInputCharacter());
+        boolean result = this.textbox.textInput(inputCharacter);
         String text = this.textbox.getText();
 
         if (this.textbox.isFocused() && !text.equals(old))
@@ -655,6 +708,6 @@ public class UITrackpad extends UIBaseTextbox
             value = this.weak;
         }
 
-        return value;
+        return value * globalFactor.getValue();
     }
 }

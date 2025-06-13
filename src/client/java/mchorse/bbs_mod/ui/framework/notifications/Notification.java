@@ -7,11 +7,13 @@ import mchorse.bbs_mod.utils.interps.Lerps;
 
 public class Notification
 {
-    public final IKey message;
-    public final int background;
-    public final int color;
+    public static final int TOTAL_LENGTH = 80;
 
-    private int tick;
+    public IKey message;
+    public int background;
+    public int color;
+
+    public int tick;
 
     public Notification(IKey message, int background, int color)
     {
@@ -19,7 +21,7 @@ public class Notification
         this.background = background | Colors.A100;
         this.color = color| Colors.A100;
 
-        this.tick = 80;
+        this.tick = TOTAL_LENGTH;
     }
 
     public boolean isExpired()
