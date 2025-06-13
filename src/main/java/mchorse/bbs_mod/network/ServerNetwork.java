@@ -27,6 +27,7 @@ import mchorse.bbs_mod.resources.packs.ExternalAssetsSourcePack;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.EnumUtils;
 import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.utils.PermissionUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
@@ -125,6 +126,11 @@ public class ServerNetwork
 
     private static void handleModelBlockFormPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
             BlockPos pos = buf.readBlockPos();
@@ -151,6 +157,11 @@ public class ServerNetwork
 
     private static void handleModelBlockTransformsPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
             try
@@ -174,6 +185,11 @@ public class ServerNetwork
 
     private static void handlePlayerFormPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
             Form form = null;
@@ -201,6 +217,11 @@ public class ServerNetwork
 
     private static void handleManagerDataPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
             MapType data = (MapType) DataStorageUtils.readFromBytes(bytes);
@@ -250,6 +271,11 @@ public class ServerNetwork
 
     private static void handleActionRecording(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         String filmId = buf.readString();
         int replayId = buf.readInt();
         int tick = buf.readInt();
@@ -281,6 +307,11 @@ public class ServerNetwork
 
     private static void handleToggleFilm(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         String filmId = buf.readString();
         boolean withCamera = buf.readBoolean();
 
@@ -306,6 +337,11 @@ public class ServerNetwork
 
     private static void handleActionControl(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         ActionManager actions = BBSMod.getActions();
         String filmId = buf.readString();
         ActionState state = EnumUtils.getValue(buf.readByte(), ActionState.values(), ActionState.STOP);
@@ -384,6 +420,11 @@ public class ServerNetwork
 
     private static void handleSyncData(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
             String filmId = packetByteBuf.readString();
@@ -405,6 +446,11 @@ public class ServerNetwork
 
     private static void handleTeleportPlayer(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
     {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
         double x = buf.readDouble();
         double y = buf.readDouble();
         double z = buf.readDouble();

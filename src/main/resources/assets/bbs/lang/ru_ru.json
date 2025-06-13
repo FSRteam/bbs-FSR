@@ -21,5 +21,7 @@
     "key.bbs.record_video": "Записать видео",
     "key.bbs.teleport": "Телепортироваться к тек. записи",
     "key.bbs.zoom": "Прицелиться (ББС ружьё)",
-    "category.bbs.main": "ББС мод"
+    "category.bbs.main": "ББС мод",
+
+    "gamerule.bbsEditing": "Привелегии редактирование ББС мода"
 }
