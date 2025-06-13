@@ -40,6 +40,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
@@ -652,7 +653,14 @@ public class UIReplayList extends UIList<Replay>
     @Override
     protected void renderElementPart(UIContext context, Replay element, int i, int x, int y, boolean hover, boolean selected)
     {
-        super.renderElementPart(context, element, i, x, y, hover, selected);
+        if (element.enabled.get())
+        {
+            super.renderElementPart(context, element, i, x, y, hover, selected);
+        }
+        else
+        {
+            context.batcher.textShadow(this.elementToString(context, i, element), x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? Colors.mulRGB(Colors.HIGHLIGHT, 0.75F) : Colors.GRAY);
+        }
 
         Form form = element.form.get();
 
