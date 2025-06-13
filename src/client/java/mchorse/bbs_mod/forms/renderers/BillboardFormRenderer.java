@@ -199,6 +199,8 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         BBSModClient.getTextures().bindTexture(texture);
         RenderSystem.setShader(shader);
 
+        texture.bind();
+        texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
         builder.begin(VertexFormat.DrawMode.TRIANGLES, format);
 
         /* Front */

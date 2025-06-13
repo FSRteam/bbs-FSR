@@ -13,6 +13,8 @@ public class BillboardForm extends Form
 {
     public final LinkProperty texture = new LinkProperty(this, "texture", null);
     public final BooleanProperty billboard = new BooleanProperty(this, "billboard", false);
+    public final BooleanProperty linear = new BooleanProperty(this, "linear", false);
+    public final BooleanProperty mipmap = new BooleanProperty(this, "mipmap", false);
     public final Vector4fProperty crop = new Vector4fProperty(this, "crop", new Vector4f(0, 0, 0, 0));
     public final BooleanProperty resizeCrop = new BooleanProperty(this, "resizeCrop", false);
     public final ColorProperty color = new ColorProperty(this, "color", Color.white());
@@ -25,11 +27,15 @@ public class BillboardForm extends Form
     {
         super();
 
+        this.linear.cantAnimate();
+        this.mipmap.cantAnimate();
         this.resizeCrop.cantAnimate();
         this.shading.cantAnimate();
 
         this.register(this.texture);
         this.register(this.billboard);
+        this.register(this.linear);
+        this.register(this.mipmap);
         this.register(this.crop);
         this.register(this.resizeCrop);
         this.register(this.color);

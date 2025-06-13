@@ -83,6 +83,11 @@ public class Texture
         return this.mipmap;
     }
 
+    public boolean isReallyMipmap()
+    {
+        return this.mipmap && this.getParameter(GL30.GL_TEXTURE_MAX_LEVEL) > 0;
+    }
+
     public boolean isValid()
     {
         return this.id >= 0;
@@ -128,6 +133,20 @@ public class Texture
     public int getParameter(int parameter)
     {
         return GL11.glGetTexParameteri(this.target, parameter);
+    }
+
+    public void setFilterMipmap(boolean linear, boolean mipmap)
+    {
+        int filter = linear ? GL11.GL_LINEAR : GL11.GL_NEAREST;
+
+        this.setFilter(filter);
+
+        if (!this.isMipmap())
+        {
+            this.generateMipmap();
+        }
+
+        this.setParameter(GL30.GL_TEXTURE_MAX_LEVEL, mipmap ? 4 : 0);
     }
 
     public void setFilter(int filter)

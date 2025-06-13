@@ -18,6 +18,8 @@ public class UIBillboardFormPanel extends UIFormPanel<BillboardForm>
 {
     public UIButton pick;
     public UIToggle billboard;
+    public UIToggle linear;
+    public UIToggle mipmap;
 
     public UIButton openCrop;
     public UIToggle resizeCrop;
@@ -38,6 +40,8 @@ public class UIBillboardFormPanel extends UIFormPanel<BillboardForm>
             UITexturePicker.open(this.getContext(), this.form.texture.get(), (l) -> this.form.texture.set(l));
         });
         this.billboard = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_TITLE, false, (b) -> this.form.billboard.set(b.getValue()));
+        this.linear = new UIToggle(UIKeys.TEXTURES_LINEAR, false, (b) -> this.form.linear.set(b.getValue()));
+        this.mipmap = new UIToggle(UIKeys.TEXTURES_MIPMAP, false, (b) -> this.form.mipmap.set(b.getValue()));
         this.openCrop = new UIButton(UIKeys.FORMS_EDITORS_BILLBOARD_EDIT_CROP, (b) ->
         {
             UIOverlay.addOverlay(this.getContext(), new UICropOverlayPanel(this.form.texture.get(), this.form.crop.get()), 0.5F, 0.5F);
@@ -54,7 +58,7 @@ public class UIBillboardFormPanel extends UIFormPanel<BillboardForm>
 
         this.shading = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_SHADING, false, (b) -> this.form.shading.set(b.getValue()));
 
-        this.options.add(this.pick, this.color, this.billboard);
+        this.options.add(this.pick, this.color, this.billboard, this.linear, this.mipmap);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_BILLBOARD_CROP).marginTop(8), this.openCrop, this.resizeCrop);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_BILLBOARD_UV_SHIFT).marginTop(8), UI.row(this.offsetX, this.offsetY), this.rotation, this.shading);
     }
@@ -65,6 +69,8 @@ public class UIBillboardFormPanel extends UIFormPanel<BillboardForm>
         super.startEdit(form);
 
         this.billboard.setValue(form.billboard.get());
+        this.linear.setValue(form.linear.get());
+        this.mipmap.setValue(form.mipmap.get());
 
         this.resizeCrop.setValue(form.resizeCrop.get());
         this.color.setColor(form.color.get().getARGBColor());
