@@ -95,6 +95,7 @@ public class BBSModClient implements ClientModInitializer
     private static KeyBinding keyDashboard;
     private static KeyBinding keyItemEditor;
     private static KeyBinding keyPlayFilm;
+    private static KeyBinding keyPauseFilm;
     private static KeyBinding keyRecordReplay;
     private static KeyBinding keyRecordVideo;
     private static KeyBinding keyOpenReplays;
@@ -340,6 +341,7 @@ public class BBSModClient implements ClientModInitializer
         keyDashboard = this.createKey("dashboard", GLFW.GLFW_KEY_0);
         keyItemEditor = this.createKey("item_editor", GLFW.GLFW_KEY_HOME);
         keyPlayFilm = this.createKey("play_film", GLFW.GLFW_KEY_RIGHT_CONTROL);
+        keyPauseFilm = this.createKey("pause_film", GLFW.GLFW_KEY_BACKSLASH);
         keyRecordReplay = this.createKey("record_replay", GLFW.GLFW_KEY_RIGHT_ALT);
         keyRecordVideo = this.createKey("record_video", GLFW.GLFW_KEY_F4);
         keyOpenReplays = this.createKey("open_replays", GLFW.GLFW_KEY_RIGHT_SHIFT);
@@ -414,6 +416,7 @@ public class BBSModClient implements ClientModInitializer
             while (keyDashboard.wasPressed()) UIScreen.open(getDashboard());
             while (keyItemEditor.wasPressed()) this.keyOpenModelBlockEditor(mc);
             while (keyPlayFilm.wasPressed()) this.keyPlayFilm();
+            while (keyPauseFilm.wasPressed()) this.keyPauseFilm();
             while (keyRecordReplay.wasPressed()) this.keyRecordReplay();
             while (keyRecordVideo.wasPressed())
             {
@@ -570,6 +573,16 @@ public class BBSModClient implements ClientModInitializer
         if (panel.getData() != null)
         {
             Films.playFilm(panel.getData().getId(), false);
+        }
+    }
+
+    private void keyPauseFilm()
+    {
+        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
+
+        if (panel.getData() != null)
+        {
+            Films.pauseFilm(panel.getData().getId());
         }
     }
 

@@ -124,9 +124,9 @@ public class FilmEditorController extends BaseFilmController
     }
 
     @Override
-    protected boolean canUpdate(int i, Replay replay, IEntity entity)
+    protected boolean canUpdate(int i, Replay replay, IEntity entity, UpdateMode updateMode)
     {
-        return super.canUpdate(i, replay, entity)
+        return super.canUpdate(i, replay, entity, updateMode)
             || this.controller.getPovMode() != UIFilmController.CAMERA_MODE_FIRST_PERSON
             || !this.isCurrent(entity)
             || !this.controller.orbit.enabled;

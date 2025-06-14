@@ -50,7 +50,10 @@ public class WorldFilmController extends BaseFilmController
     @Override
     public void update()
     {
-        this.tick += 1;
+        if (!this.paused)
+        {
+            this.tick += 1;
+        }
 
         super.update();
     }

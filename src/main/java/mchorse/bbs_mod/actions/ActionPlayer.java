@@ -252,4 +252,9 @@ public class ActionPlayer
             }
         }
     }
+
+    public void toggle()
+    {
+        this.playing = !this.playing;
+    }
 }

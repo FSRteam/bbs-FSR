@@ -103,6 +103,7 @@ public class ClientNetwork
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_ENTITY_FORM, (client, handler, buf, responseSender) -> handleEntityFormPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_ACTORS, (client, handler, buf, responseSender) -> handleActorsPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_GUN_PROPERTIES, (client, handler, buf, responseSender) -> handleGunPropertiesPacket(client, buf));
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_PAUSE_FILM, (client, handler, buf, responseSender) -> handlePauseFilmPacket(client, buf));
     }
 
     /* Handlers */
@@ -425,6 +426,16 @@ public class ClientNetwork
         });
     }
 
+    private static void handlePauseFilmPacket(MinecraftClient client, PacketByteBuf buf)
+    {
+        String filmId = buf.readString();
+
+        client.execute(() ->
+        {
+            Films.togglePauseFilm(filmId);
+        });
+    }
+
     /* API */
     
     public static void sendModelBlockForm(BlockPos pos, ModelBlockEntity modelBlock)
@@ -633,5 +644,14 @@ public class ClientNetwork
         buf.writeBoolean(zoom);
 
         ClientPlayNetworking.send(ServerNetwork.SERVER_ZOOM, buf);
+    }
+
+    public static void sendPauseFilm(String filmId)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeString(filmId);
+
+        ClientPlayNetworking.send(ServerNetwork.SERVER_PAUSE_FILM, buf);
     }
 }

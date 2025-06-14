@@ -79,6 +79,31 @@ public class Films
         BBSModClient.getFilms().add(filmController);
     }
 
+    public static void pauseFilm(String filmId)
+    {
+        if (ClientNetwork.isIsBBSModOnServer())
+        {
+            ClientNetwork.sendPauseFilm(filmId);
+        }
+        else
+        {
+            if (BBSModClient.getFilms().has(filmId))
+            {
+                togglePauseFilm(filmId);
+            }
+        }
+    }
+
+    public static void togglePauseFilm(String filmId)
+    {
+        BaseFilmController controller = BBSModClient.getFilms().getController(filmId);
+
+        if (controller != null)
+        {
+            controller.togglePause();
+        }
+    }
+
     public static void stopFilm(String filmId)
     {
         Film film = BBSModClient.getFilms().remove(filmId);
@@ -97,6 +122,19 @@ public class Films
     }
 
     /* Instance API */
+
+    public BaseFilmController getController(String filmId)
+    {
+        for (BaseFilmController controller : this.controllers)
+        {
+            if (controller.film.getId().equals(filmId))
+            {
+                return controller;
+            }
+        }
+
+        return null;
+    }
 
     public Recorder getRecorder()
     {

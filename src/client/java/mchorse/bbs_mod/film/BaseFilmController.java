@@ -57,6 +57,7 @@ public abstract class BaseFilmController
 
     protected IntObjectMap<IEntity> entities = new IntObjectHashMap<>();
 
+    public boolean paused;
     public int exception = -1;
 
     /* Rendering helpers */
@@ -287,6 +288,11 @@ public abstract class BaseFilmController
         return this.entities;
     }
 
+    public void togglePause()
+    {
+        this.paused = !this.paused;
+    }
+
     public void createEntities()
     {
         this.entities.clear();
@@ -346,7 +352,7 @@ public abstract class BaseFilmController
             List<Replay> replays = this.film.replays.getList();
             Replay replay = CollectionUtils.getSafe(replays, i);
 
-            if (!this.canUpdate(i, replay, entity))
+            if (!this.canUpdate(i, replay, entity, UpdateMode.UPDATE))
             {
                 continue;
             }
@@ -405,7 +411,7 @@ public abstract class BaseFilmController
             List<Replay> replays = this.film.replays.getList();
             Replay replay = CollectionUtils.getSafe(replays, i);
 
-            if (!this.canUpdate(i, replay, entity))
+            if (!this.canUpdate(i, replay, entity, UpdateMode.UPDATE))
             {
                 continue;
             }
@@ -481,7 +487,7 @@ public abstract class BaseFilmController
             IEntity entity = entry.getValue();
             Replay replay = this.film.replays.getList().get(i);
 
-            if (!this.canUpdate(i, replay, entity))
+            if (!this.canUpdate(i, replay, entity, UpdateMode.PROPERTIES))
             {
                 continue;
             }
@@ -508,9 +514,9 @@ public abstract class BaseFilmController
                     }
                     else if (anEntity instanceof PlayerEntity player)
                     {
-                        float yawHead = replay.keyframes.headYaw.interpolate(tick + transition).floatValue();
-                        float yawBody = replay.keyframes.bodyYaw.interpolate(tick + transition).floatValue();
-                        float pitch = replay.keyframes.pitch.interpolate(tick + transition).floatValue();
+                        float yawHead = replay.keyframes.headYaw.interpolate(tick + delta).floatValue();
+                        float yawBody = replay.keyframes.bodyYaw.interpolate(tick + delta).floatValue();
+                        float pitch = replay.keyframes.pitch.interpolate(tick + delta).floatValue();
 
                         player.setYaw(yawHead);
                         player.setHeadYaw(yawHead);
@@ -528,11 +534,16 @@ public abstract class BaseFilmController
 
     protected float getTransition(IEntity entity, float transition)
     {
-        return transition;
+        return this.paused ? 0F : transition;
     }
 
-    protected boolean canUpdate(int i, Replay replay, IEntity entity)
+    protected boolean canUpdate(int i, Replay replay, IEntity entity, UpdateMode updateMode)
     {
+        if (this.paused && (updateMode == UpdateMode.UPDATE))
+        {
+            return false;
+        }
+
         return i != this.exception;
     }
 
@@ -546,7 +557,7 @@ public abstract class BaseFilmController
             IEntity entity = entry.getValue();
             Replay replay = this.film.replays.getList().get(i);
 
-            if (!this.canUpdate(i, replay, entity))
+            if (!this.canUpdate(i, replay, entity, UpdateMode.RENDER))
             {
                 continue;
             }
@@ -559,7 +570,11 @@ public abstract class BaseFilmController
     {
         if (!replay.actor.get())
         {
-            renderEntity(getFilmControllerContext(context, replay, entity));
+            FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
+
+            filmContext.transition = getTransition(entity, context.tickDelta());
+
+            renderEntity(filmContext);
         }
     }
 
@@ -573,4 +588,9 @@ public abstract class BaseFilmController
 
     public void shutdown()
     {}
+
+    public static enum UpdateMode
+    {
+        UPDATE, RENDER, PROPERTIES;
+    }
 }
