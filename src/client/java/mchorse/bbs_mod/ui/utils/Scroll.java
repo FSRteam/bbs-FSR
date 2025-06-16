@@ -388,6 +388,8 @@ public class Scroll
 
     public boolean mouseScroll(UIContext context)
     {
+        context.updateScroll();
+
         return this.mouseScroll(context.mouseX, context.mouseY, context.mouseWheel);
     }
 

@@ -41,6 +41,7 @@ public class UIContext implements IViewportStack
     public int mouseButton;
     public double mouseWheel;
     public double mouseWheelHorizontal;
+    public long lastScroll;
 
     /* Keyboard states */
     private int keyCode;
@@ -136,6 +137,16 @@ public class UIContext implements IViewportStack
         {
             this.unfocus();
         }
+    }
+
+    public void updateScroll()
+    {
+        this.lastScroll = System.currentTimeMillis();
+    }
+
+    public boolean hasNotScrolledForMore(long millis)
+    {
+        return System.currentTimeMillis() - this.lastScroll > millis;
     }
 
     /* Keys */

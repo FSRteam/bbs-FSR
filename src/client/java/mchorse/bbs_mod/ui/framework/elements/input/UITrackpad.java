@@ -410,6 +410,13 @@ public class UITrackpad extends UIBaseTextbox
     @Override
     protected boolean subMouseScrolled(UIContext context)
     {
+        Area area = new Area();
+        int w = this.area.w / 2;
+
+        area.copy(this.area);
+        area.x = area.mx() - w / 2;
+        area.w = w;
+
         if (this.dragging)
         {
             globalFactor.addX((int) context.mouseWheel);
@@ -417,7 +424,7 @@ public class UITrackpad extends UIBaseTextbox
 
             return true;
         }
-        else if (this.area.isInside(context))
+        else if (area.isInside(context) && context.hasNotScrolledForMore(500))
         {
             if (context.mouseWheel > 0)
             {
