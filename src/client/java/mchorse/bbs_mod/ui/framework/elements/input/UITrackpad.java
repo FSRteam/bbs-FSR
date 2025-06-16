@@ -552,7 +552,7 @@ public class UITrackpad extends UIBaseTextbox
     {
         char inputCharacter = context.getInputCharacter();
 
-        if (this.onlyNumbers && !this.numberCharacterAllowed(inputCharacter))
+        if (this.onlyNumbers && this.isFocused() && !this.numberCharacterAllowed(inputCharacter))
         {
             context.unfocus();
 
