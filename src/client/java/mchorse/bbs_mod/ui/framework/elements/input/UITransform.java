@@ -51,13 +51,13 @@ public abstract class UITransform extends UIElement
 
         IKey raw = IKey.constant("%s (%s)");
 
-        this.tx = new UITrackpad((value) -> this.internalSetT(value, Axis.X)).block();
+        this.tx = new UITrackpad((value) -> this.internalSetT(value, Axis.X)).block().onlyNumbers();
         this.tx.tooltip(raw.format(UIKeys.TRANSFORMS_TRANSLATE, UIKeys.GENERAL_X));
         this.tx.textbox.setColor(Colors.RED);
-        this.ty = new UITrackpad((value) -> this.internalSetT(value, Axis.Y)).block();
+        this.ty = new UITrackpad((value) -> this.internalSetT(value, Axis.Y)).block().onlyNumbers();
         this.ty.tooltip(raw.format(UIKeys.TRANSFORMS_TRANSLATE, UIKeys.GENERAL_Y));
         this.ty.textbox.setColor(Colors.GREEN);
-        this.tz = new UITrackpad((value) -> this.internalSetT(value, Axis.Z)).block();
+        this.tz = new UITrackpad((value) -> this.internalSetT(value, Axis.Z)).block().onlyNumbers();
         this.tz.tooltip(raw.format(UIKeys.TRANSFORMS_TRANSLATE, UIKeys.GENERAL_Z));
         this.tz.textbox.setColor(Colors.BLUE);
 
@@ -66,40 +66,40 @@ public abstract class UITransform extends UIElement
             this.internalSetS(value, Axis.X);
             this.syncScale(value);
         });
-        this.sx.tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_X));
+        this.sx.onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_X));
         this.sx.textbox.setColor(Colors.RED);
         this.sy = new UITrackpad((value) ->
         {
             this.internalSetS(value, Axis.Y);
             this.syncScale(value);
         });
-        this.sy.tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Y));
+        this.sy.onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Y));
         this.sy.textbox.setColor(Colors.GREEN);
         this.sz = new UITrackpad((value) ->
         {
             this.internalSetS(value, Axis.Z);
             this.syncScale(value);
         });
-        this.sz.tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Z));
+        this.sz.onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Z));
         this.sz.textbox.setColor(Colors.BLUE);
 
-        this.rx = new UITrackpad((value) -> this.internalSetR(value, Axis.X)).degrees();
+        this.rx = new UITrackpad((value) -> this.internalSetR(value, Axis.X)).degrees().onlyNumbers();
         this.rx.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE, UIKeys.GENERAL_X));
         this.rx.textbox.setColor(Colors.RED);
-        this.ry = new UITrackpad((value) -> this.internalSetR(value, Axis.Y)).degrees();
+        this.ry = new UITrackpad((value) -> this.internalSetR(value, Axis.Y)).degrees().onlyNumbers();
         this.ry.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE, UIKeys.GENERAL_Y));
         this.ry.textbox.setColor(Colors.GREEN);
-        this.rz = new UITrackpad((value) -> this.internalSetR(value, Axis.Z)).degrees();
+        this.rz = new UITrackpad((value) -> this.internalSetR(value, Axis.Z)).degrees().onlyNumbers();
         this.rz.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE, UIKeys.GENERAL_Z));
         this.rz.textbox.setColor(Colors.BLUE);
 
-        this.r2x = new UITrackpad((value) -> this.internalSetR2(value, Axis.X)).degrees();
+        this.r2x = new UITrackpad((value) -> this.internalSetR2(value, Axis.X)).degrees().onlyNumbers();
         this.r2x.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE2, UIKeys.GENERAL_X));
         this.r2x.textbox.setColor(Colors.RED);
-        this.r2y = new UITrackpad((value) -> this.internalSetR2(value, Axis.Y)).degrees();
+        this.r2y = new UITrackpad((value) -> this.internalSetR2(value, Axis.Y)).degrees().onlyNumbers();
         this.r2y.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE2, UIKeys.GENERAL_Y));
         this.r2y.textbox.setColor(Colors.GREEN);
-        this.r2z = new UITrackpad((value) -> this.internalSetR2(value, Axis.Z)).degrees();
+        this.r2z = new UITrackpad((value) -> this.internalSetR2(value, Axis.Z)).degrees().onlyNumbers();
         this.r2z.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE2, UIKeys.GENERAL_Z));
         this.r2z.textbox.setColor(Colors.BLUE);
 

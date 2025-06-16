@@ -25,10 +25,15 @@ import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class UITrackpad extends UIBaseTextbox
 {
+    private static final Set<Character> allowedNumberCharacters = ".-+/*^%() ".chars()
+        .mapToObj((o) -> (char) o)
+        .collect(Collectors.toSet());
     private static final Factor globalFactor = new Factor(20, 1, 40, (x) ->
     {
         if (x <= 10) return x / 100D;
@@ -53,6 +58,7 @@ public class UITrackpad extends UIBaseTextbox
     public double max = Float.POSITIVE_INFINITY;
     public boolean integer;
     public boolean delayedInput;
+    public boolean onlyNumbers;
 
     public boolean relative;
     public IKey forcedLabel;
@@ -178,6 +184,13 @@ public class UITrackpad extends UIBaseTextbox
     public UITrackpad delayedInput()
     {
         this.delayedInput = true;
+
+        return this;
+    }
+
+    public UITrackpad onlyNumbers()
+    {
+        this.onlyNumbers = true;
 
         return this;
     }
@@ -539,7 +552,7 @@ public class UITrackpad extends UIBaseTextbox
     {
         char inputCharacter = context.getInputCharacter();
 
-        if (!(Character.isDigit(inputCharacter) || inputCharacter == '.' || inputCharacter == '-'))
+        if (this.onlyNumbers && !this.numberCharacterAllowed(inputCharacter))
         {
             context.unfocus();
 
@@ -568,6 +581,11 @@ public class UITrackpad extends UIBaseTextbox
         }
 
         return result;
+    }
+
+    private boolean numberCharacterAllowed(char character)
+    {
+        return Character.isDigit(character) || allowedNumberCharacters.contains(character);
     }
 
     /**
