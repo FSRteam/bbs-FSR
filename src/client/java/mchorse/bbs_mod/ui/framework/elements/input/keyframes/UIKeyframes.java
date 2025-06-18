@@ -420,8 +420,9 @@ public class UIKeyframes extends UIElement
                             float tick = mMax + this.getStackOffset() + (keyframe.getTick() - mMin) + x;
                             int index = current.channel.insert(tick, keyframe.getFactory().copy(keyframe.getValue()));
                             Keyframe kf = current.channel.get(index);
-
-                            kf.getInterpolation().setInterp(keyframe.getInterpolation().getInterp());
+                            
+                            kf.copy(keyframe);
+                            kf.setTick(tick);
                             current.selection.add(index);
                         }
 
