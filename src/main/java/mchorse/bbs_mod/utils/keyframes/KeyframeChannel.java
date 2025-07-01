@@ -308,6 +308,13 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
             }
         }
 
+        int size = this.list.size();
+
+        if (this.factory.compare(this.list.get(size - 1).getValue(), this.list.get(size - 2).getValue()))
+        {
+            this.list.remove(size - 1);
+        }
+
         this.sync();
         this.postNotifyParent();
     }
