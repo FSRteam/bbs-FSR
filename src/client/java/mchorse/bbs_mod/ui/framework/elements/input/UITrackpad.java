@@ -7,6 +7,7 @@ import mchorse.bbs_mod.math.MathBuilder;
 import mchorse.bbs_mod.settings.values.ValueDouble;
 import mchorse.bbs_mod.settings.values.ValueFloat;
 import mchorse.bbs_mod.settings.values.ValueInt;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragStartEvent;
@@ -433,11 +434,11 @@ public class UITrackpad extends UIBaseTextbox
         if (this.dragging)
         {
             globalFactor.addX((int) context.mouseWheel);
-            context.notifyOrUpdate(IKey.raw("Updated amplitude, new factor is %.2f").format(globalFactor.getValue()), Colors.BLUE);
+            context.notifyOrUpdate(UIKeys.TRACKPAD_GLOBAL_AMPLIFIER.format(globalFactor.getValue()), Colors.BLUE);
 
             return true;
         }
-        else if (area.isInside(context) && context.hasNotScrolledForMore(500))
+        else if (area.isInside(context) && context.hasNotScrolledForMore(500) && BBSSettings.enableTrackpadScrolling.get())
         {
             if (context.mouseWheel > 0)
             {
