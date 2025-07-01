@@ -2,9 +2,6 @@ package mchorse.bbs_mod.camera.controller;
 
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.utils.MathUtils;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.Vec3d;
 import org.joml.Vector3d;
 
 import java.util.ArrayList;
@@ -143,20 +140,6 @@ public class CameraController implements ICameraController
         }
 
         return false;
-    }
-
-    public void copy(Entity cameraEntity)
-    {
-        if (cameraEntity == null)
-        {
-            return;
-        }
-
-        Vec3d eyePos = cameraEntity.getEyePos();
-
-        this.camera.position.set(eyePos.x, eyePos.y, eyePos.z);
-        this.camera.rotation.set(MathUtils.toRad(cameraEntity.getPitch()), MathUtils.toRad(cameraEntity.getHeadYaw()), 0);
-        this.camera.fov = MathUtils.toRad(MinecraftClient.getInstance().options.getFov().getValue());
     }
 
     public void reset()

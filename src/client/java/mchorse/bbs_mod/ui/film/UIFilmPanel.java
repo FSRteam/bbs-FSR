@@ -704,10 +704,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         super.fillDefaultData(data);
 
         IdleClip clip = new IdleClip();
+        Camera camera = new Camera();
+        MinecraftClient mc = MinecraftClient.getInstance();
+
+        camera.set(mc.player, MathUtils.toRad(mc.options.getFov().getValue()));
 
         clip.layer.set(8);
         clip.duration.set(BBSSettings.getDefaultDuration());
-        clip.fromCamera(this.getWorldCamera());
+        clip.fromCamera(camera);
         data.camera.addClip(clip);
 
         this.newFilm = true;
