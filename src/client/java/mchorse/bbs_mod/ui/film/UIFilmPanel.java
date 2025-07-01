@@ -120,6 +120,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private List<UIElement> panels = new ArrayList<>();
     private UIElement secretPlay;
 
+    private boolean newFilm;
+
     /**
      * Initialize the camera editor with a camera profile.
      */
@@ -703,9 +705,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         IdleClip clip = new IdleClip();
 
+        clip.layer.set(8);
         clip.duration.set(BBSSettings.getDefaultDuration());
         clip.fromCamera(this.getWorldCamera());
         data.camera.addClip(clip);
+
+        this.newFilm = true;
     }
 
     @Override
@@ -752,7 +757,16 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.fillData();
         this.controller.createEntities();
 
+        if (this.newFilm)
+        {
+            Clip main = this.data.camera.get(0);
+
+            this.cameraEditor.clips.setSelected(main);
+            this.cameraEditor.pickClip(main);
+        }
+
         this.entered = data != null;
+        this.newFilm = false;
     }
 
     public void undo()

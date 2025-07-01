@@ -781,7 +781,7 @@ public class UIClips extends UIElement
         this.selection.clear();
     }
 
-    private void pickClip(Clip clip)
+    public void pickClip(Clip clip)
     {
         this.setSelected(clip);
         this.delegate.pickClip(clip);
