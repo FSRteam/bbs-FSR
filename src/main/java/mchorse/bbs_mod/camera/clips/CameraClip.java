@@ -45,7 +45,7 @@ public abstract class CameraClip extends Clip
             position.point.y = Lerps.lerp(position.point.y, temporary.point.y, factor);
             position.point.z = Lerps.lerp(position.point.z, temporary.point.z, factor);
 
-            position.angle.yaw = Lerps.lerp(position.angle.yaw, temporary.angle.yaw, factor);
+            position.angle.yaw = (float) Lerps.lerpYaw(position.angle.yaw, temporary.angle.yaw, factor);
             position.angle.pitch = Lerps.lerp(position.angle.pitch, temporary.angle.pitch, factor);
             position.angle.roll = Lerps.lerp(position.angle.roll, temporary.angle.roll, factor);
             position.angle.fov = Lerps.lerp(position.angle.fov, temporary.angle.fov, factor);
