@@ -18,6 +18,7 @@ import mchorse.bbs_mod.utils.PNGEncoder;
 import mchorse.bbs_mod.utils.resources.Pixels;
 
 import java.io.File;
+import java.util.function.Consumer;
 
 public class UITextureEditor extends UIPixelsEditor
 {
@@ -28,6 +29,8 @@ public class UITextureEditor extends UIPixelsEditor
 
     private Link texture;
     private boolean dirty;
+
+    private Consumer<Link> saveCallback;
 
     public UITextureEditor()
     {
@@ -68,6 +71,13 @@ public class UITextureEditor extends UIPixelsEditor
         this.toolbar.add(this.resize, this.extract);
 
         this.add(this.savebar);
+    }
+
+    public UITextureEditor saveCallback(Consumer<Link> saveCallback)
+    {
+        this.saveCallback = saveCallback;
+
+        return this;
     }
 
     public Link getTexture()
@@ -154,6 +164,11 @@ public class UITextureEditor extends UIPixelsEditor
             UIOverlay.addOverlay(this.getContext(), panel);
 
             this.setDirty(false);
+
+            if (this.saveCallback != null)
+            {
+                this.saveCallback.accept(link);
+            }
         }
         catch (Exception e)
         {

@@ -364,7 +364,11 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         if (this.pixelEditor == null)
         {
-            this.pixelEditor = new UITextureEditor();
+            this.pixelEditor = new UITextureEditor().saveCallback((l) ->
+            {
+                this.selectCurrent(l);
+                this.displayCurrent(l);
+            });
             this.pixelEditor.fillTexture(this.current);
             this.pixelEditor.setEditing(true);
 
