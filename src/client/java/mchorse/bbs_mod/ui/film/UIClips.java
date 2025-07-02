@@ -35,6 +35,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -77,6 +78,8 @@ public class UIClips extends UIElement
     private boolean scrolling;
     private int lastX;
     private int lastY;
+    private int initialX;
+    private int initialY;
     private int grabMode;
 
     /* Looping */
@@ -896,7 +899,7 @@ public class UIClips extends UIElement
 
     public int fromGraphX(int mouseX)
     {
-        return (int) this.scale.from(mouseX);
+        return (int) Math.round(this.scale.from(mouseX));
     }
 
     public int toGraphX(int value)
@@ -969,6 +972,12 @@ public class UIClips extends UIElement
 
         this.vertical.scrollSize = this.clips == null ? 0 : this.layers * LAYER_HEIGHT;
         this.vertical.clamp();
+    }
+
+    private void setMouse(int x, int y)
+    {
+        this.lastX = this.initialX = x;
+        this.lastY = this.initialY = y;
     }
 
     @Override
@@ -1073,12 +1082,11 @@ public class UIClips extends UIElement
                     this.snappingPoints.add(otherClip.tick.get() + otherClip.duration.get());
                 }
 
-                this.lastX = mouseX;
-                this.lastY = mouseY;
+                this.setMouse(mouseX, mouseY);
 
                 for (Clip selectedClip : this.getClipsFromSelection())
                 {
-                    this.grabbedData.add(new Vector3i(selectedClip.tick.get(), selectedClip.duration.get(), selectedClip.layer.get()));
+                    this.grabbedData.add(new Vector3i(selectedClip.tick.get(), selectedClip.layer.get(), selectedClip.duration.get()));
                 }
 
                 return true;
@@ -1088,8 +1096,8 @@ public class UIClips extends UIElement
         if (shift && !this.hasEmbeddedView())
         {
             this.selecting = true;
-            this.lastX = mouseX;
-            this.lastY = mouseY;
+
+            this.setMouse(mouseX, mouseY);
 
             return true;
         }
@@ -1143,8 +1151,7 @@ public class UIClips extends UIElement
         else
         {
             this.scrolling = true;
-            this.lastX = mouseX;
-            this.lastY = mouseY;
+            this.setMouse(mouseX, mouseY);
 
             return true;
         }
@@ -1245,37 +1252,217 @@ public class UIClips extends UIElement
         }
         else if (this.grabbing)
         {
-            int relativeX = this.fromGraphX(mouseX) - this.fromGraphX(this.lastX);
-            int relativeY = this.fromLayerY(mouseY) - this.fromLayerY(this.lastY);
-
             if (this.canGrab)
             {
-                this.dragClips(relativeX, relativeY);
+                this.dragClips(mouseX, mouseY);
+
+                this.lastX = mouseX;
+                this.lastY = mouseY;
             }
-            else if (Math.abs(relativeX) > 1 || Math.abs(relativeY) > 1 || Window.isAltPressed())
+            else if (Math.abs(mouseX - this.initialX) > 1 || Math.abs(mouseY - this.initialY) > 1 || Window.isAltPressed())
             {
                 this.canGrab = true;
             }
         }
     }
 
-    private void dragClips(int relativeX, int relativeY)
+    private void dragClips(int mouseX, int mouseY)
     {
-        /* Collect the rest of clips for collision */
         List<Clip> others = Window.isAltPressed() ? Collections.emptyList() : this.otherClips;
-        boolean snapped = true;
+        int originalTick = this.fromGraphX(this.initialX);
+        int originalLayer = this.fromLayerY(this.initialY);
+        int targetTick = this.fromGraphX(mouseX);
+        int targetLayer = this.fromLayerY(mouseY);
+        int diffX = targetTick - originalTick;
+        int diffY = targetLayer - originalLayer;
 
-        /* Checking whether it's possible to move clips */
+        if (this.grabMode == 0)
+        {
+            /* Find the anchor that will be snapped */
+            Pair<Integer, Boolean> reference = new Pair<>(-1, false);
+
+            for (int i = 0; i < this.grabbedClips.size(); i++)
+            {
+                Vector3i left = this.grabbedData.get(i);
+                int leftEnd = Math.abs(this.toGraphX(left.x) - this.initialX);
+                int rightEnd = Math.abs(this.toGraphX(left.x + left.z) - this.initialX);
+
+                if (reference.a < 0)
+                {
+                    reference.a = i;
+                    reference.b = Math.min(leftEnd, rightEnd) == leftEnd;
+                }
+                else
+                {
+                    Vector3i ref = this.grabbedData.get(reference.a);
+                    int refLeftEnd = Math.abs(this.toGraphX(ref.x) - this.initialX);
+                    int refRightEnd = Math.abs(this.toGraphX(ref.x + ref.z) - this.initialX);
+
+                    int closest = Math.min(
+                        leftEnd, Math.min(rightEnd,
+                            Math.min(refLeftEnd, refRightEnd)
+                        )
+                    );
+
+                    if (closest == leftEnd || closest == rightEnd)
+                    {
+                        reference.a = i;
+                        reference.b = closest == leftEnd;
+                    }
+                }
+            }
+
+            /* Apply snapping */
+            if (reference.a >= 0)
+            {
+                Vector3i ref = this.grabbedData.get(reference.a);
+                int duration = reference.b ? 0 : ref.z;
+                int original = ref.x + duration + diffX;
+                int target = this.snap(original);
+
+                diffX += target - original;
+            }
+
+            /* Handle collision */
+            int direction = 0;
+
+            while (diffX != 0 || diffY != 0)
+            {
+                if (!this.collectIntersection(others, diffX, diffY))
+                {
+                    break;
+                }
+
+                if (direction % 2 == 0 && diffX != 0) diffX -= (int) Math.copySign(1, diffX);
+                if (direction % 2 == 1 && diffY != 0) diffY -= (int) Math.copySign(1, diffY);
+
+                direction += 1;
+            }
+
+            /* Move clips */
+            for (int i = 0; i < this.grabbedClips.size(); i++)
+            {
+                Clip clip = this.grabbedClips.get(i);
+                Vector3i grabbedData = this.grabbedData.get(i);
+                int newTick = grabbedData.x + diffX;
+                int newDuration = grabbedData.z;
+                int newLayer = grabbedData.y + diffY;
+
+                this.setClipData(clip, newTick, newLayer, newDuration);
+            }
+        }
+        else if (this.grabMode == 1)
+        {
+            Clip clip = this.getLastSelectedClip();
+            Vector3i grabbedData = this.grabbedData.get(this.grabbedData.size() - 1);
+            int newTick = grabbedData.x + diffX;
+            int newDuration = grabbedData.z - diffX;
+            int max = 0;
+
+            /* Find the closest left point to which clip's left side can be moved to */
+            for (Clip other : others)
+            {
+                int right = other.tick.get() + other.duration.get();
+
+                if (other.layer.get().intValue() == clip.layer.get().intValue() && right <= grabbedData.x)
+                {
+                    max = Math.max(max, right);
+                }
+            }
+
+            /* Snap */
+            int tick = newTick;
+            int snap = this.snap(tick);
+
+            if (tick != snap)
+            {
+                newDuration += newTick - snap;
+                newTick = snap;
+            }
+
+            /* Limit to maximum allowed and duration 1 */
+            if (newTick < max)
+            {
+                newDuration += newTick - max;
+                newTick = max;
+            }
+
+            if (newDuration < 1)
+            {
+                newDuration = 1;
+                newTick = grabbedData.x + grabbedData.z - 1;
+            }
+
+            this.setClipData(clip, newTick, grabbedData.y, newDuration);
+        }
+        else if (this.grabMode == 2)
+        {
+            Clip clip = this.getLastSelectedClip();
+            Vector3i grabbedData = this.grabbedData.get(this.grabbedData.size() - 1);
+            int newTick = grabbedData.x;
+            int newDuration = grabbedData.z + diffX;
+            int min = Integer.MAX_VALUE;
+
+            /* Find the closest right point to which clip's right side can be moved to */
+            for (Clip other : others)
+            {
+                int left = other.tick.get();
+
+                if (other.layer.get().intValue() == clip.layer.get().intValue() && left >= grabbedData.x + grabbedData.z)
+                {
+                    min = Math.min(min, left);
+                }
+            }
+
+            /* Snap */
+            int tick = newTick + newDuration;
+            int snap = this.snap(tick);
+
+            if (tick != snap)
+            {
+                newDuration = snap - newTick;
+            }
+
+            /* Limit to maximum allowed and duration 1 */
+            if (newTick + newDuration >= min)
+            {
+                newDuration = min - newTick;
+            }
+
+            if (newDuration < 1)
+            {
+                newDuration = 1;
+                newTick = grabbedData.x;
+            }
+
+            this.setClipData(clip, newTick, grabbedData.y, newDuration);
+        }
+
+        this.delegate.fillData();
+    }
+
+    private void setClipData(Clip clip, int newTick, int newLayer, int newDuration)
+    {
+        if (clip.tick.get() != newTick && clip.duration.get() != newDuration)
+        {
+            clip.shiftLeft(newTick);
+        }
+
+        clip.tick.set(newTick);
+        clip.duration.set(newDuration);
+        clip.layer.set(newLayer);
+    }
+
+    private boolean collectIntersection(List<Clip> others, int diffX, int diffY)
+    {
         for (int i = 0; i < this.grabbedClips.size(); i++)
         {
             Vector3i grabbedData = this.grabbedData.get(i);
-            SnappingResult newClipData = this.applyGrab(grabbedData.x, grabbedData.y, grabbedData.z, relativeX, relativeY, snapped);
 
-            int newTick = newClipData.tick;
-            int newDuration = newClipData.duration;
-            int newLayer = newClipData.layer;
+            int newTick = grabbedData.x + diffX;
+            int newDuration = grabbedData.z;
+            int newLayer = grabbedData.y + diffY;
 
-            /* Detect clips collisions */
             for (Clip other : others)
             {
                 int otherTick = other.tick.get();
@@ -1286,134 +1473,40 @@ public class UIClips extends UIElement
 
                 if (intersect && other.layer.get() == newLayer)
                 {
-                    relativeX = 0;
-                    relativeY = 0;
+                    return true;
                 }
             }
 
-            if (newTick < 0) relativeX = 0;
-            if (newLayer >= this.layers) relativeY = 0;
-
-            if (newClipData.snapping)
-            {
-                snapped = false;
-
-                relativeX = newClipData.tick - grabbedData.x;
-                relativeY = newClipData.layer - grabbedData.z;
-            }
+            if (newTick < 0) return true;
+            if (newLayer < 0) return true;
         }
 
-        if (relativeX == 0 && relativeY == 0)
-        {
-            return;
-        }
-
-        /* Move clips */
-        for (int i = 0; i < this.grabbedClips.size(); i++)
-        {
-            Clip clip = this.grabbedClips.get(i);
-            Vector3i grabbedData = this.grabbedData.get(i);
-            SnappingResult newClipData = this.applyGrab(grabbedData.x, grabbedData.y, grabbedData.z, relativeX, relativeY, true);
-
-            if (clip.tick.get() != newClipData.tick && clip.duration.get() != newClipData.duration)
-            {
-                clip.shiftLeft(newClipData.tick);
-            }
-
-            clip.tick.set(newClipData.tick);
-            clip.duration.set(newClipData.duration);
-            clip.layer.set(newClipData.layer);
-        }
-
-        this.delegate.fillData();
+        return false;
     }
 
-    private SnappingResult applyGrab(int newTick, int newDuration, int newLayer, int relativeX, int relativeY, boolean doISnap)
+    private int snap(int tick)
     {
-        boolean snapping = false;
-
-        if (this.grabMode == 0)
-        {
-            int n = this.snap(newTick + relativeX, doISnap);
-
-            if (n != newTick + relativeX)
-            {
-                newTick = n;
-                snapping = true;
-            }
-            else
-            {
-                n = this.snap(newTick + newDuration + relativeX, doISnap);
-
-                if (n != newTick + newDuration + relativeX)
-                {
-                    newTick = n - newDuration;
-                    snapping = true;
-                }
-                else
-                {
-                    newTick += relativeX;
-                }
-            }
-
-            newLayer += relativeY;
-        }
-        else if (this.grabMode == 1 && newDuration - relativeX > 0)
-        {
-            if (newTick + relativeX < 0)
-            {
-                relativeX -= newTick + relativeX;
-            }
-
-            int n = this.snap(newTick + relativeX, doISnap);
-
-            if (n != newTick + relativeX)
-            {
-                newDuration -= n - newTick;
-                newTick = n;
-                snapping = true;
-            }
-            else
-            {
-                newTick += relativeX;
-                newDuration -= relativeX;
-            }
-        }
-        else if (this.grabMode == 2)
-        {
-            newDuration = newDuration + relativeX;
-
-            int snap = this.snap(newTick + newDuration, doISnap);
-
-            newDuration = Math.max(snap - newTick, 1);
-
-            if (snap != newTick + newDuration)
-            {
-                snapping = true;
-            }
-        }
-
-        return new SnappingResult(newTick, newDuration, newLayer, snapping);
-    }
-
-    private int snap(int tick, boolean doISnap)
-    {
-        if (Window.isAltPressed() || !doISnap)
+        if (Window.isAltPressed())
         {
             return tick;
         }
 
+        int diff = 11;
+        int closest = tick;
+
         for (int point : this.snappingPoints)
         {
             int pointX = this.toGraphX(point);
+            int abs = Math.abs(this.toGraphX(tick) - pointX);
 
-            if (Math.abs(this.toGraphX(tick) - pointX) <= 10)
+            if (abs <= 10 && abs < diff)
             {
-                return point;
+                closest = point;
+                diff = abs;
             }
         }
 
-        return tick;
+        return closest;
     }
 
     private void captureSelection(Area area)
@@ -1655,22 +1748,6 @@ public class UIClips extends UIElement
             context.batcher.gradientVBox(minX, y, maxX, this.area.ey(), Colors.mulRGB(0x0000ffff, alpha), Colors.mulRGB(0xaa0088ff, alpha));
             context.batcher.box(minX, y, minX + 1, this.area.ey(), color);
             context.batcher.box(maxX - 1, y, maxX, this.area.ey(), color);
-        }
-    }
-
-    public static class SnappingResult
-    {
-        public int tick;
-        public int duration;
-        public int layer;
-        public boolean snapping;
-
-        public SnappingResult(int tick, int duration, int layer, boolean snapping)
-        {
-            this.tick = tick;
-            this.duration = duration;
-            this.layer = layer;
-            this.snapping = snapping;
         }
     }
 }
