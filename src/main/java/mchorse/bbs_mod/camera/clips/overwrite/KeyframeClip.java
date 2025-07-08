@@ -4,10 +4,13 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.CameraClip;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.settings.values.ValueBoolean;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.ClipContext;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
+import org.joml.Vector3f;
 
 /**
  * Keyframe fixture
@@ -24,6 +27,7 @@ public class KeyframeClip extends CameraClip
     public final KeyframeChannel<Double> pitch = new KeyframeChannel<>("pitch", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> roll = new KeyframeChannel<>("roll", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> fov = new KeyframeChannel<>("fov", KeyframeFactories.DOUBLE);
+    public final KeyframeChannel<Double> distance = new KeyframeChannel<>("distance", KeyframeFactories.DOUBLE);
     public final ValueBoolean additive = new ValueBoolean("additive", false);
 
     public KeyframeChannel<Double>[] channels;
@@ -32,7 +36,7 @@ public class KeyframeClip extends CameraClip
     {
         super();
 
-        this.channels = new KeyframeChannel[] {this.x, this.y, this.z, this.yaw, this.pitch, this.roll, this.fov};
+        this.channels = new KeyframeChannel[] {this.x, this.y, this.z, this.yaw, this.pitch, this.roll, this.fov, this.distance};
 
         for (KeyframeChannel<Double> channel : this.channels)
         {
@@ -80,6 +84,23 @@ public class KeyframeClip extends CameraClip
             if (!this.pitch.isEmpty()) position.angle.pitch = this.pitch.interpolate(t).floatValue();
             if (!this.roll.isEmpty()) position.angle.roll = this.roll.interpolate(t).floatValue();
             if (!this.fov.isEmpty()) position.angle.fov = this.fov.interpolate(t).floatValue();
+
+            if (!this.distance.isEmpty())
+            {
+                double distance = this.distance.interpolate(t);
+
+                if (distance != 0D)
+                {
+                    Vector3f rotation = Matrices.rotation(
+                        MathUtils.toRad(position.angle.pitch),
+                        MathUtils.toRad(-position.angle.yaw - 180)
+                    );
+
+                    position.point.x += rotation.x * distance;
+                    position.point.y += rotation.y * distance;
+                    position.point.z += rotation.z * distance;
+                }
+            }
         }
     }
 

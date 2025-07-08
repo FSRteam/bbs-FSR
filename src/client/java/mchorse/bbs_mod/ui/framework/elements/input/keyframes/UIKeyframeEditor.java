@@ -20,10 +20,8 @@ import java.util.function.Function;
 
 public class UIKeyframeEditor extends UIElement
 {
-    public static final int[] COLORS = {Colors.RED, Colors.GREEN, Colors.BLUE, Colors.CYAN, Colors.MAGENTA, Colors.YELLOW, Colors.LIGHTEST_GRAY & 0xffffff};
+    public static final int[] COLORS = {Colors.RED, Colors.GREEN, Colors.BLUE, Colors.CYAN, Colors.MAGENTA, Colors.YELLOW, Colors.LIGHTEST_GRAY & 0xffffff, Colors.DEEP_PINK};
     public static final CameraAxisConverter CONVERTER = new CameraAxisConverter();
-
-    private static Map<Class, Integer> scrolls = new HashMap<>();
 
     public UIKeyframes view;
     public UIKeyframeFactory editor;

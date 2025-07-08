@@ -11,7 +11,10 @@ import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Vector3f;
 
 public class UIKeyframeClip extends UIClip<KeyframeClip>
 {
@@ -78,15 +81,33 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
     @Override
     public void editClip(Position position)
     {
+        Position newPos = position.copy();
         long tick = this.editor.getCursor() - this.clip.tick.get();
 
-        this.clip.x.insert(tick, position.point.x);
-        this.clip.y.insert(tick, position.point.y);
-        this.clip.z.insert(tick, position.point.z);
-        this.clip.yaw.insert(tick, (double) position.angle.yaw);
-        this.clip.pitch.insert(tick, (double) position.angle.pitch);
-        this.clip.roll.insert(tick, (double) position.angle.roll);
-        this.clip.fov.insert(tick, (double) position.angle.fov);
+        if (!this.clip.distance.isEmpty())
+        {
+            double distance = this.clip.distance.interpolate(tick);
+
+            if (distance != 0D)
+            {
+                Vector3f rotation = Matrices.rotation(
+                    MathUtils.toRad(newPos.angle.pitch),
+                    MathUtils.toRad(-newPos.angle.yaw - 180)
+                );
+
+                newPos.point.x -= rotation.x * distance;
+                newPos.point.y -= rotation.y * distance;
+                newPos.point.z -= rotation.z * distance;
+            }
+        }
+
+        this.clip.x.insert(tick, newPos.point.x);
+        this.clip.y.insert(tick, newPos.point.y);
+        this.clip.z.insert(tick, newPos.point.z);
+        this.clip.yaw.insert(tick, (double) newPos.angle.yaw);
+        this.clip.pitch.insert(tick, (double) newPos.angle.pitch);
+        this.clip.roll.insert(tick, (double) newPos.angle.roll);
+        this.clip.fov.insert(tick, (double) newPos.angle.fov);
     }
 
     @Override
