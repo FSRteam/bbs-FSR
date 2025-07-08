@@ -6,6 +6,7 @@ import java.util.Objects;
 
 public class Link
 {
+    public static final String ASSETS = "assets";
     public static final String SOURCE_SEPARATOR = ":";
 
     public final String source;
@@ -13,9 +14,14 @@ public class Link
 
     protected Integer hash;
 
+    public static boolean isAssets(Link link)
+    {
+        return link.source.equals(ASSETS);
+    }
+
     public static Link assets(String path)
     {
-        return new Link("assets", path);
+        return new Link(ASSETS, path);
     }
 
     public static Link bbs(String path)
@@ -29,7 +35,7 @@ public class Link
 
         if (index < 0)
         {
-            return new Link("assets", full);
+            return new Link(ASSETS, full);
         }
 
         return new Link(full.substring(0, index), full.substring(index + 1));

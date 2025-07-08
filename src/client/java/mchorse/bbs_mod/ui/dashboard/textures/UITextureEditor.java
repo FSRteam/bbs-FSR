@@ -114,27 +114,19 @@ public class UITextureEditor extends UIPixelsEditor
             this::saveTexture
         );
 
-        String text = this.texture.toString();
-        int index = text.lastIndexOf('.');
-
-        panel.text.setText(text);
-
         UIOverlay.addOverlay(this.getContext(), panel);
 
-        if (index >= 0)
-        {
-            int path = text.lastIndexOf('/');
+        String text = this.texture.toString();
 
-            panel.text.textbox.moveCursorTo(index);
-            panel.text.textbox.setSelection(path >= 0 ? path + 1 : 0);
-        }
+        panel.text.setText(text);
+        panel.text.textbox.selectFilename();
     }
 
     private void saveTexture(String path)
     {
         Link link = Link.create(path);
 
-        if (!link.source.equals("assets") || !link.path.endsWith(".png"))
+        if (!Link.isAssets(link) || !link.path.endsWith(".png"))
         {
             this.getContext().notifyError(UIKeys.TEXTURES_SAVE_WRONG_PATH);
 

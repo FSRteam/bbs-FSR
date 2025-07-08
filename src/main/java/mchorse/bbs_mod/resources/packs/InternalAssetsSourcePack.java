@@ -31,7 +31,7 @@ public class InternalAssetsSourcePack implements ISourcePack
 
     public InternalAssetsSourcePack()
     {
-        this("assets", "assets/bbs/assets", InternalAssetsSourcePack.class);
+        this(Link.ASSETS, "assets/bbs/assets", InternalAssetsSourcePack.class);
     }
 
     public InternalAssetsSourcePack(String prefix, String internalPrefix, Class clazz)

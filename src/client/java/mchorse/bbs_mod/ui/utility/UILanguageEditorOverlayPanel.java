@@ -181,7 +181,7 @@ public class UILanguageEditorOverlayPanel extends UIOverlayPanel
 
         for (Link link : l10n.getAllLinks(lang))
         {
-            if (link.source.equals("assets") && link.path.startsWith("lang_editor/"))
+            if (Link.isAssets(link) && link.path.startsWith("lang_editor/"))
             {
                 continue;
             }

@@ -382,7 +382,7 @@ public class BBSMod implements ModInitializer
 
         actions = new ActionManager();
 
-        originalSourcePack = new ExternalAssetsSourcePack("assets", assetsFolder).providesFiles();
+        originalSourcePack = new ExternalAssetsSourcePack(Link.ASSETS, assetsFolder).providesFiles();
         dynamicSourcePack = new DynamicSourcePack(originalSourcePack);
         provider = new AssetProvider();
         provider.register(dynamicSourcePack);

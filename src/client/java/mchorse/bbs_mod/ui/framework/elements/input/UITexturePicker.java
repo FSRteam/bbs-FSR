@@ -9,6 +9,7 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.importers.IImportPathProvider;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.resources.packs.URLSourcePack;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.textures.UITextureEditor;
@@ -21,6 +22,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UIFileLinkList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIFilteredLinkList;
 import mchorse.bbs_mod.ui.framework.elements.input.multilink.UIMultiLinkEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
@@ -31,17 +33,22 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.Direction;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 import mchorse.bbs_mod.utils.resources.FilteredLink;
 import mchorse.bbs_mod.utils.resources.LinkUtils;
 import mchorse.bbs_mod.utils.resources.MultiLink;
+import org.apache.commons.io.IOUtils;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -132,7 +139,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
                 menu.action(Icons.COPY, UIKeys.TEXTURES_COPY, () -> Window.setClipboard(this.current.toString()));
             }
 
-            // TODO: menu.action(Icons.DOWNLOAD, IKey.raw("Download skin..."), null);
+            menu.action(Icons.DOWNLOAD, UIKeys.TEXTURES_DOWNLOAD, () -> this.download(""));
         });
         this.close = new UIIcon(Icons.CLOSE, (b) -> this.close());
         this.folder = new UIIcon(Icons.FOLDER, (b) -> this.openFolder());
@@ -306,6 +313,67 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
     private void pasteLink(Link location)
     {
         this.setMulti(location, true);
+    }
+
+    private void download(String inputUrl)
+    {
+        Link path = this.picker.path;
+
+        if (!Link.isAssets(path))
+        {
+            return;
+        }
+
+        UITextbox textboxFilename = new UITextbox();
+        UITextbox textboxUrl = new UITextbox(1000, (t) ->
+        {
+            String newFilename = StringUtils.fileName(t).replaceAll("[^\\w\\d_\\-.]+", "");
+
+            textboxFilename.setText(newFilename);
+        });
+        UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.TEXTURES_DOWNLOAD_TITLE, UIKeys.TEXTURES_DOWNLOAD_DESCRIPTION, (b) ->
+        {
+            if (b)
+            {
+                String url = textboxUrl.getText();
+                String filename = textboxFilename.getText();
+                Link urlLink = path.combine(filename);
+
+                try (InputStream stream = URLSourcePack.downloadImage(Link.create(url)))
+                {
+                    File file = BBSMod.getProvider().getFile(urlLink);
+
+                    try (OutputStream outputStream = new FileOutputStream(file))
+                    {
+                        IOUtils.copy(stream, outputStream);
+                    }
+                }
+                catch (Exception e)
+                {}
+            }
+        });
+
+        if (!inputUrl.isEmpty())
+        {
+            String newFilename = StringUtils.fileName(inputUrl).replaceAll("[^\\w\\d_\\-.]+", "");
+
+            textboxUrl.setText(inputUrl);
+            textboxFilename.setText(newFilename);
+            textboxFilename.textbox.selectFilename();
+        }
+
+        textboxFilename.placeholder(UIKeys.TEXTURES_DOWNLOAD_FILENAME);
+        textboxUrl.placeholder(UIKeys.TEXTURES_DOWNLOAD_URL);
+
+        textboxFilename.relative(panel.confirm).y(-5).w(1F).anchorY(1F);
+        textboxUrl.relative(textboxFilename).y(-5).w(1F).anchorY(1F);
+        panel.confirm.w(1F, -10);
+        panel.content.add(textboxFilename, textboxUrl);
+
+        UIContext context = this.getContext();
+
+        UIOverlay.addOverlay(context, panel);
+        context.focus(textboxFilename);
     }
 
     public void close()
@@ -624,6 +692,12 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
         else if (context.isPressed(GLFW.GLFW_KEY_ESCAPE) && this.canBeClosed)
         {
             this.close();
+
+            return true;
+        }
+        else if (context.isPressed(Keys.PASTE.getMainKey()) && Window.isCtrlPressed())
+        {
+            this.download(Window.getClipboard());
 
             return true;
         }

@@ -8,7 +8,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 
 public abstract class UIBaseTextbox extends UIElement implements IFocusedUIElement
 {
-    public Textbox textbox;
+    public final Textbox textbox;
 
     public UIBaseTextbox()
     {

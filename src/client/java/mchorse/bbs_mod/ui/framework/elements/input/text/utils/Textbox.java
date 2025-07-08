@@ -236,6 +236,19 @@ public class Textbox
         return matcher.findGroup(direction, this.text, offset);
     }
 
+    public void selectFilename()
+    {
+        int index = this.text.lastIndexOf('.');
+
+        if (index >= 0)
+        {
+            int filePath = this.text.lastIndexOf('/');
+
+            this.moveCursorTo(index);
+            this.setSelection(filePath >= 0 ? filePath + 1 : 0);
+        }
+    }
+
     public void moveCursorTo(int cursor)
     {
         this.cursor = cursor;
