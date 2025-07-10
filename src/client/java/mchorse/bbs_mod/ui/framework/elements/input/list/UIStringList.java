@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -20,7 +20,7 @@ public class UIStringList extends UIList<String>
     @Override
     protected boolean sortElements()
     {
-        Collections.sort(this.list);
+        this.list.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
 
         return true;
     }

@@ -5,9 +5,9 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.DataPath;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -244,7 +244,16 @@ public class UIDataPathList extends UIList<DataPath>
     @Override
     protected boolean sortElements()
     {
-        this.list.sort(Comparator.comparing(DataPath::toString));
+        this.list.sort((a, b) ->
+        {
+            if (a.folder && !b.folder) return -1;
+            if (b.folder && !a.folder) return 1;
+
+            if (a.toString().endsWith("/..")) return -1;
+            if (b.toString().endsWith("/..")) return 1;
+
+            return NaturalOrderComparator.compare(true, a.toString(), b.toString());
+        });
 
         return true;
     }

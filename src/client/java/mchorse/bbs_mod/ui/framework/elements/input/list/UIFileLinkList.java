@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 
@@ -141,7 +142,7 @@ public class UIFileLinkList extends UIList<UIFileLinkList.FileLink>
                 return a.folder ? -1 : 1;
             }
 
-            return a.title.compareTo(b.title);
+            return NaturalOrderComparator.compare(true, a.title, b.title);
         });
 
         return true;

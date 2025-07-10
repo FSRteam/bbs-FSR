@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.resources.FilteredLink;
 
 import java.util.List;
@@ -17,7 +18,7 @@ public class UIFilteredLinkList extends UIList<FilteredLink>
     @Override
     protected boolean sortElements()
     {
-        this.list.sort((a, b) -> a.toString().compareToIgnoreCase(b.toString()));
+        this.list.sort((a, b) -> NaturalOrderComparator.compare(true, a.toString(), b.toString()));
 
         return true;
     }

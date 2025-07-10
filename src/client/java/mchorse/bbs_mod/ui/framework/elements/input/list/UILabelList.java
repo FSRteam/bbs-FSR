@@ -3,8 +3,8 @@ package mchorse.bbs_mod.ui.framework.elements.input.list;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Label;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -51,7 +51,7 @@ public class UILabelList <T> extends UIList<Label<T>>
     @Override
     protected boolean sortElements()
     {
-        Collections.sort(this.list, (a, b) -> a.title.get().compareToIgnoreCase(b.title.get()));
+        this.list.sort((a, b) -> NaturalOrderComparator.compare(true, a.title.get(), b.title.get()));
 
         return true;
     }
