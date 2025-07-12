@@ -226,7 +226,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
                                 file.getParentFile().mkdirs();
                                 WaveWriter.write(file, wave);
-                                clip.audio.set(Link.assets("audio/" + file.getName()));
+                                clip.audio.set(Link.assets("audio/" + t + ".wav"));
                                 clip.duration.set((int) (wave.getDuration() * 20));
                                 clip.layer.set(clips.getTopLayer() + 1);
 
@@ -250,6 +250,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 );
 
                 panel.text.setText(StringUtils.createTimestampFilename());
+                panel.text.path();
 
                 UIOverlay.addOverlay(context, panel);
             });

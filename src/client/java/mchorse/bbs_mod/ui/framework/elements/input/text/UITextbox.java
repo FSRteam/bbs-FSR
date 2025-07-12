@@ -18,6 +18,7 @@ import java.util.function.Predicate;
 public class UITextbox extends UIBaseTextbox implements ITextColoring
 {
     public static final Predicate<String> FILENAME_PREDICATE = (s) -> Patterns.FILENAME.matcher(s).find();
+    public static final Predicate<String> PATH_PREDICATE = (s) -> Patterns.PATH.matcher(s).find();
 
     public Consumer<String> callback;
 
@@ -47,6 +48,11 @@ public class UITextbox extends UIBaseTextbox implements ITextColoring
     public UITextbox filename()
     {
         return this.validator(FILENAME_PREDICATE);
+    }
+
+    public UITextbox path()
+    {
+        return this.validator(PATH_PREDICATE);
     }
 
     public UITextbox validator(Predicate<String> validator)

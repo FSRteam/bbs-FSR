@@ -5,5 +5,6 @@ import java.util.regex.Pattern;
 public class Patterns
 {
     public static final Pattern FILENAME = Pattern.compile("^[\\p{L}\\d-_.\\[\\]!@#$%^&()]*$");
+    public static final Pattern PATH = Pattern.compile("^[\\\\/\\p{L}\\d-_.\\[\\]!@#$%^&()]*$");
     public static final Pattern UNICODE_CHARACTER = Pattern.compile("\\\\u([\\da-zA-Z]{4})");
 }
