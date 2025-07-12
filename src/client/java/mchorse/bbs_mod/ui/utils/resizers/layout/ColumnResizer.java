@@ -64,7 +64,12 @@ public class ColumnResizer extends AutomaticResizer
 
     public ColumnResizer vertical()
     {
-        this.vertical = true;
+        return this.vertical(true);
+    }
+
+    public ColumnResizer vertical(boolean vertical)
+    {
+        this.vertical = vertical;
 
         return this;
     }

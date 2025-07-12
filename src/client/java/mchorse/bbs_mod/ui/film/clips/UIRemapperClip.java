@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
+import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
 
@@ -50,7 +51,7 @@ public class UIRemapperClip extends UIClip<RemapperClip>
     {
         super.registerPanels();
 
-        this.panels.add(UIClip.label(UIKeys.C_CLIP.get("bbs:remapper")).marginTop(12), this.edit);
+        this.panels.add(UI.column(UIClip.label(UIKeys.C_CLIP.get("bbs:remapper")), this.edit).marginTop(12));
     }
 
     @Override

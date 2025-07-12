@@ -60,8 +60,8 @@ public class UIPathClip extends UIClip<PathClip>
     {
         super.registerPanels();
 
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_PATH_POINTS).marginTop(12));
-        this.panels.add(this.points, UI.row(this.interpPoint, this.interpAngle).marginBottom(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_PATH_POINTS), this.points).marginTop(12));
+        this.panels.add(UI.row(this.interpPoint, this.interpAngle).marginBottom(6));
         this.panels.add(this.point.marginTop(12), this.angle.marginTop(6));
         this.panels.context((menu) -> UICameraUtils.positionContextMenu(menu, editor, this.position));
     }

@@ -56,6 +56,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
+import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.utils.TimeUtilsClient;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -172,9 +173,9 @@ public abstract class UIClip <T extends Clip> extends UIElement
         this.envelope = new UIEnvelope(this);
         this.envelope.channel.setUndoId("envelope_keyframes");
 
-        this.panels = UI.scrollView(5, 10);
+        this.panels = new UIScrollView(ScrollDirection.HORIZONTAL);
         this.panels.scroll.cancelScrolling();
-        this.panels.full(this);
+        this.panels.full(this).column(5).scroll().width(140).padding(10);
 
         this.registerUI();
         this.registerPanels();
@@ -189,14 +190,14 @@ public abstract class UIClip <T extends Clip> extends UIElement
     {
         this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_TITLE), this.title);
         this.panels.add(this.enabled.marginBottom(6));
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_METRICS), UI.row(this.layer, this.tick), this.duration);
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_METRICS), UI.row(this.layer, this.tick), this.duration));
 
         this.addEnvelopes();
     }
 
     protected void addEnvelopes()
     {
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_ENVELOPES_TITLE).marginTop(12), this.envelope);
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_ENVELOPES_TITLE), this.envelope).marginTop(12));
     }
 
     public void handleUndo(IUndo<ValueGroup> undo, boolean redo)

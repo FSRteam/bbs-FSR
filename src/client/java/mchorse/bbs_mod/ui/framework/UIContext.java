@@ -125,8 +125,6 @@ public class UIContext implements IViewportStack
 
     public void reset()
     {
-        this.lastScrollUpdate = false;
-
         this.viewportStack.reset();
         this.resetTooltip();
     }
@@ -148,12 +146,18 @@ public class UIContext implements IViewportStack
 
     public void updateScroll()
     {
-        this.lastScroll = System.currentTimeMillis();
+        if (this.lastScrollUpdate)
+        {
+            this.lastScroll = System.currentTimeMillis();
+            this.lastScrollUpdate = false;
+        }
     }
 
     public boolean hasNotScrolledForMore(long millis)
     {
-        return System.currentTimeMillis() - this.lastScroll > millis;
+        long l = System.currentTimeMillis() - this.lastScroll;
+
+        return l > millis;
     }
 
     /* Keys */
@@ -257,10 +261,7 @@ public class UIContext implements IViewportStack
 
     public void postRender()
     {
-        if (this.lastScrollUpdate)
-        {
-            this.updateScroll();
-        }
+        this.updateScroll();
 
         this.tooltip.render(this);
         this.notifications.render(this);

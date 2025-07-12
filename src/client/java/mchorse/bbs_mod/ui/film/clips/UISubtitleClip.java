@@ -109,14 +109,14 @@ public class UISubtitleClip extends UIClip<SubtitleClip>
     {
         super.registerPanels();
 
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_OFFSET).marginTop(6), UI.row(this.x, this.y));
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_SIZE).marginTop(6), this.size, this.color);
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_ANCHOR).marginTop(6), UI.row(this.anchorX, this.anchorY));
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_WINDOW).marginTop(6), UI.row(this.windowX, this.windowY));
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_BACKGROUND).marginTop(6), this.background, this.backgroundOffset);
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_SHADOW).marginTop(6), this.shadow, this.shadowOpaque);
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_TRANSFORM).marginTop(6), this.transform);
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_CONSTRAINT).marginTop(6), UI.row(this.lineHeight, this.maxWidth));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_OFFSET), UI.row(this.x, this.y)).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_SIZE), this.size, this.color).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_ANCHOR), UI.row(this.anchorX, this.anchorY)).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_WINDOW), UI.row(this.windowX, this.windowY)).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_BACKGROUND), this.background, this.backgroundOffset).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_SHADOW), this.shadow, this.shadowOpaque).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_TRANSFORM), this.transform).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_CONSTRAINT), UI.row(this.lineHeight, this.maxWidth)).marginTop(6));
     }
 
     @Override

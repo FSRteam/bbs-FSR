@@ -62,12 +62,10 @@ public class UIOrbitClip extends UIClip<OrbitClip>
         super.registerPanels();
 
         this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_TARGET).marginTop(12), this.selector);
-        this.panels.add(this.absolute.marginBottom(12));
-        this.panels.add(this.copy);
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_DISTANCE), this.distance);
-        this.panels.add(UIClip.label(UIKeys.CAMERA_PANELS_ANGLE));
-        this.panels.add(UI.row(5, 0, 20, this.yaw, this.pitch));
-        this.panels.add(this.offset);
+        this.panels.add(this.absolute, this.copy);
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_DISTANCE), this.distance).marginTop(12));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_ANGLE), UI.row(5, 0, 20, this.yaw, this.pitch)).marginTop(12));
+        this.panels.add(this.offset.marginTop(12));
     }
 
     @Override
