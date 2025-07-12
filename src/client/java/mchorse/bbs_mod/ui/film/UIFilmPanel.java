@@ -224,6 +224,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                                 AudioClientClip clip = new AudioClientClip();
                                 Clips clips = this.cameraEditor.clips.getClips();
 
+                                file.getParentFile().mkdirs();
                                 WaveWriter.write(file, wave);
                                 clip.audio.set(Link.assets("audio/" + file.getName()));
                                 clip.duration.set((int) (wave.getDuration() * 20));
