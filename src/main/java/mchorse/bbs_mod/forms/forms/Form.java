@@ -15,8 +15,8 @@ import mchorse.bbs_mod.forms.properties.IntegerProperty;
 import mchorse.bbs_mod.forms.properties.StringProperty;
 import mchorse.bbs_mod.forms.properties.TransformProperty;
 import mchorse.bbs_mod.utils.pose.Transform;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.player.PlayerEntity;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -134,7 +134,7 @@ public abstract class Form implements IMapSerializable
 
     /* Morphing */
 
-    public void onMorph(PlayerEntity entity)
+    public void onMorph(LivingEntity entity)
     {
         float hp = this.hp.get();
         float speed = this.speed.get();
@@ -149,7 +149,7 @@ public abstract class Form implements IMapSerializable
         if (stepHeight != 0.5F) entity.setStepHeight(stepHeight);
     }
 
-    public void onDemorph(PlayerEntity entity)
+    public void onDemorph(LivingEntity entity)
     {
         entity.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(20F);
         entity.setHealth(20F);
