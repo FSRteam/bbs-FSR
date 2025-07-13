@@ -261,7 +261,7 @@ public class Supporters
         this.add("鱼大少爷").withDate(2025, 5, 11);
         this.add("雪之星阿雪").withDate(2025, 5, 11);
         this.add("墨家痕", "https://space.bilibili.com/594917622").withDate(2025, 5, 15);
-        this.add("不可思议极东酱", "https://space.bilibili.com/2099739", "textures/banners/jiguangzi.png").withDate(2025, 5, 16);
+        this.add("极光子", "https://space.bilibili.com/2099739", "textures/banners/jiguangzi.png").withDate(2025, 5, 16);
 
         /* Patreon */
         this.add("terbin", "https://www.youtube.com/channel/UCD4X2slLdD_WJxlW03JPVQQ", "...").withDate(2, 23);
