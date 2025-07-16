@@ -206,54 +206,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.cameraEditor.clips.context((menu) ->
         {
-            UIContext context = this.getContext();
-
-            menu.action(Icons.SOUND, UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE, () ->
-            {
-                UIPromptOverlayPanel panel = new UIPromptOverlayPanel(
-                    UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_TITLE,
-                    UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_DESCRIPTION,
-                    (t) ->
-                    {
-                        UIElement overlay = context.menu.overlay;
-                        OpenALRecorder recorder = new OpenALRecorder((wave) ->
-                        {
-                            try
-                            {
-                                File file = new File(BBSMod.getAudioFolder(), t + ".wav");
-                                AudioClientClip clip = new AudioClientClip();
-                                Clips clips = this.cameraEditor.clips.getClips();
-
-                                file.getParentFile().mkdirs();
-                                WaveWriter.write(file, wave);
-                                clip.audio.set(Link.assets("audio/" + t + ".wav"));
-                                clip.duration.set((int) (wave.getDuration() * 20));
-                                clip.layer.set(clips.getTopLayer() + 1);
-
-                                clips.addClip(clip);
-                                this.cameraEditor.clips.clearSelection();
-                                this.cameraEditor.clips.pickClip(clip);
-                            }
-                            catch (Exception e)
-                            {}
-                        });
-                        UIAudioRecorder audioRecorder = new UIAudioRecorder(recorder);
-
-                        audioRecorder.full(overlay);
-                        audioRecorder.resize();
-                        overlay.add(audioRecorder);
-
-                        Thread thread = new Thread(recorder, "Супер классный, я записываю твой микрофон хихихи :3");
-
-                        thread.start();
-                    }
-                );
-
-                panel.text.setText(StringUtils.createTimestampFilename());
-                panel.text.path();
-
-                UIOverlay.addOverlay(context, panel);
-            });
+            UIAudioRecorder.addOption(this, menu);
         });
 
         this.replayEditor = new UIReplaysEditor(this);

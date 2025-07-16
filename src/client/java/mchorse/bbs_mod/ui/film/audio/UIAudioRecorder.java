@@ -1,17 +1,31 @@
 package mchorse.bbs_mod.ui.film.audio;
 
+import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.audio.wav.WaveWriter;
+import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
+import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import org.lwjgl.glfw.GLFW;
 
+import java.io.File;
+
 public class UIAudioRecorder extends UIElement
 {
+    private static String lastInput = "";
+
     private final OpenALRecorder recorder;
     private float volume;
 
@@ -20,6 +34,64 @@ public class UIAudioRecorder extends UIElement
         this.recorder = recorder;
 
         this.eventPropagataion(EventPropagation.BLOCK);
+    }
+
+    public static void addOption(UIFilmPanel filmPanel, ContextMenuManager menu)
+    {
+        UIContext context = filmPanel.getContext();
+        String timestampFilename = StringUtils.createTimestampFilename();
+        String value = lastInput.isEmpty() ? timestampFilename : lastInput;
+
+        menu.action(Icons.SOUND, UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE, () ->
+        {
+            UIPromptOverlayPanel panel = new UIPromptOverlayPanel(
+                UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_TITLE,
+                UIKeys.CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_DESCRIPTION,
+                (t) ->
+                {
+                    String newT = t.isEmpty() ? timestampFilename : t;
+
+                    UIElement overlay = context.menu.overlay;
+                    OpenALRecorder recorder = new OpenALRecorder((wave) ->
+                    {
+                        try
+                        {
+                            File file = new File(BBSMod.getAudioFolder(), newT + ".wav");
+                            AudioClientClip clip = new AudioClientClip();
+                            Clips clips = filmPanel.cameraEditor.clips.getClips();
+
+                            file.getParentFile().mkdirs();
+                            WaveWriter.write(file, wave);
+                            clip.audio.set(Link.assets("audio/" + newT + ".wav"));
+                            clip.duration.set((int) (wave.getDuration() * 20));
+                            clip.layer.set(clips.getTopLayer() + 1);
+
+                            clips.addClip(clip);
+                            filmPanel.cameraEditor.clips.clearSelection();
+                            filmPanel.cameraEditor.clips.pickClip(clip);
+
+                            lastInput = newT.equals(value) ? "" : newT;
+                        }
+                        catch (Exception e)
+                        {}
+                    });
+                    UIAudioRecorder audioRecorder = new UIAudioRecorder(recorder);
+
+                    audioRecorder.full(overlay);
+                    audioRecorder.resize();
+                    overlay.add(audioRecorder);
+
+                    Thread thread = new Thread(recorder, "Супер классный, я записываю твой микрофон хихихи :3");
+
+                    thread.start();
+                }
+            );
+
+            panel.text.setText(value);
+            panel.text.path();
+
+            UIOverlay.addOverlay(context, panel);
+        });
     }
 
     @Override
