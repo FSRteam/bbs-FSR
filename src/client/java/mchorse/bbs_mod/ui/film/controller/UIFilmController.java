@@ -17,6 +17,7 @@ import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
+import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -966,6 +967,22 @@ public class UIFilmController extends UIElement
             int w = font.getWidth(label);
 
             context.batcher.textCard(label, x - w, y, Colors.WHITE, Colors.A50);
+
+            Form form = replay.form.get();
+
+            if (form != null)
+            {
+                x -= w + 35;
+                y -= 5;
+
+                context.batcher.clip(x, y - 10, 40, 40, context);
+
+                y -= 10;
+
+                FormUtilsClient.renderUI(form, context, x, y, x + 40, y + 40);
+
+                context.batcher.unclip(context);
+            }
         }
 
         this.renderPickingPreview(context, area);
