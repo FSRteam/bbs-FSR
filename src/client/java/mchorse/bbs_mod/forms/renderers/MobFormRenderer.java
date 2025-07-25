@@ -201,6 +201,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             compound.putString("id", id);
             this.entity.readNbt(compound);
+            this.entity.noClip = true;
         }
     }
 
@@ -389,6 +390,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.entity.equipStack(EquipmentSlot.LEGS, entity.getEquipmentStack(EquipmentSlot.LEGS));
             this.entity.equipStack(EquipmentSlot.FEET, entity.getEquipmentStack(EquipmentSlot.FEET));
             this.entity.age = entity.getAge();
+            this.entity.noClip = true;
 
             this.prevYawHead = entity.getHeadYaw() - entity.getBodyYaw();
             this.prevPitch = entity.getPitch();
