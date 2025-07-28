@@ -139,16 +139,9 @@ public class Lerps
      */
     public static float normalizeYaw(float a, float b)
     {
-        float diff = a - b;
+        float diff = ((b - a) % 360 + 540) % 360 - 180;
 
-        if (diff > 180 || diff < -180)
-        {
-            diff = Math.copySign(360 - Math.abs(diff), diff);
-
-            return a + diff;
-        }
-
-        return b;
+        return a + diff;
     }
 
     /**
@@ -293,20 +286,14 @@ public class Lerps
 
     /**
      * Normalize yaw rotation (argument {@code b}) based on the previous
-     * yaw rotation.
+     * yaw rotation {@code a}, such that the result is the closest
+     * equivalent angle to {@code b} relative to {@code a}.
      */
     public static double normalizeYaw(double a, double b)
     {
-        double diff = a - b;
+        double diff = ((b - a) % 360 + 540) % 360 - 180;
 
-        if (diff > 180 || diff < -180)
-        {
-            diff = Math.copySign(360 - Math.abs(diff), diff);
-
-            return a + diff;
-        }
-
-        return b;
+        return a + diff;
     }
 
     /**
