@@ -22,6 +22,8 @@ import net.minecraft.state.StateManager;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.ItemScatterer;
+import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.BlockView;
@@ -130,5 +132,25 @@ public class ModelBlock extends Block implements BlockEntityProvider, Waterlogga
     public FluidState getFluidState(BlockState state)
     {
         return state.get(Properties.WATERLOGGED) ? Fluids.WATER.getStill(false) : super.getFluidState(state);
+    }
+
+    @Override
+    public void afterBreak(World world, PlayerEntity player, BlockPos pos, BlockState state, BlockEntity be, ItemStack tool)
+    {
+        if (!world.isClient && !player.getAbilities().creativeMode)
+        {
+            if (be instanceof ModelBlockEntity model)
+            {
+                ItemStack stack = new ItemStack(this);
+                NbtCompound wrapper = new NbtCompound();
+
+                wrapper.put("BlockEntityTag", model.createNbtWithId());
+                stack.setNbt(wrapper);
+
+                ItemScatterer.spawn(world, pos, DefaultedList.ofSize(1, stack));
+            }
+        }
+
+        super.afterBreak(world, player, pos, state, be, tool);
     }
 }
