@@ -388,9 +388,14 @@ public class Scroll
 
     public boolean mouseScroll(UIContext context)
     {
-        context.markUpdateScroll();
+        boolean canceled = this.mouseScroll(context.mouseX, context.mouseY, context.mouseWheel);
 
-        return this.mouseScroll(context.mouseX, context.mouseY, context.mouseWheel);
+        if (canceled)
+        {
+            context.markUpdateScroll();
+        }
+
+        return canceled;
     }
 
     /**

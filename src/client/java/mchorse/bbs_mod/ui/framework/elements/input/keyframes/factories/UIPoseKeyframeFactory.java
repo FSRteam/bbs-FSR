@@ -6,7 +6,6 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
-import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -234,19 +233,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dx = (float) (x - this.getTransform().translate.x);
             float dy = (float) (y - this.getTransform().translate.y);
             float dz = (float) (z - this.getTransform().translate.z);
-            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                if (altPressed && axis == Axis.X) poseT.translate.x = (float) x;
-                else if (altPressed && axis == Axis.Y) poseT.translate.y = (float) y;
-                else if (altPressed && axis == Axis.Z) poseT.translate.z = (float) z;
-                else
-                {
-                    poseT.translate.x += dx;
-                    poseT.translate.y += dy;
-                    poseT.translate.z += dz;
-                }
+                poseT.translate.x += dx;
+                poseT.translate.y += dy;
+                poseT.translate.z += dz;
             });
         }
 
@@ -256,19 +248,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dx = (float) (x - this.getTransform().scale.x);
             float dy = (float) (y - this.getTransform().scale.y);
             float dz = (float) (z - this.getTransform().scale.z);
-            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                if (altPressed && axis == Axis.X) poseT.scale.x = (float) x;
-                else if (altPressed && axis == Axis.Y) poseT.scale.y = (float) y;
-                else if (altPressed && axis == Axis.Z) poseT.scale.z = (float) z;
-                else
-                {
-                    poseT.scale.x += dx;
-                    poseT.scale.y += dy;
-                    poseT.scale.z += dz;
-                }
+                poseT.scale.x += dx;
+                poseT.scale.y += dy;
+                poseT.scale.z += dz;
             });
         }
 
@@ -278,19 +263,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dx = MathUtils.toRad((float) x) - this.getTransform().rotate.x;
             float dy = MathUtils.toRad((float) y) - this.getTransform().rotate.y;
             float dz = MathUtils.toRad((float) z) - this.getTransform().rotate.z;
-            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                if (altPressed && axis == Axis.X) poseT.rotate.x = (float) x;
-                else if (altPressed && axis == Axis.Y) poseT.rotate.y = (float) y;
-                else if (altPressed && axis == Axis.Z) poseT.rotate.z = (float) z;
-                else
-                {
-                    poseT.rotate.x += dx;
-                    poseT.rotate.y += dy;
-                    poseT.rotate.z += dz;
-                }
+                poseT.rotate.x += dx;
+                poseT.rotate.y += dy;
+                poseT.rotate.z += dz;
             });
         }
 
@@ -300,19 +278,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dx = MathUtils.toRad((float) x) - this.getTransform().rotate2.x;
             float dy = MathUtils.toRad((float) y) - this.getTransform().rotate2.y;
             float dz = MathUtils.toRad((float) z) - this.getTransform().rotate2.z;
-            boolean altPressed = Window.isAltPressed();
 
             UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.getGroup(), (poseT) ->
             {
-                if (altPressed && axis == Axis.X) poseT.rotate2.x = (float) x;
-                else if (altPressed && axis == Axis.Y) poseT.rotate2.y = (float) y;
-                else if (altPressed && axis == Axis.Z) poseT.rotate2.z = (float) z;
-                else
-                {
-                    poseT.rotate2.x += dx;
-                    poseT.rotate2.y += dy;
-                    poseT.rotate2.z += dz;
-                }
+                poseT.rotate2.x += dx;
+                poseT.rotate2.y += dy;
+                poseT.rotate2.z += dz;
             });
         }
     }
