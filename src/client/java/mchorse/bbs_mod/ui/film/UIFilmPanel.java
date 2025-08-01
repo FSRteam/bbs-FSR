@@ -362,7 +362,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             @Override
             protected boolean subMouseScrolled(UIContext context)
             {
-                if (Window.isCtrlPressed())
+                if (Window.isCtrlPressed() && !UIFilmPanel.this.isFlying())
                 {
                     int magnitude = Window.isShiftPressed() ? BBSSettings.editorJump.get() : 1;
                     int newCursor = UIFilmPanel.this.getCursor() + (int) Math.copySign(magnitude, context.mouseWheel);
