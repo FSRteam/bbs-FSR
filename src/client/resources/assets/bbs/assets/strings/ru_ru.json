@@ -1,5 +1,4 @@
 {
-
     "bbs.config.appearance.axes_scale": "Масштаб осей",
     "bbs.config.appearance.axes_scale-comment": "Определяет размер осей, если оси слишком большие, Вы можете изменить их размер по Вашему усмотрению",
     "bbs.config.appearance.click_sound": "Звуки кликов",
@@ -330,6 +329,11 @@
     "bbs.ui.camera.timeline.context.cut": "Обрезать клип(ы)",
     "bbs.ui.camera.timeline.context.from_player_recording": "Из записи игрока...",
     "bbs.ui.camera.timeline.context.paste": "Вставить клип(ы)",
+    "bbs.ui.camera.timeline.context.record_microphone": "Записать микрофон...",
+    "bbs.ui.camera.timeline.context.record_microphone-description": "Введите имя файла для записанного аудио трека:",
+    "bbs.ui.camera.timeline.context.record_microphone-label": "Записывается... %.2f",
+    "bbs.ui.camera.timeline.context.record_microphone-sublabel": "Нажмите Esc чтобы остановить!",
+    "bbs.ui.camera.timeline.context.record_microphone-title": "Записать микрофон",
     "bbs.ui.camera.timeline.context.remove_clips": "Удалить клип(ы)",
     "bbs.ui.camera.timeline.context.reorganize": "Реорганизовать клипы",
     "bbs.ui.camera.timeline.context.shift": "Переместить клип к курсору",
@@ -917,9 +921,8 @@
     "bbs.ui.textures.discard-title": "Подождите!",
     "bbs.ui.textures.download": "Скачать текстуру по URL...",
     "bbs.ui.textures.download-description": "Введите URL текстуры которую вы хотите скачать:",
-    "bbs.ui.textures.download.filename": "Имя файла",
     "bbs.ui.textures.download-title": "Скачать по URL",
-    "bbs.ui.textures.download.url": "URL",
+    "bbs.ui.textures.download.filename": "Имя файла",
     "bbs.ui.textures.edit": "Редактировать текстуру...",
     "bbs.ui.textures.export": "Экспортировать текстуру в файл...",
     "bbs.ui.textures.export_frames-title": "Экспортировать кадры",
