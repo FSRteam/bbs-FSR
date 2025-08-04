@@ -293,8 +293,7 @@ public class ServerNetwork
 
                 if (film != null)
                 {
-                    BBSMod.getActions().startRecording(film, player, tick, countdown);
-                    BBSMod.getActions().play(player, player.getServerWorld(), film, tick, countdown, replayId);
+                    BBSMod.getActions().startRecording(film, player, tick, countdown, replayId);
                 }
             }
             else

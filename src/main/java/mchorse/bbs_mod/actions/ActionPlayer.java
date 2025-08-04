@@ -29,6 +29,7 @@ public class ActionPlayer
     public int countdown;
     public int exception;
     public boolean syncing;
+    public boolean stopDamage = true;
 
     private ServerPlayerEntity serverPlayer;
     private ServerWorld world;

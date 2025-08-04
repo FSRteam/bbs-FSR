@@ -39,7 +39,11 @@ public class ActionManager
 
             if (tick)
             {
-                this.stopDamage(player.getWorld());
+                if (player.stopDamage)
+                {
+                    this.stopDamage(player.getWorld());
+                }
+
                 player.stop();
             }
 
@@ -117,8 +121,12 @@ public class ActionManager
 
     /* Actions recording */
 
-    public void startRecording(Film film, ServerPlayerEntity entity, int tick, int countdown)
+    public void startRecording(Film film, ServerPlayerEntity entity, int tick, int countdown, int replayId)
     {
+        ActionPlayer play = this.play(entity, entity.getServerWorld(), film, replayId);
+
+        play.stopDamage = false;
+
         this.recorders.put(entity, new ActionRecorder(film, tick, countdown));
     }
 
@@ -142,6 +150,7 @@ public class ActionManager
         ActionRecorder remove = this.recorders.remove(entity);
 
         this.stop(remove.getFilm().getId());
+        this.stopDamage(entity.getServerWorld());
 
         return remove;
     }
