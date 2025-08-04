@@ -44,6 +44,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
@@ -66,7 +67,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 {
     private static Map<Class, Supplier<UIForm>> panels = new HashMap<>();
 
-    private static final int TREE_WIDTH = 140;
+    private static int treeWidth = 140;
     private static boolean TOGGLED = true;
 
     public UIFormPalette palette;
@@ -145,7 +146,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
             });
 
         this.formsArea = new UIElement();
-        this.formsArea.relative(this).x(20).w(TREE_WIDTH).h(1F);
+        this.formsArea.relative(this).x(20).w(treeWidth).h(1F);
 
         this.forms = new UIForms((l) -> this.pickForm(l.get(0)));
         this.forms.relative(this.formsArea).w(1F).h(0.5F);
@@ -215,6 +216,17 @@ public class UIFormEditor extends UIElement implements IUIFormList
         this.formsArea.add(background, this.forms, this.bodyPartData);
         this.editArea.add(this.finish, this.toggleSidebar);
         this.add(this.editArea, this.formsArea);
+
+        UIDraggable draggable = new UIDraggable((context) ->
+        {
+            treeWidth = MathUtils.clamp(context.mouseX - this.formsArea.area.x, 100, 400);
+
+            this.formsArea.w(treeWidth).resize();
+        });
+
+        draggable.hoverOnly();
+        draggable.relative(this.formsArea).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        this.formsArea.add(draggable);
 
         this.pick.keys().register(Keys.FORMS_EDIT, this.pick::clickItself);
     }
