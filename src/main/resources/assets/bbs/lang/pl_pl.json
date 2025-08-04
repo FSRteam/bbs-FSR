@@ -16,10 +16,13 @@
     "key.bbs.demorph": "Demorfuj",
     "key.bbs.open_replays": "Otwórz bieżące powtórki",
     "key.bbs.open_morphing": "Otwórz menu morfingu",
-    "key.bbs.play_film": "Odtwórz film",
+    "key.bbs.play_film": "Włącz film",
+    "key.bbs.pause_film": "Zatrzymaj film",
     "key.bbs.record_replay": "Nagraj bieżącą powtórkę",
     "key.bbs.record_video": "Nagraj wideo",
     "key.bbs.teleport": "Teleportuj do bieżącej powtórki",
     "key.bbs.zoom": "Zoom (Pistoletu BBS)",
-    "category.bbs.main": "BBS mod"
+    "category.bbs.main": "BBS mod",
+
+    "gamerule.bbsEditing": "Pozwolenia na edycję modu BBS"
 }
