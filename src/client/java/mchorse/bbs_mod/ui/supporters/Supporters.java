@@ -535,7 +535,7 @@ public class Supporters
         this.add("zenozz BTS", "...").withDate(6, 28);
         this.add("DraKhaos").withDate(7, 1);
         this.add("Neotrix").withDate(7, 2);
-        this.add("Nederlander_Khan").withDate(7, 3);
+        this.add("Kahn_IK").withDate(7, 3);
         this.add("REHDM").withDate(7, 3);
         this.add("GoldenNooby").withDate(7, 4);
         this.add("wa tashi").withDate(7, 4);
@@ -668,6 +668,8 @@ public class Supporters
         this.add("Nick The Skeleton", "https://www.youtube.com/@NickTheSkeletonn").withDate(2025, 5, 17);
         this.add("Aethics", "https://www.youtube.com/@AethicsYT", "textures/banners/aesthics.png").withDate(2025, 5, 17);
         this.add("Strafverfolgung", "https://www.tiktok.com/@httpstrafverfolgung").withDate(2025, 5, 18);
+        this.add("Mayor05", "https://www.youtube.com/@Mayor05", "...").withDate(2025, 8, 5);
+        this.add("Tasin", "https://youtube.com/@Tasin", "textures/banners/tasin.png").withDate(2025, 8, 5);
 
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod?
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod? Also, you can provide a link to your social media account (like YouTube, Twitter, TikTok, etc.)
