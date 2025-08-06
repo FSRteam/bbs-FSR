@@ -143,14 +143,7 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
     @Override
     public boolean shouldRender(double distance)
     {
-        double d = this.getBoundingBox().getAverageSideLength();
-
-        if (Double.isNaN(d))
-        {
-            d = 1D;
-        }
-
-        return distance < (d * 256D) * (d * 256D);
+        return true;
     }
 
     @Override
