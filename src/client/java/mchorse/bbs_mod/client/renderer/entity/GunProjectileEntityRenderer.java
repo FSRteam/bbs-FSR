@@ -58,5 +58,4 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
 
         super.render(projectile, yaw, tickDelta, matrices, vertexConsumers, light);
     }
-
 }
