@@ -12,9 +12,12 @@ import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.util.math.BlockPos;
 import org.joml.Matrix4f;
@@ -63,6 +66,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         new Vector4f(0, 0, 0, 1)
     };
     private Vector3f vector = new Vector3f();
+    private Vector3f n = new Vector3f();
 
     public ParticleComponentAppearanceBillboard()
     {}
@@ -264,7 +268,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
     {}
 
     @Override
-    public void render(ParticleEmitter emitter, Particle particle, BufferBuilder builder, Matrix4f matrix, float transition)
+    public void render(ParticleEmitter emitter, VertexFormat format, Particle particle, BufferBuilder builder, Matrix4f matrix, int overlay, float transition)
     {
         this.calculateUVs(particle, emitter, transition);
 
@@ -340,16 +344,25 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.transform.mul(this.rotation);
         }
 
+        if (format != VertexFormats.POSITION_TEXTURE_COLOR_LIGHT)
+        {
+            this.n.set(0F, 0F, 1F);
+
+            Matrices.EMPTY_3F.set(this.transform).transform(this.n);
+            this.n.normalize();
+        }
+
         this.rotation.identity();
         this.rotation.rotateZ(angle / 180 * (float) Math.PI);
         this.transform.mul(this.rotation);
+
         this.transform.scale(scale);
         this.transform.setTranslation(new Vector3f((float) px, (float) py, (float) pz));
 
-        this.build(builder, matrix, particle);
+        this.build(builder, format, matrix, particle, overlay);
     }
 
-    private void build(BufferBuilder builder, Matrix4f matrix, Particle particle)
+    private void build(BufferBuilder builder, VertexFormat format, Matrix4f matrix, Particle particle, int overlay)
     {
         float u1 = this.u1 / (float) this.textureWidth;
         float u2 = this.u2 / (float) this.textureWidth;
@@ -361,21 +374,36 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.transform.transform(vertex);
         }
 
-        this.writeVertex(builder, matrix, this.vertices[0], u2, v2, particle);
-        this.writeVertex(builder, matrix, this.vertices[1], u1, v2, particle);
-        this.writeVertex(builder, matrix, this.vertices[2], u1, v1, particle);
-        this.writeVertex(builder, matrix, this.vertices[2], u1, v1, particle);
-        this.writeVertex(builder, matrix, this.vertices[3], u2, v1, particle);
-        this.writeVertex(builder, matrix, this.vertices[0], u2, v2, particle);
+        this.writeVertex(builder, format, matrix, this.vertices[0], u2, v2, overlay, particle);
+        this.writeVertex(builder, format, matrix, this.vertices[1], u1, v2, overlay, particle);
+        this.writeVertex(builder, format, matrix, this.vertices[2], u1, v1, overlay, particle);
+        this.writeVertex(builder, format, matrix, this.vertices[2], u1, v1, overlay, particle);
+        this.writeVertex(builder, format, matrix, this.vertices[3], u2, v1, overlay, particle);
+        this.writeVertex(builder, format, matrix, this.vertices[0], u2, v2, overlay, particle);
     }
 
-    private void writeVertex(BufferBuilder builder, Matrix4f matrix, Vector4f vertex, float u, float v, Particle particle)
+    private void writeVertex(BufferBuilder builder, VertexFormat format, Matrix4f matrix, Vector4f vertex, float u, float v, int overlay, Particle particle)
     {
-        builder.vertex(matrix, vertex.x, vertex.y, vertex.z)
-            .texture(u, v)
-            .color(particle.r, particle.g, particle.b, particle.a)
-            .light(this.light)
-            .next();
+        if (format == VertexFormats.POSITION_TEXTURE_COLOR_LIGHT)
+        {
+            /* VertexFormats.POSITION_TEXTURE_COLOR_LIGHT */
+            builder.vertex(matrix, vertex.x, vertex.y, vertex.z)
+                .texture(u, v)
+                .color(particle.r, particle.g, particle.b, particle.a)
+                .light(this.light)
+                .next();
+        }
+        else
+        {
+            /* VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL */
+            builder.vertex(matrix, vertex.x, vertex.y, vertex.z)
+                .color(particle.r, particle.g, particle.b, particle.a)
+                .texture(u, v)
+                .overlay(overlay)
+                .light(this.light)
+                .normal(this.n.x, this.n.y, this.n.z)
+                .next();
+        }
     }
 
     @Override

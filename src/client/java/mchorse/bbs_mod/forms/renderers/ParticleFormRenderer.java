@@ -13,12 +13,17 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+
+import java.util.function.Supplier;
 
 public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements ITickable
 {
@@ -126,7 +131,10 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
             translation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
 
-            MinecraftClient.getInstance().gameRenderer.getLightmapTextureManager().enable();
+            GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
+
+            gameRenderer.getLightmapTextureManager().enable();
+            gameRenderer.getOverlayTexture().setupOverlayColor();
 
             context.stack.push();
             context.stack.loadIdentity();
@@ -137,11 +145,21 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             if (!BBSRendering.isIrisShadowPass())
             {
+                boolean shadersEnabled = BBSRendering.isIrisShadersEnabled();
+
+                VertexFormat format = shadersEnabled ? VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : VertexFormats.POSITION_TEXTURE_COLOR_LIGHT;
+                Supplier<ShaderProgram> shader = shadersEnabled
+                    ? this.getShader(context, GameRenderer::getRenderTypeEntityTranslucentProgram, BBSShaders::getPickerBillboardProgram)
+                    : this.getShader(context, GameRenderer::getParticleProgram, BBSShaders::getPickerParticlesProgram);
+
                 emitter.setupCameraProperties(context.camera);
-                emitter.render(this.getShader(context, GameRenderer::getParticleProgram, BBSShaders::getPickerParticlesProgram), context.stack, context.getTransition());
+                emitter.render(format, shader, context.stack, context.overlay, context.getTransition());
             }
 
             context.stack.pop();
+
+            gameRenderer.getLightmapTextureManager().disable();
+            gameRenderer.getOverlayTexture().teardownOverlayColor();
         }
     }
 

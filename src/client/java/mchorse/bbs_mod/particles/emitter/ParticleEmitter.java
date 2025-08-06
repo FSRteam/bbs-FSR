@@ -467,7 +467,7 @@ public class ParticleEmitter
     /**
      * Render all the particles in this particle emitter
      */
-    public void render(Supplier<ShaderProgram> program, MatrixStack stack, float transition)
+    public void render(VertexFormat format, Supplier<ShaderProgram> program, MatrixStack stack, int overlay, float transition)
     {
         if (this.scheme == null)
         {
@@ -487,7 +487,7 @@ public class ParticleEmitter
             BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
             this.bindTexture();
-            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_TEXTURE_COLOR_LIGHT);
+            builder.begin(VertexFormat.DrawMode.TRIANGLES, format);
 
             for (Particle particle : this.particles)
             {
@@ -496,7 +496,7 @@ public class ParticleEmitter
 
                 for (IComponentParticleRender component : renders)
                 {
-                    component.render(this, particle, builder, matrix, transition);
+                    component.render(this, format, particle, builder, matrix, overlay, transition);
                 }
             }
 
