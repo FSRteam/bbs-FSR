@@ -236,8 +236,6 @@ public abstract class UIBaseMenu
             inputRenderer.render(this, mouseX, mouseY);
         }
 
-        this.context.render.executeRunnables();
-
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
 

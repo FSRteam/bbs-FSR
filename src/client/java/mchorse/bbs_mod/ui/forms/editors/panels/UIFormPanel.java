@@ -38,7 +38,6 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
             this.draggable.resize();
         });
 
-        this.draggable.hoverOnly();
         this.draggable.relative(this.options).x(0F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
         this.add(this.options, this.draggable);

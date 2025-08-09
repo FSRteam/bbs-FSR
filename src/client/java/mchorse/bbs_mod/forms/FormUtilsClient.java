@@ -6,6 +6,7 @@ import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.FramebufferForm;
 import mchorse.bbs_mod.forms.forms.ItemForm;
 import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -19,6 +20,7 @@ import mchorse.bbs_mod.forms.renderers.BlockFormRenderer;
 import mchorse.bbs_mod.forms.renderers.ExtrudedFormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
+import mchorse.bbs_mod.forms.renderers.FramebufferFormRenderer;
 import mchorse.bbs_mod.forms.renderers.ItemFormRenderer;
 import mchorse.bbs_mod.forms.renderers.LabelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.MobFormRenderer;
@@ -85,6 +87,7 @@ public class FormUtilsClient
         register(MobForm.class, MobFormRenderer::new);
         register(VanillaParticleForm.class, VanillaParticleFormRenderer::new);
         register(TrailForm.class, TrailFormRenderer::new);
+        register(FramebufferForm.class, FramebufferFormRenderer::new);
     }
 
     private static void assignBufferBuilder(Object2ObjectLinkedOpenHashMap<RenderLayer, BufferBuilder> builderStorage, RenderLayer layer)
