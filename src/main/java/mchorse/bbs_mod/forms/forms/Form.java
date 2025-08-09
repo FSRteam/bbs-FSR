@@ -35,6 +35,7 @@ public abstract class Form implements IMapSerializable
     public final FloatProperty uiScale = new FloatProperty(this, "uiScale", 1F);
     public final BodyPartManager parts = new BodyPartManager(this);
     public final AnchorProperty anchor = new AnchorProperty(this, "anchor");
+    public final BooleanProperty shaderShadow = new BooleanProperty(this, "shaderShadow", true);
 
     /* Hitbox properties */
     public final BooleanProperty hitbox = new BooleanProperty(this, "hitbox", false);
@@ -59,6 +60,7 @@ public abstract class Form implements IMapSerializable
         this.animatable.cantAnimate();
         this.name.cantAnimate();
         this.uiScale.cantAnimate();
+        this.shaderShadow.cantAnimate();
 
         this.register(this.visible);
         this.register(this.animatable);

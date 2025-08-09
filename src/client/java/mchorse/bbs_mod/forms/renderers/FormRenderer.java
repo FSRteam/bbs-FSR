@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
@@ -76,8 +77,13 @@ public abstract class FormRenderer <T extends Form>
 
     public final void render(FormRenderingContext context)
     {
+        if (this.form.shaderShadow.get() && BBSRendering.isIrisShadowPass())
+        {
+            return;
+        }
+
         int light = context.light;
-        Boolean visible = this.form.visible.get();
+        boolean visible = this.form.visible.get();
 
         if (!visible)
         {
@@ -94,10 +100,7 @@ public abstract class FormRenderer <T extends Form>
         int v = context.light >> 16 & '\uffff';
 
         u = (int) Lerps.lerp(u, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, lf);
-
-        int packedLight = u | v << 16;
-
-        context.light = packedLight;
+        context.light = u | v << 16;
 
         this.render3D(context);
 
@@ -155,7 +158,9 @@ public abstract class FormRenderer <T extends Form>
 
         if (target != null)
         {
-            target.set(context.getPickingIndex());
+            int pickingIndex = context.getPickingIndex();
+
+            target.set(pickingIndex);
         }
     }
 
