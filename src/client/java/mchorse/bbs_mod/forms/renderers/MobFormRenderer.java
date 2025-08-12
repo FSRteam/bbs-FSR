@@ -151,7 +151,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         return super.getBones();
     }
 
-    private void bindTexture(float transition)
+    private void bindTexture()
     {
         Link link = this.form.texture.get();
 
@@ -242,7 +242,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             {
                 if (!first.bool)
                 {
-                    this.bindTexture(context.getTransition());
+                    this.bindTexture();
 
                     first.bool = true;
                 }
@@ -278,7 +278,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 {
                     if (!first.bool)
                     {
-                        this.bindTexture(context.getTransition());
+                        this.bindTexture();
                         this.setupTarget(context, BBSShaders.getPickerModelsProgram());
                         RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
 
@@ -294,7 +294,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 {
                     if (!first.bool)
                     {
-                        this.bindTexture(context.getTransition());
+                        this.bindTexture();
 
                         first.bool = true;
                     }

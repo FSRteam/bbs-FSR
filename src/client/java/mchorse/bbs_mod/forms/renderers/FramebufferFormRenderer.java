@@ -89,7 +89,6 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         int prevRead = GL30.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         Vector3f light0 = RenderSystem.shaderLightDirections[0];
         Vector3f light1 = RenderSystem.shaderLightDirections[1];
-
         Matrix4f projectionMatrix = new Matrix4f(RenderSystem.getProjectionMatrix());
 
         GL30.glCullFace(GL30.GL_FRONT);

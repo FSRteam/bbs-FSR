@@ -150,7 +150,7 @@ public class UIFilmController extends UIElement
                 world,
                 RayTracing.fromVector3d(camera.position),
                 RayTracing.fromVector3f(camera.getMouseDirection(context.mouseX, context.mouseY, area.x, area.y, area.w, area.h)),
-                64F
+                512F
             );
 
             if (result.getType() == HitResult.Type.BLOCK)

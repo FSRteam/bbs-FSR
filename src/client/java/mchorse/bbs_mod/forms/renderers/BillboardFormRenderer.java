@@ -225,6 +225,8 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         RenderSystem.enableBlend();
         BufferRenderer.drawWithGlobalProgram(builder.end());
 
+        texture.setFilterMipmap(false, false);
+
         gameRenderer.getLightmapTextureManager().disable();
         gameRenderer.getOverlayTexture().teardownOverlayColor();
     }

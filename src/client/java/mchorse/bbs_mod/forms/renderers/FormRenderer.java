@@ -5,6 +5,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.keys.KeyCodes;
@@ -42,6 +43,11 @@ public abstract class FormRenderer <T extends Form>
     public List<String> getBones()
     {
         return Collections.emptyList();
+    }
+
+    protected Texture getTexture()
+    {
+        return null;
     }
 
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)
