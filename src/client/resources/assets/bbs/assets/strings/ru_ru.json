@@ -855,6 +855,7 @@
     "bbs.ui.snowstorm.rate.spawn_rate": "Скорость появления это выраженние которое отвечает за количество выпущенных частиц в секунду",
     "bbs.ui.snowstorm.rate.steady": "Постоянный",
     "bbs.ui.snowstorm.rate.title": "Темп появления",
+    "bbs.ui.snowstorm.restart_emitter": "Перезапустить эмиттер частиц",
     "bbs.ui.snowstorm.shape.aabb": "Хитбокс сущности",
     "bbs.ui.snowstorm.shape.box": "Куб",
     "bbs.ui.snowstorm.shape.box_size": "Размер куба",

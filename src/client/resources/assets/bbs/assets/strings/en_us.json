@@ -859,6 +859,7 @@
     "bbs.ui.snowstorm.rate.spawn_rate": "Spawn rate expression determines how many particles in a second will be emitted",
     "bbs.ui.snowstorm.rate.steady": "Steady",
     "bbs.ui.snowstorm.rate.title": "Spawn rate",
+    "bbs.ui.snowstorm.restart_emitter": "Restart particle emitter",
     "bbs.ui.snowstorm.shape.aabb": "Entity's hitbox",
     "bbs.ui.snowstorm.shape.box": "Box",
     "bbs.ui.snowstorm.shape.box_size": "Box size",

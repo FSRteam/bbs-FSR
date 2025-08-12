@@ -35,6 +35,7 @@ import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSpaceSection;
 import mchorse.bbs_mod.ui.particles.utils.MolangSyntaxHighlighter;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.IOUtils;
 
 import java.io.InputStream;
@@ -79,6 +80,14 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         close.relative(this.textEditor).x(1F, -20);
         this.textEditor.add(close);
         this.overlay.namesList.setFileIcon(Icons.PARTICLE);
+
+        UIIcon restart = new UIIcon(Icons.REFRESH, (b) ->
+        {
+            this.renderer.setScheme(this.data);
+        });
+        restart.tooltip(UIKeys.SNOWSTORM_RESTART_EMITTER, Direction.LEFT);
+
+        this.iconBar.add(restart);
 
         this.addSection(new UIParticleSchemeGeneralSection(this));
         this.addSection(new UIParticleSchemeCurvesSection(this));

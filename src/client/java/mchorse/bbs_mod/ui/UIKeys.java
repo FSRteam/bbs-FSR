@@ -724,6 +724,7 @@ public class UIKeys
     public static final IKey SNOWSTORM_RATE_SPAWN_RATE = L10n.lang("bbs.ui.snowstorm.rate.spawn_rate");
     public static final IKey SNOWSTORM_RATE_STEADY = L10n.lang("bbs.ui.snowstorm.rate.steady");
     public static final IKey SNOWSTORM_RATE_TITLE = L10n.lang("bbs.ui.snowstorm.rate.title");
+    public static final IKey SNOWSTORM_RESTART_EMITTER = L10n.lang("bbs.ui.snowstorm.restart_emitter");
     public static final IKey SNOWSTORM_SHAPE_AABB = L10n.lang("bbs.ui.snowstorm.shape.aabb");
     public static final IKey SNOWSTORM_SHAPE_BOX = L10n.lang("bbs.ui.snowstorm.shape.box");
     public static final IKey SNOWSTORM_SHAPE_BOX_SIZE = L10n.lang("bbs.ui.snowstorm.shape.box_size");
