@@ -15,6 +15,8 @@ import mchorse.bbs_mod.settings.values.ValueVideoSettings;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 
+import java.util.HashSet;
+
 public class BBSSettings
 {
     public static ValueString serverId;
@@ -135,8 +137,29 @@ public class BBSSettings
         uniformScale = builder.getBoolean("uniform_scale", false);
         clickSound = builder.getBoolean("click_sound", false);
 
+        HashSet<String> defaultFilters = new HashSet<>();
+
+        defaultFilters.add("item_off_hand");
+        defaultFilters.add("item_head");
+        defaultFilters.add("item_chest");
+        defaultFilters.add("item_legs");
+        defaultFilters.add("item_feet");
+        defaultFilters.add("vX");
+        defaultFilters.add("vY");
+        defaultFilters.add("vZ");
+        defaultFilters.add("grounded");
+        defaultFilters.add("stick_rx");
+        defaultFilters.add("stick_ry");
+        defaultFilters.add("trigger_l");
+        defaultFilters.add("trigger_r");
+        defaultFilters.add("extra1_x");
+        defaultFilters.add("extra1_y");
+        defaultFilters.add("extra2_x");
+        defaultFilters.add("extra2_y");
+
         favoriteColors = new ValueColors("favorite_colors");
         disabledSheets = new ValueStringKeys("disabled_sheets");
+        disabledSheets.set(defaultFilters);
         builder.register(favoriteColors);
         builder.register(disabledSheets);
 
