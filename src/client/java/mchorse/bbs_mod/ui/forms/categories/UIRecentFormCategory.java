@@ -8,6 +8,7 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.UIFormList;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 public class UIRecentFormCategory extends UIFormCategory
 {
@@ -29,7 +30,13 @@ public class UIRecentFormCategory extends UIFormCategory
 
             if (this.selected != null)
             {
-                menu.action(Icons.REMOVE, UIKeys.FORMS_CATEGORIES_CONTEXT_REMOVE_FORM, () ->
+                menu.action(Icons.TRASH, UIKeys.FORMS_CATEGORIES_CONTEXT_REMOVE_ALL_FORM, Colors.RED, () ->
+                {
+                    this.category.getDirectForms().clear();
+                    this.select(null, false);
+                });
+
+                menu.action(Icons.REMOVE, UIKeys.FORMS_CATEGORIES_CONTEXT_REMOVE_FORM, Colors.RED, () ->
                 {
                     this.category.removeForm(this.selected);
                     this.select(null, false);

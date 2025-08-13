@@ -465,6 +465,7 @@
     "bbs.ui.forms.categories.context.export_model-title": "Model exported",
     "bbs.ui.forms.categories.context.open_model_form": "Open model's folder...",
     "bbs.ui.forms.categories.context.paste_form": "Paste form",
+    "bbs.ui.forms.categories.context.remove_all_form": "Remove all forms",
     "bbs.ui.forms.categories.context.remove_category": "Remove category...",
     "bbs.ui.forms.categories.context.remove_form": "Remove this form",
     "bbs.ui.forms.categories.context.rename_category": "Rename category...",
