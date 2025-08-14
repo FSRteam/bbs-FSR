@@ -53,7 +53,7 @@ public abstract class UICanvasEditor extends UICanvas
         this.scaleY.setZoom(min);
     }
 
-    protected Vector2i getHoverPixel(int x, int y)
+    public Vector2i getHoverPixel(int x, int y)
     {
         return new Vector2i(
             (int) Math.floor(this.scaleX.from(x)) + this.w / 2,

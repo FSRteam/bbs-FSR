@@ -12,7 +12,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.resources.packs.URLSourcePack;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.textures.UITextureEditor;
+import mchorse.bbs_mod.ui.dashboard.textures.UITexturePainter;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
@@ -71,7 +71,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
     public UIButton multi;
     public UIFilteredLinkList multiList;
     public UIMultiLinkEditor editor;
-    public UITextureEditor pixelEditor;
+    public UITexturePainter pixelEditor;
 
     public UIElement buttons;
     public UIIcon add;
@@ -116,6 +116,44 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
         parent.add(picker);
 
         return picker;
+    }
+
+    public static void findAllTextures(UIContext context, Link current, Consumer<String> callback)
+    {
+        List<String> list = new ArrayList<>();
+
+        for (Link link : BBSMod.getProvider().getLinksFromPath(Link.assets("")))
+        {
+            String string = link.toString();
+
+            if (string.endsWith(".png") && !string.contains(":textures/banners/")) list.add(string);
+        }
+
+        for (Link link : BBSMod.getProvider().getLinksFromPath(new Link("http", "")))
+        {
+            String string = link.toString();
+
+            if (string.contains(".png")) list.add(string);
+        }
+
+        for (Link link : BBSMod.getProvider().getLinksFromPath(new Link("https", "")))
+        {
+            String string = link.toString();
+
+            if (string.contains(".png")) list.add(string);
+        }
+
+        UIListOverlayPanel panel = new UIListOverlayPanel(UIKeys.TEXTURE_FIND_TITLE, callback);
+
+        panel.addValues(list);
+        panel.list.list.sort();
+
+        if (current != null)
+        {
+            panel.setValue(current.toString());
+        }
+
+        UIOverlay.addOverlay(context, panel);
     }
 
     public UITexturePicker(Consumer<Link> callback)
@@ -236,43 +274,10 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         this.keys().register(Keys.TEXTURE_PICKER_FIND, () ->
         {
-            List<String> list = new ArrayList<>();
-
-            for (Link link : BBSMod.getProvider().getLinksFromPath(Link.assets("")))
-            {
-                String string = link.toString();
-
-                if (string.endsWith(".png") && !string.contains(":textures/banners/")) list.add(string);
-            }
-
-            for (Link link : BBSMod.getProvider().getLinksFromPath(new Link("http", "")))
-            {
-                String string = link.toString();
-
-                if (string.contains(".png")) list.add(string);
-            }
-
-            for (Link link : BBSMod.getProvider().getLinksFromPath(new Link("https", "")))
-            {
-                String string = link.toString();
-
-                if (string.contains(".png")) list.add(string);
-            }
-
-            UIListOverlayPanel panel = new UIListOverlayPanel(UIKeys.TEXTURE_FIND_TITLE, (s) ->
+            findAllTextures(this.getContext(), this.current, (s) ->
             {
                 this.selectCurrent(Link.create(s));
             });
-
-            panel.addValues(list);
-            panel.list.list.sort();
-
-            if (this.current != null)
-            {
-                panel.setValue(this.current.toString());
-            }
-
-            UIOverlay.addOverlay(this.getContext(), panel);
         });
 
         this.fill(null);
@@ -432,13 +437,12 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
 
         if (this.pixelEditor == null)
         {
-            this.pixelEditor = new UITextureEditor().saveCallback((l) ->
+            this.pixelEditor = new UITexturePainter((l) ->
             {
                 this.selectCurrent(l);
                 this.displayCurrent(l);
             });
             this.pixelEditor.fillTexture(this.current);
-            this.pixelEditor.setEditing(true);
 
             UIIcon close = new UIIcon(Icons.CLOSE, (b) -> this.togglePixelEditor());
 

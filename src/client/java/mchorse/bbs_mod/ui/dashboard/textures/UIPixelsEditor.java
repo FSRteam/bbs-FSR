@@ -9,8 +9,6 @@ import mchorse.bbs_mod.ui.dashboard.textures.undo.PixelsUndo;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.utils.UICanvasEditor;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -33,14 +31,9 @@ import java.util.function.Supplier;
 
 public class UIPixelsEditor extends UICanvasEditor
 {
-    public UITrackpad brightness;
-
     public UIElement toolbar;
 
     /* Tools */
-    public UIColor primary;
-    public UIColor secondary;
-
     public UIIcon undo;
     public UIIcon redo;
 
@@ -54,31 +47,23 @@ public class UIPixelsEditor extends UICanvasEditor
     private UndoManager<Pixels> undoManager;
     private PixelsUndo pixelsUndo;
 
+    private Supplier<Float> backgroundSupplier = () -> 0.7F;
+    private Supplier<Color> colorSupplier = Color::white;
+
     public UIPixelsEditor()
     {
         super();
 
-        this.brightness = new UITrackpad();
-        this.brightness.limit(0, 1).setValue(0.7);
-        this.brightness.tooltip(UIKeys.TEXTURES_VIEWER_BRIGHTNESS, Direction.TOP);
-
         this.toolbar = new UIElement();
         this.toolbar.relative(this).w(1F).h(30).row(0).resize().padding(5);
-
-        this.primary = new UIColor((c) -> {}).noLabel();
-        this.primary.direction(Direction.RIGHT).w(20);
-        this.secondary = new UIColor((c) -> {}).noLabel();
-        this.secondary.direction(Direction.RIGHT).w(20);
 
         this.undo = new UIIcon(Icons.UNDO, (b) -> this.undo());
         this.undo.tooltip(UIKeys.TEXTURES_KEYS_UNDO, Direction.BOTTOM);
         this.redo = new UIIcon(Icons.REDO, (b) -> this.redo());
         this.redo.tooltip(UIKeys.TEXTURES_KEYS_REDO, Direction.BOTTOM);
 
-        this.toolbar.add(this.primary, this.secondary.marginRight(10));
         this.toolbar.add(this.undo, this.redo);
 
-        this.editor.add(this.brightness);
         this.add(this.toolbar);
 
         IKey category = UIKeys.TEXTURES_KEYS_CATEGORY;
@@ -86,12 +71,24 @@ public class UIPixelsEditor extends UICanvasEditor
         Supplier<Boolean> editing = () -> this.editing;
 
         this.keys().register(Keys.COPY, this::copyPixel).label(UIKeys.TEXTURES_VIEWER_CONTEXT_COPY_HEX).inside().active(texture).category(category);
-        this.keys().register(Keys.PIXEL_SWAP, this::swapColors).inside().active(editing).category(category);
-        this.keys().register(Keys.PIXEL_PICK, this::pickColor).inside().active(editing).category(category);
         this.keys().register(Keys.UNDO, this::undo).inside().active(editing).category(category);
         this.keys().register(Keys.REDO, this::redo).inside().active(editing).category(category);
 
         this.setEditing(false);
+    }
+
+    public UIPixelsEditor colorSupplier(Supplier<Color> supplier)
+    {
+        this.colorSupplier = supplier;
+
+        return this;
+    }
+
+    public UIPixelsEditor backgroundSupplier(Supplier<Float> supplier)
+    {
+        this.backgroundSupplier = supplier;
+
+        return this;
     }
 
     public Pixels getPixels()
@@ -115,9 +112,6 @@ public class UIPixelsEditor extends UICanvasEditor
     public void setEditing(boolean editing)
     {
         this.editing = editing;
-
-        this.primary.setColor(0);
-        this.secondary.setColor(Colors.WHITE);
 
         this.toolbar.setVisible(editing);
 
@@ -151,26 +145,6 @@ public class UIPixelsEditor extends UICanvasEditor
             Window.setClipboard(color.stringify());
 
             UIUtils.playClick();
-        }
-    }
-
-    private void swapColors()
-    {
-        int swap = this.primary.picker.color.getRGBColor();
-
-        this.primary.setColor(this.secondary.picker.color.getRGBColor());
-        this.secondary.setColor(swap);
-    }
-
-    private void pickColor()
-    {
-        UIContext context = this.getContext();
-        Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-        Color color = this.pixels.getColor(pixel.x, pixel.y);
-
-        if (color != null)
-        {
-            this.primary.setColor(color.getRGBColor());
         }
     }
 
@@ -235,7 +209,7 @@ public class UIPixelsEditor extends UICanvasEditor
         if (this.editing && (this.mouse == 0 || this.mouse == 1) && this.pixelsUndo == null)
         {
             this.pixelsUndo = new PixelsUndo();
-            this.drawColor = this.mouse == 1 ? new Color(0, 0, 0, 0) : this.primary.picker.color;
+            this.drawColor = this.mouse == 1 ? new Color(0, 0, 0, 0) : this.colorSupplier.get();
 
             Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
 
@@ -336,7 +310,7 @@ public class UIPixelsEditor extends UICanvasEditor
     @Override
     protected void renderCheckboard(UIContext context, Area area)
     {
-        int brightness = (int) (this.brightness.getValue() * 255);
+        int brightness = (int) (this.backgroundSupplier.get() * 255);
         int color = Colors.setA(brightness << 16 | brightness << 8 | brightness, 1F);
 
         context.batcher.iconArea(Icons.CHECKBOARD, color, area.x, area.y, area.w, area.h);
@@ -351,37 +325,6 @@ public class UIPixelsEditor extends UICanvasEditor
         {
             context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.y + 10, Colors.A50);
             context.batcher.gradientVBox(this.area.x, this.area.y + 10, this.area.ex(), this.area.y + 30, Colors.A50, 0);
-        }
-
-        Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-        Color color = this.pixels.getColor(pixel.x, pixel.y);
-
-        int r = 0;
-        int g = 0;
-        int b = 0;
-        int a = 0;
-
-        if (color != null)
-        {
-            r = (int) Math.floor(color.r * 255);
-            g = (int) Math.floor(color.g * 255);
-            b = (int) Math.floor(color.b * 255);
-            a = (int) Math.floor(color.a * 255);
-        }
-
-        String[] information = {
-            this.pixels.width + "x" + this.pixels.height + " (" + pixel.x + ", " + pixel.y + ")",
-            "\u00A7cR\u00A7aG\u00A79B\u00A7rA (" + r + ", " + g + ", " + b + ", " + a + ")",
-        };
-
-        int x = this.area.x + 10;
-        int y = this.area.ey() - context.batcher.getFont().getHeight() - 10 - (information.length - 1)* 14;
-
-        for (String line : information)
-        {
-            context.batcher.textCard(line, x, y);
-
-            y += 14;
         }
     }
 }

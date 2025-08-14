@@ -6,7 +6,6 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageFolderOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -22,7 +21,6 @@ import java.util.function.Consumer;
 
 public class UITextureEditor extends UIPixelsEditor
 {
-    public UIElement savebar;
     public UIIcon save;
     public UIIcon resize;
     public UIIcon extract;
@@ -36,8 +34,6 @@ public class UITextureEditor extends UIPixelsEditor
     {
         super();
 
-        this.savebar = new UIElement();
-        this.savebar.relative(this).x(1F).h(30).anchorX(1F).row(0).resize().padding(5);
         this.save = new UIIcon(() -> this.dirty ? Icons.SAVE : Icons.SAVED, (b) -> this.saveTexture());
         this.resize = new UIIcon(Icons.FULLSCREEN, (b) ->
         {
@@ -67,10 +63,7 @@ public class UITextureEditor extends UIPixelsEditor
         });
         this.extract.tooltip(UIKeys.TEXTURES_EXTRACT_FRAMES_TITLE);
 
-        this.savebar.add(this.save);
-        this.toolbar.add(this.resize, this.extract);
-
-        this.add(this.savebar);
+        this.toolbar.add(this.resize, this.extract, this.save);
     }
 
     public UITextureEditor saveCallback(Consumer<Link> saveCallback)
