@@ -96,7 +96,7 @@ public abstract class BaseFilmController
 
         if (same)
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value.actor, value.attachment, defaultMatrix, transition);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value.actor, value.attachment, value.translate, defaultMatrix, transition);
 
             if (matrix != defaultMatrix)
             {
@@ -106,7 +106,7 @@ public abstract class BaseFilmController
         }
         else if (value.x <= 0F && value.previousActor >= -1)
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value.previousActor, value.previousAttachment, defaultMatrix, transition);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value.previousActor, value.previousAttachment, value.previousTranslate, defaultMatrix, transition);
 
             if (matrix != defaultMatrix)
             {
@@ -116,8 +116,8 @@ public abstract class BaseFilmController
         }
         else
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value.actor, value.attachment, defaultMatrix, transition);
-            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previousActor, value.previousAttachment, defaultMatrix, transition);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value.actor, value.attachment, value.translate, defaultMatrix, transition);
+            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previousActor, value.previousAttachment, value.previousTranslate, defaultMatrix, transition);
 
             if (matrix != lastMatrix)
             {
@@ -229,7 +229,7 @@ public abstract class BaseFilmController
         matrices.pop();
     }
 
-    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, int actor, String attachment, Matrix4f defaultMatrix, float transition)
+    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, int actor, String attachment, boolean translate, Matrix4f defaultMatrix, float transition)
     {
         IEntity entity = entities.get(actor);
 
@@ -251,6 +251,13 @@ public abstract class BaseFilmController
                 if (matrix != null)
                 {
                     basic.mul(matrix);
+
+                    if (translate)
+                    {
+                        basic.getTranslation(Vectors.TEMP_3F);
+                        basic.set(Matrices.TEMP_3F.set(defaultMatrix));
+                        basic.setTranslation(Vectors.TEMP_3F);
+                    }
                 }
             }
 

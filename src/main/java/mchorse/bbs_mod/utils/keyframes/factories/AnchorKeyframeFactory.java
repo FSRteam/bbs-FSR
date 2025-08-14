@@ -37,8 +37,10 @@ public class AnchorKeyframeFactory implements IKeyframeFactory<AnchorProperty.An
 
         anchor.actor = value.actor;
         anchor.attachment = value.attachment;
+        anchor.translate = value.translate;
         anchor.previousActor = value.previousActor;
         anchor.previousAttachment = value.previousAttachment;
+        anchor.previousTranslate = value.previousTranslate;
         anchor.x = value.x;
 
         return anchor;
@@ -49,9 +51,11 @@ public class AnchorKeyframeFactory implements IKeyframeFactory<AnchorProperty.An
     {
         this.i.actor = b.actor;
         this.i.attachment = b.attachment;
+        this.i.translate = b.translate;
 
         this.i.previousActor = a.actor;
         this.i.previousAttachment = a.attachment;
+        this.i.previousTranslate = a.translate;
         this.i.x = interpolation.interpolate(0F, 1F, x);
 
         return this.i;

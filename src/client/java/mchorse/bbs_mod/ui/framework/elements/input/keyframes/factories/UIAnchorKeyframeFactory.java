@@ -12,6 +12,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -29,6 +30,7 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
 {
     private UIButton actor;
     private UIButton attachment;
+    private UIToggle translate;
 
     public static void displayActors(UIContext context, IntObjectMap<IEntity> entities, int value, Consumer<Integer> callback)
     {
@@ -60,8 +62,10 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
 
         this.actor = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ACTOR, (b) -> this.displayActors());
         this.attachment = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ATTACHMENT, (b) -> this.displayAttachments());
+        this.translate = new UIToggle(UIKeys.TRANSFORMS_TRANSLATE, (b) -> this.setTranslate(b.getValue()));
+        this.translate.setValue(keyframe.getValue().translate);
 
-        this.scroll.add(this.actor, this.attachment);
+        this.scroll.add(this.actor, this.attachment, this.translate);
     }
 
     private void displayActors()
@@ -116,6 +120,11 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
     private void setAttachment(String attachment)
     {
         BaseValue.edit(this.keyframe, (value) -> value.getValue().attachment = attachment);
+    }
+
+    private void setTranslate(boolean translate)
+    {
+        BaseValue.edit(this.keyframe, (value) -> value.getValue().translate = translate);
     }
 
     private UIFilmPanel getPanel()
