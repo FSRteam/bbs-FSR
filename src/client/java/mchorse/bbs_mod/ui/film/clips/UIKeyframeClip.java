@@ -15,6 +15,8 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import org.joml.Vector3f;
 
 public class UIKeyframeClip extends UIClip<KeyframeClip>
@@ -101,13 +103,24 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
             }
         }
 
-        this.clip.x.insert(tick, newPos.point.x);
-        this.clip.y.insert(tick, newPos.point.y);
-        this.clip.z.insert(tick, newPos.point.z);
-        this.clip.yaw.insert(tick, (double) newPos.angle.yaw);
-        this.clip.pitch.insert(tick, (double) newPos.angle.pitch);
-        this.clip.roll.insert(tick, (double) newPos.angle.roll);
-        this.clip.fov.insert(tick, (double) newPos.angle.fov);
+        this.insertKeyframe(tick, this.clip.x, newPos.point.x);
+        this.insertKeyframe(tick, this.clip.y, newPos.point.y);
+        this.insertKeyframe(tick, this.clip.z, newPos.point.z);
+        this.insertKeyframe(tick, this.clip.yaw, newPos.angle.yaw);
+        this.insertKeyframe(tick, this.clip.pitch, newPos.angle.pitch);
+        this.insertKeyframe(tick, this.clip.roll, newPos.angle.roll);
+        this.insertKeyframe(tick, this.clip.fov, newPos.angle.fov);
+    }
+
+    private void insertKeyframe(long tick, KeyframeChannel<Double> keyframe, double x)
+    {
+        KeyframeSegment<Double> segment = keyframe.findSegment(tick);
+        int insert = keyframe.insert(tick, x);
+
+        if (segment != null)
+        {
+            keyframe.get(insert).getInterpolation().copy(segment.a.getInterpolation());
+        }
     }
 
     @Override
