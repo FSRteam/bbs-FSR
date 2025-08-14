@@ -1,12 +1,14 @@
 package mchorse.bbs_mod.ui.film.clips.widgets;
 
 import mchorse.bbs_mod.camera.utils.TimeUtils;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.clips.UIClip;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.context.UIInterpolationContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -25,6 +27,7 @@ public class UIEnvelope extends UIElement
     public UIClip<? extends Clip> panel;
 
     public UIToggle enabled;
+    public UICirculate mode;
     public UIButton pre;
     public UIButton post;
     public UITrackpad fadeIn;
@@ -47,6 +50,13 @@ public class UIEnvelope extends UIElement
         {
             this.panel.editor.editMultiple(this.get().enabled, (value) -> value.set(b.getValue()));
         });
+        this.mode = new UICirculate((b) ->
+        {
+            this.panel.editor.editMultiple(this.get().mode, (value) -> value.set(b.getValue()));
+        });
+        this.mode.addLabel(IKey.raw("Normal"));
+        this.mode.addLabel(IKey.raw("Fade in"));
+        this.mode.addLabel(IKey.raw("Fade out"));
         this.pre = new UIButton(UIKeys.CAMERA_PANELS_ENVELOPES_PRE, (b) ->
         {
             this.getContext().replaceContextMenu(new UIInterpolationContextMenu(this.get().pre));
@@ -94,7 +104,7 @@ public class UIEnvelope extends UIElement
     {
         this.removeAll();
 
-        this.add(this.enabled);
+        this.add(this.enabled, this.mode);
 
         if (toggled)
         {
@@ -134,6 +144,7 @@ public class UIEnvelope extends UIElement
         Envelope envelope = this.get();
 
         this.enabled.setValue(envelope.enabled.get());
+        this.mode.setValue(envelope.mode.get());
         this.fillIntervals();
         this.keyframes.setValue(envelope.keyframes.get());
         this.channel.setChannel(envelope.channel, Colors.ACTIVE);
