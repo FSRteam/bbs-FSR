@@ -232,6 +232,7 @@ public class BOBJModelVAO
         GL30.glEnableVertexAttribArray(Attributes.TEXTURE_UV);
         GL30.glEnableVertexAttribArray(Attributes.NORMAL);
 
+        if (stencilMap != null) GL30.glEnableVertexAttribArray(Attributes.LIGHTMAP_UV);
         if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
         if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
@@ -241,6 +242,7 @@ public class BOBJModelVAO
         GL30.glDisableVertexAttribArray(Attributes.TEXTURE_UV);
         GL30.glDisableVertexAttribArray(Attributes.NORMAL);
 
+        if (stencilMap != null) GL30.glDisableVertexAttribArray(Attributes.LIGHTMAP_UV);
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
