@@ -13,7 +13,6 @@ import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
-import mchorse.bbs_mod.mixin.client.iris.IrisRenderingPipelineAccessor;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -26,24 +25,25 @@ import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
+import mchorse.bbs_mod.utils.iris.ShaderCurves;
 import mchorse.bbs_mod.utils.sodium.SodiumUtils;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.impl.client.rendering.WorldRenderContextImpl;
 import net.fabricmc.loader.api.FabricLoader;
-import net.irisshaders.iris.Iris;
+import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.gl.WindowFramebuffer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.util.Window;
 import net.minecraft.client.util.math.MatrixStack;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL30;
 
 import java.io.File;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -303,25 +303,6 @@ public class BBSRendering
 
     public static void onWorldRenderBegin()
     {
-        if (Iris.getPipelineManager().getPipelineNullable() instanceof IrisRenderingPipelineAccessor accessor)
-        {
-            Set<ShaderProgram> set = accessor.bbs$loadedShaders();
-
-            for (ShaderProgram program : set)
-            {
-                int i = GL30.glGetUniformLocation(program.getGlRef(), "mchorse_cool");
-
-                if (i != -1)
-                {
-                    int lastProgram = GL30.glGetInteger(GL30.GL_CURRENT_PROGRAM);
-
-                    program.bind();
-                    GL30.glUniform1f(i, 1F);
-                    GL30.glUseProgram(lastProgram);
-                }
-            }
-        }
-
         MinecraftClient mc = MinecraftClient.getInstance();
         BBSModClient.getFilms().startRenderFrame(mc.getTickDelta());
 
@@ -492,6 +473,16 @@ public class BBSRendering
         }
 
         return IrisUtils.calculateTangents(v, n, u);
+    }
+
+    public static void addUniforms(List<CachedUniform> list, Map<String, ShaderCurves.ShaderVariable> variableMap)
+    {
+        if (!iris)
+        {
+            return;
+        }
+
+        IrisUtils.addUniforms(list, variableMap);
     }
 
     /* Time of day */

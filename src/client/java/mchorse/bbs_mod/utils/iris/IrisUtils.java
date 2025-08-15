@@ -6,13 +6,18 @@ import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import net.irisshaders.iris.api.v0.IrisApi;
+import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
 import net.irisshaders.iris.texture.TextureTracker;
 import net.irisshaders.iris.texture.pbr.loader.PBRTextureLoaderRegistry;
+import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
+import net.irisshaders.iris.uniforms.custom.cached.FloatCachedUniform;
 import net.irisshaders.iris.vertices.NormI8;
 import net.irisshaders.iris.vertices.NormalHelper;
 import net.irisshaders.iris.vertices.views.TriView;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class IrisUtils
@@ -107,6 +112,14 @@ public class IrisUtils
         }
 
         return t;
+    }
+
+    public static void addUniforms(List<CachedUniform> list, Map<String, ShaderCurves.ShaderVariable> variableMap)
+    {
+        for (ShaderCurves.ShaderVariable value : variableMap.values())
+        {
+            list.add(new FloatCachedUniform(value.uniformName, UniformUpdateFrequency.PER_FRAME, value::getValue));
+        }
     }
 
     public static class SuperTriangle implements TriView

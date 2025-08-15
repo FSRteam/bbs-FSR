@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.utils.iris;
 
+import mchorse.bbs_mod.client.BBSRendering;
 import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.FloatCachedUniform;
@@ -90,10 +91,7 @@ public class ShaderCurves
 
     public static void addUniforms(List<CachedUniform> list)
     {
-        for (ShaderVariable value : variableMap.values())
-        {
-            list.add(new FloatCachedUniform(value.uniformName, UniformUpdateFrequency.PER_FRAME, () -> value.getValue()));
-        }
+        BBSRendering.addUniforms(list, variableMap);
     }
 
     public static class ShaderVariable
