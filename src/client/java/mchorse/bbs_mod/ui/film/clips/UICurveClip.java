@@ -2,7 +2,6 @@ package mchorse.bbs_mod.ui.film.clips;
 
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
@@ -10,11 +9,14 @@ import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
-import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
-import mchorse.bbs_mod.ui.utils.icons.Icon;
-import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIStringOverlayPanel;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.iris.ShaderCurves;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class UICurveClip extends UIClip<CurveClip>
 {
@@ -42,10 +44,24 @@ public class UICurveClip extends UIClip<CurveClip>
 
         this.editKey = new UIButton(UIKeys.CAMERA_PANELS_PICK_KEY, (b) ->
         {
-            this.getContext().replaceContextMenu((menu) ->
+            List<String> list = new ArrayList<>();
+
+            for (ShaderCurves.ShaderVariable value : ShaderCurves.variableMap.values())
             {
-                this.addOption(menu, UIKeys.CAMERA_PANELS_CURVES_SUN_ROTATION, "sun_rotation", Icons.SUN);
+                list.add("curve/" + value.name);
+            }
+
+            list.add("sun_rotation");
+
+            UIStringOverlayPanel panel = new UIStringOverlayPanel(UIKeys.CAMERA_PANELS_PICK_KEY, list, (s) ->
+            {
+                this.clip.key.set(s);
             });
+
+            panel.strings.list.sort();
+            panel.set(this.clip.key.get());
+
+            UIOverlay.addOverlay(this.getContext(), panel);
         });
 
         this.edit = new UIButton(UIKeys.CAMERA_PANELS_EDIT_KEYFRAMES, (b) ->
@@ -55,11 +71,6 @@ public class UICurveClip extends UIClip<CurveClip>
             this.keyframes.view.editSheet(this.keyframes.view.getGraph().getSheets().get(0));
         });
         this.edit.keys().register(Keys.FORMS_EDIT, () -> this.edit.clickItself());
-    }
-
-    private void addOption(ContextMenuManager menu, IKey label, String key, Icon icon)
-    {
-        menu.action(icon, label, this.clip.key.get().equals(key), () -> this.clip.key.set(key));
     }
 
     @Override

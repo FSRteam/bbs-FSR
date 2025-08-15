@@ -40,8 +40,9 @@ public class CurveClip extends CameraClip
     protected void applyClip(ClipContext context, Position position)
     {
         Map<String, Double> values = getValues(context);
+        String key = this.key.get();
 
-        values.put(this.key.get(), this.channel.interpolate(context.relativeTick + context.transition));
+        values.put(key, this.channel.interpolate(context.relativeTick + context.transition));
     }
 
     @Override

@@ -30,7 +30,9 @@
         "ClientPlayerEntityAccessor",
         "iris.IrisRenderingPipelineAccessor",
         "iris.CustomUniformsBuilderMixin",
-        "iris.CustomUniformsAccessor"
+        "iris.CustomUniformsAccessor",
+        "iris.JcppProcessorMixin",
+        "iris.IrisMixin"
     ],
     "injectors": {
         "defaultRequire": 1
