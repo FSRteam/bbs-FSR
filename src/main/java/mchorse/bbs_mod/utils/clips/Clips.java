@@ -271,6 +271,14 @@ public class Clips extends ValueGroup
         return tick + (output != Integer.MIN_VALUE ? output : 0);
     }
 
+    public void shift(float tick)
+    {
+        for (Clip clip : this.clips)
+        {
+            clip.tick.set(Math.round(clip.tick.get() + tick));
+        }
+    }
+
     public void shift(double dx, double dy, double dz)
     {
         for (Clip clip : this.clips)

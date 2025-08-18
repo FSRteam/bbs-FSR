@@ -83,6 +83,7 @@ public class Replay extends ValueGroup
     {
         this.keyframes.shift(tick);
         this.properties.shift(tick);
+        this.actions.shift(tick);
     }
 
     public void applyFrame(int tick, IEntity actor)
