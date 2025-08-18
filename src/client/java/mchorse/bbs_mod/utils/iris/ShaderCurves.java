@@ -1,9 +1,7 @@
 package mchorse.bbs_mod.utils.iris;
 
 import mchorse.bbs_mod.client.BBSRendering;
-import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
-import net.irisshaders.iris.uniforms.custom.cached.FloatCachedUniform;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -78,6 +76,21 @@ public class ShaderCurves
                 String processed = matcher.group(1);
 
                 matcher.appendReplacement(sb, "bbs_" + processed);
+            }
+
+            matcher.appendTail(sb);
+
+            source = sb.toString();
+
+            /* Remove const from variables that have BBS uniforms */
+            String removeConst = "(const)( +float.*=.*bbs_.*;)";
+            pattern = Pattern.compile(removeConst);
+            matcher = pattern.matcher(source);
+            sb = new StringBuffer();
+
+            while (matcher.find())
+            {
+                matcher.appendReplacement(sb, matcher.group(2));
             }
 
             matcher.appendTail(sb);
