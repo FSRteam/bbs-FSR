@@ -88,6 +88,8 @@ public class BBSSettings
 
     public static ValueBoolean damageControl;
 
+    public static ValueBoolean shaderCurvesEnabled;
+
     public static ValueBoolean audioWaveformVisible;
     public static ValueInt audioWaveformDensity;
     public static ValueFloat audioWaveformWidth;
@@ -213,6 +215,8 @@ public class BBSSettings
         entitySelectorsPropertyWhitelist = builder.category("entity_selectors").getString("whitelist", "CustomName,Name");
 
         damageControl = builder.category("dc").getBoolean("enabled", true);
+
+        shaderCurvesEnabled = builder.category("shader_curves").getBoolean("enabled", true);
 
         builder.category("audio");
         audioWaveformVisible = builder.getBoolean("waveform_visible", true);

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.utils.iris;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 
@@ -22,6 +23,11 @@ public class ShaderCurves
 
     public static String processSource(String source)
     {
+        if (!BBSSettings.shaderCurvesEnabled.get())
+        {
+            return source;
+        }
+
         List<ShaderVariable> variables = new ArrayList<>();
 
         int index = 0;
