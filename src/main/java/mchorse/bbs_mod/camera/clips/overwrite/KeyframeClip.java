@@ -9,6 +9,7 @@ import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import org.joml.Vector3f;
 
@@ -115,9 +116,33 @@ public class KeyframeClip extends CameraClip
     {
         super.breakDownClip(original, offset);
 
+        /* Clean up keyframes prior to broken apart */
         for (KeyframeChannel<Double> channel : this.channels)
         {
             channel.moveX(-offset);
+
+            KeyframeSegment<Double> segment = channel.find(0);
+
+            if (segment != null)
+            {
+                while (segment.a != channel.get(0)) channel.remove(0);
+            }
+        }
+
+        KeyframeClip keyframeClip = (KeyframeClip) original;
+
+        /* Clean up keyframes prior to broken apart */
+        for (KeyframeChannel<Double> channel : keyframeClip.channels)
+        {
+            KeyframeSegment<Double> segment = channel.find(offset);
+
+            if (segment != null)
+            {
+                while (segment.b != channel.get(channel.getKeyframes().size() - 1))
+                {
+                    channel.remove(channel.getKeyframes().size() - 1);
+                }
+            }
         }
     }
 }
