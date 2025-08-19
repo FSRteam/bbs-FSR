@@ -537,19 +537,52 @@ public class UIClips extends UIElement
      */
     private void convertTo(Link type)
     {
-        Clip original = this.delegate.getClip();
-        ClipFactoryData data = this.factory.getData(original);
-        IClipConverter converter = data.converters.get(type);
-        Clip converted = converter.convert(original);
+        List<Clip> clipsFromSelection = this.getClipsFromSelection();
 
-        if (converted == null)
+        if (clipsFromSelection.isEmpty())
         {
             return;
         }
 
-        this.clips.remove(original);
-        this.clips.addClip(converted);
-        this.pickClip(converted);
+        for (Clip clip : clipsFromSelection)
+        {
+            if (clip.getClass() != clipsFromSelection.get(0).getClass())
+            {
+                return;
+            }
+        }
+
+        ClipFactoryData data = this.factory.getData(clipsFromSelection.get(clipsFromSelection.size() - 1));
+        IClipConverter converter = data.converters.get(type);
+        List<Clip> newClips = new ArrayList<>();
+
+        for (Clip clip : clipsFromSelection)
+        {
+            Clip converted = converter.convert(clip);
+
+            if (converted == null)
+            {
+                continue;
+            }
+
+            this.clips.remove(clip);
+            this.clips.addClip(converted);
+            newClips.add(converted);
+        }
+
+        if (newClips.isEmpty())
+        {
+            return;
+        }
+
+        this.clearSelection();
+
+        for (Clip newClip : newClips)
+        {
+            this.addSelected(newClip);
+        }
+
+        this.pickLastSelectedClip();
     }
 
     private void fromReplay(int mouseX, int mouseY)
