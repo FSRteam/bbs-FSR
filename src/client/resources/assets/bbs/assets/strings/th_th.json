@@ -253,7 +253,6 @@
     "bbs.ui.camera.panels.context.paste_position": "วางตำแหน่ง",
     "bbs.ui.camera.panels.copy_entity": "คัดลอกเอนทิตี้",
     "bbs.ui.camera.panels.copy_entity_tooltip": "คัดลอกการหมุนของศีรษะของเอนทิตี เหมือนกับการทำงานของกล้อง GoPro",
-    "bbs.ui.camera.panels.curves.sun_rotation": "การหมุนของดวงอาทิตย์",
     "bbs.ui.camera.panels.deterministic": "แบบกำหนดแน่นอน",
     "bbs.ui.camera.panels.deterministic_tooltip": "เมื่อเปิดใช้งานฟีเจอร์นี้, ระบบจะใช้อัลกอริทึมแบบกำหนดแน่นอนในการคำนวณการเคลื่อนไหวของกล้องให้ได้ผลลัพธ์ที่เรียบเนียนและสามารถทำซ้ำได้",
     "bbs.ui.camera.panels.distance": "ระยะทาง",

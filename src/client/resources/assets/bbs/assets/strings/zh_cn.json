@@ -263,7 +263,6 @@
     "bbs.ui.camera.panels.context.paste_position": "粘贴位置",
     "bbs.ui.camera.panels.copy_entity": "复制实体",
     "bbs.ui.camera.panels.copy_entity_tooltip": "复制实体的头部方向，就像 GoPros 一样",
-    "bbs.ui.camera.panels.curves.sun_rotation": "日月旋转",
     "bbs.ui.camera.panels.deterministic": "确定性",
     "bbs.ui.camera.panels.deterministic_tooltip": "当启用时，将使用确定性算法来计算可重复的平滑相机移动。",
     "bbs.ui.camera.panels.distance": "距离",

@@ -491,7 +491,7 @@ public class BBSRendering
     {
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
-            return CurveClip.getValues(controller.getContext()).containsKey("sun_rotation");
+            return CurveClip.getValues(controller.getContext()).containsKey(ShaderCurves.SUN_ROTATION);
         }
 
         return false;
@@ -501,10 +501,25 @@ public class BBSRendering
     {
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
-            return (long) (CurveClip.getValues(controller.getContext()).get("sun_rotation") * 1000L);
+            return (long) (CurveClip.getValues(controller.getContext()).get(ShaderCurves.SUN_ROTATION) * 1000L);
         }
 
         return 0L;
+    }
+
+    public static Double getBrightness()
+    {
+        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
+        {
+            Map<String, Double> values = CurveClip.getValues(controller.getContext());
+
+            if (values.containsKey(ShaderCurves.BRIGHTNESS))
+            {
+                return values.get(ShaderCurves.BRIGHTNESS);
+            }
+        }
+
+        return null;
     }
 
     public static Function<VertexConsumer, VertexConsumer> getColorConsumer(Color color)

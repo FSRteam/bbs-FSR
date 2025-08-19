@@ -235,7 +235,6 @@
     "bbs.ui.camera.panels.context.paste_position": "Coller la position",
     "bbs.ui.camera.panels.copy_entity": "Copier l'entitée",
     "bbs.ui.camera.panels.copy_entity_tooltip": "Copier l'orientation de la tête de l'entitée, exactement comme les GoPros",
-    "bbs.ui.camera.panels.curves.sun_rotation": "Rotation Jour/Nuit",
     "bbs.ui.camera.panels.deterministic": "Déterminant",
     "bbs.ui.camera.panels.deterministic_tooltip": "Quand il est activé, l'algorithme déterminant doit etre utilisé pour calculer le mouvement reproduit de la caméra de façon lisse",
     "bbs.ui.camera.panels.dolly.distance": "Distance qui détermine pour combien de blocs il doit y avoir un travelling \"dolly\" dans une direction donnée durant la durée donnée",

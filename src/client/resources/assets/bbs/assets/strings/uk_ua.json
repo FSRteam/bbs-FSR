@@ -239,7 +239,6 @@
     "bbs.ui.camera.panels.context.paste_position": "Вставити позицію",
     "bbs.ui.camera.panels.copy_entity": "Скопіювати сутність",
     "bbs.ui.camera.panels.copy_entity_tooltip": "Скопіювати орієнтацію сутності, як у GoPro",
-    "bbs.ui.camera.panels.curves.sun_rotation": "Обертання Сонця",
     "bbs.ui.camera.panels.deterministic": "Детермінований",
     "bbs.ui.camera.panels.deterministic_tooltip": "При увімкненні детермінований алгоритм буде використовуватися для розрахунку відтворюваного згладженого руху камери.",
     "bbs.ui.camera.panels.distance": "Дистанція",

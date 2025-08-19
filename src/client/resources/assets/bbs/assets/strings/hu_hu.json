@@ -252,7 +252,6 @@
     "bbs.ui.camera.panels.context.paste_position": "Pozíció beillesztés",
     "bbs.ui.camera.panels.copy_entity": "Entitás másolása",
     "bbs.ui.camera.panels.copy_entity_tooltip": "Másolja az entitás fejének tájolását, pontosan úgy, mint a GoPro-knál",
-    "bbs.ui.camera.panels.curves.sun_rotation": "Nap forgatás",
     "bbs.ui.camera.panels.deterministic": "Determinisztikus",
     "bbs.ui.camera.panels.deterministic_tooltip": "Ha engedélyezve van, determinisztikus algoritmust fog használni a reprodukálható, simított kameramozgás kiszámításához.",
     "bbs.ui.camera.panels.distance": "Távolság",

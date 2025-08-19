@@ -51,7 +51,8 @@ public class UICurveClip extends UIClip<CurveClip>
                 list.add("curve/" + value.name);
             }
 
-            list.add("sun_rotation");
+            list.add(ShaderCurves.BRIGHTNESS);
+            list.add(ShaderCurves.SUN_ROTATION);
 
             UIStringOverlayPanel panel = new UIStringOverlayPanel(UIKeys.CAMERA_PANELS_PICK_KEY, list, (s) ->
             {

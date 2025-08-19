@@ -258,7 +258,6 @@
     "bbs.ui.camera.panels.context.paste_position": "Paste position",
     "bbs.ui.camera.panels.copy_entity": "Copy entity",
     "bbs.ui.camera.panels.copy_entity_tooltip": "Copy entity's head orientation, exactly like GoPros",
-    "bbs.ui.camera.panels.curves.sun_rotation": "Sun rotation",
     "bbs.ui.camera.panels.deterministic": "Deterministic",
     "bbs.ui.camera.panels.deterministic_tooltip": "When enabled, deterministic algorithm would be used to calculate reproducible smoothed out camera movement.",
     "bbs.ui.camera.panels.distance": "Distance",

@@ -32,7 +32,8 @@
         "iris.CustomUniformsBuilderMixin",
         "iris.CustomUniformsAccessor",
         "iris.JcppProcessorMixin",
-        "iris.IrisMixin"
+        "iris.IrisMixin",
+        "SimpleOptionMixin"
     ],
     "injectors": {
         "defaultRequire": 1

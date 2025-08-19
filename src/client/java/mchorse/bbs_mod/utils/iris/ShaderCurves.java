@@ -16,6 +16,9 @@ public class ShaderCurves
 {
     public static Map<String, ShaderVariable> variableMap = new HashMap<>();
 
+    public static final String BRIGHTNESS = "brigthness";
+    public static final String SUN_ROTATION = "sun_rotation";
+
     public static void reset()
     {
         variableMap.clear();

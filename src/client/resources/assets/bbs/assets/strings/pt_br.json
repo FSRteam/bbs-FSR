@@ -245,7 +245,6 @@
     "bbs.ui.camera.panels.context.paste_position": "Colar posição",
     "bbs.ui.camera.panels.copy_entity": "Copiar Entidade",
     "bbs.ui.camera.panels.copy_entity_tooltip": "Copiar a orientação da cabeça da entidade, exatamente como GoPros",
-    "bbs.ui.camera.panels.curves.sun_rotation": "Rotação do sol",
     "bbs.ui.camera.panels.deterministic": "Determinístico",
     "bbs.ui.camera.panels.deterministic_tooltip": "Quando ativado, o algoritmo determinístico será usado para calcular o movimento reproduzído da câmera suavizada.",
     "bbs.ui.camera.panels.distance": "Distancia",

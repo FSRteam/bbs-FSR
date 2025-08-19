@@ -247,7 +247,6 @@
     "bbs.ui.camera.panels.context.paste_position": "Konumu yapıştır",
     "bbs.ui.camera.panels.copy_entity": "Entity'i kopyala",
     "bbs.ui.camera.panels.copy_entity_tooltip": "Entity'nin kafa pozisyonunu kopyala, tıpkı GoPro'lardaki gibi",
-    "bbs.ui.camera.panels.curves.sun_rotation": "Güneş dönüşü",
     "bbs.ui.camera.panels.deterministic": "Deterministik",
     "bbs.ui.camera.panels.deterministic_tooltip": "Etkinleştirildiğinde tekrarlanabilir düzgünleştirilmiş kamera hareketini hesaplamak için deterministik algoritma kullanılır.",
     "bbs.ui.camera.panels.distance": "Uzaklık",

@@ -248,7 +248,6 @@
     "bbs.ui.camera.panels.context.paste_position": "Wklej pozycję",
     "bbs.ui.camera.panels.copy_entity": "Skopiuj istotę",
     "bbs.ui.camera.panels.copy_entity_tooltip": "Skopiuj orientację głowy istoty, dokładnie tak jak GoPros",
-    "bbs.ui.camera.panels.curves.sun_rotation": "Rotacja słońca",
     "bbs.ui.camera.panels.deterministic": "Deterministyczny",
     "bbs.ui.camera.panels.deterministic_tooltip": "Po włączeniu tej opcji, algorytm deterministyczny zostanie użyty do obliczenia powtarzalnego, wygładzonego ruchu kamery.",
     "bbs.ui.camera.panels.distance": "Odległość",
