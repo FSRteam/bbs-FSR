@@ -1250,6 +1250,20 @@ public class UIClips extends UIElement
     }
 
     @Override
+    protected boolean subKeyPressed(UIContext context)
+    {
+        if (this.embedded != null && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        {
+            this.embedView(null);
+            UIUtils.playClick();
+
+            return true;
+        }
+
+        return super.subKeyPressed(context);
+    }
+
+    @Override
     public void render(UIContext context)
     {
         this.updateScrollSize();
