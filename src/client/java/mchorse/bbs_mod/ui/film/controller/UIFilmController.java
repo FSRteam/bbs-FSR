@@ -859,9 +859,26 @@ public class UIFilmController extends UIElement
                 }
             }
 
-            if (this.recordingCountdown <= 0 && !runner.isRunning())
+            if (this.recordingCountdown <= 0)
             {
-                this.stopRecording();
+                boolean stopped = !runner.isRunning();
+
+                if (BBSSettings.editorLoop.get())
+                {
+                    Vector2i loop = this.panel.getLoopingRange();
+                    int min = loop.x;
+                    int max = loop.y;
+                    int ticks = this.panel.getCursor();
+
+                    if (min >= 0 && max >= 0 && min < max && (ticks >= max - 1 || ticks < min) || stopped)
+                    {
+                        this.stopRecording();
+                    }
+                }
+                else if (stopped)
+                {
+                    this.stopRecording();
+                }
             }
         }
     }

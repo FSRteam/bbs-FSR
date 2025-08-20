@@ -2,13 +2,10 @@ package mchorse.bbs_mod.ui.utils;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.utils.OS;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.sound.SoundEvents;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
 import java.io.IOException;
@@ -107,23 +104,5 @@ public class UIUtils
         {
             MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, pitch));
         }
-    }
-
-    public static KeyCombo createCombo(IKey label, int base, int index)
-    {
-        int keys[] = new int[index > 9 ? 2 : 1];
-
-        keys[0] = base + (index % 10);
-
-        if (index >= 20)
-        {
-            keys[1] = GLFW.GLFW_KEY_LEFT_ALT;
-        }
-        else if (index >= 10)
-        {
-            keys[1] = GLFW.GLFW_KEY_LEFT_SHIFT;
-        }
-
-        return new KeyCombo(label, keys);
     }
 }

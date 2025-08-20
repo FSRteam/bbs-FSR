@@ -5,9 +5,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
-import mchorse.bbs_mod.audio.wav.WaveWriter;
 import mchorse.bbs_mod.camera.Camera;
-import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.modifiers.TranslateClip;
 import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
@@ -26,7 +24,6 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.network.ClientNetwork;
-import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.ValueEditorLayout;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
@@ -39,7 +36,6 @@ import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.overlay.UICRUDOverlayPanel;
 import mchorse.bbs_mod.ui.dashboard.utils.IUIOrbitKeysHandler;
-import mchorse.bbs_mod.ui.film.audio.OpenALRecorder;
 import mchorse.bbs_mod.ui.film.audio.UIAudioRecorder;
 import mchorse.bbs_mod.ui.film.controller.UIFilmController;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
@@ -61,7 +57,6 @@ import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
-import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
@@ -78,7 +73,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -828,6 +822,32 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
     }
 
+    public Vector2i getLoopingRange()
+    {
+        Clip clip = this.cameraEditor.getClip();
+
+        int min = -1;
+        int max = -1;
+
+        if (clip != null)
+        {
+            min = clip.tick.get();
+            max = min + clip.duration.get();
+        }
+
+        UIClips clips = this.cameraEditor.clips;
+
+        if (clips.loopMin != clips.loopMax && clips.loopMin >= 0 && clips.loopMin < clips.loopMax)
+        {
+            min = clips.loopMin;
+            max = clips.loopMax;
+        }
+
+        max = Math.min(max, this.data.camera.calculateDuration());
+
+        return new Vector2i(min, max);
+    }
+
     @Override
     public void update()
     {
@@ -937,28 +957,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         /* Loop fixture */
         if (BBSSettings.editorLoop.get() && this.isRunning())
         {
-            long min = -1;
-            long max = -1;
+            Vector2i loop = this.getLoopingRange();
+            int min = loop.x;
+            int max = loop.y;
+            int ticks = this.getCursor();
 
-            if (clip != null)
+            if (!this.recorder.isRecording() && !this.controller.isRecording() && min >= 0 && max >= 0 && min < max && (ticks >= max - 1 || ticks < min))
             {
-                min = clip.tick.get();
-                max = min + clip.duration.get();
-            }
-
-            UIClips clips = this.cameraEditor.clips;
-
-            if (clips.loopMin != clips.loopMax && clips.loopMin >= 0 && clips.loopMin < clips.loopMax)
-            {
-                min = clips.loopMin;
-                max = clips.loopMax;
-            }
-
-            max = Math.min(max, this.data.camera.calculateDuration());
-
-            if (!this.recorder.isRecording() && min >= 0 && max >= 0 && min < max && (this.runner.ticks >= max - 1 || this.runner.ticks < min) && !this.controller.isRecording())
-            {
-                this.setCursor((int) min);
+                this.setCursor(min);
             }
         }
 

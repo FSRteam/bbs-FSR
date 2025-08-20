@@ -348,35 +348,14 @@ public class UIClips extends UIElement
 
         context.replaceContextMenu((add) ->
         {
-            IKey addCategory = UIKeys.CAMERA_TIMELINE_KEYS_CLIPS;
-            int i = 0;
+            add.autoKeys(UIKeys.CAMERA_TIMELINE_KEYS_CLIPS);
 
             for (Link type : this.factory.getKeys())
             {
                 IKey typeKey = UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_CLIP_TYPE.format(UIKeys.C_CLIP.get(type));
                 ClipFactoryData data = this.factory.getData(type);
-                ContextAction action = add.action(data.icon, typeKey, data.color, () -> this.addClip(type, preview.x, preview.y, preview.z));
 
-                if (i < 30)
-                {
-                    int mod = i % 10;
-                    int key = i == 9 ? GLFW.GLFW_KEY_0 : GLFW.GLFW_KEY_1 + mod;
-
-                    if (i >= 20)
-                    {
-                        action.key(addCategory, key, GLFW.GLFW_KEY_LEFT_CONTROL);
-                    }
-                    else if (i >= 10)
-                    {
-                        action.key(addCategory, key, GLFW.GLFW_KEY_LEFT_SHIFT);
-                    }
-                    else
-                    {
-                        action.key(addCategory, key);
-                    }
-                }
-
-                i += 1;
+                add.action(data.icon, typeKey, data.color, () -> this.addClip(type, preview.x, preview.y, preview.z));
             }
 
             add.onClose((m) -> this.addPreview = null);

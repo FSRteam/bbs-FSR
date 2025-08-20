@@ -22,6 +22,8 @@ public class ContextMenuManager
     public boolean autoKeys;
     public UISimpleContextMenu menu;
 
+    private IKey category = UIKeys.CONTEXT_MENU_KEY_CATEGORY;
+
     public ContextMenuManager custom(UISimpleContextMenu menu)
     {
         this.menu = menu;
@@ -34,6 +36,13 @@ public class ContextMenuManager
         this.onClose = onClose;
 
         return this;
+    }
+
+    public ContextMenuManager autoKeys(IKey category)
+    {
+        this.category = category;
+
+        return this.autoKeys();
     }
 
     public ContextMenuManager autoKeys()
@@ -113,10 +122,26 @@ public class ContextMenuManager
                     register.category(action.keyCategory);
                 }
             }
-            else if (this.autoKeys && i <= 9)
+            else if (this.autoKeys && i < 30)
             {
                 IKey label = UIKeys.CONTEXT_MENU_KEY.format(action.label);
-                KeyCombo combo = new KeyCombo(label, GLFW.GLFW_KEY_1 + i);
+                int mod = i % 10;
+                int key = i == 9 ? GLFW.GLFW_KEY_0 : GLFW.GLFW_KEY_1 + mod;
+
+                KeyCombo combo;
+
+                if (i >= 20)
+                {
+                    combo = new KeyCombo(label, key, GLFW.GLFW_KEY_LEFT_CONTROL);
+                }
+                else if (i >= 10)
+                {
+                    combo = new KeyCombo(label, key, GLFW.GLFW_KEY_LEFT_SHIFT);
+                }
+                else
+                {
+                    combo = new KeyCombo(label, key);
+                }
 
                 contextMenu.keys().register(combo, () ->
                 {
@@ -126,7 +151,7 @@ public class ContextMenuManager
                     }
 
                     contextMenu.removeFromParent();
-                }).category(UIKeys.CONTEXT_MENU_KEY_CATEGORY);
+                }).category(this.category);
             }
         }
 
