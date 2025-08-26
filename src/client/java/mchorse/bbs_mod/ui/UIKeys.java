@@ -75,9 +75,9 @@ public class UIKeys
     public static final IKey CAMERA_PANELS_ADDITIVE = L10n.lang("bbs.ui.camera.panels.additive");
     public static final IKey CAMERA_PANELS_ANGLE = L10n.lang("bbs.ui.camera.panels.angle");
     public static final IKey CAMERA_PANELS_AT_BLOCK = L10n.lang("bbs.ui.camera.panels.at_block");
+    public static final IKey CAMERA_PANELS_AUDIO_EXTEND_DURATION = L10n.lang("bbs.ui.camera.panels.audio.extend_duration");
     public static final IKey CAMERA_PANELS_AUDIO_OFFSET = L10n.lang("bbs.ui.camera.panels.audio.offset");
     public static final IKey CAMERA_PANELS_AUDIO_PICK_AUDIO = L10n.lang("bbs.ui.camera.panels.audio.pick_audio");
-    public static final IKey CAMERA_PANELS_AUDIO_EXTEND_DURATION = L10n.lang("bbs.ui.camera.panels.audio.extend_duration");
     public static final IKey CAMERA_PANELS_BLOCK = L10n.lang("bbs.ui.camera.panels.block");
     public static final IKey CAMERA_PANELS_CIRCLE = L10n.lang("bbs.ui.camera.panels.circle");
     public static final IKey CAMERA_PANELS_CIRCLES = L10n.lang("bbs.ui.camera.panels.circles");
@@ -167,10 +167,10 @@ public class UIKeys
     public static final IKey CAMERA_TIMELINE_CONTEXT_FROM_PLAYER_RECORDING = L10n.lang("bbs.ui.camera.timeline.context.from_player_recording");
     public static final IKey CAMERA_TIMELINE_CONTEXT_PASTE = L10n.lang("bbs.ui.camera.timeline.context.paste");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE = L10n.lang("bbs.ui.camera.timeline.context.record_microphone");
-    public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_TITLE = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-title");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_DESCRIPTION = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-description");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_LABEL = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-label");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_SUBLABEL = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-sublabel");
+    public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_TITLE = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-title");
     public static final IKey CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS = L10n.lang("bbs.ui.camera.timeline.context.remove_clips");
     public static final IKey CAMERA_TIMELINE_CONTEXT_REORGANIZE = L10n.lang("bbs.ui.camera.timeline.context.reorganize");
     public static final IKey CAMERA_TIMELINE_CONTEXT_SHIFT = L10n.lang("bbs.ui.camera.timeline.context.shift");
@@ -213,6 +213,7 @@ public class UIKeys
     public static final IKey FILM_CONTROLLER_KEYS_RESTART_ACTIONS = L10n.lang("bbs.ui.film.controller.keys.restart_actions");
     public static final IKey FILM_CONTROLLER_KEYS_START_RECORDING = L10n.lang("bbs.ui.film.controller.keys.start_recording");
     public static final IKey FILM_CONTROLLER_KEYS_TOGGLE_CONTROL = L10n.lang("bbs.ui.film.controller.keys.toggle_control");
+    public static final IKey FILM_CONTROLLER_KEYS_TOGGLE_INSTANT_KEYFRAMES = L10n.lang("bbs.ui.film.controller.keys.toggle_instant_keyframes");
     public static final IKey FILM_CONTROLLER_ONION_SKIN_ALL_DESCRIPTION = L10n.lang("bbs.ui.film.controller.onion_skin.all-description");
     public static final IKey FILM_CONTROLLER_ONION_SKIN_GROUP = L10n.lang("bbs.ui.film.controller.onion_skin.group");
     public static final IKey FILM_CONTROLLER_ONION_SKIN_KEYS_TOGGLE = L10n.lang("bbs.ui.film.controller.onion_skin.keys.toggle");
@@ -300,9 +301,9 @@ public class UIKeys
     public static final IKey FORMS_CATEGORIES_CONTEXT_EXPORT_MODEL_TITLE = L10n.lang("bbs.ui.forms.categories.context.export_model-title");
     public static final IKey FORMS_CATEGORIES_CONTEXT_OPEN_MODEL_FOLDER = L10n.lang("bbs.ui.forms.categories.context.open_model_form");
     public static final IKey FORMS_CATEGORIES_CONTEXT_PASTE_FORM = L10n.lang("bbs.ui.forms.categories.context.paste_form");
+    public static final IKey FORMS_CATEGORIES_CONTEXT_REMOVE_ALL_FORM = L10n.lang("bbs.ui.forms.categories.context.remove_all_form");
     public static final IKey FORMS_CATEGORIES_CONTEXT_REMOVE_CATEGORY = L10n.lang("bbs.ui.forms.categories.context.remove_category");
     public static final IKey FORMS_CATEGORIES_CONTEXT_REMOVE_FORM = L10n.lang("bbs.ui.forms.categories.context.remove_form");
-    public static final IKey FORMS_CATEGORIES_CONTEXT_REMOVE_ALL_FORM = L10n.lang("bbs.ui.forms.categories.context.remove_all_form");
     public static final IKey FORMS_CATEGORIES_CONTEXT_RENAME_CATEGORY = L10n.lang("bbs.ui.forms.categories.context.rename_category");
     public static final IKey FORMS_CATEGORIES_CONTEXT_SHARE_FORM = L10n.lang("bbs.ui.forms.categories.context.share_form");
     public static final IKey FORMS_CATEGORIES_EXTRA = L10n.lang("bbs.ui.forms.categories.extra");

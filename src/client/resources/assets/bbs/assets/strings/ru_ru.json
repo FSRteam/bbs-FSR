@@ -380,6 +380,7 @@
     "bbs.ui.film.controller.keys.restart_actions": "Перезагрузить действия",
     "bbs.ui.film.controller.keys.start_recording": "Начать запись",
     "bbs.ui.film.controller.keys.toggle_control": "Переключить контроль актёра",
+    "bbs.ui.film.controller.keys.toggle_instant_keyframes": "Переключить автоматическую запись ключ кадров",
     "bbs.ui.film.controller.onion_skin.all-description": "Включить луковую кожу для всех записей",
     "bbs.ui.film.controller.onion_skin.group": "Группа: %s",
     "bbs.ui.film.controller.onion_skin.keys.toggle": "Переключить луковую кожу",
