@@ -952,6 +952,7 @@
     "bbs.ui.textures.export_overlay.success": "Selected texture %s was successfully exported! Would you like to open its folder?",
     "bbs.ui.textures.export_overlay.title": "Export texture",
     "bbs.ui.textures.keys.category": "Pixel editor",
+    "bbs.ui.textures.keys.fill": "Flood fill",
     "bbs.ui.textures.keys.pick": "Pick color",
     "bbs.ui.textures.keys.redo": "Redo",
     "bbs.ui.textures.keys.swap": "Swap colors",

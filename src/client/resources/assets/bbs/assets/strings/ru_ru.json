@@ -944,6 +944,7 @@
     "bbs.ui.textures.export_overlay.success": "Выбранная текстура %s успешно экспортирована! Хотите открыть папку, в которую была экспортирована текстура?",
     "bbs.ui.textures.export_overlay.title": "Экспортировать текстуру",
     "bbs.ui.textures.keys.category": "Редактор пикселей",
+    "bbs.ui.textures.keys.fill": "Заливка",
     "bbs.ui.textures.keys.pick": "Выбрать цвет",
     "bbs.ui.textures.keys.redo": "Повторить",
     "bbs.ui.textures.keys.swap": "Поменять цвета местами",
