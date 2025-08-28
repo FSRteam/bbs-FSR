@@ -38,9 +38,21 @@ public class IrisUtils
         {
             Link key = CollectionUtils.getKey(textures.textures, texture);
 
+            if (key == null && texture.getParent() != null)
+            {
+                key = CollectionUtils.getKey(textures.animatedTextures, texture.getParent());
+            }
+
             if (key != null)
             {
-                TextureTracker.INSTANCE.trackTexture(texture.id, new IrisTextureWrapper(key));
+                int index = -1;
+
+                if (texture.getParent() != null)
+                {
+                    index = texture.getParent().textures.indexOf(texture);
+                }
+
+                TextureTracker.INSTANCE.trackTexture(texture.id, new IrisTextureWrapper(key, index));
             }
 
             textureSet.add(texture);
