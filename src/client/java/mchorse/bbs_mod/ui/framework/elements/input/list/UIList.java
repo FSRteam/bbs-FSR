@@ -162,6 +162,7 @@ public abstract class UIList <T> extends UIElement
         }
 
         this.update();
+        this.scroll.updateTarget();
     }
 
     public boolean isFiltering()

@@ -3,6 +3,7 @@ package mchorse.bbs_mod.utils.iris;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,35 +32,7 @@ public class ShaderCurves
             return source;
         }
 
-        List<ShaderVariable> variables = new ArrayList<>();
-
-        int index = 0;
-
-        while ((index = source.indexOf("#define", index)) != -1)
-        {
-            int newLine = source.indexOf("\n", index);
-
-            if (newLine == -1)
-            {
-                newLine = source.length();
-            }
-
-            int lastNewLine = source.lastIndexOf('\n', index);
-            String define = source.substring(lastNewLine != -1 ? lastNewLine : index, newLine).trim();
-
-            if (!define.startsWith("/") && define.contains("//[") && define.contains("."))
-            {
-                String[] split = define.split(" ");
-
-                String name = split[1];
-                String defaultValue = split[2];
-                ShaderVariable variable = new ShaderVariable(name, defaultValue);
-
-                variables.add(variable);
-            }
-
-            index = newLine;
-        }
+        List<ShaderVariable> variables = getShaderVariables(source);
 
         int version = source.indexOf("#version");
         int nextNewLine = source.indexOf('\n', version);
@@ -109,6 +82,40 @@ public class ShaderCurves
         }
 
         return source;
+    }
+
+    private static List<ShaderVariable> getShaderVariables(String source)
+    {
+        List<ShaderVariable> variables = new ArrayList<>();
+        int index = 0;
+
+        while ((index = source.indexOf("#define", index)) != -1)
+        {
+            int newLine = source.indexOf("\n", index);
+
+            if (newLine == -1)
+            {
+                newLine = source.length();
+            }
+
+            int lastNewLine = source.lastIndexOf('\n', index);
+            String define = source.substring(lastNewLine != -1 ? lastNewLine : index, newLine).trim();
+
+            if (!define.startsWith("/") && define.contains("//[") && define.contains("."))
+            {
+                String[] split = define.split(" ");
+
+                String name = split[1];
+                String defaultValue = split[2];
+                ShaderVariable variable = new ShaderVariable(name, defaultValue);
+
+                variables.add(variable);
+            }
+
+            index = newLine;
+        }
+
+        return variables;
     }
 
     public static void addUniforms(List<CachedUniform> list)
