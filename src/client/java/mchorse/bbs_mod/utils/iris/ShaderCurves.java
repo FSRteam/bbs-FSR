@@ -3,7 +3,6 @@ package mchorse.bbs_mod.utils.iris;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,7 +16,7 @@ public class ShaderCurves
 {
     public static Map<String, ShaderVariable> variableMap = new HashMap<>();
 
-    public static final String BRIGHTNESS = "brigthness";
+    public static final String BRIGHTNESS = "brightness";
     public static final String SUN_ROTATION = "sun_rotation";
 
     public static void reset()
@@ -25,14 +24,34 @@ public class ShaderCurves
         variableMap.clear();
     }
 
+    public static void finishLoading()
+    {}
+
     public static String processSource(String source)
     {
+        List<String> filter = BBSRendering.getSliderOptions();
+
         if (!BBSSettings.shaderCurvesEnabled.get())
         {
             return source;
         }
 
         List<ShaderVariable> variables = getShaderVariables(source);
+
+        if (!variables.isEmpty())
+        {
+            variables.removeIf((v) -> !filter.contains(v.name));
+
+            String collected = variables.stream().map((m) -> m.name).collect(Collectors.joining("|"));
+            String string = "(#define +\\w+ +.*(" + collected + ")|#elif.*(" + collected + ")|#if.*(" + collected + "))";
+            Pattern pattern = Pattern.compile(string);
+            Matcher matcher = pattern.matcher(source);
+
+            while (matcher.find())
+            {
+                variables.removeIf((v) -> v.name.equals(matcher.group(2)));
+            }
+        }
 
         int version = source.indexOf("#version");
         int nextNewLine = source.indexOf('\n', version);
@@ -48,7 +67,9 @@ public class ShaderCurves
 
         if (!variables.isEmpty())
         {
-            String string = "(?<!#define |[_\\w\\d])(" + variables.stream().map((m) -> m.name).collect(Collectors.joining("|")) + ")(?![_\\w\\d])";
+            /* Replace defines with uniform identifiers */
+            String collected = variables.stream().map((m) -> m.name).collect(Collectors.joining("|"));
+            String string = "(?<!#define |[_\\w\\d])(" + collected + ")(?![_\\w\\d])";
             Pattern pattern = Pattern.compile(string);
             Matcher matcher = pattern.matcher(source);
             StringBuffer sb = new StringBuffer();
@@ -65,7 +86,7 @@ public class ShaderCurves
             source = sb.toString();
 
             /* Remove const from variables that have BBS uniforms */
-            String removeConst = "(const)( +float.*=.*bbs_.*;)";
+            String removeConst = "(const +)(\\w.*=.*bbs_.*;)";
             pattern = Pattern.compile(removeConst);
             matcher = pattern.matcher(source);
             sb = new StringBuffer();
@@ -101,13 +122,14 @@ public class ShaderCurves
             int lastNewLine = source.lastIndexOf('\n', index);
             String define = source.substring(lastNewLine != -1 ? lastNewLine : index, newLine).trim();
 
-            if (!define.startsWith("/") && define.contains("//[") && define.contains("."))
+            if (!define.startsWith("/") && define.contains("//["))
             {
                 String[] split = define.split(" ");
+                boolean integer = !define.contains(".");
 
                 String name = split[1];
                 String defaultValue = split[2];
-                ShaderVariable variable = new ShaderVariable(name, defaultValue);
+                ShaderVariable variable = new ShaderVariable(name, defaultValue, integer);
 
                 variables.add(variable);
             }
@@ -127,19 +149,21 @@ public class ShaderCurves
     {
         public String name = "";
         public String uniformName = "";
+        public boolean integer;
         public float defaultValue;
         public Float value;
 
-        public ShaderVariable(String name, String defaultValue)
+        public ShaderVariable(String name, String defaultValue, boolean integer)
         {
             this.name = name;
             this.uniformName = "bbs_" + name;
             this.defaultValue = Float.parseFloat(defaultValue);
+            this.integer = integer;
         }
 
         public String toUniformDeclaration()
         {
-            return "uniform float " + this.uniformName + ";";
+            return "uniform " + (this.integer ? "int" : "float") + " " + this.uniformName + ";";
         }
 
         public float getValue()

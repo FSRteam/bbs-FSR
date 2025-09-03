@@ -22,4 +22,10 @@ public class IrisMixin
     {
         ShaderCurves.reset();
     }
+
+    @Inject(method = "loadExternalShaderpack", at = @At(value = "RETURN", ordinal = 9), remap = false)
+    private static void onTrueReturnLoadExternalShaderPack(CallbackInfoReturnable<Boolean> info)
+    {
+        ShaderCurves.finishLoading();
+    }
 }
