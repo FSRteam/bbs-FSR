@@ -252,7 +252,7 @@ public class OrbitFilmCameraController implements ICameraController
                 {
                     AnchorProperty.Anchor v = form.anchor.get();
                     Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
-                    Matrix4f matrix = BaseFilmController.getEntityMatrix(this.controller.getEntities(), x, y, z, v.actor, v.attachment, false, defaultMatrix, transition);
+                    Matrix4f matrix = BaseFilmController.getEntityMatrix(this.controller.getEntities(), x, y, z, v.actor, v.attachment, false, false, defaultMatrix, transition);
 
                     matrix.mul(anchor);
 
