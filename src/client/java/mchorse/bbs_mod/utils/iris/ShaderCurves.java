@@ -49,7 +49,15 @@ public class ShaderCurves
 
             while (matcher.find())
             {
-                variables.removeIf((v) -> v.name.equals(matcher.group(2)));
+                variables.removeIf((v) ->
+                {
+                    String group = matcher.group(2);
+
+                    if (group == null) group = matcher.group(3);
+                    if (group == null) group = matcher.group(4);
+
+                    return v.name.equals(group);
+                });
             }
         }
 
@@ -86,7 +94,7 @@ public class ShaderCurves
             source = sb.toString();
 
             /* Remove const from variables that have BBS uniforms */
-            String removeConst = "(const +)(\\w.*=.*bbs_.*;)";
+            String removeConst = "(const +)([^=]*=[^;]*bbs_[^;]*;)";
             pattern = Pattern.compile(removeConst);
             matcher = pattern.matcher(source);
             sb = new StringBuffer();
@@ -109,6 +117,7 @@ public class ShaderCurves
     {
         List<ShaderVariable> variables = new ArrayList<>();
         int index = 0;
+        Pattern definePattern = Pattern.compile("^\\s*(?!//)\\s*#define +([\\w_]+) +([\\d.]+) *// *\\[");
 
         while ((index = source.indexOf("#define", index)) != -1)
         {
@@ -121,17 +130,29 @@ public class ShaderCurves
 
             int lastNewLine = source.lastIndexOf('\n', index);
             String define = source.substring(lastNewLine != -1 ? lastNewLine : index, newLine).trim();
+            Matcher matcher = definePattern.matcher(define);
 
-            if (!define.startsWith("/") && define.contains("//["))
+            if (matcher.find())
             {
-                String[] split = define.split(" ");
-                boolean integer = !define.contains(".");
+                String name = matcher.group(1);
+                boolean present = false;
 
-                String name = split[1];
-                String defaultValue = split[2];
-                ShaderVariable variable = new ShaderVariable(name, defaultValue, integer);
+                for (ShaderVariable variable : variables)
+                {
+                    if (variable.name.equals(name))
+                    {
+                        present = true;
+                    }
+                }
 
-                variables.add(variable);
+                if (!present)
+                {
+                    String defaultValue = matcher.group(2);
+                    boolean integer = !defaultValue.contains(".");
+                    ShaderVariable variable = new ShaderVariable(name, defaultValue, integer);
+
+                    variables.add(variable);
+                }
             }
 
             index = newLine;
