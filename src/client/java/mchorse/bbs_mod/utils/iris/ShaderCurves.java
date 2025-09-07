@@ -2,12 +2,15 @@ package mchorse.bbs_mod.utils.iris;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.utils.Pair;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -31,119 +34,39 @@ public class ShaderCurves
 
     public static String processSource(String source)
     {
-        List<String> filter = BBSRendering.getShadersSliderOptions();
-
         if (!BBSSettings.shaderCurvesEnabled.get())
         {
             return source;
         }
 
-        List<ShaderVariable> variables = getShaderVariables(source);
+        long time = System.currentTimeMillis();
+
+        Map<String, ShaderVariable> variables = parseVariables(source);
 
         if (!variables.isEmpty())
         {
-            variables.removeIf((v) -> !filter.contains(v.name));
+            source = replaceMacroReferences(source, variables);
+            source = removeConstFromRelevantVariables(source);
+            source = insertUniforms(source, variables);
 
-            String collected = variables.stream().map((m) -> m.name).collect(Collectors.joining("|"));
-            String string = "(#define +\\w+ +.*(" + collected + ")|#elif.*(" + collected + ")|#if.*(" + collected + "))";
-            Pattern pattern = Pattern.compile(string);
-            Matcher matcher = pattern.matcher(source);
-
-            while (matcher.find())
+            for (ShaderVariable value : variables.values())
             {
-                variables.removeIf((v) ->
-                {
-                    String group = matcher.group(2);
-
-                    if (group == null) group = matcher.group(3);
-                    if (group == null) group = matcher.group(4);
-
-                    return v.name.equals(group);
-                });
+                variableMap.putIfAbsent(value.name, value);
             }
         }
 
-        int version = source.indexOf("#version");
-        int nextNewLine = source.indexOf('\n', version);
-        StringBuilder uniformString = new StringBuilder();
-
-        for (ShaderVariable variable : variables)
-        {
-            uniformString.append(variable.toUniformDeclaration());
-            uniformString.append('\n');
-
-            variableMap.putIfAbsent(variable.name, variable);
-        }
-
-        if (!variables.isEmpty())
-        {
-            /* Replace defines with uniform identifiers */
-            String collected = variables.stream().map((m) -> m.name).collect(Collectors.joining("|"));
-            String string = "(?<!#define |[_\\w\\d])(" + collected + ")(?![_\\w\\d])";
-            Pattern pattern = Pattern.compile(string);
-            Matcher matcher = pattern.matcher(source);
-            StringBuffer sb = new StringBuffer();
-
-            while (matcher.find())
-            {
-                String processed = matcher.group(1);
-
-                matcher.appendReplacement(sb, UNIFORM_IDENTIFIER + processed);
-            }
-
-            matcher.appendTail(sb);
-
-            source = sb.toString();
-
-            /* Remove const from variables that have BBS uniforms */
-            List<String> deconst = new ArrayList<>();
-            String removeConst = "(const +)([^=]*=[^;]*" + UNIFORM_IDENTIFIER + "[^;]*;)";
-            pattern = Pattern.compile(removeConst);
-            matcher = pattern.matcher(source);
-            sb = new StringBuffer();
-
-            while (matcher.find())
-            {
-                String group = matcher.group(2);
-
-                matcher.appendReplacement(sb, group);
-
-                int index = group.indexOf('=');
-                String sub = group.substring(0, index).trim();
-                index = sub.lastIndexOf(' ');
-                sub = sub.substring(index).trim();
-
-                deconst.add(sub);
-            }
-
-            matcher.appendTail(sb);
-
-            /* Remove const from const */
-            pattern = Pattern.compile("(const +)([^=]*=[^;]*(" + String.join("|", deconst) + ")[^;]*;)");
-            matcher = pattern.matcher(sb.toString());
-            sb = new StringBuffer();
-
-            while (matcher.find())
-            {
-                String group = matcher.group(2);
-
-                matcher.appendReplacement(sb, group);
-            }
-
-            matcher.appendTail(sb);
-
-            source = sb.toString();
-            source = source.substring(0, nextNewLine + 1) + uniformString + source.substring(nextNewLine + 1);
-        }
+        System.out.println("[SHADER_CURVES] full: " + (System.currentTimeMillis() - time) + " " + source.length());
 
         return source;
     }
 
-    private static List<ShaderVariable> getShaderVariables(String source)
+    private static Map<String, ShaderVariable> parseVariables(String source)
     {
-        List<ShaderVariable> variables = new ArrayList<>();
-        int index = 0;
+        long time = System.currentTimeMillis();
+
+        Map<String, ShaderVariable> variables = new HashMap<>();
         Pattern definePattern = Pattern.compile("^\\s*(?!//)\\s*#define +([\\w_]+) +([\\d.]+) *// *\\[");
+        int index = 0;
 
         while ((index = source.indexOf("#define", index)) != -1)
         {
@@ -161,30 +84,160 @@ public class ShaderCurves
             if (matcher.find())
             {
                 String name = matcher.group(1);
-                boolean present = false;
+                String defaultValue = matcher.group(2);
+                boolean integer = !defaultValue.contains(".");
+                ShaderVariable variable = new ShaderVariable(name, defaultValue, integer);
 
-                for (ShaderVariable variable : variables)
-                {
-                    if (variable.name.equals(name))
-                    {
-                        present = true;
-                    }
-                }
-
-                if (!present)
-                {
-                    String defaultValue = matcher.group(2);
-                    boolean integer = !defaultValue.contains(".");
-                    ShaderVariable variable = new ShaderVariable(name, defaultValue, integer);
-
-                    variables.add(variable);
-                }
+                variables.putIfAbsent(variable.name, variable);
             }
 
             index = newLine;
         }
 
+        System.out.println("[SHADER_CURVES] find variables: " + (System.currentTimeMillis() - time) + " " + source.length());
+
+        time = System.currentTimeMillis();
+
+        /* Remove irrelevant variables */
+        List<String> filter = BBSRendering.getShadersSliderOptions();
+
+        variables.values().removeIf((v) -> !filter.contains(v.name));
+
+        String collected = variables.values().stream().map((m) -> m.name).collect(Collectors.joining("|"));
+        String string = "(#define +\\w+ +.*(" + collected + ")|#elif.*(" + collected + ")|#if.*(" + collected + "))";
+        Pattern pattern = Pattern.compile(string);
+        Matcher matcher = pattern.matcher(source);
+
+        while (matcher.find())
+        {
+            variables.values().removeIf((v) ->
+            {
+                String group = matcher.group(2);
+
+                if (group == null) group = matcher.group(3);
+                if (group == null) group = matcher.group(4);
+
+                return v.name.equals(group);
+            });
+        }
+
+        System.out.println("[SHADER_CURVES] remove variables: " + (System.currentTimeMillis() - time) + " " + source.length());
+
         return variables;
+    }
+
+    private static String replaceMacroReferences(String source, Map<String, ShaderVariable> variables)
+    {
+        long time = System.currentTimeMillis();
+
+        String collected = variables.values().stream().map((m) -> m.name).collect(Collectors.joining("|"));
+        String string = "(?<!#define |[_\\w\\d])(" + collected + ")(?![_\\w\\d])";
+        Pattern pattern = Pattern.compile(string);
+        Matcher matcher = pattern.matcher(source);
+        StringBuilder sb = new StringBuilder();
+
+        while (matcher.find())
+        {
+            String processed = matcher.group(1);
+
+            matcher.appendReplacement(sb, UNIFORM_IDENTIFIER + processed);
+        }
+
+        matcher.appendTail(sb);
+
+        System.out.println("[SHADER_CURVES] replace macros: " + (System.currentTimeMillis() - time) + " " + source.length());
+
+        return sb.toString();
+    }
+
+    private static String removeConstFromRelevantVariables(String source)
+    {
+        long time = System.currentTimeMillis();
+
+        Pair<String, Set<String>> pair = removeConst(source, (s) -> s.contains("bbs_"));
+        Set<String> deconst = pair.b;
+
+        source = pair.a;
+
+        while (!deconst.isEmpty())
+        {
+            final Set<String> finalDeconst = deconst;
+
+            pair = removeConst(source, (s) ->
+            {
+                for (String string : finalDeconst)
+                {
+                    if (s.contains(string)) return true;
+                }
+
+                return false;
+            });
+            source = pair.a;
+            deconst = pair.b;
+        }
+
+        System.out.println("[SHADER_CURVES] remove const: " + (System.currentTimeMillis() - time) + " " + source.length());
+
+        return source;
+    }
+
+    private static Pair<String, Set<String>> removeConst(String source, Function<String, Boolean> function)
+    {
+        Set<String> deconst = new HashSet<>();
+        StringBuilder builder = new StringBuilder();
+        int index = 0;
+        int lastIndex = 0;
+
+        while ((index = source.indexOf("const ", index + 1)) != -1)
+        {
+            int semicolon = source.indexOf(';', index);
+
+            if (semicolon >= 0)
+            {
+                String substr = source.substring(index, semicolon);
+
+                if (function.apply(substr))
+                {
+                    builder.append(source, lastIndex, index);
+                    builder.append(source, index + 6, semicolon);
+
+                    int equals = substr.indexOf('=');
+                    String sub = substr.substring(0, equals).trim();
+
+                    equals = sub.lastIndexOf(' ');
+                    sub = sub.substring(equals).trim();
+
+                    deconst.add(sub);
+                }
+                else
+                {
+                    builder.append(source, lastIndex, semicolon);
+                }
+            }
+
+            lastIndex = semicolon;
+        }
+
+        builder.append(source, lastIndex, source.length());
+
+        source = builder.toString();
+
+        return new Pair<>(source, deconst);
+    }
+
+    private static String insertUniforms(String source, Map<String, ShaderVariable> variables)
+    {
+        int version = source.indexOf("#version");
+        int nextNewLine = source.indexOf('\n', version);
+        StringBuilder sb = new StringBuilder();
+
+        for (ShaderVariable variable : variables.values())
+        {
+            sb.append(variable.toUniformDeclaration());
+            sb.append('\n');
+        }
+
+        return source.substring(0, nextNewLine + 1) + sb + source.substring(nextNewLine + 1);
     }
 
     public static void addUniforms(List<CachedUniform> list)
