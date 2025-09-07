@@ -486,7 +486,7 @@ public class BBSRendering
         IrisUtils.addUniforms(list, variableMap);
     }
 
-    public static List<String> getSliderOptions()
+    public static List<String> getShadersSliderOptions()
     {
         if (!iris)
         {

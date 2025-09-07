@@ -19,6 +19,8 @@ public class ShaderCurves
     public static final String BRIGHTNESS = "brightness";
     public static final String SUN_ROTATION = "sun_rotation";
 
+    public static final String UNIFORM_IDENTIFIER = "bbs_";
+
     public static void reset()
     {
         variableMap.clear();
@@ -29,7 +31,7 @@ public class ShaderCurves
 
     public static String processSource(String source)
     {
-        List<String> filter = BBSRendering.getSliderOptions();
+        List<String> filter = BBSRendering.getShadersSliderOptions();
 
         if (!BBSSettings.shaderCurvesEnabled.get())
         {
@@ -86,7 +88,7 @@ public class ShaderCurves
             {
                 String processed = matcher.group(1);
 
-                matcher.appendReplacement(sb, "bbs_" + processed);
+                matcher.appendReplacement(sb, UNIFORM_IDENTIFIER + processed);
             }
 
             matcher.appendTail(sb);
@@ -94,14 +96,38 @@ public class ShaderCurves
             source = sb.toString();
 
             /* Remove const from variables that have BBS uniforms */
-            String removeConst = "(const +)([^=]*=[^;]*bbs_[^;]*;)";
+            List<String> deconst = new ArrayList<>();
+            String removeConst = "(const +)([^=]*=[^;]*" + UNIFORM_IDENTIFIER + "[^;]*;)";
             pattern = Pattern.compile(removeConst);
             matcher = pattern.matcher(source);
             sb = new StringBuffer();
 
             while (matcher.find())
             {
-                matcher.appendReplacement(sb, matcher.group(2));
+                String group = matcher.group(2);
+
+                matcher.appendReplacement(sb, group);
+
+                int index = group.indexOf('=');
+                String sub = group.substring(0, index).trim();
+                index = sub.lastIndexOf(' ');
+                sub = sub.substring(index).trim();
+
+                deconst.add(sub);
+            }
+
+            matcher.appendTail(sb);
+
+            /* Remove const from const */
+            pattern = Pattern.compile("(const +)([^=]*=[^;]*(" + String.join("|", deconst) + ")[^;]*;)");
+            matcher = pattern.matcher(sb.toString());
+            sb = new StringBuffer();
+
+            while (matcher.find())
+            {
+                String group = matcher.group(2);
+
+                matcher.appendReplacement(sb, group);
             }
 
             matcher.appendTail(sb);
@@ -177,7 +203,7 @@ public class ShaderCurves
         public ShaderVariable(String name, String defaultValue, boolean integer)
         {
             this.name = name;
-            this.uniformName = "bbs_" + name;
+            this.uniformName = UNIFORM_IDENTIFIER + name;
             this.defaultValue = Float.parseFloat(defaultValue);
             this.integer = integer;
         }
