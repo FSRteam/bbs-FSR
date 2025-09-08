@@ -244,7 +244,7 @@ public class ShaderCurves
             {
                 String substr = source.substring(index, semicolon);
 
-                if (function.apply(substr))
+                if (substr.indexOf('{') == -1 && function.apply(substr))
                 {
                     builder.append(source, lastIndex, index);
                     builder.append(source, index + 6, semicolon);
