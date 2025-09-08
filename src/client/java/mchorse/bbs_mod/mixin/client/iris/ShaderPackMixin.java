@@ -16,7 +16,7 @@ public class ShaderPackMixin
 
     @Inject(
         method = "<init>(Ljava/nio/file/Path;Ljava/util/Map;Lcom/google/common/collect/ImmutableList;)V",
-        at = @At("RETURN"),
+        at = @At(value = "INVOKE", target = "Ljava/util/HashMap;<init>()V", shift = At.Shift.AFTER),
         remap = false
     )
     private void afterActiveFeaturesInit(CallbackInfo ci)
