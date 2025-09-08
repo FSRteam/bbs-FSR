@@ -152,78 +152,37 @@ public class ShaderCurves
 
     private static String replaceMacroReferences(String source, Map<String, ShaderVariable> variables)
     {
-        List<String> names = variables.keySet().stream().toList();
-        StringBuilder out = new StringBuilder(source.length() + names.size() * UNIFORM_IDENTIFIER.length());
-        int n = source.length(), i = 0;
-        final int NORMAL = 0, LINE = 1, BLOCK = 2;
-        int state = NORMAL;
+        StringBuilder out = new StringBuilder(source.length());
+        int length = source.length();
+        int i = 0;
+        boolean macro = false;
 
-        while (i < n)
+        while (i < length)
         {
             char c = source.charAt(i);
 
-            if (state == NORMAL)
+            if (c == '#') macro = true;
+            if (c == '\n') macro = false;
+
+            if (isIdentifierStart(c) && !macro)
             {
-                if (c == '/' && i + 1 < n)
-                {
-                    char d = source.charAt(i + 1);
+                int start = i;
+                int j = i + 1;
 
-                    if (d == '/') { out.append("//"); i += 2; state = LINE; continue; }
-                    if (d == '*') { out.append("/*"); i += 2; state = BLOCK; continue; }
+                while (j < length && isIdentifierPart(source.charAt(j)))
+                {
+                    j++;
                 }
 
-                if (Character.isLetter(c) || c == '_')
-                {
-                    int start = i;
-                    int j = i + 1;
+                String identifier = source.substring(start, j);
+                String replacement = variables.containsKey(identifier) ? UNIFORM_IDENTIFIER  + identifier : identifier;
 
-                    while (j < n)
-                    {
-                        char cj = source.charAt(j);
-                        if (Character.isLetterOrDigit(cj) || cj == '_') j++; else break;
-                    }
+                out.append(replacement);
 
-                    String ident = source.substring(start, j);
-
-                    if (names.contains(ident))
-                    {
-                        out.append(UNIFORM_IDENTIFIER);
-                    }
-
-                    out.append(ident);
-
-                    i = j;
-
-                    continue;
-                }
-
-                out.append(c);
-
-                i++;
-            }
-            else if (state == LINE)
-            {
-                out.append(c);
-
-                i++;
-
-                if (c == '\n')
-                {
-                    state = NORMAL;
-                }
+                i = j;
             }
             else
             {
-                if (c == '*' && i + 1 < n && source.charAt(i + 1) == '/')
-                {
-                    out.append("*/");
-
-                    i += 2;
-                    state = NORMAL;
-
-                    continue;
-                }
-
                 out.append(c);
 
                 i++;
@@ -231,6 +190,16 @@ public class ShaderCurves
         }
 
         return out.toString();
+    }
+
+    private static boolean isIdentifierStart(char c)
+    {
+        return Character.isLetter(c) || c == '_';
+    }
+
+    private static boolean isIdentifierPart(char c)
+    {
+        return Character.isLetterOrDigit(c) || c == '_';
     }
 
     private static String removeConstFromRelevantVariables(String source)
