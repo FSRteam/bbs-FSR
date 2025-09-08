@@ -18,10 +18,21 @@ public class ShaderCurves
 {
     public static Map<String, ShaderVariable> variableMap = new HashMap<>();
 
+    private static Set<String> prohibitedVariables = new HashSet<>();
+    private static Set<String> prohibitedConstIdentifiers = new HashSet<>();
+
     public static final String BRIGHTNESS = "brightness";
     public static final String SUN_ROTATION = "sun_rotation";
 
     public static final String UNIFORM_IDENTIFIER = "bbs_";
+
+    static
+    {
+        /* photon & Hysteria */
+        prohibitedVariables.add("WATER_WAVE_ITERATIONS");
+        prohibitedConstIdentifiers.add("get_luminance_from_exposure");
+        prohibitedConstIdentifiers.add("get_exposure_from_luminance");
+    }
 
     public static void reset()
     {
@@ -63,6 +74,11 @@ public class ShaderCurves
         List<String> filter = BBSRendering.getShadersSliderOptions();
 
         variables.values().removeIf((v) -> !filter.contains(v.name));
+
+        for (String prohibitedVariable : prohibitedVariables)
+        {
+            variables.remove(prohibitedVariable);
+        }
 
         int index = 0;
 
@@ -208,6 +224,11 @@ public class ShaderCurves
         Set<String> deconst = pair.b;
 
         source = pair.a;
+
+        for (String constIdentifier : prohibitedConstIdentifiers)
+        {
+            deconst.add(constIdentifier);
+        }
 
         while (!deconst.isEmpty())
         {
