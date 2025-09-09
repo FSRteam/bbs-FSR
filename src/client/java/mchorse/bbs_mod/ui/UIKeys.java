@@ -91,6 +91,8 @@ public class UIKeys
     public static final IKey CAMERA_PANELS_CONTEXT_PASTE_POSITION = L10n.lang("bbs.ui.camera.panels.context.paste_position");
     public static final IKey CAMERA_PANELS_COPY_ENTITY = L10n.lang("bbs.ui.camera.panels.copy_entity");
     public static final IKey CAMERA_PANELS_COPY_ENTITY_TOOLTIP = L10n.lang("bbs.ui.camera.panels.copy_entity_tooltip");
+    public static final IKey CAMERA_PANELS_CURVE_ADD = L10n.lang("bbs.ui.camera.panels.curve.add");
+    public static final IKey CAMERA_PANELS_CURVE_REMOVE = L10n.lang("bbs.ui.camera.panels.curve.remove");
     public static final IKey CAMERA_PANELS_DETERMINISTIC = L10n.lang("bbs.ui.camera.panels.deterministic");
     public static final IKey CAMERA_PANELS_DETERMINISTIC_TOOLTIP = L10n.lang("bbs.ui.camera.panels.deterministic_tooltip");
     public static final IKey CAMERA_PANELS_DISTANCE = L10n.lang("bbs.ui.camera.panels.distance");
@@ -790,8 +792,8 @@ public class UIKeys
     public static final IKey TEXTURES_EXTRACT_FRAMES_TITLE = L10n.lang("bbs.ui.textures.export_frames-title");
     public static final IKey TEXTURES_EXTRACT_FRAMES_TOOLTIP = L10n.lang("bbs.ui.textures.export_frames-tooltip");
     public static final IKey TEXTURES_KEYS_CATEGORY = L10n.lang("bbs.ui.textures.keys.category");
-    public static final IKey TEXTURES_KEYS_PICK = L10n.lang("bbs.ui.textures.keys.pick");
     public static final IKey TEXTURES_KEYS_FILL = L10n.lang("bbs.ui.textures.keys.fill");
+    public static final IKey TEXTURES_KEYS_PICK = L10n.lang("bbs.ui.textures.keys.pick");
     public static final IKey TEXTURES_KEYS_REDO = L10n.lang("bbs.ui.textures.keys.redo");
     public static final IKey TEXTURES_KEYS_SWAP = L10n.lang("bbs.ui.textures.keys.swap");
     public static final IKey TEXTURES_KEYS_UNDO = L10n.lang("bbs.ui.textures.keys.undo");
