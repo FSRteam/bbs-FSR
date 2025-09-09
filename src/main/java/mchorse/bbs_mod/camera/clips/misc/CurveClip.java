@@ -68,7 +68,10 @@ public class CurveClip extends CameraClip
                 ValueString key = new ValueString("key", "sun_rotation");
 
                 key.fromData(map.get("key"));
-                this.channels.addChannel(key.get());
+
+                KeyframeChannel<Double> channel = this.channels.addChannel(key.get());
+
+                channel.fromData(map.get("channel"));
             }
         }
 
