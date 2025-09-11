@@ -730,7 +730,7 @@
     "bbs.ui.shape_keys.context.name": "Nombre...",
     "bbs.ui.shape_keys.context.paste": "Pegar shape keys",
     "bbs.ui.shape_keys.context.reset": "Reiniciar shape keys",
-    "bbs.ui.shape_keys.context.save": "SGuardar shape keys",
+    "bbs.ui.shape_keys.context.save": "Guardar shape keys",
     "bbs.ui.snowstorm.appearance.animated": "Animado",
     "bbs.ui.snowstorm.appearance.fps": "Fotogramas de animación por segundo",
     "bbs.ui.snowstorm.appearance.frames": "Fotogramas",
