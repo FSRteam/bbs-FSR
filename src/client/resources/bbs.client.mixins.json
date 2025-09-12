@@ -34,6 +34,8 @@
         "iris.JcppProcessorMixin",
         "iris.ShaderPackMixin",
         "iris.IrisMixin",
+        "iris.SliderElementWidgetMixin",
+        "iris.StringElementWidgetInvoker",
         "SimpleOptionMixin"
     ],
     "injectors": {

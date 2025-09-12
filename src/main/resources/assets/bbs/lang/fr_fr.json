@@ -21,5 +21,7 @@
     "key.bbs.record_video": "Record la vidéo",
     "key.bbs.teleport": "Se téléporter au replay actuel",
     "key.bbs.zoom": "Zoom (BBS gun)",
-    "category.bbs.main": "BBS mod"
+    "category.bbs.main": "BBS mod",
+
+    "gamerule.bbsEditing": "Permission d'édition de BBS Mod"
 }
