@@ -1027,6 +1027,13 @@ public class UIKeyframes extends UIElement
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        if (this.currentGraph != this.dopeSheet && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        {
+            this.editSheet(null);
+
+            return true;
+        }
+
         if ((this.scaling || this.stacking) && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
             /* Reset scaling */
