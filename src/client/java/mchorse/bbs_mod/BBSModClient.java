@@ -54,7 +54,6 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.ScreenshotRecorder;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.iris.ShaderCurves;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -305,7 +304,7 @@ public class BBSModClient implements ClientModInitializer
 
         BBSMod.setupConfig(Icons.KEY_CAP, "keybinds", new File(BBSMod.getSettingsFolder(), "keybinds.json"), KeybindSettings::register);
 
-        BBSSettings.language.postCallback((v, f) -> reloadLanguage(((ValueLanguage) v).get()));
+        BBSSettings.language.postCallback((v, f) -> reloadLanguage(getLanguageKey()));
         BBSSettings.editorSeconds.postCallback((v, f) ->
         {
             if (dashboard != null && dashboard.getPanels().panel instanceof UIFilmPanel panel)
@@ -656,13 +655,23 @@ public class BBSModClient implements ClientModInitializer
         }
     }
 
-    public static void reloadLanguage(String language)
+    public static String getLanguageKey()
     {
-        if (language.isEmpty())
+        return getLanguageKey(BBSSettings.language.get());
+    }
+
+    public static String getLanguageKey(String key)
+    {
+        if (key.isEmpty())
         {
-            language = MinecraftClient.getInstance().options.language;
+            key = MinecraftClient.getInstance().options.language;
         }
 
+        return key;
+    }
+
+    public static void reloadLanguage(String language)
+    {
         l10n.reload(language, BBSMod.getProvider());
     }
 }

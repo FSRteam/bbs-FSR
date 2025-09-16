@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.mixin.client;
 
 import mchorse.bbs_mod.BBSModClient;
-import mchorse.bbs_mod.BBSSettings;
 import net.minecraft.client.resource.language.LanguageManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,6 +13,6 @@ public class LanguageManagerMixin
     @Inject(method = "reload", at = @At("TAIL"))
     public void onReload(CallbackInfo info)
     {
-        BBSModClient.reloadLanguage(BBSSettings.language.get());
+        BBSModClient.reloadLanguage(BBSModClient.getLanguageKey());
     }
 }

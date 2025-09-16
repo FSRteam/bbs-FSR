@@ -5,8 +5,10 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
+import net.irisshaders.iris.shaderpack.LanguageMap;
 import net.irisshaders.iris.shaderpack.properties.ShaderProperties;
 import net.irisshaders.iris.texture.TextureTracker;
 import net.irisshaders.iris.texture.pbr.loader.PBRTextureLoaderRegistry;
@@ -18,6 +20,7 @@ import net.irisshaders.iris.vertices.NormalHelper;
 import net.irisshaders.iris.vertices.views.TriView;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +39,24 @@ public class IrisUtils
     public static List<String> getSliderProperties()
     {
         return properties == null ? Collections.emptyList() : properties.getSliderOptions();
+    }
+
+    public static Map<String, Map<String, String>> getShadersLanguageMap()
+    {
+        if (Iris.getCurrentPack().isPresent())
+        {
+            Map<String, Map<String, String>> map = new HashMap<>();
+            LanguageMap languageMap = Iris.getCurrentPack().get().getLanguageMap();
+
+            for (String lang : languageMap.getLanguages())
+            {
+                map.put(lang, languageMap.getTranslations(lang));
+            }
+
+            return map;
+        }
+
+        return Collections.emptyMap();
     }
 
     public static void setup()

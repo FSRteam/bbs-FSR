@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.ui.film.clips;
 
+import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
@@ -12,8 +14,9 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UILabelListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
-import mchorse.bbs_mod.ui.framework.elements.overlay.UIStringOverlayPanel;
+import mchorse.bbs_mod.ui.utils.Label;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -22,6 +25,7 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class UICurveClip extends UIClip<CurveClip>
@@ -36,18 +40,37 @@ public class UICurveClip extends UIClip<CurveClip>
 
     public static void offerCurveKeys(UIContext context, List<String> existing, Consumer<String> callback)
     {
-        List<String> list = new ArrayList<>();
+        List<Label<String>> list = new ArrayList<>();
+        String language = BBSModClient.getLanguageKey();
+        Map<String, Map<String, String>> languageMap = BBSRendering.getShadersLanguageMap();
 
         for (ShaderCurves.ShaderVariable value : ShaderCurves.variableMap.values())
         {
-            list.add(CurveClip.SHADER_CURVES_PREFIX + value.name);
+            if (existing.contains(value.name))
+            {
+                continue;
+            }
+
+            String key = value.name;
+            Map<String, String> stringStringMap = languageMap.getOrDefault(language, languageMap.get("en_us"));
+
+            if (stringStringMap != null)
+            {
+                String newKey = stringStringMap.get("option." + key);
+
+                if (newKey != null)
+                {
+                    key = newKey + " (" + key + ")";
+                }
+            }
+
+            list.add(new Label<>(IKey.constant(key), CurveClip.SHADER_CURVES_PREFIX + value.name));
         }
 
-        list.add(ShaderCurves.BRIGHTNESS);
-        list.add(ShaderCurves.SUN_ROTATION);
-        list.removeAll(existing);
+        if (!existing.contains(ShaderCurves.BRIGHTNESS)) list.add(new Label<>(UIKeys.CAMERA_PANELS_CURVES_BRIGHTNESS, ShaderCurves.BRIGHTNESS));
+        if (!existing.contains(ShaderCurves.SUN_ROTATION)) list.add(new Label<>(UIKeys.CAMERA_PANELS_CURVES_SUN_ROTATION, ShaderCurves.SUN_ROTATION));
 
-        UIStringOverlayPanel panel = new UIStringOverlayPanel(UIKeys.CAMERA_PANELS_PICK_KEY, list, callback);
+        UILabelListOverlayPanel panel = new UILabelListOverlayPanel(UIKeys.CAMERA_PANELS_PICK_KEY, list, callback);
 
         panel.strings.list.sort();
 
