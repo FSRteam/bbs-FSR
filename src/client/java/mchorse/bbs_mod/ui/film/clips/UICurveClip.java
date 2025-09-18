@@ -42,7 +42,7 @@ public class UICurveClip extends UIClip<CurveClip>
     {
         List<Label<String>> list = new ArrayList<>();
         String language = BBSModClient.getLanguageKey();
-        Map<String, Map<String, String>> languageMap = BBSRendering.getShadersLanguageMap();
+        Map<String, String> languageMap = BBSRendering.getShadersLanguageMap(language);
 
         for (ShaderCurves.ShaderVariable value : ShaderCurves.variableMap.values())
         {
@@ -52,16 +52,11 @@ public class UICurveClip extends UIClip<CurveClip>
             }
 
             String key = value.name;
-            Map<String, String> stringStringMap = languageMap.getOrDefault(language, languageMap.get("en_us"));
+            String newKey = languageMap.get("option." + key);
 
-            if (stringStringMap != null)
+            if (newKey != null)
             {
-                String newKey = stringStringMap.get("option." + key);
-
-                if (newKey != null)
-                {
-                    key = newKey + " (" + key + ")";
-                }
+                key = newKey + " (" + key + ")";
             }
 
             list.add(new Label<>(IKey.constant(key), CurveClip.SHADER_CURVES_PREFIX + value.name));
@@ -74,7 +69,7 @@ public class UICurveClip extends UIClip<CurveClip>
 
         panel.strings.list.sort();
 
-        UIOverlay.addOverlay(context, panel);
+        UIOverlay.addOverlay(context, panel, 0.9F, 0.5F);
     }
 
     @Override
