@@ -20,6 +20,7 @@ import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.function.Supplier;
@@ -77,6 +78,22 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
 
         if (data != null)
         {
+            if (this.form.billboard.get())
+            {
+                Matrix4f modelMatrix = matrices.peek().getPositionMatrix();
+                Vector3f scale = Vectors.TEMP_3F;
+
+                modelMatrix.getScale(scale);
+
+                modelMatrix.m00(1).m01(0).m02(0);
+                modelMatrix.m10(0).m11(1).m12(0);
+                modelMatrix.m20(0).m21(0).m22(1);
+
+                modelMatrix.scale(scale);
+
+                matrices.peek().getNormalMatrix().identity();
+            }
+
             Color color = Colors.COLOR.set(overlayColor, true);
             GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
             Color formColor = this.form.color.get();

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.forms.properties.BooleanProperty;
 import mchorse.bbs_mod.forms.properties.ColorProperty;
 import mchorse.bbs_mod.forms.properties.LinkProperty;
 import mchorse.bbs_mod.resources.Link;
@@ -9,6 +10,7 @@ public class ExtrudedForm extends Form
 {
     public final LinkProperty texture = new LinkProperty(this, "texture", null);
     public final ColorProperty color = new ColorProperty(this, "color", Color.white());
+    public final BooleanProperty billboard = new BooleanProperty(this, "billboard", false);
 
     public ExtrudedForm()
     {
@@ -16,6 +18,7 @@ public class ExtrudedForm extends Form
 
         this.register(this.texture);
         this.register(this.color);
+        this.register(this.billboard);
     }
 
     @Override
