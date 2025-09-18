@@ -252,13 +252,12 @@ public class UITrackpad extends UIBaseTextbox
     public void setValue(double value)
     {
         this.setValueInternal(value);
-        this.textbox.setText(this.integer ? FORMAT.format((int) this.value) : FORMAT.format(this.value));
+        this.textbox.setText(this.integer ? String.valueOf((int) this.value) : String.valueOf(this.value));
         this.textbox.moveCursorToStart();
     }
 
     private void setValueInternal(double value)
     {
-        value = Math.round(value * 1000F) / 1000F;
         value = MathUtils.clamp(value, this.min, this.max);
 
         if (this.integer)
@@ -626,7 +625,7 @@ public class UITrackpad extends UIBaseTextbox
             }
 
             FontRenderer font = context.batcher.getFont();
-            String label = this.forcedLabel == null ? this.textbox.getText() : this.forcedLabel.get();
+            String label = this.forcedLabel == null ? FORMAT.format(this.value) : this.forcedLabel.get();
             int lx = this.area.mx(font.getWidth(label));
             int ly = this.area.my() - font.getHeight() / 2;
 
@@ -691,7 +690,7 @@ public class UITrackpad extends UIBaseTextbox
                         double diff = (Math.abs(dx) - 3) * value;
                         double newValue = this.lastValue + (dx < 0 ? -diff : diff);
 
-                        newValue = diff < 0 ? this.lastValue : Math.round(newValue * 1000F) / 1000F;
+                        newValue = diff < 0 ? this.lastValue : newValue;
 
                         if (this.value != newValue)
                         {
