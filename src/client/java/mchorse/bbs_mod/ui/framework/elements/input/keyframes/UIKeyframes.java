@@ -843,9 +843,14 @@ public class UIKeyframes extends UIElement
     @Override
     public void resize()
     {
+        /* Save horizontal view range, and restore it after resize */
+        double minValue = this.xAxis.getMinValue();
+        double maxValue = this.xAxis.getMaxValue();
+
         super.resize();
 
         this.currentGraph.resize();
+        this.xAxis.view(minValue, maxValue);
     }
 
     @Override
