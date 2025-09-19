@@ -123,7 +123,7 @@ public class UIDashboard extends UIBaseMenu
                 this.main.toggleVisible();
             }
         }).category(category);
-        this.overlay.keys().register(new KeyCombo(UIKeys.UTILITY_TITLE, GLFW.GLFW_KEY_F6), () ->
+        this.overlay.keys().register(Keys.OPEN_UTILITY_PANEL, () ->
         {
             if (UIOverlay.has(this.context))
             {

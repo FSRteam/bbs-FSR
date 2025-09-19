@@ -59,6 +59,7 @@ public class Keys
     public static final KeyCombo FLIGHT_ORBIT = new KeyCombo("flight_orbit", UIKeys.CAMERA_FLIGHT_FLIGHT_ORBIT, GLFW.GLFW_KEY_Z).categoryKey("flight");
 
     /* Dashboard */
+    public static final KeyCombo OPEN_UTILITY_PANEL = new KeyCombo("utility_panel", UIKeys.UTILITY_TITLE, GLFW.GLFW_KEY_F6).categoryKey("dashboard");
     public static final KeyCombo OPEN_DATA_MANAGER = new KeyCombo("data_manager", UIKeys.PANELS_KEYS_OPEN_DATA_MANAGER, GLFW.GLFW_KEY_N).categoryKey("dashboard");
     public static final KeyCombo TOGGLE_VISIBILITY = new KeyCombo("toggle", UIKeys.DASHBOARD_CONTEXT_TOGGLE_VISIBILITY, GLFW.GLFW_KEY_F1).categoryKey("dashboard");
 
