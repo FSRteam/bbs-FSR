@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework;
 
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.elements.IFocusedUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -16,6 +17,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
+import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 
@@ -185,6 +187,19 @@ public class UIContext implements IViewportStack
     public boolean isPressed(int keyCode)
     {
         return this.keyCode == keyCode && this.keyAction == KeyAction.PRESSED;
+    }
+
+    public boolean isPressed(KeyCombo combo)
+    {
+        for (int i = 1; i < combo.keys.size(); i++)
+        {
+            if (!Window.isKeyPressed(combo.keys.get(i)))
+            {
+                return false;
+            }
+        }
+
+        return this.isPressed(combo.getMainKey());
     }
 
     public boolean isReleased(int keyCode)

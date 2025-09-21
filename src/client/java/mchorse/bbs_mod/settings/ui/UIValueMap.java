@@ -153,7 +153,7 @@ public class UIValueMap
         register(ValueKeyCombo.class, (value, ui) ->
         {
             UILabel label = UI.label(value.get().label, 0).labelAnchor(0, 0.5F);
-            UIKeybind keybind = new UIKeybind(value::set).mouse();
+            UIKeybind keybind = new UIKeybind(value::set).mouse().escape();
 
             keybind.setKeyCombo(value.get());
             keybind.w(100);

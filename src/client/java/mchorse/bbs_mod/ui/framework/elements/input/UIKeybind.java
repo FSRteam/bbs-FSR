@@ -21,6 +21,7 @@ public class UIKeybind extends UIElement
 
     private boolean single;
     private boolean mouse;
+    private boolean escape;
 
     private boolean first;
 
@@ -45,6 +46,13 @@ public class UIKeybind extends UIElement
     public UIKeybind mouse()
     {
         this.mouse = true;
+
+        return this;
+    }
+
+    public UIKeybind escape()
+    {
+        this.escape = true;
 
         return this;
     }
@@ -122,7 +130,7 @@ public class UIKeybind extends UIElement
     {
         if (this.reading)
         {
-            if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+            if (!this.escape && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
             {
                 this.combo.keys.clear();
                 this.finish();

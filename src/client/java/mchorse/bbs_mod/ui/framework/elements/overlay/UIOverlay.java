@@ -157,17 +157,6 @@ public class UIOverlay extends UIElement
     }
 
     @Override
-    public boolean subKeyPressed(UIContext context)
-    {
-        if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
-        {
-            this.closeItself();
-        }
-
-        return super.subKeyPressed(context);
-    }
-
-    @Override
     public void render(UIContext context)
     {
         if (Colors.getA(this.background) > 0F)

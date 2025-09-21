@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.framework.elements.overlay;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -110,15 +111,15 @@ public class UIOverlayPanel extends UIElement
     @Override
     public boolean subKeyPressed(UIContext context)
     {
-        if (!context.isFocused() || Window.isCtrlPressed())
+        if (!context.isFocused())
         {
-            if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+            if (context.isPressed(Keys.CLOSE))
             {
                 this.close();
 
                 return true;
             }
-            else if (context.isPressed(GLFW.GLFW_KEY_ENTER))
+            else if (context.isPressed(Keys.CONFIRM))
             {
                 this.confirm();
 
