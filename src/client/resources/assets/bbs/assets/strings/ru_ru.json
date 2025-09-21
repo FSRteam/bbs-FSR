@@ -318,6 +318,7 @@
     "bbs.ui.camera.panels.subtitle.opaque": "Плотный",
     "bbs.ui.camera.panels.subtitle.shadow": "Тень",
     "bbs.ui.camera.panels.subtitle.size": "Размер",
+    "bbs.ui.camera.panels.subtitle.text_shadow": "Тень текста",
     "bbs.ui.camera.panels.subtitle.transform": "Трансформация",
     "bbs.ui.camera.panels.subtitle.window": "Окно",
     "bbs.ui.camera.panels.target": "Цель",

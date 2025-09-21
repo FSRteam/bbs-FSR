@@ -18,6 +18,7 @@ public class UISubtitleClip extends UIClip<SubtitleClip>
     public UITrackpad anchorX;
     public UITrackpad anchorY;
     public UIColor color;
+    public UIToggle textShadow;
     public UITrackpad windowX;
     public UITrackpad windowY;
     public UIColor background;
@@ -60,6 +61,10 @@ public class UISubtitleClip extends UIClip<SubtitleClip>
             value.set(c);
         }));
         this.color.withAlpha();
+        this.textShadow = new UIToggle(UIKeys.CAMERA_PANELS_SUBTITLE_TEXT_SHADOW, (b) -> this.editor.editMultiple(this.clip.textShadow, (value) ->
+        {
+            value.set(b.getValue());
+        }));
 
         this.windowX = new UITrackpad((v) -> this.editor.editMultiple(this.clip.windowX, (value) ->
         {
@@ -110,7 +115,7 @@ public class UISubtitleClip extends UIClip<SubtitleClip>
         super.registerPanels();
 
         this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_OFFSET), UI.row(this.x, this.y)).marginTop(6));
-        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_SIZE), this.size, this.color).marginTop(6));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_SIZE), this.size, this.color, this.textShadow).marginTop(6));
         this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_ANCHOR), UI.row(this.anchorX, this.anchorY)).marginTop(6));
         this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_WINDOW), UI.row(this.windowX, this.windowY)).marginTop(6));
         this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_SUBTITLE_BACKGROUND), this.background, this.backgroundOffset).marginTop(6));
@@ -130,6 +135,7 @@ public class UISubtitleClip extends UIClip<SubtitleClip>
         this.anchorX.setValue(this.clip.anchorX.get());
         this.anchorY.setValue(this.clip.anchorY.get());
         this.color.setColor(this.clip.color.get());
+        this.textShadow.setValue(this.clip.textShadow.get());
         this.windowX.setValue(this.clip.windowX.get());
         this.windowY.setValue(this.clip.windowY.get());
         this.background.setColor(this.clip.background.get());

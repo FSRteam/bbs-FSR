@@ -22,6 +22,7 @@ public class SubtitleClip extends CameraClip
     public ValueFloat anchorX = new ValueFloat("anchorX", 0.5F);
     public ValueFloat anchorY = new ValueFloat("anchorY", 0.5F);
     public ValueInt color = new ValueInt("color", Colors.WHITE);
+    public ValueBoolean textShadow = new ValueBoolean("textShadow", true);
     public ValueFloat windowX = new ValueFloat("windowX", 0.5F);
     public ValueFloat windowY = new ValueFloat("windowY", 0.5F);
     public ValueInt background = new ValueInt("background", 0);
@@ -61,6 +62,7 @@ public class SubtitleClip extends CameraClip
         this.add(this.anchorX);
         this.add(this.anchorY);
         this.add(this.color);
+        this.add(this.textShadow);
         this.add(this.windowX);
         this.add(this.windowY);
         this.add(this.background);
@@ -79,7 +81,7 @@ public class SubtitleClip extends CameraClip
         float factor = this.envelope.factorEnabled(this.duration.get(), context.relativeTick + context.transition);
         int color = Colors.setA(this.color.get(), factor * Colors.getA(this.color.get()));
 
-        this.subtitle.update(this.title.get(), this.x.get(), this.y.get(), this.size.get(), this.anchorX.get(), this.anchorY.get(), color);
+        this.subtitle.update(this.title.get(), this.x.get(), this.y.get(), this.size.get(), this.anchorX.get(), this.anchorY.get(), color, this.textShadow.get());
         this.subtitle.updateWindow(this.windowX.get(), this.windowY.get());
         this.subtitle.updateBackground(this.background.get(), this.backgroundOffset.get(), this.shadow.get(), this.shadowOpaque.get());
         this.subtitle.updateTransform(this.transform.get(), factor);

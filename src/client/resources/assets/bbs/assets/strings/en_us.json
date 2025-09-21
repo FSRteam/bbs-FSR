@@ -318,6 +318,7 @@
     "bbs.ui.camera.panels.subtitle.opaque": "Opaque",
     "bbs.ui.camera.panels.subtitle.shadow": "Shadow",
     "bbs.ui.camera.panels.subtitle.size": "Size",
+    "bbs.ui.camera.panels.subtitle.text_shadow": "Text shadow",
     "bbs.ui.camera.panels.subtitle.transform": "Transform",
     "bbs.ui.camera.panels.subtitle.window": "Window",
     "bbs.ui.camera.panels.target": "Target",

@@ -119,11 +119,11 @@ public class UISubtitleRenderer
 
                 if (Colors.getA(subtitle.backgroundColor) > 0)
                 {
-                    batcher.textCard(string, xx, yy, Colors.setA(subColor, 1F), Colors.mulA(subtitle.backgroundColor, alpha), subtitle.backgroundOffset);
+                    batcher.textCard(string, xx, yy, Colors.setA(subColor, 1F), Colors.mulA(subtitle.backgroundColor, alpha), subtitle.backgroundOffset, subtitle.textShadow);
                 }
                 else
                 {
-                    batcher.textShadow(string, xx, yy, Colors.setA(subColor, 1F));
+                    batcher.text(string, xx, yy, Colors.setA(subColor, 1F), subtitle.textShadow);
                 }
 
                 yy += subtitle.lineHeight;

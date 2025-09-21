@@ -13,6 +13,7 @@ public class Subtitle
     public float windowX;
     public float windowY;
     public int color;
+    public boolean textShadow;
     public int backgroundColor;
     public float backgroundOffset;
     public float shadow;
@@ -24,7 +25,7 @@ public class Subtitle
     public int lineHeight;
     public int maxWidth;
 
-    public void update(String label, int x, int y, float size, float anchorX, float anchorY, int color)
+    public void update(String label, int x, int y, float size, float anchorX, float anchorY, int color, boolean textShadow)
     {
         this.label = label;
         this.x = x;
@@ -33,6 +34,7 @@ public class Subtitle
         this.anchorX = anchorX;
         this.anchorY = anchorY;
         this.color = color;
+        this.textShadow = textShadow;
     }
 
     public void updateWindow(float x, float y)
