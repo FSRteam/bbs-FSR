@@ -2,6 +2,7 @@ package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.film.replays.FormProperties;
@@ -25,6 +26,7 @@ import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector4f;
@@ -34,7 +36,7 @@ public class Recorder extends WorldFilmController
     public ReplayKeyframes keyframes = new ReplayKeyframes("keyframes");
     public FormProperties properties = new FormProperties("properties");
 
-    private Matrix4f perspective = new Matrix4f();
+    private static Matrix4f perspective = new Matrix4f();
 
     public Form lastForm;
     public Vector3d lastPosition;
@@ -42,6 +44,63 @@ public class Recorder extends WorldFilmController
 
     public int countdown;
     public final int initialTick;
+
+    public static void renderCameraPreview(Position position, Camera camera, MatrixStack stack)
+    {
+        if (!BBSSettings.recordingOverlays.get())
+        {
+            return;
+        }
+
+        Vector4f vector = Vectors.TEMP_4F;
+        Matrix4f matrix = Matrices.TEMP_4F;
+        float x = (float) (position.point.x - camera.getPos().x);
+        float y = (float) (position.point.y - camera.getPos().y);
+        float z = (float) (position.point.z - camera.getPos().z);
+        float fov = MathUtils.toRad(position.angle.fov);
+        float aspect = BBSRendering.getVideoWidth() / (float) BBSRendering.getVideoHeight();
+        float thickness = 0.025F;
+
+        perspective.identity().perspective(fov, aspect, 0.001F, 100F).invert();
+
+        matrix.identity()
+            .rotateY(MathUtils.toRad(position.angle.yaw + 180))
+            .rotateX(MathUtils.toRad(-position.angle.pitch));
+
+        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+        transformFrustum(vector, matrix, 1F, 1F);
+        Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
+
+        transformFrustum(vector, matrix, -1F, 1F);
+        Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
+
+        transformFrustum(vector, matrix, 1F, -1F);
+        Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
+
+        transformFrustum(vector, matrix, -1F, -1F);
+        Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
+
+        transformFrustum(vector, matrix, 0F, 0F);
+        Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 0F, 0.5F, 1F, 1F);
+
+        BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        RenderSystem.disableDepthTest();
+    }
+
+    private static void transformFrustum(Vector4f vector, Matrix4f matrix, float x, float y)
+    {
+        vector.set(x, y, 0F, 1F);
+        vector.mul(perspective);
+        vector.w = 1F;
+        vector.normalize().mul(100F);
+        vector.w = 1F;
+        vector.mul(matrix);
+    }
 
     public Recorder(Film film, Form form, int replayId, int tick)
     {
@@ -90,60 +149,7 @@ public class Recorder extends WorldFilmController
     {
         super.render(context);
 
-        if (!BBSSettings.recordingOverlays.get())
-        {
-            return;
-        }
-
-        Camera camera = context.camera();
-        Vector4f vector = Vectors.TEMP_4F;
-        Matrix4f matrix = Matrices.TEMP_4F;
-        float x = (float) (this.position.point.x - camera.getPos().x);
-        float y = (float) (this.position.point.y - camera.getPos().y);
-        float z = (float) (this.position.point.z - camera.getPos().z);
-        float fov = MathUtils.toRad(this.position.angle.fov);
-        float aspect = BBSRendering.getVideoWidth() / (float) BBSRendering.getVideoHeight();
-        float thickness = 0.025F;
-
-        this.perspective.identity().perspective(fov, aspect, 0.001F, 100F).invert();
-
-        matrix.identity()
-            .rotateY(MathUtils.toRad(this.position.angle.yaw + 180))
-            .rotateX(MathUtils.toRad(-this.position.angle.pitch));
-
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
-
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-        this.transformFrustum(vector, matrix, 1F, 1F);
-        Draw.fillBoxTo(builder, context.matrixStack(), x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
-
-        this.transformFrustum(vector, matrix, -1F, 1F);
-        Draw.fillBoxTo(builder, context.matrixStack(), x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
-
-        this.transformFrustum(vector, matrix, 1F, -1F);
-        Draw.fillBoxTo(builder, context.matrixStack(), x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
-
-        this.transformFrustum(vector, matrix, -1F, -1F);
-        Draw.fillBoxTo(builder, context.matrixStack(), x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
-
-        this.transformFrustum(vector, matrix, 0F, 0F);
-        Draw.fillBoxTo(builder, context.matrixStack(), x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 0F, 0.5F, 1F, 1F);
-
-        BufferRenderer.drawWithGlobalProgram(builder.end());
-
-        RenderSystem.disableDepthTest();
-    }
-
-    private void transformFrustum(Vector4f vector, Matrix4f matrix, float x, float y)
-    {
-        vector.set(x, y, 0F, 1F);
-        vector.mul(this.perspective);
-        vector.w = 1F;
-        vector.normalize().mul(100F);
-        vector.w = 1F;
-        vector.mul(matrix);
+        renderCameraPreview(this.position, context.camera(), context.matrixStack());
     }
 
     @Override

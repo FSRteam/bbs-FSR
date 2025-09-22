@@ -29,6 +29,11 @@ public abstract class CameraWorkCameraController implements ICameraController
         return this.context;
     }
 
+    public Position getPosition()
+    {
+        return this.position;
+    }
+
     protected void apply(Camera camera, int ticks, float transition)
     {
         if (camera != null)

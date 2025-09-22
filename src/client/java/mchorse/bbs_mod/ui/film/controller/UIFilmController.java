@@ -15,6 +15,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmControllerContext;
+import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -1116,6 +1117,13 @@ public class UIFilmController extends UIElement
         if (this.editorController != null)
         {
             this.editorController.render(context);
+
+            int povMode = this.panel.getController().getPovMode();
+
+            if (povMode == UIFilmController.CAMERA_MODE_FREE || povMode == UIFilmController.CAMERA_MODE_ORBIT)
+            {
+                Recorder.renderCameraPreview(this.panel.getRunner().getPosition(), context.camera(), context.matrixStack());
+            }
         }
 
         Mouse mouse = MinecraftClient.getInstance().mouse;
