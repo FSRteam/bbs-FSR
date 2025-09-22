@@ -134,7 +134,7 @@ public class ShaderCurves
     private static Map<String, ShaderVariable> parseVariables(String source)
     {
         Map<String, ShaderVariable> variables = new HashMap<>();
-        Pattern definePattern = Pattern.compile("^\\s*(?!//)\\s*#define +([\\w_]+) +([\\d.]+) *// *\\[");
+        Pattern definePattern = Pattern.compile("^\\s*(?!//)\\s*#define +([\\w_]+) +([\\d.]+) *// *(\\[|OptionAnnotatedSource)");
         int index = 0;
 
         while ((index = source.indexOf("#define", index)) != -1)

@@ -1120,7 +1120,7 @@ public class UIFilmController extends UIElement
 
             int povMode = this.panel.getController().getPovMode();
 
-            if (povMode == UIFilmController.CAMERA_MODE_FREE || povMode == UIFilmController.CAMERA_MODE_ORBIT)
+            if (povMode != UIFilmController.CAMERA_MODE_CAMERA)
             {
                 Recorder.renderCameraPreview(this.panel.getRunner().getPosition(), context.camera(), context.matrixStack());
             }
