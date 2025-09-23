@@ -5,6 +5,7 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.math.Operation;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -850,7 +851,11 @@ public class UIKeyframes extends UIElement
         super.resize();
 
         this.currentGraph.resize();
-        this.xAxis.view(minValue, maxValue);
+
+        if (!Operation.equals(minValue, maxValue))
+        {
+            this.xAxis.view(minValue, maxValue);
+        }
     }
 
     @Override
