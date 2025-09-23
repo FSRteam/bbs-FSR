@@ -1,10 +1,6 @@
 package mchorse.bbs_mod.ui.film.clips;
 
 import mchorse.bbs_mod.camera.clips.modifiers.TrackerClip;
-import mchorse.bbs_mod.forms.FormUtilsClient;
-import mchorse.bbs_mod.forms.entities.IEntity;
-import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -15,14 +11,6 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.utils.UI;
-import mchorse.bbs_mod.ui.utils.icons.Icons;
-import net.minecraft.client.util.math.MatrixStack;
-import org.joml.Matrix4f;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 public class UITrackerClip extends UIClip<TrackerClip>
 {
@@ -55,7 +43,10 @@ public class UITrackerClip extends UIClip<TrackerClip>
             }
         });
         this.selector.tooltip(UIKeys.CAMERA_PANELS_TARGET_TOOLTIP);
-        this.group = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ATTACHMENT, (b) -> this.displayGroups());
+        this.group = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ATTACHMENT, (b) ->
+        {
+            UIAnchorKeyframeFactory.displayAttachments(this.getParent(UIFilmPanel.class), this.clip.selector.get(), this.clip.group.get(), (attachment) -> this.clip.group.set(attachment));
+        });
 
         this.point = new UIPointModule(this.editor, UIKeys.CAMERA_PANELS_OFFSET).contextMenu();
         this.angle = new UIPointModule(this.editor, UIKeys.CAMERA_PANELS_ANGLE).contextMenu();
@@ -66,42 +57,9 @@ public class UITrackerClip extends UIClip<TrackerClip>
         this.active = new UIBitToggle((value) -> this.clip.active.set(value)).all();
     }
 
-    private void displayGroups()
+    private UIFilmPanel getPanel()
     {
-        List<UIFilmPanel> children = this.getContext().menu.main.getChildren(UIFilmPanel.class);
-        UIFilmPanel panel = children.isEmpty() ? null : children.get(0);
-        int index = this.clip.selector.get();
-        IEntity entity = panel.getController().getEntities().get(index);
-
-        if (entity == null || entity.getForm() == null)
-        {
-            return;
-        }
-
-        Form form = entity.getForm();
-        Map<String, Matrix4f> map = new HashMap<>();
-        MatrixStack stack = new MatrixStack();
-
-        FormUtilsClient.getRenderer(form).collectMatrices(entity, null, stack, map, "", 0);
-
-        List<String> groups = new ArrayList<>(map.keySet());
-
-        groups.sort(String::compareToIgnoreCase);
-
-        if (groups.isEmpty())
-        {
-            return;
-        }
-
-        String value = this.clip.group.get();
-
-        this.getContext().replaceContextMenu((menu) ->
-        {
-            for (String attachment : groups)
-            {
-                menu.action(Icons.LIMB, IKey.constant(attachment), attachment.equals(value), () -> this.clip.group.set(attachment));
-            }
-        });
+        return this.getContext().menu.getRoot().getChildren(UIFilmPanel.class).get(0);
     }
 
     @Override

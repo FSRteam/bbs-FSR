@@ -551,6 +551,7 @@
     "bbs.ui.forms.editors.general.movement_speed-tooltip": "Эта опция не меняет скорость передвижения актёра записи. Только действует на морфнутого игрока!",
     "bbs.ui.forms.editors.general.shader_shadow": "Тень шейдеров",
     "bbs.ui.forms.editors.general.step_height": "Высота шага",
+    "bbs.ui.forms.editors.general.track_name-tooltip": "Когда указано, специальный префикс будет виден в треках ключевых кадрах и списках костях вместо путя наподобие \"0/1/2\"",
     "bbs.ui.forms.editors.general.ui_scale": "Масштаб интерфейса",
     "bbs.ui.forms.editors.general.visible": "Видимый",
     "bbs.ui.forms.editors.item.title": "Настройки предмета",

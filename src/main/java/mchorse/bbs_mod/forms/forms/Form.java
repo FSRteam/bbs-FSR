@@ -14,6 +14,7 @@ import mchorse.bbs_mod.forms.properties.IFormProperty;
 import mchorse.bbs_mod.forms.properties.IntegerProperty;
 import mchorse.bbs_mod.forms.properties.StringProperty;
 import mchorse.bbs_mod.forms.properties.TransformProperty;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -28,6 +29,7 @@ public abstract class Form implements IMapSerializable
 
     public final BooleanProperty visible = new BooleanProperty(this, "visible", true);
     public final BooleanProperty animatable = new BooleanProperty(this, "animatable", true);
+    public final StringProperty trackName = new StringProperty(this, "track_name", "");
     public final FloatProperty lighting = new FloatProperty(this, "lighting", 1F);
     public final StringProperty name = new StringProperty(this, "name", "");
     public final TransformProperty transform = new TransformProperty(this, "transform", new Transform());
@@ -64,6 +66,7 @@ public abstract class Form implements IMapSerializable
 
         this.register(this.visible);
         this.register(this.animatable);
+        this.register(this.trackName);
         this.register(this.lighting);
         this.register(this.name);
         this.register(this.transform);
@@ -194,6 +197,26 @@ public abstract class Form implements IMapSerializable
     protected String getDefaultDisplayName()
     {
         return this.getId();
+    }
+
+    public String getTrackName(String property)
+    {
+        String s = this.trackName.get();
+
+        if (!s.isEmpty())
+        {
+            if (property.isEmpty())
+            {
+                return s;
+            }
+
+            int slash = property.lastIndexOf('/');
+            String last = slash == -1 ? property : property.substring(slash + 1);
+
+            return s + (StringUtils.isInteger(last) ? "" : "/" + last);
+        }
+
+        return property;
     }
 
     /* Update */

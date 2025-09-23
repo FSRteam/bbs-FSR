@@ -7,7 +7,7 @@ import java.util.Objects;
 
 public abstract class BaseProperty <T> implements IFormProperty<T>
 {
-    protected Form form;
+    protected final Form form;
     protected String key;
     protected T value;
 

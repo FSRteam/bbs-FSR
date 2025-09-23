@@ -18,6 +18,7 @@ public class UIGeneralFormPanel extends UIFormPanel
 
     public UIToggle visible;
     public UIToggle animatable;
+    public UITextbox trackName;
     public UIToggle lighting;
     public UIToggle shaderShadow;
     public UITrackpad uiScale;
@@ -46,7 +47,9 @@ public class UIGeneralFormPanel extends UIFormPanel
 
         this.visible = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_VISIBLE, (b) -> this.form.visible.set(b.getValue()));
         this.animatable = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_ANIMATABLE, (b) -> this.form.animatable.set(b.getValue()));
-        this.animatable.tooltip(UIKeys.FORMS_EDITORS_GENERAL_ANIMATABLET_TOOLTIP);
+        this.animatable.tooltip(UIKeys.FORMS_EDITORS_GENERAL_ANIMATABLE_TOOLTIP);
+        this.trackName = new UITextbox(120, (t) -> this.form.trackName.set(t));
+        this.trackName.tooltip(UIKeys.FORMS_EDITORS_GENERAL_TRACK_NAME_TOOLTIP);
         this.lighting = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING, (b) -> this.form.lighting.set(b.getValue() ? 1F : 0F));
         this.lighting.tooltip(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING_TOOLTIP);
         this.shaderShadow = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_SHADER_SHADOW, (b) -> this.form.shaderShadow.set(b.getValue()));
@@ -75,7 +78,7 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.stepHeight.limit(0F);
 
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_GENERAL_DISPLAY), this.name);
-        this.options.add(this.hotkey, this.visible, this.animatable, this.lighting, this.shaderShadow);
+        this.options.add(this.hotkey, this.visible, this.animatable, this.trackName, this.lighting, this.shaderShadow);
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_GENERAL_UI_SCALE), this.uiScale);
         this.options.add(this.transform.marginTop(8));
         this.options.add(this.hitbox.marginTop(12), UI.row(this.hitboxWidth, this.hitboxHeight));
@@ -95,6 +98,7 @@ public class UIGeneralFormPanel extends UIFormPanel
 
         this.visible.setValue(form.visible.get());
         this.animatable.setValue(form.animatable.get());
+        this.trackName.setText(form.trackName.get());
         this.lighting.setValue(form.lighting.get() > 0F);
         this.shaderShadow.setValue(form.shaderShadow.get());
         this.uiScale.setValue(form.uiScale.get());

@@ -2,10 +2,12 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
 import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.properties.AnchorProperty;
+import mchorse.bbs_mod.forms.properties.IFormProperty;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -15,6 +17,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import net.minecraft.client.util.math.MatrixStack;
@@ -57,31 +60,8 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
         });
     }
 
-    public UIAnchorKeyframeFactory(Keyframe<AnchorProperty.Anchor> keyframe, UIKeyframes editor)
+    public static void displayAttachments(UIFilmPanel panel, int index, String value, Consumer<String> consumer)
     {
-        super(keyframe, editor);
-
-        this.actor = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ACTOR, (b) -> this.displayActors());
-        this.attachment = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ATTACHMENT, (b) -> this.displayAttachments());
-        this.translate = new UIToggle(UIKeys.TRANSFORMS_TRANSLATE, (b) -> this.setTranslate(b.getValue()));
-        this.translate.setValue(keyframe.getValue().translate);
-        this.scale = new UIToggle(UIKeys.TRANSFORMS_SCALE, (b) -> this.setScale(b.getValue()));
-        this.scale.setValue(keyframe.getValue().scale);
-
-        this.scroll.add(this.actor, this.attachment, this.translate, this.scale);
-    }
-
-    private void displayActors()
-    {
-        UIFilmPanel panel = this.getPanel();
-
-        displayActors(this.getContext(), panel.getController().getEntities(), this.keyframe.getValue().actor, this::setActor);
-    }
-
-    private void displayAttachments()
-    {
-        UIFilmPanel panel = this.getPanel();
-        int index = this.keyframe.getValue().actor;
         IEntity entity = panel.getController().getEntities().get(index);
 
         if (entity == null || entity.getForm() == null)
@@ -99,20 +79,59 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
 
         attachments.sort(String::compareToIgnoreCase);
 
+        /* Collect labels (substitute track names) */
+        List<String> labels = new ArrayList<>(attachments);
+
+        for (int i = 0; i < labels.size(); i++)
+        {
+            String label = labels.get(i);
+            Form path = FormUtils.getForm(form, label);
+
+            if (path != null)
+            {
+                labels.set(i, path.getTrackName(label));
+            }
+        }
+
         if (attachments.isEmpty())
         {
             return;
         }
 
-        String value = this.keyframe.getValue().attachment;
-
-        this.getContext().replaceContextMenu((menu) ->
+        panel.getContext().replaceContextMenu((menu) ->
         {
-            for (String attachment : attachments)
+            for (int i = 0; i < attachments.size(); i++)
             {
-                menu.action(Icons.LIMB, IKey.constant(attachment), attachment.equals(value), () -> this.setAttachment(attachment));
+                String attachment = attachments.get(i);
+                String label = labels.get(i);
+
+                menu.action(Icons.LIMB, IKey.constant(label), attachment.equals(value), () -> consumer.accept(attachment));
             }
         });
+    }
+
+    public UIAnchorKeyframeFactory(Keyframe<AnchorProperty.Anchor> keyframe, UIKeyframes editor)
+    {
+        super(keyframe, editor);
+
+        this.actor = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ACTOR, (b) -> this.displayActors());
+        this.attachment = new UIButton(UIKeys.GENERIC_KEYFRAMES_ANCHOR_PICK_ATTACHMENT, (b) ->
+        {
+            displayAttachments(this.getPanel(), this.keyframe.getValue().actor, this.keyframe.getValue().attachment, this::setAttachment);
+        });
+        this.translate = new UIToggle(UIKeys.TRANSFORMS_TRANSLATE, (b) -> this.setTranslate(b.getValue()));
+        this.translate.setValue(keyframe.getValue().translate);
+        this.scale = new UIToggle(UIKeys.TRANSFORMS_SCALE, (b) -> this.setScale(b.getValue()));
+        this.scale.setValue(keyframe.getValue().scale);
+
+        this.scroll.add(this.actor, this.attachment, this.translate, this.scale);
+    }
+
+    private void displayActors()
+    {
+        UIFilmPanel panel = this.getPanel();
+
+        displayActors(this.getContext(), panel.getController().getEntities(), this.keyframe.getValue().actor, this::setActor);
     }
 
     private void setActor(int actor)
@@ -137,6 +156,6 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<AnchorProperty.An
 
     private UIFilmPanel getPanel()
     {
-        return this.getContext().menu.getRoot().getChildren(UIFilmPanel.class).get(0);
+        return this.getParent(UIFilmPanel.class);
     }
 }

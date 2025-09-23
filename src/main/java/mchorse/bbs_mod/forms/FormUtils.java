@@ -62,6 +62,35 @@ public class FormUtils
         return form;
     }
 
+    public static Form getForm(Form form, String path)
+    {
+        String[] split = path.split(PATH_SEPARATOR);
+
+        for (String s : split)
+        {
+            try
+            {
+                int index = Integer.parseInt(s);
+                BodyPart safe = CollectionUtils.getSafe(form.parts.getAll(), index);
+
+                if (safe != null)
+                {
+                    form = safe.getForm();
+                }
+                else
+                {
+                    break;
+                }
+            }
+            catch (Exception e)
+            {
+                break;
+            }
+        }
+
+        return form;
+    }
+
     public static String getPath(Form form)
     {
         if (form.getParent() == null)
