@@ -16,6 +16,7 @@ import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -182,7 +183,13 @@ public class BOBJModel implements IModel
     @Override
     public Collection<ModelGroup> getAllGroups()
     {
-        return List.of();
+        return Collections.emptyList();
+    }
+
+    @Override
+    public Collection<BOBJBone> getAllBOBJBones()
+    {
+        return Collections.unmodifiableList(this.armature.orderedBones);
     }
 
     @Override

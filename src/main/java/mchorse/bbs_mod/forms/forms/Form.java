@@ -60,6 +60,7 @@ public abstract class Form implements IMapSerializable
     public Form()
     {
         this.animatable.cantAnimate();
+        this.trackName.cantAnimate();
         this.name.cantAnimate();
         this.uiScale.cantAnimate();
         this.shaderShadow.cantAnimate();

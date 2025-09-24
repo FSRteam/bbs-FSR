@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.cubic;
 
+import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -25,6 +26,8 @@ public interface IModel
     public Collection<String> getAllChildrenKeys(String key);
 
     public Collection<ModelGroup> getAllGroups();
+
+    public Collection<BOBJBone> getAllBOBJBones();
 
     public Collection<String> getAdjacentGroups(String groupName);
 

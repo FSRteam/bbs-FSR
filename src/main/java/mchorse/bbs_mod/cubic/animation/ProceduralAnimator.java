@@ -1,9 +1,11 @@
 package mchorse.bbs_mod.cubic.animation;
 
+import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.IModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.Animations;
+import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -136,10 +138,6 @@ public class ProceduralAnimator implements IAnimator
             coefficient = Math.min(1F, coefficient * coefficient * coefficient);
         }
 
-        ModelGroup leftArm = null;
-        ModelGroup rightArm = null;
-        ModelGroup torso = null;
-
         model.resetPose();
 
         if (target.isSneaking())
@@ -147,139 +145,283 @@ public class ProceduralAnimator implements IAnimator
             model.applyPose(armature.getSneakingPose());
         }
 
-        for (ModelGroup group : model.getAllGroups())
+        /* For regular models */
+        if (model instanceof Model)
         {
-            if (group.id.equals("anchor"))
+            ModelGroup leftArm = null;
+            ModelGroup rightArm = null;
+            ModelGroup torso = null;
+
+            for (ModelGroup group : model.getAllGroups())
             {
-                if (target.isUsingRiptide())
+                if (group.id.equals("anchor"))
                 {
-                    group.current.rotate.x = -90.0F - pitch;
-                    group.current.rotate2.y = age * -75.0F;
-                }
-
-                if (target.isFallFlying())
-                {
-                    float roll = target.getRoll() + transition;
-                    float riptide = MathHelper.clamp(roll * roll / 100F, 0F, 1F);
-
-                    if (!target.isUsingRiptide())
+                    if (target.isUsingRiptide())
                     {
-                        group.current.rotate.x = riptide * (-90 - pitch);
+                        group.current.rotate.x = -90.0F - pitch;
+                        group.current.rotate2.y = age * -75.0F;
                     }
 
-                    Vec3d look = target.getRotationVec(transition);
-                    Vec3d velocity = target.lerpVelocity(transition);
-                    double vl = velocity.horizontalLengthSquared();
-                    double ll = look.horizontalLengthSquared();
-
-                    if (vl > 0 && ll > 0)
+                    if (target.isFallFlying())
                     {
-                        double m = (velocity.x * look.x + velocity.z * look.z) / Math.sqrt(vl * ll);
-                        double n = velocity.x * look.z - velocity.z * look.x;
+                        float roll = target.getRoll() + transition;
+                        float riptide = MathHelper.clamp(roll * roll / 100F, 0F, 1F);
 
-                        group.current.rotate.y = MathUtils.toDeg((float)(Math.signum(n) * Math.acos(m)));
+                        if (!target.isUsingRiptide())
+                        {
+                            group.current.rotate.x = riptide * (-90 - pitch);
+                        }
+
+                        Vec3d look = target.getRotationVec(transition);
+                        Vec3d velocity = target.lerpVelocity(transition);
+                        double vl = velocity.horizontalLengthSquared();
+                        double ll = look.horizontalLengthSquared();
+
+                        if (vl > 0 && ll > 0)
+                        {
+                            double m = (velocity.x * look.x + velocity.z * look.z) / Math.sqrt(vl * ll);
+                            double n = velocity.x * look.z - velocity.z * look.x;
+
+                            group.current.rotate.y = MathUtils.toDeg((float)(Math.signum(n) * Math.acos(m)));
+                        }
+                    }
+                    else if (leaningPitch > 0F)
+                    {
+                        float newPitch = target.isTouchingWater() ? -90F - pitch : -90F;
+
+                        group.current.rotate.x = MathHelper.lerp(leaningPitch, 0F, newPitch);
+
+                        if (target.getEntityPose() == EntityPose.SWIMMING)
+                        {
+                            group.current.translate.y -= 0.5F * 16F;
+                            group.current.translate.z += 0.3F * 16F;
+                        }
                     }
                 }
-                else if (leaningPitch > 0F)
+                else if (group.id.equals("head"))
                 {
-                    float newPitch = target.isTouchingWater() ? -90F - pitch : -90F;
+                    group.current.rotate.y = -yaw;
 
-                    group.current.rotate.x = MathHelper.lerp(leaningPitch, 0F, newPitch);
-
-                    if (target.getEntityPose() == EntityPose.SWIMMING)
+                    if (isRolling)
                     {
-                        group.current.translate.y -= 0.5F * 16F;
-                        group.current.translate.z += 0.3F * 16F;
+                        group.current.rotate.x = 45;
+                    }
+                    else if (leaningPitch > 0F)
+                    {
+                        group.current.rotate.x = this.lerpAngle(leaningPitch, group.current.rotate.x, isInSwimmingPose ? 45 : -pitch);
+                    }
+                    else
+                    {
+                        group.current.rotate.x = -pitch;
                     }
                 }
-            }
-            else if (group.id.equals("head"))
-            {
-                group.current.rotate.y = -yaw;
-
-                if (isRolling)
+                else if (group.id.equals("right_arm"))
                 {
-                    group.current.rotate.x = 45;
-                }
-                else if (leaningPitch > 0F)
-                {
-                    group.current.rotate.x = this.lerpAngle(leaningPitch, group.current.rotate.x, isInSwimmingPose ? 45 : -pitch);
-                }
-                else
-                {
-                    group.current.rotate.x = -pitch;
-                }
-            }
-            else if (group.id.equals("right_arm"))
-            {
-                group.current.rotate.x += MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F) * 2.0F * limbSpeed * 0.5F / coefficient);
-                group.current.rotate.z += MathUtils.toDeg(1F * (MathHelper.cos(-age * 0.09F) * 0.05F + 0.05F));
-                group.current.rotate.x += MathUtils.toDeg(1F * MathHelper.sin(-age * 0.067F) * 0.05F);
+                    group.current.rotate.x += MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F) * 2.0F * limbSpeed * 0.5F / coefficient);
+                    group.current.rotate.z += MathUtils.toDeg(1F * (MathHelper.cos(-age * 0.09F) * 0.05F + 0.05F));
+                    group.current.rotate.x += MathUtils.toDeg(1F * MathHelper.sin(-age * 0.067F) * 0.05F);
 
-                if (!main.isEmpty())
-                {
-                    group.current.rotate.x = group.current.rotate.x * 0.5F + 18F;
+                    if (!main.isEmpty())
+                    {
+                        group.current.rotate.x = group.current.rotate.x * 0.5F + 18F;
+                    }
+
+                    rightArm = group;
                 }
-
-                rightArm = group;
-            }
-            else if (group.id.equals("left_arm"))
-            {
-                group.current.rotate.x += MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F + 3.1415927F) * 2.0F * limbSpeed * 0.5F / coefficient);
-                group.current.rotate.z += MathUtils.toDeg(-1F * (MathHelper.cos(-age * 0.09F) * 0.05F + 0.05F));
-                group.current.rotate.x += MathUtils.toDeg(-1F * MathHelper.sin(-age * 0.067F) * 0.05F);
-
-                if (!offhand.isEmpty())
+                else if (group.id.equals("left_arm"))
                 {
-                    group.current.rotate.x = group.current.rotate.x * 0.5F + 18F;
-                }
+                    group.current.rotate.x += MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F + 3.1415927F) * 2.0F * limbSpeed * 0.5F / coefficient);
+                    group.current.rotate.z += MathUtils.toDeg(-1F * (MathHelper.cos(-age * 0.09F) * 0.05F + 0.05F));
+                    group.current.rotate.x += MathUtils.toDeg(-1F * MathHelper.sin(-age * 0.067F) * 0.05F);
 
-                leftArm = group;
+                    if (!offhand.isEmpty())
+                    {
+                        group.current.rotate.x = group.current.rotate.x * 0.5F + 18F;
+                    }
+
+                    leftArm = group;
+                }
+                else if (group.id.equals("torso"))
+                {
+                    torso = group;
+                }
+                else if (group.id.equals("right_leg"))
+                {
+                    group.current.rotate.x = MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F + 3.1415927F) * 1.4F * limbSpeed / coefficient);
+                }
+                else if (group.id.equals("left_leg"))
+                {
+                    group.current.rotate.x = MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F) * 1.4F * limbSpeed / coefficient);
+                }
             }
-            else if (group.id.equals("torso"))
+
+            if (handSwingProgress > 0F && torso != null && leftArm != null && rightArm != null)
             {
-                torso = group;
-            }
-            else if (group.id.equals("right_leg"))
-            {
-                group.current.rotate.x = MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F + 3.1415927F) * 1.4F * limbSpeed / coefficient);
-            }
-            else if (group.id.equals("left_leg"))
-            {
-                group.current.rotate.x = MathUtils.toDeg(MathHelper.cos(limbPhase * 0.6662F) * 1.4F * limbSpeed / coefficient);
+                ModelGroup group;
+                float swingFactor = handSwingProgress;
+
+                torso.current.rotate.y = -MathUtils.toDeg(MathHelper.sin(MathHelper.sqrt(swingFactor) * MathUtils.PI * 2F) * 0.2F);
+
+                leftArm.current.translate.z += (float) Math.sin(MathUtils.toRad(torso.current.rotate.y)) * 5F;
+                leftArm.current.translate.x += (float) Math.cos(MathUtils.toRad(torso.current.rotate.y)) * 5F - 5F;
+                rightArm.current.translate.z -= (float) Math.sin(MathUtils.toRad(torso.current.rotate.y)) * 5F;
+                rightArm.current.translate.x -= (float) Math.cos(MathUtils.toRad(torso.current.rotate.y)) * 5F - 5F;
+
+                group = rightArm;
+                group.current.rotate.y += torso.current.rotate.y;
+                group = leftArm;
+                group.current.rotate.y += torso.current.rotate.y;
+                group = leftArm;
+                group.current.rotate.x += torso.current.rotate.y;
+
+                swingFactor = 1F - handSwingProgress;
+                swingFactor *= swingFactor;
+                swingFactor *= swingFactor;
+                swingFactor = 1F - swingFactor;
+
+                float headPitch = 0F;
+                float swing1 = MathHelper.sin(swingFactor * MathUtils.PI);
+                float swign2 = MathHelper.sin(handSwingProgress * MathUtils.PI) * -(headPitch - 0.7F) * 0.75F;
+                rightArm.current.rotate.x = group.current.rotate.x + MathUtils.toDeg(swing1 * 1.2F + swign2);
+                rightArm.current.rotate.y += torso.current.rotate.y * 2F;
+                rightArm.current.rotate.z += MathUtils.toDeg(MathHelper.sin(handSwingProgress * MathUtils.PI) * -0.4F);
             }
         }
-
-        if (handSwingProgress > 0F && torso != null && leftArm != null && rightArm != null)
+        /* For BOBJ models */
+        else
         {
-            ModelGroup group;
-            float swingFactor = handSwingProgress;
+            BOBJBone bobjLeftArm = null;
+            BOBJBone bobjRightArm = null;
 
-            torso.current.rotate.y = -MathUtils.toDeg(MathHelper.sin(MathHelper.sqrt(swingFactor) * MathUtils.PI * 2F) * 0.2F);
+            for (BOBJBone bone : model.getAllBOBJBones())
+            {
+                if (bone.name.equals("anchor"))
+                {
+                    if (target.isUsingRiptide())
+                    {
+                        bone.transform.rotate.x = MathUtils.toRad(-90.0F - pitch);
+                        bone.transform.rotate2.y = MathUtils.toRad(age * -75.0F);
+                    }
 
-            leftArm.current.translate.z += (float) Math.sin(MathUtils.toRad(torso.current.rotate.y)) * 5F;
-            leftArm.current.translate.x += (float) Math.cos(MathUtils.toRad(torso.current.rotate.y)) * 5F - 5F;
-            rightArm.current.translate.z -= (float) Math.sin(MathUtils.toRad(torso.current.rotate.y)) * 5F;
-            rightArm.current.translate.x -= (float) Math.cos(MathUtils.toRad(torso.current.rotate.y)) * 5F - 5F;
+                    if (target.isFallFlying())
+                    {
+                        float roll = target.getRoll() + transition;
+                        float riptide = MathHelper.clamp(roll * roll / 100F, 0F, 1F);
 
-            group = rightArm;
-            group.current.rotate.y += torso.current.rotate.y;
-            group = leftArm;
-            group.current.rotate.y += torso.current.rotate.y;
-            group = leftArm;
-            group.current.rotate.x += torso.current.rotate.y;
+                        if (!target.isUsingRiptide())
+                        {
+                            bone.transform.rotate.x = MathUtils.toRad(riptide * (-90 - pitch));
+                        }
 
-            swingFactor = 1F - handSwingProgress;
-            swingFactor *= swingFactor;
-            swingFactor *= swingFactor;
-            swingFactor = 1F - swingFactor;
+                        Vec3d look = target.getRotationVec(transition);
+                        Vec3d velocity = target.lerpVelocity(transition);
+                        double vl = velocity.horizontalLengthSquared();
+                        double ll = look.horizontalLengthSquared();
 
-            float headPitch = 0F;
-            float swing1 = MathHelper.sin(swingFactor * MathUtils.PI);
-            float swign2 = MathHelper.sin(handSwingProgress * MathUtils.PI) * -(headPitch - 0.7F) * 0.75F;
-            rightArm.current.rotate.x = group.current.rotate.x + MathUtils.toDeg( swing1 * 1.2F + swign2);
-            rightArm.current.rotate.y += torso.current.rotate.y * 2F;
-            rightArm.current.rotate.z += MathUtils.toDeg(MathHelper.sin(handSwingProgress * MathUtils.PI) * -0.4F);
+                        if (vl > 0 && ll > 0)
+                        {
+                            double m = (velocity.x * look.x + velocity.z * look.z) / Math.sqrt(vl * ll);
+                            double n = velocity.x * look.z - velocity.z * look.x;
+
+                            bone.transform.rotate.y = (float)(Math.signum(n) * Math.acos(m));
+                        }
+                    }
+                    else if (leaningPitch > 0F)
+                    {
+                        float newPitch = target.isTouchingWater() ? -90F - pitch : -90F;
+
+                        bone.transform.rotate.x = MathUtils.toRad(MathHelper.lerp(leaningPitch, 0F, newPitch));
+
+                        if (target.getEntityPose() == EntityPose.SWIMMING)
+                        {
+                            bone.transform.translate.y -= MathUtils.toRad(0.5F * 16F);
+                            bone.transform.translate.z += MathUtils.toRad(0.3F * 16F);
+                        }
+                    }
+                }
+                else if (bone.name.equals("head"))
+                {
+                    bone.transform.rotate.y = MathUtils.toRad(-yaw);
+
+                    if (isRolling)
+                    {
+                        bone.transform.rotate.x = -MathUtils.toRad(45);
+                    }
+                    else if (leaningPitch > 0F)
+                    {
+                        bone.transform.rotate.x = -MathUtils.toRad(this.lerpAngle(leaningPitch, bone.transform.rotate.x, isInSwimmingPose ? 45 : -pitch));
+                    }
+                    else
+                    {
+                        bone.transform.rotate.x = -MathUtils.toRad(-pitch);
+                    }
+                }
+                else if (bone.name.equals("right_arm"))
+                {
+                    bone.transform.rotate.x += MathHelper.cos(limbPhase * 0.6662F) * 2.0F * limbSpeed * 0.5F / coefficient;
+                    bone.transform.rotate.z -= 1F * (MathHelper.cos(-age * 0.09F) * 0.05F + 0.05F);
+                    bone.transform.rotate.x += 1F * MathHelper.sin(-age * 0.067F) * 0.05F;
+
+                    if (!main.isEmpty())
+                    {
+                        bone.transform.rotate.x = bone.transform.rotate.x * 0.5F + MathUtils.toRad(18F);
+                    }
+
+                    bobjRightArm = bone;
+                }
+                else if (bone.name.equals("left_arm"))
+                {
+                    bone.transform.rotate.x += MathHelper.cos(limbPhase * 0.6662F + 3.1415927F) * 2.0F * limbSpeed * 0.5F / coefficient;
+                    bone.transform.rotate.z -= -1F * (MathHelper.cos(-age * 0.09F) * 0.05F + 0.05F);
+                    bone.transform.rotate.x += -1F * MathHelper.sin(-age * 0.067F) * 0.05F;
+
+                    if (!offhand.isEmpty())
+                    {
+                        bone.transform.rotate.x = bone.transform.rotate.x * 0.5F + MathUtils.toRad(18F);
+                    }
+
+                    bobjLeftArm = bone;
+                }
+                else if (bone.name.equals("right_leg"))
+                {
+                    bone.transform.rotate.x = MathHelper.cos(limbPhase * 0.6662F + 3.1415927F) * 1.4F * limbSpeed / coefficient;
+                }
+                else if (bone.name.equals("left_leg"))
+                {
+                    bone.transform.rotate.x = MathHelper.cos(limbPhase * 0.6662F) * 1.4F * limbSpeed / coefficient;
+                }
+            }
+
+            if (handSwingProgress > 0F && bobjLeftArm != null && bobjRightArm != null)
+            {
+                BOBJBone group;
+                float swingFactor = handSwingProgress;
+                float rotate = -MathUtils.toDeg(MathHelper.sin(MathHelper.sqrt(swingFactor) * MathUtils.PI * 2F) * 0.2F);
+
+                bobjLeftArm.transform.translate.z -= ((float) Math.sin(MathUtils.toRad(rotate)) * 5F) / 16F;
+                bobjLeftArm.transform.translate.x -= ((float) Math.cos(MathUtils.toRad(rotate)) * 5F - 5F) / 16F;
+                bobjRightArm.transform.translate.z += ((float) Math.sin(MathUtils.toRad(rotate)) * 5F) / 16F;
+                bobjRightArm.transform.translate.x += ((float) Math.cos(MathUtils.toRad(rotate)) * 5F - 5F) / 16F;
+
+                group = bobjRightArm;
+                group.transform.rotate.y -= MathUtils.toRad(rotate);
+                group = bobjLeftArm;
+                group.transform.rotate.y -= MathUtils.toRad(rotate);
+                group = bobjLeftArm;
+                group.transform.rotate.x += MathUtils.toRad(rotate);
+
+                swingFactor = 1F - handSwingProgress;
+                swingFactor *= swingFactor;
+                swingFactor *= swingFactor;
+                swingFactor = 1F - swingFactor;
+
+                float headPitch = 0F;
+                float swing1 = MathHelper.sin(swingFactor * MathUtils.PI);
+                float swign2 = MathHelper.sin(handSwingProgress * MathUtils.PI) * -(headPitch - 0.7F) * 0.75F;
+                bobjRightArm.transform.rotate.x = MathUtils.toRad(group.transform.rotate.x + MathUtils.toDeg(swing1 * 1.2F + swign2));
+                bobjRightArm.transform.rotate.y -= MathUtils.toRad(rotate * 2F);
+                bobjRightArm.transform.rotate.z -= MathHelper.sin(handSwingProgress * MathUtils.PI) * -0.4F;
+            }
         }
 
         if (this.basePost != null)
