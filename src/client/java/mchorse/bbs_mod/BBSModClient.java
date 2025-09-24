@@ -39,7 +39,6 @@ import mchorse.bbs_mod.resources.packs.URLRepository;
 import mchorse.bbs_mod.resources.packs.URLSourcePack;
 import mchorse.bbs_mod.resources.packs.URLTextureErrorCallback;
 import mchorse.bbs_mod.selectors.EntitySelectors;
-import mchorse.bbs_mod.settings.values.ValueLanguage;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -633,14 +632,7 @@ public class BBSModClient implements ClientModInitializer
         }
         else
         {
-            UIFilmPanel panel = dashboard.getPanel(UIFilmPanel.class);
-
-            dashboard.setPanel(panel);
-
-            if (!panel.overlay.canBeSeen())
-            {
-                panel.openOverlay.clickItself();
-            }
+            dashboard.setPanel(dashboard.getPanel(UIFilmPanel.class));
         }
     }
 
