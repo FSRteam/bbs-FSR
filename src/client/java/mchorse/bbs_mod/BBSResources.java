@@ -71,14 +71,14 @@ public class BBSResources
         File assetsFolder = BBSMod.getAssetsFolder();
 
         watchDog = new WatchDog(assetsFolder, false, (runnable) -> MinecraftClient.getInstance().execute(runnable));
-        watchDog.register(BBSModClient.getTextures());
-        watchDog.register(BBSModClient.getModels());
-        watchDog.register(BBSModClient.getSounds());
-        watchDog.register(BBSModClient.getFormCategories());
+        watchDog.getProxy().register(BBSModClient.getTextures());
+        watchDog.getProxy().register(BBSModClient.getModels());
+        watchDog.getProxy().register(BBSModClient.getSounds());
+        watchDog.getProxy().register(BBSModClient.getFormCategories());
 
         if (sender)
         {
-            watchDog.register(new BBSResourceListener((link, delete) ->
+            watchDog.getProxy().register(new BBSResourceListener((link, delete) ->
             {
                 assetUpdates.put(link, delete);
                 lastAssetUpdate = 10;
@@ -173,6 +173,14 @@ public class BBSResources
             }
 
             assetUpdates.clear();
+        }
+    }
+
+    public static void tick()
+    {
+        if (watchDog != null)
+        {
+            watchDog.getProxy().tick();
         }
     }
 }

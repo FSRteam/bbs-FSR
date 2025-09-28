@@ -391,6 +391,8 @@ public class BBSModClient implements ClientModInitializer
             {
                 films.updateEndWorld();
             }
+
+            BBSResources.tick();
         });
 
         ClientTickEvents.END_CLIENT_TICK.register((client) ->
