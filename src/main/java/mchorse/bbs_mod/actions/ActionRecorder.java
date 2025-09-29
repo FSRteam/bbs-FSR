@@ -7,22 +7,35 @@ import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.SwipeActionClip;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.utils.clips.Clips;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ActionRecorder
 {
     private Film film;
+    private ServerPlayerEntity entity;
     private Clips clips = new Clips("...", BBSMod.getFactoryActionClips());
     private int tick;
     private int countdown;
     private int initialTick;
 
-    public ActionRecorder(Film film, int tick, int countdown)
+    private List<ItemStack> cache = new ArrayList<>();
+
+    public ActionRecorder(Film film, ServerPlayerEntity entity, int tick, int countdown)
     {
         this.film = film;
+        this.entity = entity;
         this.tick = tick;
         this.countdown = countdown;
         this.initialTick = tick;
+
+        for (int i = 0; i < this.entity.getInventory().size(); i++)
+        {
+            this.cache.add(entity.getInventory().getStack(i).copy());
+        }
     }
 
     public Film getFilm()
@@ -45,6 +58,11 @@ public class ActionRecorder
         Clips clips = this.clips;
 
         clips.sortLayers();
+
+        for (int i = 0; i < this.entity.getInventory().size(); i++)
+        {
+            this.entity.getInventory().setStack(i, this.cache.get(i));
+        }
 
         return clips;
     }
