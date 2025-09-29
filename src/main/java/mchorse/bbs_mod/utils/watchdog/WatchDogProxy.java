@@ -36,8 +36,12 @@ public class WatchDogProxy implements IWatchDogListener
     @Override
     public void accept(Path path, WatchDogEvent event)
     {
-        this.tick = 5;
+        /* this.tick = 5;
 
-        this.queue.add(new Pair<>(path, event));
+        this.queue.add(new Pair<>(path, event)); */
+        for (IWatchDogListener listener : this.listeners)
+        {
+            listener.accept(path, event);
+        }
     }
 }
