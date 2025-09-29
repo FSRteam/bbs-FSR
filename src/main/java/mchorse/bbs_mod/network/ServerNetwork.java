@@ -82,6 +82,7 @@ public class ServerNetwork
     public static final Identifier CLIENT_ACTORS = new Identifier(BBSMod.MOD_ID, "c14");
     public static final Identifier CLIENT_GUN_PROPERTIES = new Identifier(BBSMod.MOD_ID, "c15");
     public static final Identifier CLIENT_PAUSE_FILM = new Identifier(BBSMod.MOD_ID, "c16");
+    public static final Identifier CLIENT_SELECTED_SLOT = new Identifier(BBSMod.MOD_ID, "c17");
 
     public static final Identifier SERVER_MODEL_BLOCK_FORM_PACKET = new Identifier(BBSMod.MOD_ID, "s1");
     public static final Identifier SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = new Identifier(BBSMod.MOD_ID, "s2");
@@ -890,5 +891,16 @@ public class ServerNetwork
         buf.writeString(filmId);
 
         ServerPlayNetworking.send(player, CLIENT_PAUSE_FILM, buf);
+    }
+
+    public static void sendSelectedSlot(ServerPlayerEntity player, int slot)
+    {
+        player.getInventory().selectedSlot = slot;
+
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeInt(slot);
+
+        ServerPlayNetworking.send(player, CLIENT_SELECTED_SLOT, buf);
     }
 }

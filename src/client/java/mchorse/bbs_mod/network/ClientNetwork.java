@@ -104,6 +104,7 @@ public class ClientNetwork
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_ACTORS, (client, handler, buf, responseSender) -> handleActorsPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_GUN_PROPERTIES, (client, handler, buf, responseSender) -> handleGunPropertiesPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_PAUSE_FILM, (client, handler, buf, responseSender) -> handlePauseFilmPacket(client, buf));
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_SELECTED_SLOT, (client, handler, buf, responseSender) -> handleSelectedSlotPacket(client, buf));
     }
 
     /* Handlers */
@@ -433,6 +434,16 @@ public class ClientNetwork
         client.execute(() ->
         {
             Films.togglePauseFilm(filmId);
+        });
+    }
+
+    private static void handleSelectedSlotPacket(MinecraftClient client, PacketByteBuf buf)
+    {
+        int slot = buf.readInt();
+
+        client.execute(() ->
+        {
+            client.player.getInventory().selectedSlot = slot;
         });
     }
 

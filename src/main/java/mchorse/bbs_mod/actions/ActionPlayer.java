@@ -130,12 +130,26 @@ public class ActionPlayer
         actor.setBodyYaw(yawBody);
         actor.setSneaking(replay.keyframes.sneaking.interpolate(tick) > 0);
         actor.setOnGround(replay.keyframes.grounded.interpolate(tick) > 0);
-        actor.equipStack(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
         actor.equipStack(EquipmentSlot.OFFHAND, replay.keyframes.offHand.interpolate(tick, ItemStack.EMPTY));
         actor.equipStack(EquipmentSlot.HEAD, replay.keyframes.armorHead.interpolate(tick, ItemStack.EMPTY));
         actor.equipStack(EquipmentSlot.CHEST, replay.keyframes.armorChest.interpolate(tick, ItemStack.EMPTY));
         actor.equipStack(EquipmentSlot.LEGS, replay.keyframes.armorLegs.interpolate(tick, ItemStack.EMPTY));
         actor.equipStack(EquipmentSlot.FEET, replay.keyframes.armorFeet.interpolate(tick, ItemStack.EMPTY));
+
+        if (actor instanceof ServerPlayerEntity player)
+        {
+            int selectedSlot = player.getInventory().selectedSlot;
+            int slot = replay.keyframes.selectedSlot.interpolate(this.tick);
+
+            if (selectedSlot != slot)
+            {
+                ServerNetwork.sendSelectedSlot(player, slot);
+            }
+        }
+        else
+        {
+            actor.equipStack(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
+        }
 
         actor.fallDistance = replay.keyframes.fall.interpolate(tick).floatValue();
     }
