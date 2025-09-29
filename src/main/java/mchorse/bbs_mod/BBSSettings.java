@@ -47,6 +47,10 @@ public class BBSSettings
     public static ValueLink backgroundImage;
     public static ValueInt backgroundColor;
 
+    public static ValueBoolean chromaSkyEnabled;
+    public static ValueInt chromaSkyColor;
+    public static ValueBoolean chromaSkyTerrain;
+
     public static ValueInt scrollbarShadow;
     public static ValueInt scrollbarWidth;
     public static ValueFloat scrollingSensitivity;
@@ -172,8 +176,12 @@ public class BBSSettings
         keystrokeOffset = builder.getInt("keystrokes_offset", 10, 0, 20);
         keystrokeMode = builder.getInt("keystrokes_position", 1);
 
-        backgroundImage = builder.category("background").getRL("image",  null);
-        backgroundColor = builder.getInt("color",  Colors.A75).colorAlpha();
+        backgroundImage = builder.category("background").getRL("image", null);
+        backgroundColor = builder.getInt("color", Colors.A75).colorAlpha();
+
+        chromaSkyEnabled = builder.category("chroma_sky").getBoolean("enabled", false);
+        chromaSkyColor = builder.getInt("color", Colors.A75).color();
+        chromaSkyTerrain = builder.getBoolean("terrain", true);
 
         scrollbarShadow = builder.category("scrollbars").getInt("shadow", Colors.A50).colorAlpha();
         scrollbarWidth = builder.getInt("width", 4, 2, 10);
