@@ -226,11 +226,6 @@ public abstract class Form implements IMapSerializable
     {
         this.parts.update(entity);
 
-        for (IFormProperty property : this.properties.values())
-        {
-            property.update();
-        }
-
         if (this.renderer instanceof ITickable)
         {
             ((ITickable) this.renderer).tick(entity);

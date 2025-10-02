@@ -28,11 +28,6 @@ public interface IFormProperty <T> extends IDataSerializable<BaseType>
     public T get();
 
     /**
-     * Update current property (needed for tweening).
-     */
-    public void update();
-
-    /**
      * Checks whether this property can create a generic keyframe channel
      */
     public boolean canCreateChannel();

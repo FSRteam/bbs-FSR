@@ -50,10 +50,6 @@ public abstract class BaseProperty <T> implements IFormProperty<T>
     }
 
     @Override
-    public void update()
-    {}
-
-    @Override
     public boolean canCreateChannel()
     {
         return false;
