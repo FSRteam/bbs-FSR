@@ -248,8 +248,6 @@
     "bbs.ui.camera.panels.audio.offset": "إزاحة الصوت",
     "bbs.ui.camera.panels.audio.pick_audio": "اختيار الصوت...",
     "bbs.ui.camera.panels.block": "إحداثيات الكتلة",
-    "bbs.ui.camera.panels.circle": "دائرة",
-    "bbs.ui.camera.panels.circles": "دوائر",
     "bbs.ui.camera.panels.context.copy_angle": "نسخ الزوايا",
     "bbs.ui.camera.panels.context.copy_point": "نسخ النقطة",
     "bbs.ui.camera.panels.context.copy_position": "نسخ الموضع",

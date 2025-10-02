@@ -38,7 +38,6 @@ import mchorse.bbs_mod.camera.clips.modifiers.RemapperClip;
 import mchorse.bbs_mod.camera.clips.modifiers.ShakeClip;
 import mchorse.bbs_mod.camera.clips.modifiers.TrackerClip;
 import mchorse.bbs_mod.camera.clips.modifiers.TranslateClip;
-import mchorse.bbs_mod.camera.clips.overwrite.CircularClip;
 import mchorse.bbs_mod.camera.clips.overwrite.DollyClip;
 import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
@@ -417,8 +416,6 @@ public class BBSMod implements ModInitializer
                 .withConverter(Link.bbs("idle"), IdleConverter.CONVERTER)
                 .withConverter(Link.bbs("path"), new DollyToPathConverter())
                 .withConverter(Link.bbs("keyframe"), new DollyToKeyframeConverter()))
-            .register(Link.bbs("circular"), CircularClip.class, new ClipFactoryData(Icons.OUTLINE_SPHERE, 0x4ba03e)
-                .withConverter(Link.bbs("idle"), IdleConverter.CONVERTER))
             .register(Link.bbs("path"), PathClip.class, new ClipFactoryData(Icons.GALLERY, 0x6820ad)
                 .withConverter(Link.bbs("idle"), IdleConverter.CONVERTER)
                 .withConverter(Link.bbs("dolly"), new PathToDollyConverter())

@@ -195,8 +195,6 @@
     "bbs.ui.camera.panels.audio.offset": "Offset audio",
     "bbs.ui.camera.panels.audio.pick_audio": "Pilih audio...",
     "bbs.ui.camera.panels.block": "Koordinat blok",
-    "bbs.ui.camera.panels.circle": "Lingkaran",
-    "bbs.ui.camera.panels.circles": "Lingkaran",
     "bbs.ui.camera.panels.context.copy_angle": "Salin sudut",
     "bbs.ui.camera.panels.context.copy_point": "Salin titik",
     "bbs.ui.camera.panels.context.copy_position": "Salin posisi",

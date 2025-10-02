@@ -272,8 +272,6 @@
     "bbs.ui.camera.panels.angle": "角度",
     "bbs.ui.camera.panels.at_block": "看向方塊",
     "bbs.ui.camera.panels.block": "方塊座標",
-    "bbs.ui.camera.panels.circle": "圓形",
-    "bbs.ui.camera.panels.circles": "圓形",
     "bbs.ui.camera.panels.copy_entity": "複製實體",
     "bbs.ui.camera.panels.copy_entity_tooltip": "複製實體的頭部方向，就像 GoPros 一樣",
     "bbs.ui.camera.panels.deterministic": "確定性",

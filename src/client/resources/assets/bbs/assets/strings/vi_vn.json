@@ -242,8 +242,6 @@
     "bbs.ui.camera.panels.audio.offset": "Độ lệch âm thanh",
     "bbs.ui.camera.panels.audio.pick_audio": "Chọn âm thanh...",
     "bbs.ui.camera.panels.block": "Tọa độ khối",
-    "bbs.ui.camera.panels.circle": "xoay vòng",
-    "bbs.ui.camera.panels.circles": "Các vòng tròn",
     "bbs.ui.camera.panels.context.copy_angle": "Sao chép góc",
     "bbs.ui.camera.panels.context.copy_point": "Sao chép điểm",
     "bbs.ui.camera.panels.context.copy_position": "Sao chép vị trí",

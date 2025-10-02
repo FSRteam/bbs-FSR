@@ -227,8 +227,6 @@
     "bbs.ui.camera.panels.audio.offset": "Зміщення аудіо",
     "bbs.ui.camera.panels.audio.pick_audio": "Обрати аудіо...",
     "bbs.ui.camera.panels.block": "Координати блоку",
-    "bbs.ui.camera.panels.circle": "Коло",
-    "bbs.ui.camera.panels.circles": "Градуси",
     "bbs.ui.camera.panels.context.copy_angle": "Скопіювати кут нахилу",
     "bbs.ui.camera.panels.context.copy_point": "Скопіювати точку",
     "bbs.ui.camera.panels.context.copy_position": "Скопіювати позицію",

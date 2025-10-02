@@ -243,8 +243,6 @@
     "bbs.ui.camera.panels.audio.offset": "Odchylenie dźwięku",
     "bbs.ui.camera.panels.audio.pick_audio": "Wybierz dźwięk...",
     "bbs.ui.camera.panels.block": "Współrzędne bloku",
-    "bbs.ui.camera.panels.circle": "Kółko",
-    "bbs.ui.camera.panels.circles": "Kółka",
     "bbs.ui.camera.panels.context.copy_angle": "Skopiuj kąty",
     "bbs.ui.camera.panels.context.copy_point": "Skopiuj punkt",
     "bbs.ui.camera.panels.context.copy_position": "Skopiuj pozycję",

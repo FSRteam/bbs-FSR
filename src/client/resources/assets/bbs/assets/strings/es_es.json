@@ -237,8 +237,6 @@
     "bbs.ui.camera.panels.audio.offset": "Desplazamiento del audio",
     "bbs.ui.camera.panels.audio.pick_audio": "Elige un audio...",
     "bbs.ui.camera.panels.block": "Coordenadas del bloque",
-    "bbs.ui.camera.panels.circle": "Círculo",
-    "bbs.ui.camera.panels.circles": "Círculos",
     "bbs.ui.camera.panels.context.copy_angle": "Copiar ángulos",
     "bbs.ui.camera.panels.context.copy_point": "Copiar punto",
     "bbs.ui.camera.panels.context.copy_position": "Copiar posición",

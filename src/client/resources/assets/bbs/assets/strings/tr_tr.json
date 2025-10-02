@@ -242,8 +242,6 @@
     "bbs.ui.camera.panels.audio.offset": "Ses ötelemesi",
     "bbs.ui.camera.panels.audio.pick_audio": "Ses seç...",
     "bbs.ui.camera.panels.block": "Blok koordinatları",
-    "bbs.ui.camera.panels.circle": "Daire",
-    "bbs.ui.camera.panels.circles": "Dönme derecesi",
     "bbs.ui.camera.panels.context.copy_angle": "Açıları kopyala",
     "bbs.ui.camera.panels.context.copy_point": "Noktayı kopyala",
     "bbs.ui.camera.panels.context.copy_position": "Konumu kopyala",

@@ -245,8 +245,6 @@
     "bbs.ui.camera.panels.audio.offset": "오디오 오프셋",
     "bbs.ui.camera.panels.audio.pick_audio": "오디오 선택...",
     "bbs.ui.camera.panels.block": "블록 좌표",
-    "bbs.ui.camera.panels.circle": "원",
-    "bbs.ui.camera.panels.circles": "원들",
     "bbs.ui.camera.panels.context.copy_angle": "각도 복사",
     "bbs.ui.camera.panels.context.copy_point": "점 복사",
     "bbs.ui.camera.panels.context.copy_position": "위치 복사",

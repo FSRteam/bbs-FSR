@@ -247,8 +247,6 @@
     "bbs.ui.camera.panels.audio.offset": "Hangeltolás",
     "bbs.ui.camera.panels.audio.pick_audio": "Hang választás...",
     "bbs.ui.camera.panels.block": "Blokk koordinátái",
-    "bbs.ui.camera.panels.circle": "Kör",
-    "bbs.ui.camera.panels.circles": "Körök",
     "bbs.ui.camera.panels.context.copy_angle": "Szögek másolása",
     "bbs.ui.camera.panels.context.copy_point": "Pont másolás",
     "bbs.ui.camera.panels.context.copy_position": "Pozíció másolás",

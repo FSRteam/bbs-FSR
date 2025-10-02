@@ -262,8 +262,6 @@
   "bbs.ui.camera.panels.angle": "Ângulo",
   "bbs.ui.camera.panels.at_block": "Olhar para o bloco",
   "bbs.ui.camera.panels.block": "Coordernadas do bloco",
-  "bbs.ui.camera.panels.circle": "Circulo",
-  "bbs.ui.camera.panels.circles": "Circulos",
   "bbs.ui.camera.panels.copy_entity": "Copiar Entidade",
   "bbs.ui.camera.panels.copy_entity_tooltip": "Copiar a orientação da cabeça da entidade, exatamente como GoPros",
   "bbs.ui.camera.panels.deterministic": "Determinístico",

@@ -149,8 +149,6 @@
     "bbs.ui.camera.panels.at_block": "Δες το τετράγωνο",
     "bbs.ui.camera.panels.audio.pick_audio": "Επιλογή ήχου...",
     "bbs.ui.camera.panels.block": "Συντεταγμένες τετραγώνου",
-    "bbs.ui.camera.panels.circle": "Κύκλος",
-    "bbs.ui.camera.panels.circles": "Κύκλοι",
     "bbs.ui.camera.panels.context.copy_angle": "Αντιγραφή γωνιών",
     "bbs.ui.camera.panels.context.copy_point": "Αντιγραφή σημείου",
     "bbs.ui.camera.panels.context.copy_position": "Αντιγραφή θέσης",

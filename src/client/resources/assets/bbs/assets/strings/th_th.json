@@ -241,8 +241,6 @@
     "bbs.ui.camera.panels.audio.offset": "การชดเชยเสียง",
     "bbs.ui.camera.panels.audio.pick_audio": "เลือกเสียง...",
     "bbs.ui.camera.panels.block": "พิกัดของบล็อค",
-    "bbs.ui.camera.panels.circle": "วงกลม",
-    "bbs.ui.camera.panels.circles": "วงรอบ",
     "bbs.ui.camera.panels.context.copy_angle": "คัดลอกมุม",
     "bbs.ui.camera.panels.context.copy_point": "คัดลอกจุด",
     "bbs.ui.camera.panels.context.copy_position": "คัดลอกตำแหน่ง",
