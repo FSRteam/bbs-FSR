@@ -64,8 +64,6 @@ import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.ISourcePack;
 import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.resources.cache.CacheAssetsSourcePack;
-import mchorse.bbs_mod.resources.cache.ResourceTracker;
 import mchorse.bbs_mod.resources.packs.DynamicSourcePack;
 import mchorse.bbs_mod.resources.packs.ExternalAssetsSourcePack;
 import mchorse.bbs_mod.resources.packs.InternalAssetsSourcePack;
@@ -226,8 +224,6 @@ public class BBSMod implements ModInitializer
 
     private static File worldFolder;
 
-    private static ResourceTracker resourceTracker;
-
     private static Block createChromaBlock()
     {
         return new Block(FabricBlockSettings.create()
@@ -279,11 +275,7 @@ public class BBSMod implements ModInitializer
     {
         ISourcePack sourcePack = getDynamicSourcePack().getSourcePack();
 
-        if (sourcePack instanceof CacheAssetsSourcePack pack)
-        {
-            return pack.getFolder();
-        }
-        else if (sourcePack instanceof ExternalAssetsSourcePack pack)
+        if (sourcePack instanceof ExternalAssetsSourcePack pack)
         {
             return pack.getFolder();
         }
@@ -363,11 +355,6 @@ public class BBSMod implements ModInitializer
     public static MapFactory<Clip, ClipFactoryData> getFactoryActionClips()
     {
         return factoryActionClips;
-    }
-
-    public static ResourceTracker getResourceTracker()
-    {
-        return resourceTracker;
     }
 
     @Override
@@ -500,7 +487,6 @@ public class BBSMod implements ModInitializer
             }
         });
 
-        ServerLifecycleEvents.SERVER_STARTING.register((event) -> resourceTracker = new ResourceTracker(event));
         ServerLifecycleEvents.SERVER_STARTED.register((event) -> worldFolder = event.getSavePath(WorldSavePath.ROOT).toFile());
         ServerPlayConnectionEvents.JOIN.register((a, b, c) -> ServerNetwork.sendHandshake(c, b));
 
@@ -519,7 +505,6 @@ public class BBSMod implements ModInitializer
             }
 
             runnables.clear();
-            resourceTracker.tick();
         });
 
         ServerLifecycleEvents.SERVER_STOPPED.register((server) ->

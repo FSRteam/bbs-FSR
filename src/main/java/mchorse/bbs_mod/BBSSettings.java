@@ -19,9 +19,6 @@ import java.util.HashSet;
 
 public class BBSSettings
 {
-    public static ValueString serverId;
-    public static ValueString serverAssetManager;
-
     public static ValueColors favoriteColors;
     public static ValueStringKeys disabledSheets;
     public static ValueLanguage language;
@@ -124,10 +121,6 @@ public class BBSSettings
 
     public static void register(SettingsBuilder builder)
     {
-        serverId = builder.category("tweaks").getString("server_id", "");
-        serverAssetManager = builder.getString("asset_manager", "");
-
-        builder.getCategory().invisible();
         builder.category("appearance");
 
         builder.register(language = new ValueLanguage("language"));
