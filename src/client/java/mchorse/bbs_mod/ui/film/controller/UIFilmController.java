@@ -526,9 +526,9 @@ public class UIFilmController extends UIElement
             BaseType newData = replay.keyframes.toData();
 
             replay.keyframes.fromData(this.recordingOld);
-            replay.keyframes.preNotifyParent();
+            replay.keyframes.preNotify();
             replay.keyframes.fromData(newData);
-            replay.keyframes.postNotifyParent();
+            replay.keyframes.postNotify();
 
             this.recordingOld = null;
         }

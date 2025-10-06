@@ -52,9 +52,9 @@ public class UIShapeKeysKeyframeFactory extends UIKeyframeFactory<ShapeKeys>
         @Override
         protected void setValue(float v)
         {
-            this.editor.keyframe.preNotifyParent();
+            this.editor.keyframe.preNotify();
             super.setValue(v);
-            this.editor.keyframe.postNotifyParent();
+            this.editor.keyframe.postNotify();
         }
     }
 }

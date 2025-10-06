@@ -23,9 +23,9 @@ public class ValueChannels extends ValueGroup
     {
         KeyframeChannel<Double> channel = new KeyframeChannel<>(s, KeyframeFactories.DOUBLE);
 
-        this.preNotifyParent();
+        this.preNotify();
         this.add(channel);
-        this.postNotifyParent();
+        this.postNotify();
 
         return channel;
     }
@@ -36,9 +36,9 @@ public class ValueChannels extends ValueGroup
 
         if (baseValue == channel)
         {
-            this.preNotifyParent();
+            this.preNotify();
             this.remove(baseValue);
-            this.postNotifyParent();
+            this.postNotify();
         }
     }
 

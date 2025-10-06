@@ -25,8 +25,8 @@ public abstract class BaseValueBasic <T> extends BaseValue
 
     public void set(T value, int flag)
     {
-        this.preNotifyParent(flag);
+        this.preNotify(flag);
         this.value = value;
-        this.postNotifyParent(flag);
+        this.postNotify(flag);
     }
 }

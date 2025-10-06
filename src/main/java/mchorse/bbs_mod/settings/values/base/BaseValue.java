@@ -31,9 +31,9 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
             return;
         }
 
-        value.preNotifyParent(flag);
+        value.preNotify(flag);
         callback.accept(value);
-        value.postNotifyParent(flag);
+        value.postNotify(flag);
     }
 
     public BaseValue(String id)
@@ -87,7 +87,7 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
 
         while (value != null)
         {
-            visible = visible && (!(value instanceof BaseValue) || ((BaseValue) value).visible);
+            visible = visible && value.visible;
             value = value.getParent();
         }
 
@@ -119,21 +119,21 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
         return this.id;
     }
 
-    public void preNotifyParent()
+    public void preNotify()
     {
-        this.preNotifyParent(IValueListener.FLAG_DEFAULT);
+        this.preNotify(IValueListener.FLAG_DEFAULT);
     }
 
-    public void preNotifyParent(int flag)
+    public void preNotify(int flag)
     {
-        this.preNotifyParent(this, flag);
+        this.preNotify(this, flag);
     }
 
-    public void preNotifyParent(BaseValue value, int flag)
+    public void preNotify(BaseValue value, int flag)
     {
         if (this.parent != null)
         {
-            this.parent.preNotifyParent(value, flag);
+            this.parent.preNotify(value, flag);
         }
 
         if (this.preCallbacks != null)
@@ -145,21 +145,21 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
         }
     }
 
-    public void postNotifyParent()
+    public void postNotify()
     {
-        this.postNotifyParent(IValueListener.FLAG_DEFAULT);
+        this.postNotify(IValueListener.FLAG_DEFAULT);
     }
 
-    public void postNotifyParent(int flag)
+    public void postNotify(int flag)
     {
-        this.postNotifyParent(this, flag);
+        this.postNotify(this, flag);
     }
 
-    public void postNotifyParent(BaseValue value, int flag)
+    public void postNotify(BaseValue value, int flag)
     {
         if (this.parent != null)
         {
-            this.parent.postNotifyParent(value, flag);
+            this.parent.postNotify(value, flag);
         }
 
         if (this.postCallbacks != null)
@@ -244,13 +244,13 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
 
     public void copy(BaseValue value, int flag)
     {
-        this.preNotifyParent(flag);
+        this.preNotify(flag);
 
         if (value != null)
         {
             this.fromData(value.toData());
         }
 
-        this.postNotifyParent(flag);
+        this.postNotify(flag);
     }
 }

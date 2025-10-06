@@ -100,9 +100,9 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 {
                     if (kf.getValue() instanceof Pose pose)
                     {
-                        kf.preNotifyParent();
+                        kf.preNotify();
                         consumer.accept(pose);
-                        kf.postNotifyParent();
+                        kf.postNotify();
                     }
                 }
             }

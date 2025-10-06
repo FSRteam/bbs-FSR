@@ -29,17 +29,17 @@ public class ValueColors extends BaseValue
 
         if (i == -1)
         {
-            this.preNotifyParent();
+            this.preNotify();
             this.colors.add(color.copy());
-            this.postNotifyParent();
+            this.postNotify();
         }
     }
 
     public void remove(int index)
     {
-        this.preNotifyParent();
+        this.preNotify();
         this.colors.remove(index);
-        this.postNotifyParent();
+        this.postNotify();
     }
 
     @Override

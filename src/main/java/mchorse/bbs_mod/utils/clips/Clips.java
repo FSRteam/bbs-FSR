@@ -164,27 +164,27 @@ public class Clips extends ValueGroup
 
     public void addClip(Clip clip)
     {
-        this.preNotifyParent();
+        this.preNotify();
 
         this.clips.add(clip);
         this.sync();
 
-        this.postNotifyParent();
+        this.postNotify();
     }
 
     public void remove(Clip clip)
     {
-        this.preNotifyParent();
+        this.preNotify();
 
         this.clips.remove(clip);
         this.sync();
 
-        this.postNotifyParent();
+        this.postNotify();
     }
 
     public void copyOver(Clips clips, int tick)
     {
-        this.preNotifyParent();
+        this.preNotify();
 
         this.clips.removeIf((next) -> next.tick.get() >= tick);
 
@@ -198,7 +198,7 @@ public class Clips extends ValueGroup
 
         this.sortLayers();
         this.sync();
-        this.postNotifyParent();
+        this.postNotify();
     }
 
     /* New value methods */

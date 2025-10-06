@@ -43,8 +43,8 @@ public class UIEnvelope extends UIElement
 
         this.panel = panel;
 
-        InterpolationTooltip preTooltip = new InterpolationTooltip(0F, 0.5F, () -> this.get().pre.wrap());
-        InterpolationTooltip postTooltip = new InterpolationTooltip(0F, 0.5F, () -> this.get().post.wrap());
+        InterpolationTooltip preTooltip = new InterpolationTooltip(0F, 0.5F, () -> this.get().pre);
+        InterpolationTooltip postTooltip = new InterpolationTooltip(0F, 0.5F, () -> this.get().post);
 
         this.enabled = new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) ->
         {
