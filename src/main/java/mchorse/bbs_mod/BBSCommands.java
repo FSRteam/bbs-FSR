@@ -16,7 +16,7 @@ import mchorse.bbs_mod.mixin.LevelPropertiesAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.Settings;
-import mchorse.bbs_mod.settings.values.ValueGroup;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import net.minecraft.block.Blocks;
 import net.minecraft.command.CommandRegistryAccess;

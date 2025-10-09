@@ -7,14 +7,14 @@ import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.forms.properties.IFormProperty;
-import mchorse.bbs_mod.settings.values.ValueBoolean;
-import mchorse.bbs_mod.settings.values.ValueFloat;
-import mchorse.bbs_mod.settings.values.ValueForm;
-import mchorse.bbs_mod.settings.values.ValueGroup;
-import mchorse.bbs_mod.settings.values.ValueInt;
-import mchorse.bbs_mod.settings.values.ValueString;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
+import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
+import mchorse.bbs_mod.settings.values.core.ValueForm;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -114,7 +114,7 @@ public class Replay extends ValueGroup
 
     private void applyProperty(float tick, Form form, KeyframeChannel value)
     {
-        IFormProperty property = FormUtils.getProperty(form, value.getId());
+        BaseValueBasic property = FormUtils.getProperty(form, value.getId());
 
         if (property == null)
         {
@@ -133,7 +133,7 @@ public class Replay extends ValueGroup
 
             if (replayForm != null)
             {
-                IFormProperty replayProperty = FormUtils.getProperty(replayForm, value.getId());
+                BaseValueBasic replayProperty = FormUtils.getProperty(replayForm, value.getId());
 
                 if (replayProperty != null)
                 {

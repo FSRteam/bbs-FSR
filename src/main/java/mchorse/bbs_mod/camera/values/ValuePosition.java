@@ -2,7 +2,7 @@ package mchorse.bbs_mod.camera.values;
 
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.data.types.BaseType;
-import mchorse.bbs_mod.settings.values.ValueGroup;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
 
 public class ValuePosition extends ValueGroup
 {

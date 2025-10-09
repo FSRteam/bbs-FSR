@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.film.replays;
 
-import mchorse.bbs_mod.settings.values.ValueList;
+import mchorse.bbs_mod.settings.values.core.ValueList;
 
 public class Replays extends ValueList<Replay>
 {

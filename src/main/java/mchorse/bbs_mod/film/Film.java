@@ -3,7 +3,7 @@ package mchorse.bbs_mod.film;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.Replays;
-import mchorse.bbs_mod.settings.values.ValueGroup;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.utils.clips.Clips;
 
 public class Film extends ValueGroup

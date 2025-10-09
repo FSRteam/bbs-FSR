@@ -3,6 +3,7 @@ package mchorse.bbs_mod.settings.values.base;
 import mchorse.bbs_mod.data.IDataSerializable;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.settings.values.IValueListener;
+import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.utils.DataPath;
 
 import java.util.ArrayList;
@@ -10,10 +11,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
-public abstract class BaseValue implements IDataSerializable<BaseType>
+public abstract class BaseValue implements IDataSerializable<BaseType>, IValueNotifier
 {
     protected String id;
-    protected BaseValue parent;
+    protected IValueNotifier parent;
 
     private boolean visible = true;
     private List<IValueListener> preCallbacks;
@@ -88,7 +89,7 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
         while (value != null)
         {
             visible = visible && value.visible;
-            value = value.getParent();
+            value = value.getParentValue();
         }
 
         return visible;
@@ -100,16 +101,16 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
 
         while (true)
         {
-            if (value.getParent() == null)
+            if (value.getParentValue() == null)
             {
                 return value;
             }
 
-            value = value.getParent();
+            value = value.getParentValue();
         }
     }
 
-    public void setParent(BaseValue parent)
+    public void setParent(IValueNotifier parent)
     {
         this.parent = parent;
     }
@@ -119,22 +120,16 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
         return this.id;
     }
 
-    public void preNotify()
-    {
-        this.preNotify(IValueListener.FLAG_DEFAULT);
-    }
-
+    @Override
     public void preNotify(int flag)
     {
         this.preNotify(this, flag);
     }
 
+    @Override
     public void preNotify(BaseValue value, int flag)
     {
-        if (this.parent != null)
-        {
-            this.parent.preNotify(value, flag);
-        }
+        IValueNotifier.super.preNotify(value, flag);
 
         if (this.preCallbacks != null)
         {
@@ -145,22 +140,16 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
         }
     }
 
-    public void postNotify()
-    {
-        this.postNotify(IValueListener.FLAG_DEFAULT);
-    }
-
+    @Override
     public void postNotify(int flag)
     {
         this.postNotify(this, flag);
     }
 
+    @Override
     public void postNotify(BaseValue value, int flag)
     {
-        if (this.parent != null)
-        {
-            this.parent.postNotify(value, flag);
-        }
+        IValueNotifier.super.postNotify(value, flag);
 
         if (this.postCallbacks != null)
         {
@@ -171,9 +160,15 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
         }
     }
 
-    public BaseValue getParent()
+    @Override
+    public IValueNotifier getParent()
     {
         return this.parent;
+    }
+
+    public BaseValue getParentValue()
+    {
+        return this.parent instanceof BaseValue ? (BaseValue) this.parent : null;
     }
 
     public List<String> getPathSegments()
@@ -190,7 +185,7 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
                 strings.add(id);
             }
 
-            value = value.getParent();
+            value = value.getParentValue();
         }
 
         Collections.reverse(strings);
@@ -222,7 +217,7 @@ public abstract class BaseValue implements IDataSerializable<BaseType>
                 strings.strings.add(id);
             }
 
-            value = value.getParent();
+            value = value.getParentValue();
 
             if (value == ancestor)
             {

@@ -2,7 +2,7 @@ package mchorse.bbs_mod.camera.values;
 
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.settings.values.IValueListener;
-import mchorse.bbs_mod.settings.values.ValueList;
+import mchorse.bbs_mod.settings.values.core.ValueList;
 
 import java.util.List;
 
