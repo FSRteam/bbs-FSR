@@ -543,6 +543,21 @@ public class BBSRendering
         return null;
     }
 
+    public static Double getWeather()
+    {
+        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
+        {
+            Map<String, Double> values = CurveClip.getValues(controller.getContext());
+
+            if (values.containsKey(ShaderCurves.WEATHER))
+            {
+                return values.get(ShaderCurves.WEATHER);
+            }
+        }
+
+        return null;
+    }
+
     public static Function<VertexConsumer, VertexConsumer> getColorConsumer(Color color)
     {
         if (sodium)
