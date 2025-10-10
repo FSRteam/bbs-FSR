@@ -190,7 +190,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
         if (seconds > 0)
         {
-            if (this.savingTimer.check())
+            if (this.savingTimer.check() && this.canSave(context))
             {
                 this.savingTimer.mark(seconds * 1000L);
 
@@ -198,5 +198,10 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
                 context.notifySuccess(UIKeys.PANELS_SAVED_NOTIFICATION.format(this.data.getId()));
             }
         }
+    }
+
+    protected boolean canSave(UIContext context)
+    {
+        return true;
     }
 }
