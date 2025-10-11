@@ -459,6 +459,7 @@
     "bbs.ui.film.replay.orbit.third_person_back": "Third-person (back)",
     "bbs.ui.film.replay.orbit.third_person_front": "Third-person (front)",
     "bbs.ui.film.replay.record": "Record replay...",
+    "bbs.ui.film.replay.relative-tooltip": "When enabled, this replay will be rendered relative to the camera",
     "bbs.ui.film.replay.replay": "Replay",
     "bbs.ui.film.replay.shadow": "Shadow",
     "bbs.ui.film.replay.shadow_size": "Shadow radius",

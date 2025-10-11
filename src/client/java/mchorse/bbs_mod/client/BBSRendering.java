@@ -506,26 +506,22 @@ public class BBSRendering
         return IrisUtils.getShadersLanguageMap(language);
     }
 
-    /* Time of day */
+    /* Curves */
 
-    public static boolean canModifyTime()
+    public static Long getTimeOfDay()
     {
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
-            return CurveClip.getValues(controller.getContext()).containsKey(ShaderCurves.SUN_ROTATION);
+            Map<String, Double> values = CurveClip.getValues(controller.getContext());
+            Double v = values != null ? values.get(ShaderCurves.SUN_ROTATION) : null;
+
+            if (v != null)
+            {
+                return v.longValue() * 1000L;
+            }
         }
 
-        return false;
-    }
-
-    public static long getTimeOfDay()
-    {
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            return (long) (CurveClip.getValues(controller.getContext()).get(ShaderCurves.SUN_ROTATION) * 1000L);
-        }
-
-        return 0L;
+        return null;
     }
 
     public static Double getBrightness()
@@ -533,10 +529,11 @@ public class BBSRendering
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
             Map<String, Double> values = CurveClip.getValues(controller.getContext());
+            Double v = values != null ? values.get(ShaderCurves.BRIGHTNESS) : null;
 
-            if (values.containsKey(ShaderCurves.BRIGHTNESS))
+            if (v != null)
             {
-                return values.get(ShaderCurves.BRIGHTNESS);
+                return v;
             }
         }
 
@@ -548,10 +545,11 @@ public class BBSRendering
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
             Map<String, Double> values = CurveClip.getValues(controller.getContext());
+            Double v = values != null ? values.get(ShaderCurves.WEATHER) : null;
 
-            if (values.containsKey(ShaderCurves.WEATHER))
+            if (v != null)
             {
-                return values.get(ShaderCurves.WEATHER);
+                return v;
             }
         }
 

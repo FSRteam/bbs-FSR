@@ -1231,18 +1231,24 @@ public class UIFilmController extends UIElement
             {
                 this.stencilMap.objectIndex = entry.getKey() + 1;
 
+                Replay replay = CollectionUtils.getSafe(this.panel.getData().replays.getList(), entry.getKey());
+
                 BaseFilmController.renderEntity(FilmControllerContext.instance
-                    .setup(this.getEntities(), entry.getValue(), renderContext)
+                    .setup(this.getEntities(), entry.getValue(), replay, renderContext)
                     .transition(isPlaying ? renderContext.tickDelta() : 0)
-                    .stencil(this.stencilMap));
+                    .stencil(this.stencilMap)
+                    .relative(replay.relative.get()));
             }
         }
         else
         {
+            Replay replay = CollectionUtils.getSafe(this.panel.getData().replays.getList(), this.panel.replayEditor.replays.replays.getIndex());
+
             BaseFilmController.renderEntity(FilmControllerContext.instance
-                .setup(this.getEntities(), entity, renderContext)
+                .setup(this.getEntities(), entity, replay, renderContext)
                 .transition(isPlaying ? renderContext.tickDelta() : 0)
-                .stencil(this.stencilMap));
+                .stencil(this.stencilMap)
+                .relative(replay.relative.get()));
         }
 
         int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);

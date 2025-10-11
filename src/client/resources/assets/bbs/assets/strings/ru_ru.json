@@ -458,6 +458,7 @@
     "bbs.ui.film.replay.orbit.third_person_back": "Третье лицо (сзади)",
     "bbs.ui.film.replay.orbit.third_person_front": "Третье лицо (спереди)",
     "bbs.ui.film.replay.record": "Записать...",
+    "bbs.ui.film.replay.relative-tooltip": "Когда включено, эта запись будет отрисована относительно камеры",
     "bbs.ui.film.replay.replay": "Запись",
     "bbs.ui.film.replay.shadow": "Тень",
     "bbs.ui.film.replay.shadow_size": "Радиус тени",

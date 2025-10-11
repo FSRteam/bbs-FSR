@@ -3,18 +3,20 @@ package mchorse.bbs_mod.film.replays;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.types.ActionClip;
+import mchorse.bbs_mod.camera.data.Point;
+import mchorse.bbs_mod.camera.values.ValuePoint;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
-import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
-import mchorse.bbs_mod.settings.values.core.ValueForm;
-import mchorse.bbs_mod.settings.values.core.ValueGroup;
-import mchorse.bbs_mod.settings.values.numeric.ValueInt;
-import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.settings.values.core.ValueForm;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.settings.values.core.ValueString;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
+import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
+import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -39,6 +41,8 @@ public class Replay extends ValueGroup
 
     public final ValueBoolean actor = new ValueBoolean("actor", false);
     public final ValueBoolean fp = new ValueBoolean("fp", false);
+    public final ValueBoolean relative = new ValueBoolean("relative", false);
+    public final ValuePoint relativeOffset = new ValuePoint("relativeOffset", new Point(0, 0, 0));
 
     public Replay(String id)
     {
@@ -58,6 +62,8 @@ public class Replay extends ValueGroup
 
         this.add(this.actor);
         this.add(this.fp);
+        this.add(this.relative);
+        this.add(this.relativeOffset);
     }
 
     public String getName()
