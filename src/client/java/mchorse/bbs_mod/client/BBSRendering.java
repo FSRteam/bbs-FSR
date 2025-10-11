@@ -344,7 +344,6 @@ public class BBSRendering
         }
 
         UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
-        Texture texture = getTexture();
 
         if (currentMenu instanceof UIDashboard dashboard)
         {
@@ -354,12 +353,17 @@ public class BBSRendering
             }
         }
 
+        renderingWorld = false;
+    }
+
+    public static void onRenderBeforeScreen()
+    {
+        Texture texture = getTexture();
+
         texture.bind();
         texture.setSize(framebuffer.textureWidth, framebuffer.textureHeight);
         GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer.textureWidth, framebuffer.textureHeight);
         texture.unbind();
-
-        renderingWorld = false;
 
         toggleFramebuffer(false);
     }
