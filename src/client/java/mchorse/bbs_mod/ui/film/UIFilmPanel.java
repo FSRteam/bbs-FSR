@@ -615,6 +615,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                     }
                 }
             });
+
+            BaseValue.edit(film, (f) ->
+            {
+                film.inventory.fromData(recorder.inventory.toData());
+            });
         }
     }
 
