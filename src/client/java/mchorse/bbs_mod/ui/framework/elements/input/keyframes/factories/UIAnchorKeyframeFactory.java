@@ -48,6 +48,12 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
             {
                 final int actor = i;
                 IEntity entity = entities.get(i);
+
+                if (entity == null)
+                {
+                    continue;
+                }
+
                 Replay replay = replays == null ? null : replays.get(i);
                 Form form = entity.getForm();
                 String stringLabel = i + (replay != null ? " - " + replay.getName() : (form == null ? "" : " - " + form.getIdOrName()));
