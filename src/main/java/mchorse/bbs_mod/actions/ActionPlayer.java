@@ -10,6 +10,7 @@ import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.DataPath;
+import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
@@ -155,7 +156,7 @@ public class ActionPlayer
         if (actor instanceof ServerPlayerEntity player)
         {
             int selectedSlot = player.getInventory().selectedSlot;
-            int slot = replay.keyframes.selectedSlot.interpolate(this.tick);
+            int slot = MathUtils.clamp(replay.keyframes.selectedSlot.interpolate(this.tick), 0, 8);
 
             if (selectedSlot != slot)
             {
