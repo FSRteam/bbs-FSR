@@ -31,7 +31,7 @@ public class ActionPlayer
     public boolean playing = true;
     public int countdown;
     public int exception;
-    public boolean recording;
+    public PlayerType type;
 
     public boolean syncing;
     public boolean stopDamage = true;
@@ -44,21 +44,21 @@ public class ActionPlayer
 
     private List<ItemStack> cache = new ArrayList<>();
 
-    public ActionPlayer(ServerPlayerEntity serverPlayer, ServerWorld world, Film film, int tick, int countdown, int exception, boolean recording)
+    public ActionPlayer(ServerPlayerEntity serverPlayer, ServerWorld world, Film film, int tick, int countdown, int exception, PlayerType type)
     {
         this.world = world;
         this.film = film;
         this.tick = tick;
         this.countdown = countdown;
         this.exception = exception;
-        this.recording = recording;
+        this.type = type;
 
         this.serverPlayer = serverPlayer;
         this.duration = film.camera.calculateDuration();
 
         this.updateReplayEntities();
 
-        if (!this.recording && this.serverPlayer != null && film.getFirstPersonReplay() != null)
+        if (this.type == PlayerType.NORMAL && this.serverPlayer != null && film.getFirstPersonReplay() != null)
         {
             for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
             {
@@ -85,21 +85,19 @@ public class ActionPlayer
         for (int i = 0; i < list.size(); i++)
         {
             Replay replay = list.get(i);
-            boolean isActor = !replay.actor.get();
+            boolean isActor = replay.actor.get() || replay.fp.get();
 
-            if (replay.fp.get())
-            {
-                isActor = false;
-            }
-
-            if (i == this.exception || isActor || !replay.enabled.get())
+            if (i == this.exception || !isActor || !replay.enabled.get())
             {
                 continue;
             }
 
             if (replay.fp.get() && this.serverPlayer != null)
             {
-                this.actors.put(replay.getId(), this.serverPlayer);
+                if (this.type == PlayerType.NORMAL)
+                {
+                    this.actors.put(replay.getId(), this.serverPlayer);
+                }
             }
             else
             {
@@ -287,7 +285,7 @@ public class ActionPlayer
             }
         }
 
-        if (!this.recording && this.serverPlayer != null && this.film.getFirstPersonReplay() != null)
+        if (this.type == PlayerType.NORMAL && this.serverPlayer != null && this.film.getFirstPersonReplay() != null)
         {
             for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
             {
