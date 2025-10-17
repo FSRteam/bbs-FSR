@@ -6,6 +6,8 @@ import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.CollectionUtils;
@@ -42,7 +44,8 @@ public class ActionPlayer
 
     private Map<String, LivingEntity> actors = new HashMap<>();
 
-    private List<ItemStack> cache = new ArrayList<>();
+    private List<ItemStack> cachedInventory = new ArrayList<>();
+    private Form cachedForm;
 
     public ActionPlayer(ServerPlayerEntity serverPlayer, ServerWorld world, Film film, int tick, int countdown, int exception, PlayerType type)
     {
@@ -58,13 +61,24 @@ public class ActionPlayer
 
         this.updateReplayEntities();
 
-        if (this.type == PlayerType.NORMAL && this.serverPlayer != null && film.getFirstPersonReplay() != null)
+        Replay fpReplay = film.getFirstPersonReplay();
+
+        if (this.type == PlayerType.NORMAL && this.serverPlayer != null && fpReplay != null)
         {
             for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
             {
-                this.cache.add(serverPlayer.getInventory().getStack(i).copy());
+                this.cachedInventory.add(serverPlayer.getInventory().getStack(i).copy());
                 this.serverPlayer.getInventory().setStack(i, CollectionUtils.getSafe(this.film.inventory.getStacks(), i, ItemStack.EMPTY));
             }
+
+            Morph morph = Morph.getMorph(this.serverPlayer);
+
+            if (morph != null)
+            {
+                this.cachedForm = FormUtils.copy(morph.getForm());
+            }
+
+            ServerNetwork.sendMorphToTracked(this.serverPlayer, fpReplay.form.get());
         }
     }
 
@@ -289,8 +303,10 @@ public class ActionPlayer
         {
             for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
             {
-                this.serverPlayer.getInventory().setStack(i, this.cache.get(i));
+                this.serverPlayer.getInventory().setStack(i, this.cachedInventory.get(i));
             }
+
+            ServerNetwork.sendMorphToTracked(this.serverPlayer, this.cachedForm);
         }
     }
 
