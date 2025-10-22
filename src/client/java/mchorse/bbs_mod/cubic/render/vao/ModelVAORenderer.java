@@ -3,6 +3,8 @@ package mchorse.bbs_mod.cubic.render.vao;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.ShaderProgram;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL30;
@@ -11,9 +13,17 @@ public class ModelVAORenderer
 {
     public static void render(ShaderProgram shader, IModelVAO modelVAO, MatrixStack stack, float r, float g, float b, float a, int light, int overlay)
     {
-        GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);
-        GL30.glVertexAttribI2i(Attributes.OVERLAY_UV, overlay & '\uffff', overlay >> 16 & '\uffff');
-        GL30.glVertexAttribI2i(Attributes.LIGHTMAP_UV, light & '\uffff', light >> 16 & '\uffff');
+        if (shader.getFormat() == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL)
+        {
+            GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);
+            GL30.glVertexAttribI2i(Attributes.OVERLAY_UV, overlay & '\uffff', overlay >> 16 & '\uffff');
+            GL30.glVertexAttribI2i(Attributes.LIGHTMAP_UV, light & '\uffff', light >> 16 & '\uffff');
+        }
+        else if (shader.getFormat() == VertexFormats.POSITION_TEXTURE_LIGHT_COLOR)
+        {
+            GL30.glVertexAttribI2i(2, light & '\uffff', light >> 16 & '\uffff');
+            GL30.glVertexAttrib4f(3, r, g, b, a);
+        }
 
         int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
@@ -21,7 +31,7 @@ public class ModelVAORenderer
         setupUniforms(stack, shader);
 
         shader.bind();
-        modelVAO.render();
+        modelVAO.render(shader.getFormat());
         shader.unbind();
 
         GL30.glBindVertexArray(currentVAO);
