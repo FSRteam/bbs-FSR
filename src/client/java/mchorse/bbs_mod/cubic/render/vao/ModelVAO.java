@@ -59,6 +59,16 @@ public class ModelVAO implements IModelVAO
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, data.texCoords(), GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.MID_TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
 
+        GL30.glEnableVertexAttribArray(Attributes.POSITION);
+        GL30.glEnableVertexAttribArray(Attributes.TEXTURE_UV);
+        GL30.glEnableVertexAttribArray(Attributes.NORMAL);
+
+        GL30.glDisableVertexAttribArray(Attributes.COLOR);
+        GL30.glDisableVertexAttribArray(Attributes.OVERLAY_UV);
+        GL30.glDisableVertexAttribArray(Attributes.LIGHTMAP_UV);
+        GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
+        GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
+
         /* VertexFormats.POSITION_TEXTURE_LIGHT_COLOR */
         GL30.glBindVertexArray(this.vao2);
 
@@ -68,56 +78,42 @@ public class ModelVAO implements IModelVAO
         GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, texCoordBuffer);
         GL30.glVertexAttribPointer(1, 2, GL30.GL_FLOAT, false, 0, 0);
 
+        GL30.glEnableVertexAttribArray(0);
+        GL30.glEnableVertexAttribArray(1);
+        GL30.glDisableVertexAttribArray(2);
+        GL30.glDisableVertexAttribArray(3);
+
         this.count = data.vertices().length / 3;
     }
 
     @Override
-    public void render(VertexFormat format)
+    public void render(VertexFormat format, float r, float g, float b, float a, int light, int overlay)
     {
         boolean hasShaders = isShadersEnabled();
-        int vao = format == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL ? this.vao : this.vao2;
+        int vao = hasShaders || format == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL ? this.vao : this.vao2;
 
         GL30.glBindVertexArray(vao);
 
-        enableAttributes(format, hasShaders);
-        GL30.glDrawArrays(GL30.GL_TRIANGLES, 0, this.count);
-        disableAttributes(format, hasShaders);
-    }
-
-    private static void disableAttributes(VertexFormat format, boolean hasShaders)
-    {
-        if (format == VertexFormats.POSITION_TEXTURE_LIGHT_COLOR)
+        if (vao == this.vao)
         {
-            GL30.glDisableVertexAttribArray(0);
-            GL30.glDisableVertexAttribArray(1);
+            GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);
+            GL30.glVertexAttribI2i(Attributes.OVERLAY_UV, overlay & '\uffff', overlay >> 16 & '\uffff');
+            GL30.glVertexAttribI2i(Attributes.LIGHTMAP_UV, light & '\uffff', light >> 16 & '\uffff');
         }
         else
         {
-            GL30.glDisableVertexAttribArray(Attributes.POSITION);
-            GL30.glDisableVertexAttribArray(Attributes.TEXTURE_UV);
-            GL30.glDisableVertexAttribArray(Attributes.NORMAL);
+            GL30.glVertexAttribI2i(2, light & '\uffff', light >> 16 & '\uffff');
+            GL30.glVertexAttrib4f(3, r, g, b, a);
         }
 
-        if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
-        if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
-    }
-
-    private static void enableAttributes(VertexFormat format, boolean hasShaders)
-    {
-        if (format == VertexFormats.POSITION_TEXTURE_LIGHT_COLOR)
-        {
-            GL30.glEnableVertexAttribArray(0);
-            GL30.glEnableVertexAttribArray(1);
-        }
-        else
-        {
-            GL30.glEnableVertexAttribArray(Attributes.POSITION);
-            GL30.glEnableVertexAttribArray(Attributes.TEXTURE_UV);
-            GL30.glEnableVertexAttribArray(Attributes.NORMAL);
-        }
+        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
+        else GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
         if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
-        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
+        else GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
+
+        GL30.glDrawArrays(GL30.GL_TRIANGLES, 0, this.count);
+        GL30.glBindVertexArray(0);
     }
 
     public static boolean isShadersEnabled()
