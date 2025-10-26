@@ -159,6 +159,7 @@ public class BBSMod implements ModInitializer
         FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, GunProjectileEntity::new)
             .dimensions(EntityDimensions.fixed(0.25F, 0.25F))
             .trackRangeChunks(24)
+            .trackedUpdateRate(1)
             .build());
 
     public static final Block MODEL_BLOCK = new ModelBlock(FabricBlockSettings.create()
