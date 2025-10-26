@@ -671,7 +671,6 @@ public class Supporters
         this.add("Mayor05", "https://www.youtube.com/@Mayor05", "...").withDate(2025, 8, 5);
         this.add("Tasin", "https://youtube.com/@Tasin", "textures/banners/tasin.png").withDate(2025, 8, 5);
         this.add("indawgnito", "https://youtube.com/@indawgnito", "textures/banners/indawgnito.png").withDate(2025, 8, 5);
-        this.add("Choppa", "...").withDate(2025, 10, 25);
 
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod?
         // Thank you very much for donation! 😊 Is $ is the name you want to be included in BBS mod? Also, you can provide a link to your social media account (like YouTube, Twitter, TikTok, etc.)
