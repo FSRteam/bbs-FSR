@@ -38,6 +38,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -660,13 +661,14 @@ public class UIReplaysEditor extends UIElement
 
     private void pickProperty(String bone, UIKeyframeSheet sheet, boolean insert)
     {
+        IUIKeyframeGraph graph = this.keyframeEditor.view.getGraph();
         int tick = this.filmPanel.getRunner().ticks;
 
         if (insert)
         {
-            Keyframe keyframe = this.keyframeEditor.view.getGraph().addKeyframe(sheet, tick, null);
+            Keyframe keyframe = graph.addKeyframe(sheet, tick, null);
 
-            this.keyframeEditor.view.getGraph().selectKeyframe(keyframe);
+            graph.selectKeyframe(keyframe);
 
             return;
         }
@@ -677,9 +679,22 @@ public class UIReplaysEditor extends UIElement
         {
             Keyframe closest = segment.getClosest();
 
-            if (this.keyframeEditor.view.getGraph().getSelected() != closest)
+            if (graph.getSelected() != closest)
             {
-                this.keyframeEditor.view.getGraph().selectKeyframe(closest);
+                boolean select = true;
+
+                for (UIKeyframeSheet graphSheet : graph.getSheets())
+                {
+                    if (graphSheet.selection.getSelected().contains(closest))
+                    {
+                        select = false;
+
+                        break;
+                    }
+                }
+
+                if (select) graph.selectKeyframe(closest);
+                else graph.pickKeyframe(closest);
             }
 
             if (this.keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory)
