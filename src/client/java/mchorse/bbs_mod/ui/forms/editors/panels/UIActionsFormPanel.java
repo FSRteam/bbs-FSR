@@ -15,14 +15,16 @@ public class UIActionsFormPanel extends UIFormPanel<ModelForm>
     {
         super(editor);
 
-        this.editor = new UIActionsConfigEditor(this::resetAnimator);
+        this.editor = new UIActionsConfigEditor(() ->
+        {
+            this.form.actions.preNotify();
+        }, () ->
+        {
+            ((ModelFormRenderer) FormUtilsClient.getRenderer(this.form)).resetAnimator();
+            this.form.postNotify();
+        });
 
         this.options.add(this.editor);
-    }
-
-    private void resetAnimator()
-    {
-        ((ModelFormRenderer) FormUtilsClient.getRenderer(this.form)).resetAnimator();
     }
 
     @Override

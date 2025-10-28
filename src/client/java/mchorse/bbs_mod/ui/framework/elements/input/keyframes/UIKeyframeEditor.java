@@ -117,7 +117,7 @@ public class UIKeyframeEditor extends UIElement
 
         for (UIKeyframeSheet sheet : this.view.getGraph().getSheets())
         {
-            if (sheet.channel == keyframe.getParentValue())
+            if (sheet.channel == keyframe.getParent())
             {
                 return sheet;
             }

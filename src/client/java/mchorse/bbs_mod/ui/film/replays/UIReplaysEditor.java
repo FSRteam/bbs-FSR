@@ -608,7 +608,7 @@ public class UIReplaysEditor extends UIElement
 
         if (selected != null)
         {
-            String id = selected.getParentValue().getId();
+            String id = selected.getParent().getId();
             int index = id.indexOf("pose_overlay");
 
             if (index >= 0)
@@ -628,7 +628,7 @@ public class UIReplaysEditor extends UIElement
 
         manager.autoKeys();
 
-        for (BaseValueBasic formProperty : form.getProperties().values())
+        for (BaseValueBasic formProperty : form.getAllMap().values())
         {
             if (!formProperty.isVisible())
             {

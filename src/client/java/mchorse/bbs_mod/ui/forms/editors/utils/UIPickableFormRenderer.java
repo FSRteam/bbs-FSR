@@ -221,7 +221,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
 
         if (pair != null)
         {
-            String label = pair.a.getIdOrName();
+            String label = pair.a.getFormIdOrName();
 
             if (!pair.b.isEmpty())
             {

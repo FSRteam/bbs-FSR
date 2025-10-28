@@ -28,11 +28,13 @@ public class UIActionsConfigEditor extends UIElement
 
     private ActionsConfig configs;
     private ActionConfig config;
-    private Runnable callback;
+    private Runnable preCallback;
+    private Runnable postCallback;
 
-    public UIActionsConfigEditor(Runnable callback)
+    public UIActionsConfigEditor(Runnable preCallback, Runnable postCallback)
     {
-        this.callback = callback;
+        this.preCallback = preCallback;
+        this.postCallback = postCallback;
 
         this.actions = new UIStringList((l) -> this.pickAction(l.get(0), false));
         this.actions.scroll.cancelScrolling();
@@ -40,32 +42,37 @@ public class UIActionsConfigEditor extends UIElement
 
         this.animations = new UISearchList<>(new UIStringList((l) ->
         {
+            this.callback(this.preCallback);
             this.config.name = this.animations.list.getIndex() == 0 ? "" : l.get(0);
-            this.callback();
+            this.callback(this.postCallback);
         }));
         this.animations.list.cancelScrollEdge();
         this.animations.label(UIKeys.GENERAL_SEARCH).list.background();
         this.animations.h(112);
         this.loop = new UIToggle(UIKeys.FORMS_EDITORS_ACTIONS_LOOPS, (b) ->
         {
+            this.callback(this.preCallback);
             this.config.loop = b.getValue();
-            this.callback();
+            this.callback(this.postCallback);
         });
         this.speed = new UITrackpad((v) ->
         {
+            this.callback(this.preCallback);
             this.config.speed = v.floatValue();
-            this.callback();
+            this.callback(this.postCallback);
         });
         this.fade = new UITrackpad((v) ->
         {
+            this.callback(this.preCallback);
             this.config.fade = v.floatValue();
-            this.callback();
+            this.callback(this.postCallback);
         });
         this.fade.limit(0);
         this.tick = new UITrackpad((v) ->
         {
+            this.callback(this.preCallback);
             this.config.tick = v.intValue();
-            this.callback();
+            this.callback(this.postCallback);
         });
         this.tick.limit(0).integer();
 
@@ -77,11 +84,11 @@ public class UIActionsConfigEditor extends UIElement
         this.add(UI.label(UIKeys.FORMS_EDITORS_ACTIONS_TICK).marginTop(6), this.tick);
     }
 
-    private void callback()
+    private void callback(Runnable runnable)
     {
-        if (this.callback != null)
+        if (runnable != null)
         {
-            this.callback.run();
+            runnable.run();
         }
     }
 

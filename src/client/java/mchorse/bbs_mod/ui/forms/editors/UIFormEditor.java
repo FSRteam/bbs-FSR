@@ -39,6 +39,7 @@ import mchorse.bbs_mod.ui.forms.editors.forms.UIParticleForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UITrailForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIVanillaParticleForm;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIPickableFormRenderer;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
@@ -49,10 +50,12 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
+import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
@@ -94,6 +97,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     private Consumer<Form> callback;
     private UICopyPasteController copyPasteController;
+    private UIFormUndoHandler undoHandler;
 
     static
     {
@@ -132,6 +136,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
     {
         this.palette = palette;
 
+        this.undoHandler = new UIFormUndoHandler(this);
         this.copyPasteController = new UICopyPasteController(PresetManager.BODY_PARTS, "_FormEditorBodyPart")
             .supplier(this::copyBodyPart)
             .consumer(this::pasteBodyPart)
@@ -169,9 +174,9 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
                 Form partForm = current.part.getForm();
 
-                if (partForm != null && partForm.getId().contains("particle"))
+                if (partForm != null && partForm.getFormId().contains("particle"))
                 {
-                    current.part.useTarget = true;
+                    current.part.useTarget.set(true);
 
                     this.useTarget.setValue(true);
                 }
@@ -183,10 +188,10 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
         this.useTarget = new UIToggle(UIKeys.FORMS_EDITOR_USE_TARGET, (b) ->
         {
-            this.forms.getCurrentFirst().part.useTarget = b.getValue();
+            this.forms.getCurrentFirst().part.useTarget.set(b.getValue());
         });
 
-        this.bone = new UIStringList((l) -> this.forms.getCurrentFirst().part.bone = l.get(0));
+        this.bone = new UIStringList((l) -> this.forms.getCurrentFirst().part.bone.set(l.get(0)));
         this.bone.background().h(16 * 6);
 
         this.transform = new UIPropTransform();
@@ -234,6 +239,10 @@ public class UIFormEditor extends UIElement implements IUIFormList
         this.formsArea.add(draggable);
 
         this.pick.keys().register(Keys.FORMS_EDIT, this.pick::clickItself);
+        this.keys().register(Keys.UNDO, this::undo);
+        this.keys().register(Keys.REDO, this::redo);
+
+        this.setUndoId("form_editor");
     }
 
     public void pickFormFromRenderer(Pair<Form, String> pair)
@@ -245,7 +254,8 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
             if (part != null && this.bone.getList().contains(pair.b) && part.getManager().getOwner() == pair.a)
             {
-                this.bone.setCurrentScroll(part.bone = pair.b);
+                part.bone.set(pair.b);
+                this.bone.setCurrentScroll(pair.b);
             }
         }
         else if (Window.isAltPressed()) UIReplaysEditor.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
@@ -280,12 +290,12 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
             if (current.getForm() != null)
             {
-                menu.action(Icons.ADD, UIKeys.FORMS_EDITOR_CONTEXT_ADD, () -> this.addBodyPart(new BodyPart()));
+                menu.action(Icons.ADD, UIKeys.FORMS_EDITOR_CONTEXT_ADD, () -> this.addBodyPart(new BodyPart("")));
             }
 
             if (current.part != null)
             {
-                List<BodyPart> all = current.part.getManager().getAll();
+                List<BodyPart> all = current.part.getManager().getAllTyped();
 
                 if (all.size() > 1)
                 {
@@ -316,7 +326,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
     private void moveBodyPart(UIForms.FormEntry current, int direction)
     {
         BodyPartManager manager = current.part.getManager();
-        List<BodyPart> all = manager.getAll();
+        List<BodyPart> all = manager.getAllTyped();
         int index = all.indexOf(current.part);
         int newIndex = MathUtils.clamp(index + direction, 0, all.size() - 1);
 
@@ -355,12 +365,12 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     private MapType copyBodyPart()
     {
-        return this.forms.getCurrentFirst().part.toData();
+        return this.forms.getCurrentFirst().part.toData().asMap();
     }
 
     private void pasteBodyPart(MapType data, int mouseX, int mouseY)
     {
-        BodyPart part = new BodyPart();
+        BodyPart part = new BodyPart("");
 
         part.fromData(data);
         this.addBodyPart(part);
@@ -386,11 +396,11 @@ public class UIFormEditor extends UIElement implements IUIFormList
         {
             this.bodyPartData.removeAll();
 
-            this.useTarget.setValue(entry.part.useTarget);
+            this.useTarget.setValue(entry.part.useTarget.get());
             this.bone.clear();
             this.bone.add(FormUtilsClient.getBones(entry.form));
             this.bone.sort();
-            this.bone.setCurrentScroll(entry.part.bone);
+            this.bone.setCurrentScroll(entry.part.bone.get());
 
             if (!this.bone.getList().isEmpty())
             {
@@ -401,7 +411,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
                 this.bodyPartData.add(this.pick, this.useTarget, this.transform);
             }
 
-            this.transform.setTransform(entry.part.getTransform());
+            this.transform.setTransform(entry.part.transform.get());
 
             this.bodyPartData.scroll.setScroll(0);
             this.bodyPartData.resize();
@@ -436,13 +446,17 @@ public class UIFormEditor extends UIElement implements IUIFormList
             return false;
         }
 
-        form = form.copy();
+        form = FormUtils.copy(form);
 
         this.bodyPartData.setVisible(false);
 
         if (this.switchEditor(form))
         {
+            this.undoHandler.reset();
+
             this.form = form;
+            this.form.setId("form");
+            this.form.preCallback(this.undoHandler::handlePreValues);
 
             if (TOGGLED != this.formsArea.isVisible())
             {
@@ -461,6 +475,16 @@ public class UIFormEditor extends UIElement implements IUIFormList
         return false;
     }
 
+    public void undo()
+    {
+        if (this.form != null && this.undoHandler.getUndoManager().undo(this.form)) UIUtils.playClick();
+    }
+
+    public void redo()
+    {
+        if (this.form != null && this.undoHandler.getUndoManager().redo(this.form)) UIUtils.playClick();
+    }
+
     public void refreshFormList()
     {
         UIForms.FormEntry current = this.forms.getCurrentFirst();
@@ -477,6 +501,8 @@ public class UIFormEditor extends UIElement implements IUIFormList
         {
             return false;
         }
+
+        editor.setUndoId("form_panel");
 
         if (this.editor != null)
         {
@@ -502,6 +528,8 @@ public class UIFormEditor extends UIElement implements IUIFormList
     {
         Form form = this.form;
 
+        this.form.setId("");
+        this.form.resetCallbacks();
         this.exit();
 
         this.editor.finishEdit();
@@ -538,4 +566,49 @@ public class UIFormEditor extends UIElement implements IUIFormList
         }
     }
 
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+
+        data.putInt("body_part", this.forms.getIndex());
+    }
+
+    @Override
+    public void applyAllUndoData(MapType data)
+    {
+        if (this.editor != null && this.form != null)
+        {
+            this.switchEditor(this.form);
+        }
+
+        super.applyAllUndoData(data);
+    }
+
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+
+        this.refreshFormList();
+
+        UIForms.FormEntry bodyPart = CollectionUtils.getSafe(this.forms.getList(), data.getInt("body_part"));
+
+        if (bodyPart != null)
+        {
+            this.forms.setCurrentScroll(bodyPart);
+            this.pickForm(bodyPart);
+        }
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        if (this.undoHandler != null)
+        {
+            this.undoHandler.submitUndo();
+        }
+
+        super.render(context);
+    }
 }

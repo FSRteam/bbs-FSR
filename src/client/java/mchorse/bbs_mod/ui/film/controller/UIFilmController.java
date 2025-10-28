@@ -1089,7 +1089,7 @@ public class UIFilmController extends UIElement
         }
         else if (pair != null)
         {
-            String label = pair.a.getIdOrName();
+            String label = pair.a.getFormIdOrName();
 
             if (!pair.b.isEmpty())
             {

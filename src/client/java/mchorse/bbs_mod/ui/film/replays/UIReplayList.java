@@ -546,7 +546,7 @@ public class UIReplayList extends UIList<Replay>
             else
             {
                 AnchorForm form = new AnchorForm();
-                BodyPart part = new BodyPart();
+                BodyPart part = new BodyPart("");
 
                 part.setForm(replay.form.get());
                 form.transform.set(transform);

@@ -824,7 +824,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             /* Marking the latest undo as unmergeable */
             if (this.undoHandler != null && !flight)
             {
-                this.undoHandler.markLastUndoNoMerging();
+                this.undoHandler.getUndoManager().markLastUndoNoMerging();
             }
             else
             {
