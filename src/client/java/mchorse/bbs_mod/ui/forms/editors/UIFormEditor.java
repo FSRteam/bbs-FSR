@@ -194,7 +194,8 @@ public class UIFormEditor extends UIElement implements IUIFormList
         this.bone = new UIStringList((l) -> this.forms.getCurrentFirst().part.bone.set(l.get(0)));
         this.bone.background().h(16 * 6);
 
-        this.transform = new UIPropTransform();
+        this.transform = new UIPropTransform()
+            .callbacks(() -> this.forms.getCurrentFirst().part.transform);
 
         this.editArea = new UIElement();
         this.editArea.full(this);

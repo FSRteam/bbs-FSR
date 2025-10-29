@@ -236,6 +236,24 @@ public abstract class Form extends ValueGroup
     /* Data comparison and (de)serialization */
 
     @Override
+    public void fromData(BaseType data)
+    {
+        /* Compatibility with older forms */
+        if (data instanceof MapType map && map.has("bodyParts"))
+        {
+            MapType bodyParts = map.getMap("bodyParts");
+
+            if (bodyParts.has("parts"))
+            {
+                map.remove("bodyParts");
+                map.put("parts", bodyParts.getList("parts"));
+            }
+        }
+
+        super.fromData(data);
+    }
+
+    @Override
     public BaseType toData()
     {
         BaseType data = super.toData();

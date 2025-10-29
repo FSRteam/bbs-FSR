@@ -138,7 +138,7 @@ public class UIPoseEditor extends UIElement
     {
         String current = this.groups.getCurrentFirst();
 
-        this.changedPose(() -> this.pose.fromData(data));
+        this.pose.fromData(data);
         this.pickBone(current);
     }
 
@@ -146,7 +146,7 @@ public class UIPoseEditor extends UIElement
     {
         String current = this.groups.getCurrentFirst();
 
-        this.changedPose(() -> this.pose.flip(this.flippedParts));
+        this.pose.flip(this.flippedParts);
         this.pickBone(current);
     }
 
@@ -202,11 +202,6 @@ public class UIPoseEditor extends UIElement
     protected UIPropTransform createTransformEditor()
     {
         return new UIPropTransform().enableHotkeys();
-    }
-
-    protected void changedPose(Runnable runnable)
-    {
-        runnable.run();
     }
 
     protected void pickBone(String bone)

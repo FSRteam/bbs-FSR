@@ -23,6 +23,7 @@ public class UIActionsFormPanel extends UIFormPanel<ModelForm>
             ((ModelFormRenderer) FormUtilsClient.getRenderer(this.form)).resetAnimator();
             this.form.postNotify();
         });
+        this.editor.setUndoId("model_action_editor");
 
         this.options.add(this.editor);
     }
