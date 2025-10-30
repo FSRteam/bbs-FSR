@@ -105,7 +105,7 @@ public class UIFormUndoHandler
         {
             ValueChangeUndo change = (ValueChangeUndo) anotherUndo;
 
-            this.uiElement.applyAllUndoData(change.getUIData(redo));
+            this.uiElement.getRoot().applyAllUndoData(change.getUIData(redo));
         }
     }
 
@@ -113,7 +113,7 @@ public class UIFormUndoHandler
     {
         if (this.uiData == null)
         {
-            this.uiData = this.uiElement.collectAllUndoData();
+            this.uiData = this.uiElement.getRoot().collectAllUndoData();
         }
 
         if (!this.cachedValues.containsKey(baseValue))

@@ -7,6 +7,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.forms.states.AnimationStates;
 import mchorse.bbs_mod.forms.values.ValueAnchor;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
@@ -53,6 +54,7 @@ public abstract class Form extends ValueGroup
     public final ValueInt hotkey = new ValueInt("keybind", 0);
 
     public final BodyPartManager parts = new BodyPartManager("parts");
+    public final AnimationStates states = new AnimationStates("states");
 
     protected Object renderer;
     protected String cachedID;
@@ -110,7 +112,9 @@ public abstract class Form extends ValueGroup
         this.hotkey.invisible();
 
         this.add(this.hotkey);
+
         this.add(this.parts);
+        this.add(this.states);
     }
 
     public Object getRenderer()

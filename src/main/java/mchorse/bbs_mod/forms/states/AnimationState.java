@@ -3,11 +3,13 @@ package mchorse.bbs_mod.forms.states;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
+import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 
 public class AnimationState extends ValueGroup
 {
     public final FormProperties properties = new FormProperties("properties");
     public final ValueBoolean main = new ValueBoolean("main", false);
+    public final ValueInt keybind = new ValueInt("keybind", 0);
 
     public AnimationState(String id)
     {
@@ -15,5 +17,6 @@ public class AnimationState extends ValueGroup
 
         this.add(this.properties);
         this.add(this.main);
+        this.add(this.keybind);
     }
 }

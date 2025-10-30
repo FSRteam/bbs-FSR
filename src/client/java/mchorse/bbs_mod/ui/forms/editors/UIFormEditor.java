@@ -2,7 +2,6 @@ package mchorse.bbs_mod.ui.forms.editors;
 
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.forms.BlockForm;
@@ -18,7 +17,9 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.ParticleForm;
 import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
+import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
@@ -38,15 +39,13 @@ import mchorse.bbs_mod.ui.forms.editors.forms.UIModelForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIParticleForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UITrailForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIVanillaParticleForm;
+import mchorse.bbs_mod.ui.forms.editors.states.UIAnimationStatesOverlayPanel;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIPickableFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
-import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -75,23 +74,28 @@ public class UIFormEditor extends UIElement implements IUIFormList
     private static float treeWidth = 0F;
     private static boolean TOGGLED = true;
 
+    /* Palette for picking a form for body parts */
     public UIFormPalette palette;
 
-    public UIElement formsArea;
-    public UIForms forms;
-    public UIScrollView bodyPartData;
-
-    public UIButton pick;
-    public UIToggle useTarget;
-    public UIStringList bone;
-    public UIPropTransform transform;
-
-    public UIElement editArea;
+    /* Main form editor element */
+    public UIElement formEditor;
     public UIPickableFormRenderer renderer;
     public UIForm editor;
 
+    /* States editor */
+    public UIElement statesEditor;
+    public UIIcon openStates;
+
+    /* Forms sidebar */
+    public UIElement forms;
+    public UIForms formsList;
+    public UIBodyPartEditor bodyPartEditor;
+
+    /* Sidebar icons */
+    public UIElement icons;
     public UIIcon finish;
     public UIIcon toggleSidebar;
+    public UIIcon openStateEditor;
 
     public Form form;
 
@@ -142,104 +146,85 @@ public class UIFormEditor extends UIElement implements IUIFormList
             .consumer(this::pasteBodyPart)
             .canCopy(() ->
             {
-                UIForms.FormEntry current = this.forms.getCurrentFirst();
+                UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
                 return current != null && current.part != null;
             })
             .canPaste(() ->
             {
-                UIForms.FormEntry current = this.forms.getCurrentFirst();
+                UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
                 return current != null && current.getForm() != null;
             });
 
-        this.formsArea = new UIElement();
-        this.formsArea.relative(this).x(20).w(treeWidth).minW(140).h(1F);
+        this.forms = new UIElement();
+        this.forms.relative(this).x(20).w(treeWidth).minW(140).h(1F);
 
-        this.forms = new UIForms((l) -> this.pickForm(l.get(0)));
-        this.forms.relative(this.formsArea).w(1F).h(0.5F);
-        this.forms.context(this::createFormContextMenu);
+        this.formsList = new UIForms((l) -> this.pickForm(l.get(0)));
+        this.formsList.relative(this.forms).w(1F).h(0.5F);
+        this.formsList.context(this::createFormContextMenu);
+        this.bodyPartEditor = new UIBodyPartEditor(this);
+        this.bodyPartEditor.relative(this.forms).w(1F).y(0.5F).h(0.5F);
 
-        this.bodyPartData = UI.scrollView(5, 10);
-        this.bodyPartData.scroll.cancelScrolling();
-        this.bodyPartData.relative(this.formsArea).w(1F).y(0.5F).h(0.5F);
+        this.formEditor = new UIElement();
+        this.formEditor.full(this);
 
-        this.pick = new UIButton(UIKeys.FORMS_EDITOR_PICK_FORM, (b) ->
+        this.statesEditor = new UIElement();
+        this.statesEditor.full(this);
+        this.statesEditor.setVisible(false);
+
+        this.openStates = new UIIcon(Icons.MORE, (b) ->
         {
-            UIForms.FormEntry current = this.forms.getCurrentFirst();
+            UIAnimationStatesOverlayPanel panel = new UIAnimationStatesOverlayPanel(this.form.states, (state) -> this.pickState(state));
 
-            this.openFormList(current.part.getForm(), (f) ->
-            {
-                current.part.setForm(FormUtils.copy(f));
-
-                Form partForm = current.part.getForm();
-
-                if (partForm != null && partForm.getFormId().contains("particle"))
-                {
-                    current.part.useTarget.set(true);
-
-                    this.useTarget.setValue(true);
-                }
-
-                this.refreshFormList();
-                this.switchEditor(partForm);
-            });
+            panel.setUndoId("animation_states_overlay_panel");
+            UIOverlay.addOverlay(this.getContext(), panel, 280, 0.5F).eventPropagataion(EventPropagation.PASS);
         });
-
-        this.useTarget = new UIToggle(UIKeys.FORMS_EDITOR_USE_TARGET, (b) ->
-        {
-            this.forms.getCurrentFirst().part.useTarget.set(b.getValue());
-        });
-
-        this.bone = new UIStringList((l) -> this.forms.getCurrentFirst().part.bone.set(l.get(0)));
-        this.bone.background().h(16 * 6);
-
-        this.transform = new UIPropTransform()
-            .callbacks(() -> this.forms.getCurrentFirst().part.transform);
-
-        this.editArea = new UIElement();
-        this.editArea.full(this);
+        this.openStates.relative(this.statesEditor);
+        this.openStates.tooltip(IKey.raw("Open animation states manager"), Direction.RIGHT);
+        this.statesEditor.add(this.openStates);
 
         this.renderer = new UIPickableFormRenderer(this);
-        this.renderer.full(this.editArea);
+        this.renderer.full(this.formEditor);
 
         this.finish = new UIIcon(Icons.IN, (b) -> this.palette.exit());
-        this.finish.tooltip(UIKeys.FORMS_EDITOR_FINISH, Direction.RIGHT).relative(this.editArea).xy(0, 1F).anchorY(1F);
-
-        this.toggleSidebar = new UIIcon(() -> this.formsArea.isVisible() ? Icons.LEFTLOAD : Icons.RIGHTLOAD, (b) ->
+        this.finish.tooltip(UIKeys.FORMS_EDITOR_FINISH, Direction.RIGHT).relative(this.formEditor).xy(0, 1F).anchorY(1F);
+        this.toggleSidebar = new UIIcon(() -> this.forms.isVisible() ? Icons.LEFTLOAD : Icons.RIGHTLOAD, (b) ->
         {
             this.toggleSidebar();
 
             TOGGLED = !TOGGLED;
         });
-        this.toggleSidebar.tooltip(UIKeys.FORMS_EDITOR_TOGGLE_TREE, Direction.RIGHT).relative(this.finish).y(-1F);
+        this.toggleSidebar.tooltip(UIKeys.FORMS_EDITOR_TOGGLE_TREE, Direction.RIGHT);
+        this.openStateEditor = new UIIcon(Icons.GALLERY, (b) -> this.toggleStateEditor());
+        this.openStateEditor.tooltip(IKey.raw("Toggle animation state editor"), Direction.RIGHT);
+        this.icons = UI.column(this.openStateEditor, this.toggleSidebar, this.finish);
+        this.icons.relative(this).y(1F).w(20).anchorY(1F);
 
         UIRenderable background = new UIRenderable((context) ->
         {
-            if (this.formsArea.isVisible())
+            if (this.forms.isVisible())
             {
-                this.formsArea.area.render(context.batcher, Colors.A50);
+                this.forms.area.render(context.batcher, Colors.A50);
             }
         });
 
-        this.formsArea.add(background, this.forms, this.bodyPartData);
-        this.editArea.add(this.finish, this.toggleSidebar);
-        this.add(this.editArea, this.formsArea);
-
         UIDraggable draggable = new UIDraggable((context) ->
         {
-            int diff = context.mouseX - this.formsArea.area.x;
+            int diff = context.mouseX - this.forms.area.x;
             float f = diff / (float) this.area.w;
 
             treeWidth = MathUtils.clamp(f, 0F, 0.5F);
 
-            this.formsArea.w(treeWidth).resize();
+            this.forms.w(treeWidth).resize();
         });
 
-        draggable.relative(this.formsArea).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
-        this.formsArea.add(draggable);
+        draggable.relative(this.forms).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
-        this.pick.keys().register(Keys.FORMS_EDIT, this.pick::clickItself);
+        this.forms.add(background, this.formsList, this.bodyPartEditor, draggable);
+        this.formEditor.add(this.forms);
+        this.add(this.renderer, this.formEditor, this.statesEditor, this.icons);
+
         this.keys().register(Keys.UNDO, this::undo);
         this.keys().register(Keys.REDO, this::redo);
 
@@ -248,17 +233,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     public void pickFormFromRenderer(Pair<Form, String> pair)
     {
-        if (Window.isCtrlPressed() && !pair.b.isEmpty())
-        {
-            /* Ctrl + clicking to pick the parent bone to attach to */
-            BodyPart part = this.forms.getCurrentFirst().part;
-
-            if (part != null && this.bone.getList().contains(pair.b) && part.getManager().getOwner() == pair.a)
-            {
-                part.bone.set(pair.b);
-                this.bone.setCurrentScroll(pair.b);
-            }
-        }
+        if (Window.isCtrlPressed() && !pair.b.isEmpty()) this.bodyPartEditor.pickBone(pair);
         else if (Window.isAltPressed()) UIReplaysEditor.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else if (Window.isShiftPressed()) UIReplaysEditor.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else this.pickFormBone(pair.a, pair.b);
@@ -266,8 +241,8 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     private void pickFormBone(Form form, String bone)
     {
-        this.forms.setCurrentForm(form);
-        this.pickForm(this.forms.getCurrentFirst());
+        this.formsList.setCurrentForm(form);
+        this.pickForm(this.formsList.getCurrentFirst());
 
         if (!bone.isEmpty())
         {
@@ -275,14 +250,23 @@ public class UIFormEditor extends UIElement implements IUIFormList
         }
     }
 
+    private void pickState(AnimationState state)
+    {}
+
+    private void toggleStateEditor()
+    {
+        this.formEditor.toggleVisible();
+        this.statesEditor.toggleVisible();
+    }
+
     private void toggleSidebar()
     {
-        this.formsArea.toggleVisible();
+        this.forms.toggleVisible();
     }
 
     private void createFormContextMenu(ContextMenuManager menu)
     {
-        UIForms.FormEntry current = this.forms.getCurrentFirst();
+        UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
         if (current != null)
         {
@@ -334,11 +318,11 @@ public class UIFormEditor extends UIElement implements IUIFormList
         if (newIndex != index)
         {
             manager.moveBodyPart(current.part, newIndex);
-            this.forms.setForm(this.form);
+            this.formsList.setForm(this.form);
 
             UIForms.FormEntry selection = null;
 
-            for (UIForms.FormEntry entry : this.forms.getList())
+            for (UIForms.FormEntry entry : this.formsList.getList())
             {
                 if (entry.part == current.part)
                 {
@@ -350,7 +334,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
             if (selection != null)
             {
-                this.forms.setCurrentScroll(selection);
+                this.formsList.setCurrentScroll(selection);
                 this.pickForm(selection);
             }
         }
@@ -358,7 +342,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     private void addBodyPart(BodyPart part)
     {
-        UIForms.FormEntry current = this.forms.getCurrentFirst();
+        UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
         current.getForm().parts.addBodyPart(part);
         this.refreshFormList();
@@ -366,7 +350,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     private MapType copyBodyPart()
     {
-        return this.forms.getCurrentFirst().part.toData().asMap();
+        return this.formsList.getCurrentFirst().part.toData().asMap();
     }
 
     private void pasteBodyPart(MapType data, int mouseX, int mouseY)
@@ -379,43 +363,23 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     private void removeBodyPart()
     {
-        int index = this.forms.getIndex();
-        UIForms.FormEntry current = this.forms.getCurrentFirst();
+        int index = this.formsList.getIndex();
+        UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
         current.form.parts.removeBodyPart(current.part);
 
         this.refreshFormList();
-        this.forms.setIndex(index - 1);
-        this.pickForm(this.forms.getCurrentFirst());
+        this.formsList.setIndex(index - 1);
+        this.pickForm(this.formsList.getCurrentFirst());
     }
 
     private void pickForm(UIForms.FormEntry entry)
     {
-        this.bodyPartData.setVisible(entry.part != null);
+        this.bodyPartEditor.setVisible(entry.part != null);
 
         if (entry.part != null)
         {
-            this.bodyPartData.removeAll();
-
-            this.useTarget.setValue(entry.part.useTarget.get());
-            this.bone.clear();
-            this.bone.add(FormUtilsClient.getBones(entry.form));
-            this.bone.sort();
-            this.bone.setCurrentScroll(entry.part.bone.get());
-
-            if (!this.bone.getList().isEmpty())
-            {
-                this.bodyPartData.add(this.pick, this.useTarget, UI.label(UIKeys.FORMS_EDITOR_BONE).marginTop(8), this.bone, this.transform);
-            }
-            else
-            {
-                this.bodyPartData.add(this.pick, this.useTarget, this.transform);
-            }
-
-            this.transform.setTransform(entry.part.transform.get());
-
-            this.bodyPartData.scroll.setScroll(0);
-            this.bodyPartData.resize();
+            this.bodyPartEditor.setPart(entry.part, entry.form);
         }
 
         this.switchEditor(entry.getForm());
@@ -449,7 +413,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
         form = FormUtils.copy(form);
 
-        this.bodyPartData.setVisible(false);
+        this.bodyPartEditor.setVisible(false);
 
         if (this.switchEditor(form))
         {
@@ -459,7 +423,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
             this.form.setId("form");
             this.form.preCallback(this.undoHandler::handlePreValues);
 
-            if (TOGGLED != this.formsArea.isVisible())
+            if (TOGGLED != this.forms.isVisible())
             {
                 this.toggleSidebar();
             }
@@ -468,7 +432,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
             this.renderer.reset();
             this.renderer.form = form;
             this.refreshFormList();
-            this.forms.setIndex(0);
+            this.formsList.setIndex(0);
 
             return true;
         }
@@ -488,10 +452,10 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     public void refreshFormList()
     {
-        UIForms.FormEntry current = this.forms.getCurrentFirst();
+        UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
-        this.forms.setForm(this.form);
-        this.forms.setCurrentScroll(current);
+        this.formsList.setForm(this.form);
+        this.formsList.setCurrentScroll(current);
     }
 
     public boolean switchEditor(Form form)
@@ -512,15 +476,11 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
         this.editor = editor;
 
-        this.editArea.prepend(this.editor);
+        this.formEditor.prepend(this.editor);
 
         this.editor.setEditor(this);
         this.editor.startEdit(form);
-        this.editor.full(this.editArea).resize();
-
-        this.renderer.removeFromParent();
-        this.renderer.resize();
-        this.editArea.prepend(this.renderer);
+        this.editor.full(this.formEditor).resize();
 
         return true;
     }
@@ -572,7 +532,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
     {
         super.collectUndoData(data);
 
-        data.putInt("body_part", this.forms.getIndex());
+        data.putInt("body_part", this.formsList.getIndex());
     }
 
     @Override
@@ -593,11 +553,11 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
         this.refreshFormList();
 
-        UIForms.FormEntry bodyPart = CollectionUtils.getSafe(this.forms.getList(), data.getInt("body_part"));
+        UIForms.FormEntry bodyPart = CollectionUtils.getSafe(this.formsList.getList(), data.getInt("body_part"));
 
         if (bodyPart != null)
         {
-            this.forms.setCurrentScroll(bodyPart);
+            this.formsList.setCurrentScroll(bodyPart);
             this.pickForm(bodyPart);
         }
     }
