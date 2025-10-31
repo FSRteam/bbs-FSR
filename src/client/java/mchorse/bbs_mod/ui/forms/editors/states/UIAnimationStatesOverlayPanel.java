@@ -7,6 +7,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIKeybind;
+import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -24,13 +25,14 @@ public class UIAnimationStatesOverlayPanel extends UIOverlayPanel
 
     public UIToggle main;
     public UIKeybind keybind;
+    public UITrackpad duration;
 
     protected AnimationStates states;
     protected AnimationState state;
 
     private Consumer<AnimationState> callback;
 
-    public UIAnimationStatesOverlayPanel(AnimationStates states, Consumer<AnimationState> consumer)
+    public UIAnimationStatesOverlayPanel(AnimationStates states, AnimationState current, Consumer<AnimationState> consumer)
     {
         super(IKey.raw("Animation states"));
 
@@ -61,16 +63,18 @@ public class UIAnimationStatesOverlayPanel extends UIOverlayPanel
         });
         this.keybind = new UIKeybind((keybind) -> this.state.keybind.set(keybind.getMainKey()));
         this.keybind.single();
+        this.duration = new UITrackpad((v) -> this.state.duration.set(v.intValue())).integer().limit(0D);
 
-        this.editor = UI.scrollView(this.main, this.keybind);
+        this.editor = UI.scrollView(this.main, this.keybind, UI.label(IKey.raw("Duration")).marginTop(6), this.duration);
 
         this.list.relative(this.content).w(120).h(1F);
         this.list.setList(states.getList());
+        this.list.setCurrentScroll(current);
         this.editor.relative(this.content).x(120).w(1F, -120).h(1F).column(5).vertical().stretch().scroll().padding(10);
 
         this.content.add(this.editor, this.list);
 
-        this.pickItem(null, false);
+        this.pickItem(this.list.getCurrentFirst(), false);
     }
 
     protected UIList<AnimationState> createList()
@@ -122,10 +126,11 @@ public class UIAnimationStatesOverlayPanel extends UIOverlayPanel
         }
     }
 
-    protected void fillData(AnimationState item)
+    protected void fillData(AnimationState state)
     {
-        this.main.setValue(item.main.get());
-        this.keybind.setKeyCombo(new KeyCombo(IKey.EMPTY, item.keybind.get()));
+        this.main.setValue(state.main.get());
+        this.keybind.setKeyCombo(new KeyCombo(IKey.EMPTY, state.keybind.get()));
+        this.duration.setValue(state.duration.get());
     }
 
     @Override

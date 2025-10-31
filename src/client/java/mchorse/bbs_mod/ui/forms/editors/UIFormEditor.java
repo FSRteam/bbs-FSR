@@ -22,7 +22,8 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
+import mchorse.bbs_mod.ui.film.ICursor;
+import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.forms.IUIFormList;
 import mchorse.bbs_mod.ui.forms.UIFormList;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
@@ -40,6 +41,7 @@ import mchorse.bbs_mod.ui.forms.editors.forms.UIParticleForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UITrailForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIVanillaParticleForm;
 import mchorse.bbs_mod.ui.forms.editors.states.UIAnimationStatesOverlayPanel;
+import mchorse.bbs_mod.ui.forms.editors.states.keyframes.UIAnimationStateEditor;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIPickableFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -48,6 +50,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
@@ -60,6 +63,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.presets.PresetManager;
+import org.joml.Matrix4f;
 
 import java.util.HashMap;
 import java.util.List;
@@ -67,7 +71,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class UIFormEditor extends UIElement implements IUIFormList
+public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 {
     private static Map<Class, Supplier<UIForm>> panels = new HashMap<>();
 
@@ -84,6 +88,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
     /* States editor */
     public UIElement statesEditor;
+    public UIAnimationStateEditor statesKeyframes;
     public UIIcon openStates;
 
     /* Forms sidebar */
@@ -102,6 +107,8 @@ public class UIFormEditor extends UIElement implements IUIFormList
     private Consumer<Form> callback;
     private UICopyPasteController copyPasteController;
     private UIFormUndoHandler undoHandler;
+
+    private int cursor;
 
     static
     {
@@ -172,17 +179,18 @@ public class UIFormEditor extends UIElement implements IUIFormList
         this.statesEditor = new UIElement();
         this.statesEditor.full(this);
         this.statesEditor.setVisible(false);
+        this.statesKeyframes = new UIAnimationStateEditor(this);
+        this.statesKeyframes.relative(this.statesEditor).x(20).y(1F).w(1F, -20).h(240).anchorY(1F);
 
         this.openStates = new UIIcon(Icons.MORE, (b) ->
         {
-            UIAnimationStatesOverlayPanel panel = new UIAnimationStatesOverlayPanel(this.form.states, (state) -> this.pickState(state));
+            UIAnimationStatesOverlayPanel panel = new UIAnimationStatesOverlayPanel(this.form.states, this.statesKeyframes.getState(), (state) -> this.pickState(state));
 
             panel.setUndoId("animation_states_overlay_panel");
             UIOverlay.addOverlay(this.getContext(), panel, 280, 0.5F).eventPropagataion(EventPropagation.PASS);
         });
         this.openStates.relative(this.statesEditor);
         this.openStates.tooltip(IKey.raw("Open animation states manager"), Direction.RIGHT);
-        this.statesEditor.add(this.openStates);
 
         this.renderer = new UIPickableFormRenderer(this);
         this.renderer.full(this.formEditor);
@@ -209,6 +217,11 @@ public class UIFormEditor extends UIElement implements IUIFormList
             }
         });
 
+        UIRenderable backgroundStates = new UIRenderable((context) ->
+        {
+            context.batcher.box(this.area.x, this.area.y, this.area.x + 20, this.area.ey(), Colors.A100);
+        });
+
         UIDraggable draggable = new UIDraggable((context) ->
         {
             int diff = context.mouseX - this.forms.area.x;
@@ -223,6 +236,7 @@ public class UIFormEditor extends UIElement implements IUIFormList
 
         this.forms.add(background, this.formsList, this.bodyPartEditor, draggable);
         this.formEditor.add(this.forms);
+        this.statesEditor.add(backgroundStates, this.openStates, this.statesKeyframes);
         this.add(this.renderer, this.formEditor, this.statesEditor, this.icons);
 
         this.keys().register(Keys.UNDO, this::undo);
@@ -231,11 +245,32 @@ public class UIFormEditor extends UIElement implements IUIFormList
         this.setUndoId("form_editor");
     }
 
+    public boolean clickViewport(UIContext context, StencilFormFramebuffer stencil)
+    {
+        if (this.statesEditor.isVisible() && this.statesKeyframes.clickViewport(context, stencil))
+        {
+            return true;
+        }
+        else if (stencil.hasPicked() && context.mouseButton == 0)
+        {
+            Pair<Form, String> pair = stencil.getPicked();
+
+            if (pair != null)
+            {
+                this.pickFormFromRenderer(pair);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void pickFormFromRenderer(Pair<Form, String> pair)
     {
         if (Window.isCtrlPressed() && !pair.b.isEmpty()) this.bodyPartEditor.pickBone(pair);
-        else if (Window.isAltPressed()) UIReplaysEditor.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
-        else if (Window.isShiftPressed()) UIReplaysEditor.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
+        else if (Window.isAltPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
+        else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickFormBone(pair.a, bone));
         else this.pickFormBone(pair.a, pair.b);
     }
 
@@ -251,7 +286,9 @@ public class UIFormEditor extends UIElement implements IUIFormList
     }
 
     private void pickState(AnimationState state)
-    {}
+    {
+        this.statesKeyframes.setState(state);
+    }
 
     private void toggleStateEditor()
     {
@@ -423,6 +460,8 @@ public class UIFormEditor extends UIElement implements IUIFormList
             this.form.setId("form");
             this.form.preCallback(this.undoHandler::handlePreValues);
 
+            this.pickState(form.states.getMain());
+
             if (TOGGLED != this.forms.isVisible())
             {
                 this.toggleSidebar();
@@ -571,5 +610,27 @@ public class UIFormEditor extends UIElement implements IUIFormList
         }
 
         super.render(context);
+    }
+
+    public Matrix4f getOrigin(float transition)
+    {
+        if (this.statesEditor.isVisible())
+        {
+            return this.statesKeyframes.getOrigin(transition);
+        }
+
+        return this.editor.getOrigin(transition);
+    }
+
+    @Override
+    public int getCursor()
+    {
+        return this.cursor;
+    }
+
+    @Override
+    public void setCursor(int tick)
+    {
+        this.cursor = tick;
     }
 }

@@ -10,6 +10,7 @@ public class AnimationState extends ValueGroup
     public final FormProperties properties = new FormProperties("properties");
     public final ValueBoolean main = new ValueBoolean("main", false);
     public final ValueInt keybind = new ValueInt("keybind", 0);
+    public final ValueInt duration = new ValueInt("duration", 100);
 
     public AnimationState(String id)
     {
@@ -18,5 +19,6 @@ public class AnimationState extends ValueGroup
         this.add(this.properties);
         this.add(this.main);
         this.add(this.keybind);
+        this.add(this.duration);
     }
 }
