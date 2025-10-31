@@ -180,7 +180,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         this.statesEditor.full(this);
         this.statesEditor.setVisible(false);
         this.statesKeyframes = new UIAnimationStateEditor(this);
-        this.statesKeyframes.relative(this.statesEditor).x(20).y(1F).w(1F, -20).h(240).anchorY(1F);
+        this.statesKeyframes.relative(this.statesEditor).x(20).y(1F).w(1F, -20).h(0.25F).anchorY(1F);
 
         this.openStates = new UIIcon(Icons.MORE, (b) ->
         {
