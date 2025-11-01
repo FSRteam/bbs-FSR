@@ -2,11 +2,15 @@ package mchorse.bbs_mod.forms.states;
 
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 
+import java.util.UUID;
+
 public class AnimationState extends ValueGroup
 {
+    public final ValueString id = new ValueString("id", UUID.randomUUID().toString());
     public final FormProperties properties = new FormProperties("properties");
     public final ValueBoolean main = new ValueBoolean("main", false);
     public final ValueInt keybind = new ValueInt("keybind", 0);
@@ -16,6 +20,7 @@ public class AnimationState extends ValueGroup
     {
         super(id);
 
+        this.add(this.id);
         this.add(this.properties);
         this.add(this.main);
         this.add(this.keybind);

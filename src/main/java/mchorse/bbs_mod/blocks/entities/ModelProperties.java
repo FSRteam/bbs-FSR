@@ -33,7 +33,7 @@ public class ModelProperties implements IMapSerializable
     {
         if (form != null)
         {
-            form.addMain();
+            form.playMain();
         }
 
         return form;

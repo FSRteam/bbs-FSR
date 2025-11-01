@@ -157,16 +157,23 @@ public abstract class Form extends ValueGroup
         this.statePlayers.clear();
     }
 
-    public void addMain()
+    public void playState(AnimationState state)
     {
-        AnimationState main = this.states.getMain();
-
-        this.clearStatePlayers();
-
-        if (main != null)
+        if (state != null)
         {
-            this.statePlayers.add(new StatePlayer(main));
+            this.statePlayers.add(new StatePlayer(state));
         }
+    }
+
+    public void playState(String triggerId)
+    {
+        this.playState(this.states.getById(triggerId));
+    }
+
+    public void playMain()
+    {
+        this.clearStatePlayers();
+        this.playState(this.states.getMain());
     }
 
     public void applyStates(float transition)

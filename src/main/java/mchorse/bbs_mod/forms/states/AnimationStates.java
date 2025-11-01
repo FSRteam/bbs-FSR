@@ -10,6 +10,19 @@ public class AnimationStates extends ValueList<AnimationState>
         super(id);
     }
 
+    public AnimationState getById(String triggerId)
+    {
+        for (AnimationState state : this.list)
+        {
+            if (state.id.get().equals(triggerId))
+            {
+                return state;
+            }
+        }
+
+        return null;
+    }
+
     public AnimationState getMain()
     {
         for (AnimationState state : this.list)
