@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
@@ -323,19 +324,28 @@ public abstract class Form extends ValueGroup
     @Override
     public void fromData(BaseType data)
     {
-        /* Compatibility with older forms */
-        if (data instanceof MapType map && map.has("bodyParts"))
+        if (data instanceof MapType map)
         {
-            MapType bodyParts = map.getMap("bodyParts");
-
-            if (bodyParts.has("parts"))
+            /* Compatibility with older forms */
+            if (map.has("bodyParts"))
             {
-                map.remove("bodyParts");
-                map.put("parts", bodyParts.getList("parts"));
+                MapType bodyParts = map.getMap("bodyParts");
+
+                if (bodyParts.has("parts"))
+                {
+                    map.remove("bodyParts");
+                    map.put("parts", bodyParts.getList("parts"));
+                }
             }
         }
 
         super.fromData(data);
+
+        if (data instanceof MapType map)
+        {
+            /* Compatibility with state triggers */
+            FormUtils.readOldStateTriggers(this, map);
+        }
     }
 
     @Override

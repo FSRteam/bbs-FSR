@@ -298,7 +298,6 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
     private void pickState(AnimationState state)
     {
-        this.form.resetValues();
         this.statesKeyframes.setState(state);
     }
 
@@ -309,7 +308,6 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
     private void toggleStateEditor()
     {
-        this.form.resetValues();
         this.formEditor.toggleVisible();
         this.statesEditor.toggleVisible();
     }
@@ -474,11 +472,23 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         {
             this.undoHandler.reset();
 
+            if (this.statesEditor.isVisible())
+            {
+                this.toggleStateEditor();
+            }
+
             this.form = form;
             this.form.setId("form");
             this.form.preCallback(this.undoHandler::handlePreValues);
 
-            this.pickState(form.states.getMain());
+            AnimationState main = form.states.getMain();
+
+            if (main == null)
+            {
+                main = CollectionUtils.getSafe(form.states.getAllTyped(), 0);
+            }
+
+            this.pickState(main);
 
             if (TOGGLED != this.forms.isVisible())
             {
