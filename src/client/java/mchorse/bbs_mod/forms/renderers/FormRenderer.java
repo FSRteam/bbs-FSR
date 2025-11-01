@@ -124,6 +124,8 @@ public abstract class FormRenderer <T extends Form>
         context.stack.pop();
 
         context.light = light;
+
+        this.form.unapplyStates();
     }
 
     protected void applyTransforms(MatrixStack stack, float transition)

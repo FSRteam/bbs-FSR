@@ -26,6 +26,8 @@ public class UIAnimationStatesOverlayPanel extends UIOverlayPanel
     public UIToggle main;
     public UIKeybind keybind;
     public UITrackpad duration;
+    public UITrackpad fadeIn;
+    public UITrackpad fadeOut;
 
     protected AnimationStates states;
     protected AnimationState state;
@@ -64,8 +66,14 @@ public class UIAnimationStatesOverlayPanel extends UIOverlayPanel
         this.keybind = new UIKeybind((keybind) -> this.state.keybind.set(keybind.getMainKey()));
         this.keybind.single();
         this.duration = new UITrackpad((v) -> this.state.duration.set(v.intValue())).integer().limit(0D);
+        this.fadeIn = new UITrackpad((v) -> this.state.fadeIn.set(v.intValue())).integer().limit(0D);
+        this.fadeOut = new UITrackpad((v) -> this.state.fadeOut.set(v.intValue())).integer().limit(0D);
 
-        this.editor = UI.scrollView(this.main, this.keybind, UI.label(IKey.raw("Duration")).marginTop(6), this.duration);
+        this.editor = UI.scrollView(
+            this.main, this.keybind,
+            UI.label(IKey.raw("Duration")).marginTop(6), this.duration,
+            UI.label(IKey.raw("Fade in/out")).marginTop(6), UI.row(this.fadeIn, this.fadeOut)
+        );
 
         this.list.relative(this.content).w(120).h(1F);
         this.list.setList(states.getList());
@@ -131,6 +139,8 @@ public class UIAnimationStatesOverlayPanel extends UIOverlayPanel
         this.main.setValue(state.main.get());
         this.keybind.setKeyCombo(new KeyCombo(IKey.EMPTY, state.keybind.get()));
         this.duration.setValue(state.duration.get());
+        this.fadeIn.setValue(state.fadeIn.get());
+        this.fadeOut.setValue(state.fadeOut.get());
     }
 
     @Override

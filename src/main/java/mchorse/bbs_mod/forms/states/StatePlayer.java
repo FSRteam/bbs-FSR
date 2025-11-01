@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.states;
 
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.utils.interps.Lerps;
 
 public class StatePlayer
 {
@@ -34,6 +35,14 @@ public class StatePlayer
 
     public void assignValues(Form form, float transition)
     {
-        this.state.properties.applyProperties(form, this.tick + transition);
+        float t = this.tick + transition;
+        float blend = Lerps.envelope(t, 0, this.state.fadeIn.get(), this.state.duration.get() - this.state.fadeOut.get(), this.state.duration.get());
+
+        this.state.properties.applyProperties(form, t, blend);
+    }
+
+    public void resetValues(Form form)
+    {
+        this.state.properties.resetProperties(form);
     }
 }

@@ -184,6 +184,14 @@ public abstract class Form extends ValueGroup
         }
     }
 
+    public void unapplyStates()
+    {
+        for (StatePlayer statePlayer : this.statePlayers)
+        {
+            statePlayer.resetValues(this);
+        }
+    }
+
     public void resetValues()
     {
         for (BaseValue baseValue : this.getAll())
