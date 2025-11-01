@@ -491,6 +491,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             this.refreshFormList();
             this.formsList.setIndex(0);
 
+            this.form.clearStatePlayers();
+
             return true;
         }
 
@@ -644,7 +646,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                     }
                 }
 
-                state.properties.applyProperties(this.cursor + (this.playing ? context.getTransition() : 0), form);
+                state.properties.applyProperties(form, this.cursor + (this.playing ? context.getTransition() : 0));
             }
         }
 

@@ -66,7 +66,7 @@ public class FormProperties extends ValueGroup
         return null;
     }
 
-    public void applyProperties(float tick, Form form)
+    public void applyProperties(Form form, float tick)
     {
         if (form == null)
         {

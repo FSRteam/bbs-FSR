@@ -7,7 +7,9 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.forms.states.AnimationStates;
+import mchorse.bbs_mod.forms.states.StatePlayer;
 import mchorse.bbs_mod.forms.values.ValueAnchor;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -23,6 +25,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public abstract class Form extends ValueGroup
@@ -59,6 +62,8 @@ public abstract class Form extends ValueGroup
 
     protected Object renderer;
     protected String cachedID;
+
+    private final List<StatePlayer> statePlayers = new ArrayList<>();
 
     public Form()
     {
@@ -143,6 +148,52 @@ public abstract class Form extends ValueGroup
         }
 
         return null;
+    }
+
+    /* Animation states */
+
+    public void clearStatePlayers()
+    {
+        this.statePlayers.clear();
+    }
+
+    public void addMain()
+    {
+        AnimationState main = this.states.getMain();
+
+        this.clearStatePlayers();
+
+        if (main != null)
+        {
+            this.statePlayers.add(new StatePlayer(main));
+        }
+    }
+
+    public void applyStates(float transition)
+    {
+        for (StatePlayer statePlayer : this.statePlayers)
+        {
+            statePlayer.assignValues(this, transition);
+        }
+    }
+
+    public void resetValues()
+    {
+        for (BaseValue baseValue : this.getAll())
+        {
+            if (baseValue instanceof BaseValueBasic<?> valueBasic)
+            {
+                valueBasic.setRuntimeValue(null);
+            }
+        }
+
+        for (BodyPart part : this.parts.getAllTyped())
+        {
+            if (part.getForm() != null)
+            {
+                part.getForm().resetValues();
+            }
+        }
     }
 
     /* Morphing */
@@ -236,6 +287,20 @@ public abstract class Form extends ValueGroup
         {
             ((ITickable) this.renderer).tick(entity);
         }
+
+        Iterator<StatePlayer> it = this.statePlayers.iterator();
+
+        while (it.hasNext())
+        {
+            StatePlayer next = it.next();
+
+            next.update();
+
+            if (next.canBeRemoved())
+            {
+                it.remove();
+            }
+        }
     }
 
     /* Data comparison and (de)serialization */
@@ -269,24 +334,5 @@ public abstract class Form extends ValueGroup
         }
 
         return data;
-    }
-
-    public void resetValues()
-    {
-        for (BaseValue baseValue : this.getAll())
-        {
-            if (baseValue instanceof BaseValueBasic<?> valueBasic)
-            {
-                valueBasic.setRuntimeValue(null);
-            }
-        }
-
-        for (BodyPart part : this.parts.getAllTyped())
-        {
-            if (part.getForm() != null)
-            {
-                part.getForm().resetValues();
-            }
-        }
     }
 }

@@ -90,6 +90,8 @@ public abstract class FormRenderer <T extends Form>
             return;
         }
 
+        this.form.applyStates(context.transition);
+
         int light = context.light;
         boolean visible = this.form.visible.get();
 
