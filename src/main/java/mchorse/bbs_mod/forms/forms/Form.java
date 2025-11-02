@@ -13,7 +13,6 @@ import mchorse.bbs_mod.forms.states.AnimationStates;
 import mchorse.bbs_mod.forms.states.StatePlayer;
 import mchorse.bbs_mod.forms.values.ValueAnchor;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
-import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
@@ -162,6 +161,19 @@ public abstract class Form extends ValueGroup
     {
         if (state != null)
         {
+            if (state.looping.get())
+            {
+                for (StatePlayer statePlayer : this.statePlayers)
+                {
+                    if (statePlayer.getState() == state)
+                    {
+                        statePlayer.expire();
+
+                        return;
+                    }
+                }
+            }
+
             this.statePlayers.add(new StatePlayer(state));
         }
     }
@@ -174,7 +186,7 @@ public abstract class Form extends ValueGroup
     public void playMain()
     {
         this.clearStatePlayers();
-        this.playState(this.states.getMain());
+        this.playState(this.states.getMainRandom());
     }
 
     public void applyStates(float transition)
@@ -190,25 +202,6 @@ public abstract class Form extends ValueGroup
         for (StatePlayer statePlayer : this.statePlayers)
         {
             statePlayer.resetValues(this);
-        }
-    }
-
-    public void resetValues()
-    {
-        for (BaseValue baseValue : this.getAll())
-        {
-            if (baseValue instanceof BaseValueBasic<?> valueBasic)
-            {
-                valueBasic.setRuntimeValue(null);
-            }
-        }
-
-        for (BodyPart part : this.parts.getAllTyped())
-        {
-            if (part.getForm() != null)
-            {
-                part.getForm().resetValues();
-            }
         }
     }
 
