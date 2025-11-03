@@ -145,6 +145,11 @@ public class UIAnimationStateEditor extends UIElement
 
         sheets.removeIf((v) ->
         {
+            if (v.id.equals("anchor"))
+            {
+                return true;
+            }
+
             for (String s : BBSSettings.disabledSheets.get())
             {
                 if (v.id.equals(s) || v.id.endsWith("/" + s))
