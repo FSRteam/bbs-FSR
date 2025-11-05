@@ -173,7 +173,7 @@ public class UIReplayList extends UIList<Replay>
 
                 for (Keyframe<Anchor> keyframe : keyframeChannel.getKeyframes())
                 {
-                    keyframe.getValue().actor = MathUtils.remapIndex(keyframe.getValue().actor, from, to);
+                    keyframe.getValue().replay = MathUtils.remapIndex(keyframe.getValue().replay, from, to);
                 }
             }
         }
