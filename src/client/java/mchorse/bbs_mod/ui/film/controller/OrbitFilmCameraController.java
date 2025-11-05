@@ -19,6 +19,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import org.joml.Intersectionf;
@@ -225,8 +226,7 @@ public class OrbitFilmCameraController implements ICameraController
 
             if (form != null)
             {
-                FormRenderer renderer = FormUtilsClient.getRenderer(form);
-                Map<String, Matrix4f> map = renderer.collectMatrices(entity, "", transition);
+                Map<String, Matrix4f> map = FormUtilsClient.getRenderer(form).collectMatrices(entity, "", transition);
                 String group = "anchor";
 
                 if (form instanceof ModelForm modelForm)
@@ -245,12 +245,18 @@ public class OrbitFilmCameraController implements ICameraController
 
                 if (anchor != null)
                 {
+                    Anchor v = form.anchor.get();
                     Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
-                    Matrix4f matrix = BaseFilmController.getEntityMatrix(this.controller.getEntities(), x, y, z, form.anchor.get(), defaultMatrix, transition);
+                    Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(this.controller.getEntities(), v, defaultMatrix, x, y, z, transition, 0);
 
-                    matrix.mul(anchor);
+                    if (totalMatrix.a != null)
+                    {
+                        defaultMatrix = totalMatrix.a;
+                    }
 
-                    Vector3f translate = matrix.getTranslation(Vectors.TEMP_3F);
+                    defaultMatrix.mul(anchor);
+
+                    Vector3f translate = defaultMatrix.getTranslation(Vectors.TEMP_3F);
 
                     x += translate.x;
                     y += translate.y;

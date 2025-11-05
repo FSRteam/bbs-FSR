@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.camera.clips.misc;
 
+import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.clips.modifiers.TrackerClip;
 import mchorse.bbs_mod.camera.data.Angle;
 import mchorse.bbs_mod.camera.data.Position;
@@ -8,6 +9,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.utils.MatrixUtils;
+import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 import org.joml.Matrix3d;
@@ -53,6 +55,12 @@ public class TrackerClientClip extends TrackerClip
         }
 
         Matrix4f formTransform = BaseFilmController.getMatrixForRenderWithRotation(entity, position.point.x, position.point.y, position.point.z, context.transition);
+        Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(((CameraClipContext) context).entities, form.anchor.get(), formTransform, position.point.x, position.point.y, position.point.z, context.transition, 0);
+
+        if (totalMatrix.a != null)
+        {
+            formTransform = totalMatrix.a;
+        }
 
         formTransform.mul(map.get(targetGroup));
         formTransform.getTranslation(relativeFormPos);

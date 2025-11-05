@@ -104,7 +104,7 @@ public abstract class BaseFilmController
 
         if (!relative)
         {
-            Pair<Matrix4f, Float> pair = getTotalMatrix(entities, form.anchor.get(), defaultMatrix, cx, cy, cz, transition);
+            Pair<Matrix4f, Float> pair = getTotalMatrix(entities, form.anchor.get(), defaultMatrix, cx, cy, cz, transition, 0);
 
             target = pair.a;
             opacity = pair.b;
@@ -118,6 +118,10 @@ public abstract class BaseFilmController
             position.x += v.x - v2.x;
             position.y += v.y - v2.y;
             position.z += v.z - v2.z;
+        }
+        else
+        {
+            target = defaultMatrix;
         }
 
         BlockPos pos = BlockPos.ofFloored(position.x, position.y + 0.5D, position.z);
@@ -140,7 +144,7 @@ public abstract class BaseFilmController
             stack.peek().getNormalMatrix().identity();
         }
 
-        MatrixStackUtils.multiply(stack, target == null ? defaultMatrix : target);
+        MatrixStackUtils.multiply(stack, target);
         FormUtilsClient.render(form, formContext);
 
         if (context.bone != null && UIBaseMenu.renderAxes)
@@ -185,15 +189,21 @@ public abstract class BaseFilmController
         RenderSystem.enableDepthTest();
     }
 
-    private static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition)
+    public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i)
     {
+        /* Stupid recursion stop, I don't think anyone would need more than that */
+        if (i > 5)
+        {
+            return new Pair<>(defaultMatrix, 1F);
+        }
+
         boolean same = value.previous == null || Objects.equals(value, value.previous);
         boolean only = value.x <= 0F && value.previous != null;
         Pair<Matrix4f, Float> result = new Pair<>(null, 1F);
 
         if (same || only)
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, same ? value : value.previous, defaultMatrix, transition);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, same ? value : value.previous, defaultMatrix, transition, i);
 
             if (matrix != defaultMatrix)
             {
@@ -203,17 +213,14 @@ public abstract class BaseFilmController
         }
         else
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition);
-            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i);
+            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i);
 
-            if (matrix != lastMatrix)
-            {
-                result.a = value.x >= 1F ? matrix : Matrices.lerp(lastMatrix, matrix, value.x);
+            result.a = value.x >= 1F ? matrix : Matrices.lerp(lastMatrix, matrix, value.x);
 
-                if (value.isFadeOut()) result.b = value.x;
-                else if (value.isFadeIn()) result.b = 1F - value.x;
-                else result.b = 0F;
-            }
+            if (value.isFadeOut()) result.b = value.x;
+            else if (value.isFadeIn()) result.b = 1F - value.x;
+            else result.b = 0F;
         }
 
         return result;
@@ -221,16 +228,28 @@ public abstract class BaseFilmController
 
     public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition)
     {
+        return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, 0);
+    }
+
+    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i)
+    {
         IEntity entity = entities.get(anchor.replay);
 
         if (entity != null)
         {
-            Matrix4f basic = new Matrix4f(getMatrixForRenderWithRotation(entity, cameraX, cameraY, cameraZ, transition));
+            Matrix4f basic = getMatrixForRenderWithRotation(entity, cameraX, cameraY, cameraZ, transition);
 
             Form form = entity.getForm();
 
             if (form != null)
             {
+                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1);
+
+                if (totalMatrix.a != null)
+                {
+                    basic = totalMatrix.a;
+                }
+
                 Map<String, Matrix4f> map = FormUtilsClient.getRenderer(form).collectMatrices(entity, null, transition);
                 Matrix4f matrix = map.get(anchor.attachment);
 
@@ -240,30 +259,23 @@ public abstract class BaseFilmController
 
                     if (anchor.scale)
                     {
-                        Matrix3f mat = Matrices.TEMP_3F;
-                        Vector3f vec = Vectors.TEMP_3F;
-
+                        Matrix3f mat = new Matrix3f();
+                        Vector3f v = new Vector3f();
                         basic.get3x3(mat);
-                        mat.getRow(0, vec);
-                        vec.normalize();
-                        mat.setRow(0, vec);
 
-                        mat.getRow(1, vec);
-                        vec.normalize();
-                        mat.setRow(1, vec);
-
-                        mat.getRow(2, vec);
-                        vec.normalize();
-                        mat.setRow(2, vec);
+                        mat.getColumn(0, v); v.normalize(); mat.setColumn(0, v);
+                        mat.getColumn(1, v); v.normalize(); mat.setColumn(1, v);
+                        mat.getColumn(2, v); v.normalize(); mat.setColumn(2, v);
 
                         basic.set3x3(mat);
                     }
 
                     if (anchor.translate)
                     {
-                        basic.getTranslation(Vectors.TEMP_3F);
-                        basic.set(Matrices.TEMP_3F.set(defaultMatrix));
-                        basic.setTranslation(Vectors.TEMP_3F);
+                        Vector3f t = new Vector3f();
+                        basic.getTranslation(t);
+                        basic.set(defaultMatrix);
+                        basic.setTranslation(t);
                     }
                 }
             }
