@@ -247,6 +247,18 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         this.keys().register(Keys.UNDO, this::undo);
         this.keys().register(Keys.REDO, this::redo);
+        this.keys().register(Keys.FORMS_OPEN_STATES_EDITOR, () ->
+        {
+            if (!this.statesEditor.isVisible())
+            {
+                this.toggleStateEditor();
+            }
+
+            if (!UIOverlay.has(this.getContext()))
+            {
+                this.openStates.clickItself();
+            }
+        });
         this.plause.keys().register(Keys.PLAUSE, () ->
         {
             this.plause();
