@@ -118,7 +118,9 @@ public class BBSCommands
                 {
                     for (AnimationState animationState : form.states.getAllTyped())
                     {
-                        builder.suggest(animationState.id.get());
+                        String customId = animationState.customId.get();
+
+                        builder.suggest(customId.trim().isEmpty() ? animationState.id.get() : customId);
                     }
                 }
             }
