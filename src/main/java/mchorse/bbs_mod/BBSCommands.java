@@ -8,17 +8,20 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.mixin.LevelPropertiesAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.Settings;
-import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.command.CommandRegistryAccess;
 import net.minecraft.command.EntitySelector;
 import net.minecraft.command.argument.BlockPosArgumentType;
@@ -55,6 +58,7 @@ public class BBSCommands
         LiteralArgumentBuilder<ServerCommandSource> bbs = CommandManager.literal("bbs").requires((source) -> true);
 
         registerMorphCommand(bbs, environment, hasPermissions);
+        registerModelBlockCommand(bbs, environment, hasPermissions);
         registerMorphEntityCommand(bbs, environment, hasPermissions);
         registerFilmsCommand(bbs, environment, hasPermissions);
         registerDCCommand(bbs, environment, hasPermissions);
@@ -92,6 +96,65 @@ public class BBSCommands
             .then(form.executes(BBSCommands::morphCommandMorph)));
 
         bbs.then(morph.requires(hasPermissions));
+    }
+
+    private static void registerModelBlockCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    {
+        LiteralArgumentBuilder<ServerCommandSource> modelBlock = CommandManager.literal("model_block");
+        LiteralArgumentBuilder<ServerCommandSource> playState = CommandManager.literal("play_state");
+        RequiredArgumentBuilder<ServerCommandSource, PosArgument> coords = CommandManager.argument("coords", BlockPosArgumentType.blockPos());
+        RequiredArgumentBuilder<ServerCommandSource, String> state = CommandManager.argument("state", StringArgumentType.string());
+
+        state.suggests((ctx, builder) ->
+        {
+            BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "coords");
+            BlockEntity blockEntity = ctx.getSource().getWorld().getBlockEntity(pos);
+
+            if (blockEntity instanceof ModelBlockEntity block)
+            {
+                Form form = block.getProperties().getForm();
+
+                if (form != null)
+                {
+                    for (AnimationState animationState : form.states.getAllTyped())
+                    {
+                        builder.suggest(animationState.id.get());
+                    }
+                }
+            }
+
+            return builder.buildFuture();
+        });
+
+        modelBlock.then(
+            playState.then(
+                coords.then(
+                    state.executes((ctx) ->
+                    {
+                        BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "coords");
+                        String animationState = StringArgumentType.getString(ctx, "state");
+                        BlockEntity blockEntity = ctx.getSource().getWorld().getBlockEntity(pos);
+
+                        if (blockEntity instanceof ModelBlockEntity)
+                        {
+                            for (ServerPlayerEntity player : ctx.getSource().getWorld().getPlayers())
+                            {
+                                if (player.getBlockPos().getSquaredDistance(pos) <= 64F)
+                                {
+                                    ServerNetwork.sendModelBlockState(player, pos, animationState);
+                                }
+                            }
+
+                            return 1;
+                        }
+
+                        return 0;
+                    })
+                )
+            )
+        );
+
+        bbs.then(modelBlock.requires(hasPermissions));
     }
 
     private static void registerMorphEntityCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)

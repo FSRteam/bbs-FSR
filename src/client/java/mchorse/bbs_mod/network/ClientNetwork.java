@@ -80,6 +80,7 @@ public class ClientNetwork
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_GUN_PROPERTIES, (client, handler, buf, responseSender) -> handleGunPropertiesPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_PAUSE_FILM, (client, handler, buf, responseSender) -> handlePauseFilmPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_SELECTED_SLOT, (client, handler, buf, responseSender) -> handleSelectedSlotPacket(client, buf));
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, (client, handler, buf, responseSender) -> handleAnimationStateModelBlockPacket(client, buf));
     }
 
     /* Handlers */
@@ -348,6 +349,25 @@ public class ClientNetwork
         client.execute(() ->
         {
             client.player.getInventory().selectedSlot = slot;
+        });
+    }
+
+    private static void handleAnimationStateModelBlockPacket(MinecraftClient client, PacketByteBuf buf)
+    {
+        BlockPos pos = buf.readBlockPos();
+        String state = buf.readString();
+
+        client.execute(() ->
+        {
+            BlockEntity blockEntity = client.world.getBlockEntity(pos);
+
+            if (blockEntity instanceof ModelBlockEntity block)
+            {
+                if (block.getProperties().getForm() != null)
+                {
+                    block.getProperties().getForm().playState(state);
+                }
+            }
         });
     }
 
