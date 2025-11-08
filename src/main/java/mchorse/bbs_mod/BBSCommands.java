@@ -3,6 +3,7 @@ package mchorse.bbs_mod;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
@@ -105,6 +106,9 @@ public class BBSCommands
         RequiredArgumentBuilder<ServerCommandSource, PosArgument> coords = CommandManager.argument("coords", BlockPosArgumentType.blockPos());
         RequiredArgumentBuilder<ServerCommandSource, String> state = CommandManager.argument("state", StringArgumentType.string());
 
+        LiteralArgumentBuilder<ServerCommandSource> refresh = CommandManager.literal("refresh");
+        RequiredArgumentBuilder<ServerCommandSource, Integer> randomRange = CommandManager.argument("random_range", IntegerArgumentType.integer());
+
         state.suggests((ctx, builder) ->
         {
             BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "coords");
@@ -153,6 +157,22 @@ public class BBSCommands
                         return 0;
                     })
                 )
+            )
+        );
+
+        modelBlock.then(
+            refresh.then(
+                randomRange.executes((ctx) ->
+                {
+                    int range = IntegerArgumentType.getInteger(ctx, "random_range");
+
+                    for (ServerPlayerEntity player : ctx.getSource().getServer().getPlayerManager().getPlayerList())
+                    {
+                        ServerNetwork.sendReloadModelBlocks(player, range);
+                    }
+
+                    return 1;
+                })
             )
         );
 
