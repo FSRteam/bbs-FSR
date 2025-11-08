@@ -250,7 +250,7 @@ public class UIAnimationStateEditor extends UIElement
 
     public boolean clickViewport(UIContext context, StencilFormFramebuffer stencil)
     {
-        if (stencil.hasPicked())
+        if (stencil.hasPicked() && this.state != null)
         {
             Pair<Form, String> pair = stencil.getPicked();
 
