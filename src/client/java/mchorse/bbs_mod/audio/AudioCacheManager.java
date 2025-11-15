@@ -85,9 +85,10 @@ public class AudioCacheManager
                 LOGGER.warn("Failed to delete existing cache file: " + cacheFile.getAbsolutePath());
             }
         }
+        
         this.cachedFiles.put(soundPath, cacheFile);
-        
-        
+
+
         return cacheFile;
     }
     
