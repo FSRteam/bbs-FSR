@@ -102,6 +102,9 @@ public class BBSSettings
     public static ValueBoolean audioWaveformFilename;
     public static ValueBoolean audioWaveformTime;
 
+    public static ValueString cdnUrl;
+    public static ValueString cdnToken;
+
     public static int primaryColor()
     {
         return primaryColor(Colors.A50);
@@ -234,5 +237,9 @@ public class BBSSettings
         audioWaveformHeight = builder.getInt("waveform_height", 24, 10, 40);
         audioWaveformFilename = builder.getBoolean("waveform_filename", false);
         audioWaveformTime = builder.getBoolean("waveform_time", false);
+
+        builder.category("cdn");
+        cdnUrl = builder.getString("url", "");
+        cdnToken = builder.getString("token", "");
     }
 }

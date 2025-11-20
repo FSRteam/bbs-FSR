@@ -4,6 +4,10 @@ import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * API for working with custom CDN service. Once I'll upload the script,
@@ -39,6 +44,7 @@ public class CDNAssetSyncService
     private final HttpClient client;
     private final URI cdn;
     private final Path assets;
+    private final Consumer<Pair<CDNStatus, IKey>> callback;
 
     private static String sha1OfFile(Path path) throws IOException
     {
@@ -111,11 +117,20 @@ public class CDNAssetSyncService
         return path.replace(FileSystems.getDefault().getSeparator(), "/");
     }
 
-    public CDNAssetSyncService(String baseUrl, Path localRootDir)
+    public CDNAssetSyncService(String baseUrl, Path localRootDir, Consumer<Pair<CDNStatus, IKey>> callback)
     {
         this.client = HttpClient.newBuilder().build();
         this.cdn = URI.create(baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl);
         this.assets = localRootDir;
+        this.callback = callback;
+    }
+
+    private void issueStatus(CDNStatus status, IKey message)
+    {
+        if (this.callback != null)
+        {
+            this.callback.accept(new Pair<>(status, message));
+        }
     }
 
     private List<RemoteFile> fetchRemoteFiles() throws IOException, InterruptedException
@@ -125,6 +140,8 @@ public class CDNAssetSyncService
 
         if (response.statusCode() != 200)
         {
+            this.issueStatus(CDNStatus.FAILURE, UIKeys.CDN_STATUS_FAILED_FETCH);
+
             throw new IOException("Failed to fetch /files: HTTP " + response.statusCode());
         }
 
@@ -148,8 +165,11 @@ public class CDNAssetSyncService
                 System.out.println("[CDN] Downloading: " + remoteFile.path);
 
                 this.downloadFile(remoteFile.path, localPath);
+                this.issueStatus(CDNStatus.DOWNLOADED, UIKeys.CDN_STATUS_DOWNLOADED.format(remoteFile.path));
             }
         }
+
+        this.issueStatus(CDNStatus.SUCCESS, UIKeys.CDN_STATUS_SUCCESS_DOWNLOADING);
     }
 
     private Map<String, String> buildLocalSha1Map() throws IOException
@@ -190,6 +210,8 @@ public class CDNAssetSyncService
 
         if (response.statusCode() != 200)
         {
+            this.issueStatus(CDNStatus.FAILURE, UIKeys.CDN_STATUS_FAILED_DOWNLOADING.format(remotePath));
+
             throw new IOException("Failed to download " + remotePath + ": HTTP " + response.statusCode());
         }
 
@@ -222,10 +244,11 @@ public class CDNAssetSyncService
                 }
 
                 String relativePath = normalizeRelativePath(CDNAssetSyncService.this.assets.relativize(file).toString());
+
                 String localSha1 = sha1OfFile(file);
                 String remote = remoteSha1.get(relativePath);
 
-                boolean needsUpload = remote == null || !remote.equalsIgnoreCase(localSha1);
+                boolean needsUpload = (remote == null) || !remote.equalsIgnoreCase(localSha1);
 
                 if (needsUpload)
                 {
@@ -234,11 +257,11 @@ public class CDNAssetSyncService
                     try
                     {
                         CDNAssetSyncService.this.uploadFileToCDN(file, relativePath, uploadToken);
+                        CDNAssetSyncService.this.issueStatus(CDNStatus.UPLOADED, UIKeys.CDN_STATUS_UPLOADED.format(relativePath));
                     }
                     catch (InterruptedException e)
                     {
                         Thread.currentThread().interrupt();
-
                         throw new IOException("Upload interrupted for " + relativePath, e);
                     }
                 }
@@ -246,6 +269,31 @@ public class CDNAssetSyncService
                 return FileVisitResult.CONTINUE;
             }
         });
+
+        for (RemoteFile remoteFile : remoteFiles)
+        {
+            String normalizedPath = remoteFile.path.replace("/", FileSystems.getDefault().getSeparator());
+            Path localPath = this.assets.resolve(normalizedPath);
+
+            if (!Files.exists(localPath))
+            {
+                System.out.println("[CDN] Deleting remote: " + remoteFile.path);
+
+                try
+                {
+                    this.deleteRemoteFile(remoteFile.path, uploadToken);
+                    this.issueStatus(CDNStatus.DELETED, UIKeys.CDN_STATUS_DELETED.format(remoteFile.path));
+                }
+                catch (InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+
+                    throw new IOException("Delete interrupted for " + remoteFile.path, e);
+                }
+            }
+        }
+
+        this.issueStatus(CDNStatus.SUCCESS, UIKeys.CDN_STATUS_SUCCESS_UPLOADING);
     }
 
     private void uploadFileToCDN(Path file, String remotePath, String uploadToken) throws IOException, InterruptedException
@@ -295,6 +343,25 @@ public class CDNAssetSyncService
         }
     }
 
+    private void deleteRemoteFile(String remotePath, String uploadToken) throws IOException, InterruptedException
+    {
+        String form = "path=" + URLEncoder.encode(remotePath, StandardCharsets.UTF_8);
+        HttpRequest request = HttpRequest
+            .newBuilder(this.cdn.resolve("/delete"))
+            .POST(HttpRequest.BodyPublishers.ofString(form))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("X-Token", uploadToken)
+            .build();
+        HttpResponse<String> response = this.client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        int status = response.statusCode();
+
+        if (status != 200 && status != 204 && status != 404)
+        {
+            throw new IOException("Failed to delete " + remotePath + ": HTTP " + status + " body=" + response.body());
+        }
+    }
+
     public static class RemoteFile
     {
         public final String path;
@@ -306,6 +373,18 @@ public class CDNAssetSyncService
             this.path = path;
             this.size = size;
             this.sha1 = sha1;
+        }
+    }
+
+    public static enum CDNStatus
+    {
+        SUCCESS(Colors.GREEN), DOWNLOADED(Colors.BLUE), UPLOADED(Colors.ACTIVE), DELETED(Colors.ORANGE), FAILURE(Colors.RED);
+
+        public final int color;
+
+        private CDNStatus(int color)
+        {
+            this.color = color;
         }
     }
 }
