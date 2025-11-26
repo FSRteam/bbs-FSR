@@ -117,6 +117,8 @@
     "bbs.config.multiskin.multithreaded-comment": "Позволяет включить мультипоточную обработку мульти-скинов, которая может исправить лаги при длительной обработке",
     "bbs.config.multiskin.title": "Мульти-скин",
     "bbs.config.multiskin.tooltip": "Настройки касающиеся функции Мульти-скин",
+    "bbs.config.recording.camera_preview": "Предпросмотр камеры",
+    "bbs.config.recording.camera_preview-comment": "Позволяет включить отрисовку границ камеры в редакторе фильма (когда режим камеры не \"Камеры\")",
     "bbs.config.recording.countdown": "Отсчёт записи",
     "bbs.config.recording.countdown-comment": "Отсчёт начала записи (в секундах)",
     "bbs.config.recording.overlays": "Оверлеи",
