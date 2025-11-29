@@ -147,7 +147,7 @@ public class L10n
     {
         List<Link> links = this.getAllLinks(DEFAULT_LANGUAGE);
 
-        if (!language.equals(DEFAULT_LANGUAGE))
+        if (!language.equals(DEFAULT_LANGUAGE) && !language.isEmpty())
         {
             links.addAll(this.getAllLinks(language));
         }
