@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -187,6 +188,11 @@ public class UIPropTransform extends UITransform
 
     private void enableMode(int mode)
     {
+        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
+        {
+            return;
+        }
+
         UIContext context = this.getContext();
 
         if (this.editing)

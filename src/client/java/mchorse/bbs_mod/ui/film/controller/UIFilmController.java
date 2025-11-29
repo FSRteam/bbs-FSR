@@ -1083,7 +1083,7 @@ public class UIFilmController extends UIElement
                 context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);
             }
         }
-        else if (pair != null)
+        else if (pair != null && pair.a != null)
         {
             String label = pair.a.getFormIdOrName();
 

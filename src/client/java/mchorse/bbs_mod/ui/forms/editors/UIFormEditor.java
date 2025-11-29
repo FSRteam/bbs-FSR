@@ -50,6 +50,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -280,6 +281,11 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
             if (pair != null)
             {
+                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY))
+                {
+                    return true;
+                }
+
                 this.pickFormFromRenderer(pair);
 
                 return true;

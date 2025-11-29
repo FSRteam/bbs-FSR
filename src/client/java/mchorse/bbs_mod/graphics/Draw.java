@@ -141,25 +141,6 @@ public class Draw
         fillQuad(builder, stack, x1, y1, z2, x2, y1, z2, x2, y2, z2, x1, y2, z2, r, g, b, a);
     }
 
-    public static void axes(MatrixStack stack, float length, float thickness)
-    {
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
-
-        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-        Draw.axes(builder, stack, length, thickness);
-
-        RenderSystem.disableDepthTest();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferRenderer.drawWithGlobalProgram(builder.end());
-    }
-
-    public static void axes(BufferBuilder builder, MatrixStack stack, float length, float thickness)
-    {
-        fillBox(builder, stack, thickness, -thickness, -thickness, length, thickness, thickness, 1, 0, 0, 1);
-        fillBox(builder, stack, -thickness, -thickness, -thickness, thickness, length, thickness, 0, 1, 0, 1);
-        fillBox(builder, stack, -thickness, -thickness, thickness, thickness, thickness, length, 0, 0, 1, 1);
-    }
-
     public static void coolerAxes(MatrixStack stack, float axisSize, float axisOffset, float outlineSize, float outlineOffset)
     {
         float scale = BBSSettings.axesScale.get();
