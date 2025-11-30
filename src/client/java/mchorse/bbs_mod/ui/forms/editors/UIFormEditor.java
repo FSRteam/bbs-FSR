@@ -327,6 +327,14 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         }
     }
 
+    public void refillState()
+    {
+        if (this.statesKeyframes.getState() != null)
+        {
+            this.pickState(this.statesKeyframes.getState());
+        }
+    }
+
     private void pickState(AnimationState state)
     {
         this.statesKeyframes.setState(state);
@@ -422,6 +430,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                 this.pickForm(selection);
             }
         }
+
+        this.refillState();
     }
 
     private void addBodyPart(BodyPart part)
@@ -443,6 +453,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         part.fromData(data);
         this.addBodyPart(part);
+        this.refillState();
     }
 
     private void removeBodyPart()
@@ -455,6 +466,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         this.refreshFormList();
         this.formsList.setIndex(index - 1);
         this.pickForm(this.formsList.getCurrentFirst());
+        this.refillState();
     }
 
     private void pickForm(UIForms.FormEntry entry)
@@ -581,6 +593,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         this.editor.setEditor(this);
         this.editor.startEdit(form);
         this.editor.full(this.formEditor).resize();
+        this.refillState();
 
         return true;
     }
@@ -661,6 +674,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             this.formsList.setCurrentScroll(bodyPart);
             this.pickForm(bodyPart);
         }
+
+        this.refillState();
     }
 
     public void preFormRender(UIContext context, Form form)
