@@ -257,7 +257,7 @@ public class UIAnimationStateEditor extends UIElement
 
             if (pair != null && context.mouseButton < 2)
             {
-                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY))
+                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor)))
                 {
                     return true;
                 }

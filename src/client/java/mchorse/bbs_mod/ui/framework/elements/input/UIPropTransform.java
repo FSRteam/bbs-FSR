@@ -186,9 +186,14 @@ public class UIPropTransform extends UITransform
         this.fillR2(MathUtils.toDeg(transform.rotate2.x), MathUtils.toDeg(transform.rotate2.y), MathUtils.toDeg(transform.rotate2.z));
     }
 
-    private void enableMode(int mode)
+    public void enableMode(int mode)
     {
-        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
+        this.enableMode(mode, null);
+    }
+
+    public void enableMode(int mode, Axis axis)
+    {
+        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]) && axis == null)
         {
             return;
         }
@@ -205,7 +210,7 @@ public class UIPropTransform extends UITransform
         }
         else
         {
-            this.axis = Axis.X;
+            this.axis = axis == null ? Axis.X : axis;
             this.lastX = context.mouseX;
         }
 

@@ -509,7 +509,7 @@ public class UIReplaysEditor extends UIElement
                     this.filmPanel.showPanel(this);
                 }
 
-                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY))
+                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor)))
                 {
                     return true;
                 }

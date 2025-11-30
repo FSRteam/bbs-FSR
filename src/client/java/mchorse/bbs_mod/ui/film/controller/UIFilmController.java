@@ -1206,12 +1206,14 @@ public class UIFilmController extends UIElement
         else
         {
             Replay replay = CollectionUtils.getSafe(this.panel.getData().replays.getList(), this.panel.replayEditor.replays.replays.getIndex());
+            Pair<String, Boolean> bone = this.getBone();
 
             BaseFilmController.renderEntity(FilmControllerContext.instance
                 .setup(this.getEntities(), entity, replay, renderContext)
                 .transition(isPlaying ? renderContext.tickDelta() : 0)
                 .stencil(this.stencilMap)
-                .relative(replay.relative.get()));
+                .relative(replay.relative.get())
+                .bone(bone == null ? null : bone.a, bone != null && bone.b));
         }
 
         int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
