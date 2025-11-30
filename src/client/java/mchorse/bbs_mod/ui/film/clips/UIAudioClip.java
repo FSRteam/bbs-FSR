@@ -37,10 +37,7 @@ public class UIAudioClip extends UIClip<AudioClip>
 
         this.pickAudio = new UIButton(UIKeys.CAMERA_PANELS_AUDIO_PICK_AUDIO, (b) ->
         {
-            UISoundOverlayPanel panel = new UISoundOverlayPanel(
-                (l) -> this.clip.audio.set(l),
-                this.getContext()
-            );
+            UISoundOverlayPanel panel = new UISoundOverlayPanel((l) -> this.clip.audio.set(l), this.getContext());
 
             UIOverlay.addOverlay(this.getContext(), panel.set(this.clip.audio.get()));
         });
@@ -89,18 +86,8 @@ public class UIAudioClip extends UIClip<AudioClip>
     {
         super.registerPanels();
 
-        this.panels.add(
-            UI.column(
-                UIClip.label(UIKeys.C_CLIP.get("bbs:audio")),
-                UI.row(this.pickAudio, this.extendDuration, this.openFolder)
-            ).marginTop(12)
-        );
-        this.panels.add(
-            UI.column(
-                UIClip.label(UIKeys.CAMERA_PANELS_AUDIO_OFFSET).marginTop(6),
-                this.offset
-            ).marginTop(12)
-        );
+        this.panels.add(UI.column(UIClip.label(UIKeys.C_CLIP.get("bbs:audio")), UI.row(this.pickAudio, this.extendDuration, this.openFolder)).marginTop(12));
+        this.panels.add(UI.column(UIClip.label(UIKeys.CAMERA_PANELS_AUDIO_OFFSET).marginTop(6), this.offset).marginTop(12));
     }
 
     @Override

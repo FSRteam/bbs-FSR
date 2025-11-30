@@ -1,27 +1,25 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
-import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.BBSModClient;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import mchorse.bbs_mod.audio.AudioCacheManager;
-import mchorse.bbs_mod.audio.AudioReader;
 import mchorse.bbs_mod.audio.SoundLikeManager;
-import mchorse.bbs_mod.audio.SoundManager;
-import mchorse.bbs_mod.audio.SoundPlayer;
-import mchorse.bbs_mod.audio.Wave;
-import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.IOUtils;
-
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import mchorse.bbs_mod.utils.colors.Colors;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
+import net.minecraft.resource.Resource;
+import net.minecraft.resource.ResourceManager;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.util.Identifier;
 
 import java.io.File;
-import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -29,32 +27,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * List component for Minecraft vanilla sound effects with preview and download support
  */
 public class UIVanillaSoundList extends UIStringList
 {
-    /**
-     * Minecraft sound resource info
-     */
-    private static class VanillaSoundAsset
-    {
-        final String displayName;
-        final String resourcePath;
-        final List<String> actualSoundPaths;
-        final String category;
-
-        VanillaSoundAsset(String displayName, String resourcePath, List<String> actualSoundPaths, String category)
-        {
-            this.displayName = displayName;
-            this.resourcePath = resourcePath;
-            this.actualSoundPaths = actualSoundPaths;
-            this.category = category;
-        }
-    }
-
     private final Map<String, VanillaSoundAsset> soundAssetMap = new HashMap<>();
     private UIIcon likeButton;
     private UIIcon downloadButton;
@@ -63,6 +46,7 @@ public class UIVanillaSoundList extends UIStringList
     private SoundLikeManager likeManager;
     private boolean loaded = false;
     private JsonObject cachedSoundsJson = null;
+
     public UIVanillaSoundList(Consumer<List<String>> callback, SoundLikeManager likeManager)
     {
         super(callback);
@@ -80,6 +64,7 @@ public class UIVanillaSoundList extends UIStringList
         {
             this.loadVanillaSoundFiles();
             this.populateList();
+
             this.loaded = true;
         }
     }
@@ -149,22 +134,22 @@ public class UIVanillaSoundList extends UIStringList
     private void loadVanillaSoundFiles()
     {
         this.soundAssetMap.clear();
+
         Set<String> existingDisplayNames = new HashSet<>();
 
         try
         {
-            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
-            net.minecraft.resource.ResourceManager resourceManager = client.getResourceManager();
+            MinecraftClient client = MinecraftClient.getInstance();
+            ResourceManager resourceManager = client.getResourceManager();
 
             if (this.cachedSoundsJson == null)
             {
                 this.cachedSoundsJson = this.loadSoundsJson(resourceManager);
             }
 
-            net.minecraft.registry.Registry<net.minecraft.sound.SoundEvent> soundRegistry =
-                net.minecraft.registry.Registries.SOUND_EVENT;
+            Registry<SoundEvent> soundRegistry = Registries.SOUND_EVENT;
 
-            for (net.minecraft.util.Identifier soundId : soundRegistry.getIds())
+            for (Identifier soundId : soundRegistry.getIds())
             {
                 if (soundId.getNamespace().equals("minecraft"))
                 {
@@ -196,6 +181,7 @@ public class UIVanillaSoundList extends UIStringList
                             
                             String uniqueKey = flatDisplayName;
                             int uniqueSuffix = 1;
+
                             while (existingDisplayNames.contains(uniqueKey))
                             {
                                 uniqueKey = flatDisplayName + "_" + uniqueSuffix++;
@@ -212,6 +198,7 @@ public class UIVanillaSoundList extends UIStringList
                     else
                     {
                         String flatDisplayName = soundPath.replace(".", "_");
+
                         this.soundAssetMap.put(flatDisplayName, new VanillaSoundAsset(flatDisplayName, soundId.toString(), new ArrayList<>(), category));
                     }
                 }
@@ -225,18 +212,19 @@ public class UIVanillaSoundList extends UIStringList
     /**
      * Load and cache sounds.json
      */
-    private JsonObject loadSoundsJson(net.minecraft.resource.ResourceManager resourceManager)
+    private JsonObject loadSoundsJson(ResourceManager resourceManager)
     {
         try
         {
-            net.minecraft.util.Identifier soundsJsonId = new net.minecraft.util.Identifier("minecraft", "sounds.json");
-            var resource = resourceManager.getResource(soundsJsonId);
+            Identifier soundsJsonId = new Identifier("minecraft", "sounds.json");
+            Optional<Resource> resource = resourceManager.getResource(soundsJsonId);
 
             if (resource.isPresent())
             {
-                try (var inputStream = resource.get().getInputStream())
+                try (InputStream inputStream = resource.get().getInputStream())
                 {
                     String jsonContent = IOUtils.readText(inputStream);
+
                     return JsonParser.parseString(jsonContent).getAsJsonObject();
                 }
             }
@@ -307,9 +295,6 @@ public class UIVanillaSoundList extends UIStringList
                 
                 return actualPaths;
             }
-            else
-            {
-            }
         }
         catch (Exception e)
         {
@@ -331,6 +316,7 @@ public class UIVanillaSoundList extends UIStringList
             VanillaSoundAsset asset = this.soundAssetMap.get(key);
             String prefix = "[" + asset.category + "]: ";
             String displayName = prefix + asset.displayName;
+
             this.list.add(displayName);
         }
 
@@ -346,9 +332,10 @@ public class UIVanillaSoundList extends UIStringList
         int maxWidth = this.area.w - 8 - buttonSpace;
 
         String displayText = element;
+
         if (textWidth > maxWidth)
         {
-            displayText = truncateText(context, element, maxWidth);
+            displayText = context.batcher.getFont().limitToWidth(element, maxWidth);
         }
 
         context.batcher.textShadow(displayText, x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? Colors.HIGHLIGHT : Colors.WHITE);
@@ -371,46 +358,17 @@ public class UIVanillaSoundList extends UIStringList
             currentIconX -= 20;
         }
 
-        boolean isHoverOnLike = this.area.isInside(context) && context.mouseX >= currentIconX && context.mouseX < currentIconX + 16 &&
-                context.mouseY >= iconY && context.mouseY < iconY + 16;
-boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
-
+        boolean isHoverOnLike = this.area.isInside(context)
+            && context.mouseX >= currentIconX
+            && context.mouseX < currentIconX + 16
+            && context.mouseY >= iconY
+            && context.mouseY < iconY + 16;
+        boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
 
         this.likeButton.both(isLiked ? Icons.DISLIKE : Icons.LIKE);
         this.likeButton.iconColor(isHoverOnLike || isLiked ? Colors.WHITE : Colors.GRAY);
         this.likeButton.area.set(currentIconX, iconY, 16, 16);
         this.likeButton.render(context);
-    }
-    /**
-     * Truncate text to fit max width
-     */
-    private String truncateText(UIContext context, String text, int maxWidth)
-    {
-        String ellipsis = "...";
-        int ellipsisWidth = context.batcher.getFont().getWidth(ellipsis);
-
-        if (ellipsisWidth >= maxWidth)
-        {
-            return "";
-        }
-
-        int availableWidth = maxWidth - ellipsisWidth;
-        StringBuilder result = new StringBuilder();
-
-        for (int i = 0; i < text.length(); i++)
-        {
-            String test = result.toString() + text.charAt(i);
-            int testWidth = context.batcher.getFont().getWidth(test);
-
-            if (testWidth > availableWidth)
-            {
-                break;
-            }
-
-            result.append(text.charAt(i));
-        }
-
-        return result.toString() + ellipsis;
     }
 
     @Override
@@ -424,7 +382,6 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
 
             if (element != null)
             {
-                // 计算行的y坐标（与渲染时一致）
                 int y = this.area.y + scrollIndex * this.scroll.scrollItemSize - (int) this.scroll.getScroll();
                 int iconY = y + (this.scroll.scrollItemSize - 16) / 2;
 
@@ -435,9 +392,12 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
 
                 if (!isDownloaded)
                 {
-                    if (context.mouseX >= currentIconX && context.mouseX < currentIconX + 16 &&
-                        context.mouseY >= iconY && context.mouseY < iconY + 16)
-                    {
+                    if (
+                        context.mouseX >= currentIconX &&
+                        context.mouseX < currentIconX + 16 &&
+                        context.mouseY >= iconY &&
+                        context.mouseY < iconY + 16
+                    ) {
                         this.downloadSound(element);
                         return true;
                     }
@@ -445,10 +405,14 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
                     currentIconX -= 20;
                 }
 
-                if (context.mouseX >= currentIconX && context.mouseX < currentIconX + 16 &&
-                    context.mouseY >= iconY && context.mouseY < iconY + 16)
-                {
+                if (
+                    context.mouseX >= currentIconX &&
+                    context.mouseX < currentIconX + 16 &&
+                    context.mouseY >= iconY &&
+                    context.mouseY < iconY + 16
+                ) {
                     this.toggleLikeWithDownload(element);
+
                     return true;
                 }
             }
@@ -456,6 +420,7 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
 
         return super.subMouseClicked(context);
     }
+
     /**
      * Toggle like status, download first if not downloaded
      */
@@ -493,13 +458,11 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
                     String assetsPath = "assets:audio/" + finalName + ".ogg";
                     this.likeManager.setSoundLiked(assetsPath, displayName, true);
 
-                    // 触发下载回调以刷新主列表
                     if (this.downloadCallback != null)
                     {
                         this.downloadCallback.accept(assetsPath);
                     }
 
-                    // 触发喜欢状态切换回调
                     if (this.likeToggleCallback != null)
                     {
                         this.likeToggleCallback.run();
@@ -519,9 +482,11 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
     private String removePrefix(String displayName)
     {
         int endBracket = displayName.indexOf(']');
+
         if (endBracket > 0 && displayName.startsWith("["))
         {
             int colonSpace = displayName.indexOf("]: ", endBracket);
+
             if (colonSpace > 0)
             {
                 return displayName.substring(colonSpace + 3);
@@ -549,10 +514,12 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
             }
             
             String flatFileName = originalName;
+
             if (!flatFileName.endsWith(".ogg"))
             {
                 flatFileName += ".ogg";
             }
+
             File exactMatch = new File(audioDir, flatFileName);
             
             if (exactMatch.exists())
@@ -586,28 +553,26 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
                 }
                 
                 File cachedFile = cacheManager.getCachedFile(soundPath);
+
                 if (cachedFile != null && cachedFile.exists())
                 {
                     return cachedFile.getName();
                 }
                 
                 File cacheFile = cacheManager.createTempCacheFile(soundPath);
+
                 if (cacheFile == null)
                 {
                     return null;
                 }
                 
-                net.minecraft.util.Identifier soundFileId = new net.minecraft.util.Identifier(
-                    "minecraft",
-                    "sounds/" + soundPath
-                );
-
-                net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
-                var resource = client.getResourceManager().getResource(soundFileId);
+                Identifier soundFileId = new Identifier("minecraft", "sounds/" + soundPath);
+                MinecraftClient client = MinecraftClient.getInstance();
+                Optional<Resource> resource = client.getResourceManager().getResource(soundFileId);
 
                 if (resource.isPresent())
                 {
-                    try (var inputStream = resource.get().getInputStream())
+                    try (InputStream inputStream = resource.get().getInputStream())
                     {
                         Files.copy(inputStream, cacheFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                     }
@@ -630,8 +595,8 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
     private void downloadSound(String displayName)
     {
         String originalName = this.removePrefix(displayName);
-        
         VanillaSoundAsset asset = this.soundAssetMap.get(originalName);
+
         if (asset == null)
         {
             return;
@@ -663,6 +628,7 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
     private String copyToAssetsDirectory(String displayName, VanillaSoundAsset asset)
     {
         String originalName = this.removePrefix(displayName);
+
         return this.copyToAssetsDirectoryWithOriginalName(originalName, asset);
     }
     /**
@@ -689,22 +655,16 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
                     soundPath = soundPath + ".ogg";
                 }
                 
-                net.minecraft.util.Identifier soundFileId = new net.minecraft.util.Identifier(
-                    "minecraft",
-                    "sounds/" + soundPath
-                );
-
-                net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
-                var resource = client.getResourceManager().getResource(soundFileId);
+                Identifier soundFileId = new Identifier("minecraft", "sounds/" + soundPath);
+                MinecraftClient client = MinecraftClient.getInstance();
+                Optional<Resource> resource = client.getResourceManager().getResource(soundFileId);
 
                 if (resource.isPresent())
                 {
-                    String finalFileName = originalName;
-                    
-                    String newSoundName = this.generateSoundName(finalFileName, audioDir);
+                    String newSoundName = this.generateSoundName(originalName, audioDir);
                     File targetFile = new File(audioDir, newSoundName + ".ogg");
 
-                    try (var inputStream = resource.get().getInputStream())
+                    try (InputStream inputStream = resource.get().getInputStream())
                     {
                         Files.copy(inputStream, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                     }
@@ -727,13 +687,14 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
     private String generateSoundName(String originalName, File audioDir)
     {
         File originalFile = new File(audioDir, originalName + ".ogg");
+
         if (!originalFile.exists())
         {
             return originalName;
         }
 
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(.*)_(\\d+)$");
-        java.util.regex.Matcher matcher = pattern.matcher(originalName);
+        Pattern pattern = Pattern.compile("(.*)_(\\d+)$");
+        Matcher matcher = pattern.matcher(originalName);
 
         if (matcher.matches())
         {
@@ -742,10 +703,8 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
 
             return this.findAvailableFileName(baseName, currentNumber + 1, audioDir);
         }
-        else
-        {
-            return this.findAvailableFileName(originalName, 1, audioDir);
-        }
+
+        return this.findAvailableFileName(originalName, 1, audioDir);
     }
 
     /**
@@ -761,7 +720,7 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
         {
             candidateName = baseName + "_" + number;
             candidateFile = new File(audioDir, candidateName + ".ogg");
-            number++;
+            number += 1;
         }
         while (candidateFile.exists());
 
@@ -816,12 +775,22 @@ boolean isLiked = isDownloaded && this.likeManager.isSoundLiked(downloadedPath);
         this.ensureLoaded();
     }
 
-    public void forceReload()
+    /**
+     * Minecraft sound resource info
+     */
+    private static class VanillaSoundAsset
     {
-        this.loaded = false;
-        this.cachedSoundsJson = null;
-        this.loadVanillaSoundFiles();
-        this.populateList();
-        this.loaded = true;
+        final String displayName;
+        final String resourcePath;
+        final List<String> actualSoundPaths;
+        final String category;
+
+        VanillaSoundAsset(String displayName, String resourcePath, List<String> actualSoundPaths, String category)
+        {
+            this.displayName = displayName;
+            this.resourcePath = resourcePath;
+            this.actualSoundPaths = actualSoundPaths;
+            this.category = category;
+        }
     }
 }

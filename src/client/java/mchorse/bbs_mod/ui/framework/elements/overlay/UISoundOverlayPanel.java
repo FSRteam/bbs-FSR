@@ -11,23 +11,22 @@ import mchorse.bbs_mod.audio.SoundLikeManager.LikedSound;
 import mchorse.bbs_mod.audio.SoundManager;
 import mchorse.bbs_mod.audio.SoundPlayer;
 import mchorse.bbs_mod.audio.Wave;
+import mchorse.bbs_mod.audio.ogg.VorbisReader;
+import mchorse.bbs_mod.audio.wav.WaveReader;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.screenplay.UIAudioPlayer;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UILikeableStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UILikedSoundList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIVanillaSoundList;
-import mchorse.bbs_mod.ui.utils.UIDataUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -40,13 +39,6 @@ import java.util.function.Consumer;
 public class UISoundOverlayPanel extends UIStringOverlayPanel
 {
     private static final int PLAYER_HEIGHT = 24;
-
-    private enum ViewMode
-    {
-        FOLDER,
-        ADD,
-        LIKE
-    }
 
     public UIAudioPlayer player;
 
@@ -90,8 +82,8 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
                 this.pickAudio(list.get(0));
             }
         }, this.likeManager);
+
         likeableList.scroll.scrollSpeed *= 2;
-        
         likeableList.setEditCallback((soundName) -> {
             if (this.context == null)
             {
@@ -109,7 +101,8 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
             UIOverlay.addOverlay(this.context, renamePanel);
         });
         
-        likeableList.setRemoveCallback((soundName) -> {
+        likeableList.setRemoveCallback((soundName) ->
+        {
             if (this.context == null)
             {
                 return;
@@ -184,20 +177,17 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         this.likedSounds.y(PLAYER_HEIGHT).h(1F, -PLAYER_HEIGHT);
 
         this.folderButton = new UIIcon(Icons.FOLDER, (b) -> this.switchToMode(ViewMode.FOLDER));
-        this.folderButton.tooltip(UIKeys.OVERLAYS_SOUNDS_FOLDER_MODE).relative(this.icons).y(20).w(16).h(16);
+        this.folderButton.tooltip(UIKeys.OVERLAYS_SOUNDS_FOLDER_MODE);
 
         this.addButton = new UIIcon(Icons.ADD, (b) -> this.switchToMode(ViewMode.ADD));
-        this.addButton.tooltip(UIKeys.OVERLAYS_SOUNDS_ADD_MODE).relative(this.icons).y(40).w(16).h(16);
+        this.addButton.tooltip(UIKeys.OVERLAYS_SOUNDS_ADD_MODE);
 
         this.likeButton = new UIIcon(Icons.HEART_ALT, (b) -> this.switchToMode(ViewMode.LIKE));
-        this.likeButton.tooltip(UIKeys.OVERLAYS_SOUNDS_LIKE_MODE).relative(this.icons).y(60).w(16).h(16);
+        this.likeButton.tooltip(UIKeys.OVERLAYS_SOUNDS_LIKE_MODE);
 
         this.icons.add(this.folderButton, this.addButton, this.likeButton);
 
-        this.callback((str) ->
-        {
-            this.pickAudio(str);
-        });
+        this.callback(this::pickAudio);
 
         this.refreshSoundList();
         this.refreshVanillaSoundList();
@@ -233,19 +223,22 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         this.stopCurrentPlayback();
 
         this.currentMode = mode;
+
         this.updateButtonStates();
 
         switch (mode)
         {
             case FOLDER:
                 this.showFolderMode();
-                break;
+            break;
+
             case ADD:
                 this.showAddMode();
-                break;
+            break;
+
             case LIKE:
                 this.showLikeMode();
-                break;
+            break;
         }
 
         this.updateListSelections();
@@ -255,12 +248,14 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
     {
         this.strings.setVisible(true);
         this.vanillaSounds.setVisible(false);
+
         if (this.likedSounds != null)
         {
             this.likedSounds.setVisible(false);
         }
 
         UILikeableStringList list = (UILikeableStringList) this.strings.list;
+
         list.setShowOnlyLiked(false);
         list.setShowEditRemoveButtons(true);
 
@@ -272,6 +267,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
     {
         this.strings.setVisible(false);
         this.vanillaSounds.setVisible(true);
+
         if (this.likedSounds != null)
         {
             this.likedSounds.setVisible(false);
@@ -287,12 +283,14 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
     {
         this.strings.setVisible(false);
         this.vanillaSounds.setVisible(false);
+
         if (this.likedSounds != null)
         {
             this.likedSounds.setVisible(true);
         }
 
         UILikeableStringList list = (UILikeableStringList) this.strings.list;
+
         list.setShowOnlyLiked(true);
         list.setShowEditRemoveButtons(false);
 
@@ -319,6 +317,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         if (this.vanillaSounds != null)
         {
             String filter = this.vanillaSounds.search.getText();
+
             this.vanillaSounds.filter(filter, true);
             this.vanillaSounds.resize();
         }
@@ -336,6 +335,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         if (this.likedSounds != null)
         {
             String filter = this.likedSounds.search.getText();
+
             this.likedSounds.filter(filter, true);
             this.likedSounds.resize();
         }
@@ -349,13 +349,15 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         list.getList().clear();
 
         List<String> sorted = new ArrayList<>(soundEvents);
-        Collections.sort(sorted);
+
+        sorted.sort(null);
         list.getList().addAll(sorted);
         list.getList().add(0, UIKeys.GENERAL_NONE.get());
         list.update();
         list.sort();
 
         String filter = this.strings.search.getText();
+
         this.strings.filter(filter, true);
         this.strings.resize();
         this.refreshLikedList();
@@ -382,6 +384,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
             Wave wave = null;
 
             SoundPlayer current = this.player.getPlayer();
+
             if (current != null)
             {
                 current.stop();
@@ -399,12 +402,13 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
                         
                         if (pathLower.endsWith(".wav"))
                         {
-                            wave = new mchorse.bbs_mod.audio.wav.WaveReader().read(fis);
+                            wave = new WaveReader().read(fis);
                         }
                         else if (pathLower.endsWith(".ogg"))
                         {
                             Link tempLink = new Link("cache", tempFile.getName());
-                            wave = mchorse.bbs_mod.audio.ogg.VorbisReader.read(tempLink, fis);
+
+                            wave = VorbisReader.read(tempLink, fis);
                         }
                     }
                 }
@@ -412,10 +416,12 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
             else
             {
                 link = Link.create(audio);
+
                 if (BBSMod.getProvider().getFile(link) == null)
                 {
                     return;
                 }
+
                 wave = AudioReader.read(BBSMod.getProvider(), link);
             }
 
@@ -431,6 +437,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
                 this.player.loadAudio(wave, colorCodes);
 
                 SoundPlayer newPlayer = this.player.getPlayer();
+
                 if (newPlayer != null)
                 {
                     BBSModClient.getSounds().deleteSounds();
@@ -454,6 +461,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
             else
             {
                 String downloaded = this.findDownloadedSoundInAddMode(audio);
+
                 if (downloaded != null)
                 {
                     this.originalCallback.accept(Link.create(downloaded));
@@ -469,10 +477,10 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
             return;
         }
 
-        if (this.strings.list instanceof UILikeableStringList)
+        if (this.strings.list instanceof UILikeableStringList list)
         {
-            UILikeableStringList list = (UILikeableStringList) this.strings.list;
             int index = list.getList().indexOf(this.selectedSound);
+
             if (index >= 0)
             {
                 list.setIndex(index);
@@ -482,6 +490,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         if (this.vanillaSoundList != null)
         {
             int index = this.vanillaSoundList.getList().indexOf(this.selectedSound);
+
             if (index >= 0)
             {
                 this.vanillaSoundList.setIndex(index);
@@ -497,6 +506,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
                 if (liked.get(i).getPath().equals(this.selectedSound))
                 {
                     this.likedSoundList.setIndex(i);
+
                     break;
                 }
             }
@@ -514,16 +524,14 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         }
 
         String originalName = displayName;
-        if (originalName.startsWith("Music: "))
-        {
-            originalName = originalName.substring(7);
-        }
-        else if (originalName.startsWith("Sound: "))
+
+        if (originalName.startsWith("Music: ") || originalName.startsWith("Sound: "))
         {
             originalName = originalName.substring(7);
         }
 
         File exactMatch = new File(audioDir, originalName + ".ogg");
+
         if (exactMatch.exists())
         {
             return "assets:audio/" + originalName + ".ogg";
@@ -532,6 +540,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         for (int suffix = 1; suffix < 100; suffix++)
         {
             File file = new File(audioDir, originalName + "_" + suffix + ".ogg");
+
             if (file.exists())
             {
                 return "assets:audio/" + originalName + "_" + suffix + ".ogg";
@@ -550,42 +559,42 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         {
             case FOLDER:
                 this.renderFolderEmptyState(context);
-                break;
+            break;
+
             case ADD:
                 this.renderAddEmptyState(context);
-                break;
+            break;
+
             case LIKE:
                 this.renderLikeEmptyState(context);
-                break;
+            break;
         }
     }
 
     private void renderFolderEmptyState(UIContext context)
-    {
-    }
+    {}
 
     private void renderAddEmptyState(UIContext context)
-    {
-    }
+    {}
 
     private void renderLikeEmptyState(UIContext context)
-    {
-    }
+    {}
 
     @Override
     protected void renderBackground(UIContext context)
     {
         super.renderBackground(context);
 
-        /* Render active button highlight with theme color */
         if (this.folderButton.isActive())
         {
             this.folderButton.area.render(context.batcher, BBSSettings.primaryColor(Colors.A100));
         }
+
         if (this.addButton.isActive())
         {
             this.addButton.area.render(context.batcher, BBSSettings.primaryColor(Colors.A100));
         }
+
         if (this.likeButton.isActive())
         {
             this.likeButton.area.render(context.batcher, BBSSettings.primaryColor(Colors.A100));
@@ -639,19 +648,19 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         String fileName = soundName.replace("assets:audio/", "").replace(".ogg", "");
         File audioFile = new File(BBSMod.getAssetsFolder(), "audio/" + fileName + ".ogg");
 
-            if (audioFile.exists() && audioFile.delete())
+        if (audioFile.exists() && audioFile.delete())
+        {
+            this.likeManager.removeSound(soundName);
+
+            if (BBSModClient.getSounds() != null)
             {
-                this.likeManager.removeSound(soundName);
-
-                if (BBSModClient.getSounds() != null)
-                {
-                    BBSModClient.getSounds().stop(Link.assets("audio/" + fileName + ".ogg"));
-                }
-
-                this.refreshSoundList();
-                this.refreshVanillaSoundList();
-                this.refreshLikedList();
+                BBSModClient.getSounds().stop(Link.assets("audio/" + fileName + ".ogg"));
             }
+
+            this.refreshSoundList();
+            this.refreshVanillaSoundList();
+            this.refreshLikedList();
+        }
     }
 
     private void stopCurrentPlayback()
@@ -659,6 +668,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         if (this.player != null)
         {
             SoundPlayer current = this.player.getPlayer();
+
             if (current != null)
             {
                 current.stop();
@@ -672,7 +682,13 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
     public void onClose()
     {
         super.onClose();
+
         this.stopCurrentPlayback();
         AudioCacheManager.getInstance().clearAllCache();
+    }
+
+    private enum ViewMode
+    {
+        FOLDER, ADD, LIKE;
     }
 }

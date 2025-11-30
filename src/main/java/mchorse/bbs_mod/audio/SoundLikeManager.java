@@ -20,28 +20,6 @@ import java.util.List;
  */
 public class SoundLikeManager
 {
-    public static class LikedSound
-    {
-        private final String path;
-        private final String displayName;
-
-        public LikedSound(String path, String displayName)
-        {
-            this.path = path;
-            this.displayName = displayName;
-        }
-
-        public String getPath()
-        {
-            return this.path;
-        }
-
-        public String getDisplayName()
-        {
-            return this.displayName;
-        }
-    }
-
     private static final String LIKED_SOUNDS_FILE = "liked_sounds.dat";
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -121,6 +99,7 @@ public class SoundLikeManager
             for (LikedSound sound : this.likedSounds.values())
             {
                 MapType map = new MapType();
+
                 map.put("path", new StringType(sound.getPath()));
                 map.put("name", new StringType(sound.getDisplayName()));
                 listData.add(map);
@@ -133,14 +112,10 @@ public class SoundLikeManager
             if (!this.saveErrorLogged)
             {
                 LOGGER.error("Failed to save liked sounds to " + this.storage.getFile().getAbsolutePath(), e);
+
                 this.saveErrorLogged = true;
             }
         }
-    }
-    
-    public void setSoundLiked(String soundName, boolean liked)
-    {
-        this.setSoundLiked(soundName, null, liked);
     }
 
     public void setSoundLiked(String soundName, String displayName, boolean liked)
@@ -280,5 +255,27 @@ public class SoundLikeManager
         }
 
         this.likedSounds.put(normalized, new LikedSound(normalized, displayName));
+    }
+
+    public static class LikedSound
+    {
+        private final String path;
+        private final String displayName;
+
+        public LikedSound(String path, String displayName)
+        {
+            this.path = path;
+            this.displayName = displayName;
+        }
+
+        public String getPath()
+        {
+            return this.path;
+        }
+
+        public String getDisplayName()
+        {
+            return this.displayName;
+        }
     }
 }

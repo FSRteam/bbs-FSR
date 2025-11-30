@@ -117,16 +117,19 @@ public class UIIcon extends UIClickable<UIIcon>
         Icon icon = this.getIcon();
         int color;
         
-        if (this.isEnabled()) {
-            if (this.active) {
-                // 如果按钮处于激活状态，使用激活颜色
+        if (this.isEnabled())
+        {
+            if (this.active)
+            {
                 color = this.activeColor;
-            } else {
-                // 否则根据悬停状态决定颜色
+            }
+            else
+            {
                 color = this.hover ? this.hoverColor : this.iconColor;
             }
-        } else {
-            // 禁用状态
+        }
+        else
+        {
             color = this.disabledColor;
         }
 

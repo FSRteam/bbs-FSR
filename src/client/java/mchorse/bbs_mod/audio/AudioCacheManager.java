@@ -31,12 +31,9 @@ public class AudioCacheManager
         this.cacheDir = BBSMod.getAudioCacheFolder();
         this.cachedFiles = new HashMap<>();
         
-        if (!this.cacheDir.exists())
+        if (!this.cacheDir.exists() && !this.cacheDir.mkdirs())
         {
-            if (!this.cacheDir.mkdirs())
-            {
-                LOGGER.error("Failed to create audio cache directory: " + this.cacheDir.getAbsolutePath());
-            }
+            LOGGER.error("Failed to create audio cache directory: " + this.cacheDir.getAbsolutePath());
         }
     }
     
@@ -65,16 +62,9 @@ public class AudioCacheManager
         }
         
         String flattenedPath = soundPath.replace("/", "_").replace("\\", "_");
-        
-        String fileName;
-        if (flattenedPath.endsWith(".ogg"))
-        {
-            fileName = "preview_" + flattenedPath;
-        }
-        else
-        {
-            fileName = "preview_" + flattenedPath + ".ogg";
-        }
+        String fileName = flattenedPath.endsWith(".ogg")
+            ? "preview_" + flattenedPath
+            : "preview_" + flattenedPath + ".ogg";
         
         File cacheFile = new File(this.cacheDir, fileName);
         
@@ -87,7 +77,6 @@ public class AudioCacheManager
         }
         
         this.cachedFiles.put(soundPath, cacheFile);
-
 
         return cacheFile;
     }
@@ -180,5 +169,4 @@ public class AudioCacheManager
             }
         }
     }
-    
 }

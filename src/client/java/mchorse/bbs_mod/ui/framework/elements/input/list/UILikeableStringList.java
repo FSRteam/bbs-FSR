@@ -1,12 +1,13 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
 import mchorse.bbs_mod.audio.SoundLikeManager;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -39,16 +40,6 @@ public class UILikeableStringList extends UIStringList
         this.showOnlyLiked = showOnlyLiked;
     }
     
-    public boolean isShowOnlyLiked()
-    {
-        return this.showOnlyLiked;
-    }
-    
-    public void toggleShowOnlyLiked()
-    {
-        this.showOnlyLiked = !this.showOnlyLiked;
-    }
-    
     private String getDisplayText(String element)
     {
         String display = this.likeManager.getDisplayName(element);
@@ -63,6 +54,7 @@ public class UILikeableStringList extends UIStringList
         if (this.showOnlyLiked)
         {
             element = this.getVisibleElement(i);
+
             if (element == null)
             {
                 return;
@@ -70,22 +62,22 @@ public class UILikeableStringList extends UIStringList
         }
 
         boolean isNoneOption = element.equals(UIKeys.GENERAL_NONE.get());
-
         String displayText = this.getDisplayText(element);
         int textWidth = context.batcher.getFont().getWidth(displayText);
         int buttonSpace = 0;
-        if (!isNoneOption) {
-            if (this.showEditRemoveButtons) {
-                buttonSpace = 60; // edit + remove + like = 60px
-            } else {
-                buttonSpace = 20; // like button only = 20px
-            }
+
+        if (!isNoneOption)
+        {
+            buttonSpace = this.showEditRemoveButtons
+                ? 60 /* edit + remove + like = 60px */
+                : 20; /* like button only = 20px */
         }
+
         int maxWidth = this.area.w - 8 - buttonSpace;
 
         if (textWidth > maxWidth)
         {
-            displayText = truncateText(context, displayText, maxWidth);
+            displayText = context.batcher.getFont().limitToWidth(displayText, maxWidth);
         }
 
         context.batcher.textShadow(displayText, x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? Colors.HIGHLIGHT : Colors.WHITE);
@@ -95,65 +87,46 @@ public class UILikeableStringList extends UIStringList
             return;
         }
 
-        /* Draw buttons from right to left: like, remove, edit */
         int currentIconX = this.area.x + this.area.w - 20;
         int iconY = y + (this.scroll.scrollItemSize - 16) / 2;
 
         boolean isLiked = this.likeManager.isSoundLiked(element);
-        boolean isHoverOnLike = this.area.isInside(context) && context.mouseX >= currentIconX && context.mouseX < currentIconX + 16 &&
-                context.mouseY >= iconY && context.mouseY < iconY + 16;
+        boolean isHoverOnLike = this.area.isInside(context)
+            && context.mouseX >= currentIconX
+            && context.mouseX < currentIconX + 16
+            && context.mouseY >= iconY
+            && context.mouseY < iconY + 16;
 
         this.likeButton.both(isLiked ? Icons.DISLIKE : Icons.LIKE);
         this.likeButton.iconColor(isHoverOnLike || isLiked ? Colors.WHITE : Colors.GRAY);
         this.likeButton.area.set(currentIconX, iconY, 16, 16);
         this.likeButton.render(context);
 
-        if (this.showEditRemoveButtons) {
+        if (this.showEditRemoveButtons)
+        {
             currentIconX -= 20;
-            boolean isHoverOnRemove = this.area.isInside(context) && context.mouseX >= currentIconX && context.mouseX < currentIconX + 16 &&
-                    context.mouseY >= iconY && context.mouseY < iconY + 16;
+
+            boolean isHoverOnRemove = this.area.isInside(context)
+                && context.mouseX >= currentIconX
+                && context.mouseX < currentIconX + 16
+                && context.mouseY >= iconY
+                && context.mouseY < iconY + 16;
 
             this.removeButton.iconColor(isHoverOnRemove ? Colors.WHITE : Colors.GRAY);
             this.removeButton.area.set(currentIconX, iconY, 16, 16);
             this.removeButton.render(context);
 
             currentIconX -= 20;
-            boolean isHoverOnEdit = this.area.isInside(context) && context.mouseX >= currentIconX && context.mouseX < currentIconX + 16 &&
-                    context.mouseY >= iconY && context.mouseY < iconY + 16;
+            boolean isHoverOnEdit = this.area.isInside(context)
+                && context.mouseX >= currentIconX
+                && context.mouseX < currentIconX + 16
+                && context.mouseY >= iconY
+                && context.mouseY < iconY + 16;
 
             this.editButton.iconColor(isHoverOnEdit ? Colors.WHITE : Colors.GRAY);
             this.editButton.area.set(currentIconX, iconY, 16, 16);
             this.editButton.render(context);
         }
-    }
-    
-    private String truncateText(UIContext context, String text, int maxWidth)
-    {
-        String ellipsis = "...";
-        int ellipsisWidth = context.batcher.getFont().getWidth(ellipsis);
-        
-        if (ellipsisWidth >= maxWidth)
-        {
-            return "";
-        }
-        
-        int availableWidth = maxWidth - ellipsisWidth;
-        StringBuilder result = new StringBuilder();
-        
-        for (int i = 0; i < text.length(); i++)
-        {
-            String test = result.toString() + text.charAt(i);
-            int testWidth = context.batcher.getFont().getWidth(test);
-            
-            if (testWidth > availableWidth)
-            {
-                break;
-            }
-            
-            result.append(text.charAt(i));
-        }
-        
-        return result.toString() + ellipsis;
     }
     
     @Override
@@ -182,9 +155,12 @@ public class UILikeableStringList extends UIStringList
         int iconY = y + (this.scroll.scrollItemSize - 16) / 2;
         int likeIconX = this.area.x + this.area.w - 20;
 
-        if (context.mouseX >= likeIconX && context.mouseX < likeIconX + 16 &&
-            context.mouseY >= iconY && context.mouseY < iconY + 16)
-        {
+        if (
+            context.mouseX >= likeIconX &&
+            context.mouseX < likeIconX + 16 &&
+            context.mouseY >= iconY &&
+            context.mouseY < iconY + 16
+        ) {
             this.likeManager.toggleSoundLiked(element);
 
             if (this.refreshCallback != null)
@@ -228,14 +204,15 @@ public class UILikeableStringList extends UIStringList
         }
 
         int actualIndex = this.list.indexOf(element);
+
         if (actualIndex < 0)
         {
             return false;
         }
 
         int buttonAreaStartX = this.area.x + this.area.w - 20;
-        if (context.mouseX >= buttonAreaStartX && context.mouseX < this.area.x + this.area.w &&
-            context.mouseY >= iconY && context.mouseY < iconY + 16)
+
+        if (context.mouseX >= buttonAreaStartX && context.mouseX < this.area.x + this.area.w && context.mouseY >= iconY && context.mouseY < iconY + 16)
         {
             return false;
         }
@@ -245,8 +222,10 @@ public class UILikeableStringList extends UIStringList
 
         if (this.callback != null)
         {
-            java.util.List<String> selected = new java.util.ArrayList<>();
+            List<String> selected = new ArrayList<>();
+
             selected.add(element);
+
             this.callback.accept(selected);
         }
 
@@ -256,16 +235,14 @@ public class UILikeableStringList extends UIStringList
     @Override
     public int renderElement(UIContext context, String element, int i, int index, boolean postDraw)
     {
-        /* Custom renderList handles this, kept as safeguard */
         boolean isNoneOption = element.equals(UIKeys.GENERAL_NONE.get());
         
         if (this.showOnlyLiked && !this.likeManager.isSoundLiked(element) && !isNoneOption)
         {
             return i;
         }
-        
-        int result = super.renderElement(context, element, i, index, postDraw);
-        return result;
+
+        return super.renderElement(context, element, i, index, postDraw);
     }
 
     @Override
@@ -274,10 +251,12 @@ public class UILikeableStringList extends UIStringList
         if (!this.showOnlyLiked)
         {
             super.renderList(context);
+
             return;
         }
 
         int visibleIndex = 0;
+
         for (int actualIndex = 0; actualIndex < this.list.size(); actualIndex++)
         {
             String element = this.list.get(actualIndex);
@@ -305,12 +284,14 @@ public class UILikeableStringList extends UIStringList
         }
 
         int count = 0;
+
         for (String element : this.list)
         {
             boolean isNoneOption = element.equals(UIKeys.GENERAL_NONE.get());
+
             if (this.likeManager.isSoundLiked(element) || isNoneOption)
             {
-                count++;
+                count += 1;
             }
         }
 
@@ -325,6 +306,7 @@ public class UILikeableStringList extends UIStringList
         }
         
         int currentIndex = 0;
+
         for (String element : this.list)
         {
             boolean isNoneOption = element.equals(UIKeys.GENERAL_NONE.get());
@@ -338,7 +320,8 @@ public class UILikeableStringList extends UIStringList
             {
                 return element;
             }
-            currentIndex++;
+
+            currentIndex += 1;
         }
         
         return null;
@@ -367,15 +350,7 @@ public class UILikeableStringList extends UIStringList
     @Override
     public void update()
     {
-        int size;
-        if (this.showOnlyLiked)
-        {
-            size = this.getVisibleElementCount();
-        }
-        else
-        {
-            size = this.list.size();
-        }
+        int size = this.showOnlyLiked ? this.getVisibleElementCount() : this.list.size();
         
         this.scroll.setSize(size);
         this.scroll.clamp();
