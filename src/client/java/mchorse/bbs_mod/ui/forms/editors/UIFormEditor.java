@@ -92,6 +92,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     public UIAnimationStateEditor statesKeyframes;
     public UIIcon openStates;
     public UIIcon plause;
+    public UIIcon shiftDuration;
 
     /* Forms sidebar */
     public UIElement forms;
@@ -198,6 +199,18 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         this.plause = new UIIcon(() -> this.playing ? Icons.PAUSE : Icons.PLAY, (b) -> this.plause());
         this.plause.relative(this.openStates).y(1F);
         this.plause.tooltip(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_PLAUSE, Direction.RIGHT);
+        this.shiftDuration = new UIIcon(Icons.SHIFT_TO, (b) ->
+        {
+            AnimationState state = this.statesKeyframes.getState();
+
+            if (state != null)
+            {
+                state.duration.set(this.cursor);
+            }
+        });
+        this.shiftDuration.relative(this.plause).y(1F);
+        this.shiftDuration.tooltip(UIKeys.CAMERA_TIMELINE_CONTEXT_SHIFT_DURATION, Direction.RIGHT);
+        this.shiftDuration.keys().register(Keys.CLIP_SHIFT, () -> this.shiftDuration.clickItself());
 
         this.renderer = new UIPickableFormRenderer(this);
         this.renderer.full(this);
@@ -243,7 +256,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         this.forms.add(background, this.formsList, this.bodyPartEditor, draggable);
         this.formEditor.add(this.forms);
-        this.statesEditor.add(backgroundStates, this.openStates, this.plause, this.statesKeyframes);
+        this.statesEditor.add(backgroundStates, this.openStates, this.plause, this.shiftDuration, this.statesKeyframes);
         this.add(this.renderer, this.formEditor, this.statesEditor, this.icons);
 
         this.keys().register(Keys.UNDO, this::undo);
