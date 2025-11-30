@@ -406,6 +406,7 @@
     "bbs.ui.export": "Экспорт",
     "bbs.ui.ffmpeg.error-description": "ffmpeg не был правильно настроен или не был найден. Либо укажити путь к ffmpeg в настройках ББС мода либо откройте гайд нажав ? кнопку",
     "bbs.ui.ffmpeg.error-guide": "Открыть гайд в браузере",
+    "bbs.ui.ffmpeg.find": "Найти ffmpeg.exe...",
     "bbs.ui.film.controller.control_mode-tooltip": "Нажмите на %s чтобы отключить контроль...",
     "bbs.ui.film.controller.insert_frame-description": "Выберите ключевую группу которую Вы хотите вставить:",
     "bbs.ui.film.controller.insert_frame-title": "Вставить ключевой кадр",
