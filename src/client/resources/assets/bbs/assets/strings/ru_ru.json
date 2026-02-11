@@ -1030,6 +1030,7 @@
     "bbs.ui.textures.save": "Укажите путь к текстуре в текстовом поле ниже:",
     "bbs.ui.textures.save_wrong_path": "Текстура должна быть сохранена в формате .png и в папке с ресурсами (она должна начинаться с \"assets:\")!",
     "bbs.ui.textures.tooltip": "Менеджер текстур",
+    "bbs.ui.textures.brush_size": "Размер кисти",
     "bbs.ui.textures.viewer.brightness": "Этот ползунок регулирует яркость клетчатого фона",
     "bbs.ui.textures.viewer.context.copy_hex": "Скопировать текущий пиксель как шестнадцатеричное значение",
     "bbs.ui.trackpad.global_amplifier": "Размах был обновлена, новый коэффициент %.2f",
