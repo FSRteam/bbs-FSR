@@ -23,6 +23,10 @@ import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.film.replays.FormProperties;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
+import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.resources.Link;
@@ -50,6 +54,7 @@ import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
@@ -70,6 +75,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private ModelInstance lastModel;
 
     private IEntity entity = new StubEntity();
+
+    public FormProperties properties;
+    public float time;
+
+    private FormProperties lastProperties;
+    private int lastPropertiesSignature;
+    private int lastPropertiesNonEmpty = -1;
+    private List<PropertyAccessor> propertyAccessors = new ArrayList<>();
 
     @Override
     protected void applyTransforms(MatrixStack stack, boolean origin, float transition)
@@ -150,7 +163,162 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             this.applyPose(pose, newPose.get());
         }
 
+        if (this.properties != null)
+        {
+            this.applyProperties(pose, this.properties);
+        }
+        else if (this.form.properties != null)
+        {
+            this.applyProperties(pose, this.form.properties);
+        }
+
         return pose;
+    }
+
+    private void applyProperties(Pose pose, FormProperties properties)
+    {
+        int signature = 1;
+        int nonEmpty = 0;
+
+        for (KeyframeChannel channel : properties.properties.values())
+        {
+            if (!channel.isEmpty())
+            {
+                nonEmpty += 1;
+                signature = signature * 31 + channel.getId().hashCode();
+                signature = signature * 31 + (channel.getFactory() == null ? 0 : channel.getFactory().hashCode());
+            }
+        }
+
+        if (this.lastProperties != properties || this.lastPropertiesSignature != signature || this.lastPropertiesNonEmpty != nonEmpty)
+        {
+            this.updateAccessors(properties);
+            this.lastProperties = properties;
+            this.lastPropertiesSignature = signature;
+            this.lastPropertiesNonEmpty = nonEmpty;
+        }
+
+        for (PropertyAccessor accessor : this.propertyAccessors)
+        {
+            PoseTransform transform = pose.get(accessor.bone);
+            float value = ((Number) accessor.channel.interpolate(this.time)).floatValue();
+
+            if (accessor.type == TransformType.TRANSLATE)
+            {
+                if (accessor.axis == 0) transform.translate.x = value;
+                else if (accessor.axis == 1) transform.translate.y = value;
+                else if (accessor.axis == 2) transform.translate.z = value;
+            }
+            else if (accessor.type == TransformType.SCALE)
+            {
+                if (accessor.axis == 0) transform.scale.x = value;
+                else if (accessor.axis == 1) transform.scale.y = value;
+                else if (accessor.axis == 2) transform.scale.z = value;
+            }
+            else if (accessor.type == TransformType.ROTATE)
+            {
+                value = MathUtils.toRad(value);
+
+                if (accessor.axis == 0) transform.rotate.x = value;
+                else if (accessor.axis == 1) transform.rotate.y = value;
+                else if (accessor.axis == 2) transform.rotate.z = value;
+            }
+            else if (accessor.type == TransformType.ROTATE2)
+            {
+                value = MathUtils.toRad(value);
+
+                if (accessor.axis == 0) transform.rotate2.x = value;
+                else if (accessor.axis == 1) transform.rotate2.y = value;
+                else if (accessor.axis == 2) transform.rotate2.z = value;
+            }
+        }
+    }
+
+    private void updateAccessors(FormProperties properties)
+    {
+        this.propertyAccessors.clear();
+
+        for (KeyframeChannel channel : properties.properties.values())
+        {
+            if (channel.isEmpty())
+            {
+                continue;
+            }
+
+            IKeyframeFactory factory = channel.getFactory();
+
+            if (factory != KeyframeFactories.FLOAT && factory != KeyframeFactories.DOUBLE && factory != KeyframeFactories.INTEGER)
+            {
+                continue;
+            }
+
+            String path = channel.getId();
+            int index = path.lastIndexOf(".");
+
+            if (index == -1)
+            {
+                continue;
+            }
+
+            String property = path.substring(index + 1);
+            String bone = path.substring(0, index);
+
+            index = bone.lastIndexOf(".");
+
+            if (index == -1)
+            {
+                continue;
+            }
+
+            String transformType = bone.substring(index + 1);
+            String boneName = bone.substring(0, index);
+            TransformType type = null;
+            int axis = -1;
+
+            if (transformType.equals("translate")) type = TransformType.TRANSLATE;
+            else if (transformType.equals("scale")) type = TransformType.SCALE;
+            else if (transformType.equals("rotate")) type = TransformType.ROTATE;
+            else if (transformType.equals("rotate2")) type = TransformType.ROTATE2;
+
+            if (property.equals("x")) axis = 0;
+            else if (property.equals("y")) axis = 1;
+            else if (property.equals("z")) axis = 2;
+
+            if (type != null && axis != -1)
+            {
+                this.propertyAccessors.add(new PropertyAccessor(channel, boneName, type, axis));
+            }
+        }
+    }
+
+    public static class PerLimbPoseTransform
+    {
+        public final Vector3f translate = new Vector3f();
+        public final Vector3f scale = new Vector3f(1, 1, 1);
+        public final Vector3f rotate = new Vector3f();
+        public final Vector3f rotate2 = new Vector3f();
+        public float fix;
+    }
+
+    private static class PropertyAccessor
+    {
+        public final KeyframeChannel channel;
+        public final String bone;
+        public final TransformType type;
+        public final int axis;
+
+        public PropertyAccessor(KeyframeChannel channel, String bone, TransformType type, int axis)
+        {
+            this.channel = channel;
+            this.bone = bone;
+            this.type = type;
+            this.axis = axis;
+        }
+    }
+
+    private static enum TransformType
+    {
+        TRANSLATE, SCALE, ROTATE, ROTATE2
     }
 
     private void applyPose(Pose targetPose, Pose pose)
