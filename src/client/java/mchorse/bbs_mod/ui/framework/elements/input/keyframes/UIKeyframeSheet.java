@@ -11,14 +11,10 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import java.util.ArrayList;
 import java.util.List;
 
-public class UIKeyframeSheet
+public class UIKeyframeSheet extends UIKeyframeElement
 {
     /* Meta data */
     public final String id;
-    public final IKey title;
-    public final int color;
-    public boolean separator;
-
     private Icon icon;
 
     public final KeyframeChannel channel;
@@ -32,9 +28,9 @@ public class UIKeyframeSheet
 
     public UIKeyframeSheet(String id, IKey title, int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)
     {
+        super(title, color);
+
         this.id = id;
-        this.title = title;
-        this.color = color;
         this.separator = separator;
 
         this.channel = channel;
@@ -105,6 +101,10 @@ public class UIKeyframeSheet
             else if (selectedValue instanceof Integer)
             {
                 keyframe.setValue((int) keyframe.getValue() + valueNumber.intValue() - (int) selectedValue, dirty);
+            }
+            else if (selectedValue instanceof Long)
+            {
+                keyframe.setValue((long) keyframe.getValue() + valueNumber.longValue() - (long) selectedValue, dirty);
             }
             else
             {

@@ -59,9 +59,11 @@ import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITickable
@@ -201,6 +203,31 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         for (PropertyAccessor accessor : this.propertyAccessors)
         {
             PoseTransform transform = pose.get(accessor.bone);
+            if (accessor.vector)
+            {
+                Vector3f defaults = accessor.type == TransformType.SCALE ? new Vector3f(1F, 1F, 1F) : new Vector3f();
+                Vector3f value = (Vector3f) accessor.channel.interpolate(this.time, defaults);
+
+                if (accessor.type == TransformType.TRANSLATE)
+                {
+                    transform.translate.set(value);
+                }
+                else if (accessor.type == TransformType.SCALE)
+                {
+                    transform.scale.set(value);
+                }
+                else if (accessor.type == TransformType.ROTATE)
+                {
+                    transform.rotate.set(MathUtils.toRad(value.x), MathUtils.toRad(value.y), MathUtils.toRad(value.z));
+                }
+                else if (accessor.type == TransformType.ROTATE2)
+                {
+                    transform.rotate2.set(MathUtils.toRad(value.x), MathUtils.toRad(value.y), MathUtils.toRad(value.z));
+                }
+
+                continue;
+            }
+
             float value = ((Number) accessor.channel.interpolate(this.time)).floatValue();
 
             if (accessor.type == TransformType.TRANSLATE)
@@ -237,6 +264,45 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private void updateAccessors(FormProperties properties)
     {
         this.propertyAccessors.clear();
+        Set<String> overrides = new HashSet<>();
+
+        for (KeyframeChannel channel : properties.properties.values())
+        {
+            if (channel.isEmpty())
+            {
+                continue;
+            }
+
+            IKeyframeFactory factory = channel.getFactory();
+
+            if (factory != KeyframeFactories.VECTOR3F && factory != KeyframeFactories.VECTOR3F_SCALE)
+            {
+                continue;
+            }
+
+            String path = channel.getId();
+            int index = path.lastIndexOf(".");
+
+            if (index == -1)
+            {
+                continue;
+            }
+
+            String group = path.substring(index + 1);
+            String boneName = path.substring(0, index);
+            TransformType type = null;
+
+            if (group.equals("translate")) type = TransformType.TRANSLATE;
+            else if (group.equals("scale")) type = TransformType.SCALE;
+            else if (group.equals("rotate")) type = TransformType.ROTATE;
+            else if (group.equals("rotate2")) type = TransformType.ROTATE2;
+
+            if (type != null)
+            {
+                overrides.add(boneName + "." + type.name());
+                this.propertyAccessors.add(new PropertyAccessor(channel, boneName, type, -1, true));
+            }
+        }
 
         for (KeyframeChannel channel : properties.properties.values())
         {
@@ -286,7 +352,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             if (type != null && axis != -1)
             {
-                this.propertyAccessors.add(new PropertyAccessor(channel, boneName, type, axis));
+                if (!overrides.contains(boneName + "." + type.name()))
+                {
+                    this.propertyAccessors.add(new PropertyAccessor(channel, boneName, type, axis, false));
+                }
             }
         }
     }
@@ -306,13 +375,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         public final String bone;
         public final TransformType type;
         public final int axis;
+        public final boolean vector;
 
-        public PropertyAccessor(KeyframeChannel channel, String bone, TransformType type, int axis)
+        public PropertyAccessor(KeyframeChannel channel, String bone, TransformType type, int axis, boolean vector)
         {
             this.channel = channel;
             this.bone = bone;
             this.type = type;
             this.axis = axis;
+            this.vector = vector;
         }
     }
 
