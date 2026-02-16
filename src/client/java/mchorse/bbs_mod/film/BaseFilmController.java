@@ -15,7 +15,6 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
-import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.morphing.Morph;
@@ -148,22 +147,6 @@ public abstract class BaseFilmController
         }
 
         MatrixStackUtils.multiply(stack, target);
-        Object renderer = FormUtilsClient.getRenderer(form);
-
-        if (renderer instanceof ModelFormRenderer modelRenderer)
-        {
-            if (context.replay != null)
-            {
-                modelRenderer.properties = context.replay.properties;
-                modelRenderer.time = context.time;
-            }
-            else
-            {
-                modelRenderer.properties = null;
-                modelRenderer.time = 0F;
-            }
-        }
-
         FormUtilsClient.render(form, formContext);
 
         if (UIBaseMenu.renderAxes)
@@ -664,7 +647,6 @@ public abstract class BaseFilmController
             FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
 
             filmContext.transition = getTransition(entity, context.tickDelta());
-            filmContext.time = replay.getTick(this.getTick()) + filmContext.transition;
 
             renderEntity(filmContext);
         }

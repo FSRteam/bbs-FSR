@@ -5,7 +5,6 @@ import mchorse.bbs_mod.cubic.animation.ActionsConfig;
 import mchorse.bbs_mod.forms.values.ValueActionsConfig;
 import mchorse.bbs_mod.forms.values.ValueShapeKeys;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
-import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
@@ -25,7 +24,6 @@ public class ModelForm extends Form
     public final ValueActionsConfig actions = new ValueActionsConfig("actions", new ActionsConfig());
     public final ValueColor color = new ValueColor("color", Color.white());
     public final ValueShapeKeys shapeKeys = new ValueShapeKeys("shape_keys", new ShapeKeys());
-    public final FormProperties properties = new FormProperties("properties");
 
     public final List<ValuePose> additionalOverlays = new ArrayList<>();
 
@@ -49,7 +47,6 @@ public class ModelForm extends Form
         this.add(this.actions);
         this.add(this.color);
         this.add(this.shapeKeys);
-        this.add(this.properties);
     }
 
     @Override

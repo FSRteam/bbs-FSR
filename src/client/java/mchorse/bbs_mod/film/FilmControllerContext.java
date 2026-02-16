@@ -23,7 +23,6 @@ public class FilmControllerContext
     public StencilMap map;
 
     public float transition;
-    public float time;
     public int color;
     public float shadowRadius;
 
@@ -48,7 +47,6 @@ public class FilmControllerContext
         this.local = false;
         this.nameTag = "";
         this.relative = false;
-        this.time = 0F;
     }
 
     public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, WorldRenderContext context)
@@ -84,13 +82,6 @@ public class FilmControllerContext
     public FilmControllerContext transition(float transition)
     {
         this.transition = transition;
-
-        return this;
-    }
-
-    public FilmControllerContext time(float time)
-    {
-        this.time = time;
 
         return this;
     }
