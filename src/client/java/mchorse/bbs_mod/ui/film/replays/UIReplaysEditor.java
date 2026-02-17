@@ -26,6 +26,7 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -308,6 +309,10 @@ public class UIReplaysEditor extends UIElement
         }
 
         this.setCategory(ReplayCategory.PLAYER);
+
+        this.keys().register(Keys.REPLAYS_TAB_1, () -> this.setCategory(ReplayCategory.PLAYER)).category(UIKeys.FILM_REPLAY_TITLE);
+        this.keys().register(Keys.REPLAYS_TAB_2, () -> this.setCategory(ReplayCategory.MODEL)).category(UIKeys.FILM_REPLAY_TITLE);
+        this.keys().register(Keys.REPLAYS_TAB_3, () -> this.setCategory(ReplayCategory.POSE)).category(UIKeys.FILM_REPLAY_TITLE);
 
         this.add(this.iconBar);
         this.markContainer();
