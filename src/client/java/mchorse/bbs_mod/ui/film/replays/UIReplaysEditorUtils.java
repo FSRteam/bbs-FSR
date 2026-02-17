@@ -59,6 +59,11 @@ public class UIReplaysEditorUtils
 
     public static void pickFormProperty(UIContext context, UIKeyframeEditor editor, ICursor cursor, Form form, String bone)
     {
+        if (form == null)
+        {
+            return;
+        }
+
         String path = FormUtils.getPath(form);
         boolean shift = Window.isShiftPressed();
         ContextMenuManager manager = new ContextMenuManager();
@@ -83,47 +88,56 @@ public class UIReplaysEditorUtils
 
     public static void pickForm(UIKeyframeEditor keyframeEditor, ICursor cursor, Form form, String bone)
     {
-        String path = FormUtils.getPath(form);
-
-        if (keyframeEditor == null || bone.isEmpty())
+        if (form == null || keyframeEditor == null || bone.isEmpty())
         {
             return;
         }
 
-        Keyframe selected = keyframeEditor.view.getGraph().getSelected();
-        String type = "pose";
+        String path = FormUtils.getPath(form);
+        UIKeyframeSheet sheet = getActivePoseSheet(keyframeEditor, path);
 
-        if (selected != null)
+        if (sheet != null)
         {
-            String id = selected.getParent().getId();
-            int index = id.indexOf("pose_overlay");
+            pickProperty(keyframeEditor, cursor, bone, sheet, false);
+        }
+    }
 
-            if (index >= 0)
+    private static UIKeyframeSheet getActivePoseSheet(UIKeyframeEditor keyframeEditor, String formPath)
+    {
+        IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+        Keyframe selected = graph.getSelected();
+        UIKeyframeSheet sheet = selected != null ? graph.getSheet(selected) : graph.getLastSheet();
+
+        if (sheet == null || sheet.id == null)
+        {
+            return null;
+        }
+
+        String name = StringUtils.fileName(sheet.id);
+
+        if (!name.startsWith("pose"))
+        {
+            return null;
+        }
+
+        if (sheet.property != null)
+        {
+            Form sheetForm = FormUtils.getForm(sheet.property);
+
+            if (sheetForm != null)
             {
-                type = id.substring(index);
+                return FormUtils.getPath(sheetForm).equals(formPath) ? sheet : null;
             }
         }
-        else
-        {
-            UIKeyframeSheet lastSheet = keyframeEditor.view.getGraph().getLastSheet();
 
-            if (lastSheet != null && lastSheet.property != null)
-            {
-                if (FormUtils.getPath((Form) lastSheet.property.getParent()).equals(FormUtils.getPath(form)) && lastSheet.property.getId().startsWith("pose") && !lastSheet.channel.isEmpty())
-                {
-                    type = lastSheet.id;
-                }
-            }
+        if (formPath.isEmpty())
+        {
+            return sheet.id.contains(FormUtils.PATH_SEPARATOR) ? null : sheet;
         }
 
-        UIKeyframeSheet sheet = keyframeEditor.view.getGraph().getSheet(StringUtils.combinePaths(path, type));
+        String prefix = formPath + FormUtils.PATH_SEPARATOR;
 
-        if (sheet != null && sheet.channel.isEmpty())
-        {
-            type = "pose";
-        }
-
-        pickProperty(keyframeEditor, cursor, bone, StringUtils.combinePaths(path, type), false);
+        return sheet.id.startsWith(prefix) ? sheet : null;
     }
 
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, String key, boolean insert)
@@ -144,9 +158,7 @@ public class UIReplaysEditorUtils
         if (insert)
         {
             Keyframe keyframe = graph.addKeyframe(sheet, tick, null);
-
             graph.selectKeyframe(keyframe);
-
             return;
         }
 
@@ -165,7 +177,6 @@ public class UIReplaysEditorUtils
                     if (graphSheet.selection.getSelected().contains(closest))
                     {
                         select = false;
-
                         break;
                     }
                 }
@@ -174,13 +185,23 @@ public class UIReplaysEditorUtils
                 else graph.pickKeyframe(closest);
             }
 
-            if (keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory)
-            {
-                poseFactory.poseEditor.selectBone(bone);
-            }
+            /* Обновляем выбор кости в редакторе позы */
+            updatePoseEditorBoneSelection(keyframeEditor, bone, sheet);
 
             filmPanel.setCursor((int) closest.getTick());
         }
+    }
+
+    private static void updatePoseEditorBoneSelection(UIKeyframeEditor keyframeEditor, String bone, UIKeyframeSheet sheet)
+    {
+        /* Обновляем выбор кости в редакторе позы, если он доступен */
+        if (keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory)
+        {
+            poseFactory.poseEditor.selectBone(bone);
+        }
+        
+        /* Также обновляем выбор в основном редакторе ключевых кадров */
+        keyframeEditor.view.getGraph().pickKeyframe(keyframeEditor.view.getGraph().getSelected());
     }
 
     /* Converting Blockbench model keyframes to pose keyframes */
@@ -254,6 +275,11 @@ public class UIReplaysEditorUtils
 
     public static void offerAdjacent(UIContext context, Form form, String bone, Consumer<String> consumer)
     {
+        if (form == null)
+        {
+            return;
+        }
+
         if (!bone.isEmpty() && form instanceof ModelForm modelForm)
         {
             ModelInstance model = ModelFormRenderer.getModel(modelForm);
@@ -277,6 +303,11 @@ public class UIReplaysEditorUtils
 
     public static void offerHierarchy(UIContext context, Form form, String bone, Consumer<String> consumer)
     {
+        if (form == null)
+        {
+            return;
+        }
+
         if (!bone.isEmpty() && form instanceof ModelForm modelForm)
         {
             ModelInstance model = ModelFormRenderer.getModel(modelForm);
