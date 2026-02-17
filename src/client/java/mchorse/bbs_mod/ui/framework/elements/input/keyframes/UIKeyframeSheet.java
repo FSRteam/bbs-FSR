@@ -20,13 +20,19 @@ public class UIKeyframeSheet extends UIKeyframeElement
     public final KeyframeChannel channel;
     public final KeyframeSelection selection;
     public final BaseValueBasic property;
+    public final boolean isBoneTrack;
 
     public UIKeyframeSheet(int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)
     {
-        this(channel.getId(), IKey.constant(property != null ? FormUtils.getForm(property).getTrackName(channel.getId()) : channel.getId()), color, separator, channel, property);
+        this(channel.getId(), IKey.constant(property != null ? FormUtils.getForm(property).getTrackName(channel.getId()) : channel.getId()), color, separator, channel, property, false);
     }
 
     public UIKeyframeSheet(String id, IKey title, int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)
+    {
+        this(id, title, color, separator, channel, property, false);
+    }
+
+    public UIKeyframeSheet(String id, IKey title, int color, boolean separator, KeyframeChannel channel, BaseValueBasic property, boolean isBoneTrack)
     {
         super(title, color);
 
@@ -36,6 +42,7 @@ public class UIKeyframeSheet extends UIKeyframeElement
         this.channel = channel;
         this.selection = new KeyframeSelection(channel);
         this.property = property;
+        this.isBoneTrack = isBoneTrack;
     }
 
     public UIKeyframeSheet icon(Icon icon)

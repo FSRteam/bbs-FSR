@@ -446,7 +446,13 @@ public class UIReplaysEditor extends UIElement
 
         for (UIKeyframeSheet sheet : sheets)
         {
-            this.keys.add(StringUtils.fileName(sheet.id));
+            String name = StringUtils.fileName(sheet.id);
+            if (sheet.isBoneTrack)
+            {
+                continue;
+            }
+
+            this.keys.add(name);
         }
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
@@ -598,7 +604,7 @@ public class UIReplaysEditor extends UIElement
                     String title = path.isEmpty() ? bone : path + "/" + bone;
                     KeyframeChannel boneChannel = this.replay.properties.registerChannel(boneKey, KeyframeFactories.TRANSFORM);
                     ValueTransform transform = new ValueTransform(boneKey, new Transform());
-                    UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(title), 0xffac9c, false, boneChannel, transform);
+                    UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(title), 0xffac9c, false, boneChannel, transform, true);
 
                     sheets.add(boneSheet);
                 }
