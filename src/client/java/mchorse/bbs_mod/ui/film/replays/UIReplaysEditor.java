@@ -380,13 +380,12 @@ public class UIReplaysEditor extends UIElement
 
     public void updateChannelsList()
     {
-        UIKeyframes lastEditor = null;
+        UIKeyframes lastEditor = this.keyframeEditor != null ? this.keyframeEditor.view : null;
 
         if (this.keyframeEditor != null)
         {
             this.keyframeEditor.removeFromParent();
-
-            lastEditor = this.keyframeEditor.view;
+            this.keyframeEditor = null;
         }
 
         if (this.replay == null)
@@ -394,7 +393,6 @@ public class UIReplaysEditor extends UIElement
             return;
         }
 
-        /* Replay keyframes */
         List<UIKeyframeSheet> sheets = new ArrayList<>();
 
         if (this.category == ReplayCategory.PLAYER)
@@ -409,8 +407,8 @@ public class UIReplaysEditor extends UIElement
         }
 
         /* Form properties */
-        Set<Form> processedForms = new LinkedHashSet<>();
-        List<UIKeyframeSheet> boneSheets = new ArrayList<>();
+        Form lastForm = null;
+        List<UIKeyframeSheet> formSheets = new ArrayList<>();
 
         for (String key : FormUtils.collectPropertyPaths(this.replay.form.get()))
         {
@@ -421,41 +419,28 @@ public class UIReplaysEditor extends UIElement
             if (property != null && ((this.category == ReplayCategory.MODEL && !isPose) || (this.category == ReplayCategory.POSE && isPose)))
             {
                 BaseValueBasic formProperty = FormUtils.getProperty(this.replay.form.get(), key);
+                Form form = formProperty.getParent() instanceof Form ? (Form) formProperty.getParent() : null;
+
+                if (form != lastForm)
+                {
+                    if (lastForm != null)
+                    {
+                        this.flushForm(sheets, formSheets, lastForm);
+                    }
+
+                    lastForm = form;
+                }
+
                 UIKeyframeSheet sheet = new UIKeyframeSheet(getColor(key), false, property, formProperty);
 
-                sheets.add(sheet.icon(getIcon(key)));
-
-                if (this.category == ReplayCategory.POSE && formProperty != null && formProperty.getParent() instanceof ModelForm modelForm)
-                {
-                    if (processedForms.add(modelForm))
-                    {
-                        ModelInstance model = ModelFormRenderer.getModel(modelForm);
-
-                        if (model != null)
-                        {
-                            List<String> bones = new ArrayList<>(model.model.getAllGroupKeys());
-
-                            bones.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
-
-                            for (String bone : bones)
-                            {
-                                String path = FormUtils.getPath(modelForm);
-                                String boneKey = PerLimbService.toPoseBoneKey(path, bone);
-                                KeyframeChannel boneChannel = this.replay.properties.registerChannel(boneKey, KeyframeFactories.TRANSFORM);
-                                ValueTransform transform = new ValueTransform(boneKey, new Transform());
-                                UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(bone), 0xffac9c, false, boneChannel, transform);
-
-                                boneSheets.add(boneSheet);
-                            }
-                        }
-                    }
-                }
+                formSheets.add(sheet.icon(getIcon(key)));
             }
         }
 
-        sheets.addAll(boneSheets);
-
-
+        if (lastForm != null)
+        {
+            this.flushForm(sheets, formSheets, lastForm);
+        }
 
         this.keys.clear();
 
@@ -479,11 +464,11 @@ public class UIReplaysEditor extends UIElement
             return false;
         });
 
-        Object lastForm = null;
+        lastForm = null;
 
         for (UIKeyframeSheet sheet : sheets)
         {
-            Object form = sheet.property == null ? null : FormUtils.getForm(sheet.property);
+            Form form = sheet.property == null ? null : FormUtils.getForm(sheet.property);
 
             if (!Objects.equals(lastForm, form))
             {
@@ -588,6 +573,36 @@ public class UIReplaysEditor extends UIElement
         if (this.keyframeEditor != null && lastEditor == null)
         {
             this.keyframeEditor.view.resetView();
+        }
+    }
+
+    private void flushForm(List<UIKeyframeSheet> sheets, List<UIKeyframeSheet> formSheets, Form form)
+    {
+        sheets.addAll(formSheets);
+        formSheets.clear();
+
+        if (this.category == ReplayCategory.POSE && form instanceof ModelForm modelForm)
+        {
+            ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+            if (model != null)
+            {
+                List<String> bones = new ArrayList<>(model.model.getAllGroupKeys());
+
+                bones.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
+
+                for (String bone : bones)
+                {
+                    String path = FormUtils.getPath(modelForm);
+                    String boneKey = PerLimbService.toPoseBoneKey(path, bone);
+                    String title = path.isEmpty() ? bone : path + "/" + bone;
+                    KeyframeChannel boneChannel = this.replay.properties.registerChannel(boneKey, KeyframeFactories.TRANSFORM);
+                    ValueTransform transform = new ValueTransform(boneKey, new Transform());
+                    UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(title), 0xffac9c, false, boneChannel, transform);
+
+                    sheets.add(boneSheet);
+                }
+            }
         }
     }
 
