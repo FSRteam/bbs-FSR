@@ -48,6 +48,7 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.CollectionUtils;
@@ -431,13 +432,17 @@ public class UIReplaysEditor extends UIElement
 
                         if (model != null)
                         {
-                            for (String bone : model.model.getAllGroupKeys())
+                            List<String> bones = new ArrayList<>(model.model.getAllGroupKeys());
+
+                            bones.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
+
+                            for (String bone : bones)
                             {
                                 String path = FormUtils.getPath(modelForm);
                                 String boneKey = PerLimbService.toPoseBoneKey(path, bone);
                                 KeyframeChannel boneChannel = this.replay.properties.registerChannel(boneKey, KeyframeFactories.TRANSFORM);
                                 ValueTransform transform = new ValueTransform(boneKey, new Transform());
-                                UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(bone), 0xf5f5dc, false, boneChannel, transform);
+                                UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(bone), 0xffac9c, false, boneChannel, transform);
 
                                 boneSheets.add(boneSheet);
                             }
