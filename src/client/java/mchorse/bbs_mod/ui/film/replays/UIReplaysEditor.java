@@ -59,6 +59,7 @@ import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
@@ -609,7 +610,7 @@ public class UIReplaysEditor extends UIElement
                     String title = path.isEmpty() ? bone : path + "/" + bone;
                     KeyframeChannel boneChannel = this.replay.properties.registerChannel(boneKey, KeyframeFactories.TRANSFORM);
                     ValueTransform transform = new ValueTransform(boneKey, new Transform());
-                    UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(title), 0xffac9c, false, boneChannel, transform, true);
+                    UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(title), Colors.HSVtoRGB(Math.abs((bone.hashCode() % 360) / 360F), 0.7F, 0.7F).getRGBColor(), false, boneChannel, transform, true);
 
                     sheets.add(boneSheet);
                 }
