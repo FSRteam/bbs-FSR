@@ -36,8 +36,9 @@ import mchorse.bbs_mod.ui.film.replays.overlays.UIReplaysOverlayPanel;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -47,7 +48,6 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
-import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -90,8 +90,8 @@ public class UIReplaysEditor extends UIElement
 
     public UIReplaysOverlayPanel replays;
 
-    public UIElement tabs;
-    public Map<ReplayCategory, UIButton> tabButtons = new HashMap<>();
+    public UIElement iconBar;
+    public Map<ReplayCategory, UIIcon> tabButtons = new HashMap<>();
     private ReplayCategory category = ReplayCategory.PLAYER;
 
     /* Keyframes */
@@ -105,15 +105,17 @@ public class UIReplaysEditor extends UIElement
 
     public enum ReplayCategory
     {
-        PLAYER(L10n.lang("bbs.ui.film.replays.category.player"), L10n.lang("bbs.ui.film.replays.category.player.tooltip")),
-        MODEL(L10n.lang("bbs.ui.film.replays.category.model"), L10n.lang("bbs.ui.film.replays.category.model.tooltip")),
-        POSE(L10n.lang("bbs.ui.film.replays.category.pose"), L10n.lang("bbs.ui.film.replays.category.pose.tooltip"));
+        PLAYER(Icons.PLAYER, L10n.lang("bbs.ui.film.replays.category.player"), L10n.lang("bbs.ui.film.replays.category.player.tooltip")),
+        MODEL(Icons.BLOCK, L10n.lang("bbs.ui.film.replays.category.model"), L10n.lang("bbs.ui.film.replays.category.model.tooltip")),
+        POSE(Icons.POSE, L10n.lang("bbs.ui.film.replays.category.pose"), L10n.lang("bbs.ui.film.replays.category.pose.tooltip"));
 
+        public final Icon icon;
         public final IKey label;
         public final IKey tooltip;
 
-        private ReplayCategory(IKey label, IKey tooltip)
+        private ReplayCategory(Icon icon, IKey label, IKey tooltip)
         {
+            this.icon = icon;
             this.label = label;
             this.tooltip = tooltip;
         }
@@ -275,46 +277,45 @@ public class UIReplaysEditor extends UIElement
         this.filmPanel = filmPanel;
         this.replays = new UIReplaysOverlayPanel(filmPanel, (replay) -> this.setReplay(replay, false, true));
 
-        this.tabs = new UIElement();
-        this.tabs.relative(this).x(0).y(0).w(1F).h(20);
+        this.iconBar = new UIElement();
+        this.iconBar.relative(this).x(0).w(20).h(1F).column(0).stretch();
+
+        this.iconBar.add(new UIRenderable((context) ->
+        {
+            context.batcher.box(this.iconBar.area.x, this.iconBar.area.y, this.iconBar.area.ex(), this.iconBar.area.ey(), Colors.A50);
+            context.batcher.gradientHBox(this.iconBar.area.ex(), this.iconBar.area.y, this.iconBar.area.ex() + 6, this.iconBar.area.ey(), 0x29000000, 0);
+
+            UIIcon activeIcon = this.tabButtons.get(this.category);
+
+            if (activeIcon != null)
+            {
+                int color = BBSSettings.primaryColor.get();
+                Area area = activeIcon.area;
+
+                context.batcher.box(area.x, area.y, area.x + 2, area.ey(), Colors.A100 | color);
+                context.batcher.gradientHBox(area.x + 2, area.y, area.ex(), area.ey(), Colors.A75 | color, color);
+            }
+        }));
 
         for (ReplayCategory category : ReplayCategory.values())
         {
-            UIButton button = new UIButton(category.label, (b) -> this.setCategory(category));
+            UIIcon button = new UIIcon(category.icon, (b) -> this.setCategory(category));
 
-            button.tooltip(category.tooltip);
-            this.tabs.add(button);
+            button.tooltip(category.tooltip, Direction.RIGHT);
+            this.iconBar.add(button);
             this.tabButtons.put(category, button);
         }
 
         this.setCategory(ReplayCategory.PLAYER);
 
-        this.tabs.row(0);
-
-        this.add(this.tabs);
+        this.add(this.iconBar);
         this.markContainer();
     }
 
     private void setCategory(ReplayCategory c)
     {
         this.category = c;
-
-        for (Map.Entry<ReplayCategory, UIButton> entry : this.tabButtons.entrySet())
-        {
-            this.updateTab(entry.getValue(), entry.getKey() == c);
-        }
-
         this.updateChannelsList();
-    }
-
-    private void updateTab(UIButton button, boolean selected)
-    {
-        button.custom = !selected;
-
-        if (!selected)
-        {
-            button.customColor = Colors.A25;
-        }
     }
 
     public void setFilm(Film film)
@@ -495,7 +496,7 @@ public class UIReplaysEditor extends UIElement
         if (!sheets.isEmpty())
         {
             this.keyframeEditor = new UIKeyframeEditor((consumer) -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute()).target(this.filmPanel.editArea);
-            this.keyframeEditor.relative(this).y(20).w(1F).h(1F, -20);
+            this.keyframeEditor.relative(this).x(20).w(1F, -20).h(1F);
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
 
             /* Reset */
