@@ -61,7 +61,17 @@ public class FormProperties extends ValueGroup
             return channel;
         }
 
-        return property != null ? this.create(property) : null;
+        if (property != null)
+        {
+            return this.create(property);
+        }
+
+        if (PerLimbService.isPoseBoneChannel(key))
+        {
+            return this.registerChannel(key, KeyframeFactories.POSE_TRANSFORM);
+        }
+
+        return null;
     }
 
     public KeyframeChannel create(BaseValue property)
@@ -69,7 +79,14 @@ public class FormProperties extends ValueGroup
         if (property.isVisible() && property instanceof BaseKeyframeFactoryValue<?> keyframeFactoryValue)
         {
             String key = FormUtils.getPropertyPath(property);
-            KeyframeChannel channel = new KeyframeChannel(key, keyframeFactoryValue.getFactory());
+            IKeyframeFactory factory = keyframeFactoryValue.getFactory();
+
+            if (factory == KeyframeFactories.TRANSFORM && PerLimbService.isPoseBoneChannel(key))
+            {
+                factory = KeyframeFactories.POSE_TRANSFORM;
+            }
+
+            KeyframeChannel channel = new KeyframeChannel(key, factory);
 
             this.properties.put(key, channel);
             this.add(channel);
@@ -188,7 +205,7 @@ public class FormProperties extends ValueGroup
                         modelForm.pose.get().transforms.put(bone, transform);
                     }
 
-                    Transform interpolated = (Transform) this.interpolateValue(value, new Transform(), segment, blend);
+                    Transform interpolated = (Transform) this.interpolateValue(value, new PoseTransform(), segment, blend);
 
                     transform.add(interpolated);
                 }
@@ -319,6 +336,32 @@ public class FormProperties extends ValueGroup
                 }
 
                 property = newProperty;
+            }
+
+            /* Convert transform to pose_transform for pose bone channels */
+            if (property.getFactory() == KeyframeFactories.TRANSFORM && PerLimbService.isPoseBoneChannel(key))
+            {
+                KeyframeChannel newChannel = new KeyframeChannel(key, KeyframeFactories.POSE_TRANSFORM);
+
+                for (Object o : property.getKeyframes())
+                {
+                    Keyframe kf = (Keyframe) o;
+                    Object value = kf.getValue();
+                    PoseTransform newValue = new PoseTransform();
+
+                    if (value instanceof Transform)
+                    {
+                        newValue.copy((Transform) value);
+                    }
+
+                    Keyframe newKf = new Keyframe(kf.getId(), KeyframeFactories.POSE_TRANSFORM, kf.getTick(), newValue);
+
+                    newKf.getInterpolation().copy(kf.getInterpolation());
+                    newChannel.add(newKf);
+                }
+
+                newChannel.sort();
+                property = newChannel;
             }
 
             if (property.getFactory() != null)
