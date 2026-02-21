@@ -33,15 +33,18 @@ import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.film.replays.UIRecordOverlayPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
@@ -114,6 +117,7 @@ public class UIFilmController extends UIElement
     private IEntity hoveredEntity;
     private StencilFormFramebuffer stencil = new StencilFormFramebuffer();
     private StencilMap stencilMap = new StencilMap();
+    private boolean gizmoActive;
 
     public final OrbitFilmCameraController orbit = new OrbitFilmCameraController(this);
     private int pov;
@@ -542,6 +546,18 @@ public class UIFilmController extends UIElement
             return true;
         }
 
+        if (this.stencil.hasPicked())
+        {
+            int index = this.stencil.getIndex();
+            UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.panel.replayEditor.keyframeEditor);
+
+            if (Gizmo.INSTANCE.start(index, context.mouseX, context.mouseY, transform))
+            {
+                this.gizmoActive = true;
+                return true;
+            }
+        }
+
         if (context.mouseButton == 0)
         {
             /* Alt pick the replay */
@@ -574,6 +590,12 @@ public class UIFilmController extends UIElement
         if (this.canControl())
         {
             return true;
+        }
+
+        if (this.gizmoActive)
+        {
+            Gizmo.INSTANCE.stop();
+            this.gizmoActive = false;
         }
 
         this.orbit.stop();
@@ -1016,7 +1038,7 @@ public class UIFilmController extends UIElement
 
     private void renderPickingPreview(UIContext context, Area area)
     {
-        if (this.panel.isFlying())
+        if (this.panel.isFlying() || this.worldRenderContext == null)
         {
             return;
         }
