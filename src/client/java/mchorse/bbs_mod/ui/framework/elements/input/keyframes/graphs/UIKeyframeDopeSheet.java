@@ -523,6 +523,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int hx = this.keyframes.getDuration() / mult;
         int ht = (int) this.keyframes.fromGraphX(area.x);
 
+        context.batcher.clip(area, context);
+
         for (int j = Math.max(ht / mult, 0); j <= hx; j++)
         {
             int x = this.keyframes.toGraphX(j * mult);
@@ -537,6 +539,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             context.batcher.box(x, area.y, x + 1, area.ey(), Colors.setA(Colors.WHITE, 0.25F));
             context.batcher.text(label, x + 4, area.y + 4);
         }
+
+        context.batcher.unclip(context);
 
         /* Render where the keyframe will be duplicated or added */
         if (!area.isInside(context))
@@ -689,8 +693,9 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
         Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
 
+        context.batcher.clip(area, context);
         this.renderElements(context, builder, matrix, area, this.elements, 0, this.getDopeSheetY());
-        this.renderLabels(context, builder, matrix, this.elements, 0, this.getDopeSheetY());
+        context.batcher.unclip(context);
     }
 
     private void renderLabels(UIContext context, BufferBuilder builder, Matrix4f matrix, List<UIKeyframeElement> elements, int offset, int y)
@@ -700,6 +705,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         /* Render background */
         context.batcher.box(area.x + w - 1, area.y, area.x + w, area.ey(), Colors.A12);
+
+        context.batcher.clip(area.x, area.y, area.x + w, area.ey(), context);
 
         for (UIKeyframeElement element : elements)
         {
@@ -721,6 +728,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 y = this.getElementHeight(group) - (int) this.trackHeight + y;
             }
         }
+
+        context.batcher.unclip(context);
     }
 
     private void renderGroupLabel(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeGroup group, int offset, int y, int w)
@@ -944,6 +953,14 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public void postRender(UIContext context)
     {
+        if (!this.elements.isEmpty())
+        {
+            BufferBuilder builder = Tessellator.getInstance().getBuffer();
+            Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+
+            this.renderLabels(context, builder, matrix, this.elements, 0, this.getDopeSheetY());
+        }
+
         this.dopeSheet.renderScrollbar(context.batcher);
     }
 
