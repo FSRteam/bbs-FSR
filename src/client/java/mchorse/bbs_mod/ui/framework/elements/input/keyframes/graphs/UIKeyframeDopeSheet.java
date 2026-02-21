@@ -764,10 +764,12 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int trackColor = BBSSettings.darkMode.get() ? Colors.DARK_GRAY : sheet.color;
         int cc = Colors.setA(trackColor, hover ? 1F : 0.45F);
 
+        int trackWidth = BBSSettings.editorTrackWidth.get();
+
         /* Render track bars (horizontal lines) */
         builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
 
-        context.batcher.fillRect(builder, matrix, area.x, my - 1, area.w, 2, cc, cc, cc, cc);
+        context.batcher.fillRect(builder, matrix, area.x, my - trackWidth / 2, area.w, trackWidth, cc, cc, cc, cc);
 
         if (sheet.separator)
         {
@@ -788,14 +790,16 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
             if (previous.getFactory().compare(previous.getValue(), frame.getValue()))
             {
-                context.batcher.fillRect(builder, matrix, xx, my - 2, this.keyframes.toGraphX(frame.getTick()) - xx, 4, c, c, c, c);
+                int w = trackWidth + 2;
+
+                context.batcher.fillRect(builder, matrix, xx, my - w / 2, this.keyframes.toGraphX(frame.getTick()) - xx, w, c, c, c, c);
             }
 
             if (Math.abs(xxx - xx) < 5)
             {
                 c = Colors.YELLOW | Colors.A50;
 
-                context.batcher.fillRect(builder, matrix, xx - 2, my + 5, xxx - xx + 4, 2, c, c, c, c);
+                context.batcher.fillRect(builder, matrix, xx - 2, my + trackWidth / 2 + 4, xxx - xx + 4, 2, c, c, c, c);
             }
         }
 
