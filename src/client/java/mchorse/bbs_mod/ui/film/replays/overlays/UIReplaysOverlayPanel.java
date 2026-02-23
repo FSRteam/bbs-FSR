@@ -2,6 +2,9 @@ package mchorse.bbs_mod.ui.film.replays.overlays;
 
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplayList;
@@ -66,6 +69,21 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
         this.removeReplay.tooltip(UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE, Direction.LEFT);
 
         this.icons.add(this.addReplay, this.dupeReplay, this.removeReplay);
+
+        this.keys().register(Keys.DELETE, () -> this.replays.removeReplay())
+            .label(UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE)
+            .active(() -> this.replays.isSelected() || !this.replays.getCurrent().isEmpty());
+        this.keys().register(Keys.COPY, this.replays::copyReplay)
+            .label(UIKeys.SCENE_REPLAYS_CONTEXT_COPY)
+            .active(() -> this.replays.isSelected() || !this.replays.getCurrent().isEmpty());
+        this.keys().register(Keys.PASTE, () ->
+        {
+            MapType data = Window.getClipboardMap("_CopyReplay");
+            if (data != null) this.replays.pasteReplay(data);
+        }).label(UIKeys.SCENE_REPLAYS_CONTEXT_PASTE).active(() -> Window.getClipboardMap("_CopyReplay") != null);
+        this.keys().register(Keys.REPLAYS_DUPE, () -> this.replays.dupeReplay())
+            .label(UIKeys.SCENE_REPLAYS_CONTEXT_DUPE)
+            .active(() -> this.replays.isSelected() || !this.replays.getCurrent().isEmpty());
 
         this.pickEdit = new UINestedEdit((editing) ->
         {

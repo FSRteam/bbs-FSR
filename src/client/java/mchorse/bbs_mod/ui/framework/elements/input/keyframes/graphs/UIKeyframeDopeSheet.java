@@ -672,7 +672,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int x = this.keyframes.toGraphX(tick);
         int y = this.getDopeSheetY(sheet) + (int) this.trackHeight / 2;
         float a = (float) Math.sin(context.getTickTransition() / 2D) * 0.1F + 0.5F;
-        int r = 2;
+        int r = 4;
 
         context.batcher.box(x - r, y - r, x + r, y + r, Colors.setA(color, a));
     }
