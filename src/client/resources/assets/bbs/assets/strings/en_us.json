@@ -475,6 +475,7 @@
 	"bbs.ui.film.open_camera_editor": "Open camera editor",
 	"bbs.ui.film.open_history": "Open undo/redo history...",
 	"bbs.ui.film.open_replay_editor": "Open replay editor",
+	"bbs.ui.film.options": "Film options",
 	"bbs.ui.film.swap_small_panels": "Swap small panels",
 	"bbs.ui.film.recording": "Recording %s",
 	"bbs.ui.film.render_audio": "Render audio (from audio clips)",

@@ -56,6 +56,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
@@ -106,7 +107,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIClipsPanel actionEditor;
 
     /* Icon bar buttons */
-    public UIIcon openHistory;
+    public UIIcon openFilmMenu;
     public UIIcon toggleHorizontal;
     public UIIcon openCameraEditor;
     public UIIcon openReplayEditor;
@@ -242,11 +243,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.actionEditor.full(this.main).setVisible(false);
 
         /* Icon bar buttons */
-        this.openHistory = new UIIcon(Icons.LIST, (b) ->
+        this.openFilmMenu = new UIIcon(Icons.GEAR, (b) ->
         {
-            UIOverlay.addOverlay(this.getContext(), new UIUndoHistoryOverlay(this), 200, 0.6F);
+            this.getContext().replaceContextMenu(this::fillFilmContextMenu);
         });
-        this.openHistory.tooltip(UIKeys.FILM_OPEN_HISTORY, Direction.LEFT);
+        this.openFilmMenu.tooltip(UIKeys.FILM_OPTIONS, Direction.LEFT);
         this.toggleHorizontal = new UIIcon(() -> BBSSettings.editorLayoutSettings.isHorizontal() ? Icons.EXCHANGE : Icons.CONVERT, (b) ->
         {
             BBSSettings.editorLayoutSettings.setHorizontal(!BBSSettings.editorLayoutSettings.isHorizontal());
@@ -262,7 +263,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.openActionEditor.tooltip(UIKeys.FILM_OPEN_ACTION_EDITOR, Direction.LEFT);
 
         /* Setup elements */
-        this.iconBar.add(this.openHistory, this.toggleHorizontal.marginTop(9), this.openCameraEditor.marginTop(9), this.openReplayEditor, this.openActionEditor);
+        this.iconBar.add(this.openFilmMenu, this.toggleHorizontal.marginTop(9), this.openCameraEditor.marginTop(9), this.openReplayEditor, this.openActionEditor);
 
         this.editor.prepend(new UIRenderable((context) ->
         {
@@ -301,85 +302,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.showPanel(MathUtils.cycler(this.getPanelIndex() + (Window.isShiftPressed() ? -1 : 1), this.panels));
             UIUtils.playClick();
         }).category(editor);
-
-        this.openOverlay.context((menu) ->
-        {
-            if (this.data == null)
-            {
-                return;
-            }
-
-            menu.action(Icons.ARROW_RIGHT, UIKeys.FILM_MOVE_TITLE, () ->
-            {
-                UIFilmMoveOverlayPanel panel = new UIFilmMoveOverlayPanel((vector) ->
-                {
-                    int topLayer = this.data.camera.getTopLayer() + 1;
-                    int duration = this.data.camera.calculateDuration();
-                    double dx = vector.x;
-                    double dy = vector.y;
-                    double dz = vector.z;
-
-                    BaseValue.edit(this.data, (__) ->
-                    {
-                        TranslateClip clip = new TranslateClip();
-
-                        clip.layer.set(topLayer);
-                        clip.duration.set(duration);
-                        clip.translate.get().set(dx, dy, dz);
-                        __.camera.addClip(clip);
-
-                        for (Replay replay : __.replays.getList())
-                        {
-                            for (Keyframe<Double> keyframe : replay.keyframes.x.getKeyframes()) keyframe.setValue(keyframe.getValue() + dx);
-                            for (Keyframe<Double> keyframe : replay.keyframes.y.getKeyframes()) keyframe.setValue(keyframe.getValue() + dy);
-                            for (Keyframe<Double> keyframe : replay.keyframes.z.getKeyframes()) keyframe.setValue(keyframe.getValue() + dz);
-
-                            replay.actions.shift(dx, dy, dz);
-                        }
-                    });
-                });
-
-                UIOverlay.addOverlay(this.getContext(), panel, 200, 0.9F);
-            });
-
-            menu.action(Icons.TIME, UIKeys.FILM_INSERT_SPACE_TITLE, () ->
-            {
-                UINumberOverlayPanel panel = new UINumberOverlayPanel(UIKeys.FILM_INSERT_SPACE_TITLE, UIKeys.FILM_INSERT_SPACE_DESCRIPTION, (d) ->
-                {
-                    if (d.intValue() <= 0)
-                    {
-                        return;
-                    }
-
-                    for (Replay replay : this.data.replays.getList())
-                    {
-                        for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
-                        {
-                            channel.insertSpace(this.getCursor(), d.intValue());
-                        }
-
-                        for (KeyframeChannel channel : replay.properties.properties.values())
-                        {
-                            channel.insertSpace(this.getCursor(), d.intValue());
-                        }
-                    }
-                });
-
-                panel.value.limit(1).integer().setValue(1D);
-
-                UIOverlay.addOverlay(this.getContext(), panel);
-            });
-
-            menu.action(Icons.GEAR, UIKeys.FILM_PLAYER_SETTINGS, () ->
-            {
-                UIOverlay.addOverlay(this.getContext(), new UIFilmPlayerSettingsOverlayPanel(this.getData()), 280, 0.8F);
-            });
-
-            menu.action(Icons.HELP, L10n.lang("bbs.ui.film.details.button"), () ->
-            {
-                UIOverlay.addOverlay(this.getContext(), new UIFilmDetailsOverlayPanel(this.getData()), 300, 260);
-            });
-        });
 
         this.fill(null);
 
@@ -472,6 +394,90 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.resize();
             this.resize();
         }
+    }
+
+    private void fillFilmContextMenu(ContextMenuManager menu)
+    {
+        if (this.data == null)
+        {
+            return;
+        }
+
+        menu.action(Icons.LIST, UIKeys.FILM_OPEN_HISTORY, () ->
+        {
+            UIOverlay.addOverlay(this.getContext(), new UIUndoHistoryOverlay(this), 200, 0.6F);
+        });
+
+        menu.action(Icons.ARROW_RIGHT, UIKeys.FILM_MOVE_TITLE, () ->
+        {
+            UIFilmMoveOverlayPanel panel = new UIFilmMoveOverlayPanel((vector) ->
+            {
+                int topLayer = this.data.camera.getTopLayer() + 1;
+                int duration = this.data.camera.calculateDuration();
+                double dx = vector.x;
+                double dy = vector.y;
+                double dz = vector.z;
+
+                BaseValue.edit(this.data, (__) ->
+                {
+                    TranslateClip clip = new TranslateClip();
+
+                    clip.layer.set(topLayer);
+                    clip.duration.set(duration);
+                    clip.translate.get().set(dx, dy, dz);
+                    __.camera.addClip(clip);
+
+                    for (Replay replay : __.replays.getList())
+                    {
+                        for (Keyframe<Double> keyframe : replay.keyframes.x.getKeyframes()) keyframe.setValue(keyframe.getValue() + dx);
+                        for (Keyframe<Double> keyframe : replay.keyframes.y.getKeyframes()) keyframe.setValue(keyframe.getValue() + dy);
+                        for (Keyframe<Double> keyframe : replay.keyframes.z.getKeyframes()) keyframe.setValue(keyframe.getValue() + dz);
+
+                        replay.actions.shift(dx, dy, dz);
+                    }
+                });
+            });
+
+            UIOverlay.addOverlay(this.getContext(), panel, 200, 0.9F);
+        });
+
+        menu.action(Icons.TIME, UIKeys.FILM_INSERT_SPACE_TITLE, () ->
+        {
+            UINumberOverlayPanel panel = new UINumberOverlayPanel(UIKeys.FILM_INSERT_SPACE_TITLE, UIKeys.FILM_INSERT_SPACE_DESCRIPTION, (d) ->
+            {
+                if (d.intValue() <= 0)
+                {
+                    return;
+                }
+
+                for (Replay replay : this.data.replays.getList())
+                {
+                    for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
+                    {
+                        channel.insertSpace(this.getCursor(), d.intValue());
+                    }
+
+                    for (KeyframeChannel channel : replay.properties.properties.values())
+                    {
+                        channel.insertSpace(this.getCursor(), d.intValue());
+                    }
+                }
+            });
+
+            panel.value.limit(1).integer().setValue(1D);
+
+            UIOverlay.addOverlay(this.getContext(), panel);
+        });
+
+        menu.action(Icons.GEAR, UIKeys.FILM_PLAYER_SETTINGS, () ->
+        {
+            UIOverlay.addOverlay(this.getContext(), new UIFilmPlayerSettingsOverlayPanel(this.getData()), 280, 0.8F);
+        });
+
+        menu.action(Icons.HELP, L10n.lang("bbs.ui.film.details.button"), () ->
+        {
+            UIOverlay.addOverlay(this.getContext(), new UIFilmDetailsOverlayPanel(this.getData()), 300, 260);
+        });
     }
 
     @Override
@@ -888,7 +894,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.preview.replays.setEnabled(data != null);
-        this.openHistory.setEnabled(data != null);
+        this.openFilmMenu.setEnabled(data != null);
         this.toggleHorizontal.setEnabled(data != null);
         this.openCameraEditor.setEnabled(data != null);
         this.openReplayEditor.setEnabled(data != null);
@@ -1185,7 +1191,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private void renderDividers(UIContext context)
     {
-        Area a1 = this.openHistory.area;
+        Area a1 = this.openFilmMenu.area;
         Area a2 = this.toggleHorizontal.area;
 
         context.batcher.box(a1.x + 3, a1.ey() + 4, a1.ex() - 3, a1.ey() + 5, 0x22ffffff);
