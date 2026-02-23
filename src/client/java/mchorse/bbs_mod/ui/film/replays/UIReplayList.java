@@ -558,7 +558,7 @@ public class UIReplayList extends UIList<Replay>
         palette.updatable();
     }
 
-    private void addReplay()
+    public void addReplay()
     {
         World world = MinecraftClient.getInstance().world;
         Camera camera = this.panel.getCamera();
@@ -728,7 +728,7 @@ public class UIReplayList extends UIList<Replay>
         this.panel.replayEditor.updateChannelsList();
     }
 
-    private void dupeReplay()
+    public void dupeReplay()
     {
         if (this.isDeselected())
         {
@@ -755,7 +755,7 @@ public class UIReplayList extends UIList<Replay>
         }
     }
 
-    private void removeReplay()
+    public void removeReplay()
     {
         if (this.isDeselected())
         {
