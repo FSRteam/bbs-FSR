@@ -101,7 +101,8 @@ public class BBSSettings
 
     public static ValueBoolean shaderCurvesEnabled;
 
-    public static ValueBoolean audioWaveformVisible;
+    public static ValueBoolean audioWaveformVisibleInPreview;
+    public static ValueBoolean audioWaveformVisibleInKeyframes;
     public static ValueInt audioWaveformDensity;
     public static ValueFloat audioWaveformWidth;
     public static ValueInt audioWaveformHeight;
@@ -252,7 +253,8 @@ public class BBSSettings
         shaderCurvesEnabled = builder.getBoolean("enabled", true);
 
         builder.category("audio");
-        audioWaveformVisible = builder.getBoolean("waveform_visible", true);
+        audioWaveformVisibleInPreview = builder.getBoolean("waveform_visible_preview", true);
+        audioWaveformVisibleInKeyframes = builder.getBoolean("waveform_visible_keyframes", true);
         audioWaveformDensity = builder.getInt("waveform_density", 20, 10, 100);
         audioWaveformWidth = builder.getFloat("waveform_width", 0.8F, 0F, 1F);
         audioWaveformHeight = builder.getInt("waveform_height", 24, 10, 40);

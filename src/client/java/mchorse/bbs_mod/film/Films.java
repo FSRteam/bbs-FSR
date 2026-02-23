@@ -298,24 +298,27 @@ public class Films
             batcher2D.icon(Icons.SPHERE, Colors.RED | Colors.A100, x, y);
             batcher2D.textShadow(label, x + 18, y + 4);
 
-            /* Render audio waveform */
-            List<AudioClip> audioClips = new ArrayList<>();
-
-            for (Clip clip : recorder.film.camera.get())
+            /* Render audio waveform (uses preview visibility setting) */
+            if (BBSSettings.audioWaveformVisibleInPreview.get())
             {
-                if (clip instanceof AudioClip)
+                List<AudioClip> audioClips = new ArrayList<>();
+
+                for (Clip clip : recorder.film.camera.get())
                 {
-                    audioClips.add((AudioClip) clip);
+                    if (clip instanceof AudioClip)
+                    {
+                        audioClips.add((AudioClip) clip);
+                    }
                 }
+
+                int sw = MinecraftClient.getInstance().getWindow().getScaledWidth();
+                int sh = MinecraftClient.getInstance().getWindow().getScaledHeight();
+                w = (int) (sw * BBSSettings.audioWaveformWidth.get());
+                x = sw / 2 - w / 2;
+                y = sh / 2 + 100;
+
+                AudioRenderer.renderAll(batcher2D, audioClips, recorder.getTick() + tickDelta, x, y, w, BBSSettings.audioWaveformHeight.get(), sw, sh);
             }
-
-            int sw = MinecraftClient.getInstance().getWindow().getScaledWidth();
-            int sh = MinecraftClient.getInstance().getWindow().getScaledHeight();
-            w = (int) (sw * BBSSettings.audioWaveformWidth.get());
-            x = sw / 2 - w / 2;
-            y = sh / 2 + 100;
-
-            AudioRenderer.renderAll(batcher2D, audioClips, recorder.getTick() + tickDelta, x, y, w, BBSSettings.audioWaveformHeight.get(), sw, sh);
         }
     }
 

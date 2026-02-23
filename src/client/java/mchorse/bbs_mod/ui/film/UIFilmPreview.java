@@ -373,7 +373,7 @@ public class UIFilmPreview extends UIElement
 
         this.panel.getController().renderHUD(context, area);
 
-        if (this.panel.replayEditor.isVisible())
+        if (this.panel.replayEditor.isVisible() && BBSSettings.audioWaveformVisibleInPreview.get())
         {
             RunnerCameraController runner = this.panel.getRunner();
             int w = (int) (area.w * BBSSettings.audioWaveformWidth.get());
