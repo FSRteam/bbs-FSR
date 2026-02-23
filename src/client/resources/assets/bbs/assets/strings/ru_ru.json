@@ -474,6 +474,7 @@
 	"bbs.ui.film.open_camera_editor": "Открыть редактор камеры",
 	"bbs.ui.film.open_history": "Открыть историю изменений...",
 	"bbs.ui.film.open_replay_editor": "Открыть редактор записей",
+	"bbs.ui.film.swap_small_panels": "Поменять местами два окна",
 	"bbs.ui.film.recording": "Запись %s",
 	"bbs.ui.film.render_audio": "Отрендерить аудио (из аудио клипов)",
 	"bbs.ui.film.render_audio.error": "Аудио клипы не смогли быть отрендерены! Откройте latest.log чтобы узнать больше...",

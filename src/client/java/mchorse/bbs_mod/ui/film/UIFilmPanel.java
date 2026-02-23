@@ -94,6 +94,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIElement main;
     public UIElement editArea;
     public UIDraggable draggableMain;
+    public UIIcon swapSmallPanels;
     public UIFilmRecorder recorder;
     public UIFilmPreview preview;
 
@@ -171,43 +172,60 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.draggableMain.reference(() ->
         {
+            UIElement rightSmall = this.getRightSmallPanel();
             return BBSSettings.editorLayoutSettings.isHorizontal()
-                ? new Vector2i(this.editArea.area.x, this.editArea.area.ey())
-                : new Vector2i(this.editArea.area.x, this.editArea.area.y);
+                ? new Vector2i(rightSmall.area.x, rightSmall.area.ey())
+                : new Vector2i(rightSmall.area.x, rightSmall.area.y);
         });
         this.draggableMain.rendering((context) ->
         {
+            UIElement rightSmall = this.getRightSmallPanel();
             int size = 5;
 
             if (BBSSettings.editorLayoutSettings.isHorizontal())
             {
-                int x = this.editArea.area.x + 3;
-                int y = this.editArea.area.ey() - 3;
+                int x = rightSmall.area.x + 3;
+                int y = rightSmall.area.ey() - 3;
 
                 context.batcher.box(x, y - size, x + 1, y, Colors.WHITE);
                 context.batcher.box(x, y - 1, x + size, y, Colors.WHITE);
 
-                x = this.editArea.area.x - 3;
-                y = this.editArea.area.ey() - 3;
+                x = rightSmall.area.x - 3;
+                y = rightSmall.area.ey() - 3;
 
                 context.batcher.box(x - 1, y - size, x, y, Colors.WHITE);
                 context.batcher.box(x - size, y - 1, x, y, Colors.WHITE);
             }
             else
             {
-                int x = this.editArea.area.x + 3;
-                int y = this.editArea.area.y - 3;
+                int x = rightSmall.area.x + 3;
+                int y = rightSmall.area.y - 3;
 
                 context.batcher.box(x, y - size, x + 1, y, Colors.WHITE);
                 context.batcher.box(x, y - 1, x + size, y, Colors.WHITE);
 
-                x = this.editArea.area.x + 3;
-                y = this.editArea.area.y + 3;
+                x = rightSmall.area.x + 3;
+                y = rightSmall.area.y + 3;
 
                 context.batcher.box(x, y, x + 1, y + size, Colors.WHITE);
                 context.batcher.box(x, y, x + size, y + 1, Colors.WHITE);
             }
         });
+
+        this.swapSmallPanels = new UIIcon(Icons.EXCHANGE, (b) ->
+        {
+            ValueEditorLayout layout = BBSSettings.editorLayoutSettings;
+            layout.setSmallPanelsSwapped(!layout.isSmallPanelsSwapped());
+            if (layout.isHorizontal())
+                layout.setEditorSizeH(1F - layout.getEditorSizeH());
+            else
+                layout.setEditorSizeV(1F - layout.getEditorSizeV());
+            this.setupEditorFlex(true);
+            UIUtils.playClick();
+        });
+        this.swapSmallPanels.tooltip(UIKeys.FILM_SWAP_SMALL_PANELS, Direction.LEFT);
+        this.swapSmallPanels.setVisible(false);
+        this.draggableMain.add(this.swapSmallPanels);
 
         /* Editors */
         this.cameraEditor = new UIClipsPanel(this, BBSMod.getFactoryCameraClips()).target(this.editArea);
@@ -246,6 +264,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         /* Setup elements */
         this.iconBar.add(this.openHistory, this.toggleHorizontal.marginTop(9), this.openCameraEditor.marginTop(9), this.openReplayEditor, this.openActionEditor);
 
+        this.editor.prepend(new UIRenderable((context) ->
+        {
+            this.swapSmallPanels.setVisible(this.draggableMain.area.isInside(context));
+        }));
         this.editor.add(this.main, new UIRenderable(this::renderIcons));
         this.main.add(this.cameraEditor, this.replayEditor, this.actionEditor, this.editArea, this.preview, this.draggableMain);
         this.add(this.controller, new UIRenderable(this::renderDividers));
@@ -398,6 +420,18 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.add(element);
     }
 
+    /** Left of the two small panels (preview and editArea). */
+    public UIElement getLeftSmallPanel()
+    {
+        return BBSSettings.editorLayoutSettings.isSmallPanelsSwapped() ? this.editArea : this.preview;
+    }
+
+    /** Right of the two small panels (preview and editArea). */
+    public UIElement getRightSmallPanel()
+    {
+        return BBSSettings.editorLayoutSettings.isSmallPanelsSwapped() ? this.preview : this.editArea;
+    }
+
     private void setupEditorFlex(boolean resize)
     {
         ValueEditorLayout layout = BBSSettings.editorLayoutSettings;
@@ -407,25 +441,31 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         layout.setMainSizeV(MathUtils.clamp(layout.getMainSizeV(), 0.05F, 0.95F));
         layout.setEditorSizeV(MathUtils.clamp(layout.getEditorSizeV(), 0.05F, 0.95F));
 
+        UIElement leftSmall = this.getLeftSmallPanel();
+        UIElement rightSmall = this.getRightSmallPanel();
+
         this.main.resetFlex();
         this.editArea.resetFlex();
         this.preview.resetFlex();
         this.draggableMain.resetFlex();
+        this.swapSmallPanels.resetFlex();
 
         if (layout.isHorizontal())
         {
             this.main.relative(this.editor).y(1F - layout.getMainSizeH()).w(1F).hTo(this.editor.area, 1F);
-            this.editArea.relative(this.editor).x(1F - layout.getEditorSizeH()).wTo(this.editor.area, 1F).hTo(this.main.area, 0F);
-            this.preview.relative(this.editor).w(1F - layout.getEditorSizeH()).hTo(this.main.area, 0F);
-            this.draggableMain.hoverOnly().relative(this.editArea).x(-6).y(0).w(12).h(1F);
+            leftSmall.relative(this.editor).w(1F - layout.getEditorSizeH()).hTo(this.main.area, 0F);
+            rightSmall.relative(this.editor).x(1F - layout.getEditorSizeH()).wTo(this.editor.area, 1F).hTo(this.main.area, 0F);
+            this.draggableMain.hoverOnly().relative(rightSmall).x(-6).y(0).w(12).h(1F);
         }
         else
         {
             this.main.relative(this.editor).w(layout.getMainSizeV()).h(1F);
-            this.editArea.relative(this.main).x(1F).y(layout.getEditorSizeV()).wTo(this.editor.area, 1F).hTo(this.editor.area, 1F);
-            this.preview.relative(this.main).x(1F).wTo(this.editor.area, 1F).hTo(this.editArea.area, 0F);
-            this.draggableMain.hoverOnly().relative(this.main).x(1F).w(12).h(1F);
+            rightSmall.relative(this.main).x(1F).y(layout.getEditorSizeV()).wTo(this.editor.area, 1F).hTo(this.editor.area, 1F);
+            leftSmall.relative(this.main).x(1F).wTo(this.editor.area, 1F).hTo(rightSmall.area, 0F);
+            this.draggableMain.hoverOnly().relative(rightSmall).x(0).y(-6).w(1F).h(12);
         }
+
+        this.swapSmallPanels.relative(this.draggableMain).x(0.5F).y(0.5F).wh(16, 16).anchor(0.5F, 0.5F);
 
         if (resize)
         {

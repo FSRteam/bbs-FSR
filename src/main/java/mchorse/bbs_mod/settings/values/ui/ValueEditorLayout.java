@@ -14,6 +14,7 @@ public class ValueEditorLayout extends BaseValue
     private float editorSizeV = 0.5F;
     private float stateEditorSizeH = 0.7F;
     private float stateEditorSizeV = 0.25F;
+    private boolean smallPanelsSwapped;
 
     public ValueEditorLayout(String id)
     {
@@ -90,6 +91,16 @@ public class ValueEditorLayout extends BaseValue
         return MathUtils.clamp(this.stateEditorSizeV, 0.1F, 0.9F);
     }
 
+    public boolean isSmallPanelsSwapped()
+    {
+        return this.smallPanelsSwapped;
+    }
+
+    public void setSmallPanelsSwapped(boolean smallPanelsSwapped)
+    {
+        BaseValue.edit(this, (v) -> this.smallPanelsSwapped = smallPanelsSwapped);
+    }
+
     @Override
     public BaseType toData()
     {
@@ -102,6 +113,7 @@ public class ValueEditorLayout extends BaseValue
         data.putFloat("editor_size_v", this.editorSizeV);
         data.putFloat("state_editor_size_h", this.stateEditorSizeH);
         data.putFloat("state_editor_size_v", this.stateEditorSizeV);
+        data.putBool("small_panels_swapped", this.smallPanelsSwapped);
 
         return data;
     }
@@ -120,6 +132,7 @@ public class ValueEditorLayout extends BaseValue
             this.editorSizeV = map.getFloat("editor_size_v", 0.5F);
             this.stateEditorSizeH = map.getFloat("state_editor_size_h", 0.7F);
             this.stateEditorSizeV = map.getFloat("state_editor_size_v", 0.25F);
+            this.smallPanelsSwapped = map.getBool("small_panels_swapped", false);
         }
     }
 }
