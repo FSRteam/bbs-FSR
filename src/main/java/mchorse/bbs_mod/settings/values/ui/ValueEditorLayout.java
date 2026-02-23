@@ -15,6 +15,7 @@ public class ValueEditorLayout extends BaseValue
     private float stateEditorSizeH = 0.7F;
     private float stateEditorSizeV = 0.25F;
     private boolean smallPanelsSwapped;
+    private int keyframeLabelWidth = 120;
 
     public ValueEditorLayout(String id)
     {
@@ -101,6 +102,16 @@ public class ValueEditorLayout extends BaseValue
         BaseValue.edit(this, (v) -> this.smallPanelsSwapped = smallPanelsSwapped);
     }
 
+    public int getKeyframeLabelWidth()
+    {
+        return MathUtils.clamp(this.keyframeLabelWidth, 40, 400);
+    }
+
+    public void setKeyframeLabelWidth(int keyframeLabelWidth)
+    {
+        BaseValue.edit(this, (v) -> this.keyframeLabelWidth = MathUtils.clamp(keyframeLabelWidth, 40, 400));
+    }
+
     @Override
     public BaseType toData()
     {
@@ -114,6 +125,7 @@ public class ValueEditorLayout extends BaseValue
         data.putFloat("state_editor_size_h", this.stateEditorSizeH);
         data.putFloat("state_editor_size_v", this.stateEditorSizeV);
         data.putBool("small_panels_swapped", this.smallPanelsSwapped);
+        data.putInt("keyframe_label_width", this.keyframeLabelWidth);
 
         return data;
     }
@@ -133,6 +145,7 @@ public class ValueEditorLayout extends BaseValue
             this.stateEditorSizeH = map.getFloat("state_editor_size_h", 0.7F);
             this.stateEditorSizeV = map.getFloat("state_editor_size_v", 0.25F);
             this.smallPanelsSwapped = map.getBool("small_panels_swapped", false);
+            this.keyframeLabelWidth = map.getInt("keyframe_label_width", 120);
         }
     }
 }
