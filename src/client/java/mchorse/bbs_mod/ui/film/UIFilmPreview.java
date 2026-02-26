@@ -339,7 +339,12 @@ public class UIFilmPreview extends UIElement
 
         this.renderCursor(context);
 
-        this.getGuidesArea(area, this.guidesArea);
+        boolean needGuides = this.panel.cameraEditor.isVisible()
+            || BBSSettings.editorRuleOfThirds.get()
+            || BBSSettings.editorCenterLines.get()
+            || BBSSettings.editorCrosshair.get();
+        if (needGuides)
+            this.getGuidesArea(area, this.guidesArea);
 
         /* Render rule of thirds (inside export frame when camera editor shows bands) */
         if (BBSSettings.editorRuleOfThirds.get())
