@@ -140,6 +140,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
     private final Map<String, UIDraggable> dragHandlesById = new LinkedHashMap<>();
     private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
+    private static final float DRAG_HANDLE_TOP_OFFSET_NORM = 0.01F;
     private static final int SPLITTER_HANDLE_PX = 6;
     private static final int DROP_ZONE_CENTER = -1;
     private static final float DROP_EDGE_MARGIN = 0.2F;
@@ -432,7 +433,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             if (h != null)
             {
                 float[] b = e.getValue();
-                h.relative(this.editor).x(b[0]).y(b[1]).w(b[2]).h(DRAG_HANDLE_HEIGHT_NORM);
+                h.relative(this.editor).x(b[0]).y(b[1] + DRAG_HANDLE_TOP_OFFSET_NORM).w(b[2]).h(DRAG_HANDLE_HEIGHT_NORM);
             }
         }
     }

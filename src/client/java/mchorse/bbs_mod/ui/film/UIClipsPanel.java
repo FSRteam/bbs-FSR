@@ -152,7 +152,7 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
             }
             else
             {
-                this.panel.relative(this.target).xy(0, 0.04F).wh(1F, 1F - 0.04F);
+                this.panel.relative(this.target).x(0).y(0, 20).w(1F).h(1F, -20);
             }
 
             this.add(this.panel);
