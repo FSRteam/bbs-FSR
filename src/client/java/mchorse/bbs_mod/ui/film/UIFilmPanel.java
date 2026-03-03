@@ -60,12 +60,14 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.clips.Clip;
+import mchorse.bbs_mod.utils.presets.PresetManager;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Vectors;
@@ -116,9 +118,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIIcon openReplayEditor;
     public UIIcon openActionEditor;
     public UIIcon lockLayoutButton;
+    public UIIcon layoutPresetsButton;
 
     /** When true, docking and resizing are disabled; drag handles and their top offset are hidden. */
     private boolean layoutLocked = true;
+
+    private UICopyPasteController layoutPresetsController;
 
     private Camera camera = new Camera();
     private boolean entered;
@@ -208,9 +213,21 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.updateLockButtonTooltip();
         this.lockLayoutButton.relative(this.iconBar).x(0).y(1F, -EDIT_PANEL_TOP_OFFSET_PX).w(EDIT_PANEL_TOP_OFFSET_PX).h(EDIT_PANEL_TOP_OFFSET_PX);
 
+        this.layoutPresetsController = new UICopyPasteController(PresetManager.LAYOUTS, "_CopyFilmLayout")
+            .supplier(this::getFilmLayoutPresetData)
+            .consumer(this::applyFilmLayoutFromPreset);
+        this.layoutPresetsButton = new UIIcon(Icons.LAYOUT, (b) ->
+        {
+            UIContext ctx = this.getContext();
+            this.layoutPresetsController.openPresets(ctx, ctx.mouseX, ctx.mouseY);
+        });
+        this.layoutPresetsButton.tooltip(UIKeys.FILM_LAYOUT_PRESETS, Direction.LEFT);
+        this.layoutPresetsButton.relative(this.iconBar).x(0).y(1F, -EDIT_PANEL_TOP_OFFSET_PX * 2).w(EDIT_PANEL_TOP_OFFSET_PX).h(EDIT_PANEL_TOP_OFFSET_PX);
+
         /* Setup elements */
         this.iconBar.add(this.openFilmMenu, this.openCameraEditor.marginTop(9), this.openReplayEditor, this.openActionEditor);
         this.add(this.lockLayoutButton);
+        this.add(this.layoutPresetsButton);
 
         this.editor.add(this.main, new UIRenderable(this::renderIcons), new UIRenderable(this::renderDropZoneHighlight));
         for (String id : this.panelById.keySet())
@@ -321,6 +338,28 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.cameraEditor.refreshEditPanelOffset();
         this.actionEditor.refreshEditPanelOffset();
         this.replayEditor.refreshEditPanelOffset();
+    }
+
+    private MapType getFilmLayoutPresetData()
+    {
+        MapType data = new MapType();
+        data.put("film_layout", BBSSettings.editorLayoutSettings.getFilmLayoutRoot().toData());
+        return data;
+    }
+
+    private void applyFilmLayoutFromPreset(MapType data, int mouseX, int mouseY)
+    {
+        BaseType layoutData = data.get("film_layout");
+        if (layoutData == null)
+        {
+            return;
+        }
+        EditorLayoutNode root = EditorLayoutNode.fromData(layoutData);
+        if (root != null)
+        {
+            BBSSettings.editorLayoutSettings.setFilmLayoutRoot(root);
+            this.setupEditorFlex(true);
+        }
     }
 
     private void setupEditorFlex(boolean resize)

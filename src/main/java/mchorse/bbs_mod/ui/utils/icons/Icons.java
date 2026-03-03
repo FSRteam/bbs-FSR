@@ -25,6 +25,7 @@ public class Icons
     public static final Icon MOVE_DOWN = register(new Icon(ATLAS, "move_down", 144, 8, 16, 8));
     public static final Icon LOCKED = register(new Icon(ATLAS, "locked", 160, 0));
     public static final Icon UNLOCKED = register(new Icon(ATLAS, "unlocked", 176, 0));
+    public static final Icon LAYOUT = register(new Icon(ATLAS, "layout", 240, 144));
     public static final Icon COPY = register(new Icon(ATLAS, "copy", 192, 0));
     public static final Icon PASTE = register(new Icon(ATLAS, "paste", 208, 0));
     public static final Icon CUT = register(new Icon(ATLAS, "cut", 224, 0));
