@@ -423,7 +423,7 @@ public class UIReplaysEditor extends UIElement
         {
             KeyframeChannel property = this.replay.properties.getOrCreate(this.replay.form.get(), key);
             String name = StringUtils.fileName(key);
-            boolean isPose = name.startsWith("transform") || name.startsWith("pose") || name.startsWith("pose_overlay");
+            boolean isPose = name.startsWith("transform") || name.startsWith("pose") || name.startsWith("pose_overlay") || name.startsWith("shape_keys");
 
             if (property != null && ((this.category == ReplayCategory.MODEL && !isPose) || (this.category == ReplayCategory.POSE && isPose)))
             {
