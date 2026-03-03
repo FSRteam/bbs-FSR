@@ -202,6 +202,12 @@ public class BBSModClient implements ClientModInitializer
         return keyRecordVideo;
     }
 
+    /** Returns the dashboard without creating it. Used to avoid creating UI when handling keys (e.g. F6) before user has opened BBS. */
+    public static UIDashboard getDashboardIfCreated()
+    {
+        return dashboard;
+    }
+
     public static UIDashboard getDashboard()
     {
         if (dashboard == null)
@@ -660,8 +666,12 @@ public class BBSModClient implements ClientModInitializer
 
     private void keyPlayFilm()
     {
-        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
+        if (getDashboardIfCreated() == null)
+        {
+            return;
+        }
 
+        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
         if (panel.getData() != null)
         {
             Films.playFilm(panel.getData().getId(), false);
@@ -674,8 +684,12 @@ public class BBSModClient implements ClientModInitializer
      */
     private void keyPlayFilmAndRecord()
     {
-        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
+        if (getDashboardIfCreated() == null)
+        {
+            return;
+        }
 
+        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
         if (panel.getData() == null)
         {
             return;
@@ -703,8 +717,12 @@ public class BBSModClient implements ClientModInitializer
 
     private void keyPauseFilm()
     {
-        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
+        if (getDashboardIfCreated() == null)
+        {
+            return;
+        }
 
+        UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
         if (panel.getData() != null)
         {
             Films.pauseFilm(panel.getData().getId());
