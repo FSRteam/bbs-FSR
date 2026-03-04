@@ -4,6 +4,7 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
 import mchorse.bbs_mod.film.replays.PerLimbService;
+import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -22,9 +23,12 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransfo
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
+import mchorse.bbs_mod.utils.pose.Pose;
+import mchorse.bbs_mod.utils.pose.PoseTransform;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +39,6 @@ import java.util.function.Consumer;
 
 public class UIReplaysEditorUtils
 {
-
     public static UIPropTransform getEditableTransform(UIKeyframeEditor editor)
     {
         if (editor == null || editor.editor == null)
@@ -302,6 +305,82 @@ public class UIReplaysEditorUtils
         int insert = sheet.channel.insert(current + i, model.model.createPose());
 
         sheet.selection.add(insert);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void posesToLimbTracks(Replay replay, UIKeyframeSheet poseSheet, ModelForm modelForm)
+    {
+        if (replay == null || poseSheet == null || modelForm == null)
+        {
+            return;
+        }
+
+        String formPath = poseSheet.id.equals("pose") ? "" : poseSheet.id.substring(0, poseSheet.id.length() - (FormUtils.PATH_SEPARATOR + "pose").length());
+        Form form = formPath.isEmpty() ? replay.form.get() : FormUtils.getForm(replay.form.get(), formPath);
+
+        if (!(form instanceof ModelForm targetModelForm))
+        {
+            return;
+        }
+
+        ModelInstance model = ModelFormRenderer.getModel(targetModelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        List<String> bones = new ArrayList<>(model.model.getAllGroupKeys());
+
+        bones.removeIf(model.disabledBones::contains);
+        bones.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
+
+        List<Keyframe<Pose>> keyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.channel.getKeyframes();
+
+        for (Keyframe<Pose> keyframe : keyframes)
+        {
+            Pose pose = keyframe.getValue();
+
+            if (pose == null)
+            {
+                continue;
+            }
+
+            float tick = keyframe.getTick();
+
+            for (String bone : bones)
+            {
+                String boneKey = PerLimbService.toPoseBoneKey(formPath, bone);
+                KeyframeChannel<PoseTransform> limbChannel = (KeyframeChannel<PoseTransform>) replay.properties.getOrCreate(form, boneKey);
+
+                if (limbChannel == null)
+                {
+                    continue;
+                }
+
+                PoseTransform transform = pose.get(bone);
+                PoseTransform copy = (PoseTransform) transform.copy();
+                int index = limbChannel.insert(tick, copy);
+                Keyframe<PoseTransform> limbKf = limbChannel.get(index);
+
+                limbKf.preNotify();
+                limbKf.getInterpolation().copy(keyframe.getInterpolation());
+                limbKf.setShape(keyframe.getShape());
+                limbKf.setColor(keyframe.getColor() != null ? keyframe.getColor().copy() : null);
+                limbKf.setDuration(keyframe.getDuration());
+                limbKf.lx = keyframe.lx;
+                limbKf.ly = keyframe.ly;
+                limbKf.rx = keyframe.rx;
+                limbKf.ry = keyframe.ry;
+                limbKf.lx_m = keyframe.lx_m != null ? new ArrayList<>(keyframe.lx_m) : null;
+                limbKf.ly_m = keyframe.ly_m != null ? new ArrayList<>(keyframe.ly_m) : null;
+                limbKf.rx_m = keyframe.rx_m != null ? new ArrayList<>(keyframe.rx_m) : null;
+                limbKf.ry_m = keyframe.ry_m != null ? new ArrayList<>(keyframe.ry_m) : null;
+                limbKf.postNotify();
+            }
+        }
+
+        poseSheet.channel.removeAll();
     }
 
     /* Offer bone hierarchy options */

@@ -21,11 +21,12 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.l10n.L10n;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
-import mchorse.bbs_mod.l10n.L10n;
-import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
@@ -38,32 +39,32 @@ import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
-import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
-import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
-import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
+import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.hit.BlockHitResult;
@@ -73,16 +74,11 @@ import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
-import mchorse.bbs_mod.settings.values.core.ValueTransform;
-import mchorse.bbs_mod.utils.pose.PoseTransform;
-import mchorse.bbs_mod.utils.pose.Transform;
 
 public class UIReplaysEditor extends UIElement
 {
@@ -550,6 +546,21 @@ public class UIReplaysEditor extends UIElement
                                     UIReplaysEditorUtils.animationToPoseKeyframes(this.keyframeEditor, sheet, modelForm, entity, current, animationKey, onlyKeyframes, length, step);
                                 }, modelForm, sheet), 200, 197);
                             }
+                        });
+                    }
+
+                    boolean isPoseTrack = sheet != null
+                        && sheet.channel.getFactory() == KeyframeFactories.POSE
+                        && (sheet.id.equals("pose") || sheet.id.endsWith(FormUtils.PATH_SEPARATOR + "pose"))
+                        && !sheet.id.contains("pose_overlay");
+
+                    if (isPoseTrack && !sheet.channel.isEmpty())
+                    {
+                        menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () ->
+                        {
+                            UIReplaysEditorUtils.posesToLimbTracks(this.replay, sheet, modelForm);
+                            
+                            this.updateChannelsList();
                         });
                     }
                 }
