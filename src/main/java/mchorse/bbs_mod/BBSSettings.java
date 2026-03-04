@@ -33,6 +33,7 @@ public class BBSSettings
     public static ValueBoolean forceQwerty;
     public static ValueBoolean freezeModels;
     public static ValueFloat axesScale;
+    public static ValueFloat axesThickness;
     public static ValueBoolean uniformScale;
     public static ValueBoolean clickSound;
     public static ValueBoolean gizmos;
@@ -175,6 +176,7 @@ public class BBSSettings
         forceQwerty = builder.getBoolean("force_qwerty", false);
         freezeModels = builder.getBoolean("freeze_models", false);
         axesScale = builder.getFloat("axes_scale", 1F, 0F, 2F);
+        axesThickness = builder.getFloat("axes_thickness", 1F, 0.25F, 3F);
         uniformScale = builder.getBoolean("uniform_scale", false);
         clickSound = builder.getBoolean("click_sound", false);
         gizmos = builder.getBoolean("gizmos", true);

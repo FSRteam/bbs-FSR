@@ -114,11 +114,12 @@ public class Gizmo
     private void drawAxes(MatrixStack stack, float axisSize, float axisOffset, float outlineSize, float outlineOffset)
     {
         float scale = BBSSettings.axesScale.get();
+        float thickness = BBSSettings.axesThickness.get();
 
         axisSize *= scale;
-        axisOffset *= scale;
+        axisOffset *= scale * thickness;
         outlineSize *= scale;
-        outlineOffset *= scale;
+        outlineOffset *= scale * thickness;
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
@@ -126,9 +127,9 @@ public class Gizmo
 
         if (this.mode == Mode.ROTATE)
         {
-            float outlinePad = 0.015F * scale;
+            float outlinePad = 0.015F * scale * thickness;
             float radius = 0.22F * scale;
-            float thicknessRing = 0.025F * scale;
+            float thicknessRing = 0.025F * scale * thickness;
 
             Draw.arc3D(builder, stack, Axis.Z, radius, thicknessRing + outlinePad, 0F, 0F, 0F);
             Draw.arc3D(builder, stack, Axis.Z, radius, thicknessRing, 0F, 0F, 1F);
@@ -202,9 +203,10 @@ public class Gizmo
     private void drawAxes(MatrixStack stack, StencilMap map, float axisSize, float axisOffset)
     {
         float scale = BBSSettings.axesScale.get();
+        float thickness = BBSSettings.axesThickness.get();
 
         axisSize *= scale;
-        axisOffset *= scale;
+        axisOffset *= scale * thickness;
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
 
@@ -212,9 +214,9 @@ public class Gizmo
 
         if (this.mode == Mode.ROTATE)
         {
-            float outlinePad = 0.015F * scale;
+            float outlinePad = 0.015F * scale * thickness;
             float radius = 0.22F * scale;
-            float thicknessRing = 0.025F * scale;
+            float thicknessRing = 0.025F * scale * thickness;
 
             Draw.arc3D(builder, stack, Axis.Z, radius, thicknessRing + outlinePad, STENCIL_Z / 255F, 0F, 0F);
             Draw.arc3D(builder, stack, Axis.X, radius, thicknessRing + outlinePad, STENCIL_X / 255F, 0F, 0F);

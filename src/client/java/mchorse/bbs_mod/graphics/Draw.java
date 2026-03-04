@@ -146,11 +146,12 @@ public class Draw
     public static void coolerAxes(MatrixStack stack, float axisSize, float axisOffset, float outlineSize, float outlineOffset)
     {
         float scale = BBSSettings.axesScale.get();
+        float thickness = BBSSettings.axesThickness.get();
 
         axisSize *= scale;
-        axisOffset *= scale;
+        axisOffset *= scale * thickness;
         outlineSize *= scale;
-        outlineOffset *= scale;
+        outlineOffset *= scale * thickness;
 
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
 

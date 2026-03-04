@@ -1,6 +1,8 @@
 {
 	"bbs.config.appearance.axes_scale": "Масштаб осей",
 	"bbs.config.appearance.axes_scale-comment": "Определяет размер осей, если оси слишком большие, Вы можете изменить их размер по Вашему усмотрению",
+	"bbs.config.appearance.axes_thickness": "Толщина осей",
+	"bbs.config.appearance.axes_thickness-comment": "Толщина линий осей (гизмо и мировые оси)",
 	"bbs.config.appearance.click_sound": "Звуки кликов",
 	"bbs.config.appearance.click_sound-comment": "Когда эта опция включена, нажатие по кнопкам будет проигрывать звуковой эффект из ББС Студии",
 	"bbs.config.appearance.force_qwerty": "Отображать QWERTY",
