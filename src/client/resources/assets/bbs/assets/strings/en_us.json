@@ -505,6 +505,7 @@
 	"bbs.ui.film.replay.axes_preview": "Axes preview",
 	"bbs.ui.film.replay.context.add": "Add a replay here",
 	"bbs.ui.film.replay.context.animation_to_keyframes": "Animation to pose keyframes...",
+	"bbs.ui.film.replay.context.poses_to_limbs": "Poses to limbs",
 	"bbs.ui.film.replay.context.move_here": "Move replay here",
 	"bbs.ui.film.replay.filter_sheets": "Filter tracks...",
 	"bbs.ui.film.replay.filter_sheets-title": "Keyframe tracks",
