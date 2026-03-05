@@ -1,8 +1,10 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
+import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -24,21 +26,64 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeG
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.NaturalOrderComparator;
+import mchorse.bbs_mod.settings.values.core.ValueTransform;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
+import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
 public class UIReplaysEditorUtils
 {
+    private static final int BONE_TRACK_HUE_COUNT = 12;
+
+    public static void addBoneTrackSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        IModel iModel = model.model;
+        List<String> bones = iModel.getGroupKeysInHierarchyOrder();
+        Map<String, Integer> parentToColor = new HashMap<>();
+        int[] hueIndex = {0};
+
+        for (String bone : bones)
+        {
+            if (model.disabledBones.contains(bone))
+            {
+                continue;
+            }
+
+            String parent = iModel.getParentGroupKey(bone);
+            int color = parentToColor.computeIfAbsent(parent, (p) ->
+                Colors.HSVtoRGB((hueIndex[0]++ % BONE_TRACK_HUE_COUNT) / (float) BONE_TRACK_HUE_COUNT, 0.7F, 0.7F).getRGBColor()
+            );
+
+            String path = FormUtils.getPath(modelForm);
+            String boneKey = PerLimbService.toPoseBoneKey(path, bone);
+            String title = path.isEmpty() ? bone : path + "/" + bone;
+            KeyframeChannel channel = properties.registerChannel(boneKey, KeyframeFactories.POSE_TRANSFORM);
+            ValueTransform transform = new ValueTransform(boneKey, new PoseTransform());
+
+            out.add(new UIKeyframeSheet(boneKey, IKey.constant(title), color, false, channel, transform, true));
+        }
+    }
+
     public static UIPropTransform getEditableTransform(UIKeyframeEditor editor)
     {
         if (editor == null || editor.editor == null)

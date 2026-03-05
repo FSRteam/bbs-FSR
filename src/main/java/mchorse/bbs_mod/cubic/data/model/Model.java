@@ -238,6 +238,33 @@ public class Model implements IMapSerializable, IModel
     }
 
     @Override
+    public Collection<String> getRootGroupKeys()
+    {
+        return this.topGroups.stream().map((g) -> g.id).toList();
+    }
+
+    @Override
+    public Collection<String> getDirectChildrenKeys(String key)
+    {
+        ModelGroup group = this.getGroup(key);
+
+        if (group == null)
+        {
+            return Collections.emptyList();
+        }
+
+        return group.children.stream().map((g) -> g.id).toList();
+    }
+
+    @Override
+    public String getParentGroupKey(String key)
+    {
+        ModelGroup group = this.getGroup(key);
+
+        return group == null || group.parent == null ? "" : group.parent.id;
+    }
+
+    @Override
     public void apply(IEntity target, Animation action, float tick, float blend, float transition, boolean skipInitial)
     {
         MolangHelper.setMolangVariables(this.parser, target, tick, transition);

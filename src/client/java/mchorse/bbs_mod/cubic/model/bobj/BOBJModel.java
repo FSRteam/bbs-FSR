@@ -221,6 +221,29 @@ public class BOBJModel implements IModel
     }
 
     @Override
+    public Collection<String> getRootGroupKeys()
+    {
+        return this.armature.orderedBones.stream()
+            .filter((b) -> b.parent.isEmpty())
+            .map((b) -> b.name)
+            .toList();
+    }
+
+    @Override
+    public Collection<String> getDirectChildrenKeys(String key)
+    {
+        return this.getAdjacentGroups(key);
+    }
+
+    @Override
+    public String getParentGroupKey(String key)
+    {
+        BOBJBone bone = this.armature.bones.get(key);
+
+        return bone == null ? "" : bone.parent;
+    }
+
+    @Override
     public void apply(IEntity target, Animation action, float tick, float blend, float transition, boolean skipInitial)
     {
         MolangHelper.setMolangVariables(action.parser, target, tick, transition);

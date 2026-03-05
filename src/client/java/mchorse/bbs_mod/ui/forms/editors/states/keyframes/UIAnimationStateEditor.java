@@ -30,16 +30,13 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
-import mchorse.bbs_mod.utils.pose.PoseTransform;
 import org.joml.Matrix4f;
 import org.joml.Vector2i;
 
@@ -284,31 +281,7 @@ public class UIAnimationStateEditor extends UIElement
 
         if (form instanceof ModelForm modelForm)
         {
-            ModelInstance model = ModelFormRenderer.getModel(modelForm);
-
-            if (model != null)
-            {
-                List<String> bones = new ArrayList<>(model.model.getAllGroupKeys());
-
-                bones.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
-
-                for (String bone : bones)
-                {
-                    if (model.disabledBones.contains(bone))
-                    {
-                        continue;
-                    }
-
-                    String path = FormUtils.getPath(modelForm);
-                    String boneKey = PerLimbService.toPoseBoneKey(path, bone);
-                    String title = path.isEmpty() ? bone : path + "/" + bone;
-                    KeyframeChannel boneChannel = this.state.properties.registerChannel(boneKey, KeyframeFactories.POSE_TRANSFORM);
-                    ValueTransform transform = new ValueTransform(boneKey, new PoseTransform());
-                    UIKeyframeSheet boneSheet = new UIKeyframeSheet(boneKey, IKey.constant(title), Colors.HSVtoRGB(Math.abs((bone.hashCode() % 360) / 360F), 0.7F, 0.7F).getRGBColor(), false, boneChannel, transform, true);
-
-                    sheets.add(boneSheet);
-                }
-            }
+            UIReplaysEditorUtils.addBoneTrackSheets(modelForm, this.state.properties, sheets);
         }
     }
 
