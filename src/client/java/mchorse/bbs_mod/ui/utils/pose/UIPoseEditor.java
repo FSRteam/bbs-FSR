@@ -165,7 +165,7 @@ public class UIPoseEditor extends UIElement
         this.model = null;
         this.flippedParts = null;
 
-        this.fillInGroups(groups, reset);
+        this.fillInGroups(groups, reset, true);
     }
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset)
@@ -173,14 +173,17 @@ public class UIPoseEditor extends UIElement
         this.model = model;
         this.flippedParts = flippedParts;
 
-        this.fillInGroups(model == null ? Collections.emptyList() : model.getAllGroupKeys(), reset);
+        this.fillInGroups(model == null ? Collections.emptyList() : model.getGroupKeysInHierarchyOrder(), reset, false);
     }
 
-    private void fillInGroups(Collection<String> groups, boolean reset)
+    private void fillInGroups(Collection<String> groups, boolean reset, boolean sort)
     {
         this.groups.clear();
         this.groups.add(groups);
-        this.groups.sort();
+        if (sort)
+        {
+            this.groups.sort();
+        }
 
         this.fix.setVisible(!groups.isEmpty());
         this.color.setVisible(!groups.isEmpty());

@@ -25,7 +25,6 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransfo
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.StringUtils;
-import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -375,10 +374,9 @@ public class UIReplaysEditorUtils
             return;
         }
 
-        List<String> bones = new ArrayList<>(model.model.getAllGroupKeys());
+        List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
 
         bones.removeIf(model.disabledBones::contains);
-        bones.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
 
         List<Keyframe<Pose>> keyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.channel.getKeyframes();
 
