@@ -217,7 +217,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     {
         ModelInstance model = this.getModel();
 
-        return model == null ? Collections.emptyList() : new ArrayList<>(model.model.getAllGroupKeys());
+        if (model == null)
+        {
+            return Collections.emptyList();
+        }
+
+        List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
+        bones.removeIf(model.disabledBones::contains);
+
+        return bones;
     }
 
     @Override

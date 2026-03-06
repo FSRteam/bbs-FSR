@@ -21,6 +21,7 @@ import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseManager;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -170,10 +171,26 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset)
     {
+        this.fillGroups(model, flippedParts, reset, null);
+    }
+
+    public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones)
+    {
         this.model = model;
         this.flippedParts = flippedParts;
 
-        this.fillInGroups(model == null ? Collections.emptyList() : model.getGroupKeysInHierarchyOrder(), reset, false);
+        if (model == null)
+        {
+            this.fillInGroups(Collections.emptyList(), reset, false);
+            return;
+        }
+
+        List<String> bones = new ArrayList<>(model.getGroupKeysInHierarchyOrder());
+        if (disabledBones != null && !disabledBones.isEmpty())
+        {
+            bones.removeIf(disabledBones::contains);
+        }
+        this.fillInGroups(bones, reset, false);
     }
 
     private void fillInGroups(Collection<String> groups, boolean reset, boolean sort)
