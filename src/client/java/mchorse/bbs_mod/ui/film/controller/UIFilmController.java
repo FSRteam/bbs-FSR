@@ -34,6 +34,7 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplayList;
+import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.film.replays.UIRecordOverlayPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -848,6 +849,20 @@ public class UIFilmController extends UIElement
             return;
         }
 
+        UIReplaysEditor.ReplayCategory category = this.panel.replayEditor.getCategory();
+
+        if (category == UIReplaysEditor.ReplayCategory.MODEL)
+        {
+            return;
+        }
+
+        if (category == UIReplaysEditor.ReplayCategory.POSE)
+        {
+            UIReplaysEditorUtils.insertPoseKeyframesAtTick(replay, this.getTick());
+            return;
+        }
+
+        /* PLAYER */
         if (Window.isCtrlPressed())
         {
             this.toggleMousePointer(false);

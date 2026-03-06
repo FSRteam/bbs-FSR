@@ -322,6 +322,11 @@ public class UIReplaysEditor extends UIElement
         this.updateChannelsList();
     }
 
+    public ReplayCategory getCategory()
+    {
+        return this.category;
+    }
+
     public void setFilm(Film film)
     {
         this.film = film;

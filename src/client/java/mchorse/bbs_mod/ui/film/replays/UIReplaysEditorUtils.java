@@ -31,6 +31,7 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 
@@ -46,6 +47,38 @@ import java.util.function.Consumer;
 public class UIReplaysEditorUtils
 {
     private static final int BONE_TRACK_HUE_COUNT = 12;
+
+    public static void insertPoseKeyframesAtTick(Replay replay, float tick)
+    {
+        if (replay == null)
+        {
+            return;
+        }
+
+        BaseValue.edit(replay.properties, (props) ->
+        {
+            for (KeyframeChannel<?> channel : props.properties.values())
+            {
+                if (!PerLimbService.isPoseBoneChannel(channel.getId()))
+                {
+                    continue;
+                }
+
+                KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
+                KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
+                PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
+
+                int index = poseChannel.insert(tick, value);
+                Keyframe<PoseTransform> kf = poseChannel.get(index);
+
+                Keyframe<PoseTransform> template = segment != null ? segment.a : null;
+                if (template != null && template != kf)
+                {
+                    kf.copyOverExtra(template);
+                }
+            }
+        });
+    }
 
     public static void addBoneTrackSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
