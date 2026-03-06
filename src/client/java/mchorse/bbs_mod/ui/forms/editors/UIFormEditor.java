@@ -182,8 +182,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             this.updateFormListButtons();
         });
         this.formsList.context(this::createFormContextMenu);
-        this.formsList.keys().register(Keys.COPY, () -> this.copyPasteController.copy())
-            .inside().label(UIKeys.FORMS_EDITOR_CONTEXT_COPY).active(this.copyPasteController::canCopy);
+        this.formsList.keys().register(Keys.COPY, () ->
+        {
+            if (this.copyPasteController.copy())
+            {
+                this.updateFormListButtons();
+            }
+        }).inside().label(UIKeys.FORMS_EDITOR_CONTEXT_COPY).active(this.copyPasteController::canCopy);
         this.formsList.keys().register(Keys.PASTE, () -> this.copyPasteController.paste(0, 0))
             .inside().label(UIKeys.FORMS_EDITOR_CONTEXT_PASTE).active(this.copyPasteController::canPaste);
         this.formsList.keys().register(Keys.DELETE, this::removeBodyPart)
@@ -207,7 +212,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         listToolbarBg.relative(listSection).xy(0, 0).w(1F).h(20);
         this.addFormList = new UIIcon(Icons.ADD, (b) -> this.addBodyPart(new BodyPart("")));
         this.addFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_ADD, Direction.LEFT);
-        this.copyFormList = new UIIcon(Icons.COPY, (b) -> this.copyPasteController.copy());
+        this.copyFormList = new UIIcon(Icons.COPY, (b) ->
+        {
+            if (this.copyPasteController.copy())
+            {
+                this.updateFormListButtons();
+            }
+        });
         this.copyFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_COPY, Direction.LEFT);
         this.pasteFormList = new UIIcon(Icons.PASTE, (b) -> this.copyPasteController.paste(0, 0));
         this.pasteFormList.tooltip(UIKeys.FORMS_EDITOR_CONTEXT_PASTE, Direction.LEFT);
