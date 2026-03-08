@@ -629,6 +629,8 @@
 	"bbs.ui.forms.editors.general": "General",
 	"bbs.ui.forms.editors.general.animatable": "Animatable",
 	"bbs.ui.forms.editors.general.animatable-tooltip": "Whether this form provides keyframe tracks for animation",
+	"bbs.ui.forms.editors.general.bone_tracks": "Bone tracks",
+	"bbs.ui.forms.editors.general.bone_tracks-tooltip": "When enabled, per-bone keyframe tracks are shown in pose keyframe editor and replays",
 	"bbs.ui.forms.editors.general.display": "Display name",
 	"bbs.ui.forms.editors.general.hitbox": "Hitbox",
 	"bbs.ui.forms.editors.general.hitbox_eye_height": "Hitbox eye height",

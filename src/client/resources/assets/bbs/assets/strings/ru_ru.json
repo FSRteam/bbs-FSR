@@ -627,6 +627,8 @@
 	"bbs.ui.forms.editors.general": "Общие",
 	"bbs.ui.forms.editors.general.animatable": "Анимируется",
 	"bbs.ui.forms.editors.general.animatable-tooltip": "Эта опция влияет если эту форму (и её части тела) можно анимировать через ключевые кадры",
+	"bbs.ui.forms.editors.general.bone_tracks": "Костевые дорожки",
+	"bbs.ui.forms.editors.general.bone_tracks-tooltip": "Если включено, в редакторе поз и реплеях отображаются отдельные дорожки по костям",
 	"bbs.ui.forms.editors.general.display": "Ярлык",
 	"bbs.ui.forms.editors.general.hitbox": "Хитбокс",
 	"bbs.ui.forms.editors.general.hitbox_eye_height": "Множитель уровня глаз хитбокса",

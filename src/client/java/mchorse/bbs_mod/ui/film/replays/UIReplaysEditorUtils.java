@@ -82,6 +82,11 @@ public class UIReplaysEditorUtils
 
     public static void addBoneTrackSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
+        if (!modelForm.boneTracks.get())
+        {
+            return;
+        }
+
         ModelInstance model = ModelFormRenderer.getModel(modelForm);
 
         if (model == null)
