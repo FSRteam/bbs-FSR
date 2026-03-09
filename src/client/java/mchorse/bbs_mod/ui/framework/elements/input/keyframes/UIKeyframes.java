@@ -106,6 +106,11 @@ public class UIKeyframes extends UIElement
             int w = context.mouseX - this.area.x;
             BBSSettings.editorLayoutSettings.setKeyframeLabelWidth(w);
             this.resize();
+            /* Notify parents so e.g. replay editor can sync its category bar width */
+            for (UIElement p = this.getParent(); p != null; p = p.getParent())
+            {
+                p.resize();
+            }
         });
         this.labelResizer.hoverOnly();
         this.add(this.labelResizer);

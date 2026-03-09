@@ -276,13 +276,10 @@ public class UIReplaysEditor extends UIElement
 this.replays = new UIReplaysOverlayPanel(filmPanel, (replay) -> this.setReplay(replay, false, false));
 
         this.iconBar = new UIElement();
-        this.iconBar.relative(this).x(0).w(20).h(1F).column(0).stretch();
+        this.iconBar.relative(this).x(0).y(0).h(20).row(0).resize();
 
         this.iconBar.add(new UIRenderable((context) ->
         {
-            context.batcher.box(this.iconBar.area.x, this.iconBar.area.y, this.iconBar.area.ex(), this.iconBar.area.ey(), Colors.A50);
-            context.batcher.gradientHBox(this.iconBar.area.ex(), this.iconBar.area.y, this.iconBar.area.ex() + 6, this.iconBar.area.ey(), 0x29000000, 0);
-
             UIIcon activeIcon = this.tabButtons.get(this.category);
 
             if (activeIcon != null)
@@ -290,8 +287,8 @@ this.replays = new UIReplaysOverlayPanel(filmPanel, (replay) -> this.setReplay(r
                 int color = BBSSettings.primaryColor.get();
                 Area area = activeIcon.area;
 
-                context.batcher.box(area.x, area.y, area.x + 2, area.ey(), Colors.A100 | color);
-                context.batcher.gradientHBox(area.x + 2, area.y, area.ex(), area.ey(), Colors.A75 | color, color);
+                context.batcher.box(area.x, area.ey() - 2, area.ex(), area.ey(), Colors.A100 | color);
+                context.batcher.gradientVBox(area.x, area.y, area.ex(), area.ey() - 2, color, Colors.A75 | color);
             }
         }));
 
@@ -492,7 +489,7 @@ this.replays = new UIReplaysOverlayPanel(filmPanel, (replay) -> this.setReplay(r
             this.keyframeEditor = new UIKeyframeEditor((consumer) -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute())
                 .target(this.filmPanel.editArea)
                 .editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
-            this.keyframeEditor.relative(this).x(20).w(1F, -20).h(1F);
+            this.keyframeEditor.relative(this).x(0).y(0).w(1F).h(1F);
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
 
             /* Reset */
@@ -599,6 +596,12 @@ this.replays = new UIReplaysOverlayPanel(filmPanel, (replay) -> this.setReplay(r
             }
 
             this.add(this.keyframeEditor);
+            /* Icon bar on top so it overlays the track names column (left labelWidth pixels) */
+            if (this.iconBar.getParent() != null)
+            {
+                this.iconBar.removeFromParent();
+            }
+            this.add(this.iconBar);
         }
 
         this.resize();
@@ -795,6 +798,15 @@ this.replays = new UIReplaysOverlayPanel(filmPanel, (replay) -> this.setReplay(r
             player.setBodyYaw(bodyYaw);
             player.setPitch(pitch);
         }
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        /* Hide category bar when "edit track" overlay is open */
+        this.iconBar.setVisible(this.keyframeEditor == null || !this.keyframeEditor.view.isEditing());
+
+        super.render(context);
     }
 
     @Override
