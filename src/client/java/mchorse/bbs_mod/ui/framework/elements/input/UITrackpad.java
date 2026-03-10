@@ -1,5 +1,15 @@
 package mchorse.bbs_mod.ui.framework.elements.input;
 
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import org.lwjgl.glfw.GLFW;
+
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -13,23 +23,14 @@ import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragStartEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UIBaseTextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
-import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.MinecraftClient;
-import org.lwjgl.glfw.GLFW;
-
-import java.math.RoundingMode;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.util.Locale;
-import java.util.Set;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 public class UITrackpad extends UIBaseTextbox
 {
@@ -52,10 +53,10 @@ public class UITrackpad extends UIBaseTextbox
     protected double value;
 
     /* Trackpad options */
-    public double strong = 1D;
-    public double normal = 0.25D;
-    public double weak = 0.05D;
-    public double increment = 1D;
+    public double strong = 0.5D;
+    public double normal = 0.1D;
+    public double weak = 0.025D;
+    public double increment = 0.25D;
     public double min = Float.NEGATIVE_INFINITY;
     public double max = Float.POSITIVE_INFINITY;
     public boolean integer;
@@ -780,13 +781,13 @@ public class UITrackpad extends UIBaseTextbox
         {
             value = this.strong;
         }
-        else if (Window.isCtrlPressed())
-        {
-            value = this.increment;
-        }
         else if (Window.isAltPressed())
         {
             value = this.weak;
+        }
+        else if (Window.isCtrlPressed())
+        {
+            value = this.increment;
         }
 
         return value * globalFactor.getValue();
