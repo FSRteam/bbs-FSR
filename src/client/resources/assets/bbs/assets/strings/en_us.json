@@ -769,6 +769,7 @@
 	"bbs.ui.keyframes.keys.select_next": "Select next keyframe",
 	"bbs.ui.keyframes.keys.select_prev": "Select previous keyframe",
 	"bbs.ui.keyframes.keys.select_right": "Select to the right",
+	"bbs.ui.keyframes.keys.select_track": "Select all on track",
 	"bbs.ui.keyframes.keys.select_same": "Select by same value",
 	"bbs.ui.keyframes.keys.stack_keyframes": "Stack keyframes",
 	"bbs.ui.keyframes.keys.toggle_interp": "Toggle interpolation selection",

@@ -161,6 +161,7 @@ public class UIKeyframes extends UIElement
 
             menu.action(Icons.MAXIMIZE, UIKeys.KEYFRAMES_CONTEXT_MAXIMIZE, this::resetView);
             menu.action(Icons.FULLSCREEN, UIKeys.KEYFRAMES_CONTEXT_SELECT_ALL, () -> this.currentGraph.selectAll());
+            menu.action(Icons.FULLSCREEN, UIKeys.KEYFRAMES_KEYS_SELECT_TRACK, this::selectAllOnTrackUnderCursor);
 
             if (hasSelected)
             {
@@ -200,6 +201,7 @@ public class UIKeyframes extends UIElement
 
         this.keys().register(Keys.KEYFRAMES_MAXIMIZE, this::resetView).inside().category(category);
         this.keys().register(Keys.KEYFRAMES_SELECT_ALL, () -> this.currentGraph.selectAll()).inside().category(category).active(canModify);
+        this.keys().register(Keys.KEYFRAMES_SELECT_TRACK, this::selectAllOnTrackUnderCursor).inside().category(category).active(canModify);
         this.keys().register(Keys.COPY, () ->
         {
             if (this.copyPasteController.copy()) UIUtils.playClick();
@@ -332,6 +334,19 @@ public class UIKeyframes extends UIElement
     public UIKeyframeDopeSheet getDopeSheet()
     {
         return this.dopeSheet;
+    }
+
+    private void selectAllOnTrackUnderCursor()
+    {
+        UIContext context = this.getContext();
+        UIKeyframeSheet sheet = this.currentGraph.getSheet(context.mouseY);
+
+        if (sheet != null)
+        {
+            this.currentGraph.clearSelection();
+            sheet.selection.all();
+            this.currentGraph.pickSelected();
+        }
     }
 
     protected void selectNextKeyframe(int direction)

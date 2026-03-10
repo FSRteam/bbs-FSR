@@ -765,6 +765,7 @@
 	"bbs.ui.keyframes.keys.select_next": "Выделить следующий ключевой кадр",
 	"bbs.ui.keyframes.keys.select_prev": "Выделить предыдущий ключевой кадр",
 	"bbs.ui.keyframes.keys.select_right": "Выделить направо",
+	"bbs.ui.keyframes.keys.select_track": "Выделить все на дорожке",
 	"bbs.ui.keyframes.keys.select_same": "Выделить одинаковые",
 	"bbs.ui.keyframes.keys.stack_keyframes": "Продублировать ключевые кадры",
 	"bbs.ui.keyframes.keys.toggle_interp": "Включить выбор интерполяции",
