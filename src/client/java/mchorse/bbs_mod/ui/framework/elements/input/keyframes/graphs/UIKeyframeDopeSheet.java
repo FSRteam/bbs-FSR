@@ -466,8 +466,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             if (this.getSelected() != null)
             {
-                float step = 5F;
-                float delta = (float) (context.mouseWheel * step);
+                float delta = (float) (context.mouseWheel * 1F);
                 this.moveSelectedBy(delta, true);
             }
             else

@@ -286,8 +286,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         }
         else if (Window.isAltPressed() && context.mouseWheel != 0D && this.getSelected() != null)
         {
-            float step = 5F;
-            float delta = (float) (context.mouseWheel * step);
+            float delta = (float) (context.mouseWheel * 1F);
             this.moveSelectedBy(delta, true);
         }
         else
