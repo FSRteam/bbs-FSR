@@ -109,6 +109,7 @@
 	"bbs.config.editor.preview_resolution_scale-comment": "Множитель разрешения рендера превью в редакторе фильмов (1 = как размер блока, 1.5 = чётче, выше = меньше пикселизации, больше нагрузка на GPU)",
 	"bbs.config.editor.periodic_save": "Переодическое сохранение",
 	"bbs.config.editor.periodic_save-comment": "Кол-во секунд после которого панель сохранит данные после иссечение периода. Чтобы отключить авто-сохранение, установите 0.",
+
 	"bbs.config.editor.rewind": "Перемотать",
 	"bbs.config.editor.rewind-comment": "Перемотать ли курсор в самое начало когда фильм закончился проигрываться в редакторе фильмов",
 	"bbs.config.editor.rule_of_thirds": "Правило третей",
@@ -145,6 +146,8 @@
 	"bbs.config.recording.pose_transform_overlays-comment": "Сколько доп. дорожек pose и transform формы будут иметь (перезайдите в мир чтобы новое число оверлеев отобразилось)",
 	"bbs.config.recording.swipe_damage": "Урон взмаха",
 	"bbs.config.recording.swipe_damage-comment": "Когда клип взмахнуть будет записан, также будет клип аттаки вставлен после него",
+	"bbs.config.recording.replay_tabs": "Вкладки реплея",
+	"bbs.config.recording.replay_tabs-comment": "Когда включено, треки реплея разбиты на три вкладки: Игрок, Модель и Поза. Когда выключено, все треки отображаются вместе",
 	"bbs.config.recording.title": "Запись",
 	"bbs.config.recording.tooltip": "Настройки записи игрока и его действий",
 	"bbs.config.scrollbars.sensitivity": "Чуствительность прокрутки",

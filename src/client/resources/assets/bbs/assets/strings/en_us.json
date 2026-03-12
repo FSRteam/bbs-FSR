@@ -109,6 +109,7 @@
 	"bbs.config.editor.preview_resolution_scale-comment": "Multiplier for the film preview render resolution (1 = same as block size, 1.5 = sharper, higher = less pixelation, more GPU load)",
 	"bbs.config.editor.periodic_save": "Pereodic save",
 	"bbs.config.editor.periodic_save-comment": "Number of seconds that triggers automatic save repeatedly. To disable periodic saving, set the option to 0",
+
 	"bbs.config.editor.rewind": "Rewind",
 	"bbs.config.editor.rewind-comment": "Whether the playback should be rewound to beginning upon finishing playing the film",
 	"bbs.config.editor.rule_of_thirds": "Rule of thirds",
@@ -145,6 +146,8 @@
 	"bbs.config.recording.pose_transform_overlays-comment": "How many additional pose and transform tracks forms will have (relog into the world to refresh the number of overlays)",
 	"bbs.config.recording.swipe_damage": "Swipe damage",
 	"bbs.config.recording.swipe_damage-comment": "When swipe action clip gets recorded, insert also an automatic attack action clip",
+	"bbs.config.recording.replay_tabs": "Replay tabs",
+	"bbs.config.recording.replay_tabs-comment": "When enabled, replay tracks are split into three tabs: Player, Model and Pose. When disabled, all tracks are shown at once",
 	"bbs.config.recording.title": "Recording",
 	"bbs.config.recording.tooltip": "Here is everything related to player recording system",
 	"bbs.config.scrollbars.sensitivity": "Scrolling sensitivity",
