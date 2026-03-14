@@ -292,24 +292,31 @@ public class UIReplaysEditor extends UIElement {
 
 		this.iconBar.add(
 			new UIRenderable(context -> {
+				/* Render background matching track names container */
+				int labelWidth = this.getLabelWidth();
+				Area area = this.iconBar.area;
+				
+				context.batcher.box(area.x, area.y, area.x + labelWidth, area.ey(), Colors.A100);
+				
+				/* Render active tab indicator */
 				UIIcon activeIcon = this.tabButtons.get(this.category);
 
 				if (activeIcon != null) {
 					int color = BBSSettings.primaryColor.get();
-					Area area = activeIcon.area;
+					Area iconArea = activeIcon.area;
 
 					context.batcher.box(
-						area.x,
-						area.ey() - 2,
-						area.ex(),
-						area.ey(),
+						iconArea.x,
+						iconArea.ey() - 2,
+						iconArea.ex(),
+						iconArea.ey(),
 						Colors.A100 | color
 					);
 					context.batcher.gradientVBox(
-						area.x,
-						area.y,
-						area.ex(),
-						area.ey() - 2,
+						iconArea.x,
+						iconArea.y,
+						iconArea.ex(),
+						iconArea.ey() - 2,
 						color,
 						Colors.A75 | color
 					);
@@ -348,6 +355,10 @@ public class UIReplaysEditor extends UIElement {
 
 	public ReplayCategory getCategory() {
 		return this.category;
+	}
+
+	private int getLabelWidth() {
+		return this.keyframeEditor != null ? this.keyframeEditor.view.getLabelWidth() : UIKeyframes.LABEL_WIDTH_DEFAULT;
 	}
 
 	public void setFilm(Film film) {
@@ -512,6 +523,10 @@ public class UIReplaysEditor extends UIElement {
 				.editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
 			this.keyframeEditor.relative(this).x(0).y(0).w(1F).h(1F);
 			this.keyframeEditor.setUndoId("replay_keyframe_editor");
+
+			/* Update iconBar width to match label width */
+			int labelWidth = this.keyframeEditor.view.getLabelWidth();
+			this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
 
 			/* Reset */
 			if (lastEditor != null) {
@@ -880,6 +895,17 @@ public class UIReplaysEditor extends UIElement {
 		);
 
 		super.render(context);
+	}
+
+	@Override
+	public void resize() {
+		super.resize();
+
+		/* Update iconBar width when resizing */
+		if (this.keyframeEditor != null) {
+			int labelWidth = this.keyframeEditor.view.getLabelWidth();
+			this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
+		}
 	}
 
 	@Override
