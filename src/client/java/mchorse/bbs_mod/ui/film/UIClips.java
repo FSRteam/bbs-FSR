@@ -247,6 +247,7 @@ public class UIClips extends UIElement
     public String getClipDisplayName(Clip clip)
     {
         if (!clip.title.get().isEmpty()) return clip.title.get();
+        if (!BBSSettings.editorClipAutoName.get()) return "";
         return this.renderers.get(clip).getDefaultLabel(this, clip);
     }
 
