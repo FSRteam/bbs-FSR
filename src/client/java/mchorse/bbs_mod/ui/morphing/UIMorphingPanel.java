@@ -56,8 +56,6 @@ public class UIMorphingPanel extends UIDashboardPanel
 
         this.palette.list.bar.add(this.fromMob, this.demorph);
 
-        this.palette.list.forms.scroll.scrollSpeed = 100;
-
         this.add(this.palette);
 
         this.controller = new ImmersiveMorphingCameraController(() -> this.palette.editor.isEditing() ? this.palette.editor.renderer : null);
