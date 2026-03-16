@@ -787,6 +787,7 @@
 	"bbs.ui.keyframes.shapes.triangle": "Треугольник",
 	"bbs.ui.keyframes.tick": "Тик",
 	"bbs.ui.keyframes.value": "Значение",
+	"bbs.ui.keyframes.record_value": "Записать значение",
 	"bbs.ui.keys.list": "Список горячих клавиш",
 	"bbs.ui.language.credits": "Автор перевода: McHorse и Kirkus",
 	"bbs.ui.language.pick": "Выбрать язык...",

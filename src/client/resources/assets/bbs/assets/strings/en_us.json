@@ -791,6 +791,7 @@
 	"bbs.ui.keyframes.shapes.triangle": "Triangle",
 	"bbs.ui.keyframes.tick": "Tick",
 	"bbs.ui.keyframes.value": "Value",
+	"bbs.ui.keyframes.record_value": "Record value",
 	"bbs.ui.keys.list": "Keybind list",
 	"bbs.ui.language.credits": "Translated by McHorse",
 	"bbs.ui.language.pick": "Pick language...",
