@@ -20,6 +20,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 public class BBSSettings {
 
 	public static ValueColors favoriteColors;
+	public static ValueColors recentColors;
 	public static ValueStringKeys disabledSheets;
 	public static ValueLanguage language;
 	public static ValueInt primaryColor;
@@ -178,9 +179,11 @@ public class BBSSettings {
 		transformLocalDefault = builder.getBoolean("transform_local_default", false);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10);
 		favoriteColors = new ValueColors("favorite_colors");
+		recentColors = new ValueColors("recent_colors");
 		disabledSheets = new ValueStringKeys("disabled_sheets");
 		disabledSheets.set(defaultFilters);
 		builder.register(favoriteColors);
+		builder.register(recentColors);
 		builder.register(disabledSheets);
 		editorClipAutoName = builder.getBoolean("clip_auto_name", true);
 
