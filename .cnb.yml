@@ -12,12 +12,12 @@ main:
           script: |
             set -eu
             chmod +x ./gradlew
-            if ./gradlew --no-daemon clean build --stacktrace; then
+            if ./gradlew --no-daemon build --stacktrace; then
               exit 0
             fi
 
             echo "[cnb] Primary build failed. Retrying with mirror-primary repositories..."
-            ./gradlew --no-daemon clean build --stacktrace -PbbsPreferMirror=true
+            ./gradlew --no-daemon build --stacktrace -PbbsPreferMirror=true
 
   api_trigger:
     - runner:
@@ -32,9 +32,9 @@ main:
           script: |
             set -eu
             chmod +x ./gradlew
-            if ./gradlew --no-daemon clean build --stacktrace; then
+            if ./gradlew --no-daemon build --stacktrace; then
               exit 0
             fi
 
             echo "[cnb] Primary build failed. Retrying with mirror-primary repositories..."
-            ./gradlew --no-daemon clean build --stacktrace -PbbsPreferMirror=true
+            ./gradlew --no-daemon build --stacktrace -PbbsPreferMirror=true
