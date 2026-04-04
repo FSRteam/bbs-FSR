@@ -7,6 +7,14 @@ pluginManagement {
         }
         mavenCentral()
     }
+
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == 'net.neoforged.gradle.userdev' && requested.version != null) {
+                useModule("net.neoforged.gradle:userdev:${requested.version}")
+            }
+        }
+    }
 }
 
 rootProject.name = "BBS mod"
