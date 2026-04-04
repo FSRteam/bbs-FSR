@@ -1,3 +1,7 @@
+def bbsPreferMirror = (findProperty("bbsPreferMirror")?.toString()?.toBoolean()) ?: false
+def neoForgedOfficial = 'https://maven.neoforged.net/releases'
+def neoForgedMirror = 'https://cfproxy.sweatent.top/-----https://maven.neoforged.net/releases'
+
 plugins {
     id 'net.neoforged.gradle.userdev' version '7.1.21'
     id 'maven-publish'
@@ -19,13 +23,24 @@ sourceSets {
 
 repositories {
     mavenCentral()
-    maven {
-        name = 'NeoForged'
-        url = 'https://maven.neoforged.net/releases'
-    }
-    maven {
-        name = 'NeoForged Mirror Fallback'
-        url = 'https://cfproxy.sweatent.top/-----https://maven.neoforged.net/releases'
+    if (bbsPreferMirror) {
+        maven {
+            name = 'NeoForged Mirror Primary'
+            url = neoForgedMirror
+        }
+        maven {
+            name = 'NeoForged Official Fallback'
+            url = neoForgedOfficial
+        }
+    } else {
+        maven {
+            name = 'NeoForged Official Primary'
+            url = neoForgedOfficial
+        }
+        maven {
+            name = 'NeoForged Mirror Fallback'
+            url = neoForgedMirror
+        }
     }
     maven {
         name = 'Modrinth'
