@@ -1,3 +1,5 @@
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+
 plugins {
     id 'net.neoforged.gradle.userdev' version '7.1.21'
     id 'maven-publish'
@@ -5,7 +7,20 @@ plugins {
 
 def bbsPreferMirror = (findProperty("bbsPreferMirror")?.toString() ?: "true").toBoolean()
 def neoForgedOfficial = 'https://maven.neoforged.net/releases'
-def neoForgedMirror = 'https://cfproxy.sweatent.top/-----https://maven.neoforged.net/releases'
+def neoForgedMirror = 'https://neoforged.forgecdn.net/releases'
+
+def rewriteNeoForgedRepoUrl = { MavenArtifactRepository repository ->
+    if (!bbsPreferMirror || repository.url == null) {
+        return
+    }
+
+    String repositoryUrl = repository.url.toString().replaceAll('/+$', '')
+    String officialUrl = neoForgedOfficial.replaceAll('/+$', '')
+
+    if (repositoryUrl == officialUrl) {
+        repository.setUrl(uri(neoForgedMirror))
+    }
+}
 
 version = mod_version
 group = mod_group_id
@@ -48,6 +63,8 @@ repositories {
         content { includeGroup 'maven.modrinth' }
     }
 }
+
+repositories.withType(MavenArtifactRepository).configureEach(rewriteNeoForgedRepoUrl)
 
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"

@@ -1,7 +1,7 @@
 pluginManagement {
     def bbsPreferMirror = providers.gradleProperty("bbsPreferMirror").orElse("true").get().toBoolean()
     def neoForgedOfficial = 'https://maven.neoforged.net/releases'
-    def neoForgedMirror = 'https://cfproxy.sweatent.top/-----https://maven.neoforged.net/releases'
+    def neoForgedMirror = 'https://neoforged.forgecdn.net/releases'
 
     repositories {
         gradlePluginPortal()
