@@ -13,6 +13,9 @@ import mchorse.bbs_mod.actions.types.chat.CommandActionClip;
 import mchorse.bbs_mod.actions.types.item.ItemDropActionClip;
 import mchorse.bbs_mod.actions.types.item.UseBlockItemActionClip;
 import mchorse.bbs_mod.actions.types.item.UseItemActionClip;
+import mchorse.bbs_mod.addon.BBSAddonBridge;
+import mchorse.bbs_mod.addon.BBSAddonCollector;
+import mchorse.bbs_mod.addon.BBSAddonRegisterEvent;
 import mchorse.bbs_mod.blocks.ModelBlock;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
@@ -44,7 +47,6 @@ import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.clips.overwrite.PathClip;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
-import mchorse.bbs_mod.events.BBSAddonMod;
 import mchorse.bbs_mod.events.EventBus;
 import mchorse.bbs_mod.events.register.RegisterSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterSourcePacksEvent;
@@ -63,8 +65,14 @@ import mchorse.bbs_mod.forms.forms.ParticleForm;
 import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
 import mchorse.bbs_mod.items.GunItem;
+import mchorse.bbs_mod.items.ModelBlockItem;
+import mchorse.bbs_mod.loader.LoaderAccess;
+import mchorse.bbs_mod.loader.LoaderAccessHolder;
+import mchorse.bbs_mod.loader.NeoForgeLoaderAccess;
+import mchorse.bbs_mod.compat.FabricRegistryCompat;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ServerNetwork;
+import mchorse.bbs_mod.network.compat.NetworkCompat;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.ISourcePack;
 import mchorse.bbs_mod.resources.Link;
@@ -79,21 +87,6 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.MapFactory;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.gamerule.v1.GameRuleFactory;
-import net.fabricmc.fabric.api.gamerule.v1.GameRuleRegistry;
-import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
-import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
-import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
-import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.entity.EntityDimensions;
@@ -113,17 +106,34 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameRules;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.fml.event.lifecycle.FMLConstructModEvent;
+import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-public class BBSMod implements ModInitializer
+@Mod(BBSMod.MOD_ID)
+public class BBSMod
 {
     public static final String MOD_ID = "bbs";
 
     public static final EventBus events = new EventBus();
+
+    private final IEventBus modBus;
+    private final BBSAddonCollector addonCollector;
+    private final BBSAddonBridge addonBridge;
 
     private static ActionManager actions;
 
@@ -152,22 +162,28 @@ public class BBSMod implements ModInitializer
     public static final EntityType<ActorEntity> ACTOR_ENTITY = Registry.register(
         Registries.ENTITY_TYPE,
         new Identifier(MOD_ID, "actor"),
-        FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ActorEntity::new)
-            .dimensions(EntityDimensions.fixed(0.6F, 1.8F))
-            .trackRangeBlocks(256)
-            .trackedUpdateRate(1)
-            .build());
+        FabricRegistryCompat.buildEntityTypeWithBlockRange(
+            SpawnGroup.CREATURE,
+            ActorEntity::new,
+            EntityDimensions.fixed(0.6F, 1.8F),
+            256,
+            1
+        )
+    );
 
     public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = Registry.register(
         Registries.ENTITY_TYPE,
         new Identifier(MOD_ID, "gun_projectile"),
-        FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, GunProjectileEntity::new)
-            .dimensions(EntityDimensions.fixed(0.25F, 0.25F))
-            .trackRangeChunks(24)
-            .trackedUpdateRate(1)
-            .build());
+        FabricRegistryCompat.buildEntityTypeWithChunkRange(
+            SpawnGroup.CREATURE,
+            GunProjectileEntity::new,
+            EntityDimensions.fixed(0.25F, 0.25F),
+            24,
+            1
+        )
+    );
 
-    public static final Block MODEL_BLOCK = new ModelBlock(FabricBlockSettings.create()
+    public static final Block MODEL_BLOCK = new ModelBlock(FabricRegistryCompat.blockSettings()
         .noBlockBreakParticles()
         .dropsNothing()
         .noCollision()
@@ -183,7 +199,7 @@ public class BBSMod implements ModInitializer
     public static final Block CHROMA_BLACK_BLOCK = createChromaBlock();
     public static final Block CHROMA_WHITE_BLOCK = createChromaBlock();
 
-    public static final BlockItem MODEL_BLOCK_ITEM = new BlockItem(MODEL_BLOCK, new Item.Settings());
+    public static final ModelBlockItem MODEL_BLOCK_ITEM = new ModelBlockItem(MODEL_BLOCK, new Item.Settings());
     public static final GunItem GUN_ITEM = new GunItem(new Item.Settings().maxCount(1));
     public static final BlockItem CHROMA_RED_BLOCK_ITEM = new BlockItem(CHROMA_RED_BLOCK, new Item.Settings());
     public static final BlockItem CHROMA_GREEN_BLOCK_ITEM = new BlockItem(CHROMA_GREEN_BLOCK, new Item.Settings());
@@ -194,15 +210,15 @@ public class BBSMod implements ModInitializer
     public static final BlockItem CHROMA_BLACK_BLOCK_ITEM = new BlockItem(CHROMA_BLACK_BLOCK, new Item.Settings());
     public static final BlockItem CHROMA_WHITE_BLOCK_ITEM = new BlockItem(CHROMA_WHITE_BLOCK, new Item.Settings());
 
-    public static final GameRules.Key<GameRules.BooleanRule> BBS_EDITING_RULE = GameRuleRegistry.register("bbsEditing", GameRules.Category.MISC, GameRuleFactory.createBooleanRule(true));
+    public static final GameRules.Key<GameRules.BooleanRule> BBS_EDITING_RULE = FabricRegistryCompat.registerBooleanRule("bbsEditing", GameRules.Category.MISC, true);
 
     public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = Registry.register(
         Registries.BLOCK_ENTITY_TYPE,
         new Identifier(MOD_ID, "model_block_entity"),
-        FabricBlockEntityTypeBuilder.create(ModelBlockEntity::new, MODEL_BLOCK).build()
+        FabricRegistryCompat.buildBlockEntityType(ModelBlockEntity::new, MODEL_BLOCK)
     );
 
-    public static final ItemGroup ITEM_GROUP = FabricItemGroup.builder()
+    public static final ItemGroup ITEM_GROUP = FabricRegistryCompat.itemGroupBuilder()
         .icon(() -> createModelBlockStack(Link.assets("textures/icon.png")))
         .displayName(Text.translatable("itemGroup.bbs.main"))
         .entries((context, entries) ->
@@ -233,7 +249,7 @@ public class BBSMod implements ModInitializer
 
     private static Block createChromaBlock()
     {
-        return new Block(FabricBlockSettings.create()
+        return new Block(FabricRegistryCompat.blockSettings()
             .noBlockBreakParticles()
             .dropsNothing()
             .requiresTool()
@@ -369,24 +385,44 @@ public class BBSMod implements ModInitializer
         return factoryActionClips;
     }
 
-    @Override
-    public void onInitialize()
+    public BBSMod()
     {
-        /* Core */
-        gameFolder = FabricLoader.getInstance().getGameDir().toFile();
+        this.modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        this.addonCollector = new BBSAddonCollector();
+        this.addonBridge = new BBSAddonBridge(this.addonCollector);
+
+        LoaderAccessHolder.set(new NeoForgeLoaderAccess(() -> new ArrayList<>(this.addonCollector.getAddons())));
+
+        this.modBus.addListener(this::onConstructMod);
+        this.modBus.addListener(this::onCommonSetup);
+        this.modBus.addListener(NetworkCompat::onRegisterPayloadHandlers);
+        NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(this::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(this::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(this::onServerTickPre);
+        NeoForge.EVENT_BUS.addListener(this::onServerTickPost);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
+        NeoForge.EVENT_BUS.addListener(this::onStartTracking);
+        NeoForge.EVENT_BUS.addListener(this::onEntityJoinLevel);
+    }
+
+    private void onConstructMod(final FMLConstructModEvent event)
+    {
+        this.modBus.post(new BBSAddonRegisterEvent(this.addonCollector));
+    }
+
+    private void onCommonSetup(final FMLCommonSetupEvent event)
+    {
+        LoaderAccess loader = LoaderAccessHolder.get();
+        gameFolder = loader.getGameDir().toFile();
         assetsFolder = new File(gameFolder, "config/bbs/assets");
         settingsFolder = new File(gameFolder, "config/bbs/settings");
 
         assetsFolder.mkdirs();
-
-        FabricLoader.getInstance()
-            .getEntrypointContainers("bbs-addon", BBSAddonMod.class)
-            .forEach((container) ->
-            {
-                events.register(container.getEntrypoint());
-            });
+        this.addonBridge.bridgeToInternalBus(events);
 
         actions = new ActionManager();
+        ActionHandler.registerHandlers(actions);
 
         originalSourcePack = new ExternalAssetsSourcePack(Link.ASSETS, assetsFolder).providesFiles();
         dynamicSourcePack = new DynamicSourcePack(originalSourcePack);
@@ -414,7 +450,6 @@ public class BBSMod implements ModInitializer
 
         films = new FilmManager(() -> new File(worldFolder, "bbs/films"));
 
-        /* Register camera clips */
         factoryCameraClips = new MapFactory<Clip, ClipFactoryData>()
             .register(Link.bbs("idle"), IdleClip.class, new ClipFactoryData(Icons.FRUSTUM, 0x159e64)
                 .withConverter(Link.bbs("dolly"), new IdleToDollyConverter())
@@ -461,19 +496,10 @@ public class BBSMod implements ModInitializer
 
         events.post(new RegisterSettingsEvent());
 
-        /* Networking */
         ServerNetwork.setup();
 
-        /* Commands */
-        CommandRegistrationCallback.EVENT.register(BBSCommands::register);
+        FabricRegistryCompat.registerAttributes(ACTOR_ENTITY, ActorEntity.createActorAttributes());
 
-        /* Event listener */
-        registerEvents();
-
-        /* Entities */
-        FabricDefaultAttributeRegistry.register(ACTOR_ENTITY, ActorEntity.createActorAttributes());
-
-        /* Blocks */
         Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "model"), MODEL_BLOCK);
         Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_red"), CHROMA_RED_BLOCK);
         Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_green"), CHROMA_GREEN_BLOCK);
@@ -498,59 +524,72 @@ public class BBSMod implements ModInitializer
         Registry.register(Registries.ITEM_GROUP, new Identifier(MOD_ID, "main"), ITEM_GROUP);
     }
 
-    private void registerEvents()
+    private void onServerStarted(ServerStartedEvent event)
     {
-        ServerEntityEvents.ENTITY_LOAD.register((entity, world) ->
+        worldFolder = event.getServer().getSavePath(WorldSavePath.ROOT).toFile();
+    }
+
+    private void onServerStopped(ServerStoppedEvent event)
+    {
+        actions.reset();
+        ServerNetwork.reset();
+    }
+
+    private void onServerTickPre(ServerTickEvent.Pre event)
+    {
+        actions.tick();
+    }
+
+    private void onServerTickPost(ServerTickEvent.Post event)
+    {
+        for (Runnable runnable : runnables)
         {
-            if (entity instanceof ServerPlayerEntity player)
-            {
-                Morph morph = Morph.getMorph(player);
+            runnable.run();
+        }
 
-                ServerNetwork.sendMorphToTracked(player, morph.getForm());
-            }
-        });
+        runnables.clear();
+    }
 
-        ServerLifecycleEvents.SERVER_STARTED.register((event) -> worldFolder = event.getSavePath(WorldSavePath.ROOT).toFile());
-        ServerPlayConnectionEvents.JOIN.register((a, b, c) -> ServerNetwork.sendHandshake(c, b));
-
-        ActionHandler.registerHandlers(actions);
-
-        ServerTickEvents.START_SERVER_TICK.register((server) ->
+    private void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event)
+    {
+        if (event.getEntity() instanceof ServerPlayerEntity player)
         {
-            actions.tick();
-        });
+            ServerNetwork.sendHandshake(player.getServer(), player);
+        }
+    }
 
-        ServerTickEvents.END_SERVER_TICK.register((server) ->
-        {
-            for (Runnable runnable : runnables)
-            {
-                runnable.run();
-            }
-
-            runnables.clear();
-        });
-
-        ServerLifecycleEvents.SERVER_STOPPED.register((server) ->
-        {
-            actions.reset();
-            ServerNetwork.reset();
-        });
-
-        EntityTrackingEvents.START_TRACKING.register((trackedEntity, player) ->
+    private void onStartTracking(PlayerEvent.StartTracking event)
+    {
+        if (event.getTarget() instanceof ServerPlayerEntity tracked && event.getEntity() instanceof ServerPlayerEntity watcher)
         {
             runnables.add(() ->
             {
-                if (trackedEntity instanceof ServerPlayerEntity playerTwo)
+                Morph morph = Morph.getMorph(tracked);
+                if (morph != null)
                 {
-                    Morph morph = Morph.getMorph(trackedEntity);
-
-                    if (morph != null)
-                    {
-                        ServerNetwork.sendMorph(player, playerTwo.getId(), morph.getForm());
-                    }
+                    ServerNetwork.sendMorph(watcher, tracked.getId(), morph.getForm());
                 }
             });
-        });
+        }
+    }
+
+    private void onEntityJoinLevel(EntityJoinLevelEvent event)
+    {
+        if (event.getLevel().isClientSide())
+        {
+            return;
+        }
+
+        if (event.getEntity() instanceof ServerPlayerEntity player)
+        {
+            Morph morph = Morph.getMorph(player);
+            ServerNetwork.sendMorphToTracked(player, morph.getForm());
+        }
+    }
+
+    private void onRegisterCommands(RegisterCommandsEvent event)
+    {
+        BBSCommands.register((com.mojang.brigadier.CommandDispatcher) event.getDispatcher(), event.getBuildContext(), event.getCommandSelection());
     }
 
     public static Settings setupConfig(Icon icon, String id, File destination, Consumer<SettingsBuilder> registerer)

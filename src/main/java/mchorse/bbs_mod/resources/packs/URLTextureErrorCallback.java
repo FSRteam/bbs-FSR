@@ -1,19 +1,35 @@
 package mchorse.bbs_mod.resources.packs;
 
-import net.fabricmc.fabric.api.event.Event;
-import net.fabricmc.fabric.api.event.EventFactory;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public interface URLTextureErrorCallback
 {
-    public static final Event<URLTextureErrorCallback> EVENT = EventFactory.createArrayBacked(
-        URLTextureErrorCallback.class, (listeners) -> (url, error) ->
+    Event EVENT = new Event();
+
+    void onError(String url, URLError error);
+
+    final class Event
+    {
+        private final List<URLTextureErrorCallback> listeners = new CopyOnWriteArrayList<>();
+
+        public void register(URLTextureErrorCallback callback)
         {
-            for (URLTextureErrorCallback listener : listeners)
+            if (callback != null)
             {
-                listener.onError(url, error);
+                this.listeners.add(callback);
             }
         }
-    );
 
-    public void onError(String url, URLError error);
+        public URLTextureErrorCallback invoker()
+        {
+            return (url, error) ->
+            {
+                for (URLTextureErrorCallback callback : this.listeners)
+                {
+                    callback.onError(url, error);
+                }
+            };
+        }
+    }
 }

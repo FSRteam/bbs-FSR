@@ -4,8 +4,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.resources.ISourcePack;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.DataPath;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.ModContainer;
+import mchorse.bbs_mod.loader.LoaderAccessHolder;
 
 import java.io.File;
 import java.io.IOException;
@@ -119,24 +118,14 @@ public class InternalAssetsSourcePack implements ISourcePack
          * jar file for some reason... so I have to resort to such ugly piece of code for
          * it to work correctly. I should probably ask on Connector's Discord what I can do,
          * but whatever for now... */
-        String version = "";
-
-        for (ModContainer allMod : FabricLoader.getInstance().getAllMods())
-        {
-            if (allMod.getMetadata().getId().equals(BBSMod.MOD_ID))
-            {
-                version = allMod.getMetadata().getVersion().getFriendlyString();
-
-                break;
-            }
-        }
+        String version = LoaderAccessHolder.get().getModVersion(BBSMod.MOD_ID).orElse("");
 
         if (version.isEmpty())
         {
             return;
         }
 
-        File mods = new File(FabricLoader.getInstance().getGameDir().toFile(), "mods");
+        File mods = new File(LoaderAccessHolder.get().getGameDir().toFile(), "mods");
 
         if (mods.isDirectory())
         {
@@ -176,7 +165,7 @@ public class InternalAssetsSourcePack implements ISourcePack
         /* In development environment, the assets are separate from classes, and for this
          * reason for the files to be found, I have to use this ugly workaround. Also, I
          * don't think it works outside of IntelliJ, so RIP... */
-        if (FabricLoader.getInstance().isDevelopmentEnvironment())
+        if (LoaderAccessHolder.get().isDevelopmentEnvironment())
         {
             File resources = new File(file.getParentFile().getParentFile().getParentFile(), "resources/client/");
 

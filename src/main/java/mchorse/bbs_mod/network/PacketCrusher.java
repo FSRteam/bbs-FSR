@@ -2,9 +2,11 @@ package mchorse.bbs_mod.network;
 
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import mchorse.bbs_mod.network.compat.NetworkCompat;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
 import java.io.ByteArrayOutputStream;
@@ -72,36 +74,65 @@ public abstract class PacketCrusher
 
     public void send(Collection<PlayerEntity> entities, Identifier identifier, byte[] bytes, Consumer<PacketByteBuf> consumer)
     {
-        if (bytes.length == 0)
+        this.sendChunked(bytes, consumer, (buf) ->
         {
-            bytes = new byte[]{69};
+            for (PlayerEntity playerEntity : entities)
+            {
+                this.sendBuffer(playerEntity, identifier, buf);
+            }
+        });
+    }
+
+    public void sendToPlayersTrackingEntity(Entity entity, Identifier identifier, BaseType baseType, Consumer<PacketByteBuf> consumer)
+    {
+        this.sendToPlayersTrackingEntity(entity, identifier, DataStorageUtils.writeToBytes(baseType), consumer);
+    }
+
+    public void sendToPlayersTrackingEntity(Entity entity, Identifier identifier, byte[] bytes, Consumer<PacketByteBuf> consumer)
+    {
+        this.sendChunked(bytes, consumer, (buf) -> NetworkCompat.sendToPlayersTrackingEntity(entity, identifier, buf));
+    }
+
+    public void sendToPlayersTrackingEntityAndSelf(ServerPlayerEntity player, Identifier identifier, BaseType baseType, Consumer<PacketByteBuf> consumer)
+    {
+        this.sendToPlayersTrackingEntityAndSelf(player, identifier, DataStorageUtils.writeToBytes(baseType), consumer);
+    }
+
+    public void sendToPlayersTrackingEntityAndSelf(ServerPlayerEntity player, Identifier identifier, byte[] bytes, Consumer<PacketByteBuf> consumer)
+    {
+        this.sendChunked(bytes, consumer, (buf) -> NetworkCompat.sendToPlayersTrackingEntityAndSelf(player, identifier, buf));
+    }
+
+    private void sendChunked(byte[] bytes, Consumer<PacketByteBuf> consumer, Consumer<PacketByteBuf> sender)
+    {
+        byte[] chunkBytes = bytes;
+
+        if (chunkBytes.length == 0)
+        {
+            chunkBytes = new byte[]{69};
         }
 
-        int total = Math.max((int) Math.ceil(bytes.length / (float) BUFFER_SIZE), 1);
-        int counter = this.counter;
+        int total = Math.max((int) Math.ceil(chunkBytes.length / (float) BUFFER_SIZE), 1);
+        int transferId = this.counter;
 
         for (int index = 0; index < total; index++)
         {
             int offset = index * BUFFER_SIZE;
+            int size = Math.min(BUFFER_SIZE, chunkBytes.length - offset);
+            PacketByteBuf buf = NetworkCompat.createBuffer();
 
-            PacketByteBuf buf = PacketByteBufs.create();
-            int size = Math.min(BUFFER_SIZE, bytes.length - offset);
-
-            buf.writeInt(counter);
+            buf.writeInt(transferId);
             buf.writeInt(index);
             buf.writeInt(total);
             buf.writeInt(size);
-            buf.writeBytes(bytes, offset, size);
+            buf.writeBytes(chunkBytes, offset, size);
 
             if (consumer != null && index == total - 1)
             {
                 consumer.accept(buf);
             }
 
-            for (PlayerEntity playerEntity : entities)
-            {
-                this.sendBuffer(playerEntity, identifier, buf);
-            }
+            sender.accept(buf);
         }
 
         this.counter += 1;

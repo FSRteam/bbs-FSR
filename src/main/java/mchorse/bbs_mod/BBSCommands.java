@@ -55,24 +55,51 @@ public class BBSCommands
 {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher, CommandRegistryAccess registryAccess, CommandManager.RegistrationEnvironment environment)
     {
+        register(dispatcher, environment != null && environment.dedicated);
+    }
+
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, Object registryAccess, Object commandSelection)
+    {
+        register(dispatcher, isDedicatedEnvironment(commandSelection));
+    }
+
+    private static void register(CommandDispatcher<ServerCommandSource> dispatcher, boolean dedicated)
+    {
         Predicate<ServerCommandSource> hasPermissions = (source) -> source.hasPermissionLevel(2);
         LiteralArgumentBuilder<ServerCommandSource> bbs = CommandManager.literal("bbs").requires((source) -> true);
 
-        registerMorphCommand(bbs, environment, hasPermissions);
-        registerModelBlockCommand(bbs, environment, hasPermissions);
-        registerMorphEntityCommand(bbs, environment, hasPermissions);
-        registerFilmsCommand(bbs, environment, hasPermissions);
-        registerDCCommand(bbs, environment, hasPermissions);
-        registerOnHeadCommand(bbs, environment, hasPermissions);
-        registerConfigCommand(bbs, environment, hasPermissions);
-        registerCheatsCommand(bbs, environment);
-        registerBoomCommand(bbs, environment, hasPermissions);
-        registerStructureSaveCommand(bbs, environment, hasPermissions);
+        registerMorphCommand(bbs, dedicated, hasPermissions);
+        registerModelBlockCommand(bbs, dedicated, hasPermissions);
+        registerMorphEntityCommand(bbs, dedicated, hasPermissions);
+        registerFilmsCommand(bbs, dedicated, hasPermissions);
+        registerDCCommand(bbs, dedicated, hasPermissions);
+        registerOnHeadCommand(bbs, dedicated, hasPermissions);
+        registerConfigCommand(bbs, dedicated, hasPermissions);
+        registerCheatsCommand(bbs, dedicated);
+        registerBoomCommand(bbs, dedicated, hasPermissions);
+        registerStructureSaveCommand(bbs, dedicated, hasPermissions);
 
         dispatcher.register(bbs);
     }
 
-    private static void registerStructureSaveCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static boolean isDedicatedEnvironment(Object commandSelection)
+    {
+        if (commandSelection == null)
+        {
+            return false;
+        }
+
+        if (commandSelection instanceof CommandManager.RegistrationEnvironment environment)
+        {
+            return environment.dedicated;
+        }
+
+        String name = commandSelection.toString().toUpperCase();
+
+        return name.contains("DEDICATED");
+    }
+
+    private static void registerStructureSaveCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> structures = CommandManager.literal("structures");
         LiteralArgumentBuilder<ServerCommandSource> save = CommandManager.literal("save");
@@ -86,7 +113,7 @@ public class BBSCommands
         ));
     }
 
-    private static void registerMorphCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerMorphCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> morph = CommandManager.literal("morph");
         RequiredArgumentBuilder<ServerCommandSource, EntitySelector> target = CommandManager.argument("target", EntityArgumentType.players());
@@ -99,7 +126,7 @@ public class BBSCommands
         bbs.then(morph.requires(hasPermissions));
     }
 
-    private static void registerModelBlockCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerModelBlockCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> modelBlock = CommandManager.literal("model_block");
         LiteralArgumentBuilder<ServerCommandSource> playState = CommandManager.literal("play_state");
@@ -179,7 +206,7 @@ public class BBSCommands
         bbs.then(modelBlock.requires(hasPermissions));
     }
 
-    private static void registerMorphEntityCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerMorphEntityCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> morph = CommandManager.literal("morph_entity");
 
@@ -204,7 +231,7 @@ public class BBSCommands
         bbs.then(morph.requires(hasPermissions));
     }
 
-    private static void registerFilmsCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerFilmsCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> scene = CommandManager.literal("films");
         LiteralArgumentBuilder<ServerCommandSource> play = CommandManager.literal("play");
@@ -253,7 +280,7 @@ public class BBSCommands
         bbs.then(scene.requires(hasPermissions));
     }
 
-    private static void registerDCCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerDCCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> dc = CommandManager.literal("dc");
         LiteralArgumentBuilder<ServerCommandSource> shutdown = CommandManager.literal("shutdown");
@@ -267,14 +294,14 @@ public class BBSCommands
         );
     }
 
-    private static void registerOnHeadCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerOnHeadCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> onHead = CommandManager.literal("on_head");
 
         bbs.then(onHead.requires(hasPermissions).executes(BBSCommands::onHead));
     }
 
-    private static void registerConfigCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerConfigCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         LiteralArgumentBuilder<ServerCommandSource> config = CommandManager.literal("config");
 
@@ -331,9 +358,9 @@ public class BBSCommands
         bbs.then(config.requires(hasPermissions));
     }
 
-    private static void registerCheatsCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment)
+    private static void registerCheatsCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated)
     {
-        if (environment.dedicated)
+        if (dedicated)
         {
             return;
         }
@@ -372,7 +399,7 @@ public class BBSCommands
         );
     }
 
-    private static void registerBoomCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, CommandManager.RegistrationEnvironment environment, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerBoomCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
     {
         bbs.then(
             CommandManager.literal("boom").requires(hasPermissions).then(

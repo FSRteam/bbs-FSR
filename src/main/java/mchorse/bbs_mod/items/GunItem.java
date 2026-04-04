@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.items;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.forms.FormUtils;
 import net.minecraft.entity.Entity;
@@ -12,6 +13,9 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
+
+import java.util.function.Consumer;
 
 public class GunItem extends Item
 {
@@ -78,5 +82,17 @@ public class GunItem extends Item
     private GunProperties getProperties(ItemStack stack)
     {
         return GunProperties.get(stack);
+    }
+
+    public void initializeClient(Consumer<IClientItemExtensions> consumer)
+    {
+        consumer.accept(new IClientItemExtensions()
+        {
+            @Override
+            public net.minecraft.client.render.item.BuiltinModelItemRenderer getCustomRenderer()
+            {
+                return BBSItemRenderers.getGunBuiltinRenderer();
+            }
+        });
     }
 }

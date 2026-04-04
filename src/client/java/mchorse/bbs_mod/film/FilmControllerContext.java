@@ -5,7 +5,7 @@ import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
@@ -49,7 +49,7 @@ public class FilmControllerContext
         this.relative = false;
     }
 
-    public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, WorldRenderContext context)
+    public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, BBSWorldRenderContext context)
     {
         this.reset();
 

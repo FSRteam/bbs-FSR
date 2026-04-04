@@ -1,114 +1,78 @@
 plugins {
-	id 'fabric-loom' version '1.15-SNAPSHOT'
-	id 'maven-publish'
+    id 'net.neoforged.gradle.userdev' version '7.1.21'
+    id 'maven-publish'
 }
 
-version = project.mod_version + "-" + minecraft_version
-group = project.maven_group
+version = mod_version
+group = mod_group_id
 
 base {
-	archivesName = project.archives_base_name
+    archivesName = archives_base_name
+}
+
+sourceSets {
+    main {
+        java.srcDirs = ['src/main/java', 'src/client/java']
+        resources.srcDirs = ['src/main/resources', 'src/client/resources']
+    }
 }
 
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
-	exclusiveContent {
-		forRepository {
-			maven {
-				name = "Modrinth"
-				url = "https://api.modrinth.com/maven"
-			}
-		}
-		filter {
-			includeGroup "maven.modrinth"
-		}
-	}
-
-	maven {
-		name = "Gegy"
-		url = "https://maven.gegy.dev/"
-	}
-}
-
-loom {
-    splitEnvironmentSourceSets()
-
-	mods {
-		"bbs" {
-			sourceSet sourceSets.main
-		}
-	}
-
-	accessWidenerPath.set(getRootProject().file("src/main/resources/bbs.accesswidener"))
+    mavenCentral()
+    maven {
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases'
+    }
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
 }
 
 dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.neoforged:neoforge:${neo_version}"
 
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-	
-	// Uncomment the following line to enable the deprecated Fabric API modules. 
-	// These are included in the Fabric API production distribution and allow you to update your mod to the latest modules at a later more convenient time.
+    implementation "org.anarres:jcpp:1.4.14"
+    implementation "io.github.douira:glsl-transformer:2.0.0-pre13"
 
-	// modImplementation "net.fabricmc.fabric-api:fabric-api-deprecated:${project.fabric_version}"
-	modImplementation "maven.modrinth:sodium:mc1.20.4-0.5.8"
-	modCompileOnly "maven.modrinth:iris:1.7.2+1.20.4"
-	modCompileOnly "maven.modrinth:distanthorizons:2.1.0-a-1.20.4"
-	modCompileOnly "maven.modrinth:indium:1.0.31+mc1.20.4"
-
-	modImplementation "org.anarres:jcpp:1.4.14"
-	modImplementation "io.github.douira:glsl-transformer:2.0.0-pre13"
-}
-
-processResources {
-	inputs.property "version", project.version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": project.version
-	}
-}
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 17
+    // TODO: validate 1.21.1-compatible versions for optional client mods before re-enabling
+    // modImplementation "maven.modrinth:sodium:mc1.20.4-0.5.8"
+    // modCompileOnly "maven.modrinth:iris:1.7.2+1.20.4"
+    // modCompileOnly "maven.modrinth:distanthorizons:2.1.0-a-1.20.4"
+    // modCompileOnly "maven.modrinth:indium:1.0.31+mc1.20.4"
 }
 
 java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
-	withSourcesJar()
-
-	sourceCompatibility = JavaVersion.VERSION_17
-	targetCompatibility = JavaVersion.VERSION_17
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+    withSourcesJar()
 }
 
-jar {
-	from("LICENSE") {
-		rename { "${it}_${project.base.archivesName.get()}"}
-	}
+tasks.withType(JavaCompile).configureEach {
+    // NeoForge 1.21.1 targets Java 21
+    options.release = java_version as int
 }
 
-// configure the maven publication
+processResources {
+    inputs.properties(
+        mod_id: mod_id,
+        mod_version: mod_version,
+        mod_name: mod_name,
+        mod_license: mod_license,
+        minecraft_version: minecraft_version,
+        loader_version_range: loader_version_range,
+        neo_version_range: neo_version_range
+    )
+
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand project.properties
+    }
+}
+
 publishing {
-	publications {
-		mavenJava(MavenPublication) {
-			from components.java
-		}
-	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
-	}
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
 }

@@ -5,7 +5,7 @@ import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.utils.clips.Clip;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
 
 import java.util.List;
 import java.util.Map;
@@ -59,7 +59,7 @@ public class WorldFilmController extends BaseFilmController
     }
 
     @Override
-    public void render(WorldRenderContext context)
+    public void render(BBSWorldRenderContext context)
     {
         super.render(context);
 

@@ -26,11 +26,9 @@ import mchorse.bbs_mod.utils.EnumUtils;
 import mchorse.bbs_mod.utils.PermissionUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.fabricmc.fabric.api.networking.v1.PacketSender;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import mchorse.bbs_mod.network.compat.NetworkCompat;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -96,20 +94,20 @@ public class ServerNetwork
 
     public static void setup()
     {
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_MODEL_BLOCK_FORM_PACKET, (server, player, handler, buf, responder) -> handleModelBlockFormPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_MODEL_BLOCK_TRANSFORMS_PACKET, (server, player, handler, buf, responder) -> handleModelBlockTransformsPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_PLAYER_FORM_PACKET, (server, player, handler, buf, responder) -> handlePlayerFormPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_MANAGER_DATA_PACKET, (server, player, handler, buf, responder) -> handleManagerDataPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_ACTION_RECORDING, (server, player, handler, buf, responder) -> handleActionRecording(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_TOGGLE_FILM, (server, player, handler, buf, responder) -> handleToggleFilm(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_ACTION_CONTROL, (server, player, handler, buf, responder) -> handleActionControl(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_FILM_DATA_SYNC, (server, player, handler, buf, responder) -> handleSyncData(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_PLAYER_TP, (server, player, handler, buf, responder) -> handleTeleportPlayer(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_ANIMATION_STATE_TRIGGER, (server, player, handler, buf, responder) -> handleAnimationStateTriggerPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_SHARED_FORM, (server, player, handler, buf, responder) -> handleSharedFormPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_ZOOM, (server, player, handler, buf, responder) -> handleZoomPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_PAUSE_FILM, (server, player, handler, buf, responder) -> handlePauseFilmPacket(server, player, buf));
-        ServerPlayNetworking.registerGlobalReceiver(SERVER_APPLY_FILM_PLAYER_SETTINGS, (server, player, handler, buf, responder) -> handleApplyFilmPlayerSettings(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_MODEL_BLOCK_FORM_PACKET, (server, player, buf) -> handleModelBlockFormPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_MODEL_BLOCK_TRANSFORMS_PACKET, (server, player, buf) -> handleModelBlockTransformsPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_PLAYER_FORM_PACKET, (server, player, buf) -> handlePlayerFormPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_MANAGER_DATA_PACKET, (server, player, buf) -> handleManagerDataPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_ACTION_RECORDING, (server, player, buf) -> handleActionRecording(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_TOGGLE_FILM, (server, player, buf) -> handleToggleFilm(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_ACTION_CONTROL, (server, player, buf) -> handleActionControl(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_FILM_DATA_SYNC, (server, player, buf) -> handleSyncData(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_PLAYER_TP, (server, player, buf) -> handleTeleportPlayer(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_ANIMATION_STATE_TRIGGER, (server, player, buf) -> handleAnimationStateTriggerPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_SHARED_FORM, (server, player, buf) -> handleSharedFormPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_ZOOM, (server, player, buf) -> handleZoomPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_PAUSE_FILM, (server, player, buf) -> handlePauseFilmPacket(server, player, buf));
+        NetworkCompat.registerServerReceiver(SERVER_APPLY_FILM_PLAYER_SETTINGS, (server, player, buf) -> handleApplyFilmPlayerSettings(server, player, buf));
     }
 
     /* Handlers */
@@ -462,16 +460,13 @@ public class ServerNetwork
     {
         String string = buf.readString();
         int type = buf.readInt();
-        PacketByteBuf newBuf = PacketByteBufs.create();
+        PacketByteBuf newBuf = NetworkCompat.createBuffer();
 
         newBuf.writeInt(player.getId());
         newBuf.writeString(string);
         newBuf.writeInt(type);
 
-        for (ServerPlayerEntity otherPlayer : PlayerLookup.tracking(player))
-        {
-            ServerPlayNetworking.send(otherPlayer, CLIENT_ANIMATION_STATE_TRIGGER, newBuf);
-        }
+        NetworkCompat.sendToPlayersTrackingEntity(player, CLIENT_ANIMATION_STATE_TRIGGER, newBuf);
 
         server.execute(() ->
         {
@@ -581,21 +576,19 @@ public class ServerNetwork
 
     public static void sendMorphToTracked(ServerPlayerEntity player, Form form)
     {
-        sendMorph(player, player.getId(), form);
-
-        for (ServerPlayerEntity otherPlayer : PlayerLookup.tracking(player))
+        crusher.sendToPlayersTrackingEntityAndSelf(player, CLIENT_PLAYER_FORM_PACKET, FormUtils.toData(form), (packetByteBuf) ->
         {
-            sendMorph(otherPlayer, player.getId(), form);
-        }
+            packetByteBuf.writeInt(player.getId());
+        });
     }
 
     public static void sendClickedModelBlock(ServerPlayerEntity player, BlockPos pos)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeBlockPos(pos);
 
-        ServerPlayNetworking.send(player, CLIENT_CLICKED_MODEL_BLOCK_PACKET, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_CLICKED_MODEL_BLOCK_PACKET, buf);
     }
 
     public static void sendPlayFilm(ServerPlayerEntity player, ServerWorld world, String filmId, boolean withCamera)
@@ -648,11 +641,11 @@ public class ServerNetwork
 
     public static void sendStopFilm(ServerPlayerEntity player, String filmId)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeString(filmId);
 
-        ServerPlayNetworking.send(player, CLIENT_STOP_FILM_PACKET, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_STOP_FILM_PACKET, buf);
     }
 
     public static void sendManagerData(ServerPlayerEntity player, int callbackId, RepositoryOperation op, BaseType data)
@@ -673,20 +666,14 @@ public class ServerNetwork
             packetByteBuf.writeInt(tick);
         });
     }
-
-    public static void sendHandshake(MinecraftServer server, PacketSender packetSender)
-    {
-        packetSender.sendPacket(ServerNetwork.CLIENT_HANDSHAKE, createHandshakeBuf(server));
-    }
-
     public static void sendHandshake(MinecraftServer server, ServerPlayerEntity player)
     {
-        ServerPlayNetworking.send(player, ServerNetwork.CLIENT_HANDSHAKE, createHandshakeBuf(server));
+        NetworkCompat.sendToPlayer(player, ServerNetwork.CLIENT_HANDSHAKE, createHandshakeBuf(server));
     }
 
     private static PacketByteBuf createHandshakeBuf(MinecraftServer server)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
         String id = "";
 
         /* No need to do that in singleplayer */
@@ -702,11 +689,11 @@ public class ServerNetwork
 
     public static void sendCheatsPermission(ServerPlayerEntity player, boolean cheats)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeBoolean(cheats);
 
-        ServerPlayNetworking.send(player, ServerNetwork.CLIENT_CHEATS_PERMISSION, buf);
+        NetworkCompat.sendToPlayer(player, ServerNetwork.CLIENT_CHEATS_PERMISSION, buf);
     }
 
     public static void sendSharedForm(ServerPlayerEntity player, MapType data)
@@ -723,9 +710,17 @@ public class ServerNetwork
         });
     }
 
+    public static void sendEntityFormToTracking(Entity trackedEntity, IEntityFormProvider actor)
+    {
+        crusher.sendToPlayersTrackingEntity(trackedEntity, CLIENT_ENTITY_FORM, FormUtils.toData(actor.getForm()), (packetByteBuf) ->
+        {
+            packetByteBuf.writeInt(actor.getEntityId());
+        });
+    }
+
     public static void sendActors(ServerPlayerEntity player, String filmId, Map<String, LivingEntity> actors)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeString(filmId);
         buf.writeInt(actors.size());
@@ -736,56 +731,56 @@ public class ServerNetwork
             buf.writeInt(entry.getValue().getId());
         }
 
-        ServerPlayNetworking.send(player, CLIENT_ACTORS, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_ACTORS, buf);
     }
 
     public static void sendGunProperties(ServerPlayerEntity player, GunProjectileEntity projectile)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
         GunProperties properties = projectile.getProperties();
 
         buf.writeInt(projectile.getEntityId());
         properties.toNetwork(buf);
 
-        ServerPlayNetworking.send(player, CLIENT_GUN_PROPERTIES, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_GUN_PROPERTIES, buf);
     }
 
     public static void sendPauseFilm(ServerPlayerEntity player, String filmId)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeString(filmId);
 
-        ServerPlayNetworking.send(player, CLIENT_PAUSE_FILM, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_PAUSE_FILM, buf);
     }
 
     public static void sendSelectedSlot(ServerPlayerEntity player, int slot)
     {
         player.getInventory().selectedSlot = slot;
 
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeInt(slot);
 
-        ServerPlayNetworking.send(player, CLIENT_SELECTED_SLOT, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_SELECTED_SLOT, buf);
     }
 
     public static void sendModelBlockState(ServerPlayerEntity player, BlockPos pos, String trigger)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeBlockPos(pos);
         buf.writeString(trigger);
 
-        ServerPlayNetworking.send(player, CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, buf);
     }
 
     public static void sendReloadModelBlocks(ServerPlayerEntity player, int tickRandom)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeInt(tickRandom);
 
-        ServerPlayNetworking.send(player, CLIENT_REFRESH_MODEL_BLOCKS, buf);
+        NetworkCompat.sendToPlayer(player, CLIENT_REFRESH_MODEL_BLOCKS, buf);
     }
 }

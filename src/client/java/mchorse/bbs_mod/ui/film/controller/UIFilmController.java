@@ -78,7 +78,7 @@ import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import net.minecraft.client.gl.GlUniform;
@@ -129,7 +129,7 @@ public class UIFilmController extends UIElement
     private int pov;
     private boolean paused;
 
-    private WorldRenderContext worldRenderContext;
+    private BBSWorldRenderContext worldRenderContext;
 
     public UIFilmController(UIFilmPanel panel)
     {
@@ -1203,7 +1203,7 @@ public class UIFilmController extends UIElement
         }
     }
 
-    public void renderFrame(WorldRenderContext context)
+    public void renderFrame(BBSWorldRenderContext context)
     {
         this.worldRenderContext = context;
 
@@ -1260,7 +1260,7 @@ public class UIFilmController extends UIElement
         return keyframeEditor != null ? keyframeEditor.getBone() : null;
     }
 
-    private void renderStencil(WorldRenderContext renderContext, UIContext context, boolean altPressed)
+    private void renderStencil(BBSWorldRenderContext renderContext, UIContext context, boolean altPressed)
     {
         Area viewport = this.panel.preview.getViewport();
 

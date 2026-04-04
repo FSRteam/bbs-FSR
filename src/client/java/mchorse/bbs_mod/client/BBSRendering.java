@@ -27,9 +27,10 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
 import mchorse.bbs_mod.utils.iris.ShaderCurves;
 import mchorse.bbs_mod.utils.sodium.SodiumUtils;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.compat.FabricWorldRenderContextAdapter;
 import net.fabricmc.fabric.impl.client.rendering.WorldRenderContextImpl;
-import net.fabricmc.loader.api.FabricLoader;
+import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
@@ -190,9 +191,9 @@ public class BBSRendering
 
     public static void setup()
     {
-        iris = FabricLoader.getInstance().isModLoaded("iris");
-        sodium = FabricLoader.getInstance().isModLoaded("sodium");
-        optifine = FabricLoader.getInstance().isModLoaded("optifabric");
+        iris = LoaderAccessHolder.get().isModLoaded("iris");
+        sodium = LoaderAccessHolder.get().isModLoaded("sodium");
+        optifine = LoaderAccessHolder.get().isModLoaded("optifabric");
 
         ModelBlockEntityUpdateCallback.EVENT.register((entity) ->
         {
@@ -412,7 +413,7 @@ public class BBSRendering
 
         if (isIrisShadersEnabled())
         {
-            renderCoolStuff(worldRenderContext);
+            renderCoolStuff(FabricWorldRenderContextAdapter.wrap(worldRenderContext));
         }
     }
 
@@ -441,7 +442,7 @@ public class BBSRendering
         }
     }
 
-    public static void renderCoolStuff(WorldRenderContext worldRenderContext)
+    public static void renderCoolStuff(BBSWorldRenderContext worldRenderContext)
     {
         if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
         {

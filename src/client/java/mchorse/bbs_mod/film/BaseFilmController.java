@@ -30,7 +30,7 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -623,7 +623,7 @@ public abstract class BaseFilmController
         return i != this.exception;
     }
 
-    public void render(WorldRenderContext context)
+    public void render(BBSWorldRenderContext context)
     {
         RenderSystem.enableDepthTest();
 
@@ -642,7 +642,7 @@ public abstract class BaseFilmController
         }
     }
 
-    protected void renderEntity(WorldRenderContext context, Replay replay, IEntity entity)
+    protected void renderEntity(BBSWorldRenderContext context, Replay replay, IEntity entity)
     {
         if (!replay.actor.get())
         {
@@ -654,7 +654,7 @@ public abstract class BaseFilmController
         }
     }
 
-    protected FilmControllerContext getFilmControllerContext(WorldRenderContext context, Replay replay, IEntity entity)
+    protected FilmControllerContext getFilmControllerContext(BBSWorldRenderContext context, Replay replay, IEntity entity)
     {
         return FilmControllerContext.instance
             .setup(this.entities, entity, replay, context)

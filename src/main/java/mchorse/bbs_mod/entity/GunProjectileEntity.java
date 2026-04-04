@@ -8,7 +8,6 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.items.GunProperties;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.utils.MathUtils;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -23,7 +22,6 @@ import net.minecraft.entity.projectile.ProjectileUtil;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.tag.EntityTypeTags;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -70,11 +68,7 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
         if (!this.impacted)
         {
             this.setForm(FormUtils.copy(this.properties.impactForm));
-
-            for (ServerPlayerEntity otherPlayer : PlayerLookup.tracking(this))
-            {
-                ServerNetwork.sendEntityForm(otherPlayer, this);
-            }
+            ServerNetwork.sendEntityFormToTracking(this, this);
 
             this.impacted = true;
         }

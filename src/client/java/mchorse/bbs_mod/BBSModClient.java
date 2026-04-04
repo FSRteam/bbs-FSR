@@ -9,9 +9,11 @@ import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.compat.ClientApiCompat;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
+import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.cubic.model.ModelManager;
@@ -57,16 +59,6 @@ import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.fabricmc.fabric.impl.client.rendering.BlockEntityRendererRegistryImpl;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
@@ -89,7 +81,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.List;
 
-public class BBSModClient implements ClientModInitializer
+public class BBSModClient
 {
     private static TextureManager textures;
     private static FramebufferManager framebuffers;
@@ -120,8 +112,8 @@ public class BBSModClient implements ClientModInitializer
     private static UIDashboard dashboard;
 
     private static CameraController cameraController = new CameraController();
-    private static ModelBlockItemRenderer modelBlockItemRenderer = new ModelBlockItemRenderer();
-    private static GunItemRenderer gunItemRenderer = new GunItemRenderer();
+    private static ModelBlockItemRenderer modelBlockItemRenderer = BBSItemRenderers.getModelBlockRenderer();
+    private static GunItemRenderer gunItemRenderer = BBSItemRenderers.getGunRenderer();
     private static Films films;
     private static GunZoom gunZoom;
     private static String playFilmAndRecordFilmId;
@@ -322,7 +314,6 @@ public class BBSModClient implements ClientModInitializer
         }
     }
 
-    @Override
     public void onInitializeClient()
     {
         AssetProvider provider = BBSMod.getProvider();
@@ -406,7 +397,7 @@ public class BBSModClient implements ClientModInitializer
         keyTeleport = this.createKey("teleport", GLFW.GLFW_KEY_Y);
         keyZoom = this.createKeyMouse("zoom", 2);
 
-        WorldRenderEvents.AFTER_ENTITIES.register((context) ->
+        ClientApiCompat.onAfterEntities((context) ->
         {
             if (!BBSRendering.isIrisShadersEnabled())
             {
@@ -457,7 +448,7 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
-        WorldRenderEvents.LAST.register((context) ->
+        ClientApiCompat.onLast((context) ->
         {
             if (videoRecorder.isRecording() && BBSRendering.canRender)
             {
@@ -465,7 +456,7 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
+        ClientApiCompat.onDisconnect((client) ->
         {
             dashboard = null;
             films = new Films();
@@ -476,12 +467,12 @@ public class BBSModClient implements ClientModInitializer
             cameraController.reset();
         });
 
-        ClientTickEvents.START_CLIENT_TICK.register((client) ->
+        ClientApiCompat.onStartClientTick((client) ->
         {
             BBSRendering.startTick();
         });
 
-        ClientTickEvents.END_WORLD_TICK.register((client) ->
+        ClientApiCompat.onEndWorldTick((client) ->
         {
             MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -493,7 +484,7 @@ public class BBSModClient implements ClientModInitializer
             BBSResources.tick();
         });
 
-        ClientTickEvents.END_CLIENT_TICK.register((client) ->
+        ClientApiCompat.onEndClientTick((client) ->
         {
             MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -561,7 +552,7 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
-        HudRenderCallback.EVENT.register((drawContext, tickDelta) ->
+        ClientApiCompat.onHudRender((drawContext, tickDelta) ->
         {
             BBSRendering.renderHud(drawContext, tickDelta);
 
@@ -577,8 +568,8 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
-        ClientLifecycleEvents.CLIENT_STOPPING.register((e) -> BBSResources.stopWatchdog());
-        ClientLifecycleEvents.CLIENT_STARTED.register((e) ->
+        ClientApiCompat.onClientStopping((e) -> BBSResources.stopWatchdog());
+        ClientApiCompat.onClientStarted((e) ->
         {
             BBSRendering.setupFramebuffer();
             provider.register(new MinecraftSourcePack());
@@ -613,13 +604,10 @@ public class BBSModClient implements ClientModInitializer
         ClientNetwork.setup();
 
         /* Entity renderers */
-        EntityRendererRegistry.register(BBSMod.ACTOR_ENTITY, ActorEntityRenderer::new);
-        EntityRendererRegistry.register(BBSMod.GUN_PROJECTILE_ENTITY, GunProjectileEntityRenderer::new);
+        ClientApiCompat.registerEntityRenderer(BBSMod.ACTOR_ENTITY, ActorEntityRenderer::new);
+        ClientApiCompat.registerEntityRenderer(BBSMod.GUN_PROJECTILE_ENTITY, GunProjectileEntityRenderer::new);
 
-        BlockEntityRendererRegistryImpl.register(BBSMod.MODEL_BLOCK_ENTITY, ModelBlockEntityRenderer::new);
-
-        BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.MODEL_BLOCK_ITEM, modelBlockItemRenderer);
-        BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.GUN_ITEM, gunItemRenderer);
+        ClientApiCompat.registerBlockEntityRenderer(BBSMod.MODEL_BLOCK_ENTITY, ModelBlockEntityRenderer::new);
 
         /* Create folders */
         BBSMod.getAudioFolder().mkdirs();
@@ -638,7 +626,7 @@ public class BBSModClient implements ClientModInitializer
 
     private KeyBinding createKey(String id, int key)
     {
-        return KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        return ClientApiCompat.registerKeyBinding(new KeyBinding(
             "key." + BBSMod.MOD_ID + "." + id,
             InputUtil.Type.KEYSYM,
             key,
@@ -648,7 +636,7 @@ public class BBSModClient implements ClientModInitializer
 
     private KeyBinding createKeyMouse(String id, int button)
     {
-        return KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        return ClientApiCompat.registerKeyBinding(new KeyBinding(
             "key." + BBSMod.MOD_ID + "." + id,
             InputUtil.Type.MOUSE,
             button,

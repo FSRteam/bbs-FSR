@@ -2,13 +2,10 @@ package mchorse.bbs_mod.actions;
 
 import mchorse.bbs_mod.actions.types.blocks.PlaceBlockActionClip;
 import mchorse.bbs_mod.actions.types.chat.ChatActionClip;
-import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
-import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import mchorse.bbs_mod.actions.compat.ActionEventCompat;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.message.MessageType;
-import net.minecraft.network.message.SignedMessage;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameMode;
@@ -19,24 +16,22 @@ public class ActionHandler
 {
     public static void registerHandlers(ActionManager actions)
     {
-        ServerMessageEvents.CHAT_MESSAGE.register((SignedMessage message, ServerPlayerEntity sender, MessageType.Parameters params) ->
+        ActionEventCompat.onChatMessage((String rawText, ServerPlayerEntity sender) ->
         {
-            String literalString = message.getContent().getLiteralString();
-
-            if (literalString != null)
+            if (rawText != null)
             {
                 actions.addAction(sender, () ->
                 {
                     ChatActionClip clip = new ChatActionClip();
 
-                    clip.message.set(literalString);
+                    clip.message.set(rawText);
 
                     return clip;
                 });
             }
         });
 
-        PlayerBlockBreakEvents.AFTER.register((World world, PlayerEntity player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity) ->
+        ActionEventCompat.onBlockBreakAfter((World world, PlayerEntity player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity) ->
         {
             if (player instanceof ServerPlayerEntity serverPlayer)
             {

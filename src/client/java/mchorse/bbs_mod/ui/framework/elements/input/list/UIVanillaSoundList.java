@@ -9,7 +9,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.IOUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.fabricmc.loader.api.FabricLoader;
+import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
@@ -505,7 +505,7 @@ public class UIVanillaSoundList extends UIStringList
         {
             String originalName = this.removePrefix(displayName);
 
-            File gameDir = net.fabricmc.loader.api.FabricLoader.getInstance().getGameDir().toFile();
+            File gameDir = LoaderAccessHolder.get().getGameDir().toFile();
             File audioDir = new File(gameDir, "config/bbs/assets/audio");
 
             if (!audioDir.exists() || !audioDir.isDirectory())
@@ -638,7 +638,7 @@ public class UIVanillaSoundList extends UIStringList
     {
         try
         {
-            File gameDir = FabricLoader.getInstance().getGameDir().toFile();
+            File gameDir = LoaderAccessHolder.get().getGameDir().toFile();
             File audioDir = new File(gameDir, "config/bbs/assets/audio");
             
             if (!audioDir.exists())

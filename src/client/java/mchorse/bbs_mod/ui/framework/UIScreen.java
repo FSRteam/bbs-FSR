@@ -10,7 +10,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.utils.IFileDropListener;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.FFMpegUtils;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -68,7 +68,7 @@ public class UIScreen extends Screen implements IFileDropListener
         this.menu.update();
     }
 
-    public void renderInWorld(WorldRenderContext context)
+    public void renderInWorld(BBSWorldRenderContext context)
     {
         this.menu.renderInWorld(context);
     }

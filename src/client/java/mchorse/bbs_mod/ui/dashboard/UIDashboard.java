@@ -40,8 +40,8 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.loader.api.FabricLoader;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.Entity;
@@ -252,7 +252,7 @@ public class UIDashboard extends UIBaseMenu
         this.panels.registerPanel(new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND);
         this.panels.registerPanel(new UIGraphPanel(this), UIKeys.GRAPH_TOOLTIP, Icons.GRAPH);
 
-        if (FabricLoader.getInstance().isDevelopmentEnvironment())
+        if (LoaderAccessHolder.get().isDevelopmentEnvironment())
         {
             this.panels.registerPanel(new UIDebugPanel(this), IKey.raw("Sandbox"), Icons.CODE);
         }
@@ -334,7 +334,7 @@ public class UIDashboard extends UIBaseMenu
         }
     }
 
-    public void renderInWorld(WorldRenderContext context)
+    public void renderInWorld(BBSWorldRenderContext context)
     {
         super.renderInWorld(context);
 
