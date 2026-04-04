@@ -1,0 +1,30 @@
+main:
+  push:
+    - runner:
+        cpus: 2
+      docker:
+        image: eclipse-temurin:21-jdk
+      cache:
+        - /root/.gradle/caches
+        - /root/.gradle/wrapper
+      stages:
+        - name: build
+          script: |
+            set -eu
+            chmod +x ./gradlew
+            ./gradlew --no-daemon clean build --stacktrace
+
+  api_trigger:
+    - runner:
+        cpus: 2
+      docker:
+        image: eclipse-temurin:21-jdk
+      cache:
+        - /root/.gradle/caches
+        - /root/.gradle/wrapper
+      stages:
+        - name: build
+          script: |
+            set -eu
+            chmod +x ./gradlew
+            ./gradlew --no-daemon clean build --stacktrace
