@@ -5,6 +5,10 @@ pluginManagement {
             name = 'NeoForged'
             url = 'https://maven.neoforged.net/releases'
         }
+        maven {
+            name = 'NeoForged Mirror Fallback'
+            url = 'https://cfproxy.sweatent.top/-----https://maven.neoforged.net/releases'
+        }
         mavenCentral()
     }
 
