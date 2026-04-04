@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
 }
 
-def bbsPreferMirror = (findProperty("bbsPreferMirror")?.toString()?.toBoolean()) ?: false
+def bbsPreferMirror = (findProperty("bbsPreferMirror")?.toString() ?: "true").toBoolean()
 def neoForgedOfficial = 'https://maven.neoforged.net/releases'
 def neoForgedMirror = 'https://cfproxy.sweatent.top/-----https://maven.neoforged.net/releases'
 

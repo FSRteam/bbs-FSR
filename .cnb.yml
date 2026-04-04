@@ -2,6 +2,7 @@ main:
   push:
     - runner:
         cpus: 2
+        memory: 8
       docker:
         image: eclipse-temurin:21-jdk
       cache:
@@ -22,6 +23,7 @@ main:
   api_trigger:
     - runner:
         cpus: 2
+        memory: 8
       docker:
         image: eclipse-temurin:21-jdk
       cache:
