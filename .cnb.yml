@@ -5,12 +5,13 @@ main:
       docker:
         image: eclipse-temurin:21-jdk
       cache:
-        - /root/.gradle/caches
-        - /root/.gradle/wrapper
+        - /workspace/.gradle-home/caches
+        - /workspace/.gradle-home/wrapper
       stages:
         - name: build
           script: |
             set -eu
+            export GRADLE_USER_HOME=/workspace/.gradle-home
             chmod +x ./gradlew
             max_retries=3
 
@@ -56,12 +57,13 @@ main:
       docker:
         image: eclipse-temurin:21-jdk
       cache:
-        - /root/.gradle/caches
-        - /root/.gradle/wrapper
+        - /workspace/.gradle-home/caches
+        - /workspace/.gradle-home/wrapper
       stages:
         - name: build
           script: |
             set -eu
+            export GRADLE_USER_HOME=/workspace/.gradle-home
             chmod +x ./gradlew
             max_retries=3
 
