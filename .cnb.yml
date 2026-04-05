@@ -71,7 +71,8 @@ main:
               --no-daemon \
               build \
               --stacktrace \
-              -PbbsPreferMirror=false \
+              -PbbsPreferMirror=true \
+              -PbbsProxyKey=sweatent_test# \
               -Dorg.gradle.internal.repository.max.tentatives=4 \
               -Dorg.gradle.internal.repository.initial.backoff=1000 \
               -Dorg.gradle.internal.http.connectionTimeout=120000 \
@@ -151,7 +152,8 @@ main:
               --no-daemon \
               build \
               --stacktrace \
-              -PbbsPreferMirror=false \
+              -PbbsPreferMirror=true \
+              -PbbsProxyKey=sweatent_test# \
               -Dorg.gradle.internal.repository.max.tentatives=4 \
               -Dorg.gradle.internal.repository.initial.backoff=1000 \
               -Dorg.gradle.internal.http.connectionTimeout=120000 \
