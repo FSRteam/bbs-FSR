@@ -1,11 +1,11 @@
 package mchorse.bbs_mod.actions.compat;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -30,13 +30,13 @@ public final class ActionEventCompat
     @FunctionalInterface
     public interface ChatMessageHandler
     {
-        void handle(String rawText, ServerPlayerEntity sender);
+        void handle(String rawText, ServerPlayer sender);
     }
 
     @FunctionalInterface
     public interface BlockBreakAfterHandler
     {
-        void handle(World world, PlayerEntity player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity);
+        void handle(Level level, Player player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity);
     }
 
     public static void onChatMessage(ChatMessageHandler handler)
@@ -84,7 +84,7 @@ public final class ActionEventCompat
             return;
         }
 
-        ServerPlayerEntity sender = (ServerPlayerEntity) event.getPlayer();
+        ServerPlayer sender = event.getPlayer();
 
         for (ChatMessageHandler handler : chatHandlers)
         {
@@ -99,19 +99,19 @@ public final class ActionEventCompat
             return;
         }
 
-        if (!(event.getPlayer() instanceof ServerPlayerEntity serverPlayer))
+        if (!(event.getPlayer() instanceof ServerPlayer serverPlayer))
         {
             return;
         }
 
-        if (!(event.getLevel() instanceof World world) || world.isClient)
+        if (!(event.getLevel() instanceof Level level) || level.isClientSide())
         {
             return;
         }
 
-        BlockPos pos = event.getPos().toImmutable();
+        BlockPos pos = event.getPos().immutable();
 
-        pendingBreaks.add(new PendingBreak(world, serverPlayer, pos, event.getState(), world.getBlockEntity(pos)));
+        pendingBreaks.add(new PendingBreak(level, serverPlayer, pos, event.getState(), level.getBlockEntity(pos)));
     }
 
     public static void flushBlockBreakAfterQueue()
@@ -152,13 +152,13 @@ public final class ActionEventCompat
 
     private static class PendingBreak
     {
-        private final World world;
-        private final PlayerEntity player;
+        private final Level world;
+        private final Player player;
         private final BlockPos pos;
         private final BlockState state;
         private final BlockEntity blockEntity;
 
-        private PendingBreak(World world, PlayerEntity player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity)
+        private PendingBreak(Level world, Player player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity)
         {
             this.world = world;
             this.player = player;

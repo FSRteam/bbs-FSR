@@ -3,21 +3,21 @@ package mchorse.bbs_mod.entity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.network.ServerNetwork;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.DefaultAttributeContainer;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.network.packet.s2c.play.ItemPickupAnimationS2CPacket;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Arm;
-import net.minecraft.util.math.Box;
-import net.minecraft.world.World;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundTakeItemEntityPacket;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 
 import java.util.HashMap;
 import java.util.List;
@@ -25,24 +25,24 @@ import java.util.Map;
 
 public class ActorEntity extends LivingEntity implements IEntityFormProvider
 {
-    public static DefaultAttributeContainer.Builder createActorAttributes()
+    public static AttributeSupplier.Builder createActorAttributes()
     {
         return LivingEntity.createLivingAttributes()
-            .add(EntityAttributes.GENERIC_ATTACK_DAMAGE, 1D)
-            .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.1D)
-            .add(EntityAttributes.GENERIC_ATTACK_SPEED)
-            .add(EntityAttributes.GENERIC_LUCK);
+            .add(Attributes.ATTACK_DAMAGE, 1D)
+            .add(Attributes.MOVEMENT_SPEED, 0.1D)
+            .add(Attributes.ATTACK_SPEED)
+            .add(Attributes.LUCK);
     }
 
     private boolean despawn;
-    private MCEntity entity = new MCEntity(this);
+    private final MCEntity entity = new MCEntity(this);
     private Form form;
 
-    private Map<EquipmentSlot, ItemStack> equipment = new HashMap<>();
+    private final Map<EquipmentSlot, ItemStack> equipment = new HashMap<>();
 
-    public ActorEntity(EntityType<? extends LivingEntity> entityType, World world)
+    public ActorEntity(EntityType<? extends LivingEntity> entityType, Level level)
     {
-        super(entityType, world);
+        super(entityType, level);
     }
 
     public MCEntity getEntity()
@@ -69,7 +69,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
 
         this.form = form;
 
-        if (!this.getWorld().isClient())
+        if (!this.level().isClientSide)
         {
             if (lastForm != null) lastForm.onDemorph(this);
             if (form != null) form.onMorph(this);
@@ -77,7 +77,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     }
 
     @Override
-    public boolean shouldRender(double distance)
+    public boolean shouldRenderAtSqrDistance(double distance)
     {
         double d = this.getBoundingBox().getAverageSideLength();
 
@@ -90,33 +90,33 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     }
 
     @Override
-    public Iterable<ItemStack> getHandItems()
+    public Iterable<ItemStack> getHandSlots()
     {
-        return List.of(this.getEquippedStack(EquipmentSlot.MAINHAND), this.getEquippedStack(EquipmentSlot.OFFHAND));
+        return List.of(this.getItemBySlot(EquipmentSlot.MAINHAND), this.getItemBySlot(EquipmentSlot.OFFHAND));
     }
 
     @Override
-    public Iterable<ItemStack> getArmorItems()
+    public Iterable<ItemStack> getArmorSlots()
     {
-        return List.of(this.getEquippedStack(EquipmentSlot.FEET), this.getEquippedStack(EquipmentSlot.LEGS), this.getEquippedStack(EquipmentSlot.CHEST), this.getEquippedStack(EquipmentSlot.HEAD));
+        return List.of(this.getItemBySlot(EquipmentSlot.FEET), this.getItemBySlot(EquipmentSlot.LEGS), this.getItemBySlot(EquipmentSlot.CHEST), this.getItemBySlot(EquipmentSlot.HEAD));
     }
 
     @Override
-    public ItemStack getEquippedStack(EquipmentSlot slot)
+    public ItemStack getItemBySlot(EquipmentSlot slot)
     {
         return this.equipment.getOrDefault(slot, ItemStack.EMPTY);
     }
 
     @Override
-    public void equipStack(EquipmentSlot slot, ItemStack stack)
+    public void setItemSlot(EquipmentSlot slot, ItemStack stack)
     {
         this.equipment.put(slot, stack == null ? ItemStack.EMPTY : stack);
     }
 
     @Override
-    public Arm getMainArm()
+    public HumanoidArm getMainArm()
     {
-        return Arm.RIGHT;
+        return HumanoidArm.RIGHT;
     }
 
     @Override
@@ -124,32 +124,33 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     {
         super.tick();
 
-        this.tickHandSwing();
+        this.updateSwingTime();
 
         if (this.form != null)
         {
             this.form.update(this.entity);
         }
 
-        if (this.getWorld().isClient)
+        if (this.level().isClientSide)
         {
             return;
         }
 
         /* Pickup items */
-        Box box = this.getBoundingBox().expand(1D, 0.5D, 1D);
-        List<Entity> list = this.getWorld().getOtherEntities(this, box);
+        AABB box = this.getBoundingBox().inflate(1D, 0.5D, 1D);
+        List<Entity> list = this.level().getEntities(this, box);
 
         for (Entity entity : list)
         {
             if (entity instanceof ItemEntity itemEntity)
             {
-                ItemStack itemStack = itemEntity.getStack();
+                ItemStack itemStack = itemEntity.getItem();
                 int i = itemStack.getCount();
 
-                if (!entity.isRemoved() && !itemEntity.cannotPickup())
+                if (!entity.isRemoved() && !itemEntity.hasPickUpDelay())
                 {
-                    ((ServerWorld) this.getWorld()).getChunkManager().sendToOtherNearbyPlayers(entity, new ItemPickupAnimationS2CPacket(entity.getId(), this.getId(), i));
+                    ServerLevel level = (ServerLevel) this.level();
+                    level.getChunkSource().broadcast(entity, new ClientboundTakeItemEntityPacket(entity.getId(), this.getId(), i));
                     entity.discard();
                 }
             }
@@ -168,25 +169,25 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     }
 
     @Override
-    public void onStartedTrackingBy(ServerPlayerEntity player)
+    public void startSeenByPlayer(ServerPlayer player)
     {
-        super.onStartedTrackingBy(player);
+        super.startSeenByPlayer(player);
 
         ServerNetwork.sendEntityForm(player, this);
     }
 
     @Override
-    public void readCustomDataFromNbt(NbtCompound nbt)
+    protected void readAdditionalSaveData(CompoundTag nbt)
     {
-        super.readCustomDataFromNbt(nbt);
+        super.readAdditionalSaveData(nbt);
 
         this.despawn = nbt.getBoolean("despawn");
     }
 
     @Override
-    public void writeCustomDataToNbt(NbtCompound nbt)
+    protected void addAdditionalSaveData(CompoundTag nbt)
     {
-        super.writeCustomDataToNbt(nbt);
+        super.addAdditionalSaveData(nbt);
 
         nbt.putBoolean("despawn", true);
     }

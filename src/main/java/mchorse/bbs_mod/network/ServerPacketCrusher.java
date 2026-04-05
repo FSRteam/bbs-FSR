@@ -1,16 +1,16 @@
 package mchorse.bbs_mod.network;
 
 import mchorse.bbs_mod.network.compat.NetworkCompat;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.resources.ResourceLocation;
 
 public class ServerPacketCrusher extends PacketCrusher
 {
     @Override
-    protected void sendBuffer(PlayerEntity entity, Identifier identifier, PacketByteBuf buf)
+    protected void sendBuffer(Player entity, ResourceLocation identifier, FriendlyByteBuf buf)
     {
-        NetworkCompat.sendToPlayer((ServerPlayerEntity) entity, identifier, buf);
+        NetworkCompat.sendToPlayer((ServerPlayer) entity, identifier, buf);
     }
 }

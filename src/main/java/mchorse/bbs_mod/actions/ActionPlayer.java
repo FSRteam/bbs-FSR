@@ -13,13 +13,13 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.MathUtils;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.MovementType;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,8 +38,8 @@ public class ActionPlayer
     public boolean syncing;
     public boolean stopDamage = true;
 
-    private ServerPlayerEntity serverPlayer;
-    private ServerWorld world;
+    private ServerPlayer serverPlayer;
+    private ServerLevel level;
     private int duration;
 
     private Map<String, LivingEntity> actors = new HashMap<>();
@@ -52,9 +52,9 @@ public class ActionPlayer
     private int cacheXpLevel;
     private float cacheXpProgress;
 
-    public ActionPlayer(ServerPlayerEntity serverPlayer, ServerWorld world, Film film, int tick, int countdown, int exception, PlayerType type)
+    public ActionPlayer(ServerPlayer serverPlayer, ServerLevel level, Film film, int tick, int countdown, int exception, PlayerType type)
     {
-        this.world = world;
+        this.level = level;
         this.film = film;
         this.tick = tick;
         this.countdown = countdown;
@@ -70,10 +70,10 @@ public class ActionPlayer
 
         if (this.type == PlayerType.NORMAL && this.serverPlayer != null && fpReplay != null)
         {
-            for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
+            for (int i = 0; i < this.serverPlayer.getInventory().getContainerSize(); i++)
             {
-                this.cachedInventory.add(serverPlayer.getInventory().getStack(i).copy());
-                this.serverPlayer.getInventory().setStack(i, CollectionUtils.getSafe(this.film.inventory.getStacks(), i, ItemStack.EMPTY));
+                this.cachedInventory.add(serverPlayer.getInventory().getItem(i).copy());
+                this.serverPlayer.getInventory().setItem(i, CollectionUtils.getSafe(this.film.inventory.getStacks(), i, ItemStack.EMPTY));
             }
 
             Morph morph = Morph.getMorph(this.serverPlayer);
@@ -86,7 +86,7 @@ public class ActionPlayer
             ServerNetwork.sendMorphToTracked(this.serverPlayer, fpReplay.form.get());
 
             this.cacheHp = this.serverPlayer.getHealth();
-            this.cacheHunger = this.serverPlayer.getHungerManager().getFoodLevel();
+            this.cacheHunger = this.serverPlayer.getFoodData().getFoodLevel();
             this.cacheXpLevel = this.serverPlayer.experienceLevel;
             this.cacheXpProgress = this.serverPlayer.experienceProgress;
 
@@ -94,11 +94,11 @@ public class ActionPlayer
         }
     }
 
-    public static void applyFilmPlayerSettingsTo(ServerPlayerEntity player, float hp, float hunger, int xpLevel, float xpProgress)
+    public static void applyFilmPlayerSettingsTo(ServerPlayer player, float hp, float hunger, int xpLevel, float xpProgress)
     {
         player.setHealth(hp);
-        player.getHungerManager().setFoodLevel((int) hunger);
-        player.setExperienceLevel(xpLevel);
+        player.getFoodData().setFoodLevel((int) hunger);
+        player.setExperienceLevels(xpLevel);
         player.experienceProgress = xpProgress;
     }
 
@@ -135,25 +135,25 @@ public class ActionPlayer
             }
             else
             {
-                ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.world);
+                ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.level);
 
                 actor.setForm(FormUtils.copy(replay.form.get()));
 
                 this.apply(actor, replay, this.tick, false);
                 this.actors.put(replay.getId(), actor);
-                this.world.spawnEntity(actor);
+                this.level.addFreshEntity(actor);
             }
         }
 
-        for (ServerPlayerEntity player : this.world.getPlayers())
+        for (ServerPlayer player : this.level.getPlayers((player) -> true))
         {
             ServerNetwork.sendActors(player, this.film.getId(), this.actors);
         }
     }
 
-    public ServerWorld getWorld()
+    public ServerLevel getLevel()
     {
-        return this.world;
+        return this.level;
     }
 
     public void apply(LivingEntity actor, Replay replay, float tick, boolean ticking)
@@ -165,29 +165,29 @@ public class ActionPlayer
         float yawBody = replay.keyframes.bodyYaw.interpolate(tick).floatValue();
         float pitch = replay.keyframes.pitch.interpolate(tick).floatValue();
 
-        Vec3d pos = actor.getPos();
+        Vec3 pos = actor.position();
 
         if (ticking)
         {
-            actor.move(MovementType.SELF, new Vec3d(x - pos.x, y - pos.y, z - pos.z));
+            actor.move(MoverType.SELF, new Vec3(x - pos.x, y - pos.y, z - pos.z));
         }
 
-        actor.setPosition(x, y, z);
-        actor.setYaw(yawHead);
-        actor.setHeadYaw(yawHead);
-        actor.setPitch(pitch);
-        actor.setBodyYaw(yawBody);
-        actor.setSneaking(replay.keyframes.sneaking.interpolate(tick) > 0);
+        actor.setPos(x, y, z);
+        actor.setYRot(yawHead);
+        actor.setYHeadRot(yawHead);
+        actor.setXRot(pitch);
+        actor.setYBodyRot(yawBody);
+        actor.setShiftKeyDown(replay.keyframes.sneaking.interpolate(tick) > 0);
         actor.setOnGround(replay.keyframes.grounded.interpolate(tick) > 0);
-        actor.equipStack(EquipmentSlot.OFFHAND, replay.keyframes.offHand.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.HEAD, replay.keyframes.armorHead.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.CHEST, replay.keyframes.armorChest.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.LEGS, replay.keyframes.armorLegs.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.FEET, replay.keyframes.armorFeet.interpolate(tick, ItemStack.EMPTY));
+        actor.setItemSlot(EquipmentSlot.OFFHAND, replay.keyframes.offHand.interpolate(tick, ItemStack.EMPTY));
+        actor.setItemSlot(EquipmentSlot.HEAD, replay.keyframes.armorHead.interpolate(tick, ItemStack.EMPTY));
+        actor.setItemSlot(EquipmentSlot.CHEST, replay.keyframes.armorChest.interpolate(tick, ItemStack.EMPTY));
+        actor.setItemSlot(EquipmentSlot.LEGS, replay.keyframes.armorLegs.interpolate(tick, ItemStack.EMPTY));
+        actor.setItemSlot(EquipmentSlot.FEET, replay.keyframes.armorFeet.interpolate(tick, ItemStack.EMPTY));
 
-        if (actor instanceof ServerPlayerEntity player)
+        if (actor instanceof ServerPlayer player)
         {
-            int selectedSlot = player.getInventory().selectedSlot;
+            int selectedSlot = player.getInventory().selected;
             int slot = MathUtils.clamp(replay.keyframes.selectedSlot.interpolate(this.tick), 0, 8);
 
             if (selectedSlot != slot)
@@ -195,11 +195,11 @@ public class ActionPlayer
                 ServerNetwork.sendSelectedSlot(player, slot);
             }
 
-            actor.equipStack(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
+            actor.setItemSlot(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
         }
         else
         {
-            actor.equipStack(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
+            actor.setItemSlot(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
         }
 
         double vx = x - replay.keyframes.x.interpolate(tick - 1);
@@ -211,7 +211,7 @@ public class ActionPlayer
             vy = -0.0784;
         }
 
-        actor.setVelocity(vx, vy, vz);
+        actor.setDeltaMovement(vx, vy, vz);
 
         actor.fallDistance = replay.keyframes.fall.interpolate(tick).floatValue();
     }
@@ -252,7 +252,7 @@ public class ActionPlayer
 
     private void applyAction()
     {
-        SuperFakePlayer fakePlayer = SuperFakePlayer.get(this.world);
+        SuperFakePlayer fakePlayer = SuperFakePlayer.get(this.level);
         List<Replay> list = this.film.replays.getList();
 
         for (int i = 0; i < list.size(); i++)
@@ -332,17 +332,17 @@ public class ActionPlayer
 
         if (this.type == PlayerType.NORMAL && this.serverPlayer != null && this.film.getFirstPersonReplay() != null)
         {
-            for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
+            for (int i = 0; i < this.serverPlayer.getInventory().getContainerSize(); i++)
             {
-                this.serverPlayer.getInventory().setStack(i, this.cachedInventory.get(i));
+                this.serverPlayer.getInventory().setItem(i, this.cachedInventory.get(i));
             }
 
             ServerNetwork.sendMorphToTracked(this.serverPlayer, this.cachedForm);
 
             this.serverPlayer.setHealth(this.cacheHp);
-            this.serverPlayer.getHungerManager().setFoodLevel(this.cacheHunger);
+            this.serverPlayer.getFoodData().setFoodLevel(this.cacheHunger);
             this.serverPlayer.experienceProgress = this.cacheXpProgress;
-            this.serverPlayer.setExperienceLevel(this.cacheXpLevel);
+            this.serverPlayer.setExperienceLevels(this.cacheXpLevel);
         }
     }
 

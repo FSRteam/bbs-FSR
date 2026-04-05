@@ -27,19 +27,21 @@ import mchorse.bbs_mod.utils.PermissionUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.PacketByteBuf;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,38 +58,38 @@ public class ServerNetwork
     public static final int STATE_TRIGGER_MAIN_HAND_ITEM = 1;
     public static final int STATE_TRIGGER_OFF_HAND_ITEM = 2;
 
-    public static final Identifier CLIENT_CLICKED_MODEL_BLOCK_PACKET = new Identifier(BBSMod.MOD_ID, "c1");
-    public static final Identifier CLIENT_PLAYER_FORM_PACKET = new Identifier(BBSMod.MOD_ID, "c2");
-    public static final Identifier CLIENT_PLAY_FILM_PACKET = new Identifier(BBSMod.MOD_ID, "c3");
-    public static final Identifier CLIENT_MANAGER_DATA_PACKET = new Identifier(BBSMod.MOD_ID, "c4");
-    public static final Identifier CLIENT_STOP_FILM_PACKET = new Identifier(BBSMod.MOD_ID, "c5");
-    public static final Identifier CLIENT_HANDSHAKE = new Identifier(BBSMod.MOD_ID, "c6");
-    public static final Identifier CLIENT_RECORDED_ACTIONS = new Identifier(BBSMod.MOD_ID, "c7");
-    public static final Identifier CLIENT_ANIMATION_STATE_TRIGGER = new Identifier(BBSMod.MOD_ID, "c8");
-    public static final Identifier CLIENT_CHEATS_PERMISSION = new Identifier(BBSMod.MOD_ID, "c9");
-    public static final Identifier CLIENT_SHARED_FORM = new Identifier(BBSMod.MOD_ID, "c10");
-    public static final Identifier CLIENT_ENTITY_FORM = new Identifier(BBSMod.MOD_ID, "c11");
-    public static final Identifier CLIENT_ACTORS = new Identifier(BBSMod.MOD_ID, "c12");
-    public static final Identifier CLIENT_GUN_PROPERTIES = new Identifier(BBSMod.MOD_ID, "c13");
-    public static final Identifier CLIENT_PAUSE_FILM = new Identifier(BBSMod.MOD_ID, "c14");
-    public static final Identifier CLIENT_SELECTED_SLOT = new Identifier(BBSMod.MOD_ID, "c15");
-    public static final Identifier CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = new Identifier(BBSMod.MOD_ID, "c16");
-    public static final Identifier CLIENT_REFRESH_MODEL_BLOCKS = new Identifier(BBSMod.MOD_ID, "c17");
+    public static final ResourceLocation CLIENT_CLICKED_MODEL_BLOCK_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c1");
+    public static final ResourceLocation CLIENT_PLAYER_FORM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c2");
+    public static final ResourceLocation CLIENT_PLAY_FILM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c3");
+    public static final ResourceLocation CLIENT_MANAGER_DATA_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c4");
+    public static final ResourceLocation CLIENT_STOP_FILM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c5");
+    public static final ResourceLocation CLIENT_HANDSHAKE = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c6");
+    public static final ResourceLocation CLIENT_RECORDED_ACTIONS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c7");
+    public static final ResourceLocation CLIENT_ANIMATION_STATE_TRIGGER = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c8");
+    public static final ResourceLocation CLIENT_CHEATS_PERMISSION = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c9");
+    public static final ResourceLocation CLIENT_SHARED_FORM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c10");
+    public static final ResourceLocation CLIENT_ENTITY_FORM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c11");
+    public static final ResourceLocation CLIENT_ACTORS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c12");
+    public static final ResourceLocation CLIENT_GUN_PROPERTIES = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c13");
+    public static final ResourceLocation CLIENT_PAUSE_FILM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c14");
+    public static final ResourceLocation CLIENT_SELECTED_SLOT = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c15");
+    public static final ResourceLocation CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c16");
+    public static final ResourceLocation CLIENT_REFRESH_MODEL_BLOCKS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c17");
 
-    public static final Identifier SERVER_MODEL_BLOCK_FORM_PACKET = new Identifier(BBSMod.MOD_ID, "s1");
-    public static final Identifier SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = new Identifier(BBSMod.MOD_ID, "s2");
-    public static final Identifier SERVER_PLAYER_FORM_PACKET = new Identifier(BBSMod.MOD_ID, "s3");
-    public static final Identifier SERVER_MANAGER_DATA_PACKET = new Identifier(BBSMod.MOD_ID, "s4");
-    public static final Identifier SERVER_ACTION_RECORDING = new Identifier(BBSMod.MOD_ID, "s5");
-    public static final Identifier SERVER_TOGGLE_FILM = new Identifier(BBSMod.MOD_ID, "s6");
-    public static final Identifier SERVER_ACTION_CONTROL = new Identifier(BBSMod.MOD_ID, "s7");
-    public static final Identifier SERVER_FILM_DATA_SYNC = new Identifier(BBSMod.MOD_ID, "s8");
-    public static final Identifier SERVER_PLAYER_TP = new Identifier(BBSMod.MOD_ID, "s9");
-    public static final Identifier SERVER_ANIMATION_STATE_TRIGGER = new Identifier(BBSMod.MOD_ID, "s10");
-    public static final Identifier SERVER_SHARED_FORM = new Identifier(BBSMod.MOD_ID, "s11");
-    public static final Identifier SERVER_ZOOM = new Identifier(BBSMod.MOD_ID, "s12");
-    public static final Identifier SERVER_PAUSE_FILM = new Identifier(BBSMod.MOD_ID, "s13");
-    public static final Identifier SERVER_APPLY_FILM_PLAYER_SETTINGS = new Identifier(BBSMod.MOD_ID, "s14");
+    public static final ResourceLocation SERVER_MODEL_BLOCK_FORM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s1");
+    public static final ResourceLocation SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s2");
+    public static final ResourceLocation SERVER_PLAYER_FORM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s3");
+    public static final ResourceLocation SERVER_MANAGER_DATA_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s4");
+    public static final ResourceLocation SERVER_ACTION_RECORDING = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s5");
+    public static final ResourceLocation SERVER_TOGGLE_FILM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s6");
+    public static final ResourceLocation SERVER_ACTION_CONTROL = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s7");
+    public static final ResourceLocation SERVER_FILM_DATA_SYNC = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s8");
+    public static final ResourceLocation SERVER_PLAYER_TP = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s9");
+    public static final ResourceLocation SERVER_ANIMATION_STATE_TRIGGER = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s10");
+    public static final ResourceLocation SERVER_SHARED_FORM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s11");
+    public static final ResourceLocation SERVER_ZOOM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s12");
+    public static final ResourceLocation SERVER_PAUSE_FILM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s13");
+    public static final ResourceLocation SERVER_APPLY_FILM_PLAYER_SETTINGS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s14");
 
     private static ServerPacketCrusher crusher = new ServerPacketCrusher();
 
@@ -116,7 +118,7 @@ public class ServerNetwork
 
     /* Handlers */
 
-    private static void handleModelBlockFormPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleModelBlockFormPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -125,7 +127,7 @@ public class ServerNetwork
 
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
-            BlockPos pos = buf.readBlockPos();
+            BlockPos pos = packetByteBuf.readBlockPos();
 
             try
             {
@@ -133,7 +135,7 @@ public class ServerNetwork
 
                 server.execute(() ->
                 {
-                    World world = player.getWorld();
+                    Level world = player.level();
                     BlockEntity be = world.getBlockEntity(pos);
 
                     if (be instanceof ModelBlockEntity modelBlock)
@@ -147,7 +149,7 @@ public class ServerNetwork
         });
     }
 
-    private static void handleModelBlockTransformsPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleModelBlockTransformsPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -162,12 +164,24 @@ public class ServerNetwork
 
                 server.execute(() ->
                 {
-                    ItemStack stack = player.getEquippedStack(EquipmentSlot.MAINHAND).copy();
+                    ItemStack stack = player.getItemBySlot(EquipmentSlot.MAINHAND).copy();
 
-                    if (stack.getItem() == BBSMod.MODEL_BLOCK_ITEM) stack.getNbt().getCompound("BlockEntityTag").put("Properties", DataStorageUtils.toNbt(data));
-                    else if (stack.getItem() == BBSMod.GUN_ITEM) stack.getOrCreateNbt().put("GunData", DataStorageUtils.toNbt(data));
+                    if (stack.getItem() == BBSMod.MODEL_BLOCK_ITEM)
+                    {
+                        CustomData.update(DataComponents.BLOCK_ENTITY_DATA, stack, (compoundTag) ->
+                        {
+                            compoundTag.put("Properties", DataStorageUtils.toNbt(data));
+                        });
+                    }
+                    else if (stack.getItem() == BBSMod.GUN_ITEM)
+                    {
+                        CustomData.update(DataComponents.CUSTOM_DATA, stack, (compoundTag) ->
+                        {
+                            compoundTag.put("GunData", DataStorageUtils.toNbt(data));
+                        });
+                    }
 
-                    player.equipStack(EquipmentSlot.MAINHAND, stack);
+                    player.setItemSlot(EquipmentSlot.MAINHAND, stack);
                 });
             }
             catch (Exception e)
@@ -175,7 +189,7 @@ public class ServerNetwork
         });
     }
 
-    private static void handlePlayerFormPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handlePlayerFormPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -207,7 +221,7 @@ public class ServerNetwork
         });
     }
 
-    private static void handleManagerDataPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleManagerDataPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -261,7 +275,7 @@ public class ServerNetwork
         });
     }
 
-    private static void handleActionRecording(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleActionRecording(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -296,7 +310,7 @@ public class ServerNetwork
         });
     }
 
-    private static void handleToggleFilm(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleToggleFilm(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -314,19 +328,19 @@ public class ServerNetwork
             {
                 BBSMod.getActions().stop(filmId);
 
-                for (ServerPlayerEntity otherPlayer : server.getPlayerManager().getPlayerList())
+                for (ServerPlayer otherPlayer : server.getPlayerList().getPlayers())
                 {
                     sendStopFilm(otherPlayer, filmId);
                 }
             }
             else
             {
-                sendPlayFilm(player, player.getServerWorld(), filmId, withCamera);
+                sendPlayFilm(player, player.serverLevel(), filmId, withCamera);
             }
         });
     }
 
-    private static void handleActionControl(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleActionControl(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -379,14 +393,14 @@ public class ServerNetwork
 
                     if (film != null)
                     {
-                        actionPlayer = actions.play(player, player.getServerWorld(), film, tick, PlayerType.FILM_EDITOR);
+                        actionPlayer = actions.play(player, player.serverLevel(), film, tick, PlayerType.FILM_EDITOR);
                     }
                 }
                 else
                 {
                     actions.stop(filmId);
 
-                    actionPlayer = actions.play(player, player.getServerWorld(), actionPlayer.film, tick, PlayerType.FILM_EDITOR);
+                    actionPlayer = actions.play(player, player.serverLevel(), actionPlayer.film, tick, PlayerType.FILM_EDITOR);
                 }
 
                 if (actionPlayer != null)
@@ -409,7 +423,7 @@ public class ServerNetwork
         });
     }
 
-    private static void handleSyncData(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleSyncData(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -421,9 +435,9 @@ public class ServerNetwork
             String filmId = packetByteBuf.readString();
             List<String> path = new ArrayList<>();
 
-            for (int i = 0, c = buf.readInt(); i < c; i++)
+            for (int i = 0, c = packetByteBuf.readInt(); i < c; i++)
             {
-                path.add(buf.readString());
+                path.add(packetByteBuf.readString());
             }
 
             BaseType data = DataStorageUtils.readFromBytes(bytes);
@@ -435,7 +449,7 @@ public class ServerNetwork
         });
     }
 
-    private static void handleTeleportPlayer(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleTeleportPlayer(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -451,20 +465,19 @@ public class ServerNetwork
 
         server.execute(() ->
         {
-            player.requestTeleport(x, y, z);
-
-            player.setYaw(yaw);
-            player.setHeadYaw(yaw);
-            player.setBodyYaw(bodyYaw);
-            player.setPitch(pitch);
+            player.teleportTo(x, y, z);
+            player.setYRot(yaw);
+            player.setYHeadRot(yaw);
+            player.setYBodyRot(bodyYaw);
+            player.setXRot(pitch);
         });
     }
 
-    private static void handleAnimationStateTriggerPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleAnimationStateTriggerPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         String string = buf.readString();
         int type = buf.readInt();
-        PacketByteBuf newBuf = NetworkCompat.createBuffer();
+        FriendlyByteBuf newBuf = NetworkCompat.createBuffer();
 
         newBuf.writeInt(player.getId());
         newBuf.writeString(string);
@@ -478,16 +491,16 @@ public class ServerNetwork
         });
     }
 
-    private static void handleSharedFormPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleSharedFormPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
-            UUID playerUuid = packetByteBuf.readUuid();
+            UUID playerUuid = packetByteBuf.readUUID();
             MapType data = (MapType) DataStorageUtils.readFromBytes(bytes);
 
             server.execute(() ->
             {
-                ServerPlayerEntity otherPlayer = server.getPlayerManager().getPlayer(playerUuid);
+                ServerPlayer otherPlayer = server.getPlayerList().getPlayer(playerUuid);
 
                 if (otherPlayer != null)
                 {
@@ -497,10 +510,10 @@ public class ServerNetwork
         });
     }
 
-    private static void handleZoomPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleZoomPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         boolean zoom = buf.readBoolean();
-        ItemStack main = player.getMainHandStack();
+        ItemStack main = player.getMainHandItem();
 
         if (main.getItem() == BBSMod.GUN_ITEM)
         {
@@ -514,7 +527,7 @@ public class ServerNetwork
         }
     }
 
-    private static void handlePauseFilmPacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handlePauseFilmPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         String filmId = buf.readString();
 
@@ -525,13 +538,13 @@ public class ServerNetwork
             actionPlayer.toggle();
         }
 
-        for (ServerPlayerEntity playerEntity : server.getPlayerManager().getPlayerList())
+        for (ServerPlayer playerEntity : server.getPlayerList().getPlayers())
         {
             sendPauseFilm(playerEntity, filmId);
         }
     }
 
-    private static void handleApplyFilmPlayerSettings(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    private static void handleApplyFilmPlayerSettings(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
         if (!PermissionUtils.arePanelsAllowed(server, player))
         {
@@ -570,7 +583,7 @@ public class ServerNetwork
 
     /* API */
 
-    public static void sendMorph(ServerPlayerEntity player, int playerId, Form form)
+    public static void sendMorph(ServerPlayer player, int playerId, Form form)
     {
         crusher.send(player, CLIENT_PLAYER_FORM_PACKET, FormUtils.toData(form), (packetByteBuf) ->
         {
@@ -578,7 +591,7 @@ public class ServerNetwork
         });
     }
 
-    public static void sendMorphToTracked(ServerPlayerEntity player, Form form)
+    public static void sendMorphToTracked(ServerPlayer player, Form form)
     {
         crusher.sendToPlayersTrackingEntityAndSelf(player, CLIENT_PLAYER_FORM_PACKET, FormUtils.toData(form), (packetByteBuf) ->
         {
@@ -586,16 +599,16 @@ public class ServerNetwork
         });
     }
 
-    public static void sendClickedModelBlock(ServerPlayerEntity player, BlockPos pos)
+    public static void sendClickedModelBlock(ServerPlayer player, BlockPos pos)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeBlockPos(pos);
 
         NetworkCompat.sendToPlayer(player, CLIENT_CLICKED_MODEL_BLOCK_PACKET, buf);
     }
 
-    public static void sendPlayFilm(ServerPlayerEntity player, ServerWorld world, String filmId, boolean withCamera)
+    public static void sendPlayFilm(ServerPlayer player, ServerLevel world, String filmId, boolean withCamera)
     {
         try
         {
@@ -607,7 +620,7 @@ public class ServerNetwork
 
                 BaseType data = film.toData();
 
-                crusher.send(world.getPlayers().stream().map((p) -> (PlayerEntity) p).toList(), CLIENT_PLAY_FILM_PACKET, data, (packetByteBuf) ->
+                crusher.send(world.getPlayers((p) -> true).stream().map((p) -> (Player) p).toList(), CLIENT_PLAY_FILM_PACKET, data, (packetByteBuf) ->
                 {
                     packetByteBuf.writeString(filmId);
                     packetByteBuf.writeBoolean(withCamera);
@@ -620,7 +633,7 @@ public class ServerNetwork
         }
     }
 
-    public static void sendPlayFilm(ServerPlayerEntity player, String filmId, boolean withCamera)
+    public static void sendPlayFilm(ServerPlayer player, String filmId, boolean withCamera)
     {
         try
         {
@@ -628,7 +641,7 @@ public class ServerNetwork
 
             if (film != null)
             {
-                BBSMod.getActions().play(player, player.getServerWorld(), film, 0);
+                BBSMod.getActions().play(player, player.serverLevel(), film, 0);
 
                 crusher.send(player, CLIENT_PLAY_FILM_PACKET, film.toData(), (packetByteBuf) ->
                 {
@@ -643,16 +656,16 @@ public class ServerNetwork
         }
     }
 
-    public static void sendStopFilm(ServerPlayerEntity player, String filmId)
+    public static void sendStopFilm(ServerPlayer player, String filmId)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeString(filmId);
 
         NetworkCompat.sendToPlayer(player, CLIENT_STOP_FILM_PACKET, buf);
     }
 
-    public static void sendManagerData(ServerPlayerEntity player, int callbackId, RepositoryOperation op, BaseType data)
+    public static void sendManagerData(ServerPlayer player, int callbackId, RepositoryOperation op, BaseType data)
     {
         crusher.send(player, CLIENT_MANAGER_DATA_PACKET, data, (packetByteBuf) ->
         {
@@ -661,7 +674,7 @@ public class ServerNetwork
         });
     }
 
-    public static void sendRecordedActions(ServerPlayerEntity player, String filmId, int replayId, int tick, Clips clips)
+    public static void sendRecordedActions(ServerPlayer player, String filmId, int replayId, int tick, Clips clips)
     {
         crusher.send(player, CLIENT_RECORDED_ACTIONS, clips.toData(), (packetByteBuf) ->
         {
@@ -670,16 +683,16 @@ public class ServerNetwork
             packetByteBuf.writeInt(tick);
         });
     }
-    public static void sendHandshake(MinecraftServer server, ServerPlayerEntity player)
+    public static void sendHandshake(MinecraftServer server, ServerPlayer player)
     {
         LOGGER.info("[BBS-SEM] topic=net.handshake player={} state=send_start", player.getGameProfile().getName());
         NetworkCompat.sendToPlayer(player, ServerNetwork.CLIENT_HANDSHAKE, createHandshakeBuf(server));
         LOGGER.info("[BBS-SEM] topic=net.handshake player={} state=send_done", player.getGameProfile().getName());
     }
 
-    private static PacketByteBuf createHandshakeBuf(MinecraftServer server)
+    private static FriendlyByteBuf createHandshakeBuf(MinecraftServer server)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
         String id = "";
 
         /* No need to do that in singleplayer */
@@ -693,22 +706,22 @@ public class ServerNetwork
         return buf;
     }
 
-    public static void sendCheatsPermission(ServerPlayerEntity player, boolean cheats)
+    public static void sendCheatsPermission(ServerPlayer player, boolean cheats)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeBoolean(cheats);
 
         NetworkCompat.sendToPlayer(player, ServerNetwork.CLIENT_CHEATS_PERMISSION, buf);
     }
 
-    public static void sendSharedForm(ServerPlayerEntity player, MapType data)
+    public static void sendSharedForm(ServerPlayer player, MapType data)
     {
         crusher.send(player, CLIENT_SHARED_FORM, data, (packetByteBuf) ->
         {});
     }
 
-    public static void sendEntityForm(ServerPlayerEntity player, IEntityFormProvider actor)
+    public static void sendEntityForm(ServerPlayer player, IEntityFormProvider actor)
     {
         crusher.send(player, CLIENT_ENTITY_FORM, FormUtils.toData(actor.getForm()), (packetByteBuf) ->
         {
@@ -724,9 +737,9 @@ public class ServerNetwork
         });
     }
 
-    public static void sendActors(ServerPlayerEntity player, String filmId, Map<String, LivingEntity> actors)
+    public static void sendActors(ServerPlayer player, String filmId, Map<String, LivingEntity> actors)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeString(filmId);
         buf.writeInt(actors.size());
@@ -740,40 +753,40 @@ public class ServerNetwork
         NetworkCompat.sendToPlayer(player, CLIENT_ACTORS, buf);
     }
 
-    public static void sendGunProperties(ServerPlayerEntity player, GunProjectileEntity projectile)
+    public static void sendGunProperties(ServerPlayer player, GunProjectileEntity projectile)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
         GunProperties properties = projectile.getProperties();
 
-        buf.writeInt(projectile.getEntityId());
+        buf.writeInt(projectile.getId());
         properties.toNetwork(buf);
 
         NetworkCompat.sendToPlayer(player, CLIENT_GUN_PROPERTIES, buf);
     }
 
-    public static void sendPauseFilm(ServerPlayerEntity player, String filmId)
+    public static void sendPauseFilm(ServerPlayer player, String filmId)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeString(filmId);
 
         NetworkCompat.sendToPlayer(player, CLIENT_PAUSE_FILM, buf);
     }
 
-    public static void sendSelectedSlot(ServerPlayerEntity player, int slot)
+    public static void sendSelectedSlot(ServerPlayer player, int slot)
     {
-        player.getInventory().selectedSlot = slot;
+        player.getInventory().selected = slot;
 
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeInt(slot);
 
         NetworkCompat.sendToPlayer(player, CLIENT_SELECTED_SLOT, buf);
     }
 
-    public static void sendModelBlockState(ServerPlayerEntity player, BlockPos pos, String trigger)
+    public static void sendModelBlockState(ServerPlayer player, BlockPos pos, String trigger)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeBlockPos(pos);
         buf.writeString(trigger);
@@ -781,9 +794,9 @@ public class ServerNetwork
         NetworkCompat.sendToPlayer(player, CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, buf);
     }
 
-    public static void sendReloadModelBlocks(ServerPlayerEntity player, int tickRandom)
+    public static void sendReloadModelBlocks(ServerPlayer player, int tickRandom)
     {
-        PacketByteBuf buf = NetworkCompat.createBuffer();
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeInt(tickRandom);
 

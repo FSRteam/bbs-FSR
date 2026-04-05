@@ -11,17 +11,17 @@ import mchorse.bbs_mod.data.types.LongType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.data.types.ShortType;
 import mchorse.bbs_mod.data.types.StringType;
-import net.minecraft.nbt.NbtByte;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtDouble;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtFloat;
-import net.minecraft.nbt.NbtInt;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtLong;
-import net.minecraft.nbt.NbtShort;
-import net.minecraft.nbt.NbtString;
-import net.minecraft.network.PacketByteBuf;
+import net.minecraft.nbt.ByteTag;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.FloatTag;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.LongTag;
+import net.minecraft.nbt.ShortTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.FriendlyByteBuf;
 import org.joml.Matrix3f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
@@ -39,7 +39,7 @@ public class DataStorageUtils
 {
     private static final byte[] EMPTY = new byte[0];
 
-    /* PacketByteBuf */
+    /* FriendlyByteBuf */
 
     public static byte[] writeToBytes(BaseType type)
     {
@@ -85,7 +85,7 @@ public class DataStorageUtils
         return null;
     }
 
-    public static void writeToPacket(PacketByteBuf packet, BaseType type)
+    public static void writeToPacket(FriendlyByteBuf packet, BaseType type)
     {
         try
         {
@@ -101,7 +101,7 @@ public class DataStorageUtils
         }
     }
 
-    public static BaseType readFromPacket(PacketByteBuf packet)
+    public static BaseType readFromPacket(FriendlyByteBuf packet)
     {
         try
         {
@@ -119,39 +119,39 @@ public class DataStorageUtils
 
     /* NBT */
 
-    public static NbtElement toNbt(BaseType type)
+    public static Tag toNbt(BaseType type)
     {
         if (type instanceof ByteType byteType)
         {
-            return NbtByte.of(byteType.value);
+            return ByteTag.valueOf(byteType.value);
         }
         else if (type instanceof DoubleType doubleType)
         {
-            return NbtDouble.of(doubleType.value);
+            return DoubleTag.valueOf(doubleType.value);
         }
         else if (type instanceof FloatType floatType)
         {
-            return NbtFloat.of(floatType.value);
+            return FloatTag.valueOf(floatType.value);
         }
         else if (type instanceof IntType intType)
         {
-            return NbtInt.of(intType.value);
+            return IntTag.valueOf(intType.value);
         }
         else if (type instanceof LongType longType)
         {
-            return NbtLong.of(longType.value);
+            return LongTag.valueOf(longType.value);
         }
         else if (type instanceof ShortType shortType)
         {
-            return NbtShort.of(shortType.value);
+            return ShortTag.valueOf(shortType.value);
         }
         else if (type instanceof StringType stringType)
         {
-            return NbtString.of(stringType.value);
+            return StringTag.valueOf(stringType.value);
         }
         else if (type instanceof ListType listType)
         {
-            NbtList list = new NbtList();
+            ListTag list = new ListTag();
 
             for (BaseType baseType : listType)
             {
@@ -162,7 +162,7 @@ public class DataStorageUtils
         }
         else if (type instanceof MapType mapType)
         {
-            NbtCompound compound = new NbtCompound();
+            CompoundTag compound = new CompoundTag();
 
             for (String key : mapType.keys())
             {
@@ -177,54 +177,54 @@ public class DataStorageUtils
         return null;
     }
 
-    public static BaseType fromNbt(NbtElement element)
+    public static BaseType fromNbt(Tag element)
     {
-        if (element instanceof NbtByte nbtByte)
+        if (element instanceof ByteTag byteTag)
         {
-            return new ByteType(nbtByte.byteValue());
+            return new ByteType(byteTag.getAsByte());
         }
-        else if (element instanceof NbtDouble nbtDouble)
+        else if (element instanceof DoubleTag doubleTag)
         {
-            return new DoubleType(nbtDouble.doubleValue());
+            return new DoubleType(doubleTag.getAsDouble());
         }
-        else if (element instanceof NbtFloat nbtFloat)
+        else if (element instanceof FloatTag floatTag)
         {
-            return new FloatType(nbtFloat.floatValue());
+            return new FloatType(floatTag.getAsFloat());
         }
-        else if (element instanceof NbtInt nbtInt)
+        else if (element instanceof IntTag intTag)
         {
-            return new IntType(nbtInt.intValue());
+            return new IntType(intTag.getAsInt());
         }
-        else if (element instanceof NbtLong nbtLong)
+        else if (element instanceof LongTag longTag)
         {
-            return new LongType(nbtLong.longValue());
+            return new LongType(longTag.getAsLong());
         }
-        else if (element instanceof NbtShort nbtShort)
+        else if (element instanceof ShortTag shortTag)
         {
-            return new ShortType(nbtShort.shortValue());
+            return new ShortType(shortTag.getAsShort());
         }
-        else if (element instanceof NbtString nbtString)
+        else if (element instanceof StringTag stringTag)
         {
-            return new StringType(nbtString.asString());
+            return new StringType(stringTag.getAsString());
         }
-        else if (element instanceof NbtList nbtList)
+        else if (element instanceof ListTag listTag)
         {
             ListType list = new ListType();
 
-            for (NbtElement nbtElement : nbtList)
+            for (Tag tag : listTag)
             {
-                list.add(fromNbt(nbtElement));
+                list.add(fromNbt(tag));
             }
 
             return list;
         }
-        else if (element instanceof NbtCompound nbtCompound)
+        else if (element instanceof CompoundTag compoundTag)
         {
             MapType map = new MapType();
 
-            for (String key : nbtCompound.getKeys())
+            for (String key : compoundTag.getAllKeys())
             {
-                map.put(key, fromNbt(nbtCompound.get(key)));
+                map.put(key, fromNbt(compoundTag.get(key)));
             }
 
             return map;
@@ -235,12 +235,12 @@ public class DataStorageUtils
         return null;
     }
 
-    public static void writeToNbtCompound(NbtCompound compound, String key, BaseType data)
+    public static void writeToNbtCompound(CompoundTag compound, String key, BaseType data)
     {
         compound.put(key, DataStorageUtils.toNbt(data));
     }
 
-    public static BaseType readFromNbtCompound(NbtCompound compound, String key)
+    public static BaseType readFromNbtCompound(CompoundTag compound, String key)
     {
         BaseType baseType = DataStorageUtils.fromNbt(compound.get(key));
 

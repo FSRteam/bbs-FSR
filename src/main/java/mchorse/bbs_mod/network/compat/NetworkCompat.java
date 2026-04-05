@@ -2,14 +2,14 @@ package mchorse.bbs_mod.network.compat;
 
 import io.netty.buffer.Unpooled;
 import mchorse.bbs_mod.BBSMod;
-import net.minecraft.entity.Entity;
-import net.minecraft.network.PacketByteBuf;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -26,7 +26,7 @@ import java.util.Set;
 /**
  * Transitional network compatibility facade.
  *
- * Uses NeoForge payload registration while preserving old PacketByteBuf-facing APIs.
+ * Uses NeoForge payload registration while preserving old byte-buffer-facing APIs.
  */
 public final class NetworkCompat
 {
@@ -37,16 +37,16 @@ public final class NetworkCompat
         "c2", "c3", "c4", "c7", "c10", "c11"
     );
 
-    private static final LinkedHashMap<Identifier, PayloadBinding> C2S_BINDINGS = createBindings("s", 14);
-    private static final LinkedHashMap<Identifier, PayloadBinding> S2C_BINDINGS = createBindings("c", 17);
-    private static final Map<Identifier, ServerReceiver> SERVER_RECEIVERS = new HashMap<>();
+    private static final LinkedHashMap<ResourceLocation, PayloadBinding> C2S_BINDINGS = createBindings("s", 14);
+    private static final LinkedHashMap<ResourceLocation, PayloadBinding> S2C_BINDINGS = createBindings("c", 17);
+    private static final Map<ResourceLocation, ServerReceiver> SERVER_RECEIVERS = new HashMap<>();
 
     private NetworkCompat() {}
 
     @FunctionalInterface
     public interface ServerReceiver
     {
-        void receive(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf);
+        void receive(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf);
     }
 
     public static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event)
@@ -70,7 +70,7 @@ public final class NetworkCompat
         verifyPayloadFreeze("c", 17, S2C_BINDINGS, "play_to_client");
     }
 
-    public static void registerServerReceiver(Identifier id, ServerReceiver receiver)
+    public static void registerServerReceiver(ResourceLocation id, ServerReceiver receiver)
     {
         if (!C2S_BINDINGS.containsKey(id))
         {
@@ -80,38 +80,38 @@ public final class NetworkCompat
         SERVER_RECEIVERS.put(id, receiver);
     }
 
-    public static void sendToServer(Identifier id, PacketByteBuf buf)
+    public static void sendToServer(ResourceLocation id, FriendlyByteBuf buf)
     {
         PacketDistributor.sendToServer(createPayload(C2S_BINDINGS, id, buf));
     }
 
-    public static void sendToPlayer(ServerPlayerEntity player, Identifier id, PacketByteBuf buf)
+    public static void sendToPlayer(ServerPlayer player, ResourceLocation id, FriendlyByteBuf buf)
     {
         PacketDistributor.sendToPlayer(player, createPayload(S2C_BINDINGS, id, buf));
     }
 
-    public static void sendToPlayersTrackingEntity(Entity entity, Identifier id, PacketByteBuf buf)
+    public static void sendToPlayersTrackingEntity(Entity entity, ResourceLocation id, FriendlyByteBuf buf)
     {
         PacketDistributor.sendToPlayersTrackingEntity(entity, createPayload(S2C_BINDINGS, id, buf));
     }
 
-    public static void sendToPlayersTrackingEntityAndSelf(ServerPlayerEntity player, Identifier id, PacketByteBuf buf)
+    public static void sendToPlayersTrackingEntityAndSelf(ServerPlayer player, ResourceLocation id, FriendlyByteBuf buf)
     {
         PacketDistributor.sendToPlayersTrackingEntityAndSelf(player, createPayload(S2C_BINDINGS, id, buf));
     }
 
-    public static PacketByteBuf createBuffer()
+    public static FriendlyByteBuf createBuffer()
     {
-        return new PacketByteBuf(Unpooled.buffer());
+        return new FriendlyByteBuf(Unpooled.buffer());
     }
 
-    private static LinkedHashMap<Identifier, PayloadBinding> createBindings(String prefix, int amount)
+    private static LinkedHashMap<ResourceLocation, PayloadBinding> createBindings(String prefix, int amount)
     {
-        LinkedHashMap<Identifier, PayloadBinding> bindings = new LinkedHashMap<>();
+        LinkedHashMap<ResourceLocation, PayloadBinding> bindings = new LinkedHashMap<>();
 
         for (int i = 1; i <= amount; i++)
         {
-            Identifier id = new Identifier(BBSMod.MOD_ID, prefix + i);
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, prefix + i);
 
             bindings.put(id, new PayloadBinding(id));
         }
@@ -134,7 +134,7 @@ public final class NetworkCompat
         LOGGER.info("[BBS-SEM] topic=net.negotiation phase=policy result=pending reason=optional_not_configured");
     }
 
-    private static void logPayloadTypes(String direction, LinkedHashMap<Identifier, PayloadBinding> bindings)
+    private static void logPayloadTypes(String direction, LinkedHashMap<ResourceLocation, PayloadBinding> bindings)
     {
         for (PayloadBinding binding : bindings.values())
         {
@@ -148,7 +148,7 @@ public final class NetworkCompat
         }
     }
 
-    private static void verifyPayloadFreeze(String prefix, int amount, LinkedHashMap<Identifier, PayloadBinding> bindings, String direction)
+    private static void verifyPayloadFreeze(String prefix, int amount, LinkedHashMap<ResourceLocation, PayloadBinding> bindings, String direction)
     {
         Set<String> expected = expectedPayloadIds(prefix, amount);
         Set<String> actual = collectPayloadIds(bindings);
@@ -175,11 +175,11 @@ public final class NetworkCompat
         return result;
     }
 
-    private static Set<String> collectPayloadIds(LinkedHashMap<Identifier, PayloadBinding> bindings)
+    private static Set<String> collectPayloadIds(LinkedHashMap<ResourceLocation, PayloadBinding> bindings)
     {
         Set<String> result = new HashSet<>();
 
-        for (Identifier id : bindings.keySet())
+        for (ResourceLocation id : bindings.keySet())
         {
             result.add(payloadKey(id));
         }
@@ -187,7 +187,7 @@ public final class NetworkCompat
         return result;
     }
 
-    private static String payloadKey(Identifier id)
+    private static String payloadKey(ResourceLocation id)
     {
         return id.getPath();
     }
@@ -202,7 +202,7 @@ public final class NetworkCompat
         );
     }
 
-    private static RawPayload createPayload(Map<Identifier, PayloadBinding> bindings, Identifier id, PacketByteBuf buf)
+    private static RawPayload createPayload(Map<ResourceLocation, PayloadBinding> bindings, ResourceLocation id, FriendlyByteBuf buf)
     {
         PayloadBinding binding = bindings.get(id);
 
@@ -214,7 +214,7 @@ public final class NetworkCompat
         return new RawPayload(binding, copyReadableBytes(buf));
     }
 
-    private static byte[] copyReadableBytes(PacketByteBuf buf)
+    private static byte[] copyReadableBytes(FriendlyByteBuf buf)
     {
         byte[] bytes = new byte[buf.readableBytes()];
 
@@ -223,14 +223,14 @@ public final class NetworkCompat
         return bytes;
     }
 
-    private static PacketByteBuf wrapBytes(byte[] bytes)
+    private static FriendlyByteBuf wrapBytes(byte[] bytes)
     {
         if (bytes == null || bytes.length == 0)
         {
             return createBuffer();
         }
 
-        return new PacketByteBuf(Unpooled.wrappedBuffer(bytes));
+        return new FriendlyByteBuf(Unpooled.wrappedBuffer(bytes));
     }
 
     private static void handleServerPayload(RawPayload payload, IPayloadContext context)
@@ -244,7 +244,7 @@ public final class NetworkCompat
             return;
         }
 
-        if (!(context.player() instanceof ServerPlayerEntity player))
+        if (!(context.player() instanceof ServerPlayer player))
         {
             LOGGER.warn("[BBS-SEM] topic=net.negotiation phase=server_payload result=reject reason=invalid_player_context id={}",
                 payloadKey(payload.binding().id));
@@ -268,10 +268,10 @@ public final class NetworkCompat
 
     private static final class PayloadBinding
     {
-        private final Identifier id;
+        private final ResourceLocation id;
         private final CustomPacketPayload.Type<RawPayload> type;
 
-        private PayloadBinding(Identifier id)
+        private PayloadBinding(ResourceLocation id)
         {
             this.id = id;
             this.type = CustomPacketPayload.createType(id.toString());

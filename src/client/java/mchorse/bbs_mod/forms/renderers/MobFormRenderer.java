@@ -350,11 +350,11 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 livingEntity.prevBodyYaw = 0F;
 
                 /* Limb swing is so ugly */
-                if (livingEntity.limbAnimator instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)
+                if (livingEntity.walkAnimation instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)
                 {
-                    a.setPrevSpeed(b.getPrevSpeed());
+                    a.setSpeedOld(b.getSpeedOld());
                     a.setSpeed(b.getSpeed());
-                    a.setPos(b.getPos());
+                    a.setPosition(b.getPosition());
                 }
 
                 /* Arm swing */

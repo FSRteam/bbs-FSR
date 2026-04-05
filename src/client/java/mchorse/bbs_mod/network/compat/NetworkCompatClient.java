@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.network.compat;
 
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,27 +14,27 @@ import java.util.Map;
 public final class NetworkCompatClient
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network-client");
-    private static final Map<Identifier, ClientReceiver> CLIENT_RECEIVERS = new HashMap<>();
+    private static final Map<ResourceLocation, ClientReceiver> CLIENT_RECEIVERS = new HashMap<>();
 
     private NetworkCompatClient() {}
 
     @FunctionalInterface
     public interface ClientReceiver
     {
-        void receive(PacketByteBuf buf);
+        void receive(FriendlyByteBuf buf);
     }
 
-    public static void registerClientReceiver(Identifier id, ClientReceiver receiver)
+    public static void registerClientReceiver(ResourceLocation id, ClientReceiver receiver)
     {
         CLIENT_RECEIVERS.put(id, receiver);
     }
 
-    public static void sendToServer(Identifier id, PacketByteBuf buf)
+    public static void sendToServer(ResourceLocation id, FriendlyByteBuf buf)
     {
         NetworkCompat.sendToServer(id, buf);
     }
 
-    public static void dispatchClientPayload(Identifier id, PacketByteBuf buf)
+    public static void dispatchClientPayload(ResourceLocation id, FriendlyByteBuf buf)
     {
         ClientReceiver receiver = CLIENT_RECEIVERS.get(id);
 

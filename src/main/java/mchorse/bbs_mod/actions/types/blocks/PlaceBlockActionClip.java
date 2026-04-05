@@ -6,9 +6,9 @@ import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.settings.values.mc.ValueBlockState;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.utils.clips.Clip;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.block.Blocks;
 
 public class PlaceBlockActionClip extends BlockActionClip
 {
@@ -30,11 +30,11 @@ public class PlaceBlockActionClip extends BlockActionClip
 
         if (this.state.get().getBlock() == Blocks.AIR)
         {
-            player.getWorld().breakBlock(pos, this.drop.get());
+            player.level().destroyBlock(pos, this.drop.get(), player);
         }
         else
         {
-            player.getWorld().setBlockState(pos, this.state.get());
+            player.level().setBlockAndUpdate(pos, this.state.get());
         }
     }
 

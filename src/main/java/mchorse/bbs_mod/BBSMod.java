@@ -103,7 +103,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -564,7 +564,7 @@ public class BBSMod
 
     private void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event)
     {
-        if (event.getEntity() instanceof ServerPlayerEntity player)
+        if (event.getEntity() instanceof ServerPlayer player)
         {
             if (player.getServer() != null)
             {
@@ -575,7 +575,7 @@ public class BBSMod
 
     private void onStartTracking(PlayerEvent.StartTracking event)
     {
-        if (event.getTarget() instanceof ServerPlayerEntity tracked && event.getEntity() instanceof ServerPlayerEntity watcher)
+        if (event.getTarget() instanceof ServerPlayer tracked && event.getEntity() instanceof ServerPlayer watcher)
         {
             runnables.add(() ->
             {
@@ -595,7 +595,7 @@ public class BBSMod
             return;
         }
 
-        if (event.getEntity() instanceof ServerPlayerEntity player)
+        if (event.getEntity() instanceof ServerPlayer player)
         {
             Morph morph = Morph.getMorph(player);
 

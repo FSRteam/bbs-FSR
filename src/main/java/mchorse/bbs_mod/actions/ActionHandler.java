@@ -3,20 +3,20 @@ package mchorse.bbs_mod.actions;
 import mchorse.bbs_mod.actions.types.blocks.PlaceBlockActionClip;
 import mchorse.bbs_mod.actions.types.chat.ChatActionClip;
 import mchorse.bbs_mod.actions.compat.ActionEventCompat;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 public class ActionHandler
 {
     public static void registerHandlers(ActionManager actions)
     {
-        ActionEventCompat.onChatMessage((String rawText, ServerPlayerEntity sender) ->
+        ActionEventCompat.onChatMessage((String rawText, ServerPlayer sender) ->
         {
             if (rawText != null)
             {
@@ -31,19 +31,19 @@ public class ActionHandler
             }
         });
 
-        ActionEventCompat.onBlockBreakAfter((World world, PlayerEntity player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity) ->
+        ActionEventCompat.onBlockBreakAfter((Level level, Player player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity) ->
         {
-            if (player instanceof ServerPlayerEntity serverPlayer)
+            if (player instanceof ServerPlayer serverPlayer)
             {
                 actions.addAction(serverPlayer, () ->
                 {
                     PlaceBlockActionClip clip = new PlaceBlockActionClip();
 
-                    clip.state.set(world.getBlockState(pos));
+                    clip.state.set(level.getBlockState(pos));
                     clip.x.set(pos.getX());
                     clip.y.set(pos.getY());
                     clip.z.set(pos.getZ());
-                    clip.drop.set(serverPlayer.interactionManager.getGameMode() == GameMode.SURVIVAL);
+                    clip.drop.set(serverPlayer.gameMode.getGameModeForPlayer() == GameType.SURVIVAL);
 
                     return clip;
                 });

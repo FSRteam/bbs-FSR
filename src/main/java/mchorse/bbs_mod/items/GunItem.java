@@ -4,15 +4,15 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.forms.FormUtils;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.TypedActionResult;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 
 import java.util.function.Consumer;
@@ -21,62 +21,68 @@ public class GunItem extends Item
 {
     public static Entity actor;
 
-    public GunItem(Settings settings)
+    public GunItem(Properties settings)
     {
         super(settings);
     }
 
     @Override
-    public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand)
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand)
     {
-        Entity owner = actor == null ? user : actor;
-        ItemStack stack = user.getStackInHand(hand);
+        Entity owner = actor == null ? player : actor;
+        ItemStack stack = player.getItemInHand(hand);
         GunProperties properties = this.getProperties(stack);
 
         /* Launch the player */
         if (properties.launch)
         {
-            Vec3d rotationVector = owner.getRotationVector().multiply(properties.launchPower);
+            Vec3 rotationVector = owner.getRotationVector().scale(properties.launchPower);
 
             if (properties.launchAdditive)
             {
-                owner.addVelocity(rotationVector);
+                owner.addDeltaMovement(rotationVector);
             }
             else
             {
-                owner.setVelocity(rotationVector);
+                owner.setDeltaMovement(rotationVector);
             }
 
-            return new TypedActionResult<>(ActionResult.SUCCESS, stack);
+            return InteractionResultHolder.success(stack);
         }
 
-        if (!world.isClient)
+        if (!level.isClientSide)
         {
             /* Shoot projectiles */
             int projectiles = Math.max(properties.projectiles, 1);
 
             for (int i = 0; i < projectiles; i++)
             {
-                GunProjectileEntity projectile = new GunProjectileEntity(BBSMod.GUN_PROJECTILE_ENTITY, world);
-                float yaw = owner.getHeadYaw() + (float) (properties.scatterY * (Math.random() - 0.5D));
-                float pitch = owner.getPitch() + (float) (properties.scatterX * (Math.random() - 0.5D));
+                GunProjectileEntity projectile = BBSMod.GUN_PROJECTILE_ENTITY.create(level);
+
+                if (projectile == null)
+                {
+                    continue;
+                }
+
+                float yaw = owner.getYHeadRot() + (float) (properties.scatterY * (Math.random() - 0.5D));
+                float pitch = owner.getXRot() + (float) (properties.scatterX * (Math.random() - 0.5D));
 
                 projectile.setProperties(properties);
                 projectile.setForm(FormUtils.copy(properties.projectileForm));
-                projectile.setPos(owner.getX(), owner.getY() + owner.getEyeHeight(owner.getPose()), owner.getZ());
-                projectile.setVelocity(owner, pitch, yaw, 0F, properties.speed, 0F);
-                projectile.calculateDimensions();
+                projectile.setPos(owner.getX(), owner.getEyeY(), owner.getZ());
+                projectile.shootFromRotation(owner, pitch, yaw, 0F, properties.speed, 0F);
+                projectile.refreshDimensions();
 
-                world.spawnEntity(projectile);
+                level.addFreshEntity(projectile);
             }
 
-            if (!properties.cmdFiring.isEmpty())
+            if (!properties.cmdFiring.isEmpty() && owner.getServer() != null)
             {
                 owner.getServer().getCommands().performPrefixedCommand(owner.createCommandSourceStack(), properties.cmdFiring);
             }
         }
 
-        return new TypedActionResult<>(ActionResult.PASS, stack);
+        return InteractionResultHolder.pass(stack);
     }
 
     private GunProperties getProperties(ItemStack stack)
@@ -89,7 +95,7 @@ public class GunItem extends Item
         consumer.accept(new IClientItemExtensions()
         {
             @Override
-            public net.minecraft.client.render.item.BuiltinModelItemRenderer getCustomRenderer()
+            public BlockEntityWithoutLevelRenderer getCustomRenderer()
             {
                 return BBSItemRenderers.getGunBuiltinRenderer();
             }
