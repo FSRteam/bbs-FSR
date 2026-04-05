@@ -257,54 +257,60 @@ public class BBSCommands
         Predicate<CommandSourceStack> configPermission = createPermissionPredicate("bbs.config.set", 4);
         LiteralArgumentBuilder<CommandSourceStack> config = Commands.literal("config").requires(configPermission);
 
-        config.then(Commands.literal("set").then(
-            Commands.argument("option", StringArgumentType.word())
-                .suggests((ctx, builder) ->
-                {
-                    Settings settings = BBSMod.getSettings().modules.get("bbs");
-
-                    if (settings != null)
-                    {
-                        for (ValueGroup value : settings.categories.values())
+        config.then(
+            Commands.literal("set")
+                .then(
+                    Commands.argument("option", StringArgumentType.word())
+                        .suggests((ctx, builder) ->
                         {
-                            for (BaseValue baseValue : value.getAll())
+                            Settings settings = BBSMod.getSettings().modules.get("bbs");
+
+                            if (settings != null)
                             {
-                                builder.suggest(value.getId() + "." + baseValue.getId());
+                                for (ValueGroup value : settings.categories.values())
+                                {
+                                    for (BaseValue baseValue : value.getAll())
+                                    {
+                                        builder.suggest(value.getId() + "." + baseValue.getId());
+                                    }
+                                }
                             }
-                        }
-                    }
 
-                    return builder.buildFuture();
-                })
-                .then(Commands.argument("value", StringArgumentType.greedyString()).executes((ctx) ->
-                {
-                    Settings settings = BBSMod.getSettings().modules.get("bbs");
+                            return builder.buildFuture();
+                        })
+                        .then(
+                            Commands.argument("value", StringArgumentType.greedyString())
+                                .executes((ctx) ->
+                                {
+                                    Settings settings = BBSMod.getSettings().modules.get("bbs");
 
-                    if (settings != null)
-                    {
-                        String option = StringArgumentType.getString(ctx, "option");
-                        String value = StringArgumentType.getString(ctx, "value");
-                        BaseType valueType = DataToString.fromString(value);
-                        String[] split = option.split("\\.");
+                                    if (settings != null)
+                                    {
+                                        String option = StringArgumentType.getString(ctx, "option");
+                                        String value = StringArgumentType.getString(ctx, "value");
+                                        BaseType valueType = DataToString.fromString(value);
+                                        String[] split = option.split("\\.");
 
-                        if (valueType != null && split.length >= 2)
-                        {
-                            BaseValue baseValue = settings.get(split[0], split[1]);
+                                        if (valueType != null && split.length >= 2)
+                                        {
+                                            BaseValue baseValue = settings.get(split[0], split[1]);
 
-                            if (baseValue != null)
-                            {
-                                baseValue.fromData(valueType);
-                                settings.saveLater();
-                            }
-                        }
-                    }
+                                            if (baseValue != null)
+                                            {
+                                                baseValue.fromData(valueType);
+                                                settings.saveLater();
+                                            }
+                                        }
+                                    }
 
-                    LOGGER.info("[BBS-SEM] topic=cmd.permission node=bbs.config.set required=4 player_level={} result=true",
-                        resolvePermissionLevel(ctx.getSource()));
+                                    LOGGER.info("[BBS-SEM] topic=cmd.permission node=bbs.config.set required=4 player_level={} result=true",
+                                        resolvePermissionLevel(ctx.getSource()));
 
-                    return 1;
-                })))
-        ));
+                                    return 1;
+                                })
+                        )
+                )
+        );
 
         bbs.then(config.requires(hasPermissions));
     }
