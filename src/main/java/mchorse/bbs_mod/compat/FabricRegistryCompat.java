@@ -1,14 +1,14 @@
 package mchorse.bbs_mod.compat;
 
-import net.minecraft.block.AbstractBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.BlockEntityType;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityDimensions;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnGroup;
-import net.minecraft.item.ItemGroup;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 
 /**
  * Transitional registration facade that exposes vanilla builders.
@@ -17,30 +17,30 @@ public final class FabricRegistryCompat
 {
     private FabricRegistryCompat() {}
 
-    public static AbstractBlock.Settings blockSettings()
+    public static BlockBehaviour.Properties blockSettings()
     {
-        return AbstractBlock.Settings.create();
+        return BlockBehaviour.Properties.of();
     }
 
     public static <T extends Entity> EntityType<T> buildEntityTypeWithBlockRange(
         String id,
-        SpawnGroup spawnGroup,
+        MobCategory spawnGroup,
         EntityType.EntityFactory<T> factory,
         EntityDimensions dimensions,
         int trackingRangeBlocks,
         int updateRate
     )
     {
-        return EntityType.Builder.create(factory, spawnGroup)
-            .setDimensions(dimensions.width, dimensions.height)
-            .maxTrackingRange(trackingRangeBlocks)
-            .trackingTickInterval(updateRate)
+        return EntityType.Builder.of(factory, spawnGroup)
+            .sized(dimensions.width(), dimensions.height())
+            .clientTrackingRange(trackingRangeBlocks)
+            .updateInterval(updateRate)
             .build(id);
     }
 
     public static <T extends Entity> EntityType<T> buildEntityTypeWithChunkRange(
         String id,
-        SpawnGroup spawnGroup,
+        MobCategory spawnGroup,
         EntityType.EntityFactory<T> factory,
         EntityDimensions dimensions,
         int trackingRangeChunks,
@@ -62,12 +62,12 @@ public final class FabricRegistryCompat
         Block... blocks
     )
     {
-        return BlockEntityType.Builder.create(factory, blocks).build(null);
+        return BlockEntityType.Builder.of(factory, blocks).build(null);
     }
 
-    public static ItemGroup.Builder itemGroupBuilder()
+    public static CreativeModeTab.Builder itemGroupBuilder()
     {
-        return ItemGroup.create(ItemGroup.Row.TOP, 0);
+        return CreativeModeTab.builder(CreativeModeTab.Row.TOP, 0);
     }
 
 }

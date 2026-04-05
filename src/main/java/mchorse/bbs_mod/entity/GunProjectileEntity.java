@@ -425,9 +425,9 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
     }
 
     @Override
-    protected Entity.MoveEffect getMoveEffect()
+    protected Entity.MovementEmission getMovementEmission()
     {
-        return MoveEffect.NONE;
+        return Entity.MovementEmission.NONE;
     }
 
     @Override
