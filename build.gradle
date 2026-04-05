@@ -1,4 +1,6 @@
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+import org.gradle.api.credentials.HttpHeaderCredentials
+import org.gradle.authentication.http.HttpHeaderAuthentication
 
 plugins {
     id 'net.neoforged.gradle.userdev' version '7.1.21'
@@ -6,8 +8,24 @@ plugins {
 }
 
 def bbsPreferMirror = (findProperty("bbsPreferMirror")?.toString() ?: "true").toBoolean()
+def bbsNeoMirrorUrl = findProperty("bbsNeoMirrorUrl")?.toString() ?: "https://cdnneo.sweatent.top/releases"
+def bbsProxyKey = findProperty("bbsProxyKey")?.toString() ?: (System.getenv("BBS_PROXY_KEY") ?: "")
 def neoForgedOfficial = 'https://maven.neoforged.net/releases'
-def neoForgedMirror = 'https://neoforged.forgecdn.net/releases'
+def neoForgedMirror = bbsNeoMirrorUrl
+
+def applyBbsProxyHeaderAuth = { MavenArtifactRepository repository, String repositoryUrl ->
+    if (!repositoryUrl.contains("cdnneo.sweatent.top") || bbsProxyKey.isEmpty()) {
+        return
+    }
+
+    repository.credentials(HttpHeaderCredentials) {
+        name = "x-proxy-key"
+        value = bbsProxyKey
+    }
+    repository.authentication {
+        header(HttpHeaderAuthentication)
+    }
+}
 
 def rewriteNeoForgedRepoUrl = { MavenArtifactRepository repository ->
     if (!bbsPreferMirror || repository.url == null) {
@@ -19,6 +37,7 @@ def rewriteNeoForgedRepoUrl = { MavenArtifactRepository repository ->
 
     if (repositoryUrl == officialUrl) {
         repository.setUrl(uri(neoForgedMirror))
+        applyBbsProxyHeaderAuth(repository, neoForgedMirror.toString())
     }
 }
 
@@ -42,6 +61,7 @@ repositories {
         maven {
             name = 'NeoForged Mirror Primary'
             url = neoForgedMirror
+            applyBbsProxyHeaderAuth(delegate, neoForgedMirror.toString())
         }
         maven {
             name = 'NeoForged Official Fallback'

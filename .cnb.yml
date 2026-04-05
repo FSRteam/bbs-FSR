@@ -67,7 +67,7 @@ main:
             set -eu
             export GRADLE_USER_HOME=/workspace/.gradle-home
             chmod +x ./gradlew
-            ./gradlew \
+            set -- \
               --no-daemon \
               build \
               --stacktrace \
@@ -76,6 +76,14 @@ main:
               -Dorg.gradle.internal.repository.initial.backoff=1000 \
               -Dorg.gradle.internal.http.connectionTimeout=120000 \
               -Dorg.gradle.internal.http.socketTimeout=180000
+
+            if [ -n "${BBS_PROXY_KEY:-}" ]; then
+              set -- "$@" "-PbbsProxyKey=${BBS_PROXY_KEY}"
+            else
+              echo "[cnb] BBS_PROXY_KEY is empty; cf proxy mirror may return 401."
+            fi
+
+            ./gradlew "$@"
 
   api_trigger:
     - runner:
@@ -145,7 +153,7 @@ main:
             set -eu
             export GRADLE_USER_HOME=/workspace/.gradle-home
             chmod +x ./gradlew
-            ./gradlew \
+            set -- \
               --no-daemon \
               build \
               --stacktrace \
@@ -154,3 +162,11 @@ main:
               -Dorg.gradle.internal.repository.initial.backoff=1000 \
               -Dorg.gradle.internal.http.connectionTimeout=120000 \
               -Dorg.gradle.internal.http.socketTimeout=180000
+
+            if [ -n "${BBS_PROXY_KEY:-}" ]; then
+              set -- "$@" "-PbbsProxyKey=${BBS_PROXY_KEY}"
+            else
+              echo "[cnb] BBS_PROXY_KEY is empty; cf proxy mirror may return 401."
+            fi
+
+            ./gradlew "$@"
