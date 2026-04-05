@@ -118,7 +118,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLConstructModEvent;
-import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -389,7 +389,7 @@ public class BBSMod
 
     public BBSMod()
     {
-        this.modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        this.modBus = ModLoadingContext.get().getActiveContainer().getEventBus();
         this.addonCollector = new BBSAddonCollector();
         this.addonBridge = new BBSAddonBridge(this.addonCollector);
 
