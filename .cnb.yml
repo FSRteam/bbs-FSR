@@ -4,9 +4,9 @@ main:
         cpus: 4
       docker:
         image: eclipse-temurin:21-jdk
-      cache:
-        - /workspace/.gradle-home/caches
-        - /workspace/.gradle-home/wrapper
+        volumes:
+          - main:/workspace/.gradle-home/caches:copy-on-write
+          - main:/workspace/.gradle-home/wrapper:copy-on-write
       stages:
         - name: build
           script: |
@@ -56,9 +56,9 @@ main:
         cpus: 4
       docker:
         image: eclipse-temurin:21-jdk
-      cache:
-        - /workspace/.gradle-home/caches
-        - /workspace/.gradle-home/wrapper
+        volumes:
+          - main:/workspace/.gradle-home/caches:copy-on-write
+          - main:/workspace/.gradle-home/wrapper:copy-on-write
       stages:
         - name: build
           script: |
