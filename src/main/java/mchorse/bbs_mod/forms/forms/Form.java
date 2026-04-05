@@ -21,8 +21,8 @@ import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -235,19 +235,43 @@ public abstract class Form extends ValueGroup
 
         if (hp != 20F)
         {
-            entity.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(hp);
+            if (entity.getAttribute(Attributes.MAX_HEALTH) != null)
+            {
+                entity.getAttribute(Attributes.MAX_HEALTH).setBaseValue(hp);
+            }
+
             entity.setHealth(hp);
         }
-        if (speed != 0.1F) entity.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED).setBaseValue(speed);
-        if (stepHeight != 0.5F) entity.setStepHeight(stepHeight);
+
+        if (speed != 0.1F && entity.getAttribute(Attributes.MOVEMENT_SPEED) != null)
+        {
+            entity.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(speed);
+        }
+
+        if (stepHeight != 0.5F && entity.getAttribute(Attributes.STEP_HEIGHT) != null)
+        {
+            entity.getAttribute(Attributes.STEP_HEIGHT).setBaseValue(stepHeight);
+        }
     }
 
     public void onDemorph(LivingEntity entity)
     {
-        entity.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(20F);
+        if (entity.getAttribute(Attributes.MAX_HEALTH) != null)
+        {
+            entity.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20F);
+        }
+
         entity.setHealth(20F);
-        entity.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED).setBaseValue(0.1F);
-        entity.setStepHeight(0.5F);
+
+        if (entity.getAttribute(Attributes.MOVEMENT_SPEED) != null)
+        {
+            entity.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.1F);
+        }
+
+        if (entity.getAttribute(Attributes.STEP_HEIGHT) != null)
+        {
+            entity.getAttribute(Attributes.STEP_HEIGHT).setBaseValue(0.5F);
+        }
     }
 
     /* ID and display name */
