@@ -8,6 +8,60 @@ main:
           - main:/workspace/.gradle-home/caches:read-write
           - main:/workspace/.gradle-home/wrapper:read-write
       stages:
+        - name: network-probe
+          script: |
+            set -eu
+            probe_urls="https://api.ipify.org https://ifconfig.me/ip https://ipinfo.io/ip"
+            found=0
+
+            for url in $probe_urls; do
+              ip_value=""
+
+              if command -v curl >/dev/null 2>&1; then
+                ip_value="$(curl -fsSL --max-time 8 "$url" 2>/dev/null | tr -d '\r\n[:space:]' || true)"
+              elif command -v wget >/dev/null 2>&1; then
+                ip_value="$(wget -qO- --timeout=8 "$url" 2>/dev/null | tr -d '\r\n[:space:]' || true)"
+              else
+                break
+              fi
+
+              case "$ip_value" in
+                ""|*"<"*|*"{"*|*"\""*)
+                  ip_value=""
+                  ;;
+              esac
+
+              if [ -n "$ip_value" ]; then
+                echo "[cnb] outbound-ip=${ip_value} source=${url}"
+                found=1
+                break
+              fi
+            done
+
+            if [ "$found" -eq 0 ]; then
+              echo "[cnb] outbound-ip=unknown"
+            fi
+        - name: gradle-wrapper-cache
+          type: docker:cache
+          options:
+            dockerfile: cnb/cache.wrapper.dockerfile
+            by:
+              - gradlew
+              - gradle/wrapper/gradle-wrapper.jar
+              - gradle/wrapper/gradle-wrapper.properties
+              - cnb/cache.wrapper.dockerfile
+            versionBy:
+              - gradle/wrapper/gradle-wrapper.properties
+          exports:
+            name: GRADLE_WRAPPER_CACHE_IMAGE
+        - name: warm-gradle-wrapper
+          image: $GRADLE_WRAPPER_CACHE_IMAGE
+          script: |
+            set -eu
+            mkdir -p /workspace/.gradle-home
+            if [ -d /root/.gradle/wrapper ]; then
+              cp -a /root/.gradle/wrapper /workspace/.gradle-home/
+            fi
         - name: build
           script: |
             set -eu
@@ -32,6 +86,60 @@ main:
           - main:/workspace/.gradle-home/caches:read-write
           - main:/workspace/.gradle-home/wrapper:read-write
       stages:
+        - name: network-probe
+          script: |
+            set -eu
+            probe_urls="https://api.ipify.org https://ifconfig.me/ip https://ipinfo.io/ip"
+            found=0
+
+            for url in $probe_urls; do
+              ip_value=""
+
+              if command -v curl >/dev/null 2>&1; then
+                ip_value="$(curl -fsSL --max-time 8 "$url" 2>/dev/null | tr -d '\r\n[:space:]' || true)"
+              elif command -v wget >/dev/null 2>&1; then
+                ip_value="$(wget -qO- --timeout=8 "$url" 2>/dev/null | tr -d '\r\n[:space:]' || true)"
+              else
+                break
+              fi
+
+              case "$ip_value" in
+                ""|*"<"*|*"{"*|*"\""*)
+                  ip_value=""
+                  ;;
+              esac
+
+              if [ -n "$ip_value" ]; then
+                echo "[cnb] outbound-ip=${ip_value} source=${url}"
+                found=1
+                break
+              fi
+            done
+
+            if [ "$found" -eq 0 ]; then
+              echo "[cnb] outbound-ip=unknown"
+            fi
+        - name: gradle-wrapper-cache
+          type: docker:cache
+          options:
+            dockerfile: cnb/cache.wrapper.dockerfile
+            by:
+              - gradlew
+              - gradle/wrapper/gradle-wrapper.jar
+              - gradle/wrapper/gradle-wrapper.properties
+              - cnb/cache.wrapper.dockerfile
+            versionBy:
+              - gradle/wrapper/gradle-wrapper.properties
+          exports:
+            name: GRADLE_WRAPPER_CACHE_IMAGE
+        - name: warm-gradle-wrapper
+          image: $GRADLE_WRAPPER_CACHE_IMAGE
+          script: |
+            set -eu
+            mkdir -p /workspace/.gradle-home
+            if [ -d /root/.gradle/wrapper ]; then
+              cp -a /root/.gradle/wrapper /workspace/.gradle-home/
+            fi
         - name: build
           script: |
             set -eu
