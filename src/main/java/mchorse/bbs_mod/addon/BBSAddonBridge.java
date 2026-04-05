@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Utility to expose collector lifecycle to the core mod without entangling with Fabric/NeoForge specifics.
+ * Utility to expose collector lifecycle to the core mod without entangling with loader-specific details.
  */
 public final class BBSAddonBridge
 {

@@ -21,103 +21,76 @@ import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.Settings;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.command.CommandRegistryAccess;
-import net.minecraft.command.EntitySelector;
-import net.minecraft.command.argument.BlockPosArgumentType;
-import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.command.argument.PosArgument;
-import net.minecraft.command.argument.Vec3ArgumentType;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.item.ItemStack;
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.commands.arguments.coordinates.Coordinates;
+import net.minecraft.commands.arguments.coordinates.Vec3Argument;
+import net.minecraft.commands.arguments.selector.EntitySelector;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.structure.StructureTemplate;
-import net.minecraft.structure.StructureTemplateManager;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.InvalidIdentifierException;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.SaveProperties;
-import net.minecraft.world.World;
-import net.minecraft.world.level.LevelInfo;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+import net.minecraft.world.level.storage.PrimaryLevelData;
+import net.minecraft.world.phys.Vec3;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.function.Predicate;
 
 public class BBSCommands
 {
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, CommandRegistryAccess registryAccess, CommandManager.RegistrationEnvironment environment)
-    {
-        register(dispatcher, environment != null && environment.dedicated);
-    }
+    private static final Logger LOGGER = LoggerFactory.getLogger(BBSCommands.class);
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, Object registryAccess, Object commandSelection)
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext context, Commands.CommandSelection selection)
     {
-        register(dispatcher, isDedicatedEnvironment(commandSelection));
-    }
+        Predicate<CommandSourceStack> hasPermissions = createPermissionPredicate("bbs.admin", 2);
+        LiteralArgumentBuilder<CommandSourceStack> bbs = Commands.literal("bbs");
 
-    private static void register(CommandDispatcher<ServerCommandSource> dispatcher, boolean dedicated)
-    {
-        Predicate<ServerCommandSource> hasPermissions = (source) -> source.hasPermissionLevel(2);
-        LiteralArgumentBuilder<ServerCommandSource> bbs = CommandManager.literal("bbs").requires((source) -> true);
-
-        registerMorphCommand(bbs, dedicated, hasPermissions);
-        registerModelBlockCommand(bbs, dedicated, hasPermissions);
-        registerMorphEntityCommand(bbs, dedicated, hasPermissions);
-        registerFilmsCommand(bbs, dedicated, hasPermissions);
-        registerDCCommand(bbs, dedicated, hasPermissions);
-        registerOnHeadCommand(bbs, dedicated, hasPermissions);
-        registerConfigCommand(bbs, dedicated, hasPermissions);
-        registerCheatsCommand(bbs, dedicated);
-        registerBoomCommand(bbs, dedicated, hasPermissions);
-        registerStructureSaveCommand(bbs, dedicated, hasPermissions);
+        registerMorphCommand(bbs, hasPermissions);
+        registerModelBlockCommand(bbs, hasPermissions);
+        registerMorphEntityCommand(bbs, hasPermissions);
+        registerFilmsCommand(bbs, hasPermissions);
+        registerDCCommand(bbs, hasPermissions);
+        registerOnHeadCommand(bbs, hasPermissions);
+        registerConfigCommand(bbs, hasPermissions);
+        registerCheatsCommand(bbs, selection);
+        registerBoomCommand(bbs, hasPermissions);
+        registerStructureSaveCommand(bbs);
 
         dispatcher.register(bbs);
     }
 
-    private static boolean isDedicatedEnvironment(Object commandSelection)
+    private static void registerStructureSaveCommand(LiteralArgumentBuilder<CommandSourceStack> bbs)
     {
-        if (commandSelection == null)
-        {
-            return false;
-        }
+        LiteralArgumentBuilder<CommandSourceStack> structures = Commands.literal("structures");
+        LiteralArgumentBuilder<CommandSourceStack> save = Commands.literal("save");
+        RequiredArgumentBuilder<CommandSourceStack, String> name = Commands.argument("name", StringArgumentType.word());
+        RequiredArgumentBuilder<CommandSourceStack, Coordinates> from = Commands.argument("from", BlockPosArgument.blockPos());
+        RequiredArgumentBuilder<CommandSourceStack, Coordinates> to = Commands.argument("to", BlockPosArgument.blockPos());
 
-        if (commandSelection instanceof CommandManager.RegistrationEnvironment environment)
-        {
-            return environment.dedicated;
-        }
-
-        String name = commandSelection.toString().toUpperCase();
-
-        return name.contains("DEDICATED");
+        bbs.then(structures.then(save.then(name.then(from.then(to.executes(BBSCommands::saveStructure))))));
     }
 
-    private static void registerStructureSaveCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerMorphCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
     {
-        LiteralArgumentBuilder<ServerCommandSource> structures = CommandManager.literal("structures");
-        LiteralArgumentBuilder<ServerCommandSource> save = CommandManager.literal("save");
-        RequiredArgumentBuilder<ServerCommandSource, String> name = CommandManager.argument("name", StringArgumentType.word());
-        RequiredArgumentBuilder<ServerCommandSource, PosArgument> from = CommandManager.argument("from", BlockPosArgumentType.blockPos());
-        RequiredArgumentBuilder<ServerCommandSource, PosArgument> to = CommandManager.argument("to", BlockPosArgumentType.blockPos());
-
-        bbs.then(structures
-            .then(save.then(name.then(from.then(to
-                .executes(BBSCommands::saveStructure))))
-        ));
-    }
-
-    private static void registerMorphCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
-    {
-        LiteralArgumentBuilder<ServerCommandSource> morph = CommandManager.literal("morph");
-        RequiredArgumentBuilder<ServerCommandSource, EntitySelector> target = CommandManager.argument("target", EntityArgumentType.players());
-        RequiredArgumentBuilder<ServerCommandSource, String> form = CommandManager.argument("form", StringArgumentType.greedyString());
+        LiteralArgumentBuilder<CommandSourceStack> morph = Commands.literal("morph");
+        RequiredArgumentBuilder<CommandSourceStack, EntitySelector> target = Commands.argument("target", EntityArgument.players());
+        RequiredArgumentBuilder<CommandSourceStack, String> form = Commands.argument("form", StringArgumentType.greedyString());
 
         morph.then(target
             .executes(BBSCommands::morphCommandDemorph)
@@ -126,20 +99,20 @@ public class BBSCommands
         bbs.then(morph.requires(hasPermissions));
     }
 
-    private static void registerModelBlockCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerModelBlockCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
     {
-        LiteralArgumentBuilder<ServerCommandSource> modelBlock = CommandManager.literal("model_block");
-        LiteralArgumentBuilder<ServerCommandSource> playState = CommandManager.literal("play_state");
-        RequiredArgumentBuilder<ServerCommandSource, PosArgument> coords = CommandManager.argument("coords", BlockPosArgumentType.blockPos());
-        RequiredArgumentBuilder<ServerCommandSource, String> state = CommandManager.argument("state", StringArgumentType.string());
+        LiteralArgumentBuilder<CommandSourceStack> modelBlock = Commands.literal("model_block");
+        LiteralArgumentBuilder<CommandSourceStack> playState = Commands.literal("play_state");
+        RequiredArgumentBuilder<CommandSourceStack, Coordinates> coords = Commands.argument("coords", BlockPosArgument.blockPos());
+        RequiredArgumentBuilder<CommandSourceStack, String> state = Commands.argument("state", StringArgumentType.string());
 
-        LiteralArgumentBuilder<ServerCommandSource> refresh = CommandManager.literal("refresh");
-        RequiredArgumentBuilder<ServerCommandSource, Integer> randomRange = CommandManager.argument("random_range", IntegerArgumentType.integer());
+        LiteralArgumentBuilder<CommandSourceStack> refresh = Commands.literal("refresh");
+        RequiredArgumentBuilder<CommandSourceStack, Integer> randomRange = Commands.argument("random_range", IntegerArgumentType.integer());
 
         state.suggests((ctx, builder) ->
         {
-            BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "coords");
-            BlockEntity blockEntity = ctx.getSource().getWorld().getBlockEntity(pos);
+            BlockPos pos = BlockPosArgument.getBlockPos(ctx, "coords");
+            BlockEntity blockEntity = ctx.getSource().getLevel().getBlockEntity(pos);
 
             if (blockEntity instanceof ModelBlockEntity block)
             {
@@ -159,62 +132,53 @@ public class BBSCommands
             return builder.buildFuture();
         });
 
-        modelBlock.then(
-            playState.then(
-                coords.then(
-                    state.executes((ctx) ->
-                    {
-                        BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "coords");
-                        String animationState = StringArgumentType.getString(ctx, "state");
-                        BlockEntity blockEntity = ctx.getSource().getWorld().getBlockEntity(pos);
+        modelBlock.then(playState.then(coords.then(state.executes((ctx) ->
+        {
+            BlockPos pos = BlockPosArgument.getBlockPos(ctx, "coords");
+            String animationState = StringArgumentType.getString(ctx, "state");
+            ServerLevel level = ctx.getSource().getLevel();
+            BlockEntity blockEntity = level.getBlockEntity(pos);
 
-                        if (blockEntity instanceof ModelBlockEntity)
-                        {
-                            for (ServerPlayerEntity player : ctx.getSource().getWorld().getPlayers())
-                            {
-                                if (player.getBlockPos().getSquaredDistance(pos) <= 64F)
-                                {
-                                    ServerNetwork.sendModelBlockState(player, pos, animationState);
-                                }
-                            }
-
-                            return 1;
-                        }
-
-                        return 0;
-                    })
-                )
-            )
-        );
-
-        modelBlock.then(
-            refresh.then(
-                randomRange.executes((ctx) ->
+            if (blockEntity instanceof ModelBlockEntity)
+            {
+                for (ServerPlayer player : level.getPlayers((p) -> true))
                 {
-                    int range = IntegerArgumentType.getInteger(ctx, "random_range");
-
-                    for (ServerPlayerEntity player : ctx.getSource().getServer().getPlayerManager().getPlayerList())
+                    if (player.blockPosition().distSqr(pos) <= 64.0D)
                     {
-                        ServerNetwork.sendReloadModelBlocks(player, range);
+                        ServerNetwork.sendModelBlockState(player, pos, animationState);
                     }
+                }
 
-                    return 1;
-                })
-            )
-        );
+                return 1;
+            }
+
+            return 0;
+        }))));
+
+        modelBlock.then(refresh.then(randomRange.executes((ctx) ->
+        {
+            int range = IntegerArgumentType.getInteger(ctx, "random_range");
+
+            for (ServerPlayer player : ctx.getSource().getServer().getPlayerList().getPlayers())
+            {
+                ServerNetwork.sendReloadModelBlocks(player, range);
+            }
+
+            return 1;
+        })));
 
         bbs.then(modelBlock.requires(hasPermissions));
     }
 
-    private static void registerMorphEntityCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerMorphEntityCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
     {
-        LiteralArgumentBuilder<ServerCommandSource> morph = CommandManager.literal("morph_entity");
+        LiteralArgumentBuilder<CommandSourceStack> morph = Commands.literal("morph_entity");
 
         morph.executes((source) ->
         {
             Entity entity = source.getSource().getEntity();
 
-            if (entity instanceof ServerPlayerEntity player)
+            if (entity instanceof ServerPlayer player)
             {
                 Form form = Morph.getMobForm(player);
 
@@ -231,15 +195,15 @@ public class BBSCommands
         bbs.then(morph.requires(hasPermissions));
     }
 
-    private static void registerFilmsCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerFilmsCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
     {
-        LiteralArgumentBuilder<ServerCommandSource> scene = CommandManager.literal("films");
-        LiteralArgumentBuilder<ServerCommandSource> play = CommandManager.literal("play");
-        LiteralArgumentBuilder<ServerCommandSource> stop = CommandManager.literal("stop");
-        RequiredArgumentBuilder<ServerCommandSource, EntitySelector> target = CommandManager.argument("target", EntityArgumentType.players());
-        RequiredArgumentBuilder<ServerCommandSource, String> playFilm = CommandManager.argument("film", StringArgumentType.string());
-        RequiredArgumentBuilder<ServerCommandSource, String> stopFilm = CommandManager.argument("film", StringArgumentType.string());
-        RequiredArgumentBuilder<ServerCommandSource, Boolean> camera = CommandManager.argument("camera", BoolArgumentType.bool());
+        LiteralArgumentBuilder<CommandSourceStack> scene = Commands.literal("films");
+        LiteralArgumentBuilder<CommandSourceStack> play = Commands.literal("play");
+        LiteralArgumentBuilder<CommandSourceStack> stop = Commands.literal("stop");
+        RequiredArgumentBuilder<CommandSourceStack, EntitySelector> target = Commands.argument("target", EntityArgument.players());
+        RequiredArgumentBuilder<CommandSourceStack, String> playFilm = Commands.argument("film", StringArgumentType.string());
+        RequiredArgumentBuilder<CommandSourceStack, String> stopFilm = Commands.argument("film", StringArgumentType.string());
+        RequiredArgumentBuilder<CommandSourceStack, Boolean> camera = Commands.argument("camera", BoolArgumentType.bool());
 
         playFilm.suggests((ctx, builder) ->
         {
@@ -261,173 +225,195 @@ public class BBSCommands
             return builder.buildFuture();
         });
 
-        scene.then(
-            target.then(
-                play.then(
-                    playFilm.executes((source) -> sceneCommandPlay(source, true))
-                        .then(
-                            camera.executes((source) -> sceneCommandPlay(source, BoolArgumentType.getBool(source, "camera")))
-                        )
-                )
-            )
-            .then(
-                stop.then(
-                    stopFilm.executes(BBSCommands::sceneCommandStop)
-                )
-            )
-        );
+        scene.then(target.then(play.then(playFilm.executes((source) -> sceneCommandPlay(source, true))
+            .then(camera.executes((source) -> sceneCommandPlay(source, BoolArgumentType.getBool(source, "camera"))))))
+            .then(stop.then(stopFilm.executes(BBSCommands::sceneCommandStop))));
 
         bbs.then(scene.requires(hasPermissions));
     }
 
-    private static void registerDCCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerDCCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
     {
-        LiteralArgumentBuilder<ServerCommandSource> dc = CommandManager.literal("dc");
-        LiteralArgumentBuilder<ServerCommandSource> shutdown = CommandManager.literal("shutdown");
-        LiteralArgumentBuilder<ServerCommandSource> start = CommandManager.literal("start");
-        LiteralArgumentBuilder<ServerCommandSource> stop = CommandManager.literal("stop");
+        LiteralArgumentBuilder<CommandSourceStack> dc = Commands.literal("dc");
+        LiteralArgumentBuilder<CommandSourceStack> shutdown = Commands.literal("shutdown");
+        LiteralArgumentBuilder<CommandSourceStack> start = Commands.literal("start");
+        LiteralArgumentBuilder<CommandSourceStack> stop = Commands.literal("stop");
 
-        bbs.then(
-            dc.requires(hasPermissions).then(start.executes(BBSCommands::DCCommandStart))
-                .then(stop.executes(BBSCommands::DCCommandStop))
-                .then(shutdown.executes(BBSCommands::DCCommandShutdown))
-        );
+        bbs.then(dc.requires(hasPermissions)
+            .then(start.executes(BBSCommands::DCCommandStart))
+            .then(stop.executes(BBSCommands::DCCommandStop))
+            .then(shutdown.executes(BBSCommands::DCCommandShutdown)));
     }
 
-    private static void registerOnHeadCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerOnHeadCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
     {
-        LiteralArgumentBuilder<ServerCommandSource> onHead = CommandManager.literal("on_head");
+        LiteralArgumentBuilder<CommandSourceStack> onHead = Commands.literal("on_head");
 
         bbs.then(onHead.requires(hasPermissions).executes(BBSCommands::onHead));
     }
 
-    private static void registerConfigCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static void registerConfigCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
     {
-        LiteralArgumentBuilder<ServerCommandSource> config = CommandManager.literal("config");
+        Predicate<CommandSourceStack> configPermission = createPermissionPredicate("bbs.config.set", 4);
+        LiteralArgumentBuilder<CommandSourceStack> config = Commands.literal("config").requires(configPermission);
 
-        config.requires((ctx) -> ctx.hasPermissionLevel(4)).then(
-            CommandManager.literal("set").then(
-                CommandManager.argument("option", StringArgumentType.word())
-                    .suggests((ctx, builder) ->
+        config.then(Commands.literal("set").then(
+            Commands.argument("option", StringArgumentType.word())
+                .suggests((ctx, builder) ->
+                {
+                    Settings settings = BBSMod.getSettings().modules.get("bbs");
+
+                    if (settings != null)
                     {
-                        Settings settings = BBSMod.getSettings().modules.get("bbs");
-
-                        if (settings != null)
+                        for (ValueGroup value : settings.categories.values())
                         {
-                            for (ValueGroup value : settings.categories.values())
+                            for (BaseValue baseValue : value.getAll())
                             {
-                                for (BaseValue baseValue : value.getAll())
-                                {
-                                    builder.suggest(value.getId() + "." + baseValue.getId());
-                                }
+                                builder.suggest(value.getId() + "." + baseValue.getId());
                             }
                         }
+                    }
 
-                        return builder.buildFuture();
-                    })
-                    .then(
-                        CommandManager.argument("value", StringArgumentType.greedyString()).executes((ctx) ->
+                    return builder.buildFuture();
+                })
+                .then(Commands.argument("value", StringArgumentType.greedyString()).executes((ctx) ->
+                {
+                    Settings settings = BBSMod.getSettings().modules.get("bbs");
+
+                    if (settings != null)
+                    {
+                        String option = StringArgumentType.getString(ctx, "option");
+                        String value = StringArgumentType.getString(ctx, "value");
+                        BaseType valueType = DataToString.fromString(value);
+                        String[] split = option.split("\\.");
+
+                        if (valueType != null && split.length >= 2)
                         {
-                            Settings settings = BBSMod.getSettings().modules.get("bbs");
+                            BaseValue baseValue = settings.get(split[0], split[1]);
 
-                            if (settings != null)
+                            if (baseValue != null)
                             {
-                                String option = StringArgumentType.getString(ctx, "option");
-                                String value = StringArgumentType.getString(ctx, "value");
-                                BaseType valueType = DataToString.fromString(value);
-                                String[] split = option.split("\\.");
-
-                                if (valueType != null && split.length >= 2)
-                                {
-                                    BaseValue baseValue = settings.get(split[0], split[1]);
-
-                                    if (baseValue != null)
-                                    {
-                                        baseValue.fromData(valueType);
-                                        settings.saveLater();
-                                    }
-                                }
+                                baseValue.fromData(valueType);
+                                settings.saveLater();
                             }
+                        }
+                    }
 
-                            return 1;
-                        })
-                    )
-            )
-        );
+                    LOGGER.info("[BBS-SEM] topic=cmd.permission node=bbs.config.set required=4 player_level={} result=true",
+                        resolvePermissionLevel(ctx.getSource()));
+
+                    return 1;
+                })))
+        ));
 
         bbs.then(config.requires(hasPermissions));
     }
 
-    private static void registerCheatsCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated)
+    private static void registerCheatsCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Commands.CommandSelection selection)
     {
-        if (dedicated)
+        boolean hasCheats = selection == Commands.CommandSelection.INTEGRATED;
+        LOGGER.info("[BBS-SEM] topic=cmd.visibility selection={} has_bbs=true has_cheats={}", selection, hasCheats);
+
+        if (selection != Commands.CommandSelection.INTEGRATED)
         {
             return;
         }
 
-        bbs.then(
-            CommandManager.literal("cheats").then(
-                CommandManager.argument("enabled", BoolArgumentType.bool()).executes((ctx) ->
+        bbs.then(Commands.literal("cheats").then(Commands.argument("enabled", BoolArgumentType.bool()).executes((ctx) ->
+        {
+            MinecraftServer server = ctx.getSource().getServer();
+            boolean enabled = BoolArgumentType.getBool(ctx, "enabled");
+            int onlineCount = server.getPlayerList().getPlayers().size();
+            int sendCount = 0;
+
+            if (server.getWorldData() instanceof PrimaryLevelData data)
+            {
+                LevelSettings settings = data.getLevelSettings();
+
+                ((LevelPropertiesAccessor) data).bbs$setSettings(new LevelSettings(
+                    settings.levelName(),
+                    settings.gameType(),
+                    settings.hardcore(),
+                    settings.difficulty(),
+                    enabled,
+                    settings.gameRules(),
+                    settings.getDataConfiguration()
+                ));
+
+                for (ServerPlayer player : server.getPlayerList().getPlayers())
                 {
-                    MinecraftServer server = ctx.getSource().getServer();
-                    boolean enabled = BoolArgumentType.getBool(ctx, "enabled");
-                    SaveProperties saveProperties = server.getSaveProperties();
+                    server.getCommands().sendCommands(player);
+                    ServerNetwork.sendCheatsPermission(player, enabled);
+                    sendCount++;
+                }
+            }
 
-                    if (saveProperties instanceof LevelPropertiesAccessor accessor)
-                    {
-                        LevelInfo levelInfo = saveProperties.getLevelInfo();
+            LOGGER.info("[BBS-SEM] topic=cmd.refresh online_count={} send_count={} enabled={}",
+                onlineCount,
+                sendCount,
+                enabled
+            );
 
-                        accessor.bbs$setLevelInfo(new LevelInfo(levelInfo.getLevelName(),
-                            levelInfo.getGameMode(),
-                            levelInfo.isHardcore(),
-                            levelInfo.getDifficulty(),
-                            enabled,
-                            levelInfo.getGameRules(),
-                            levelInfo.getDataConfiguration()
-                        ));
-
-                        for (ServerPlayerEntity serverPlayerEntity : server.getPlayerManager().getPlayerList())
-                        {
-                            server.getCommandManager().sendCommandTree(serverPlayerEntity);
-                            ServerNetwork.sendCheatsPermission(serverPlayerEntity, enabled);
-                        }
-                    }
-
-                    return 1;
-                })
-            )
-        );
+            return 1;
+        })));
     }
 
-    private static void registerBoomCommand(LiteralArgumentBuilder<ServerCommandSource> bbs, boolean dedicated, Predicate<ServerCommandSource> hasPermissions)
+    private static Predicate<CommandSourceStack> createPermissionPredicate(String node, int requiredLevel)
     {
-        bbs.then(
-            CommandManager.literal("boom").requires(hasPermissions).then(
-                CommandManager.argument("pos", Vec3ArgumentType.vec3()).then(
-                    CommandManager.argument("radius", FloatArgumentType.floatArg(1)).then(
-                        CommandManager.argument("fire", BoolArgumentType.bool()).executes((ctx) ->
-                        {
-                            ServerCommandSource source = ctx.getSource();
-                            Vec3d pos = Vec3ArgumentType.getVec3(ctx, "pos");
-                            float radius = FloatArgumentType.getFloat(ctx, "radius");
-                            boolean fire = BoolArgumentType.getBool(ctx, "fire");
+        return (source) ->
+        {
+            boolean result = source.hasPermission(requiredLevel);
 
-                            source.getWorld().createExplosion(null, pos.x, pos.y, pos.z, radius, fire, World.ExplosionSourceType.BLOCK);
+            LOGGER.info("[BBS-SEM] topic=cmd.permission node={} required={} player_level={} result={}",
+                node,
+                requiredLevel,
+                resolvePermissionLevel(source),
+                result
+            );
 
-                            return 1;
-                        })
-                    )
+            return result;
+        };
+    }
+
+    private static int resolvePermissionLevel(CommandSourceStack source)
+    {
+        if (source.hasPermission(4))
+        {
+            return 4;
+        }
+
+        if (source.hasPermission(2))
+        {
+            return 2;
+        }
+
+        return 0;
+    }
+
+    private static void registerBoomCommand(LiteralArgumentBuilder<CommandSourceStack> bbs, Predicate<CommandSourceStack> hasPermissions)
+    {
+        bbs.then(Commands.literal("boom").requires(hasPermissions).then(
+            Commands.argument("pos", Vec3Argument.vec3()).then(
+                Commands.argument("radius", FloatArgumentType.floatArg(1)).then(
+                    Commands.argument("fire", BoolArgumentType.bool()).executes((ctx) ->
+                    {
+                        CommandSourceStack source = ctx.getSource();
+                        Vec3 pos = Vec3Argument.getVec3(ctx, "pos");
+                        float radius = FloatArgumentType.getFloat(ctx, "radius");
+                        boolean fire = BoolArgumentType.getBool(ctx, "fire");
+
+                        source.getLevel().explode(null, pos.x, pos.y, pos.z, radius, fire, Level.ExplosionInteraction.BLOCK);
+
+                        return 1;
+                    })
                 )
             )
-        );
+        ));
     }
 
-    /**
-     * /bbs morph McHorseYT - demorph (remove morph) player McHorseYT
-     */
-    private static int morphCommandDemorph(CommandContext<ServerCommandSource> source) throws CommandSyntaxException
+    private static int morphCommandDemorph(CommandContext<CommandSourceStack> source) throws CommandSyntaxException
     {
-        ServerPlayerEntity entity = EntityArgumentType.getPlayer(source, "target");
+        ServerPlayer entity = EntityArgument.getPlayer(source, "target");
 
         ServerNetwork.sendMorphToTracked(entity, null);
         Morph.getMorph(entity).setForm(null);
@@ -435,21 +421,16 @@ public class BBSCommands
         return 1;
     }
 
-    /**
-     * /bbs morph McHorse {id:"bbs:model",model:"butterfly",texture:"assets:models/butterfly/yellow.png"}
-     *
-     * Morphs player McHorseYT into a butterfly model with yellow skin
-     */
-    private static int morphCommandMorph(CommandContext<ServerCommandSource> source) throws CommandSyntaxException
+    private static int morphCommandMorph(CommandContext<CommandSourceStack> source) throws CommandSyntaxException
     {
-        Collection<ServerPlayerEntity> players = EntityArgumentType.getPlayers(source, "target");
+        Collection<ServerPlayer> players = EntityArgument.getPlayers(source, "target");
         String formData = StringArgumentType.getString(source, "form");
 
         try
         {
             Form form = FormUtils.fromData(DataToString.mapFromString(formData));
 
-            for (ServerPlayerEntity player : players)
+            for (ServerPlayer player : players)
             {
                 ServerNetwork.sendMorphToTracked(player, form);
                 Morph.getMorph(player).setForm(FormUtils.copy(form));
@@ -465,16 +446,12 @@ public class BBSCommands
         return -1;
     }
 
-    /**
-     * /bbs film McHorseYT play test - Plays a film (with camera) to McHorseYT
-     * /bbs film @a play test false - Plays a film (without camera) to all players
-     */
-    private static int sceneCommandPlay(CommandContext<ServerCommandSource> source, boolean withCamera) throws CommandSyntaxException
+    private static int sceneCommandPlay(CommandContext<CommandSourceStack> source, boolean withCamera) throws CommandSyntaxException
     {
-        Collection<ServerPlayerEntity> players = EntityArgumentType.getPlayers(source, "target");
+        Collection<ServerPlayer> players = EntityArgument.getPlayers(source, "target");
         String filmId = StringArgumentType.getString(source, "film");
 
-        for (ServerPlayerEntity player : players)
+        for (ServerPlayer player : players)
         {
             ServerNetwork.sendPlayFilm(player, filmId, withCamera);
         }
@@ -482,15 +459,12 @@ public class BBSCommands
         return 1;
     }
 
-    /**
-     * /bbs film McHorseYT stop test - Stops film playback
-     */
-    private static int sceneCommandStop(CommandContext<ServerCommandSource> source) throws CommandSyntaxException
+    private static int sceneCommandStop(CommandContext<CommandSourceStack> source) throws CommandSyntaxException
     {
-        Collection<ServerPlayerEntity> players = EntityArgumentType.getPlayers(source, "target");
+        Collection<ServerPlayer> players = EntityArgument.getPlayers(source, "target");
         String filmId = StringArgumentType.getString(source, "film");
 
-        for (ServerPlayerEntity player : players)
+        for (ServerPlayer player : players)
         {
             ServerNetwork.sendStopFilm(player, filmId);
         }
@@ -498,76 +472,80 @@ public class BBSCommands
         return 1;
     }
 
-    private static int DCCommandShutdown(CommandContext<ServerCommandSource> source)
+    private static int DCCommandShutdown(CommandContext<CommandSourceStack> source)
     {
-        BBSMod.getActions().resetDamage(source.getSource().getWorld());
+        BBSMod.getActions().resetDamage(source.getSource().getLevel());
 
         return 1;
     }
 
-    private static int DCCommandStart(CommandContext<ServerCommandSource> source)
+    private static int DCCommandStart(CommandContext<CommandSourceStack> source)
     {
-        BBSMod.getActions().trackDamage(source.getSource().getWorld());
+        BBSMod.getActions().trackDamage(source.getSource().getLevel());
 
         return 1;
     }
 
-    private static int DCCommandStop(CommandContext<ServerCommandSource> source)
+    private static int DCCommandStop(CommandContext<CommandSourceStack> source)
     {
-        BBSMod.getActions().stopDamage(source.getSource().getWorld());
+        BBSMod.getActions().stopDamage(source.getSource().getLevel());
 
         return 1;
     }
 
-    private static int onHead(CommandContext<ServerCommandSource> source)
+    private static int onHead(CommandContext<CommandSourceStack> source)
     {
         if (source.getSource().getEntity() instanceof LivingEntity livingEntity)
         {
-            ItemStack stack = livingEntity.getEquippedStack(EquipmentSlot.MAINHAND);
+            ItemStack stack = livingEntity.getItemBySlot(EquipmentSlot.MAINHAND);
 
             if (!stack.isEmpty())
             {
-                livingEntity.equipStack(EquipmentSlot.HEAD, stack.copy());
+                livingEntity.setItemSlot(EquipmentSlot.HEAD, stack.copy());
             }
         }
 
         return 1;
     }
 
-    private static int saveStructure(CommandContext<ServerCommandSource> source)
+    private static int saveStructure(CommandContext<CommandSourceStack> source)
     {
         String name = StringArgumentType.getString(source, "name");
-        BlockPos from = BlockPosArgumentType.getBlockPos(source, "from");
-        BlockPos to = BlockPosArgumentType.getBlockPos(source, "to");
+        BlockPos from = BlockPosArgument.getBlockPos(source, "from");
+        BlockPos to = BlockPosArgument.getBlockPos(source, "to");
+        ResourceLocation id = ResourceLocation.tryParse(name);
 
-        ServerWorld world = source.getSource().getWorld();
-        StructureTemplateManager structureTemplateManager = world.getStructureTemplateManager();
-        StructureTemplate structureTemplate;
-
-        try
-        {
-            structureTemplate = structureTemplateManager.getTemplateOrBlank(new Identifier(name));
-        }
-        catch (InvalidIdentifierException e)
+        if (id == null)
         {
             return 0;
         }
 
-        BlockPos min = new BlockPos(Math.min(from.getX(), to.getX()), Math.min(from.getY(), to.getY()), Math.min(from.getZ(), to.getZ()));
-        BlockPos max = new BlockPos(Math.max(from.getX(), to.getX()), Math.max(from.getY(), to.getY()), Math.max(from.getZ(), to.getZ()));
-        BlockPos size = max.subtract(min).add(1, 1, 1);
+        ServerLevel world = source.getSource().getLevel();
+        StructureTemplateManager structureTemplateManager = world.getStructureManager();
+        StructureTemplate structureTemplate = structureTemplateManager.getOrCreate(id);
 
-        structureTemplate.saveFromWorld(world, min, size, true, Blocks.STRUCTURE_VOID);
+        BlockPos min = new BlockPos(
+            Math.min(from.getX(), to.getX()),
+            Math.min(from.getY(), to.getY()),
+            Math.min(from.getZ(), to.getZ())
+        );
+        BlockPos max = new BlockPos(
+            Math.max(from.getX(), to.getX()),
+            Math.max(from.getY(), to.getY()),
+            Math.max(from.getZ(), to.getZ())
+        );
+        BlockPos size = new BlockPos(
+            max.getX() - min.getX() + 1,
+            max.getY() - min.getY() + 1,
+            max.getZ() - min.getZ() + 1
+        );
 
-        try
+        structureTemplate.fillFromWorld(world, min, size, true, Blocks.STRUCTURE_VOID);
+
+        if (structureTemplateManager.save(id))
         {
-            if (structureTemplateManager.saveTemplate(new Identifier(name)))
-            {
-                return 1;
-            }
+            return 1;
         }
-        catch (InvalidIdentifierException var7)
-        {}
 
         return 0;
     }

@@ -1,12 +1,6 @@
 package mchorse.bbs_mod.compat;
 
-import net.fabricmc.fabric.api.gamerule.v1.GameRuleFactory;
-import net.fabricmc.fabric.api.gamerule.v1.GameRuleRegistry;
-import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
-import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
-import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
-import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
+import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
@@ -14,21 +8,22 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnGroup;
-import net.minecraft.world.GameRules;
+import net.minecraft.item.ItemGroup;
 
 /**
- * Transitional registration facade for APIs that still rely on Fabric helpers.
+ * Transitional registration facade that exposes vanilla builders.
  */
 public final class FabricRegistryCompat
 {
     private FabricRegistryCompat() {}
 
-    public static FabricBlockSettings blockSettings()
+    public static AbstractBlock.Settings blockSettings()
     {
-        return FabricBlockSettings.create();
+        return AbstractBlock.Settings.create();
     }
 
     public static <T extends Entity> EntityType<T> buildEntityTypeWithBlockRange(
+        String id,
         SpawnGroup spawnGroup,
         EntityType.EntityFactory<T> factory,
         EntityDimensions dimensions,
@@ -36,14 +31,15 @@ public final class FabricRegistryCompat
         int updateRate
     )
     {
-        return FabricEntityTypeBuilder.create(spawnGroup, factory)
-            .dimensions(dimensions)
-            .trackRangeBlocks(trackingRangeBlocks)
-            .trackedUpdateRate(updateRate)
-            .build();
+        return EntityType.Builder.create(factory, spawnGroup)
+            .setDimensions(dimensions.width, dimensions.height)
+            .maxTrackingRange(trackingRangeBlocks)
+            .trackingTickInterval(updateRate)
+            .build(id);
     }
 
     public static <T extends Entity> EntityType<T> buildEntityTypeWithChunkRange(
+        String id,
         SpawnGroup spawnGroup,
         EntityType.EntityFactory<T> factory,
         EntityDimensions dimensions,
@@ -51,40 +47,27 @@ public final class FabricRegistryCompat
         int updateRate
     )
     {
-        return FabricEntityTypeBuilder.create(spawnGroup, factory)
-            .dimensions(dimensions)
-            .trackRangeChunks(trackingRangeChunks)
-            .trackedUpdateRate(updateRate)
-            .build();
+        return buildEntityTypeWithBlockRange(
+            id,
+            spawnGroup,
+            factory,
+            dimensions,
+            trackingRangeChunks * 16,
+            updateRate
+        );
     }
 
     public static <T extends BlockEntity> BlockEntityType<T> buildBlockEntityType(
-        FabricBlockEntityTypeBuilder.Factory<T> factory,
+        BlockEntityType.BlockEntityFactory<? extends T> factory,
         Block... blocks
     )
     {
-        return FabricBlockEntityTypeBuilder.create(factory, blocks).build();
+        return BlockEntityType.Builder.create(factory, blocks).build(null);
     }
 
-    public static FabricItemGroup.Builder itemGroupBuilder()
+    public static ItemGroup.Builder itemGroupBuilder()
     {
-        return FabricItemGroup.builder();
+        return ItemGroup.create(ItemGroup.Row.TOP, 0);
     }
 
-    public static GameRules.Key<GameRules.BooleanRule> registerBooleanRule(
-        String id,
-        GameRules.Category category,
-        boolean defaultValue
-    )
-    {
-        return GameRuleRegistry.register(id, category, GameRuleFactory.createBooleanRule(defaultValue));
-    }
-
-    public static <T extends Entity> void registerAttributes(
-        EntityType<T> entityType,
-        net.minecraft.entity.attribute.DefaultAttributeContainer.Builder attributes
-    )
-    {
-        FabricDefaultAttributeRegistry.register(entityType, attributes);
-    }
 }

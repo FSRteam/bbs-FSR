@@ -72,7 +72,7 @@ public class GunItem extends Item
 
             if (!properties.cmdFiring.isEmpty())
             {
-                owner.getServer().getCommandManager().executeWithPrefix(owner.getCommandSource(), properties.cmdFiring);
+                owner.getServer().getCommands().performPrefixedCommand(owner.createCommandSourceStack(), properties.cmdFiring);
             }
         }
 

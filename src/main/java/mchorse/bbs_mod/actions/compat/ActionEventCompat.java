@@ -10,7 +10,6 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -52,6 +51,11 @@ public final class ActionEventCompat
         blockBreakAfterHandlers.add(handler);
     }
 
+    public static void register()
+    {
+        ensureRegistered();
+    }
+
     private static void ensureRegistered()
     {
         if (registered)
@@ -63,7 +67,6 @@ public final class ActionEventCompat
 
         NeoForge.EVENT_BUS.addListener(ActionEventCompat::onServerChat);
         NeoForge.EVENT_BUS.addListener(ActionEventCompat::onBlockBreak);
-        NeoForge.EVENT_BUS.addListener(ActionEventCompat::onServerTickPost);
         NeoForge.EVENT_BUS.addListener(ActionEventCompat::onServerStopped);
     }
 
@@ -111,7 +114,7 @@ public final class ActionEventCompat
         pendingBreaks.add(new PendingBreak(world, serverPlayer, pos, event.getState(), world.getBlockEntity(pos)));
     }
 
-    private static void onServerTickPost(ServerTickEvent.Post event)
+    public static void flushBlockBreakAfterQueue()
     {
         if (pendingBreaks.isEmpty())
         {
@@ -121,6 +124,11 @@ public final class ActionEventCompat
         List<PendingBreak> breaks = new ArrayList<>(pendingBreaks);
 
         pendingBreaks.clear();
+
+        if (blockBreakAfterHandlers.isEmpty())
+        {
+            return;
+        }
 
         for (PendingBreak pendingBreak : breaks)
         {

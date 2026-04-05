@@ -80,7 +80,7 @@ public class GunProjectileEntity extends ProjectileEntity implements IEntityForm
     {
         if (!command.isEmpty())
         {
-            this.getServer().getCommandManager().executeWithPrefix(this.getCommandSource(), command);
+            this.getServer().getCommands().performPrefixedCommand(this.createCommandSourceStack(), command);
         }
     }
 

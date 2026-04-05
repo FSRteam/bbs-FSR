@@ -18,8 +18,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Transitional network compatibility facade.
@@ -30,6 +32,10 @@ public final class NetworkCompat
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network");
     private static final String NETWORK_VERSION = "1";
+    private static final Set<String> CHUNKED_PAYLOAD_IDS = Set.of(
+        "s1", "s2", "s3", "s4", "s8", "s11",
+        "c2", "c3", "c4", "c7", "c10", "c11"
+    );
 
     private static final LinkedHashMap<Identifier, PayloadBinding> C2S_BINDINGS = createBindings("s", 14);
     private static final LinkedHashMap<Identifier, PayloadBinding> S2C_BINDINGS = createBindings("c", 17);
@@ -57,8 +63,11 @@ public final class NetworkCompat
             registrar.playToClient(binding.type, codec(binding), NetworkCompat::handleClientPayload);
         }
 
-        LOGGER.info("Registered payload bindings: version={}, playToServer={}, playToClient={}",
-            NETWORK_VERSION, C2S_BINDINGS.size(), S2C_BINDINGS.size());
+        logRegistrationSummary();
+        logPayloadTypes("play_to_server", C2S_BINDINGS);
+        logPayloadTypes("play_to_client", S2C_BINDINGS);
+        verifyPayloadFreeze("s", 14, C2S_BINDINGS, "play_to_server");
+        verifyPayloadFreeze("c", 17, S2C_BINDINGS, "play_to_client");
     }
 
     public static void registerServerReceiver(Identifier id, ServerReceiver receiver)
@@ -110,6 +119,79 @@ public final class NetworkCompat
         return bindings;
     }
 
+    private static void logRegistrationSummary()
+    {
+        int playToServer = C2S_BINDINGS.size();
+        int playToClient = S2C_BINDINGS.size();
+        int payloadTotal = playToServer + playToClient;
+
+        LOGGER.info("[BBS-SEM] topic=net.version version={} play_to_server={} play_to_client={} payload_total={}",
+            NETWORK_VERSION,
+            playToServer,
+            playToClient,
+            payloadTotal
+        );
+        LOGGER.info("[BBS-SEM] topic=net.negotiation phase=policy result=pending reason=optional_not_configured");
+    }
+
+    private static void logPayloadTypes(String direction, LinkedHashMap<Identifier, PayloadBinding> bindings)
+    {
+        for (PayloadBinding binding : bindings.values())
+        {
+            String payloadId = payloadKey(binding.id);
+
+            LOGGER.info("[BBS-SEM] topic=net.type id={} direction={} chunked={}",
+                payloadId,
+                direction,
+                CHUNKED_PAYLOAD_IDS.contains(payloadId)
+            );
+        }
+    }
+
+    private static void verifyPayloadFreeze(String prefix, int amount, LinkedHashMap<Identifier, PayloadBinding> bindings, String direction)
+    {
+        Set<String> expected = expectedPayloadIds(prefix, amount);
+        Set<String> actual = collectPayloadIds(bindings);
+
+        if (!expected.equals(actual))
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.type direction={} state=freeze_mismatch expected={} actual={}",
+                direction,
+                expected,
+                actual
+            );
+        }
+    }
+
+    private static Set<String> expectedPayloadIds(String prefix, int amount)
+    {
+        Set<String> result = new HashSet<>();
+
+        for (int i = 1; i <= amount; i++)
+        {
+            result.add(prefix + i);
+        }
+
+        return result;
+    }
+
+    private static Set<String> collectPayloadIds(LinkedHashMap<Identifier, PayloadBinding> bindings)
+    {
+        Set<String> result = new HashSet<>();
+
+        for (Identifier id : bindings.keySet())
+        {
+            result.add(payloadKey(id));
+        }
+
+        return result;
+    }
+
+    private static String payloadKey(Identifier id)
+    {
+        return id.getPath();
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static StreamCodec codec(PayloadBinding binding)
     {
@@ -157,13 +239,15 @@ public final class NetworkCompat
 
         if (receiver == null)
         {
-            LOGGER.warn("Received unbound C2S payload: {}", payload.binding().id);
+            LOGGER.warn("[BBS-SEM] topic=net.negotiation phase=server_payload result=reject reason=unbound_receiver id={}",
+                payloadKey(payload.binding().id));
             return;
         }
 
         if (!(context.player() instanceof ServerPlayerEntity player))
         {
-            LOGGER.warn("Received C2S payload from non-server player context: {}", payload.binding().id);
+            LOGGER.warn("[BBS-SEM] topic=net.negotiation phase=server_payload result=reject reason=invalid_player_context id={}",
+                payloadKey(payload.binding().id));
             return;
         }
 

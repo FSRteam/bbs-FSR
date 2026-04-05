@@ -4,8 +4,8 @@ import com.mojang.brigadier.ParseResults;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.types.blocks.InteractBlockActionClip;
 import mchorse.bbs_mod.actions.types.chat.CommandActionClip;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.item.ItemStack;
-import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.network.ServerPlayerInteractionManager;
@@ -26,8 +26,8 @@ public class ServerPlayNetworkHandlerMixin
     @Shadow
     public ServerPlayerEntity player;
 
-    @Inject(method = "parse", at = @At("HEAD"))
-    public void onParse(String command, CallbackInfoReturnable<ParseResults<ServerCommandSource>> info)
+    @Inject(method = "parseCommand", at = @At("HEAD"))
+    public void onParse(String command, CallbackInfoReturnable<ParseResults<CommandSourceStack>> info)
     {
         BBSMod.getActions().addAction(this.player, () ->
         {

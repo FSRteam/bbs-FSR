@@ -24,11 +24,12 @@ public final class BBSAddonCollector
 
     private final Map<String, BBSAddonMod> addons = new LinkedHashMap<>();
     private final Map<String, Boolean> warnOnce = new LinkedHashMap<>();
+    private boolean registrationOpen = true;
 
     /**
      * Registers an addon if the id is unique. Returns true when accepted.
      */
-    public boolean register(String addonId, BBSAddonMod addon)
+    public synchronized boolean register(String addonId, BBSAddonMod addon)
     {
         if (addonId == null || addonId.isBlank())
         {
@@ -44,10 +45,25 @@ public final class BBSAddonCollector
 
         String key = addonId.trim();
 
+        if (!this.registrationOpen)
+        {
+            LOGGER.warn("[bbs-addon] rejected registration for '{}' because the window is closed", key);
+            return false;
+        }
+
         if (this.addons.containsKey(key))
         {
             // Reject later registrations and keep the first one.
-            warnOnce(key, () -> LOGGER.warn("[bbs-addon] duplicate addonId '{}', keeping first and rejecting later one", key));
+            BBSAddonMod existing = this.addons.get(key);
+            String existingSource = existing == null ? "<unknown>" : existing.getClass().getName();
+            String incomingSource = addon.getClass().getName();
+
+            warnOnce(key, () -> LOGGER.warn(
+                "[bbs-addon] duplicate addonId '{}', keeping first and rejecting later one (kept='{}', rejected='{}')",
+                key,
+                existingSource,
+                incomingSource
+            ));
             return false;
         }
 
@@ -81,6 +97,17 @@ public final class BBSAddonCollector
     public Collection<BBSAddonMod> getAddons()
     {
         return Collections.unmodifiableCollection(this.addons.values());
+    }
+
+    public synchronized void closeRegistrationWindow()
+    {
+        if (!this.registrationOpen)
+        {
+            return;
+        }
+
+        this.registrationOpen = false;
+        LOGGER.info("[bbs-addon] registration window closed after collecting {} addon(s)", this.addons.size());
     }
 
     private void warnOnce(String key, Runnable action)

@@ -40,6 +40,8 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +50,8 @@ import java.util.UUID;
 
 public class ServerNetwork
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network");
+
     public static final int STATE_TRIGGER_MORPH = 0;
     public static final int STATE_TRIGGER_MAIN_HAND_ITEM = 1;
     public static final int STATE_TRIGGER_OFF_HAND_ITEM = 2;
@@ -505,7 +509,7 @@ public class ServerNetwork
 
             if (!command.isEmpty())
             {
-                server.getCommandManager().executeWithPrefix(player.getCommandSource(), command);
+                server.getCommands().performPrefixedCommand(player.createCommandSourceStack(), command);
             }
         }
     }
@@ -668,7 +672,9 @@ public class ServerNetwork
     }
     public static void sendHandshake(MinecraftServer server, ServerPlayerEntity player)
     {
+        LOGGER.info("[BBS-SEM] topic=net.handshake player={} state=send_start", player.getGameProfile().getName());
         NetworkCompat.sendToPlayer(player, ServerNetwork.CLIENT_HANDSHAKE, createHandshakeBuf(server));
+        LOGGER.info("[BBS-SEM] topic=net.handshake player={} state=send_done", player.getGameProfile().getName());
     }
 
     private static PacketByteBuf createHandshakeBuf(MinecraftServer server)

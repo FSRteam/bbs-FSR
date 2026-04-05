@@ -1,7 +1,9 @@
 package mchorse.bbs_mod;
 
+import com.mojang.brigadier.tree.CommandNode;
 import mchorse.bbs_mod.actions.ActionHandler;
 import mchorse.bbs_mod.actions.ActionManager;
+import mchorse.bbs_mod.actions.compat.ActionEventCompat;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.DamageActionClip;
 import mchorse.bbs_mod.actions.types.SwipeActionClip;
@@ -15,7 +17,9 @@ import mchorse.bbs_mod.actions.types.item.UseBlockItemActionClip;
 import mchorse.bbs_mod.actions.types.item.UseItemActionClip;
 import mchorse.bbs_mod.addon.BBSAddonBridge;
 import mchorse.bbs_mod.addon.BBSAddonCollector;
+import mchorse.bbs_mod.addon.BBSAddonProtocolSelfCheck;
 import mchorse.bbs_mod.addon.BBSAddonRegisterEvent;
+import mchorse.bbs_mod.addon.demo.BBSAddonDemoBootstrap;
 import mchorse.bbs_mod.blocks.ModelBlock;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
@@ -48,6 +52,7 @@ import mchorse.bbs_mod.camera.clips.overwrite.PathClip;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.events.EventBus;
+import mchorse.bbs_mod.events.BBSAddonMod;
 import mchorse.bbs_mod.events.register.RegisterSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterSourcePacksEvent;
 import mchorse.bbs_mod.film.FilmManager;
@@ -89,6 +94,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.MapFactory;
 import net.minecraft.block.Block;
 import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.commands.Commands;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnGroup;
@@ -97,8 +103,6 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.Text;
@@ -108,6 +112,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameRules;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLConstructModEvent;
 import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -116,8 +121,11 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -130,6 +138,8 @@ public class BBSMod
     public static final String MOD_ID = "bbs";
 
     public static final EventBus events = new EventBus();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BBSMod.class);
 
     private final IEventBus modBus;
     private final BBSAddonCollector addonCollector;
@@ -155,32 +165,27 @@ public class BBSMod
     private static FilmManager films;
 
     private static List<Runnable> runnables = new ArrayList<>();
+    private static int commandRegisterCount;
 
     private static MapFactory<Clip, ClipFactoryData> factoryCameraClips;
     private static MapFactory<Clip, ClipFactoryData> factoryActionClips;
 
-    public static final EntityType<ActorEntity> ACTOR_ENTITY = Registry.register(
-        Registries.ENTITY_TYPE,
-        new Identifier(MOD_ID, "actor"),
-        FabricRegistryCompat.buildEntityTypeWithBlockRange(
-            SpawnGroup.CREATURE,
-            ActorEntity::new,
-            EntityDimensions.fixed(0.6F, 1.8F),
-            256,
-            1
-        )
+    public static final EntityType<ActorEntity> ACTOR_ENTITY = FabricRegistryCompat.buildEntityTypeWithBlockRange(
+        MOD_ID + ":actor",
+        SpawnGroup.CREATURE,
+        ActorEntity::new,
+        EntityDimensions.fixed(0.6F, 1.8F),
+        256,
+        1
     );
 
-    public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = Registry.register(
-        Registries.ENTITY_TYPE,
-        new Identifier(MOD_ID, "gun_projectile"),
-        FabricRegistryCompat.buildEntityTypeWithChunkRange(
-            SpawnGroup.CREATURE,
-            GunProjectileEntity::new,
-            EntityDimensions.fixed(0.25F, 0.25F),
-            24,
-            1
-        )
+    public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = FabricRegistryCompat.buildEntityTypeWithChunkRange(
+        MOD_ID + ":gun_projectile",
+        SpawnGroup.CREATURE,
+        GunProjectileEntity::new,
+        EntityDimensions.fixed(0.25F, 0.25F),
+        24,
+        1
     );
 
     public static final Block MODEL_BLOCK = new ModelBlock(FabricRegistryCompat.blockSettings()
@@ -210,12 +215,11 @@ public class BBSMod
     public static final BlockItem CHROMA_BLACK_BLOCK_ITEM = new BlockItem(CHROMA_BLACK_BLOCK, new Item.Settings());
     public static final BlockItem CHROMA_WHITE_BLOCK_ITEM = new BlockItem(CHROMA_WHITE_BLOCK, new Item.Settings());
 
-    public static final GameRules.Key<GameRules.BooleanRule> BBS_EDITING_RULE = FabricRegistryCompat.registerBooleanRule("bbsEditing", GameRules.Category.MISC, true);
+    public static final GameRules.Key<GameRules.BooleanRule> BBS_EDITING_RULE = GameRules.register("bbsEditing", GameRules.Category.MISC, GameRules.BooleanRule.create(true));
 
-    public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = Registry.register(
-        Registries.BLOCK_ENTITY_TYPE,
-        new Identifier(MOD_ID, "model_block_entity"),
-        FabricRegistryCompat.buildBlockEntityType(ModelBlockEntity::new, MODEL_BLOCK)
+    public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = FabricRegistryCompat.buildBlockEntityType(
+        ModelBlockEntity::new,
+        MODEL_BLOCK
     );
 
     public static final ItemGroup ITEM_GROUP = FabricRegistryCompat.itemGroupBuilder()
@@ -236,13 +240,11 @@ public class BBSMod
         })
         .build();
 
-    public static final SoundEvent CLICK = registerSound("click");
+    public static final SoundEvent CLICK = createSound("click");
 
-    private static SoundEvent registerSound(String path)
+    private static SoundEvent createSound(String path)
     {
-        Identifier id = new Identifier(MOD_ID, path);
-
-        return Registry.register(Registries.SOUND_EVENT, id, SoundEvent.of(id));
+        return SoundEvent.of(new Identifier(MOD_ID, path));
     }
 
     private static File worldFolder;
@@ -391,13 +393,22 @@ public class BBSMod
         this.addonCollector = new BBSAddonCollector();
         this.addonBridge = new BBSAddonBridge(this.addonCollector);
 
+        if (!FMLEnvironment.isProduction())
+        {
+            BBSAddonDemoBootstrap.bind(this.modBus);
+        }
+
         LoaderAccessHolder.set(new NeoForgeLoaderAccess(() -> new ArrayList<>(this.addonCollector.getAddons())));
 
         this.modBus.addListener(this::onConstructMod);
         this.modBus.addListener(this::onCommonSetup);
+        this.modBus.addListener(BBSRegistries::onRegister);
+        this.modBus.addListener(BBSRegistries::onEntityAttributes);
         this.modBus.addListener(NetworkCompat::onRegisterPayloadHandlers);
+        LOGGER.info("[BBS-SEM] topic=cmd.register entry=BBSMod#<init> wire_mode=NeoForge.EVENT_BUS.addListener dispatch_id=n/a");
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onServerStopped);
         NeoForge.EVENT_BUS.addListener(this::onServerTickPre);
         NeoForge.EVENT_BUS.addListener(this::onServerTickPost);
@@ -408,12 +419,28 @@ public class BBSMod
 
     private void onConstructMod(final FMLConstructModEvent event)
     {
-        this.modBus.post(new BBSAddonRegisterEvent(this.addonCollector));
+        LOGGER.info("[bbs-addon] opening registration window on mod bus");
+
+        try
+        {
+            this.modBus.post(new BBSAddonRegisterEvent(this.addonCollector));
+        }
+        catch (Exception e)
+        {
+            LOGGER.error("[bbs-addon] registration event failed, continue without crashing core", e);
+        }
+        finally
+        {
+            this.addonCollector.closeRegistrationWindow();
+        }
     }
 
     private void onCommonSetup(final FMLCommonSetupEvent event)
     {
         LoaderAccess loader = LoaderAccessHolder.get();
+        BBSAddonProtocolSelfCheck.run(loader, this.addonCollector);
+        List<BBSAddonMod> addonEntrypoints = loader.getEntrypoints("bbs-addon", BBSAddonMod.class);
+        LOGGER.info("[bbs-addon] loader resolved {} registered addon(s)", addonEntrypoints.size());
         gameFolder = loader.getGameDir().toFile();
         assetsFolder = new File(gameFolder, "config/bbs/assets");
         settingsFolder = new File(gameFolder, "config/bbs/settings");
@@ -422,6 +449,7 @@ public class BBSMod
         this.addonBridge.bridgeToInternalBus(events);
 
         actions = new ActionManager();
+        ActionEventCompat.register();
         ActionHandler.registerHandlers(actions);
 
         originalSourcePack = new ExternalAssetsSourcePack(Link.ASSETS, assetsFolder).providesFiles();
@@ -497,31 +525,6 @@ public class BBSMod
         events.post(new RegisterSettingsEvent());
 
         ServerNetwork.setup();
-
-        FabricRegistryCompat.registerAttributes(ACTOR_ENTITY, ActorEntity.createActorAttributes());
-
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "model"), MODEL_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_red"), CHROMA_RED_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_green"), CHROMA_GREEN_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_blue"), CHROMA_BLUE_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_cyan"), CHROMA_CYAN_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_magenta"), CHROMA_MAGENTA_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_yellow"), CHROMA_YELLOW_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_black"), CHROMA_BLACK_BLOCK);
-        Registry.register(Registries.BLOCK, new Identifier(MOD_ID, "chroma_white"), CHROMA_WHITE_BLOCK);
-
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "model"), MODEL_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "gun"), GUN_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_red"), CHROMA_RED_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_green"), CHROMA_GREEN_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_blue"), CHROMA_BLUE_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_cyan"), CHROMA_CYAN_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_magenta"), CHROMA_MAGENTA_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_yellow"), CHROMA_YELLOW_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_black"), CHROMA_BLACK_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "chroma_white"), CHROMA_WHITE_BLOCK_ITEM);
-
-        Registry.register(Registries.ITEM_GROUP, new Identifier(MOD_ID, "main"), ITEM_GROUP);
     }
 
     private void onServerStarted(ServerStartedEvent event)
@@ -531,17 +534,26 @@ public class BBSMod
 
     private void onServerStopped(ServerStoppedEvent event)
     {
-        actions.reset();
-        ServerNetwork.reset();
+        resetServerRuntimeState();
+    }
+
+    private void onServerStopping(ServerStoppingEvent event)
+    {
+        resetServerRuntimeState();
     }
 
     private void onServerTickPre(ServerTickEvent.Pre event)
     {
-        actions.tick();
+        if (actions != null)
+        {
+            actions.tick();
+        }
     }
 
     private void onServerTickPost(ServerTickEvent.Post event)
     {
+        ActionEventCompat.flushBlockBreakAfterQueue();
+
         for (Runnable runnable : runnables)
         {
             runnable.run();
@@ -554,7 +566,10 @@ public class BBSMod
     {
         if (event.getEntity() instanceof ServerPlayerEntity player)
         {
-            ServerNetwork.sendHandshake(player.getServer(), player);
+            if (player.getServer() != null)
+            {
+                ServerNetwork.sendHandshake(player.getServer(), player);
+            }
         }
     }
 
@@ -583,13 +598,45 @@ public class BBSMod
         if (event.getEntity() instanceof ServerPlayerEntity player)
         {
             Morph morph = Morph.getMorph(player);
-            ServerNetwork.sendMorphToTracked(player, morph.getForm());
+
+            if (morph != null)
+            {
+                ServerNetwork.sendMorphToTracked(player, morph.getForm());
+            }
         }
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event)
     {
-        BBSCommands.register((com.mojang.brigadier.CommandDispatcher) event.getDispatcher(), event.getBuildContext(), event.getCommandSelection());
+        commandRegisterCount++;
+        LOGGER.info("[BBS-SEM] topic=cmd.register entry=BBSMod#onRegisterCommands wire_mode=NeoForge.EVENT_BUS.addListener dispatch_id={}",
+            Integer.toHexString(System.identityHashCode(event.getDispatcher())));
+        LOGGER.info("[BBS-SEM] topic=cmd.selection selection={} server_type={}",
+            event.getCommandSelection(),
+            mapServerType(event.getCommandSelection()));
+
+        BBSCommands.register(event.getDispatcher(), event.getBuildContext(), event.getCommandSelection());
+
+        CommandNode<?> bbsNode = event.getDispatcher().getRoot().getChild("bbs");
+        int bbsNodeCount = bbsNode == null ? 0 : bbsNode.getChildren().size();
+
+        LOGGER.info("[BBS-SEM] topic=cmd.rebuild selection={} reload_index={} bbs_node_count={}",
+            event.getCommandSelection(),
+            commandRegisterCount,
+            bbsNodeCount
+        );
+    }
+
+    private void resetServerRuntimeState()
+    {
+        if (actions != null)
+        {
+            actions.reset();
+        }
+
+        commandRegisterCount = 0;
+        ServerNetwork.reset();
+        runnables.clear();
     }
 
     public static Settings setupConfig(Icon icon, String id, File destination, Consumer<SettingsBuilder> registerer)
@@ -603,5 +650,15 @@ public class BBSMod
         BBSMod.settings.load(settings, settings.file);
 
         return settings;
+    }
+
+    private static String mapServerType(Commands.CommandSelection selection)
+    {
+        return switch (selection)
+        {
+            case DEDICATED -> "dedicated";
+            case INTEGRATED -> "integrated";
+            case ALL -> "all";
+        };
     }
 }
