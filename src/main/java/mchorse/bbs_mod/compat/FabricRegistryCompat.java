@@ -58,7 +58,7 @@ public final class FabricRegistryCompat
     }
 
     public static <T extends BlockEntity> BlockEntityType<T> buildBlockEntityType(
-        BlockEntityType.BlockEntityFactory<? extends T> factory,
+        BlockEntityType.BlockEntitySupplier<? extends T> factory,
         Block... blocks
     )
     {
