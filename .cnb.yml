@@ -5,8 +5,8 @@ main:
       docker:
         image: eclipse-temurin:21-jdk
         volumes:
-          - main:/workspace/.gradle-home/caches:copy-on-write
-          - main:/workspace/.gradle-home/wrapper:copy-on-write
+          - main:/workspace/.gradle-home/caches:read-write
+          - main:/workspace/.gradle-home/wrapper:read-write
       stages:
         - name: build
           script: |
@@ -57,8 +57,8 @@ main:
       docker:
         image: eclipse-temurin:21-jdk
         volumes:
-          - main:/workspace/.gradle-home/caches:copy-on-write
-          - main:/workspace/.gradle-home/wrapper:copy-on-write
+          - main:/workspace/.gradle-home/caches:read-write
+          - main:/workspace/.gradle-home/wrapper:read-write
       stages:
         - name: build
           script: |
