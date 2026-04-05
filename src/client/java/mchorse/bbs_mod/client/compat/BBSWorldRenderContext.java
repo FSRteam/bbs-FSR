@@ -1,19 +1,44 @@
 package mchorse.bbs_mod.client.compat;
 
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 
 /**
- * Minimal world render context used by BBS rendering and UI pipelines.
+ * Legacy compatibility alias for the new world render context contract.
  */
-public interface BBSWorldRenderContext
+public interface BBSWorldRenderContext extends IBbsWorldRenderContext
 {
-    Camera camera();
+    static BBSWorldRenderContext bridge(IBbsWorldRenderContext context)
+    {
+        if (context instanceof BBSWorldRenderContext compat)
+        {
+            return compat;
+        }
 
-    MatrixStack matrixStack();
+        return new BBSWorldRenderContext()
+        {
+            @Override
+            public net.minecraft.client.render.Camera camera()
+            {
+                return context.camera();
+            }
 
-    VertexConsumerProvider.Immediate consumers();
+            @Override
+            public net.minecraft.client.util.math.MatrixStack matrixStack()
+            {
+                return context.matrixStack();
+            }
 
-    float tickDelta();
+            @Override
+            public net.minecraft.client.render.VertexConsumerProvider.Immediate consumers()
+            {
+                return context.consumers();
+            }
+
+            @Override
+            public float tickDelta()
+            {
+                return context.tickDelta();
+            }
+        };
+    }
 }

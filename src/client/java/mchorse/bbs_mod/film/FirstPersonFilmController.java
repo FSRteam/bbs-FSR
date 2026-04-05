@@ -2,7 +2,7 @@ package mchorse.bbs_mod.film;
 
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.entities.IEntity;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 
 public class FirstPersonFilmController extends WorldFilmController
 {
@@ -12,7 +12,7 @@ public class FirstPersonFilmController extends WorldFilmController
     }
 
     @Override
-    protected void renderEntity(BBSWorldRenderContext context, Replay replay, IEntity entity)
+    protected void renderEntity(IBbsWorldRenderContext context, Replay replay, IEntity entity)
     {
         if (replay.fp.get())
         {

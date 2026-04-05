@@ -26,8 +26,8 @@ public class ServerPlayNetworkHandlerMixin
     @Shadow
     public ServerPlayer player;
 
-    @Inject(method = "parseCommand", at = @At("HEAD"))
-    public void onParse(String command, CallbackInfoReturnable<ParseResults<CommandSourceStack>> info)
+    @Inject(method = "parseCommand(Ljava/lang/String;)Lcom/mojang/brigadier/ParseResults;", at = @At("HEAD"))
+    public void onParseCommand(String command, CallbackInfoReturnable<ParseResults<CommandSourceStack>> info)
     {
         BBSMod.getActions().addAction(this.player, () ->
         {
@@ -39,7 +39,7 @@ public class ServerPlayNetworkHandlerMixin
         });
     }
 
-    @Redirect(method = "handleUseItemOn", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayerGameMode;useItemOn(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;"))
+    @Redirect(method = "handleUseItemOn(Lnet/minecraft/network/protocol/game/ServerboundUseItemOnPacket;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayerGameMode;useItemOn(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;"))
     private InteractionResult redirectOnBlockInteract(ServerPlayerGameMode manager, ServerPlayer player, Level level, ItemStack stack, InteractionHand hand, BlockHitResult hitResult)
     {
         BBSMod.getActions().addAction(this.player, () ->

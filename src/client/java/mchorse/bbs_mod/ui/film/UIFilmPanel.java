@@ -74,7 +74,7 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.Vec3d;
@@ -1686,7 +1686,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     }
 
     @Override
-    public void renderInWorld(BBSWorldRenderContext context)
+    public void renderInWorld(IBbsWorldRenderContext context)
     {
         super.renderInWorld(context);
 

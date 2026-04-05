@@ -10,7 +10,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.renderers.InputRenderer;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
@@ -252,7 +252,7 @@ public abstract class UIBaseMenu
     public void startRenderFrame(float tickDelta)
     {}
 
-    public void renderInWorld(BBSWorldRenderContext context)
+    public void renderInWorld(IBbsWorldRenderContext context)
     {}
 
     public static class UIRootElement extends UIElement implements IViewport

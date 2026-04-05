@@ -22,3 +22,9 @@ type="required"
 versionRange="${neo_version_range}"
 ordering="NONE"
 side="BOTH"
+
+[[mixins]]
+config="bbs.mixins.json"
+
+[[mixins]]
+config="bbs.client.mixins.json"

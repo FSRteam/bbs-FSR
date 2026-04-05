@@ -4,29 +4,29 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.VideoRecorder;
-import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.client.DeltaTracker;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(RenderTickCounter.class)
+@Mixin(DeltaTracker.Timer.class)
 public class RenderTickCounterMixin
 {
     @Shadow
-    public float tickDelta;
+    private float deltaTicks;
 
     @Shadow
-    public float lastFrameDuration;
+    private float deltaTickResidual;
 
     @Shadow
-    private long prevTimeMillis;
+    private long lastMs;
 
     private int heldFrames;
 
-    @Inject(method = "beginRenderTick", at = @At("HEAD"), cancellable = true)
-    public void onBeginRenderTick(long timeMillis, CallbackInfoReturnable<Integer> info)
+    @Inject(method = "advanceTime", at = @At("HEAD"), cancellable = true)
+    public void onAdvanceTime(long timeMillis, boolean processGameTime, CallbackInfoReturnable<Integer> info)
     {
         VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
 
@@ -34,23 +34,24 @@ public class RenderTickCounterMixin
         {
             if (videoRecorder.getCounter() == 0)
             {
-                this.tickDelta = 0;
+                this.deltaTicks = 0F;
+                this.deltaTickResidual = 0F;
             }
 
             if (this.heldFrames == 0)
             {
-                this.lastFrameDuration = 20F / (float) BBSRendering.getVideoFrameRate();
-                this.prevTimeMillis = timeMillis;
-                this.tickDelta += this.lastFrameDuration;
+                this.lastMs = timeMillis;
+                this.deltaTickResidual += 20F / (float) BBSRendering.getVideoFrameRate();
 
-                int i = (int) this.tickDelta;
+                int ticks = (int) this.deltaTickResidual;
 
-                this.tickDelta -= (float) i;
+                this.deltaTickResidual -= (float) ticks;
+                this.deltaTicks = this.deltaTickResidual;
 
-                videoRecorder.serverTicks += i;
+                videoRecorder.serverTicks += ticks;
                 BBSRendering.canRender = true;
 
-                info.setReturnValue(i);
+                info.setReturnValue(ticks);
             }
             else
             {

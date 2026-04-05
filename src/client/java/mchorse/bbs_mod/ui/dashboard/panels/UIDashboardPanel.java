@@ -3,7 +3,7 @@ package mchorse.bbs_mod.ui.dashboard.panels;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 
 public class UIDashboardPanel extends UIElement
 {
@@ -55,7 +55,7 @@ public class UIDashboardPanel extends UIElement
     public void startRenderFrame(float tickDelta)
     {}
 
-    public void renderInWorld(BBSWorldRenderContext context)
+    public void renderInWorld(IBbsWorldRenderContext context)
     {}
 
     public void renderPanelBackground(UIContext context)

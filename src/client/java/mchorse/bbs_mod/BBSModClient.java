@@ -1,6 +1,7 @@
 package mchorse.bbs_mod;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.platform.InputConstants;
 import mchorse.bbs_mod.audio.SoundManager;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
@@ -9,13 +10,10 @@ import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.client.compat.ClientApiCompat;
-import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
-import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
-import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterL10nEvent;
@@ -60,15 +58,15 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexFormat;
 import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.Window;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EquipmentSlot;
@@ -80,6 +78,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 public class BBSModClient
 {
@@ -96,18 +96,18 @@ public class BBSModClient
 
     private static ParticleManager particles;
 
-    private static KeyBinding keyDashboard;
-    private static KeyBinding keyItemEditor;
-    private static KeyBinding keyPlayFilm;
-    private static KeyBinding keyPauseFilm;
-    private static KeyBinding keyRecordReplay;
-    private static KeyBinding keyRecordVideo;
-    private static KeyBinding keyPlayFilmAndRecord;
-    private static KeyBinding keyOpenReplays;
-    private static KeyBinding keyOpenMorphing;
-    private static KeyBinding keyDemorph;
-    private static KeyBinding keyTeleport;
-    private static KeyBinding keyZoom;
+    private static KeyMapping keyDashboard;
+    private static KeyMapping keyItemEditor;
+    private static KeyMapping keyPlayFilm;
+    private static KeyMapping keyPauseFilm;
+    private static KeyMapping keyRecordReplay;
+    private static KeyMapping keyRecordVideo;
+    private static KeyMapping keyPlayFilmAndRecord;
+    private static KeyMapping keyOpenReplays;
+    private static KeyMapping keyOpenMorphing;
+    private static KeyMapping keyDemorph;
+    private static KeyMapping keyTeleport;
+    private static KeyMapping keyZoom;
 
     private static UIDashboard dashboard;
 
@@ -185,12 +185,12 @@ public class BBSModClient
         return gunZoom;
     }
 
-    public static KeyBinding getKeyZoom()
+    public static KeyMapping getKeyZoom()
     {
         return keyZoom;
     }
 
-    public static KeyBinding getKeyRecordVideo()
+    public static KeyMapping getKeyRecordVideo()
     {
         return keyRecordVideo;
     }
@@ -248,6 +248,11 @@ public class BBSModClient
     }
 
     public static void onEndKey(long window, int key, int scancode, int action, int modifiers, CallbackInfo info)
+    {
+        onEndKey(window, key, scancode, action, modifiers);
+    }
+
+    public static void onEndKey(long window, int key, int scancode, int action, int modifiers)
     {
         if (action != GLFW.GLFW_PRESS)
         {
@@ -384,200 +389,7 @@ public class BBSModClient
             .register(Link.bbs("curve"), CurveClientClip.class, new ClipFactoryData(Icons.ARC, 0xff1493));
 
         /* Keybinds */
-        keyDashboard = this.createKey("dashboard", GLFW.GLFW_KEY_0);
-        keyItemEditor = this.createKey("item_editor", GLFW.GLFW_KEY_HOME);
-        keyPlayFilm = this.createKey("play_film", GLFW.GLFW_KEY_RIGHT_CONTROL);
-        keyPauseFilm = this.createKey("pause_film", GLFW.GLFW_KEY_BACKSLASH);
-        keyRecordReplay = this.createKey("record_replay", GLFW.GLFW_KEY_RIGHT_ALT);
-        keyRecordVideo = this.createKey("record_video", GLFW.GLFW_KEY_F4);
-        keyPlayFilmAndRecord = this.createKey("play_film_and_record", GLFW.GLFW_KEY_F6);
-        keyOpenReplays = this.createKey("open_replays", GLFW.GLFW_KEY_RIGHT_SHIFT);
-        keyOpenMorphing = this.createKey("open_morphing", GLFW.GLFW_KEY_B);
-        keyDemorph = this.createKey("demorph", GLFW.GLFW_KEY_PERIOD);
-        keyTeleport = this.createKey("teleport", GLFW.GLFW_KEY_Y);
-        keyZoom = this.createKeyMouse("zoom", 2);
-
-        ClientApiCompat.onAfterEntities((context) ->
-        {
-            if (!BBSRendering.isIrisShadersEnabled())
-            {
-                BBSRendering.renderCoolStuff(context);
-            }
-
-            if (BBSSettings.chromaSkyEnabled.get())
-            {
-                float d = BBSSettings.chromaSkyBillboard.get();
-
-                if (d > 0)
-                {
-                    MatrixStack stack = context.matrixStack();
-                    Integer fromCurve = BBSRendering.getChromaSkyColorArgb();
-                    Color color = Colors.COLOR.set(fromCurve != null ? fromCurve : BBSSettings.chromaSkyColor.get());
-
-                    stack.push();
-
-                    MatrixStack.Entry peek = stack.peek();
-
-                    peek.getPositionMatrix().identity();
-                    peek.getNormalMatrix().identity();
-                    stack.translate(0F, 0F, -d);
-
-                    RenderSystem.enableDepthTest();
-                    BufferBuilder builder = Tessellator.getInstance().getBuffer();
-
-                    builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-                    float fov = MinecraftClient.getInstance().options.getFov().getValue();
-                    float dd = d * (float) Math.pow(fov / 40F, 2F);
-
-                    Draw.fillQuad(builder, stack,
-                        -dd, -dd, 0,
-                        dd, -dd, 0,
-                        dd, dd, 0,
-                        -dd, dd, 0,
-                        color.r, color.g, color.b, 1F
-                    );
-
-                    RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-
-                    BufferRenderer.drawWithGlobalProgram(builder.end());
-                    RenderSystem.disableDepthTest();
-
-                    stack.pop();
-                }
-            }
-        });
-
-        ClientApiCompat.onLast((context) ->
-        {
-            if (videoRecorder.isRecording() && BBSRendering.canRender)
-            {
-                videoRecorder.recordFrame();
-            }
-        });
-
-        ClientApiCompat.onDisconnect((client) ->
-        {
-            dashboard = null;
-            films = new Films();
-            playFilmAndRecordFilmId = null;
-
-            ClientNetwork.resetHandshake();
-            films.reset();
-            cameraController.reset();
-        });
-
-        ClientApiCompat.onStartClientTick((client) ->
-        {
-            BBSRendering.startTick();
-        });
-
-        ClientApiCompat.onEndWorldTick((client) ->
-        {
-            MinecraftClient mc = MinecraftClient.getInstance();
-
-            if (!mc.isPaused())
-            {
-                films.updateEndWorld();
-            }
-
-            BBSResources.tick();
-        });
-
-        ClientApiCompat.onEndClientTick((client) ->
-        {
-            MinecraftClient mc = MinecraftClient.getInstance();
-
-            if (mc.currentScreen instanceof UIScreen screen)
-            {
-                screen.update();
-            }
-
-            cameraController.update();
-
-            if (!mc.isPaused())
-            {
-                films.update();
-                modelBlockItemRenderer.update();
-                gunItemRenderer.update();
-                textures.update();
-            }
-
-            if (playFilmAndRecordFilmId != null && !videoRecorder.isRecording())
-            {
-                playFilmAndRecordFilmId = null;
-            }
-
-            while (keyDashboard.wasPressed()) UIScreen.open(getDashboard());
-            while (keyItemEditor.wasPressed()) this.keyOpenModelBlockEditor(mc);
-            while (keyPlayFilm.wasPressed()) this.keyPlayFilm();
-            while (keyPauseFilm.wasPressed()) this.keyPauseFilm();
-            while (keyRecordReplay.wasPressed()) this.keyRecordReplay();
-            while (keyRecordVideo.wasPressed())
-            {
-                Window window = mc.getWindow();
-                int width = Math.max(window.getWidth(), 2);
-                int height = Math.max(window.getHeight(), 2);
-
-                if (width % 2 == 1) width -= width % 2;
-                if (height % 2 == 1) height -= height % 2;
-
-                videoRecorder.toggleRecording(BBSRendering.getTexture().id, width, height);
-                BBSRendering.setCustomSize(videoRecorder.isRecording(), width, height);
-            }
-            while (keyPlayFilmAndRecord.wasPressed()) this.keyPlayFilmAndRecord();
-            while (keyOpenReplays.wasPressed()) this.keyOpenReplays();
-            while (keyOpenMorphing.wasPressed())
-            {
-                UIDashboard dashboard = getDashboard();
-
-                UIScreen.open(dashboard);
-                dashboard.setPanel(dashboard.getPanel(UIMorphingPanel.class));
-            }
-            while (keyDemorph.wasPressed()) ClientNetwork.sendPlayerForm(null);
-            while (keyTeleport.wasPressed()) this.keyTeleport();
-
-            if (mc.player != null)
-            {
-                boolean zoom = keyZoom.isPressed();
-                ItemStack stack = mc.player.getMainHandStack();
-
-                if (gunZoom == null && zoom && stack.getItem() == BBSMod.GUN_ITEM)
-                {
-                    GunProperties properties = GunProperties.get(stack);
-
-                    ClientNetwork.sendZoom(true);
-                    gunZoom = new GunZoom(properties.fovTarget, properties.fovInterp, properties.fovDuration);
-                }
-            }
-        });
-
-        ClientApiCompat.onHudRender((drawContext, tickDelta) ->
-        {
-            BBSRendering.renderHud(drawContext, tickDelta);
-
-            if (gunZoom != null)
-            {
-                gunZoom.update(keyZoom.isPressed(), MinecraftClient.getInstance().getLastFrameDuration());
-
-                if (gunZoom.canBeRemoved())
-                {
-                    ClientNetwork.sendZoom(false);
-                    gunZoom = null;
-                }
-            }
-        });
-
-        ClientApiCompat.onClientStopping((e) -> BBSResources.stopWatchdog());
-        ClientApiCompat.onClientStarted((e) ->
-        {
-            BBSRendering.setupFramebuffer();
-            provider.register(new MinecraftSourcePack());
-
-            Window window = MinecraftClient.getInstance().getWindow();
-
-            originalFramebufferScale = window.getFramebufferWidth() / window.getWidth();
-        });
+        ensureKeyMappingsCreated();
 
         URLTextureErrorCallback.EVENT.register((url, error) ->
         {
@@ -603,12 +415,6 @@ public class BBSModClient
         /* Network */
         ClientNetwork.setup();
 
-        /* Entity renderers */
-        ClientApiCompat.registerEntityRenderer(BBSMod.ACTOR_ENTITY, ActorEntityRenderer::new);
-        ClientApiCompat.registerEntityRenderer(BBSMod.GUN_PROJECTILE_ENTITY, GunProjectileEntityRenderer::new);
-
-        ClientApiCompat.registerBlockEntityRenderer(BBSMod.MODEL_BLOCK_ENTITY, ModelBlockEntityRenderer::new);
-
         /* Create folders */
         BBSMod.getAudioFolder().mkdirs();
         BBSMod.getAssetsPath("textures").mkdirs();
@@ -624,27 +430,255 @@ public class BBSModClient
         }
     }
 
-    private KeyBinding createKey(String id, int key)
+    public static void registerKeyMappings(Consumer<KeyMapping> register)
     {
-        return ClientApiCompat.registerKeyBinding(new KeyBinding(
+        Objects.requireNonNull(register, "register");
+        ensureKeyMappingsCreated();
+
+        register.accept(keyDashboard);
+        register.accept(keyItemEditor);
+        register.accept(keyPlayFilm);
+        register.accept(keyPauseFilm);
+        register.accept(keyRecordReplay);
+        register.accept(keyRecordVideo);
+        register.accept(keyPlayFilmAndRecord);
+        register.accept(keyOpenReplays);
+        register.accept(keyOpenMorphing);
+        register.accept(keyDemorph);
+        register.accept(keyTeleport);
+        register.accept(keyZoom);
+    }
+
+    public static void onRenderAfterEntities(IBbsWorldRenderContext context)
+    {
+        if (!BBSRendering.isIrisShadersEnabled())
+        {
+            BBSRendering.renderCoolStuff(context);
+        }
+
+        if (BBSSettings.chromaSkyEnabled.get())
+        {
+            float d = BBSSettings.chromaSkyBillboard.get();
+
+            if (d > 0)
+            {
+                MatrixStack stack = context.matrixStack();
+                Integer fromCurve = BBSRendering.getChromaSkyColorArgb();
+                Color color = Colors.COLOR.set(fromCurve != null ? fromCurve : BBSSettings.chromaSkyColor.get());
+
+                stack.push();
+
+                MatrixStack.Entry peek = stack.peek();
+
+                peek.getPositionMatrix().identity();
+                peek.getNormalMatrix().identity();
+                stack.translate(0F, 0F, -d);
+
+                RenderSystem.enableDepthTest();
+                BufferBuilder builder = Tessellator.getInstance().getBuffer();
+
+                builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+
+                float fov = MinecraftClient.getInstance().options.getFov().getValue();
+                float dd = d * (float) Math.pow(fov / 40F, 2F);
+
+                Draw.fillQuad(builder, stack,
+                    -dd, -dd, 0,
+                    dd, -dd, 0,
+                    dd, dd, 0,
+                    -dd, dd, 0,
+                    color.r, color.g, color.b, 1F
+                );
+
+                RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+
+                BufferRenderer.drawWithGlobalProgram(builder.end());
+                RenderSystem.disableDepthTest();
+
+                stack.pop();
+            }
+        }
+    }
+
+    public static void onRenderAfterLevel()
+    {
+        if (videoRecorder.isRecording() && BBSRendering.canRender)
+        {
+            videoRecorder.recordFrame();
+        }
+    }
+
+    public static void onClientDisconnect()
+    {
+        dashboard = null;
+        films = new Films();
+        playFilmAndRecordFilmId = null;
+
+        ClientNetwork.resetHandshake();
+        films.reset();
+        cameraController.reset();
+    }
+
+    public static void onClientTickPre()
+    {
+        BBSRendering.startTick();
+    }
+
+    public static void onLevelTickPost()
+    {
+        MinecraftClient mc = MinecraftClient.getInstance();
+
+        if (!mc.isPaused())
+        {
+            films.updateEndWorld();
+        }
+
+        BBSResources.tick();
+    }
+
+    public static void onClientTickPost()
+    {
+        MinecraftClient mc = MinecraftClient.getInstance();
+
+        if (mc.currentScreen instanceof UIScreen screen)
+        {
+            screen.update();
+        }
+
+        cameraController.update();
+
+        if (!mc.isPaused())
+        {
+            films.update();
+            modelBlockItemRenderer.update();
+            gunItemRenderer.update();
+            textures.update();
+        }
+
+        if (playFilmAndRecordFilmId != null && !videoRecorder.isRecording())
+        {
+            playFilmAndRecordFilmId = null;
+        }
+
+        ensureKeyMappingsCreated();
+
+        while (keyDashboard.consumeClick()) UIScreen.open(getDashboard());
+        while (keyItemEditor.consumeClick()) keyOpenModelBlockEditor(mc);
+        while (keyPlayFilm.consumeClick()) keyPlayFilm();
+        while (keyPauseFilm.consumeClick()) keyPauseFilm();
+        while (keyRecordReplay.consumeClick()) keyRecordReplay();
+        while (keyRecordVideo.consumeClick())
+        {
+            Window window = mc.getWindow();
+            int width = Math.max(window.getWidth(), 2);
+            int height = Math.max(window.getHeight(), 2);
+
+            if (width % 2 == 1) width -= width % 2;
+            if (height % 2 == 1) height -= height % 2;
+
+            videoRecorder.toggleRecording(BBSRendering.getTexture().id, width, height);
+            BBSRendering.setCustomSize(videoRecorder.isRecording(), width, height);
+        }
+        while (keyPlayFilmAndRecord.consumeClick()) keyPlayFilmAndRecord();
+        while (keyOpenReplays.consumeClick()) keyOpenReplays();
+        while (keyOpenMorphing.consumeClick())
+        {
+            UIDashboard dashboard = getDashboard();
+
+            UIScreen.open(dashboard);
+            dashboard.setPanel(dashboard.getPanel(UIMorphingPanel.class));
+        }
+        while (keyDemorph.consumeClick()) ClientNetwork.sendPlayerForm(null);
+        while (keyTeleport.consumeClick()) keyTeleport();
+
+        if (mc.player != null)
+        {
+            boolean zoom = keyZoom.isDown();
+            ItemStack stack = mc.player.getMainHandStack();
+
+            if (gunZoom == null && zoom && stack.getItem() == BBSMod.GUN_ITEM)
+            {
+                GunProperties properties = GunProperties.get(stack);
+
+                ClientNetwork.sendZoom(true);
+                gunZoom = new GunZoom(properties.fovTarget, properties.fovInterp, properties.fovDuration);
+            }
+        }
+    }
+
+    public static void onRenderGuiPost(DrawContext drawContext, float tickDelta)
+    {
+        BBSRendering.renderHud(drawContext, tickDelta);
+
+        if (gunZoom != null)
+        {
+            gunZoom.update(keyZoom.isDown(), MinecraftClient.getInstance().getLastFrameDuration());
+
+            if (gunZoom.canBeRemoved())
+            {
+                ClientNetwork.sendZoom(false);
+                gunZoom = null;
+            }
+        }
+    }
+
+    public static void onClientStopping()
+    {
+        BBSResources.stopWatchdog();
+    }
+
+    public static void onClientStarted()
+    {
+        BBSRendering.setupFramebuffer();
+        BBSMod.getProvider().register(new MinecraftSourcePack());
+
+        Window window = MinecraftClient.getInstance().getWindow();
+
+        originalFramebufferScale = window.getFramebufferWidth() / window.getWidth();
+    }
+
+    private static void ensureKeyMappingsCreated()
+    {
+        if (keyDashboard != null)
+        {
+            return;
+        }
+
+        keyDashboard = createKey("dashboard", GLFW.GLFW_KEY_0);
+        keyItemEditor = createKey("item_editor", GLFW.GLFW_KEY_HOME);
+        keyPlayFilm = createKey("play_film", GLFW.GLFW_KEY_RIGHT_CONTROL);
+        keyPauseFilm = createKey("pause_film", GLFW.GLFW_KEY_BACKSLASH);
+        keyRecordReplay = createKey("record_replay", GLFW.GLFW_KEY_RIGHT_ALT);
+        keyRecordVideo = createKey("record_video", GLFW.GLFW_KEY_F4);
+        keyPlayFilmAndRecord = createKey("play_film_and_record", GLFW.GLFW_KEY_F6);
+        keyOpenReplays = createKey("open_replays", GLFW.GLFW_KEY_RIGHT_SHIFT);
+        keyOpenMorphing = createKey("open_morphing", GLFW.GLFW_KEY_B);
+        keyDemorph = createKey("demorph", GLFW.GLFW_KEY_PERIOD);
+        keyTeleport = createKey("teleport", GLFW.GLFW_KEY_Y);
+        keyZoom = createKeyMouse("zoom", 2);
+    }
+
+    private static KeyMapping createKey(String id, int key)
+    {
+        return new KeyMapping(
             "key." + BBSMod.MOD_ID + "." + id,
-            InputUtil.Type.KEYSYM,
+            InputConstants.Type.KEYSYM,
             key,
             "category." + BBSMod.MOD_ID + ".main"
-        ));
+        );
     }
 
-    private KeyBinding createKeyMouse(String id, int button)
+    private static KeyMapping createKeyMouse(String id, int button)
     {
-        return ClientApiCompat.registerKeyBinding(new KeyBinding(
+        return new KeyMapping(
             "key." + BBSMod.MOD_ID + "." + id,
-            InputUtil.Type.MOUSE,
+            InputConstants.Type.MOUSE,
             button,
             "category." + BBSMod.MOD_ID + ".main"
-        ));
+        );
     }
 
-    private void keyOpenModelBlockEditor(MinecraftClient mc)
+    private static void keyOpenModelBlockEditor(MinecraftClient mc)
     {
         ItemStack stack = mc.player.getEquippedStack(EquipmentSlot.MAINHAND);
         ModelBlockItemRenderer.Item item = modelBlockItemRenderer.get(stack);
@@ -660,7 +694,7 @@ public class BBSModClient
         }
     }
 
-    private void keyPlayFilm()
+    private static void keyPlayFilm()
     {
         if (getDashboardIfCreated() == null)
         {
@@ -678,7 +712,7 @@ public class BBSModClient
      * Start video recording and film playback together (Ctrl+F4).
      * Recording stops automatically when the film finishes.
      */
-    private void keyPlayFilmAndRecord()
+    private static void keyPlayFilmAndRecord()
     {
         if (getDashboardIfCreated() == null)
         {
@@ -725,7 +759,7 @@ public class BBSModClient
         playFilmAndRecordFilmId = film.getId();
     }
 
-    private void keyPauseFilm()
+    private static void keyPauseFilm()
     {
         if (getDashboardIfCreated() == null)
         {
@@ -739,7 +773,7 @@ public class BBSModClient
         }
     }
 
-    private void keyRecordReplay()
+    private static void keyRecordReplay()
     {
         UIDashboard dashboard = getDashboard();
         UIFilmPanel panel = dashboard.getPanel(UIFilmPanel.class);
@@ -772,7 +806,7 @@ public class BBSModClient
         }
     }
 
-    private void keyOpenReplays()
+    private static void keyOpenReplays()
     {
         UIDashboard dashboard = getDashboard();
 
@@ -788,7 +822,7 @@ public class BBSModClient
         }
     }
 
-    private void keyTeleport()
+    private static void keyTeleport()
     {
         UIDashboard dashboard = getDashboard();
         UIFilmPanel panel = dashboard.getPanel(UIFilmPanel.class);

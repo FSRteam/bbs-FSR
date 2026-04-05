@@ -2,7 +2,6 @@ package mchorse.bbs_mod.mixin;
 
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.IMorphProvider;
-import mchorse.bbs_mod.morphing.Morph;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.Pose;
@@ -21,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Player.class)
 public class PlayerEntityMixin
 {
-    @Inject(method = "addAdditionalSaveData(Lnet/minecraft/nbt/CompoundTag;)V", at = @At("TAIL"))
+    @Inject(method = "addAdditionalSaveData", at = @At("TAIL"))
     public void onAddAdditionalSaveData(CompoundTag nbt, CallbackInfo info)
     {
         if (this instanceof IMorphProvider provider)
@@ -30,7 +29,7 @@ public class PlayerEntityMixin
         }
     }
 
-    @Inject(method = "readAdditionalSaveData(Lnet/minecraft/nbt/CompoundTag;)V", at = @At("TAIL"))
+    @Inject(method = "readAdditionalSaveData", at = @At("TAIL"))
     public void onReadAdditionalSaveData(CompoundTag nbt, CallbackInfo info)
     {
         if (this instanceof IMorphProvider provider)
@@ -42,8 +41,8 @@ public class PlayerEntityMixin
         }
     }
 
-    @Inject(method = "getDimensions(Lnet/minecraft/world/entity/Pose;)Lnet/minecraft/world/entity/EntityDimensions;", at = @At("RETURN"), cancellable = true)
-    public void onGetDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> info)
+    @Inject(method = "getDefaultDimensions", at = @At("RETURN"), cancellable = true)
+    public void onGetDefaultDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> info)
     {
         if (this instanceof IMorphProvider provider)
         {
@@ -51,39 +50,16 @@ public class PlayerEntityMixin
 
             if (form != null && form.hitbox.get())
             {
-                Player player = (Player) (Object) this;
                 EntityDimensions dimensions = info.getReturnValue();
-                float height = form.hitboxHeight.get() * (player.isCrouching() ? form.hitboxSneakMultiplier.get() : 1F);
+                float height = form.hitboxHeight.get() * (pose == Pose.CROUCHING ? form.hitboxSneakMultiplier.get() : 1F);
 
                 if (dimensions.fixed())
                 {
-                    info.setReturnValue(EntityDimensions.fixed(form.hitboxWidth.get(), height));
+                    info.setReturnValue(EntityDimensions.fixed(form.hitboxWidth.get(), height).withEyeHeight(form.hitboxEyeHeight.get() * height));
                 }
                 else
                 {
-                    info.setReturnValue(EntityDimensions.scalable(form.hitboxWidth.get(), height));
-                }
-            }
-        }
-    }
-
-    @Inject(method = "getEyeHeight(Lnet/minecraft/world/entity/Pose;)F", at = @At("HEAD"), cancellable = true)
-    public void onGetEyeHeight(Pose pose, CallbackInfoReturnable<Float> info)
-    {
-        if (this instanceof IMorphProvider provider)
-        {
-            Morph morph = provider.getMorph();
-
-            if (morph != null)
-            {
-                Form form = morph.getForm();
-
-                if (form != null && form.hitbox.get())
-                {
-                    Player player = (Player) (Object) this;
-                    float height = form.hitboxHeight.get() * (player.isCrouching() ? form.hitboxSneakMultiplier.get() : 1F);
-
-                    info.setReturnValue(form.hitboxEyeHeight.get() * height);
+                    info.setReturnValue(EntityDimensions.scalable(form.hitboxWidth.get(), height).withEyeHeight(form.hitboxEyeHeight.get() * height));
                 }
             }
         }

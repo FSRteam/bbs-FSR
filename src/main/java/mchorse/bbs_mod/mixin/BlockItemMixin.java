@@ -2,6 +2,7 @@ package mchorse.bbs_mod.mixin;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.types.blocks.PlaceBlockActionClip;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.BlockItem;
@@ -28,10 +29,16 @@ public class BlockItemMixin
                 clip.x.set(pos.getX());
                 clip.y.set(pos.getY());
                 clip.z.set(pos.getZ());
-                clip.state.set(state);
+                setLegacyValue(clip.state, state);
 
                 return clip;
             });
         }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void setLegacyValue(BaseValueBasic value, Object object)
+    {
+        value.set(object);
     }
 }

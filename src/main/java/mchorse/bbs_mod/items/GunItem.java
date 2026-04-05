@@ -90,6 +90,7 @@ public class GunItem extends Item
         return GunProperties.get(stack);
     }
 
+    @Override
     public void initializeClient(Consumer<IClientItemExtensions> consumer)
     {
         consumer.accept(new IClientItemExtensions()
@@ -97,7 +98,7 @@ public class GunItem extends Item
             @Override
             public BlockEntityWithoutLevelRenderer getCustomRenderer()
             {
-                return BBSItemRenderers.getGunBuiltinRenderer();
+                return BBSItemRenderers.getGunCustomRenderer();
             }
         });
     }

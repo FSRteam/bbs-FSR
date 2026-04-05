@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class ServerWorldMixin
 {
     @Inject(method = "destroyBlockProgress", at = @At("HEAD"))
-    public void onSetBlockBreakingInfo(int entityId, BlockPos pos, int progress, CallbackInfo info)
+    public void onDestroyBlockProgress(int entityId, BlockPos pos, int progress, CallbackInfo ci)
     {
         ServerLevel serverLevel = (ServerLevel) (Object) this;
         Entity entity = serverLevel.getEntity(entityId);
@@ -38,7 +38,7 @@ public class ServerWorldMixin
     }
 
     @Inject(method = "addFreshEntity", at = @At("HEAD"))
-    public void onSpawnEntity(Entity entity, CallbackInfoReturnable<Boolean> info)
+    public void onAddFreshEntity(Entity entity, CallbackInfoReturnable<Boolean> cir)
     {
         BBSMod.getActions().spawnedEntity(entity);
     }

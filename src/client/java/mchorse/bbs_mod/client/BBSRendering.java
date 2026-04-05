@@ -27,9 +27,8 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
 import mchorse.bbs_mod.utils.iris.ShaderCurves;
 import mchorse.bbs_mod.utils.sodium.SodiumUtils;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
-import mchorse.bbs_mod.client.compat.FabricWorldRenderContextAdapter;
-import net.fabricmc.fabric.impl.client.rendering.WorldRenderContextImpl;
+import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.MinecraftClient;
@@ -402,18 +401,16 @@ public class BBSRendering
 
     public static void onRenderChunkLayer(MatrixStack stack)
     {
-        WorldRenderContextImpl worldRenderContext = new WorldRenderContextImpl();
         MinecraftClient mc = MinecraftClient.getInstance();
-
-        worldRenderContext.prepare(
-            mc.worldRenderer, stack, mc.getTickDelta(), mc.getRenderTime(), false,
-            mc.gameRenderer.getCamera(), mc.gameRenderer, mc.gameRenderer.getLightmapTextureManager(),
-            RenderSystem.getProjectionMatrix(), mc.getBufferBuilders().getEntityVertexConsumers(), null, false, mc.world
-        );
 
         if (isIrisShadersEnabled())
         {
-            renderCoolStuff(FabricWorldRenderContextAdapter.wrap(worldRenderContext));
+            renderCoolStuff(new BbsWorldRenderContext(
+                mc.gameRenderer.getCamera(),
+                stack,
+                mc.getBufferBuilders().getEntityVertexConsumers(),
+                mc.getTickDelta()
+            ));
         }
     }
 
@@ -429,7 +426,7 @@ public class BBSRendering
             int count = videoRecorder.getCounter();
             String label = UIKeys.FILM_VIDEO_RECORDING.format(
                 count,
-                BBSModClient.getKeyRecordVideo().getBoundKeyLocalizedText().getString()
+                BBSModClient.getKeyRecordVideo().getTranslatedKeyMessage().getString()
             ).get();
 
             int x = 5;
@@ -442,7 +439,7 @@ public class BBSRendering
         }
     }
 
-    public static void renderCoolStuff(BBSWorldRenderContext worldRenderContext)
+    public static void renderCoolStuff(IBbsWorldRenderContext worldRenderContext)
     {
         if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
         {

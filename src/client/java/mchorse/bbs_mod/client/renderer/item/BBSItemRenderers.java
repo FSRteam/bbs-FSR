@@ -1,15 +1,15 @@
 package mchorse.bbs_mod.client.renderer.item;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.item.BuiltinModelItemRenderer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 
 public final class BBSItemRenderers
 {
     private static final ModelBlockItemRenderer MODEL_BLOCK_RENDERER = new ModelBlockItemRenderer();
     private static final GunItemRenderer GUN_RENDERER = new GunItemRenderer();
 
-    private static BuiltinModelItemRenderer modelBlockBuiltinRenderer;
-    private static BuiltinModelItemRenderer gunBuiltinRenderer;
+    private static BlockEntityWithoutLevelRenderer modelBlockCustomRenderer;
+    private static BlockEntityWithoutLevelRenderer gunCustomRenderer;
 
     private BBSItemRenderers() {}
 
@@ -23,35 +23,35 @@ public final class BBSItemRenderers
         return GUN_RENDERER;
     }
 
-    public static BuiltinModelItemRenderer getModelBlockBuiltinRenderer()
+    public static BlockEntityWithoutLevelRenderer getModelBlockCustomRenderer()
     {
-        if (modelBlockBuiltinRenderer == null)
+        if (modelBlockCustomRenderer == null)
         {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
 
-            modelBlockBuiltinRenderer = new ModelBlockItemBEWLR(
+            modelBlockCustomRenderer = new ModelBlockItemBEWLR(
                 client.getBlockEntityRenderDispatcher(),
-                client.getEntityModelLoader(),
+                client.getEntityModels(),
                 MODEL_BLOCK_RENDERER
             );
         }
 
-        return modelBlockBuiltinRenderer;
+        return modelBlockCustomRenderer;
     }
 
-    public static BuiltinModelItemRenderer getGunBuiltinRenderer()
+    public static BlockEntityWithoutLevelRenderer getGunCustomRenderer()
     {
-        if (gunBuiltinRenderer == null)
+        if (gunCustomRenderer == null)
         {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
 
-            gunBuiltinRenderer = new GunItemBEWLR(
+            gunCustomRenderer = new GunItemBEWLR(
                 client.getBlockEntityRenderDispatcher(),
-                client.getEntityModelLoader(),
+                client.getEntityModels(),
                 GUN_RENDERER
             );
         }
 
-        return gunBuiltinRenderer;
+        return gunCustomRenderer;
     }
 }

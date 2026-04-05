@@ -2,9 +2,9 @@ package mchorse.bbs_mod.mixin;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.types.item.ItemDropActionClip;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class ServerPlayerEntityMixin
 {
     @Inject(method = "drop(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;", at = @At("RETURN"))
-    public void onDropItem(ItemStack stack, boolean throwRandomly, boolean retainOwnership, CallbackInfoReturnable<ItemEntity> info)
+    public void onDrop(CallbackInfoReturnable<ItemEntity> info)
     {
         ItemEntity entity = info.getReturnValue();
 
@@ -34,10 +34,16 @@ public class ServerPlayerEntityMixin
                 actionClip.posX.set(pos.x);
                 actionClip.posY.set(pos.y);
                 actionClip.posZ.set(pos.z);
-                actionClip.itemStack.set(entity.getItem().copy());
+                setLegacyValue(actionClip.itemStack, entity.getItem().copy());
 
                 return actionClip;
             });
         }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void setLegacyValue(BaseValueBasic value, Object object)
+    {
+        value.set(object);
     }
 }

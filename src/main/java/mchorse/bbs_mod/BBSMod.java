@@ -113,6 +113,7 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.storage.LevelResource;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -131,6 +132,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -405,6 +407,12 @@ public class BBSMod
         this.modBus.addListener(BBSRegistries::onRegister);
         this.modBus.addListener(BBSRegistries::onEntityAttributes);
         this.modBus.addListener(NetworkCompat::onRegisterPayloadHandlers);
+
+        if (FMLEnvironment.dist == Dist.CLIENT)
+        {
+            this.registerClientNeoEventsBridge();
+        }
+
         LOGGER.info("[BBS-SEM] topic=cmd.register entry=BBSMod#<init> wire_mode=NeoForge.EVENT_BUS.addListener dispatch_id=n/a");
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
@@ -415,6 +423,21 @@ public class BBSMod
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
         NeoForge.EVENT_BUS.addListener(this::onStartTracking);
         NeoForge.EVENT_BUS.addListener(this::onEntityJoinLevel);
+    }
+
+    private void registerClientNeoEventsBridge()
+    {
+        try
+        {
+            Class<?> bridgeClass = Class.forName("mchorse.bbs_mod.client.BBSClientNeoEvents");
+            Method registerMethod = bridgeClass.getMethod("register", IEventBus.class);
+
+            registerMethod.invoke(null, this.modBus);
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.warn("[bbs-client] failed to register NeoForge client event bridge, continue without it", e);
+        }
     }
 
     private void onConstructMod(final FMLConstructModEvent event)

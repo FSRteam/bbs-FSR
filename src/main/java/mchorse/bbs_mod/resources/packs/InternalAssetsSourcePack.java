@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,6 +28,8 @@ public class InternalAssetsSourcePack implements ISourcePack
     private boolean isForge;
 
     private List<String> zipCache = new ArrayList<>();
+    private String cachedZipPath;
+    private long cachedZipLastModified;
 
     public InternalAssetsSourcePack()
     {
@@ -89,20 +92,9 @@ public class InternalAssetsSourcePack implements ISourcePack
             return;
         }
 
-        URL url = this.clazz.getProtectionDomain().getCodeSource().getLocation();
-
         try
         {
-            File file = Paths.get(url.toURI()).toFile();
-
-            if (file.isDirectory())
-            {
-                this.getLinksFromFolder(this.getResourcesFolder(file), link, links, recursive);
-            }
-            else if (file.getName().endsWith(".jar") || file.getName().endsWith(".zip"))
-            {
-                this.getLinksFromZipFile(file, link, links, recursive);
-            }
+            this.handleSourceFile(this.resolveSourceFile(), link, links, recursive);
         }
         catch (Exception e)
         {
@@ -114,30 +106,51 @@ public class InternalAssetsSourcePack implements ISourcePack
 
     private void stupidWorkaround(Collection<Link> links, Link link, boolean recursive)
     {
-        /* Forge throws some exception due to the way Connector works, it can't find the
-         * jar file for some reason... so I have to resort to such ugly piece of code for
-         * it to work correctly. I should probably ask on Connector's Discord what I can do,
-         * but whatever for now... */
-        String version = LoaderAccessHolder.get().getModVersion(BBSMod.MOD_ID).orElse("");
+        try
+        {
+            this.handleSourceFile(this.resolveSourceFile(), link, links, recursive);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
 
-        if (version.isEmpty())
+    private File resolveSourceFile() throws Exception
+    {
+        Path modFile = null;
+
+        try
+        {
+            modFile = LoaderAccessHolder.get().getModFile(BBSMod.MOD_ID).orElse(null);
+        }
+        catch (Exception e)
+        {}
+
+        if (modFile != null)
+        {
+            return modFile.toFile();
+        }
+
+        URL url = this.clazz.getProtectionDomain().getCodeSource().getLocation();
+
+        return Paths.get(url.toURI()).toFile();
+    }
+
+    private void handleSourceFile(File file, Link link, Collection<Link> links, boolean recursive)
+    {
+        if (file == null)
         {
             return;
         }
 
-        File mods = new File(LoaderAccessHolder.get().getGameDir().toFile(), "mods");
-
-        if (mods.isDirectory())
+        if (file.isDirectory())
         {
-            for (File file : mods.listFiles())
-            {
-                String name = file.getName();
-
-                if (name.startsWith("bbs") && name.contains(version) && name.endsWith(".jar"))
-                {
-                    this.getLinksFromZipFile(file, link, links, recursive);
-                }
-            }
+            this.getLinksFromFolder(this.getResourcesFolder(file), link, links, recursive);
+        }
+        else if (file.getName().endsWith(".jar") || file.getName().endsWith(".zip"))
+        {
+            this.getLinksFromZipFile(file, link, links, recursive);
         }
     }
 
@@ -195,6 +208,17 @@ public class InternalAssetsSourcePack implements ISourcePack
          */
         try (ZipFile zipFile = new ZipFile(file))
         {
+            String zipPath = file.getAbsolutePath();
+            long zipLastModified = file.lastModified();
+            boolean sameZipSource = zipPath.equals(this.cachedZipPath) && zipLastModified == this.cachedZipLastModified;
+
+            if (!sameZipSource)
+            {
+                this.zipCache.clear();
+                this.cachedZipPath = zipPath;
+                this.cachedZipLastModified = zipLastModified;
+            }
+
             if (this.zipCache.isEmpty())
             {
                 Enumeration<? extends ZipEntry> it = zipFile.entries();

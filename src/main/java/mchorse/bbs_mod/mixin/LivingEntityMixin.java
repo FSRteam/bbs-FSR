@@ -14,14 +14,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin
 {
-    @Inject(method = "actuallyHurt", at = @At("HEAD"))
-    public void onApplyDamage(DamageSource source, float amount, CallbackInfo info)
+    @Inject(method = "actuallyHurt(Lnet/minecraft/world/damagesource/DamageSource;F)V", at = @At("HEAD"))
+    public void onActuallyHurt(DamageSource source, float amount, CallbackInfo info)
     {
-        Entity attacker = source.getAttacker();
+        Entity attacker = source.getEntity();
 
-        if (source.isDirect() && attacker instanceof ServerPlayer player)
+        if (attacker != null && attacker == source.getDirectEntity() && attacker.getClass() == ServerPlayer.class)
         {
-            BBSMod.getActions().addAction(player, () ->
+            BBSMod.getActions().addAction((ServerPlayer) attacker, () ->
             {
                 AttackActionClip clip = new AttackActionClip();
 

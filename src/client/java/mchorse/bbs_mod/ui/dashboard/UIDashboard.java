@@ -40,12 +40,12 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.Perspective;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -63,7 +63,7 @@ public class UIDashboard extends UIBaseMenu
     public final OrbitCameraController camera = new OrbitCameraController(this.orbit, 5);
 
     private UISettingsOverlayPanel settingsPanel;
-    private Perspective lastPerspective = Perspective.FIRST_PERSON;
+    private CameraType lastPerspective = CameraType.FIRST_PERSON;
 
     private UIChalkboard chalkboard;
 
@@ -156,13 +156,13 @@ public class UIDashboard extends UIBaseMenu
 
     public void copyCurrentEntityCamera()
     {
-        Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
-        Vec3d eyePos = cameraEntity.getEyePos();
+        Entity cameraEntity = Minecraft.getInstance().getCameraEntity();
+        Vec3 eyePos = cameraEntity.getEyePosition();
         Camera camera = new Camera();
 
-        camera.position.set(eyePos.getX(), eyePos.getY(), eyePos.getZ());
-        camera.rotation.set(MathUtils.toRad(cameraEntity.getPitch()), MathUtils.toRad(cameraEntity.getHeadYaw() - 180), 0);
-        camera.fov = MathUtils.toRad(MinecraftClient.getInstance().options.getFov().getValue().floatValue());
+        camera.position.set(eyePos.x, eyePos.y, eyePos.z);
+        camera.rotation.set(MathUtils.toRad(cameraEntity.getXRot()), MathUtils.toRad(cameraEntity.getYHeadRot() - 180), 0);
+        camera.fov = MathUtils.toRad(Minecraft.getInstance().options.fov().get().floatValue());
 
         this.orbit.setup(camera);
         this.camera.setup(BBSModClient.getCameraController().camera, 0F);
@@ -202,9 +202,9 @@ public class UIDashboard extends UIBaseMenu
     {
         super.onOpen(oldMenu);
 
-        this.lastPerspective = MinecraftClient.getInstance().options.getPerspective();
+        this.lastPerspective = Minecraft.getInstance().options.getCameraType();
 
-        MinecraftClient.getInstance().options.setPerspective(Perspective.FIRST_PERSON);
+        Minecraft.getInstance().options.setCameraType(CameraType.FIRST_PERSON);
 
         if (oldMenu != this)
         {
@@ -228,7 +228,7 @@ public class UIDashboard extends UIBaseMenu
         this.orbit.reset();
         BBSModClient.getCameraController().remove(this.camera);
 
-        MinecraftClient.getInstance().options.setPerspective(this.lastPerspective);
+        Minecraft.getInstance().options.setCameraType(this.lastPerspective);
     }
 
     @Override
@@ -334,7 +334,7 @@ public class UIDashboard extends UIBaseMenu
         }
     }
 
-    public void renderInWorld(BBSWorldRenderContext context)
+    public void renderInWorld(IBbsWorldRenderContext context)
     {
         super.renderInWorld(context);
 

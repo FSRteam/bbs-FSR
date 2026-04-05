@@ -30,7 +30,7 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -623,7 +623,7 @@ public abstract class BaseFilmController
         return i != this.exception;
     }
 
-    public void render(BBSWorldRenderContext context)
+    public void render(IBbsWorldRenderContext context)
     {
         RenderSystem.enableDepthTest();
 
@@ -642,7 +642,7 @@ public abstract class BaseFilmController
         }
     }
 
-    protected void renderEntity(BBSWorldRenderContext context, Replay replay, IEntity entity)
+    protected void renderEntity(IBbsWorldRenderContext context, Replay replay, IEntity entity)
     {
         if (!replay.actor.get())
         {
@@ -654,10 +654,18 @@ public abstract class BaseFilmController
         }
     }
 
-    protected FilmControllerContext getFilmControllerContext(BBSWorldRenderContext context, Replay replay, IEntity entity)
+    protected FilmControllerContext getFilmControllerContext(IBbsWorldRenderContext context, Replay replay, IEntity entity)
     {
         return FilmControllerContext.instance
-            .setup(this.entities, entity, replay, context)
+            .setup(
+                this.entities,
+                entity,
+                replay,
+                context.camera(),
+                context.matrixStack(),
+                context.consumers(),
+                context.tickDelta()
+            )
             .shadow(replay.shadow.get(), replay.shadowSize.get())
             .nameTag(replay.nameTag.get())
             .relative(replay.relative.get());

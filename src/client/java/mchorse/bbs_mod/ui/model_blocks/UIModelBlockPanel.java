@@ -34,7 +34,7 @@ import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
-import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.hit.BlockHitResult;
@@ -371,7 +371,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     }
 
     @Override
-    public void renderInWorld(BBSWorldRenderContext context)
+    public void renderInWorld(IBbsWorldRenderContext context)
     {
         super.renderInWorld(context);
 

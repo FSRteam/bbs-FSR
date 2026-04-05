@@ -5,7 +5,6 @@
     "client": [
         "CameraMixin",
         "GameRendererMixin",
-        "MouseMixin",
         "EntityRendererDispatcherInvoker",
         "PlayerEntityRendererMixin",
         "RenderTickCounterMixin",
@@ -18,7 +17,6 @@
         "LivingEntityRendererMixin",
         "iris.SystemTimeUniformsTimerMixin",
         "InGameHudMixin",
-        "KeyboardMixin",
         "ResourceReloadLoggerMixin",
         "RenderLayerMixin",
         "ClientWorldPropertiesMixin",
