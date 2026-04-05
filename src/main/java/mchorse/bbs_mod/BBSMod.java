@@ -15,6 +15,8 @@ import mchorse.bbs_mod.actions.types.chat.CommandActionClip;
 import mchorse.bbs_mod.actions.types.item.ItemDropActionClip;
 import mchorse.bbs_mod.actions.types.item.UseBlockItemActionClip;
 import mchorse.bbs_mod.actions.types.item.UseItemActionClip;
+import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.addon.BBSAddonBridge;
 import mchorse.bbs_mod.addon.BBSAddonCollector;
 import mchorse.bbs_mod.addon.BBSAddonProtocolSelfCheck;
@@ -92,24 +94,25 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.MapFactory;
-import net.minecraft.block.Block;
-import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.commands.Commands;
-import net.minecraft.entity.EntityDimensions;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnGroup;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemGroup;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.GameRules;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -172,7 +175,7 @@ public class BBSMod
 
     public static final EntityType<ActorEntity> ACTOR_ENTITY = FabricRegistryCompat.buildEntityTypeWithBlockRange(
         MOD_ID + ":actor",
-        SpawnGroup.CREATURE,
+        MobCategory.CREATURE,
         ActorEntity::new,
         EntityDimensions.fixed(0.6F, 1.8F),
         256,
@@ -181,7 +184,7 @@ public class BBSMod
 
     public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = FabricRegistryCompat.buildEntityTypeWithChunkRange(
         MOD_ID + ":gun_projectile",
-        SpawnGroup.CREATURE,
+        MobCategory.CREATURE,
         GunProjectileEntity::new,
         EntityDimensions.fixed(0.25F, 0.25F),
         24,
@@ -189,11 +192,9 @@ public class BBSMod
     );
 
     public static final Block MODEL_BLOCK = new ModelBlock(FabricRegistryCompat.blockSettings()
-        .noBlockBreakParticles()
-        .dropsNothing()
-        .noCollision()
-        .nonOpaque()
-        .notSolid()
+        .noLootTable()
+        .noCollission()
+        .noOcclusion()
         .strength(0F));
     public static final Block CHROMA_RED_BLOCK = createChromaBlock();
     public static final Block CHROMA_GREEN_BLOCK = createChromaBlock();
@@ -204,39 +205,39 @@ public class BBSMod
     public static final Block CHROMA_BLACK_BLOCK = createChromaBlock();
     public static final Block CHROMA_WHITE_BLOCK = createChromaBlock();
 
-    public static final ModelBlockItem MODEL_BLOCK_ITEM = new ModelBlockItem(MODEL_BLOCK, new Item.Settings());
-    public static final GunItem GUN_ITEM = new GunItem(new Item.Settings().maxCount(1));
-    public static final BlockItem CHROMA_RED_BLOCK_ITEM = new BlockItem(CHROMA_RED_BLOCK, new Item.Settings());
-    public static final BlockItem CHROMA_GREEN_BLOCK_ITEM = new BlockItem(CHROMA_GREEN_BLOCK, new Item.Settings());
-    public static final BlockItem CHROMA_BLUE_BLOCK_ITEM = new BlockItem(CHROMA_BLUE_BLOCK, new Item.Settings());
-    public static final BlockItem CHROMA_CYAN_BLOCK_ITEM = new BlockItem(CHROMA_CYAN_BLOCK, new Item.Settings());
-    public static final BlockItem CHROMA_MAGENTA_BLOCK_ITEM = new BlockItem(CHROMA_MAGENTA_BLOCK, new Item.Settings());
-    public static final BlockItem CHROMA_YELLOW_BLOCK_ITEM = new BlockItem(CHROMA_YELLOW_BLOCK, new Item.Settings());
-    public static final BlockItem CHROMA_BLACK_BLOCK_ITEM = new BlockItem(CHROMA_BLACK_BLOCK, new Item.Settings());
-    public static final BlockItem CHROMA_WHITE_BLOCK_ITEM = new BlockItem(CHROMA_WHITE_BLOCK, new Item.Settings());
+    public static final ModelBlockItem MODEL_BLOCK_ITEM = new ModelBlockItem(MODEL_BLOCK, new Item.Properties());
+    public static final GunItem GUN_ITEM = new GunItem(new Item.Properties().stacksTo(1));
+    public static final BlockItem CHROMA_RED_BLOCK_ITEM = new BlockItem(CHROMA_RED_BLOCK, new Item.Properties());
+    public static final BlockItem CHROMA_GREEN_BLOCK_ITEM = new BlockItem(CHROMA_GREEN_BLOCK, new Item.Properties());
+    public static final BlockItem CHROMA_BLUE_BLOCK_ITEM = new BlockItem(CHROMA_BLUE_BLOCK, new Item.Properties());
+    public static final BlockItem CHROMA_CYAN_BLOCK_ITEM = new BlockItem(CHROMA_CYAN_BLOCK, new Item.Properties());
+    public static final BlockItem CHROMA_MAGENTA_BLOCK_ITEM = new BlockItem(CHROMA_MAGENTA_BLOCK, new Item.Properties());
+    public static final BlockItem CHROMA_YELLOW_BLOCK_ITEM = new BlockItem(CHROMA_YELLOW_BLOCK, new Item.Properties());
+    public static final BlockItem CHROMA_BLACK_BLOCK_ITEM = new BlockItem(CHROMA_BLACK_BLOCK, new Item.Properties());
+    public static final BlockItem CHROMA_WHITE_BLOCK_ITEM = new BlockItem(CHROMA_WHITE_BLOCK, new Item.Properties());
 
-    public static final GameRules.Key<GameRules.BooleanRule> BBS_EDITING_RULE = GameRules.register("bbsEditing", GameRules.Category.MISC, GameRules.BooleanRule.create(true));
+    public static final GameRules.Key<GameRules.BooleanValue> BBS_EDITING_RULE = GameRules.register("bbsEditing", GameRules.Category.MISC, GameRules.BooleanValue.create(true));
 
     public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = FabricRegistryCompat.buildBlockEntityType(
         ModelBlockEntity::new,
         MODEL_BLOCK
     );
 
-    public static final ItemGroup ITEM_GROUP = FabricRegistryCompat.itemGroupBuilder()
+    public static final CreativeModeTab ITEM_GROUP = FabricRegistryCompat.itemGroupBuilder()
         .icon(() -> createModelBlockStack(Link.assets("textures/icon.png")))
-        .displayName(Text.translatable("itemGroup.bbs.main"))
-        .entries((context, entries) ->
+        .title(Component.translatable("itemGroup.bbs.main"))
+        .displayItems((context, entries) ->
         {
-            entries.add(createModelBlockStack(Link.assets("textures/model_block.png")));
-            entries.add(CHROMA_RED_BLOCK_ITEM);
-            entries.add(CHROMA_GREEN_BLOCK_ITEM);
-            entries.add(CHROMA_BLUE_BLOCK_ITEM);
-            entries.add(CHROMA_CYAN_BLOCK_ITEM);
-            entries.add(CHROMA_MAGENTA_BLOCK_ITEM);
-            entries.add(CHROMA_YELLOW_BLOCK_ITEM);
-            entries.add(CHROMA_BLACK_BLOCK_ITEM);
-            entries.add(CHROMA_WHITE_BLOCK_ITEM);
-            entries.add(new ItemStack(GUN_ITEM));
+            entries.accept(createModelBlockStack(Link.assets("textures/model_block.png")));
+            entries.accept(CHROMA_RED_BLOCK_ITEM);
+            entries.accept(CHROMA_GREEN_BLOCK_ITEM);
+            entries.accept(CHROMA_BLUE_BLOCK_ITEM);
+            entries.accept(CHROMA_CYAN_BLOCK_ITEM);
+            entries.accept(CHROMA_MAGENTA_BLOCK_ITEM);
+            entries.accept(CHROMA_YELLOW_BLOCK_ITEM);
+            entries.accept(CHROMA_BLACK_BLOCK_ITEM);
+            entries.accept(CHROMA_WHITE_BLOCK_ITEM);
+            entries.accept(new ItemStack(GUN_ITEM));
         })
         .build();
 
@@ -244,7 +245,7 @@ public class BBSMod
 
     private static SoundEvent createSound(String path)
     {
-        return SoundEvent.of(new Identifier(MOD_ID, path));
+        return SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, path));
     }
 
     private static File worldFolder;
@@ -252,29 +253,28 @@ public class BBSMod
     private static Block createChromaBlock()
     {
         return new Block(FabricRegistryCompat.blockSettings()
-            .noBlockBreakParticles()
-            .dropsNothing()
-            .requiresTool()
+            .noLootTable()
+            .requiresCorrectToolForDrops()
             .strength(-1F, 3600000F));
     }
 
     private static ItemStack createModelBlockStack(Link texture)
     {
         ItemStack stack = new ItemStack(MODEL_BLOCK_ITEM);
-        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ORIGIN, MODEL_BLOCK.getDefaultState());
-        NbtCompound nbt = new NbtCompound();
         BillboardForm form = new BillboardForm();
-        ModelProperties properties = entity.getProperties();
+        ModelProperties properties = new ModelProperties();
 
         form.transform.get().translate.set(0F, 0.5F, 0F);
         form.texture.set(texture);
         properties.setForm(form);
         properties.getTransformFirstPerson().translate.set(0F, 0F, -0.25F);
 
-        NbtCompound compound = entity.createNbtWithId();
+        MapType data = properties.toData();
 
-        nbt.put("BlockEntityTag", compound);
-        stack.setNbt(nbt);
+        CustomData.update(DataComponents.BLOCK_ENTITY_DATA, stack, compoundTag ->
+        {
+            compoundTag.put("Properties", DataStorageUtils.toNbt(data));
+        });
 
         return stack;
     }
@@ -529,7 +529,7 @@ public class BBSMod
 
     private void onServerStarted(ServerStartedEvent event)
     {
-        worldFolder = event.getServer().getSavePath(WorldSavePath.ROOT).toFile();
+        worldFolder = event.getServer().getWorldPath(LevelResource.ROOT).toFile();
     }
 
     private void onServerStopped(ServerStoppedEvent event)

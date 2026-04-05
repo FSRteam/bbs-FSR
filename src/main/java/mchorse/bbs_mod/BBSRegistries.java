@@ -1,13 +1,13 @@
 package mchorse.bbs_mod;
 
 import mchorse.bbs_mod.entity.ActorEntity;
-import net.minecraft.block.Block;
-import net.minecraft.block.entity.BlockEntityType;
-import net.minecraft.entity.EntityType;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
@@ -57,7 +57,7 @@ public final class BBSRegistries
 
         event.register(Registries.SOUND_EVENT, helper -> registerSoundEvent(helper, "click", BBSMod.CLICK));
 
-        event.register(Registries.ITEM_GROUP, helper -> helper.register(id("main"), BBSMod.ITEM_GROUP));
+        event.register(Registries.CREATIVE_MODE_TAB, helper -> helper.register(id("main"), BBSMod.ITEM_GROUP));
     }
 
     public static void onEntityAttributes(EntityAttributeCreationEvent event)
@@ -90,8 +90,8 @@ public final class BBSRegistries
         helper.register(id(path), soundEvent);
     }
 
-    private static Identifier id(String path)
+    private static ResourceLocation id(String path)
     {
-        return new Identifier(BBSMod.MOD_ID, path);
+        return ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, path);
     }
 }
