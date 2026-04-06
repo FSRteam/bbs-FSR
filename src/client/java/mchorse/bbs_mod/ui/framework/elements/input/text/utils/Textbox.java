@@ -73,7 +73,7 @@ public class Textbox
         this.border = border;
     }
 
-    /* Text */
+    /* Component */
 
     public String getSelectedText()
     {

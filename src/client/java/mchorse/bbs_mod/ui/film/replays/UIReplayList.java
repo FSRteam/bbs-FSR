@@ -57,12 +57,12 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 import org.joml.Vector3d;
 
 import java.util.ArrayList;
@@ -1264,11 +1264,11 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     public void addReplay()
     {
-        World world = MinecraftClient.getInstance().world;
+        Level world = Minecraft.getInstance().level;
         Camera camera = this.panel.getCamera();
 
         BlockHitResult blockHitResult = RayTracing.rayTrace(world, camera, 64F);
-        Vec3d p = blockHitResult.getPos();
+        Vec3 p = blockHitResult.getLocation();
         Vector3d position = new Vector3d(p.x, p.y, p.z);
 
         if (blockHitResult.getType() == HitResult.Type.MISS)
@@ -1366,7 +1366,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         replay.category.set("");
 
-        BlockPos blockPos = modelBlock.getPos();
+        BlockPos blockPos = modelBlock.getBlockPos();
         ModelProperties properties = modelBlock.getProperties();
         Transform transform = properties.getTransform().copy();
         double x = blockPos.getX() + transform.translate.x + 0.5D;

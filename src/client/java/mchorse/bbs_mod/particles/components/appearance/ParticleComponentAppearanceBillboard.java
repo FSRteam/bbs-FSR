@@ -14,12 +14,12 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.render.WorldRenderer;
-import net.minecraft.util.math.BlockPos;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.LightTexture;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import net.minecraft.core.BlockPos;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -345,7 +345,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.transform.mul(this.rotation);
         }
 
-        if (format != VertexFormats.POSITION_TEXTURE_COLOR_LIGHT)
+        if (format != DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)
         {
             this.n.set(0F, 0F, 1F);
 
@@ -385,25 +385,23 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
     private void writeVertex(BufferBuilder builder, VertexFormat format, Matrix4f matrix, Vector4f vertex, float u, float v, int overlay, Particle particle)
     {
-        if (format == VertexFormats.POSITION_TEXTURE_COLOR_LIGHT)
+        if (format == DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)
         {
-            /* VertexFormats.POSITION_TEXTURE_COLOR_LIGHT */
-            builder.vertex(matrix, vertex.x, vertex.y, vertex.z)
-                .texture(u, v)
-                .color(particle.r, particle.g, particle.b, particle.a)
-                .light(this.light)
-                .next();
+            /* DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR */
+            builder.addVertex(matrix, vertex.x, vertex.y, vertex.z)
+                .setUv(u, v)
+                .setLight(this.light)
+                .setColor(particle.r, particle.g, particle.b, particle.a);
         }
         else
         {
-            /* VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL */
-            builder.vertex(matrix, vertex.x, vertex.y, vertex.z)
-                .color(particle.r, particle.g, particle.b, particle.a)
-                .texture(u, v)
-                .overlay(overlay)
-                .light(this.light)
-                .normal(this.n.x, this.n.y, this.n.z)
-                .next();
+            /* DefaultVertexFormat.NEW_ENTITY */
+            builder.addVertex(matrix, vertex.x, vertex.y, vertex.z)
+                .setColor(particle.r, particle.g, particle.b, particle.a)
+                .setUv(u, v)
+                .setOverlay(overlay)
+                .setLight(this.light)
+                .setNormal(this.n.x, this.n.y, this.n.z);
         }
     }
 
@@ -452,10 +450,9 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
     private void writeVertexUI(BufferBuilder builder, Matrix4f matrix, Vector4f vertex, float u, float v, Particle particle)
     {
-        builder.vertex(matrix, vertex.x, vertex.y, 0F)
-            .texture(u, v)
-            .color(particle.r, particle.g, particle.b, particle.a)
-            .next();
+        builder.addVertex(matrix, vertex.x, vertex.y, 0F)
+            .setUv(u, v)
+            .setColor(particle.r, particle.g, particle.b, particle.a);
     }
 
     public void calculateUVs(Particle particle, ParticleEmitter emitter, float transition)
@@ -502,15 +499,14 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
         if (emitter == null || emitter.lit || emitter.world == null)
         {
-            this.light = LightmapTextureManager.pack(15, 15);
+            this.light = LightTexture.pack(15, 15);
         }
         else
         {
             Vector3d pos = particle.getGlobalPosition(emitter);
-            BlockPos blockPos = new BlockPos((int) pos.x, (int) pos.y, (int) pos.z);
-            int lightLevel = WorldRenderer.getLightmapCoordinates(emitter.world, blockPos);
+            BlockPos blockPos = BlockPos.containing(pos.x, pos.y, pos.z);
 
-            this.light = lightLevel;
+            this.light = LevelRenderer.getLightColor(emitter.world, blockPos);
         }
     }
 

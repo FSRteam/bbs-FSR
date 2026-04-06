@@ -1,13 +1,13 @@
 package mchorse.bbs_mod.client.compat;
 
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.block.entity.BlockEntityRendererFactory;
-import net.minecraft.client.render.entity.EntityRendererFactory;
-import net.minecraft.entity.Entity;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 
 import java.util.ArrayList;
@@ -28,12 +28,12 @@ public final class ClientApiCompat
     private static final List<WorldRenderHandler> AFTER_ENTITIES_HANDLERS = new CopyOnWriteArrayList<>();
     private static final List<WorldRenderHandler> LAST_HANDLERS = new CopyOnWriteArrayList<>();
     private static final List<DisconnectHandler> DISCONNECT_HANDLERS = new CopyOnWriteArrayList<>();
-    private static final List<Consumer<MinecraftClient>> START_CLIENT_TICK_HANDLERS = new CopyOnWriteArrayList<>();
-    private static final List<Consumer<MinecraftClient>> END_WORLD_TICK_HANDLERS = new CopyOnWriteArrayList<>();
-    private static final List<Consumer<MinecraftClient>> END_CLIENT_TICK_HANDLERS = new CopyOnWriteArrayList<>();
+    private static final List<Consumer<Minecraft>> START_CLIENT_TICK_HANDLERS = new CopyOnWriteArrayList<>();
+    private static final List<Consumer<Minecraft>> END_WORLD_TICK_HANDLERS = new CopyOnWriteArrayList<>();
+    private static final List<Consumer<Minecraft>> END_CLIENT_TICK_HANDLERS = new CopyOnWriteArrayList<>();
     private static final List<HudRenderHandler> HUD_RENDER_HANDLERS = new CopyOnWriteArrayList<>();
-    private static final List<Consumer<MinecraftClient>> CLIENT_STOPPING_HANDLERS = new CopyOnWriteArrayList<>();
-    private static final List<Consumer<MinecraftClient>> CLIENT_STARTED_HANDLERS = new CopyOnWriteArrayList<>();
+    private static final List<Consumer<Minecraft>> CLIENT_STOPPING_HANDLERS = new CopyOnWriteArrayList<>();
+    private static final List<Consumer<Minecraft>> CLIENT_STARTED_HANDLERS = new CopyOnWriteArrayList<>();
     private static final List<EntityRendererRegistration<?>> ENTITY_RENDERER_REGISTRATIONS = new CopyOnWriteArrayList<>();
     private static final List<BlockEntityRendererRegistration<?>> BLOCK_ENTITY_RENDERER_REGISTRATIONS = new CopyOnWriteArrayList<>();
 
@@ -42,7 +42,7 @@ public final class ClientApiCompat
     @FunctionalInterface
     public interface DisconnectHandler
     {
-        void onDisconnect(MinecraftClient client);
+        void onDisconnect(Minecraft client);
     }
 
     @FunctionalInterface
@@ -54,7 +54,7 @@ public final class ClientApiCompat
     @FunctionalInterface
     public interface HudRenderHandler
     {
-        void render(DrawContext drawContext, float tickDelta);
+        void render(net.minecraft.client.gui.GuiGraphics drawContext, float tickDelta);
     }
 
     public static KeyMapping registerKeyBinding(KeyMapping keyBinding)
@@ -77,17 +77,17 @@ public final class ClientApiCompat
         DISCONNECT_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
     }
 
-    public static void onStartClientTick(Consumer<MinecraftClient> handler)
+    public static void onStartClientTick(Consumer<Minecraft> handler)
     {
         START_CLIENT_TICK_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
     }
 
-    public static void onEndWorldTick(Consumer<MinecraftClient> handler)
+    public static void onEndWorldTick(Consumer<Minecraft> handler)
     {
         END_WORLD_TICK_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
     }
 
-    public static void onEndClientTick(Consumer<MinecraftClient> handler)
+    public static void onEndClientTick(Consumer<Minecraft> handler)
     {
         END_CLIENT_TICK_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
     }
@@ -97,22 +97,22 @@ public final class ClientApiCompat
         HUD_RENDER_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
     }
 
-    public static void onClientStopping(Consumer<MinecraftClient> handler)
+    public static void onClientStopping(Consumer<Minecraft> handler)
     {
         CLIENT_STOPPING_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
     }
 
-    public static void onClientStarted(Consumer<MinecraftClient> handler)
+    public static void onClientStarted(Consumer<Minecraft> handler)
     {
         CLIENT_STARTED_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
     }
 
-    public static <T extends Entity> void registerEntityRenderer(net.minecraft.entity.EntityType<T> type, EntityRendererFactory<T> factory)
+    public static <T extends Entity> void registerEntityRenderer(EntityType<T> type, EntityRendererProvider<T> factory)
     {
         ENTITY_RENDERER_REGISTRATIONS.add(new EntityRendererRegistration<>(type, factory));
     }
 
-    public static <E extends BlockEntity> void registerBlockEntityRenderer(BlockEntityType<E> type, BlockEntityRendererFactory<? super E> factory)
+    public static <E extends BlockEntity> void registerBlockEntityRenderer(BlockEntityType<E> type, BlockEntityRendererProvider<? super E> factory)
     {
         BLOCK_ENTITY_RENDERER_REGISTRATIONS.add(new BlockEntityRendererRegistration<>(type, factory));
     }
@@ -137,7 +137,7 @@ public final class ClientApiCompat
         }
     }
 
-    public static void emitDisconnect(MinecraftClient client)
+    public static void emitDisconnect(Minecraft client)
     {
         for (DisconnectHandler handler : DISCONNECT_HANDLERS)
         {
@@ -145,31 +145,31 @@ public final class ClientApiCompat
         }
     }
 
-    public static void emitStartClientTick(MinecraftClient client)
+    public static void emitStartClientTick(Minecraft client)
     {
-        for (Consumer<MinecraftClient> handler : START_CLIENT_TICK_HANDLERS)
+        for (Consumer<Minecraft> handler : START_CLIENT_TICK_HANDLERS)
         {
             handler.accept(client);
         }
     }
 
-    public static void emitEndWorldTick(MinecraftClient client)
+    public static void emitEndWorldTick(Minecraft client)
     {
-        for (Consumer<MinecraftClient> handler : END_WORLD_TICK_HANDLERS)
+        for (Consumer<Minecraft> handler : END_WORLD_TICK_HANDLERS)
         {
             handler.accept(client);
         }
     }
 
-    public static void emitEndClientTick(MinecraftClient client)
+    public static void emitEndClientTick(Minecraft client)
     {
-        for (Consumer<MinecraftClient> handler : END_CLIENT_TICK_HANDLERS)
+        for (Consumer<Minecraft> handler : END_CLIENT_TICK_HANDLERS)
         {
             handler.accept(client);
         }
     }
 
-    public static void emitHudRender(DrawContext drawContext, float tickDelta)
+    public static void emitHudRender(net.minecraft.client.gui.GuiGraphics drawContext, float tickDelta)
     {
         for (HudRenderHandler handler : HUD_RENDER_HANDLERS)
         {
@@ -177,17 +177,17 @@ public final class ClientApiCompat
         }
     }
 
-    public static void emitClientStopping(MinecraftClient client)
+    public static void emitClientStopping(Minecraft client)
     {
-        for (Consumer<MinecraftClient> handler : CLIENT_STOPPING_HANDLERS)
+        for (Consumer<Minecraft> handler : CLIENT_STOPPING_HANDLERS)
         {
             handler.accept(client);
         }
     }
 
-    public static void emitClientStarted(MinecraftClient client)
+    public static void emitClientStarted(Minecraft client)
     {
-        for (Consumer<MinecraftClient> handler : CLIENT_STARTED_HANDLERS)
+        for (Consumer<Minecraft> handler : CLIENT_STARTED_HANDLERS)
         {
             handler.accept(client);
         }
@@ -205,21 +205,21 @@ public final class ClientApiCompat
 
     public static final class EntityRendererRegistration<T extends Entity>
     {
-        private final net.minecraft.entity.EntityType<T> type;
-        private final EntityRendererFactory<T> factory;
+        private final EntityType<T> type;
+        private final EntityRendererProvider<T> factory;
 
-        public EntityRendererRegistration(net.minecraft.entity.EntityType<T> type, EntityRendererFactory<T> factory)
+        public EntityRendererRegistration(EntityType<T> type, EntityRendererProvider<T> factory)
         {
             this.type = Objects.requireNonNull(type, "type");
             this.factory = Objects.requireNonNull(factory, "factory");
         }
 
-        public net.minecraft.entity.EntityType<T> getType()
+        public EntityType<T> getType()
         {
             return this.type;
         }
 
-        public EntityRendererFactory<T> getFactory()
+        public EntityRendererProvider<T> getFactory()
         {
             return this.factory;
         }
@@ -228,9 +228,9 @@ public final class ClientApiCompat
     public static final class BlockEntityRendererRegistration<E extends BlockEntity>
     {
         private final BlockEntityType<E> type;
-        private final BlockEntityRendererFactory<? super E> factory;
+        private final BlockEntityRendererProvider<? super E> factory;
 
-        public BlockEntityRendererRegistration(BlockEntityType<E> type, BlockEntityRendererFactory<? super E> factory)
+        public BlockEntityRendererRegistration(BlockEntityType<E> type, BlockEntityRendererProvider<? super E> factory)
         {
             this.type = Objects.requireNonNull(type, "type");
             this.factory = Objects.requireNonNull(factory, "factory");
@@ -241,7 +241,7 @@ public final class ClientApiCompat
             return this.type;
         }
 
-        public BlockEntityRendererFactory<? super E> getFactory()
+        public BlockEntityRendererProvider<? super E> getFactory()
         {
             return this.factory;
         }

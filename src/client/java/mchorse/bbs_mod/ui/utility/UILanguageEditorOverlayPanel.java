@@ -30,13 +30,9 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.IOUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import org.lwjgl.glfw.GLFW;
-import org.lwjgl.system.MemoryUtil;
 
 import java.io.File;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -281,18 +277,7 @@ public class UILanguageEditorOverlayPanel extends UIOverlayPanel
             translated.putString(key.key, key.content);
         }
 
-        String string = DataToString.toString(translated, true);
-        byte[] bytes = string.getBytes(StandardCharsets.UTF_8);
-
-        ByteBuffer buffer = MemoryUtil.memAlloc(bytes.length + 1);
-
-        buffer.put(bytes);
-        buffer.put((byte) '\0');
-        buffer.flip();
-
-        GLFW.glfwSetClipboardString(Window.getWindow(), buffer);
-
-        MemoryUtil.memFree(buffer);
+        Window.setClipboard(DataToString.toString(translated, true));
     }
 
     private void paste()

@@ -22,7 +22,7 @@ import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,7 +61,7 @@ public class Films
             {
                 ContentType.FILMS.getRepository().load(filmId, (data) ->
                 {
-                    MinecraftClient.getInstance().execute(() -> playFilm((Film) data, withCamera));
+                    Minecraft.getInstance().execute(() -> playFilm((Film) data, withCamera));
                 });
             }
         }
@@ -146,7 +146,7 @@ public class Films
 
     public void startRecording(Film film, int replayId, int tick)
     {
-        Morph morph = Morph.getMorph(MinecraftClient.getInstance().player);
+        Morph morph = Morph.getMorph(Minecraft.getInstance().player);
 
         this.recorder = new Recorder(film, morph == null ? null : morph.getForm(), replayId, tick);
 
@@ -330,8 +330,8 @@ public class Films
                     }
                 }
 
-                int sw = MinecraftClient.getInstance().getWindow().getScaledWidth();
-                int sh = MinecraftClient.getInstance().getWindow().getScaledHeight();
+                int sw = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+                int sh = Minecraft.getInstance().getWindow().getGuiScaledHeight();
                 w = (int) (sw * BBSSettings.audioWaveformWidth.get());
                 x = sw / 2 - w / 2;
                 y = sh / 2 + 100;

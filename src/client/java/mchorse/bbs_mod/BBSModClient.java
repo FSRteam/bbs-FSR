@@ -57,21 +57,21 @@ import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.network.ClientPlayerEntity;
+import com.mojang.blaze3d.platform.Window;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.Window;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.Hand;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -217,7 +217,7 @@ public class BBSModClient
 
         if (scale == 0)
         {
-            return MinecraftClient.getInstance().options.getGuiScale().getValue();
+            return Minecraft.getInstance().options.guiScale().get();
         }
 
         return scale;
@@ -259,9 +259,9 @@ public class BBSModClient
             return;
         }
 
-        ClientPlayerEntity player = MinecraftClient.getInstance().player;
+        LocalPlayer player = Minecraft.getInstance().player;
 
-        if (player == null || MinecraftClient.getInstance().currentScreen != null)
+        if (player == null || Minecraft.getInstance().screen != null)
         {
             return;
         }
@@ -277,8 +277,8 @@ public class BBSModClient
             return;
 
         /* Animation state trigger for items*/
-        ModelProperties main = getItemStackProperties(player.getStackInHand(Hand.MAIN_HAND));
-        ModelProperties offhand = getItemStackProperties(player.getStackInHand(Hand.OFF_HAND));
+        ModelProperties main = getItemStackProperties(player.getItemInHand(InteractionHand.MAIN_HAND));
+        ModelProperties offhand = getItemStackProperties(player.getItemInHand(InteractionHand.OFF_HAND));
 
         if (main != null && main.getForm() != null && main.getForm().findState(key, (form, state) ->
         {
@@ -462,24 +462,22 @@ public class BBSModClient
 
             if (d > 0)
             {
-                MatrixStack stack = context.matrixStack();
+                PoseStack stack = context.matrixStack();
                 Integer fromCurve = BBSRendering.getChromaSkyColorArgb();
                 Color color = Colors.COLOR.set(fromCurve != null ? fromCurve : BBSSettings.chromaSkyColor.get());
 
-                stack.push();
+                stack.pushPose();
 
-                MatrixStack.Entry peek = stack.peek();
+                PoseStack.Pose peek = stack.last();
 
-                peek.getPositionMatrix().identity();
-                peek.getNormalMatrix().identity();
+                peek.pose().identity();
+                peek.normal().identity();
                 stack.translate(0F, 0F, -d);
 
                 RenderSystem.enableDepthTest();
-                BufferBuilder builder = Tessellator.getInstance().getBuffer();
+                BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
-                builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-
-                float fov = MinecraftClient.getInstance().options.getFov().getValue();
+                float fov = Minecraft.getInstance().options.fov().get().floatValue();
                 float dd = d * (float) Math.pow(fov / 40F, 2F);
 
                 Draw.fillQuad(builder, stack,
@@ -492,10 +490,10 @@ public class BBSModClient
 
                 RenderSystem.setShader(GameRenderer::getPositionColorProgram);
 
-                BufferRenderer.drawWithGlobalProgram(builder.end());
+                BufferUploader.drawWithShader(builder.buildOrThrow());
                 RenderSystem.disableDepthTest();
 
-                stack.pop();
+                stack.popPose();
             }
         }
     }
@@ -526,7 +524,7 @@ public class BBSModClient
 
     public static void onLevelTickPost()
     {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
         if (!mc.isPaused())
         {
@@ -538,9 +536,9 @@ public class BBSModClient
 
     public static void onClientTickPost()
     {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
-        if (mc.currentScreen instanceof UIScreen screen)
+        if (mc.screen instanceof UIScreen screen)
         {
             screen.update();
         }
@@ -594,7 +592,7 @@ public class BBSModClient
         if (mc.player != null)
         {
             boolean zoom = keyZoom.isDown();
-            ItemStack stack = mc.player.getMainHandStack();
+            ItemStack stack = mc.player.getMainHandItem();
 
             if (gunZoom == null && zoom && stack.getItem() == BBSMod.GUN_ITEM)
             {
@@ -606,13 +604,13 @@ public class BBSModClient
         }
     }
 
-    public static void onRenderGuiPost(DrawContext drawContext, float tickDelta)
+    public static void onRenderGuiPost(GuiGraphics drawContext, float tickDelta)
     {
         BBSRendering.renderHud(drawContext, tickDelta);
 
         if (gunZoom != null)
         {
-            gunZoom.update(keyZoom.isDown(), MinecraftClient.getInstance().getLastFrameDuration());
+            gunZoom.update(keyZoom.isDown(), Minecraft.getInstance().getDeltaFrameTime());
 
             if (gunZoom.canBeRemoved())
             {
@@ -632,7 +630,7 @@ public class BBSModClient
         BBSRendering.setupFramebuffer();
         BBSMod.getProvider().register(new MinecraftSourcePack());
 
-        Window window = MinecraftClient.getInstance().getWindow();
+        Window window = Minecraft.getInstance().getWindow();
 
         originalFramebufferScale = window.getFramebufferWidth() / window.getWidth();
     }
@@ -678,9 +676,9 @@ public class BBSModClient
         );
     }
 
-    private static void keyOpenModelBlockEditor(MinecraftClient mc)
+    private static void keyOpenModelBlockEditor(Minecraft mc)
     {
-        ItemStack stack = mc.player.getEquippedStack(EquipmentSlot.MAINHAND);
+        ItemStack stack = mc.player.getItemBySlot(EquipmentSlot.MAINHAND);
         ModelBlockItemRenderer.Item item = modelBlockItemRenderer.get(stack);
         GunItemRenderer.Item gunItem = gunItemRenderer.get(stack);
 
@@ -744,7 +742,7 @@ public class BBSModClient
             return;
         }
 
-        Window window = MinecraftClient.getInstance().getWindow();
+        Window window = Minecraft.getInstance().getWindow();
         int width = Math.max(window.getWidth(), 2);
         int height = Math.max(window.getHeight(), 2);
 
@@ -842,7 +840,7 @@ public class BBSModClient
     {
         if (key.isEmpty())
         {
-            key = MinecraftClient.getInstance().options.language;
+            key = Minecraft.getInstance().options.language().get();
         }
 
         return key;

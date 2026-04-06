@@ -7,8 +7,8 @@ import mchorse.bbs_mod.utils.resources.MultiLink;
 import net.irisshaders.iris.targets.backed.NativeImageBackedSingleColorTexture;
 import net.irisshaders.iris.texture.pbr.PBRType;
 import net.irisshaders.iris.texture.pbr.loader.PBRTextureLoader;
-import net.minecraft.client.texture.AbstractTexture;
-import net.minecraft.resource.ResourceManager;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.server.packs.resources.ResourceManager;
 
 public class IrisTextureWrapperLoader implements PBRTextureLoader
 {

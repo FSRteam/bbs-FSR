@@ -8,8 +8,11 @@ import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.items.GunZoom;
+import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
+import org.joml.Matrix4f;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,7 +27,7 @@ public class GameRendererMixin
      * This injection cancels bobbing when camera controller takes over
      */
     @Inject(method = "bobView", at = @At("HEAD"), cancellable = true)
-    public void onBob(CallbackInfo ci)
+    public void onBob(PoseStack poseStack, float partialTick, CallbackInfo ci)
     {
         if (BBSModClient.getCameraController().getCurrent() != null)
         {
@@ -36,7 +39,7 @@ public class GameRendererMixin
      * This injection replaces the camera FOV when camera controller takes over
      */
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
-    public void onGetFov(CallbackInfoReturnable<Double> info)
+    public void onGetFov(Camera camera, float partialTick, boolean useConfiguredFov, CallbackInfoReturnable<Double> info)
     {
         GunZoom gunZoom = BBSModClient.getGunZoom();
 
@@ -72,7 +75,7 @@ public class GameRendererMixin
     }
 
     @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
-    public void onRenderHand(CallbackInfo info)
+    public void onRenderHand(Camera camera, float partialTick, Matrix4f projectionMatrix, CallbackInfo info)
     {
         ICameraController current = BBSModClient.getCameraController().getCurrent();
 
@@ -83,13 +86,13 @@ public class GameRendererMixin
     }
 
     @Inject(at = @At("HEAD"), method = "renderLevel")
-    private void onWorldRenderBegin(CallbackInfo callbackInfo)
+    private void onWorldRenderBegin(DeltaTracker deltaTracker, CallbackInfo callbackInfo)
     {
         BBSRendering.onWorldRenderBegin();
     }
 
     @Inject(at = @At("RETURN"), method = "renderLevel")
-    private void onWorldRenderEnd(CallbackInfo callbackInfo)
+    private void onWorldRenderEnd(DeltaTracker deltaTracker, CallbackInfo callbackInfo)
     {
         BBSRendering.onWorldRenderEnd();
     }

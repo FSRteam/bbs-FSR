@@ -16,12 +16,12 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.renderer.GameRenderer;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -101,10 +101,10 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
         }
 
         /* Render track bars (horizontal lines) */
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
-        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+        BufferBuilder builder;
+        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
         
-        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
         for (int axis = 0; axis < 3; axis++)
         {
@@ -113,7 +113,7 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
         
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithGlobalProgram(builder.end());
     }
 
     private void renderGraphLine(UIContext context, int axis, KeyframeSegment segment)

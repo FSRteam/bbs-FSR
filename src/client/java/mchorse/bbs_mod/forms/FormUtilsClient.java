@@ -29,12 +29,12 @@ import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
 import mchorse.bbs_mod.forms.renderers.TrailFormRenderer;
 import mchorse.bbs_mod.forms.renderers.VanillaParticleFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.TexturedRenderLayers;
-import net.minecraft.client.render.chunk.BlockBufferBuilderStorage;
-import net.minecraft.client.render.model.ModelLoader;
-import net.minecraft.util.Util;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.TexturedRenderLayers;
+import net.minecraft.client.renderer.chunk.BlockBufferBuilderStorage;
+import net.minecraft.client.renderer.model.ModelLoader;
+import net.minecraft.Util;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -53,24 +53,24 @@ public class FormUtilsClient
     {
         BlockBufferBuilderStorage storage = new BlockBufferBuilderStorage();
         SortedMap sortedMap = Util.make(new Object2ObjectLinkedOpenHashMap(), map -> {
-            map.put(TexturedRenderLayers.getEntitySolid(), storage.get(RenderLayer.getSolid()));
-            map.put(TexturedRenderLayers.getEntityCutout(), storage.get(RenderLayer.getCutout()));
-            map.put(TexturedRenderLayers.getBannerPatterns(), storage.get(RenderLayer.getCutoutMipped()));
-            map.put(TexturedRenderLayers.getEntityTranslucentCull(), storage.get(RenderLayer.getTranslucent()));
+            map.put(TexturedRenderLayers.getEntitySolid(), storage.get(RenderType.solid()));
+            map.put(TexturedRenderLayers.getEntityCutout(), storage.get(RenderType.cutout()));
+            map.put(TexturedRenderLayers.getBannerPatterns(), storage.get(RenderType.cutoutMipped()));
+            map.put(TexturedRenderLayers.getEntityTranslucentCull(), storage.get(RenderType.translucent()));
             assignBufferBuilder(map, TexturedRenderLayers.getShieldPatterns());
             assignBufferBuilder(map, TexturedRenderLayers.getBeds());
             assignBufferBuilder(map, TexturedRenderLayers.getShulkerBoxes());
             assignBufferBuilder(map, TexturedRenderLayers.getSign());
             assignBufferBuilder(map, TexturedRenderLayers.getHangingSign());
             map.put(TexturedRenderLayers.getChest(), new BufferBuilder(786432));
-            assignBufferBuilder(map, RenderLayer.getArmorGlint());
-            assignBufferBuilder(map, RenderLayer.getArmorEntityGlint());
-            assignBufferBuilder(map, RenderLayer.getGlint());
-            assignBufferBuilder(map, RenderLayer.getDirectGlint());
-            assignBufferBuilder(map, RenderLayer.getGlintTranslucent());
-            assignBufferBuilder(map, RenderLayer.getEntityGlint());
-            assignBufferBuilder(map, RenderLayer.getDirectEntityGlint());
-            assignBufferBuilder(map, RenderLayer.getWaterMask());
+            assignBufferBuilder(map, RenderType.glint());
+            assignBufferBuilder(map, RenderType.armorEntityGlint());
+            assignBufferBuilder(map, RenderType.glint());
+            assignBufferBuilder(map, RenderType.glint());
+            assignBufferBuilder(map, RenderType.glintTranslucent());
+            assignBufferBuilder(map, RenderType.entityGlint());
+            assignBufferBuilder(map, RenderType.entityGlintDirect());
+            assignBufferBuilder(map, RenderType.waterMask());
             ModelLoader.BLOCK_DESTRUCTION_RENDER_LAYERS.forEach(renderLayer -> assignBufferBuilder(map, renderLayer));
         });
 
@@ -90,7 +90,7 @@ public class FormUtilsClient
         register(FramebufferForm.class, FramebufferFormRenderer::new);
     }
 
-    private static void assignBufferBuilder(Object2ObjectLinkedOpenHashMap<RenderLayer, BufferBuilder> builderStorage, RenderLayer layer)
+    private static void assignBufferBuilder(Object2ObjectLinkedOpenHashMap<RenderType, BufferBuilder> builderStorage, RenderType layer)
     {
         builderStorage.put(layer, new BufferBuilder(layer.getExpectedBufferSize()));
     }
@@ -159,9 +159,13 @@ public class FormUtilsClient
                 renderer.render(context);
             }
             catch (Exception e)
-            {}
-
-            currentForm.pop();
+            {
+                e.printStackTrace();
+            }
+            finally
+            {
+                currentForm.pop();
+            }
         }
     }
 

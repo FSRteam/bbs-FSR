@@ -5,24 +5,24 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.morphing.Morph;
-import net.minecraft.client.model.ModelPart;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.PlayerEntityRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.player.PlayerRenderer;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(PlayerEntityRenderer.class)
+@Mixin(PlayerRenderer.class)
 public class PlayerEntityRendererMixin
 {
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    public void onRender(AbstractClientPlayerEntity abstractClientPlayerEntity, float f, float g, MatrixStack matrixStack, VertexConsumerProvider vertexConsumerProvider, int i, CallbackInfo info)
+    public void onRender(AbstractClientPlayer abstractClientPlayerEntity, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i, CallbackInfo info)
     {
         if (MorphRenderer.renderPlayer(abstractClientPlayerEntity, f, g, matrixStack, vertexConsumerProvider, i))
         {
@@ -30,19 +30,19 @@ public class PlayerEntityRendererMixin
         }
     }
 
-    @Inject(method = "getPositionOffset", at = @At("HEAD"), cancellable = true)
-    public void onPositionOffset(AbstractClientPlayerEntity abstractClientPlayerEntity, float f, CallbackInfoReturnable<Vec3d> info)
+    @Inject(method = "getRenderOffset", at = @At("HEAD"), cancellable = true)
+    public void onPositionOffset(AbstractClientPlayer abstractClientPlayerEntity, float f, CallbackInfoReturnable<Vec3> info)
     {
         Morph morph = Morph.getMorph(abstractClientPlayerEntity);
 
         if (morph != null && morph.getForm() != null)
         {
-            info.setReturnValue(Vec3d.ZERO);
+            info.setReturnValue(Vec3.ZERO);
         }
     }
 
-    @Inject(method = "renderArm", at = @At("HEAD"), cancellable = true)
-    public void onRenderArmBegin(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, AbstractClientPlayerEntity player, ModelPart arm, ModelPart sleeve, CallbackInfo info)
+    @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
+    public void onRenderArmBegin(PoseStack matrices, MultiBufferSource vertexConsumers, int light, AbstractClientPlayer player, ModelPart arm, ModelPart sleeve, CallbackInfo info)
     {
         Morph morph = Morph.getMorph(player);
 
@@ -53,7 +53,7 @@ public class PlayerEntityRendererMixin
             if (form != null)
             {
                 FormRenderer renderer = FormUtilsClient.getRenderer(form);
-                Hand hand = ((PlayerEntityRenderer) (Object) this).getModel().rightArm == arm ? Hand.MAIN_HAND : Hand.OFF_HAND;
+                InteractionHand hand = ((PlayerRenderer) (Object) this).getModel().rightArm == arm ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
 
                 if (renderer != null && renderer.renderArm(matrices, light, player, hand))
                 {

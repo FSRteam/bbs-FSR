@@ -102,7 +102,7 @@ public class Keys
     public static final KeyCombo KEYFRAMES_SPREAD = new KeyCombo("spread", UIKeys.KEYFRAMES_CONTEXT_SPREAD, GLFW.GLFW_KEY_B, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("keyframes");
     public static final KeyCombo KEYFRAMES_ADJUST_VALUES = new KeyCombo("adjust_values", UIKeys.KEYFRAMES_CONTEXT_ADJUST_VALUES, GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("keyframes");
 
-    /* World menu */
+    /* Level menu */
     public static final KeyCombo CYCLE_PANELS = new KeyCombo("cycle_panels", UIKeys.WORLD_KEYS_CYCLE_PANELS, GLFW.GLFW_KEY_TAB).categoryKey("world");
 
     /* Transformations */

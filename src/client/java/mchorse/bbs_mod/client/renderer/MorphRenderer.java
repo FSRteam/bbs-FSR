@@ -15,19 +15,19 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.utils.interps.Lerps;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.LivingEntityRenderer;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.RotationAxis;
+import com.mojang.math.Axis;
 
 public class MorphRenderer
 {
     public static boolean hidePlayer = false;
 
-    public static boolean renderPlayer(AbstractClientPlayerEntity player, float f, float g, MatrixStack matrixStack, VertexConsumerProvider vertexConsumerProvider, int i)
+    public static boolean renderPlayer(AbstractClientPlayerEntity player, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i)
     {
         if (hidePlayer)
         {
@@ -46,16 +46,16 @@ public class MorphRenderer
                 RenderSystem.enableDepthTest();
 
                 float bodyYaw = Lerps.lerp(player.prevBodyYaw, player.bodyYaw, g);
-                int overlay = LivingEntityRenderer.getOverlay(player, 0F);
+                int overlay = LivingEntityRenderer.getOverlayCoords(player, 0F);
 
-                matrixStack.push();
-                matrixStack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
+                matrixStack.pushPose();
+                matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
 
                 FormUtilsClient.render(morph.getForm(), new FormRenderingContext()
                     .set(FormRenderType.ENTITY, morph.entity, matrixStack, i, overlay, g)
-                    .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
+                    .camera(Minecraft.getInstance().gameRenderer.getCamera()));
 
-                matrixStack.pop();
+                matrixStack.popPose();
 
                 RenderSystem.disableDepthTest();
             }
@@ -83,7 +83,7 @@ public class MorphRenderer
         return true;
     }
 
-    public static boolean renderLivingEntity(LivingEntity livingEntity, float f, float g, MatrixStack matrixStack, VertexConsumerProvider vertexConsumerProvider, int i, int o)
+    public static boolean renderLivingEntity(LivingEntity livingEntity, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i, int o)
     {
         if (!(livingEntity instanceof ISelectorOwnerProvider))
         {
@@ -102,14 +102,14 @@ public class MorphRenderer
 
             float bodyYaw = Lerps.lerp(livingEntity.prevBodyYaw, livingEntity.bodyYaw, g);
 
-            matrixStack.push();
-            matrixStack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
+            matrixStack.pushPose();
+            matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
 
             FormUtilsClient.render(form, new FormRenderingContext()
                 .set(FormRenderType.ENTITY, owner.entity, matrixStack, i, o, g)
-                .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
+                .camera(Minecraft.getInstance().gameRenderer.getCamera()));
 
-            matrixStack.pop();
+            matrixStack.popPose();
 
             RenderSystem.disableDepthTest();
 

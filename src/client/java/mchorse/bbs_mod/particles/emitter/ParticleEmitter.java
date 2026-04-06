@@ -15,16 +15,17 @@ import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.world.World;
+import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.MeshData;
+import net.minecraft.client.renderer.GameRenderer;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
@@ -45,7 +46,7 @@ public class ParticleEmitter
 
     public Link texture;
     public LivingEntity target;
-    public World world;
+    public Level world;
     public boolean lit;
 
     public boolean running = true;
@@ -121,10 +122,10 @@ public class ParticleEmitter
     public void setTarget(LivingEntity target)
     {
         this.target = target;
-        this.world = target == null ? null : target.getWorld();
+        this.world = target == null ? null : target.level();
     }
 
-    public void setWorld(World world)
+    public void setWorld(Level world)
     {
         this.world = world;
     }
@@ -424,7 +425,7 @@ public class ParticleEmitter
     /**
      * Render the particle on screen
      */
-    public void renderUI(MatrixStack stack, float transition)
+    public void renderUI(PoseStack stack, float transition)
     {
         if (this.scheme == null)
         {
@@ -447,27 +448,30 @@ public class ParticleEmitter
             this.setEmitterVariables(transition);
             this.setParticleVariables(this.uiParticle, transition);
 
-            Matrix4f matrix = stack.peek().getPositionMatrix();
-            BufferBuilder builder = Tessellator.getInstance().getBuffer();
-
-            builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_TEXTURE_COLOR);
+            Matrix4f matrix = stack.last().pose();
+            BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
 
             for (IComponentParticleRender render : list)
             {
                 render.renderUI(this.uiParticle, builder, matrix, transition);
             }
 
-            RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
-            RenderSystem.disableCull();
-            BufferRenderer.drawWithGlobalProgram(builder.end());
-            RenderSystem.enableCull();
+            MeshData meshData = builder.build();
+
+            if (meshData != null)
+            {
+                RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
+                RenderSystem.disableCull();
+                BufferUploader.drawWithShader(meshData);
+                RenderSystem.enableCull();
+            }
         }
     }
 
     /**
      * Render all the particles in this particle emitter
      */
-    public void render(VertexFormat format, Supplier<ShaderProgram> program, MatrixStack stack, int overlay, float transition)
+    public void render(VertexFormat format, Supplier<ShaderInstance> program, PoseStack stack, int overlay, float transition)
     {
         if (this.scheme == null)
         {
@@ -483,11 +487,10 @@ public class ParticleEmitter
 
         if (!this.particles.isEmpty())
         {
-            Matrix4f matrix = stack.peek().getPositionMatrix();
-            BufferBuilder builder = Tessellator.getInstance().getBuffer();
+            Matrix4f matrix = stack.last().pose();
+            BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
 
             this.bindTexture();
-            builder.begin(VertexFormat.DrawMode.TRIANGLES, format);
 
             for (Particle particle : this.particles)
             {
@@ -500,11 +503,17 @@ public class ParticleEmitter
                 }
             }
 
-            RenderSystem.setShader(program);
-            RenderSystem.disableBlend();
-            RenderSystem.disableCull();
-            BufferRenderer.drawWithGlobalProgram(builder.end());
-            RenderSystem.enableCull();
+            MeshData meshData = builder.build();
+
+            if (meshData != null)
+            {
+                RenderSystem.setShader(program);
+                RenderSystem.disableBlend();
+                RenderSystem.disableCull();
+                BufferUploader.drawWithShader(meshData);
+                RenderSystem.enableCull();
+                RenderSystem.enableBlend();
+            }
         }
 
         for (IComponentParticleRender component : renders)

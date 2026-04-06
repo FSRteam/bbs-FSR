@@ -362,7 +362,7 @@ public class UIReplaysEditorUtils
 
     private static void forceSelectInSheet(IUIKeyframeGraph graph, UIKeyframeSheet sheet, Keyframe keyframe)
     {
-        /* World-pick must deterministically activate exactly clicked sheet/keyframe */
+        /* Level-pick must deterministically activate exactly clicked sheet/keyframe */
         graph.clearSelection();
         sheet.selection.add(keyframe);
         graph.pickKeyframe(keyframe);

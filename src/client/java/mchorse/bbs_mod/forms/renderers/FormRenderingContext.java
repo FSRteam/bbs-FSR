@@ -4,14 +4,14 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.vertex.PoseStack;
 
 public class FormRenderingContext
 {
     public FormRenderType type;
     public IEntity entity;
-    public MatrixStack stack;
+    public PoseStack stack;
     public int light;
     public int overlay;
     public float transition;
@@ -24,7 +24,7 @@ public class FormRenderingContext
     public FormRenderingContext()
     {}
 
-    public FormRenderingContext set(FormRenderType type, IEntity entity, MatrixStack stack, int light, int overlay, float transition)
+    public FormRenderingContext set(FormRenderType type, IEntity entity, PoseStack stack, int light, int overlay, float transition)
     {
         this.type = type == null ? FormRenderType.ENTITY : type;
         this.entity = entity;
@@ -47,11 +47,11 @@ public class FormRenderingContext
         return this;
     }
 
-    public FormRenderingContext camera(net.minecraft.client.render.Camera camera)
+    public FormRenderingContext camera(net.minecraft.client.Camera camera)
     {
         this.camera.position.set(camera.getPos().x, camera.getPos().y, camera.getPos().z);
         this.camera.rotation.set(MathUtils.toRad(-camera.getPitch()), MathUtils.toRad(camera.getYaw()), 0F);
-        this.camera.fov = MathUtils.toRad(MinecraftClient.getInstance().options.getFov().getValue());
+        this.camera.fov = MathUtils.toRad(Minecraft.getInstance().options.getFov().getValue());
         this.camera.view.identity().rotate(camera.getRotation());
 
         return this;

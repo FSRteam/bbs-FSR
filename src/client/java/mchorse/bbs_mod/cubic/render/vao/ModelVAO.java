@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.cubic.render.vao;
 
 import mchorse.bbs_mod.client.BBSRendering;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.lwjgl.opengl.GL30;
 
 public class ModelVAO implements IModelVAO
@@ -10,6 +10,11 @@ public class ModelVAO implements IModelVAO
     private int vao;
     private int vao2;
     private int count;
+    private int vertexBuffer;
+    private int normalBuffer;
+    private int tangentsBuffer;
+    private int texCoordBuffer;
+    private int midTexCoordBuffer;
 
     public ModelVAO(ModelVAOData data)
     {
@@ -24,6 +29,11 @@ public class ModelVAO implements IModelVAO
     {
         GL30.glDeleteVertexArrays(this.vao);
         GL30.glDeleteVertexArrays(this.vao2);
+        GL30.glDeleteBuffers(this.vertexBuffer);
+        GL30.glDeleteBuffers(this.normalBuffer);
+        GL30.glDeleteBuffers(this.tangentsBuffer);
+        GL30.glDeleteBuffers(this.texCoordBuffer);
+        GL30.glDeleteBuffers(this.midTexCoordBuffer);
     }
 
     public void upload(ModelVAOData data)
@@ -33,29 +43,29 @@ public class ModelVAO implements IModelVAO
 
         GL30.glBindVertexArray(this.vao);
 
-        int vertexBuffer = GL30.glGenBuffers();
-        int normalBuffer = GL30.glGenBuffers();
-        int tangentsBuffer = GL30.glGenBuffers();
-        int texCoordBuffer = GL30.glGenBuffers();
-        int midTexCoordBuffer = GL30.glGenBuffers();
+        this.vertexBuffer = GL30.glGenBuffers();
+        this.normalBuffer = GL30.glGenBuffers();
+        this.tangentsBuffer = GL30.glGenBuffers();
+        this.texCoordBuffer = GL30.glGenBuffers();
+        this.midTexCoordBuffer = GL30.glGenBuffers();
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, vertexBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.vertexBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, data.vertices(), GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.POSITION, 3, GL30.GL_FLOAT, false, 0, 0);
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, normalBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.normalBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, data.normals(), GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.NORMAL, 3, GL30.GL_FLOAT, false, 0, 0);
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, texCoordBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.texCoordBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, data.texCoords(), GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, tangentsBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.tangentsBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, data.tangents(), GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.TANGENTS, 4, GL30.GL_FLOAT, false, 0, 0);
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, midTexCoordBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.midTexCoordBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, data.texCoords(), GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.MID_TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
 
@@ -69,13 +79,13 @@ public class ModelVAO implements IModelVAO
         GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
         GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
-        /* VertexFormats.POSITION_TEXTURE_LIGHT_COLOR */
+        /* DefaultVertexFormat.POSITION_TEXTURE_LIGHT_COLOR */
         GL30.glBindVertexArray(this.vao2);
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, vertexBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.vertexBuffer);
         GL30.glVertexAttribPointer(0, 3, GL30.GL_FLOAT, false, 0, 0);
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, texCoordBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.texCoordBuffer);
         GL30.glVertexAttribPointer(1, 2, GL30.GL_FLOAT, false, 0, 0);
 
         GL30.glEnableVertexAttribArray(0);
@@ -90,7 +100,7 @@ public class ModelVAO implements IModelVAO
     public void render(VertexFormat format, float r, float g, float b, float a, int light, int overlay)
     {
         boolean hasShaders = isShadersEnabled();
-        int vao = hasShaders || format == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL ? this.vao : this.vao2;
+        int vao = hasShaders || format == DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL ? this.vao : this.vao2;
 
         GL30.glBindVertexArray(vao);
 

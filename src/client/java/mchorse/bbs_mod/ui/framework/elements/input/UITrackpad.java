@@ -30,7 +30,7 @@ import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public class UITrackpad extends UIBaseTextbox
 {
@@ -700,7 +700,7 @@ public class UITrackpad extends UIBaseTextbox
 
         if (dragging)
         {
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
             int ww = mc.getWindow().getWidth();
 
             double factor = Math.ceil(ww / (double) context.menu.width);

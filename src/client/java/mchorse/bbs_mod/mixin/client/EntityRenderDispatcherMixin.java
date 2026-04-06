@@ -3,13 +3,13 @@ package mchorse.bbs_mod.mixin.client;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import mchorse.bbs_mod.client.renderer.MorphRenderer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.EntityRenderDispatcher;
-import net.minecraft.client.render.entity.EntityRenderer;
-import net.minecraft.client.render.entity.LivingEntityRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -20,12 +20,12 @@ public class EntityRenderDispatcherMixin
         method = "render",
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/client/render/entity/EntityRenderer;render(Lnet/minecraft/entity/Entity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V"
+            target = "Lnet/minecraft/client/renderer/entity/EntityRenderer;render(Lnet/minecraft/world/entity/Entity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"
         )
     )
     private <E extends Entity> void wrapRender(
         EntityRenderer<E> renderer, E entity, float yaw, float tickDelta,
-        MatrixStack matrices, VertexConsumerProvider vcp, int light,
+        PoseStack matrices, MultiBufferSource vcp, int light,
         Operation<Void> original
     ) {
         if (entity instanceof LivingEntity livingEntity)
@@ -34,10 +34,10 @@ public class EntityRenderDispatcherMixin
 
             if (renderer instanceof LivingEntityRendererInvoker invoker)
             {
-                whiteOverlayProgress = invoker.bbs$getAnimationCounter(livingEntity, tickDelta);
+                whiteOverlayProgress = invoker.bbs$getWhiteOverlayProgress(livingEntity, tickDelta);
             }
 
-            int o = LivingEntityRenderer.getOverlay(livingEntity, whiteOverlayProgress);
+            int o = LivingEntityRenderer.getOverlayCoords(livingEntity, whiteOverlayProgress);
 
             if (MorphRenderer.renderLivingEntity(livingEntity, yaw, tickDelta, matrices, vcp, light, o))
             {

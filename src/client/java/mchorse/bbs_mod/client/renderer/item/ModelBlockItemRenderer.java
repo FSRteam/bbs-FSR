@@ -12,17 +12,18 @@ import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.model.json.ModelTransformationMode;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.world.item.ItemDisplayContext;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.BlockPos;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.lang.reflect.Method;
 
 public class ModelBlockItemRenderer
 {
@@ -47,7 +48,7 @@ public class ModelBlockItemRenderer
         }
     }
 
-    public void render(ItemStack stack, ModelTransformationMode mode, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, int overlay)
+    public void render(ItemStack stack, ItemDisplayContext mode, PoseStack matrices, MultiBufferSource vertexConsumers, int light, int overlay)
     {
         Item item = this.get(stack);
 
@@ -62,17 +63,17 @@ public class ModelBlockItemRenderer
 
                 Transform transform = properties.getTransform(mode);
 
-                matrices.push();
+                matrices.pushPose();
                 matrices.translate(0.5F, 0F, 0.5F);
                 MatrixStackUtils.applyTransform(matrices, transform);
 
                 RenderSystem.enableDepthTest();
                 FormUtilsClient.render(form, new FormRenderingContext()
-                    .set(FormRenderType.fromModelMode(mode), item.formEntity, matrices, light, overlay, MinecraftClient.getInstance().getTickDelta())
-                    .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
+                    .set(resolveRenderType(mode), item.formEntity, matrices, light, overlay, getTickDelta())
+                    .camera(Minecraft.getInstance().gameRenderer.getCamera()));
                 RenderSystem.disableDepthTest();
 
-                matrices.pop();
+                matrices.popPose();
             }
         }
     }
@@ -89,7 +90,7 @@ public class ModelBlockItemRenderer
             return this.map.get(stack);
         }
 
-        NbtCompound nbt = stack.getNbt();
+        CompoundTag nbt = stack.getTag();
         ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ORIGIN, BBSMod.MODEL_BLOCK.getDefaultState());
         Item item = new Item(entity);
 
@@ -100,7 +101,7 @@ public class ModelBlockItemRenderer
             return item;
         }
 
-        entity.readNbt(nbt.getCompound("BlockEntityTag"));
+        applyBlockEntityTag(entity, nbt.getCompound("BlockEntityTag"));
 
         return item;
     }
@@ -114,7 +115,82 @@ public class ModelBlockItemRenderer
         public Item(ModelBlockEntity entity)
         {
             this.entity = entity;
-            this.formEntity = new StubEntity(MinecraftClient.getInstance().world);
+            this.formEntity = new StubEntity(Minecraft.getInstance().level);
         }
+    }
+
+    private static FormRenderType resolveRenderType(ItemDisplayContext mode)
+    {
+        if (mode.firstPerson())
+        {
+            return FormRenderType.ITEM_FP;
+        }
+        else if (mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND || mode == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND)
+        {
+            return FormRenderType.ITEM_TP;
+        }
+        else if (mode == ItemDisplayContext.GROUND)
+        {
+            return FormRenderType.ITEM;
+        }
+        else if (mode == ItemDisplayContext.GUI)
+        {
+            return FormRenderType.ITEM_INVENTORY;
+        }
+
+        return FormRenderType.ENTITY;
+    }
+
+    private static float getTickDelta()
+    {
+        try
+        {
+            return Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
+        }
+        catch (Exception ignored)
+        {}
+
+        return 0F;
+    }
+
+    private static void applyBlockEntityTag(ModelBlockEntity entity, CompoundTag tag)
+    {
+        try
+        {
+            Object level = Minecraft.getInstance().level;
+            Object registryAccess = level == null ? null : level.getClass().getMethod("registryAccess").invoke(level);
+
+            if (registryAccess != null)
+            {
+                for (Method method : entity.getClass().getMethods())
+                {
+                    if (method.getName().equals("loadWithComponents")
+                        && method.getParameterCount() == 2
+                        && method.getParameterTypes()[0] == CompoundTag.class
+                        && method.getParameterTypes()[1].isInstance(registryAccess))
+                    {
+                        method.invoke(entity, tag, registryAccess);
+                        return;
+                    }
+                }
+            }
+        }
+        catch (Exception ignored)
+        {}
+
+        try
+        {
+            entity.getClass().getMethod("load", CompoundTag.class).invoke(entity, tag);
+            return;
+        }
+        catch (Exception ignored)
+        {}
+
+        try
+        {
+            entity.getClass().getMethod("readNbt", CompoundTag.class).invoke(entity, tag);
+        }
+        catch (Exception ignored)
+        {}
     }
 }

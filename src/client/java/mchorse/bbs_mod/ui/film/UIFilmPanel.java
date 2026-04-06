@@ -75,9 +75,9 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
@@ -1299,9 +1299,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         IdleClip clip = new IdleClip();
         Camera camera = new Camera();
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
-        camera.set(mc.player, MathUtils.toRad(mc.options.getFov().getValue()));
+        camera.set(mc.player, MathUtils.toRad(mc.options.fov().get().floatValue()));
 
         clip.layer.set(8);
         clip.duration.set(BBSSettings.getDefaultDuration());
@@ -1534,7 +1534,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (this.getData() != null)
         {
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
 
             if (this.filmUserActivity.shouldAccumulateActiveTime(mc, context, now))
             {
@@ -1579,11 +1579,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (this.entered)
         {
-            ClientPlayerEntity player = MinecraftClient.getInstance().player;
-            Vec3d pos = player.getPos();
+            LocalPlayer player = Minecraft.getInstance().player;
+            Vec3 pos = player.position();
             Vector3d cameraPos = this.camera.position;
             double distance = cameraPos.distance(pos.x, pos.y, pos.z);
-            int value = MinecraftClient.getInstance().options.getViewDistance().getValue();
+            int value = Minecraft.getInstance().options.renderDistance().get();
 
             if (distance > value * 12)
             {
@@ -1693,7 +1693,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (!BBSRendering.isIrisShadowPass())
         {
             this.lastProjection.set(RenderSystem.getProjectionMatrix());
-            this.lastView.set(context.matrixStack().peek().getPositionMatrix());
+            this.lastView.set(context.matrixStack().last().pose());
         }
 
         this.controller.renderFrame(context);

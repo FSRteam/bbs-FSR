@@ -2,12 +2,12 @@ package mchorse.bbs_mod.utils;
 
 import com.mojang.authlib.GameProfile;
 import mchorse.bbs_mod.network.ClientNetwork;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.data.TrackedData;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 
 public class PlayerUtils
 {
@@ -18,31 +18,31 @@ public class PlayerUtils
 
     public static void teleport(double x, double y, double z, float yaw, float bodyYaw, float pitch)
     {
-        ClientPlayerEntity player = MinecraftClient.getInstance().player;
+        LocalPlayer player = Minecraft.getInstance().player;
 
         if (!ClientNetwork.isIsBBSModOnServer())
         {
             String command = "tp " + player.getGameProfile().getName() + " " + x + " " + y + " " + z + " " + yaw + " " + pitch;
 
-            player.networkHandler.sendCommand(command);
+            player.connection.sendCommand(command);
         }
         else
         {
             ClientNetwork.sendTeleport(x, y, z, yaw, bodyYaw, pitch);
-            player.setYaw(yaw);
-            player.setHeadYaw(yaw);
-            player.setBodyYaw(bodyYaw);
-            player.setPitch(pitch);
+            player.setYRot(yaw);
+            player.setYHeadRot(yaw);
+            player.setYBodyRot(bodyYaw);
+            player.setXRot(pitch);
         }
     }
 
     public static void teleport(double x, double y, double z)
     {
-        ClientPlayerEntity player = MinecraftClient.getInstance().player;
+        LocalPlayer player = Minecraft.getInstance().player;
 
         if (!ClientNetwork.isIsBBSModOnServer())
         {
-            player.networkHandler.sendCommand("tp " + player.getGameProfile().getName() + " " + x + " " + y + " " + z);
+            player.connection.sendCommand("tp " + player.getGameProfile().getName() + " " + x + " " + y + " " + z);
         }
         else
         {
@@ -50,14 +50,14 @@ public class PlayerUtils
         }
     }
 
-    public static class ProtectedAccess extends PlayerEntity
+    public static class ProtectedAccess extends Player
     {
-        public static TrackedData<Byte> getModelParts()
+        public static EntityDataAccessor<Byte> getModelParts()
         {
-            return PLAYER_MODEL_PARTS;
+            return DATA_PLAYER_MODE_CUSTOMISATION;
         }
 
-        public ProtectedAccess(World world, BlockPos pos, float yaw, GameProfile gameProfile)
+        public ProtectedAccess(Level world, BlockPos pos, float yaw, GameProfile gameProfile)
         {
             super(world, pos, yaw, gameProfile);
         }

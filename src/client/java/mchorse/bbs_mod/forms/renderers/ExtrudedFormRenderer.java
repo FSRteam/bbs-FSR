@@ -13,14 +13,14 @@ import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
@@ -37,9 +37,9 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        MatrixStack stack = context.batcher.getContext().getMatrices();
+        PoseStack stack = context.batcher.getContext().getMatrices();
 
-        stack.push();
+        stack.pushPose();
 
         Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
 
@@ -50,18 +50,18 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
         stack.scale(this.form.uiScale.get(), this.form.uiScale.get(), this.form.uiScale.get());
 
         /* Shading fix */
-        stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
-        stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
+        stack.last().normal().getScale(Vectors.EMPTY_3F);
+        stack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
         this.renderModel(BBSShaders::getModel,
             stack,
-            OverlayTexture.DEFAULT_UV, LightmapTextureManager.MAX_LIGHT_COORDINATE, Colors.WHITE,
+            OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, Colors.WHITE,
             context.getTransition()
         );
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
-        stack.pop();
+        stack.popPose();
     }
 
     @Override
@@ -74,16 +74,16 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             shading = true;
         }
 
-        VertexFormat format = shading ? VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : VertexFormats.POSITION_TEXTURE_LIGHT_COLOR;
-        Supplier<ShaderProgram> shader = this.getShader(context,
-            shading ? GameRenderer::getRenderTypeEntityTranslucentProgram : GameRenderer::getPositionTexLightmapColorProgram,
+        VertexFormat format = shading ? DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : DefaultVertexFormat.POSITION_TEXTURE_LIGHT_COLOR;
+        Supplier<ShaderInstance> shader = this.getShader(context,
+            shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionColorTexLightmapShader,
             shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
         );
 
         this.renderModel(shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
     }
 
-    private void renderModel(Supplier<ShaderProgram> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderModel(Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
     {
         Link texture = this.form.texture.get();
         ModelVAO data = BBSModClient.getTextures().getExtruder().get(texture);
@@ -92,7 +92,7 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
         {
             if (this.form.billboard.get())
             {
-                Matrix4f modelMatrix = matrices.peek().getPositionMatrix();
+                Matrix4f modelMatrix = matrices.last().pose();
                 Vector3f scale = Vectors.TEMP_3F;
 
                 modelMatrix.getScale(scale);
@@ -103,11 +103,11 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
 
                 modelMatrix.scale(scale);
 
-                matrices.peek().getNormalMatrix().identity();
+                matrices.last().normal().identity();
             }
 
             Color color = Colors.COLOR.set(overlayColor, true);
-            GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
+            GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
             Color formColor = this.form.color.get();
 
             BBSModClient.getTextures().bindTexture(texture);

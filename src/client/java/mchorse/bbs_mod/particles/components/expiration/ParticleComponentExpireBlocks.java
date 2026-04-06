@@ -7,8 +7,8 @@ import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
-import net.minecraft.block.BlockState;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
 import org.joml.Vector3d;
 
 import java.util.ArrayList;
@@ -46,6 +46,6 @@ public abstract class ParticleComponentExpireBlocks extends ParticleComponentBas
 
         Vector3d position = particle.getGlobalPosition(emitter);
 
-        return emitter.world.getBlockState(new BlockPos((int) position.x, (int) position.y, (int) position.z));
+        return emitter.world.getBlockState(BlockPos.containing(position.x, position.y, position.z));
     }
 }

@@ -20,12 +20,12 @@ import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.GlUniform;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.shaders.Uniform;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 
 import java.util.function.Supplier;
@@ -108,7 +108,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
         this.formEditor.preFormRender(context, this.form);
 
         FormRenderingContext formContext = new FormRenderingContext()
-            .set(FormRenderType.PREVIEW, this.target == null ? this.entity : this.target, context.batcher.getContext().getMatrices(), LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
+            .set(FormRenderType.PREVIEW, this.target == null ? this.entity : this.target, context.batcher.getContext().getMatrices(), LightTexture.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
             .camera(this.camera)
             .modelRenderer();
 
@@ -134,7 +134,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
             FormUtilsClient.render(this.form, formContext.stencilMap(this.stencilMap));
 
             Matrix4f matrix = this.formEditor.getOrigin(context.getTransition());
-            MatrixStack stack = context.render.batcher.getContext().getMatrices();
+            PoseStack stack = context.render.batcher.getContext().getMatrices();
 
             stack.push();
 
@@ -150,7 +150,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
             this.stencil.pickGUI(context, this.area);
             this.stencil.unbind(this.stencilMap);
 
-            MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
+            Minecraft.getInstance().getFramebuffer().beginWrite(true);
 
             GlStateManager._enableScissorTest();
         }
@@ -163,7 +163,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
     private void renderAxes(UIContext context)
     {
         Matrix4f matrix = this.formEditor.getOrigin(context.getTransition());
-        MatrixStack stack = context.render.batcher.getContext().getMatrices();
+        PoseStack stack = context.render.batcher.getContext().getMatrices();
 
         stack.push();
 
@@ -224,8 +224,8 @@ public class UIPickableFormRenderer extends UIFormRenderer
         int w = texture.width;
         int h = texture.height;
 
-        ShaderProgram previewProgram = BBSShaders.getPickerPreviewProgram();
-        GlUniform target = previewProgram.getUniform("Target");
+        ShaderInstance previewProgram = BBSShaders.getPickerPreviewProgram();
+        Uniform target = previewProgram.getUniform("Target");
 
         if (target != null)
         {

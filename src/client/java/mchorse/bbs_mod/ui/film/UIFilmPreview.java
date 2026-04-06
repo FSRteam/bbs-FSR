@@ -43,9 +43,9 @@ import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.RotationAxis;
+import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Vector2i;
 
 import java.io.File;
@@ -414,20 +414,20 @@ public class UIFilmPreview extends UIElement
 
     private void renderCursor(UIContext context)
     {
-        net.minecraft.client.render.Camera mcCamera = MinecraftClient.getInstance().gameRenderer.getCamera();
-        MatrixStack stack = RenderSystem.getModelViewStack();
+        net.minecraft.client.Camera mcCamera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        PoseStack stack = RenderSystem.getModelViewStack();
 
-        stack.push();
+        stack.pushPose();
 
-        stack.multiplyPositionMatrix(context.batcher.getContext().getMatrices().peek().getPositionMatrix());
+        stack.mulPose(context.batcher.getContext().getMatrices().last().pose());
         stack.translate(area.x + 16, area.ey() - 12, 0F);
-        stack.multiply(RotationAxis.NEGATIVE_X.rotationDegrees(mcCamera.getPitch()));
-        stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(mcCamera.getYaw()));
+        stack.mulPose(Axis.XN.rotationDegrees(mcCamera.getXRot()));
+        stack.mulPose(Axis.YP.rotationDegrees(mcCamera.getYRot()));
         stack.scale(-1F, -1F, -1F);
         RenderSystem.applyModelViewMatrix();
         RenderSystem.renderCrosshair(10);
 
-        stack.pop();
+        stack.popPose();
         RenderSystem.applyModelViewMatrix();
     }
 }

@@ -7,7 +7,7 @@ import mchorse.bbs_mod.utils.undo.IUndo;
 public class TextEditUndo implements IUndo<UITextarea>
 {
     /**
-     * Text that was present before undo
+     * Component that was present before undo
      */
     public String text;
 
@@ -16,7 +16,7 @@ public class TextEditUndo implements IUndo<UITextarea>
     public Cursor selection = new Cursor(-1, 0);
 
     /**
-     * Text that will be added
+     * Component that will be added
      */
     public String postText = "";
 

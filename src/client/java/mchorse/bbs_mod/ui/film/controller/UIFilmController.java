@@ -15,7 +15,8 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
+import com.mojang.blaze3d.vertex.VertexSorting;
+import com.mojang.blaze3d.platform.Window;
 
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
@@ -79,15 +80,15 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.Mouse;
-import net.minecraft.client.gl.GlUniform;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.option.GameOptions;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.MouseHandler;
+import com.mojang.blaze3d.shaders.Uniform;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.Options;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.level.Level;
 
 public class UIFilmController extends UIElement
 {
@@ -153,7 +154,7 @@ public class UIFilmController extends UIElement
         {
             Area area = this.panel.preview.getViewport();
             UIContext context = this.getContext();
-            World world = MinecraftClient.getInstance().world;
+            Level world = Minecraft.getInstance().level;
             Camera camera = this.panel.getCamera();
 
             HitResult result = RayTracing.rayTrace(
@@ -165,7 +166,7 @@ public class UIFilmController extends UIElement
 
             if (result.getType() == HitResult.Type.BLOCK)
             {
-                this.panel.replayEditor.moveReplay(result.getPos().x, result.getPos().y, result.getPos().z);
+                this.panel.replayEditor.moveReplay(result.getLocation().x, result.getLocation().y, result.getLocation().z);
             }
         }).active(hasActor).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_RESTART_ACTIONS, () ->
@@ -223,7 +224,7 @@ public class UIFilmController extends UIElement
 
     private void toggleMousePointer(boolean disable)
     {
-        net.minecraft.client.util.Window window = MinecraftClient.getInstance().getWindow();
+        Window window = Minecraft.getInstance().getWindow();
 
         if (disable)
         {
@@ -378,7 +379,13 @@ public class UIFilmController extends UIElement
             {
                 this.controlled.setForm(this.playerForm);
 
-                entities.put(CollectionUtils.getKey(entities, this.controlled), this.previousEntity);
+                Integer controlledIndex = CollectionUtils.getKey(entities, this.controlled);
+
+                if (controlledIndex != null)
+                {
+                    entities.put(controlledIndex, this.previousEntity);
+                }
+
                 this.previousEntity = null;
             }
 
@@ -390,14 +397,19 @@ public class UIFilmController extends UIElement
 
             if (replacePlayer && this.controlled != null)
             {
-                MCEntity player = Morph.getMorph(MinecraftClient.getInstance().player).entity;
+                MCEntity player = Morph.getMorph(Minecraft.getInstance().player).entity;
 
                 this.playerForm = player.getForm();
                 this.previousEntity = this.controlled;
 
                 player.copy(this.controlled);
                 PlayerUtils.teleport(this.controlled.getX(), this.controlled.getY(), this.controlled.getZ(), this.controlled.getHeadYaw(), this.controlled.getBodyYaw(), this.controlled.getPitch());
-                entities.put(CollectionUtils.getKey(entities, this.controlled), player);
+                Integer controlledIndex = CollectionUtils.getKey(entities, this.controlled);
+
+                if (controlledIndex != null)
+                {
+                    entities.put(controlledIndex, player);
+                }
 
                 this.controlled = player;
             }
@@ -452,7 +464,7 @@ public class UIFilmController extends UIElement
     {
         if (groups != null && groups.contains("outside"))
         {
-            MinecraftClient.getInstance().setScreen(null);
+            Minecraft.getInstance().setScreen(null);
 
             Replay replay = this.panel.replayEditor.getReplay();
             int index = this.panel.getData().replays.getList().indexOf(replay);
@@ -595,9 +607,21 @@ public class UIFilmController extends UIElement
 
     private void pickEntity(IEntity entity)
     {
-        int index = CollectionUtils.getKey(this.getEntities(), entity);
+        Integer index = CollectionUtils.getKey(this.getEntities(), entity);
 
-        this.panel.replayEditor.setReplay(this.panel.getData().replays.getList().get(index));
+        if (index == null)
+        {
+            return;
+        }
+
+        List<Replay> replays = this.panel.getData().replays.getList();
+
+        if (index < 0 || index >= replays.size())
+        {
+            return;
+        }
+
+        this.panel.replayEditor.setReplay(replays.get(index));
 
         if (!this.panel.replayEditor.isVisible())
         {
@@ -649,7 +673,7 @@ public class UIFilmController extends UIElement
                 return true;
             }
 
-            InputUtil.Key utilKey = InputUtil.fromKeyCode(context.getKeyCode(), context.getScanCode());
+            InputConstants.Key utilKey = InputConstants.getKey(context.getKeyCode(), context.getScanCode());
 
             if (this.canControlWithKeyboard(utilKey))
             {
@@ -660,22 +684,22 @@ public class UIFilmController extends UIElement
         return super.subKeyPressed(context);
     }
 
-    private boolean canControlWithKeyboard(InputUtil.Key utilKey)
+    private boolean canControlWithKeyboard(InputConstants.Key utilKey)
     {
         if (!ClientNetwork.isIsBBSModOnServer())
         {
             return false;
         }
 
-        GameOptions options = MinecraftClient.getInstance().options;
+        Options options = Minecraft.getInstance().options;
 
-        return options.forwardKey.getDefaultKey() == utilKey
-            || options.backKey.getDefaultKey() == utilKey
-            || options.leftKey.getDefaultKey() == utilKey
-            || options.rightKey.getDefaultKey() == utilKey
-            || options.sneakKey.getDefaultKey() == utilKey
-            || options.sprintKey.getDefaultKey() == utilKey
-            || options.jumpKey.getDefaultKey() == utilKey;
+        return options.keyUp.getDefaultKey() == utilKey
+            || options.keyDown.getDefaultKey() == utilKey
+            || options.keyLeft.getDefaultKey() == utilKey
+            || options.keyRight.getDefaultKey() == utilKey
+            || options.keyShift.getDefaultKey() == utilKey
+            || options.keySprint.getDefaultKey() == utilKey
+            || options.keyJump.getDefaultKey() == utilKey;
     }
 
     public void pickRecording()
@@ -836,7 +860,7 @@ public class UIFilmController extends UIElement
 
         boolean back = mode == CAMERA_MODE_THIRD_PERSON_BACK;
         Vector3f rotate = Matrices.rotation(rotation.x * (back ? 1 : -1), (back ? 0F : MathUtils.PI) - rotation.y);
-        World world = MinecraftClient.getInstance().world;
+        Level world = Minecraft.getInstance().level;
 
         HitResult result = RayTracing.rayTraceEntity(
             world,
@@ -847,7 +871,7 @@ public class UIFilmController extends UIElement
 
         if (result.getType() == HitResult.Type.BLOCK)
         {
-            distance = (float) position.distance(result.getPos().x, result.getPos().y, result.getPos().z) - 0.1F;
+            distance = (float) position.distance(result.getLocation().x, result.getLocation().y, result.getLocation().z) - 0.1F;
         }
 
         rotate.mul(distance);
@@ -1127,11 +1151,11 @@ public class UIFilmController extends UIElement
         /* Cache the global stuff */
         MatrixStackUtils.cacheMatrices();
 
-        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorter.BY_Z);
+        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.BY_Z);
         RenderSystem.setInverseViewRotationMatrix(new Matrix3f(this.panel.lastView).invert());
 
         /* Render the stencil */
-        MatrixStack worldStack = this.worldRenderContext.matrixStack();
+        PoseStack worldStack = this.worldRenderContext.matrixStack();
 
         worldStack.push();
         worldStack.loadIdentity();
@@ -1148,6 +1172,7 @@ public class UIFilmController extends UIElement
 
         if (!this.stencil.hasPicked())
         {
+            RenderSystem.depthFunc(GL11.GL_LEQUAL);
             return;
         }
 
@@ -1157,9 +1182,9 @@ public class UIFilmController extends UIElement
         int w = texture.width;
         int h = texture.height;
 
-        ShaderProgram previewProgram = BBSShaders.getPickerPreviewProgram();
-        Supplier<ShaderProgram> getPickerPreviewProgram = BBSShaders::getPickerPreviewProgram;
-        GlUniform target = previewProgram.getUniform("Target");
+        ShaderInstance previewProgram = BBSShaders.getPickerPreviewProgram();
+        Supplier<ShaderInstance> getPickerPreviewProgram = BBSShaders::getPickerPreviewProgram;
+        Uniform target = previewProgram.getUniform("Target");
 
         if (target != null)
         {
@@ -1177,7 +1202,16 @@ public class UIFilmController extends UIElement
 
             if (this.hoveredEntity != null)
             {
-                String label = this.panel.getData().replays.getList().get(stencilIndex).getName();
+                List<Replay> replays = this.panel.getData().replays.getList();
+
+                if (stencilIndex < 0 || stencilIndex >= replays.size())
+                {
+                    this.hoveredEntity = null;
+                    RenderSystem.depthFunc(GL11.GL_LEQUAL);
+                    return;
+                }
+
+                String label = replays.get(stencilIndex).getName();
 
                 context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);
             }
@@ -1193,6 +1227,8 @@ public class UIFilmController extends UIElement
 
             context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);
         }
+
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
 
     public void startRenderFrame(float tickDelta)
@@ -1221,7 +1257,7 @@ public class UIFilmController extends UIElement
             }
         }
 
-        Mouse mouse = MinecraftClient.getInstance().mouse;
+        MouseHandler mouse = Minecraft.getInstance().mouse;
         int x = (int) mouse.getX();
         int y = (int) mouse.getY();
 
@@ -1232,7 +1268,7 @@ public class UIFilmController extends UIElement
                 float cursorDeltaX = (x - this.lastMouse.x) / 2F;
                 float cursorDeltaY = (y - this.lastMouse.y) / 2F;
 
-                MinecraftClient.getInstance().player.changeLookDirection(cursorDeltaX, cursorDeltaY);
+                Minecraft.getInstance().player.turn(cursorDeltaX, cursorDeltaY);
             }
             else
             {
@@ -1295,6 +1331,11 @@ public class UIFilmController extends UIElement
 
                 Replay replay = CollectionUtils.getSafe(this.panel.getData().replays.getList(), entry.getKey());
 
+                if (replay == null)
+                {
+                    continue;
+                }
+
                 BaseFilmController.renderEntity(FilmControllerContext.instance
                     .setup(this.getEntities(), entry.getValue(), replay, renderContext)
                     .transition(isPlaying ? renderContext.tickDelta() : 0)
@@ -1306,6 +1347,11 @@ public class UIFilmController extends UIElement
         {
             Replay replay = this.panel.replayEditor.getReplay();
             Pair<String, Boolean> bone = this.getBone();
+
+            if (replay == null)
+            {
+                return;
+            }
 
             BaseFilmController.renderEntity(FilmControllerContext.instance
                 .setup(this.getEntities(), entity, replay, renderContext)
@@ -1321,7 +1367,7 @@ public class UIFilmController extends UIElement
         this.stencil.pick(x, y);
         this.stencil.unbind(this.stencilMap);
 
-        MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
+        Minecraft.getInstance().getFramebuffer().beginWrite(true);
     }
 
     private void ensureStencilFramebuffer()

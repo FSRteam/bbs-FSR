@@ -17,7 +17,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import org.joml.Matrix3f;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
@@ -439,7 +439,7 @@ public class UIPropTransform extends UITransform
              * being held! */
             GLFW.glfwGetCursorPos(Window.getWindow(), CURSOR_X, CURSOR_Y);
 
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
             int w = mc.getWindow().getWidth();
 
             double rawX = CURSOR_X[0];

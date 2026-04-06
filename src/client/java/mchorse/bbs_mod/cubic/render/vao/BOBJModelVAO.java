@@ -5,8 +5,8 @@ import mchorse.bbs_mod.bobj.BOBJLoader;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.joml.Matrices;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -63,7 +63,7 @@ public class BOBJModelVAO
         this.count = this.data.normData.length / 3;
         this.tmpVertices = new float[this.data.posData.length];
         this.tmpNormals = new float[this.data.normData.length];
-        this.tmpLight = new int[this.data.posData.length];
+        this.tmpLight = new int[this.count * 2];
         this.tmpTangents = new float[this.count * 4];
 
         GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.vertexBuffer);
@@ -86,7 +86,7 @@ public class BOBJModelVAO
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.tmpTangents, GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.TANGENTS, 4, GL30.GL_FLOAT, false, 0, 0);
 
-        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.texCoordBuffer);
+        GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.midTextureBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.texData, GL30.GL_STATIC_DRAW);
         GL30.glVertexAttribPointer(Attributes.MID_TEXTURE_UV, 2, GL30.GL_FLOAT, false, 0, 0);
     }
@@ -211,7 +211,7 @@ public class BOBJModelVAO
     protected void processData(float[] newVertices, float[] newNormals)
     {}
 
-    public void render(ShaderProgram shader, MatrixStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
+    public void render(ShaderInstance shader, PoseStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
     {
         boolean hasShaders = BBSRendering.isIrisShadersEnabled();
 

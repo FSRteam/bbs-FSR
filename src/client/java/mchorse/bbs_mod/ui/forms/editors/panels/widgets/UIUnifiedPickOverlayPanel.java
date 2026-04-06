@@ -21,8 +21,8 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
@@ -34,8 +34,8 @@ import net.minecraft.nbt.StringNbtReader;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.state.property.Property;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -87,7 +87,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
      */
     private static String minecraftLanguageKey()
     {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
         if (mc == null || mc.options == null)
         {
@@ -107,7 +107,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         {
             try
             {
-                Item item = Registries.ITEM.get(new Identifier(id));
+                Item item = Registries.ITEM.get(new ResourceLocation(id));
 
                 return new ItemStack(item).getName().getString();
             }
@@ -126,7 +126,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         {
             try
             {
-                return Registries.BLOCK.get(new Identifier(id)).getName().getString();
+                return Registries.BLOCK.get(new ResourceLocation(id)).getName().getString();
             }
             catch (Exception e)
             {
@@ -141,7 +141,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         {
             try
             {
-                Identifier rid = new Identifier(id);
+                ResourceLocation rid = new ResourceLocation(id);
 
                 if (mode == PickerMode.ITEM)
                 {
@@ -241,7 +241,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
                 return;
             }
 
-            this.itemStack.setCustomName(value.isEmpty() ? null : Text.literal(value));
+            this.itemStack.setCustomName(value.isEmpty() ? null : Component.literal(value));
             this.acceptItem(this.itemStack.copy());
             this.updateItemNbt();
         });
@@ -351,7 +351,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
         if (this.mode == PickerMode.ITEM)
         {
-            Item item = Registries.ITEM.get(new Identifier(id));
+            Item item = Registries.ITEM.get(new ResourceLocation(id));
             ItemStack selected = new ItemStack(item);
 
             selected.setCount(Math.max(1, this.itemStack.getCount()));
@@ -367,7 +367,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         }
         else
         {
-            Block block = Registries.BLOCK.get(new Identifier(id));
+            Block block = Registries.BLOCK.get(new ResourceLocation(id));
             this.acceptBlock(block.getDefaultState());
             this.fillBlockProperties(this.blockState);
         }
@@ -459,7 +459,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
                 return false;
             }
 
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
 
             if (mc.player == null)
             {
@@ -511,7 +511,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         {
             super.render(context);
 
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
 
             if (mc.player == null)
             {
@@ -534,7 +534,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
                 if (!stack.isEmpty())
                 {
-                    MatrixStack matrices = context.batcher.getContext().getMatrices();
+                    PoseStack matrices = context.batcher.getContext().getMatrices();
                     CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
                     matrices.push();
@@ -592,7 +592,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
             if (!stack.isEmpty())
             {
-                MatrixStack matrices = context.batcher.getContext().getMatrices();
+                PoseStack matrices = context.batcher.getContext().getMatrices();
                 CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
                 matrices.push();

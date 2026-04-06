@@ -17,19 +17,19 @@ public interface BBSWorldRenderContext extends IBbsWorldRenderContext
         return new BBSWorldRenderContext()
         {
             @Override
-            public net.minecraft.client.render.Camera camera()
+            public net.minecraft.client.Camera camera()
             {
                 return context.camera();
             }
 
             @Override
-            public net.minecraft.client.util.math.MatrixStack matrixStack()
+            public com.mojang.blaze3d.vertex.PoseStack matrixStack()
             {
                 return context.matrixStack();
             }
 
             @Override
-            public net.minecraft.client.render.VertexConsumerProvider.Immediate consumers()
+            public net.minecraft.client.renderer.MultiBufferSource.BufferSource consumers()
             {
                 return context.consumers();
             }

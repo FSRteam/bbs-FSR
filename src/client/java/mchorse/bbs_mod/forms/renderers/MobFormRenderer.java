@@ -19,23 +19,23 @@ import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.ModelPart;
-import net.minecraft.client.network.OtherClientPlayerEntity;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.entity.LivingEntityRenderer;
-import net.minecraft.client.render.entity.model.EntityModel;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityPose;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.StringNbtReader;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.RotationAxis;
+import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.model.EntityModel;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.resources.ResourceLocation;
+import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
@@ -106,7 +106,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             {
                 stringModelPartMap = new HashMap<>();
 
-                if (MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(this.entity) instanceof LivingEntityRenderer renderer)
+                if (Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity) instanceof LivingEntityRenderer renderer)
                 {
                     EntityModel model = renderer.getModel();
                     Set<Field> fields = new HashSet<>();
@@ -180,27 +180,27 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             return;
         }
 
-        NbtCompound compound = new NbtCompound();
+        CompoundTag compound = new CompoundTag();
 
         try
         {
-            compound = (new StringNbtReader(new StringReader(nbt))).parseCompound();
+            compound = (new TagParser(new StringReader(nbt))).parseCompound();
         }
         catch (Exception e)
         {}
 
-        this.entity = Registries.ENTITY_TYPE.get(new Identifier(id)).create(MinecraftClient.getInstance().world);
+        this.entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)).create(Minecraft.getInstance().world);
 
         if (this.entity == null && this.form.isPlayer())
         {
-            this.entity = new OtherClientPlayerEntity(MinecraftClient.getInstance().world, slim ? SLIM : WIDE);
+            this.entity = new OtherClientPlayerEntity(Minecraft.getInstance().world, slim ? SLIM : WIDE);
             this.entity.getDataTracker().set(PlayerUtils.ProtectedAccess.getModelParts(), (byte) 0b1111111);
         }
 
         if (this.entity != null)
         {
             compound.putString("id", id);
-            this.entity.readNbt(compound);
+            this.entity.load(compound);
             this.entity.noClip = true;
         }
     }
@@ -212,9 +212,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.entity != null)
         {
-            MatrixStack stack = context.batcher.getContext().getMatrices();
+            PoseStack stack = context.batcher.getContext().getMatrices();
 
-            stack.push();
+            stack.pushPose();
 
             Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
@@ -230,11 +230,11 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (!this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+                stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
             }
 
-            stack.peek().getNormalMatrix().getScale(Vectors.EMPTY_3F);
-            stack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
+            stack.last().normal().getScale(Vectors.EMPTY_3F);
+            stack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
             BooleanHolder first = new BooleanHolder();
 
@@ -249,13 +249,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             });
 
             consumers.setUI(true);
-            MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE);
+            Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightTexture.FULL_BRIGHT);
             consumers.draw();
             consumers.setUI(false);
 
             CustomVertexConsumerProvider.clearRunnables();
 
-            stack.pop();
+            stack.popPose();
 
             RenderSystem.depthFunc(GL11.GL_ALWAYS);
         }
@@ -301,11 +301,11 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 });
             }
 
-            context.stack.push();
+            context.stack.pushPose();
 
             if (this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                context.stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.PI));
+                context.stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
             }
 
             if (this.entity instanceof LivingEntity entity)
@@ -319,14 +319,14 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             currentPose = this.form.pose.get();
             currentPoseOverlay = this.form.poseOverlay.get();
 
-            MinecraftClient.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
+            Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
 
             currentPose = currentPoseOverlay = null;
 
             consumers.draw();
             CustomVertexConsumerProvider.clearRunnables();
 
-            context.stack.pop();
+            context.stack.popPose();
 
             RenderSystem.enableDepthTest();
         }
@@ -367,7 +367,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                 if (handSwingProgress > 0 && this.prevHandSwing == 0)
                 {
-                    livingEntity.swingHand(Hand.MAIN_HAND);
+                    livingEntity.swing(InteractionHand.MAIN_HAND);
                 }
 
                 this.prevHandSwing = handSwingProgress;
@@ -380,15 +380,15 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             this.entity.setPos(entity.getX(), entity.getY(), entity.getZ());
             this.entity.setOnGround(entity.isOnGround());
-            this.entity.setSneaking(entity.isSneaking());
+            this.entity.setShiftKeyDown(entity.isShiftKeyDown());
             this.entity.setSprinting(entity.isSprinting());
-            this.entity.setPose(entity.isSneaking() ? EntityPose.CROUCHING : EntityPose.STANDING);
-            this.entity.equipStack(EquipmentSlot.MAINHAND, entity.getEquipmentStack(EquipmentSlot.MAINHAND));
-            this.entity.equipStack(EquipmentSlot.OFFHAND, entity.getEquipmentStack(EquipmentSlot.OFFHAND));
-            this.entity.equipStack(EquipmentSlot.HEAD, entity.getEquipmentStack(EquipmentSlot.HEAD));
-            this.entity.equipStack(EquipmentSlot.CHEST, entity.getEquipmentStack(EquipmentSlot.CHEST));
-            this.entity.equipStack(EquipmentSlot.LEGS, entity.getEquipmentStack(EquipmentSlot.LEGS));
-            this.entity.equipStack(EquipmentSlot.FEET, entity.getEquipmentStack(EquipmentSlot.FEET));
+            this.entity.setPose(entity.isShiftKeyDown() ? Pose.CROUCHING : Pose.STANDING);
+            this.entity.setItemSlot(EquipmentSlot.MAINHAND, entity.getItemBySlot(EquipmentSlot.MAINHAND));
+            this.entity.setItemSlot(EquipmentSlot.OFFHAND, entity.getItemBySlot(EquipmentSlot.OFFHAND));
+            this.entity.setItemSlot(EquipmentSlot.HEAD, entity.getItemBySlot(EquipmentSlot.HEAD));
+            this.entity.setItemSlot(EquipmentSlot.CHEST, entity.getItemBySlot(EquipmentSlot.CHEST));
+            this.entity.setItemSlot(EquipmentSlot.LEGS, entity.getItemBySlot(EquipmentSlot.LEGS));
+            this.entity.setItemSlot(EquipmentSlot.FEET, entity.getItemBySlot(EquipmentSlot.FEET));
             this.entity.age = entity.getAge();
             this.entity.noClip = true;
 

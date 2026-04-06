@@ -6,13 +6,13 @@ import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.Axis;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.renderer.GameRenderer;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.lwjgl.opengl.GL11;
 
 public class Gizmo
@@ -99,7 +99,7 @@ public class Gizmo
         this.currentTransform = null;
     }
 
-    public void render(MatrixStack stack)
+    public void render(PoseStack stack)
     {
         if (BBSSettings.gizmos.get())
         {
@@ -111,7 +111,7 @@ public class Gizmo
         }
     }
 
-    private void drawAxes(MatrixStack stack, float axisSize, float axisOffset, float outlineSize, float outlineOffset)
+    private void drawAxes(PoseStack stack, float axisSize, float axisOffset, float outlineSize, float outlineOffset)
     {
         float scale = BBSSettings.axesScale.get();
         float thickness = BBSSettings.axesThickness.get();
@@ -121,9 +121,9 @@ public class Gizmo
         outlineSize *= scale;
         outlineOffset *= scale * thickness;
 
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        BufferBuilder builder;
 
-        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
         if (this.mode == Mode.ROTATE)
         {
@@ -187,12 +187,12 @@ public class Gizmo
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithGlobalProgram(builder.end());
 
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
 
-    public void renderStencil(MatrixStack stack, StencilMap map)
+    public void renderStencil(PoseStack stack, StencilMap map)
     {
         if (BBSSettings.gizmos.get())
         {
@@ -200,7 +200,7 @@ public class Gizmo
         }
     }
 
-    private void drawAxes(MatrixStack stack, StencilMap map, float axisSize, float axisOffset)
+    private void drawAxes(PoseStack stack, StencilMap map, float axisSize, float axisOffset)
     {
         float scale = BBSSettings.axesScale.get();
         float thickness = BBSSettings.axesThickness.get();
@@ -208,9 +208,9 @@ public class Gizmo
         axisSize *= scale;
         axisOffset *= scale * thickness;
 
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        BufferBuilder builder;
 
-        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
         if (this.mode == Mode.ROTATE)
         {
@@ -249,8 +249,8 @@ public class Gizmo
 
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         RenderSystem.disableDepthTest();
-
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+        RenderSystem.enableDepthTest();
     }
 
     public static enum Mode

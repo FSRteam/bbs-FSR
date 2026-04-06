@@ -24,12 +24,12 @@ import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.renderer.GameRenderer;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -900,8 +900,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.updateScrollSize();
 
         Area area = this.keyframes.graphArea;
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
-        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+        BufferBuilder builder;
+        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
 
         context.batcher.clip(area, context);
         this.renderElements(context, builder, matrix, area, this.elements, 0, this.getDopeSheetY());
@@ -1051,13 +1051,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int cc = Colors.setA(group.color, hover ? 1F : 0.45F);
 
         /* Render track bars (horizontal lines) */
-        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
         context.batcher.fillRect(builder, matrix, area.x, my - 1, area.w, 2, cc, cc, cc, cc);
 
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
     private void renderSheet(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int offset, int y)
@@ -1082,7 +1082,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int trackWidth = BBSSettings.editorTrackWidth.get();
 
         /* Render track bars (horizontal lines) */
-        builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
         context.batcher.fillRect(builder, matrix, area.x, my - trackWidth / 2, area.w, trackWidth, cc, cc, cc, cc);
 
@@ -1176,7 +1176,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
     private boolean isPoseTabArrowHit(UIContext context, int y, int labelWidth)
@@ -1212,8 +1212,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     {
         if (!this.elements.isEmpty())
         {
-            BufferBuilder builder = Tessellator.getInstance().getBuffer();
-            Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
+            BufferBuilder builder;
+            Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
 
             this.renderLabels(context, builder, matrix, this.elements, 0, this.getDopeSheetY());
         }

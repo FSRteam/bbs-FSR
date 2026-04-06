@@ -10,7 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +26,7 @@ public class UIParticleSettings extends UIElement
     {
         this.particle = new UIButton(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_PICK, (b) ->
         {
-            UIListOverlayPanel overlayPanel = new UIListOverlayPanel(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_TITLE, (l) -> this.setParticle(new Identifier(l)));
+            UIListOverlayPanel overlayPanel = new UIListOverlayPanel(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_TITLE, (l) -> this.setParticle(new ResourceLocation(l)));
             List<String> strings = new ArrayList<>();
 
             for (RegistryKey<ParticleType<?>> key : Registries.PARTICLE_TYPE.getKeys())
@@ -54,7 +54,7 @@ public class UIParticleSettings extends UIElement
         this.arguments.setText(settings.arguments);
     }
 
-    protected void setParticle(Identifier id)
+    protected void setParticle(ResourceLocation id)
     {
         this.settings.particle = id;
     }

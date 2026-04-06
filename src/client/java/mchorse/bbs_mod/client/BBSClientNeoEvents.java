@@ -7,8 +7,8 @@ import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.graphics.window.Window;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -85,18 +85,18 @@ public final class BBSClientNeoEvents
     {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES)
         {
-            MatrixStack stack = event.getPoseStack();
+            PoseStack stack = event.getPoseStack();
 
             if (stack == null)
             {
                 return;
             }
 
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
             BbsWorldRenderContext context = new BbsWorldRenderContext(
                 event.getCamera(),
                 stack,
-                mc.getBufferBuilders().getEntityVertexConsumers(),
+                mc.renderBuffers().bufferSource(),
                 resolveTickDelta(event.getPartialTick())
             );
 
@@ -159,7 +159,7 @@ public final class BBSClientNeoEvents
         BBSRendering.lastAction = event.getAction();
 
         BBSModClient.onEndKey(
-            MinecraftClient.getInstance().getWindow().getHandle(),
+            Minecraft.getInstance().getWindow().getHandle(),
             event.getKey(),
             event.getScanCode(),
             event.getAction(),
@@ -208,7 +208,14 @@ public final class BBSClientNeoEvents
         catch (Exception ignored)
         {}
 
-        return MinecraftClient.getInstance().getTickDelta();
+        try
+        {
+            return Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
+        }
+        catch (Exception ignored)
+        {}
+
+        return 0F;
     }
 
     private static boolean isClientLevel(Object level)

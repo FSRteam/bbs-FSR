@@ -41,7 +41,7 @@ public interface IUIElement
     public IUIElement keyPressed(UIContext context);
 
     /**
-     * Text was inputted
+     * Component was inputted
      */
     public IUIElement textInput(UIContext context);
 

@@ -8,15 +8,15 @@ import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIModelRenderer;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -62,9 +62,9 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
         this.emitter.setupCameraProperties(this.camera);
         this.emitter.rotation.identity();
 
-        MinecraftClient.getInstance().gameRenderer.getLightmapTextureManager().enable();
+        Minecraft.getInstance().gameRenderer.getLightmapTextureManager().enable();
 
-        MatrixStack stack = context.batcher.getContext().getMatrices();
+        PoseStack stack = context.batcher.getContext().getMatrices();
 
         stack.push();
         stack.loadIdentity();
@@ -72,7 +72,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
-        this.emitter.render(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, GameRenderer::getParticleProgram, stack, OverlayTexture.DEFAULT_UV, context.getTransition());
+        this.emitter.render(DefaultVertexFormat.POSITION_TEXTURE_COLOR_LIGHT, GameRenderer::getParticleProgram, stack, OverlayTexture.DEFAULT_UV, context.getTransition());
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();
 
@@ -88,29 +88,29 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
     private void renderPlane(UIContext context, float a, float b, float c, float d)
     {
-        Matrix4f matrix = context.batcher.getContext().getMatrices().peek().getPositionMatrix();
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+        BufferBuilder builder;
         final float alpha = 0.5F;
 
-        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
         this.calculate(0, 0, a, b, c, d);
-        builder.vertex(matrix, this.vector.x, this.vector.y, this.vector.z).color(0, 1, 0, alpha).next();
+        builder.addVertex(matrix, this.vector.x, this.vector.y, this.vector.z).setColor(0, 1, 0, alpha);
         this.calculate(0, 1, a, b, c, d);
-        builder.vertex(matrix, this.vector.x, this.vector.y, this.vector.z).color(0, 1, 0, alpha).next();
+        builder.addVertex(matrix, this.vector.x, this.vector.y, this.vector.z).setColor(0, 1, 0, alpha);
         this.calculate(1, 0, a, b, c, d);
-        builder.vertex(matrix, this.vector.x, this.vector.y, this.vector.z).color(0, 1, 0, alpha).next();
+        builder.addVertex(matrix, this.vector.x, this.vector.y, this.vector.z).setColor(0, 1, 0, alpha);
 
         this.calculate(1, 0, a, b, c, d);
-        builder.vertex(matrix, this.vector.x, this.vector.y, this.vector.z).color(0, 1, 0, alpha).next();
+        builder.addVertex(matrix, this.vector.x, this.vector.y, this.vector.z).setColor(0, 1, 0, alpha);
         this.calculate(0, 1, a, b, c, d);
-        builder.vertex(matrix, this.vector.x, this.vector.y, this.vector.z).color(0, 1, 0, alpha).next();
+        builder.addVertex(matrix, this.vector.x, this.vector.y, this.vector.z).setColor(0, 1, 0, alpha);
         this.calculate(1, 1, a, b, c, d);
-        builder.vertex(matrix, this.vector.x, this.vector.y, this.vector.z).color(0, 1, 0, alpha).next();
+        builder.addVertex(matrix, this.vector.x, this.vector.y, this.vector.z).setColor(0, 1, 0, alpha);
 
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         RenderSystem.disableCull();
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithGlobalProgram(builder.end());
         RenderSystem.enableCull();
     }
 

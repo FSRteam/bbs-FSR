@@ -20,7 +20,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.nbt.StringNbtReader;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 
@@ -67,7 +67,7 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
 
             try
             {
-                this.current.entity = id.isEmpty() ? null : new Identifier(id);
+                this.current.entity = id.isEmpty() ? null : new ResourceLocation(id);
             }
             catch (Exception e)
             {

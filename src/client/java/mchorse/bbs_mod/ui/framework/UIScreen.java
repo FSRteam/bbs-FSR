@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.framework;
 
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.importers.IImportPathProvider;
 import mchorse.bbs_mod.importers.ImporterContext;
 import mchorse.bbs_mod.importers.Importers;
@@ -10,11 +11,10 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.utils.IFileDropListener;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.FFMpegUtils;
-import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
@@ -31,12 +31,12 @@ public class UIScreen extends Screen implements IFileDropListener
 
     public static void open(UIBaseMenu menu)
     {
-        MinecraftClient.getInstance().setScreen(new UIScreen(Text.empty(), menu));
+        Minecraft.getInstance().setScreen(new UIScreen(Component.empty(), menu));
     }
 
     public static UIBaseMenu getCurrentMenu()
     {
-        Screen currentScreen = MinecraftClient.getInstance().currentScreen;
+        Screen currentScreen = Minecraft.getInstance().screen;
 
         if (currentScreen instanceof UIScreen uiScreen)
         {
@@ -46,14 +46,14 @@ public class UIScreen extends Screen implements IFileDropListener
         return null;
     }
 
-    public UIScreen(Text title, UIBaseMenu menu)
+    public UIScreen(Component title, UIBaseMenu menu)
     {
         super(title);
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
         this.menu = menu;
-        this.context = new UIRenderingContext(new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers()));
+        this.context = new UIRenderingContext(new GuiGraphics(mc, mc.renderBuffers().bufferSource()));
 
         this.menu.context.setup(this.context);
     }
@@ -74,9 +74,9 @@ public class UIScreen extends Screen implements IFileDropListener
     }
 
     @Override
-    public void filesDragged(List<Path> paths)
+    public void onFilesDrop(List<Path> paths)
     {
-        super.filesDragged(paths);
+        super.onFilesDrop(paths);
 
         String[] filePaths = new String[paths.size()];
         int i = 0;
@@ -94,8 +94,10 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public void removed()
     {
-        MinecraftClient.getInstance().options.getGuiScale().setValue(this.lastGuiScale);
-        MinecraftClient.getInstance().onResolutionChanged();
+        Minecraft mc = Minecraft.getInstance();
+
+        mc.options.guiScale().set(this.lastGuiScale);
+        mc.resizeDisplay();
 
         super.removed();
 
@@ -103,30 +105,32 @@ public class UIScreen extends Screen implements IFileDropListener
 
         if (this.menu.canHideHUD())
         {
-            MinecraftClient.getInstance().options.hudHidden = false;
+            mc.options.hideGui = false;
         }
     }
 
     @Override
-    public void onDisplayed()
+    public void added()
     {
-        this.lastGuiScale = MinecraftClient.getInstance().options.getGuiScale().getValue();
+        Minecraft mc = Minecraft.getInstance();
 
-        MinecraftClient.getInstance().options.getGuiScale().setValue(BBSModClient.getGUIScale());
-        MinecraftClient.getInstance().onResolutionChanged();
+        this.lastGuiScale = mc.options.guiScale().get();
 
-        super.onDisplayed();
+        mc.options.guiScale().set(BBSModClient.getGUIScale());
+        mc.resizeDisplay();
+
+        super.added();
 
         this.menu.onOpen(null);
 
         if (this.menu.canHideHUD())
         {
-            MinecraftClient.getInstance().options.hudHidden = true;
+            mc.options.hideGui = true;
         }
     }
 
     @Override
-    public boolean shouldPause()
+    public boolean isPauseScreen()
     {
         return this.menu.canPause();
     }
@@ -140,7 +144,7 @@ public class UIScreen extends Screen implements IFileDropListener
     }
 
     @Override
-    public void resize(MinecraftClient client, int width, int height)
+    public void resize(Minecraft client, int width, int height)
     {
         super.resize(client, width, height);
 
@@ -186,15 +190,16 @@ public class UIScreen extends Screen implements IFileDropListener
     }
 
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta)
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta)
     {}
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta)
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta)
     {
         super.render(context, mouseX, mouseY, delta);
 
-        this.menu.context.setTransition(this.client.getTickDelta());
+        this.context.setContext(context);
+        this.menu.context.setTransition(delta);
         this.menu.renderMenu(this.context, mouseX, mouseY);
         this.menu.context.render.executeRunnables();
     }

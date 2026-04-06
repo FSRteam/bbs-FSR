@@ -18,16 +18,16 @@ import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.GameRenderer;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector4f;
@@ -51,7 +51,7 @@ public class Recorder extends WorldFilmController
     public int countdown;
     public final int initialTick;
 
-    public static void renderCameraPreview(Position position, Camera camera, MatrixStack stack)
+    public static void renderCameraPreview(Position position, Camera camera, PoseStack stack)
     {
         if (!BBSSettings.recordingOverlays.get())
         {
@@ -60,9 +60,9 @@ public class Recorder extends WorldFilmController
 
         Vector4f vector = Vectors.TEMP_4F;
         Matrix4f matrix = Matrices.TEMP_4F;
-        float x = (float) (position.point.x - camera.getPos().x);
-        float y = (float) (position.point.y - camera.getPos().y);
-        float z = (float) (position.point.z - camera.getPos().z);
+        float x = (float) (position.point.x - camera.getPosition().x);
+        float y = (float) (position.point.y - camera.getPosition().y);
+        float z = (float) (position.point.z - camera.getPosition().z);
         float fov = MathUtils.toRad(position.angle.fov);
         float aspect = BBSRendering.getVideoWidth() / (float) BBSRendering.getVideoHeight();
         float thickness = 0.025F;
@@ -73,10 +73,9 @@ public class Recorder extends WorldFilmController
             .rotateY(MathUtils.toRad(position.angle.yaw + 180))
             .rotateX(MathUtils.toRad(-position.angle.pitch));
 
-        BufferBuilder builder = Tessellator.getInstance().getBuffer();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
 
         transformFrustum(vector, matrix, 1F, 1F);
         Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 1F, 1F, 1F, 1F);
@@ -93,7 +92,7 @@ public class Recorder extends WorldFilmController
         transformFrustum(vector, matrix, 0F, 0F);
         Draw.fillBoxTo(builder, stack, x, y, z, x + vector.x, y + vector.y, z + vector.z, thickness, 0F, 0.5F, 1F, 1F);
 
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
 
         RenderSystem.disableDepthTest();
     }
@@ -133,16 +132,16 @@ public class Recorder extends WorldFilmController
             return;
         }
 
-        ClientPlayerEntity player = MinecraftClient.getInstance().player;
+        LocalPlayer player = Minecraft.getInstance().player;
 
         if (this.lastPosition == null)
         {
             this.lastPosition = new Vector3d(player.getX(), player.getY(), player.getZ());
-            this.lastRotation = new Vector4f(player.getYaw(), player.getPitch(), player.getHeadYaw(), player.getBodyYaw());
+            this.lastRotation = new Vector4f(player.getYRot(), player.getXRot(), player.getYHeadRot(), player.getYBodyRot());
             this.inventory.fromPlayer(player);
 
             this.hp = player.getHealth();
-            this.hunger = player.getHungerManager().getFoodLevel();
+            this.hunger = player.getFoodData().getFoodLevel();
             this.xpLevel = player.experienceLevel;
             this.xpProgress = player.experienceProgress;
         }

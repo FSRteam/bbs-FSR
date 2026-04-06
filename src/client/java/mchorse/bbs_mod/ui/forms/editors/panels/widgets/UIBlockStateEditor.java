@@ -11,7 +11,7 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.client.util.math.MatrixStack;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.item.ItemStack;
 
 import java.util.function.Consumer;
@@ -79,7 +79,7 @@ public class UIBlockStateEditor extends UIElement
 
         if (!stack.isEmpty())
         {
-            MatrixStack matrices = context.batcher.getContext().getMatrices();
+            PoseStack matrices = context.batcher.getContext().getMatrices();
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
             matrices.push();

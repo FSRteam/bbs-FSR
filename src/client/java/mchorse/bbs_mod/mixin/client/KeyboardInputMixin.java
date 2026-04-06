@@ -5,7 +5,7 @@ import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
-import net.minecraft.client.input.KeyboardInput;
+import net.minecraft.client.player.KeyboardInput;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +20,7 @@ public class KeyboardInputMixin
      * MovementInputUpdateEvent does not expose slowDown/slowDownFactor parity,
      * so tick(...) override stays as the temporary compatibility layer.
      */
-    private static float getMovementMultiplier(boolean positive, boolean negative)
+    private static float getMovementImpulse(boolean positive, boolean negative)
     {
         return positive == negative ? 0F : (positive ? 1F : -1F);
     }
@@ -37,19 +37,19 @@ public class KeyboardInputMixin
         ) {
             KeyboardInput input = (KeyboardInput) (Object) this;
 
-            input.pressingForward = Window.isKeyPressed(GLFW.GLFW_KEY_W);
-            input.pressingBack = Window.isKeyPressed(GLFW.GLFW_KEY_S);
-            input.pressingLeft = Window.isKeyPressed(GLFW.GLFW_KEY_A);
-            input.pressingRight = Window.isKeyPressed(GLFW.GLFW_KEY_D);
-            input.movementForward = getMovementMultiplier(input.pressingForward, input.pressingBack);
-            input.movementSideways = getMovementMultiplier(input.pressingLeft, input.pressingRight);
+            input.up = Window.isKeyPressed(GLFW.GLFW_KEY_W);
+            input.down = Window.isKeyPressed(GLFW.GLFW_KEY_S);
+            input.left = Window.isKeyPressed(GLFW.GLFW_KEY_A);
+            input.right = Window.isKeyPressed(GLFW.GLFW_KEY_D);
+            input.forwardImpulse = getMovementImpulse(input.up, input.down);
+            input.leftImpulse = getMovementImpulse(input.left, input.right);
             input.jumping = Window.isKeyPressed(GLFW.GLFW_KEY_SPACE);
-            input.sneaking = Window.isKeyPressed(GLFW.GLFW_KEY_LEFT_SHIFT);
+            input.shiftKeyDown = Window.isKeyPressed(GLFW.GLFW_KEY_LEFT_SHIFT);
 
             if (slowDown)
             {
-                input.movementSideways *= slowDownFactor;
-                input.movementForward *= slowDownFactor;
+                input.leftImpulse *= slowDownFactor;
+                input.forwardImpulse *= slowDownFactor;
             }
         }
     }

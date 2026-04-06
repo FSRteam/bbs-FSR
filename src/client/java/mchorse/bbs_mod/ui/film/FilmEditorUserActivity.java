@@ -1,9 +1,9 @@
 package mchorse.bbs_mod.ui.film;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.InputUtil;
+import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -38,9 +38,9 @@ public final class FilmEditorUserActivity
     /**
      * @return {@code true} if the non-AFK timer should accumulate the elapsed real-time delta for this frame.
      */
-    public boolean shouldAccumulateActiveTime(MinecraftClient mc, UIContext context, long nowMs)
+    public boolean shouldAccumulateActiveTime(Minecraft mc, UIContext context, long nowMs)
     {
-        if (!mc.isWindowFocused() || mc.isPaused())
+        if (!mc.isWindowActive() || mc.isPaused())
         {
             return false;
         }
@@ -53,7 +53,7 @@ public final class FilmEditorUserActivity
         return nowMs - this.lastActivityMs < AFK_IDLE_MS;
     }
 
-    private boolean detectActivity(MinecraftClient mc, UIContext context)
+    private boolean detectActivity(Minecraft mc, UIContext context)
     {
         if (context.mouseX != this.lastMouseX || context.mouseY != this.lastMouseY)
         {
@@ -84,7 +84,7 @@ public final class FilmEditorUserActivity
 
         for (int key = GLFW.GLFW_KEY_SPACE; key <= GLFW.GLFW_KEY_LAST; key++)
         {
-            if (key != GLFW.GLFW_KEY_UNKNOWN && InputUtil.isKeyPressed(handle, key))
+            if (key != GLFW.GLFW_KEY_UNKNOWN && InputConstants.isKeyDown(handle, key))
             {
                 return true;
             }

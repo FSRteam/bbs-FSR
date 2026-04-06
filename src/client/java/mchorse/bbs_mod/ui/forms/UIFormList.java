@@ -19,7 +19,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.client.render.DiffuseLighting;
+import net.minecraft.client.renderer.DiffuseLighting;
 
 import java.util.ArrayList;
 import java.util.List;

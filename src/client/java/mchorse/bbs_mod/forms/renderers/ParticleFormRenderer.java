@@ -12,13 +12,13 @@ import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.renderer.GameRenderer;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.level.Level;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -44,7 +44,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
         return this.emitter;
     }
 
-    public void ensureEmitter(World world, float transition)
+    public void ensureEmitter(Level world, float transition)
     {
         if (this.lastParticleUpdate < lastUpdate)
         {
@@ -82,16 +82,16 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        this.ensureEmitter(MinecraftClient.getInstance().world, context.getTransition());
+        this.ensureEmitter(Minecraft.getInstance().world, context.getTransition());
 
         ParticleEmitter emitter = this.emitter;
 
         if (emitter != null)
         {
-            MatrixStack stack = context.batcher.getContext().getMatrices();
+            PoseStack stack = context.batcher.getContext().getMatrices();
             int scale = (y2 - y1) / 2;
 
-            stack.push();
+            stack.pushPose();
             stack.translate((x2 + x1) / 2, (y2 + y1) / 2, 40);
             MatrixStackUtils.scaleStack(stack, scale, scale, scale);
 
@@ -100,14 +100,14 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             emitter.rotation.identity();
             emitter.renderUI(stack, context.getTransition());
 
-            stack.pop();
+            stack.popPose();
         }
     }
 
     @Override
     public void render3D(FormRenderingContext context)
     {
-        this.ensureEmitter(MinecraftClient.getInstance().world, context.transition);
+        this.ensureEmitter(Minecraft.getInstance().world, context.transition);
 
         ParticleEmitter emitter = this.emitter;
 
@@ -126,19 +126,19 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             Matrix4f matrix = new Matrix4f(RenderSystem.getInverseViewRotationMatrix());
 
-            matrix.mul(context.stack.peek().getPositionMatrix());
+            matrix.mul(context.stack.last().pose());
 
             Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
             translation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
 
-            GameRenderer gameRenderer = MinecraftClient.getInstance().gameRenderer;
+            GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
             gameRenderer.getLightmapTextureManager().enable();
             gameRenderer.getOverlayTexture().setupOverlayColor();
 
-            context.stack.push();
-            context.stack.loadIdentity();
-            context.stack.multiplyPositionMatrix(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
+            context.stack.pushPose();
+            context.stack.setIdentity();
+            context.stack.mulPose(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
 
             emitter.lastGlobal.set(translation);
             emitter.rotation.set(matrix);
@@ -147,16 +147,16 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             {
                 boolean shadersEnabled = BBSRendering.isIrisShadersEnabled();
 
-                VertexFormat format = shadersEnabled ? VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : VertexFormats.POSITION_TEXTURE_COLOR_LIGHT;
-                Supplier<ShaderProgram> shader = shadersEnabled
-                    ? this.getShader(context, GameRenderer::getRenderTypeEntityTranslucentProgram, BBSShaders::getPickerBillboardProgram)
+                VertexFormat format = shadersEnabled ? DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : DefaultVertexFormat.POSITION_TEXTURE_COLOR_LIGHT;
+                Supplier<ShaderInstance> shader = shadersEnabled
+                    ? this.getShader(context, GameRenderer::getRendertypeEntityTranslucentShader, BBSShaders::getPickerBillboardProgram)
                     : this.getShader(context, GameRenderer::getParticleProgram, BBSShaders::getPickerParticlesProgram);
 
                 emitter.setupCameraProperties(context.camera);
                 emitter.render(format, shader, context.stack, context.overlay, context.getTransition());
             }
 
-            context.stack.pop();
+            context.stack.popPose();
 
             gameRenderer.getLightmapTextureManager().disable();
             gameRenderer.getOverlayTexture().teardownOverlayColor();

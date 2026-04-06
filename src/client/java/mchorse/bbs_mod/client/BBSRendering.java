@@ -31,13 +31,13 @@ import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.WindowFramebuffer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.util.Window;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.gui.GuiGraphics;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.platform.Window;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.lwjgl.opengl.GL11;
 import org.slf4j.Logger;
 
@@ -219,7 +219,7 @@ public class BBSRendering
 
     public static void setupFramebuffer()
     {
-        Window window = MinecraftClient.getInstance().getWindow();
+        Window window = Minecraft.getInstance().getWindow();
 
         framebuffer = new WindowFramebuffer(window.getFramebufferWidth(), window.getFramebufferHeight());
     }
@@ -227,14 +227,14 @@ public class BBSRendering
     public static void resizeExtraFramebuffers()
     {
         Set<Framebuffer> buffers = new HashSet<>();
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
-        buffers.add(mc.worldRenderer.getEntityOutlinesFramebuffer());
-        buffers.add(mc.worldRenderer.getTranslucentFramebuffer());
-        buffers.add(mc.worldRenderer.getEntityFramebuffer());
-        buffers.add(mc.worldRenderer.getParticlesFramebuffer());
-        buffers.add(mc.worldRenderer.getWeatherFramebuffer());
-        buffers.add(mc.worldRenderer.getCloudsFramebuffer());
+        buffers.add(mc.levelRenderer.getEntityOutlinesFramebuffer());
+        buffers.add(mc.levelRenderer.getTranslucentFramebuffer());
+        buffers.add(mc.levelRenderer.getEntityFramebuffer());
+        buffers.add(mc.levelRenderer.getParticlesFramebuffer());
+        buffers.add(mc.levelRenderer.getWeatherFramebuffer());
+        buffers.add(mc.levelRenderer.getCloudsFramebuffer());
 
         for (Framebuffer buffer : buffers)
         {
@@ -249,7 +249,7 @@ public class BBSRendering
             return;
         }
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         int w = mc.getWindow().getFramebufferWidth();
         int h = mc.getWindow().getFramebufferHeight();
 
@@ -258,7 +258,7 @@ public class BBSRendering
             return;
         }
 
-        framebuffer.resize(w, h, MinecraftClient.IS_SYSTEM_MAC);
+        framebuffer.resize(w, h, Minecraft.ON_OSX);
     }
 
     public static void toggleFramebuffer(boolean toggleFramebuffer)
@@ -268,7 +268,7 @@ public class BBSRendering
             return;
         }
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         Window window = mc.getWindow();
 
         BBSRendering.toggleFramebuffer = toggleFramebuffer;
@@ -282,10 +282,10 @@ public class BBSRendering
 
             if (framebuffer.textureWidth != w || framebuffer.textureHeight != h)
             {
-                framebuffer.resize(w, h, MinecraftClient.IS_SYSTEM_MAC);
+                framebuffer.resize(w, h, Minecraft.ON_OSX);
             }
 
-            clientFramebuffer = mc.getFramebuffer();
+            clientFramebuffer = mc.getMainRenderTarget();
 
             reassignFramebuffer(framebuffer);
 
@@ -297,7 +297,7 @@ public class BBSRendering
             int drawH = window.getFramebufferHeight();
             reassignFramebuffer(clientFramebuffer);
 
-            mc.getFramebuffer().beginWrite(true);
+            mc.getMainRenderTarget().beginWrite(true);
 
             if (width != 0)
             {
@@ -316,21 +316,21 @@ public class BBSRendering
 
     private static void reassignFramebuffer(Framebuffer framebuffer)
     {
-        MinecraftClient.getInstance().framebuffer = framebuffer;
+        Minecraft.getInstance().mainRenderTarget = framebuffer;
     }
 
     /* Rendering */
 
     public static void onWorldRenderBegin()
     {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        BBSModClient.getFilms().startRenderFrame(mc.getTickDelta());
+        Minecraft mc = Minecraft.getInstance();
+        BBSModClient.getFilms().startRenderFrame(getTickDelta(mc));
 
         UIBaseMenu menu = UIScreen.getCurrentMenu();
 
         if (menu != null)
         {
-            menu.startRenderFrame(mc.getTickDelta());
+            menu.startRenderFrame(getTickDelta(mc));
         }
 
         renderingWorld = true;
@@ -345,11 +345,11 @@ public class BBSRendering
 
     public static void onWorldRenderEnd()
     {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
         if (BBSModClient.getCameraController().getCurrent() instanceof PlayCameraController controller)
         {
-            DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
+            GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
             Batcher2D batcher = new Batcher2D(drawContext);
 
             UISubtitleRenderer.renderSubtitles(batcher.getContext().getMatrices(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
@@ -390,7 +390,7 @@ public class BBSRendering
         {
             Runnable action = pendingExportResolutionAction;
             pendingExportResolutionAction = null;
-            MinecraftClient.getInstance().execute(action);
+            Minecraft.getInstance().execute(action);
         }
     }
 
@@ -399,22 +399,22 @@ public class BBSRendering
         pendingExportResolutionAction = action;
     }
 
-    public static void onRenderChunkLayer(MatrixStack stack)
+    public static void onRenderChunkLayer(PoseStack stack)
     {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
         if (isIrisShadersEnabled())
         {
             renderCoolStuff(new BbsWorldRenderContext(
                 mc.gameRenderer.getCamera(),
                 stack,
-                mc.getBufferBuilders().getEntityVertexConsumers(),
-                mc.getTickDelta()
+                mc.renderBuffers().bufferSource(),
+                getTickDelta(mc)
             ));
         }
     }
 
-    public static void renderHud(DrawContext drawContext, float tickDelta)
+    public static void renderHud(GuiGraphics drawContext, float tickDelta)
     {
         Batcher2D batcher2D = new Batcher2D(drawContext);
         VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
@@ -441,7 +441,7 @@ public class BBSRendering
 
     public static void renderCoolStuff(IBbsWorldRenderContext worldRenderContext)
     {
-        if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
+        if (Minecraft.getInstance().screen instanceof UIScreen screen)
         {
             screen.renderInWorld(worldRenderContext);
         }
@@ -543,7 +543,7 @@ public class BBSRendering
 
     public static Long getTimeOfDay()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isOnThread())
         {
             return null;
         }
@@ -564,7 +564,7 @@ public class BBSRendering
 
     public static Double getBrightness()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isOnThread())
         {
             return null;
         }
@@ -585,7 +585,7 @@ public class BBSRendering
 
     public static Double getWeather()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isOnThread())
         {
             return null;
         }
@@ -606,7 +606,7 @@ public class BBSRendering
 
     public static Integer getChromaSkyColorArgb()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isOnThread())
         {
             return null;
         }
@@ -632,5 +632,17 @@ public class BBSRendering
         }
 
         return (b) -> new RecolorVertexConsumer(b, color);
+    }
+
+    private static float getTickDelta(Minecraft mc)
+    {
+        try
+        {
+            return mc.getTimer().getGameTimeDeltaPartialTick(false);
+        }
+        catch (Exception ignored)
+        {}
+
+        return 0F;
     }
 }

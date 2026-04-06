@@ -9,18 +9,18 @@ import mchorse.bbs_mod.obj.shapes.ShapeKeys;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import net.minecraft.client.renderer.LightTexture;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 
 public class CubicVAORenderer extends CubicCubeRenderer
 {
-    private ShaderProgram program;
+    private ShaderInstance program;
     private ModelInstance model;
 
-    public CubicVAORenderer(ShaderProgram program, ModelInstance model, int light, int overlay, StencilMap stencilMap, ShapeKeys shapeKeys)
+    public CubicVAORenderer(ShaderInstance program, ModelInstance model, int light, int overlay, StencilMap stencilMap, ShapeKeys shapeKeys)
     {
         super(light, overlay, stencilMap, shapeKeys);
 
@@ -29,7 +29,7 @@ public class CubicVAORenderer extends CubicCubeRenderer
     }
 
     @Override
-    public boolean renderGroup(BufferBuilder builder, MatrixStack stack, ModelGroup group, Model model)
+    public boolean renderGroup(BufferBuilder builder, PoseStack stack, ModelGroup group, Model model)
     {
         ModelVAO modelVAO = this.model.getVaos().get(group);
 
@@ -47,7 +47,7 @@ public class CubicVAORenderer extends CubicCubeRenderer
             }
             else
             {
-                int u = (int) Lerps.lerp(light & '\uffff', LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE, MathUtils.clamp(group.lighting, 0F, 1F));
+                int u = (int) Lerps.lerp(light & '\uffff', LightTexture.MAX_BLOCK_LIGHT_COORDINATE, MathUtils.clamp(group.lighting, 0F, 1F));
                 int v = light >> 16 & '\uffff';
 
                 light = u | v << 16;

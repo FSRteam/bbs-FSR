@@ -1,20 +1,19 @@
 package mchorse.bbs_mod.mixin.client;
 
-import com.mojang.blaze3d.systems.VertexSorter;
+import com.mojang.blaze3d.vertex.MeshData;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.renderer.RenderType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(RenderLayer.class)
+@Mixin(RenderType.class)
 public class RenderLayerMixin
 {
-    @Inject(method = "draw", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/RenderLayer;startDrawing()V", ordinal = 0, shift = At.Shift.AFTER))
-    public void onDraw(BufferBuilder buffer, VertexSorter sorter, CallbackInfo info)
+    @Inject(method = "draw", at = @At("HEAD"))
+    public void onDraw(MeshData meshData, CallbackInfo info)
     {
-        CustomVertexConsumerProvider.drawLayer((RenderLayer) (Object) this);
+        CustomVertexConsumerProvider.drawLayer((RenderType) (Object) this);
     }
 }

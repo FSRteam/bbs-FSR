@@ -2,24 +2,24 @@ package mchorse.bbs_mod.forms;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import net.minecraft.client.renderer.RenderType;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.renderer.MultiBufferSource;
 import org.lwjgl.opengl.GL11;
 
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-public class CustomVertexConsumerProvider extends VertexConsumerProvider.Immediate
+public class CustomVertexConsumerProvider extends MultiBufferSource.Immediate
 {
-    private static Consumer<RenderLayer> runnables;
+    private static Consumer<RenderType> runnables;
 
     private Function<VertexConsumer, VertexConsumer> substitute;
     private boolean ui;
 
-    public static void drawLayer(RenderLayer layer)
+    public static void drawLayer(RenderType layer)
     {
         if (runnables != null)
         {
@@ -27,7 +27,7 @@ public class CustomVertexConsumerProvider extends VertexConsumerProvider.Immedia
         }
     }
 
-    public static void hijackVertexFormat(Consumer<RenderLayer> runnable)
+    public static void hijackVertexFormat(Consumer<RenderType> runnable)
     {
         runnables = runnable;
     }
@@ -37,7 +37,7 @@ public class CustomVertexConsumerProvider extends VertexConsumerProvider.Immedia
         runnables = null;
     }
 
-    public CustomVertexConsumerProvider(BufferBuilder fallback, Map<RenderLayer, BufferBuilder> layers)
+    public CustomVertexConsumerProvider(BufferBuilder fallback, Map<RenderType, BufferBuilder> layers)
     {
         super(fallback, layers);
     }
@@ -58,7 +58,7 @@ public class CustomVertexConsumerProvider extends VertexConsumerProvider.Immedia
     }
 
     @Override
-    public VertexConsumer getBuffer(RenderLayer renderLayer)
+    public VertexConsumer getBuffer(RenderType renderLayer)
     {
         VertexConsumer buffer = super.getBuffer(renderLayer);
 

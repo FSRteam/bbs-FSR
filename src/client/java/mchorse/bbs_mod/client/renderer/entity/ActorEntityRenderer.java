@@ -6,24 +6,24 @@ import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.EntityRenderer;
-import net.minecraft.client.render.entity.EntityRendererFactory;
-import net.minecraft.client.render.entity.LivingEntityRenderer;
-import net.minecraft.client.render.entity.model.ArmorEntityModel;
-import net.minecraft.client.render.entity.model.EntityModelLayers;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.model.ArmorEntityModel;
+import net.minecraft.client.renderer.entity.model.EntityModelLayers;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.entity.EntityPose;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
+import com.mojang.math.Axis;
 
 public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
 {
     public static ArmorRenderer armorRenderer;
 
-    public ActorEntityRenderer(EntityRendererFactory.Context ctx)
+    public ActorEntityRenderer(EntityRendererProvider.Context ctx)
     {
         super(ctx);
 
@@ -37,18 +37,18 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
     }
 
     @Override
-    public Identifier getTexture(ActorEntity entity)
+    public ResourceLocation getTextureLocation(ActorEntity entity)
     {
-        return new Identifier("minecraft:textures/entity/player/wide/steve.png");
+        return new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
     }
 
     @Override
-    public void render(ActorEntity livingEntity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)
+    public void render(ActorEntity livingEntity, float yaw, float tickDelta, PoseStack matrices, MultiBufferSource vertexConsumers, int light)
     {
-        matrices.push();
+        matrices.pushPose();
 
         float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, livingEntity.prevBodyYaw, livingEntity.bodyYaw);
-        int overlay = LivingEntityRenderer.getOverlay(livingEntity, 0F);
+        int overlay = LivingEntityRenderer.getOverlayCoords(livingEntity, 0F);
 
         this.setupTransforms(livingEntity, matrices, bodyYaw, tickDelta);
 
@@ -56,11 +56,11 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         RenderSystem.enableDepthTest();
         FormUtilsClient.render(livingEntity.getForm(), new FormRenderingContext()
             .set(FormRenderType.ENTITY, livingEntity.getEntity(), matrices, light, overlay, tickDelta)
-            .camera(MinecraftClient.getInstance().gameRenderer.getCamera()));
+            .camera(Minecraft.getInstance().gameRenderer.getCamera()));
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();
 
-        matrices.pop();
+        matrices.popPose();
 
         super.render(livingEntity, yaw, tickDelta, matrices, vertexConsumers, light);
     }
@@ -70,18 +70,18 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         return !entity.isInvisible();
     }
 
-    protected void setupTransforms(ActorEntity entity, MatrixStack matrices, float bodyYaw, float tickDelta)
+    protected void setupTransforms(ActorEntity entity, PoseStack matrices, float bodyYaw, float tickDelta)
     {
         if (!entity.isInPose(EntityPose.SLEEPING))
         {
-            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
+            matrices.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
         }
 
         if (entity.deathTime > 0)
         {
             float deathAngle = (entity.deathTime + tickDelta - 1F) / 20F * 1.6F;
 
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(Math.min(MathHelper.sqrt(deathAngle), 1F) * 90F));
+            matrices.mulPose(Axis.ZP.rotationDegrees(Math.min(MathHelper.sqrt(deathAngle), 1F) * 90F));
         }
     }
 }

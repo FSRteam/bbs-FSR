@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.client.rendering.context;
 
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.MultiBufferSource;
+import com.mojang.blaze3d.vertex.PoseStack;
 
 /**
  * Minimal world render context contract.
@@ -11,9 +11,9 @@ public interface IBbsWorldRenderContext
 {
     Camera camera();
 
-    MatrixStack matrixStack();
+    PoseStack matrixStack();
 
-    VertexConsumerProvider.Immediate consumers();
+    MultiBufferSource.BufferSource consumers();
 
     float tickDelta();
 }

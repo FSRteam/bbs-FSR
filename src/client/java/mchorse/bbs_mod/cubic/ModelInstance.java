@@ -29,14 +29,14 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.resources.LinkUtils;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -236,7 +236,7 @@ public class ModelInstance implements IModelInstance
     {
         if (this.model instanceof BOBJModel model)
         {
-            MinecraftClient.getInstance().execute(model::setup);
+            Minecraft.getInstance().execute(model::setup);
         }
 
         /* VAOs should be only generated if there are no shape keys */
@@ -247,9 +247,9 @@ public class ModelInstance implements IModelInstance
 
         if (this.model instanceof Model model && !this.onCpu)
         {
-            MinecraftClient.getInstance().execute(() ->
+            Minecraft.getInstance().execute(() ->
             {
-                CubicRenderer.processRenderModel(new CubicVAOBuilderRenderer(this.vaos), null, new MatrixStack(), model);
+                CubicRenderer.processRenderModel(new CubicVAOBuilderRenderer(this.vaos), null, new PoseStack(), model);
             });
         }
     }
@@ -293,7 +293,7 @@ public class ModelInstance implements IModelInstance
     {
         if (this.model instanceof Model model)
         {
-            MatrixStack stack = new MatrixStack();
+            PoseStack stack = new PoseStack();
             CubicMatrixRenderer renderer = new CubicMatrixRenderer(model);
 
             CubicRenderer.processRenderModel(renderer, null, stack, model);
@@ -334,7 +334,7 @@ public class ModelInstance implements IModelInstance
         }
     }
 
-    public void render(MatrixStack stack, Supplier<ShaderProgram> program, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys)
+    public void render(PoseStack stack, Supplier<ShaderInstance> program, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys)
     {
         if (this.model instanceof Model model)
         {
@@ -353,11 +353,11 @@ public class ModelInstance implements IModelInstance
             {
                 RenderSystem.setShader(program);
 
-                BufferBuilder builder = Tessellator.getInstance().getBuffer();
+                BufferBuilder builder;
 
-                builder.begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
+                builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
-                BufferRenderer.drawWithGlobalProgram(builder.end());
+                BufferUploader.drawWithGlobalProgram(builder.end());
             }
         }
         else if (this.model instanceof BOBJModel model)

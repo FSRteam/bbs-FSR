@@ -12,13 +12,13 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Camera;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.particle.ParticleTypes;
-import net.minecraft.registry.Registries;
-import net.minecraft.world.World;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.Level;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
@@ -61,29 +61,29 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     {
         super.render3D(context);
 
-        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        Camera camera = Minecraft.getInstance().gameRenderer.getCamera();
         Matrix4f matrix = new Matrix4f(RenderSystem.getInverseViewRotationMatrix());
 
-        matrix.mul(context.stack.peek().getPositionMatrix());
+        matrix.mul(context.stack.last().pose());
 
         Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
 
         translation.add(camera.getPos().x, camera.getPos().y, camera.getPos().z);
-        context.stack.push();
-        context.stack.loadIdentity();
-        context.stack.multiplyPositionMatrix(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
+        context.stack.pushPose();
+        context.stack.setIdentity();
+        context.stack.mulPose(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
 
         this.pos.set(translation);
         this.vel.set(0F, 0F, 1F);
         this.rot.set(matrix).transform(this.vel);
 
-        context.stack.pop();
+        context.stack.popPose();
     }
 
     @Override
     public void tick(IEntity entity)
     {
-        World world = entity.getWorld();
+        Level world = entity.getWorld();
         boolean paused = this.form.paused.get();
         Vector3f temp3f = new Vector3f();
 
@@ -98,7 +98,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                 Matrix3f m = Matrices.TEMP_3F;
                 Vector3f v = Vectors.TEMP_3F;
                 ParticleSettings settings = this.form.settings.get();
-                ParticleType type = Registries.PARTICLE_TYPE.get(settings.particle);
+                ParticleType type = BuiltInRegistries.PARTICLE_TYPE.get(settings.particle);
                 ParticleEffect effect = ParticleTypes.FLAME;
 
                 try

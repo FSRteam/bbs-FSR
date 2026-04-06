@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.client.rendering.context;
 
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.MultiBufferSource;
+import com.mojang.blaze3d.vertex.PoseStack;
 
 import java.util.Objects;
 
@@ -12,14 +12,14 @@ import java.util.Objects;
 public final class BbsWorldRenderContext implements IBbsWorldRenderContext
 {
     private final Camera camera;
-    private final MatrixStack matrixStack;
-    private final VertexConsumerProvider.Immediate consumers;
+    private final PoseStack matrixStack;
+    private final MultiBufferSource.BufferSource consumers;
     private final float tickDelta;
 
     public BbsWorldRenderContext(
         Camera camera,
-        MatrixStack matrixStack,
-        VertexConsumerProvider.Immediate consumers,
+        PoseStack matrixStack,
+        MultiBufferSource.BufferSource consumers,
         float tickDelta
     )
     {
@@ -36,13 +36,13 @@ public final class BbsWorldRenderContext implements IBbsWorldRenderContext
     }
 
     @Override
-    public MatrixStack matrixStack()
+    public PoseStack matrixStack()
     {
         return this.matrixStack;
     }
 
     @Override
-    public VertexConsumerProvider.Immediate consumers()
+    public MultiBufferSource.BufferSource consumers()
     {
         return this.consumers;
     }

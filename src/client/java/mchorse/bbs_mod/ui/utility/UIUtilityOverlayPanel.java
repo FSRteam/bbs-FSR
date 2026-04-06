@@ -26,8 +26,8 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.resources.CDNAssetSyncService;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.Window;
+import com.mojang.blaze3d.platform.Window;
+import net.minecraft.client.Minecraft;
 
 import java.io.File;
 import java.util.Arrays;
@@ -47,7 +47,7 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
     {
         super(title);
 
-        this.window = MinecraftClient.getInstance().getWindow();
+        this.window = Minecraft.getInstance().getWindow();
         this.callback = callback;
 
         this.view = UI.scrollView(5, 10, 140);
@@ -126,7 +126,7 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
                 {
                     CDNAssetSyncService syncService = new CDNAssetSyncService(BBSSettings.cdnUrl.get(), BBSMod.getAssetsFolder().toPath(), (p) ->
                     {
-                        MinecraftClient.getInstance().execute(() -> panel.list.add(new Pair<>(p.a.color, p.b)));
+                        Minecraft.getInstance().execute(() -> panel.list.add(new Pair<>(p.a.color, p.b)));
                     });
 
                     syncService.syncOnce();
@@ -138,7 +138,7 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
 
                 BBSResources.setupWatchdog();
                 
-                MinecraftClient.getInstance().execute(() ->
+                Minecraft.getInstance().execute(() ->
                 {
                     BBSModClient.getTextures().delete();
                     BBSModClient.getSounds().deleteSounds();
@@ -161,7 +161,7 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
                 {
                     CDNAssetSyncService syncService = new CDNAssetSyncService(BBSSettings.cdnUrl.get(), BBSMod.getAssetsFolder().toPath(), (p) ->
                     {
-                        MinecraftClient.getInstance().execute(() -> panel.list.add(new Pair<>(p.a.color, p.b)));
+                        Minecraft.getInstance().execute(() -> panel.list.add(new Pair<>(p.a.color, p.b)));
                     });
 
                     syncService.pushChangedFiles(BBSSettings.cdnToken.get());
@@ -198,7 +198,7 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
 
         for (String command : commands)
         {
-            MinecraftClient.getInstance().player.networkHandler.sendCommand(command);
+            Minecraft.getInstance().player.connection.sendCommand(command);
         }
     }
 

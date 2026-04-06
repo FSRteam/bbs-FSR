@@ -1,16 +1,16 @@
 package mchorse.bbs_mod.cubic.render.vao;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.gl.GlUniform;
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.util.math.MatrixStack;
+import com.mojang.blaze3d.shaders.Uniform;
+import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL30;
 
 public class ModelVAORenderer
 {
-    public static void render(ShaderProgram shader, IModelVAO modelVAO, MatrixStack stack, float r, float g, float b, float a, int light, int overlay)
+    public static void render(ShaderInstance shader, IModelVAO modelVAO, PoseStack stack, float r, float g, float b, float a, int light, int overlay)
     {
         int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
@@ -25,7 +25,7 @@ public class ModelVAORenderer
         GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
     }
 
-    public static void setupUniforms(MatrixStack stack, ShaderProgram shader)
+    public static void setupUniforms(PoseStack stack, ShaderInstance shader)
     {
         for (int i = 0; i < 12; i++)
         {
@@ -39,18 +39,18 @@ public class ModelVAORenderer
 
         if (shader.modelViewMat != null)
         {
-            shader.modelViewMat.set(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.peek().getPositionMatrix()));
+            shader.modelViewMat.set(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose()));
         }
 
         /* NormalMat is present by default in Iris' shaders, but when there is no Iris,
          * the BBS mod's model.json shader is being used instead that provides NormalMat
          * uniform.
          */
-        GlUniform normalUniform = shader.getUniform("NormalMat");
+        Uniform normalUniform = shader.getUniform("NormalMat");
 
         if (normalUniform != null)
         {
-            normalUniform.set(stack.peek().getNormalMatrix());
+            normalUniform.set(stack.last().normal());
         }
 
         if (shader.viewRotationMat != null)

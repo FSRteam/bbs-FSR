@@ -17,8 +17,8 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.StringNbtReader;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +54,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
         this.stack = stack.copy();
         this.name = new UITextbox(1000, (v) ->
         {
-            this.stack.setCustomName(Text.literal(v));
+            this.stack.setCustomName(Component.literal(v));
             this.pickItemStack(this.stack);
             this.updateNbt();
         });
@@ -114,7 +114,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
 
     private void setItem(String s)
     {
-        this.stack = new ItemStack(Registries.ITEM.get(new Identifier(s)));
+        this.stack = new ItemStack(Registries.ITEM.get(new ResourceLocation(s)));
 
         this.pickItemStack(this.stack);
         this.updateNbt();

@@ -10,7 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageBarOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public class UIFilmPlayerSettingsOverlayPanel extends UIMessageBarOverlayPanel
 {
@@ -47,12 +47,12 @@ public class UIFilmPlayerSettingsOverlayPanel extends UIMessageBarOverlayPanel
         this.xpProgress.limit(0, 1).increment(0.01D).setValue(this.film.xpProgress.get());
 
         this.replaceInventory = new UIButton(UIKeys.FILM_REPLACE_INVENTORY, (b) ->
-            BaseValue.edit(this.film.inventory, (inv) -> inv.fromPlayer(MinecraftClient.getInstance().player)));
-        this.replaceInventory.setEnabled(MinecraftClient.getInstance().player != null);
+            BaseValue.edit(this.film.inventory, (inv) -> inv.fromPlayer(Minecraft.getInstance().player)));
+        this.replaceInventory.setEnabled(Minecraft.getInstance().player != null);
         this.replaceInventory.w(1F);
 
         this.applyToPlayer = new UIButton(UIKeys.FILM_APPLY_PLAYER_SETTINGS_TO_PLAYER, (b) -> ClientNetwork.sendApplyFilmPlayerSettingsToPlayer(this.film));
-        this.applyToPlayer.setEnabled(MinecraftClient.getInstance().player != null);
+        this.applyToPlayer.setEnabled(Minecraft.getInstance().player != null);
         this.applyToPlayer.w(1F);
 
         this.editor = UI.scrollView(5, 6,

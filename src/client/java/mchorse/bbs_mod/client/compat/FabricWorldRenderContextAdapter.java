@@ -32,21 +32,21 @@ public final class FabricWorldRenderContextAdapter
         return new BBSWorldRenderContext()
         {
             @Override
-            public net.minecraft.client.render.Camera camera()
+            public net.minecraft.client.Camera camera()
             {
-                return invoke(delegate, "camera", net.minecraft.client.render.Camera.class);
+                return invoke(delegate, "camera", net.minecraft.client.Camera.class);
             }
 
             @Override
-            public net.minecraft.client.util.math.MatrixStack matrixStack()
+            public com.mojang.blaze3d.vertex.PoseStack matrixStack()
             {
-                return invoke(delegate, "matrixStack", net.minecraft.client.util.math.MatrixStack.class);
+                return invoke(delegate, "matrixStack", com.mojang.blaze3d.vertex.PoseStack.class);
             }
 
             @Override
-            public net.minecraft.client.render.VertexConsumerProvider.Immediate consumers()
+            public net.minecraft.client.renderer.MultiBufferSource.BufferSource consumers()
             {
-                return invoke(delegate, "consumers", net.minecraft.client.render.VertexConsumerProvider.Immediate.class);
+                return invoke(delegate, "consumers", net.minecraft.client.renderer.MultiBufferSource.BufferSource.class);
             }
 
             @Override

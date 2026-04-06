@@ -27,7 +27,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.PlayerListEntry;
 
 import java.util.ArrayList;
@@ -112,7 +112,7 @@ public class UIFormCategory extends UIElement
                 {
                     MapType data = FormUtils.toData(this.selected);
                     DataStringifier stringifier = new DataStringifier();
-                    String name = MinecraftClient.getInstance().player.getGameProfile().getName();
+                    String name = Minecraft.getInstance().player.getGameProfile().getName();
 
                     stringifier.jsonLike();
                     stringifier.indent = "";
@@ -120,7 +120,7 @@ public class UIFormCategory extends UIElement
                     Window.setClipboard("/bbs morph " + name + " " + stringifier.toString(data));
                 });
 
-                Collection<PlayerListEntry> playerList = MinecraftClient.getInstance().getNetworkHandler().getPlayerList();
+                Collection<PlayerListEntry> playerList = Minecraft.getInstance().getNetworkHandler().getPlayerList();
 
                 if (playerList.size() > 1)
                 {
@@ -130,7 +130,7 @@ public class UIFormCategory extends UIElement
                         {
                             for (PlayerListEntry entry : playerList)
                             {
-                                if (entry.getProfile().getId().equals(MinecraftClient.getInstance().player.getGameProfile().getId()))
+                                if (entry.getProfile().getId().equals(Minecraft.getInstance().player.getGameProfile().getId()))
                                 {
                                     continue;
                                 }

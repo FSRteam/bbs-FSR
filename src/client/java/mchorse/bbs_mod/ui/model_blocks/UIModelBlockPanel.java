@@ -35,12 +35,12 @@ import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Camera;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.math.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -79,13 +79,13 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.keyDude = new UIElement().noCulling();
         this.keyDude.keys().register(Keys.MODEL_BLOCKS_MOVE_TO, () ->
         {
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
             Camera camera = mc.gameRenderer.getCamera();
             BlockHitResult blockHitResult = RayTracing.rayTrace(mc.world, camera.getPos(), RayTracing.fromVector3f(this.mouseDirection), 512F);
 
             if (blockHitResult.getType() != HitResult.Type.MISS)
             {
-                Vec3d hit = blockHitResult.getPos();
+                Vec3 hit = blockHitResult.getPos();
                 BlockPos pos = this.modelBlock.getPos();
 
                 this.modelBlock.getProperties().getTransform().translate.set(hit.x - pos.getX() - 0.5F, hit.y - pos.getY(), hit.z - pos.getZ() - 0.5F);
@@ -146,7 +146,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.global = new UIToggle(UIKeys.MODEL_BLOCKS_GLOBAL, (b) ->
         {
             this.modelBlock.getProperties().setGlobal(b.getValue());
-            MinecraftClient.getInstance().worldRenderer.reload();
+            Minecraft.getInstance().worldRenderer.reload();
         });
         this.lookAt = new UIToggle(UIKeys.CAMERA_PANELS_LOOK_AT, (b) -> this.modelBlock.getProperties().setLookAt(b.getValue()));
 
@@ -376,15 +376,15 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         super.renderInWorld(context);
 
         Camera camera = context.camera();
-        Vec3d pos = camera.getPos();
+        Vec3 pos = camera.getPos();
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         double x = mc.mouse.getX();
         double y = mc.mouse.getY();
 
         this.mouseDirection.set(CameraUtils.getMouseDirection(
             RenderSystem.getProjectionMatrix(),
-            context.matrixStack().peek().getPositionMatrix(),
+            context.matrixStack().last().pose(),
             (int) x, (int) y, 0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight()
         ));
         this.hovered = this.getClosestObject(new Vector3d(pos.x, pos.y, pos.z), this.mouseDirection);

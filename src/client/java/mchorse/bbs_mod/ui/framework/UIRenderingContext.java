@@ -3,7 +3,7 @@ package mchorse.bbs_mod.ui.framework;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
-import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,9 +14,14 @@ public class UIRenderingContext
 
     private List<Runnable> runnables = new ArrayList<>();
 
-    public UIRenderingContext(DrawContext context)
+    public UIRenderingContext(GuiGraphics context)
     {
         this.batcher = new Batcher2D(context);
+    }
+
+    public void setContext(GuiGraphics context)
+    {
+        this.batcher.setContext(context);
     }
 
     /* Rendering context implementations */

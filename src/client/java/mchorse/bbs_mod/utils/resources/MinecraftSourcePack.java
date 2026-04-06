@@ -4,10 +4,10 @@ import mchorse.bbs_mod.resources.ISourcePack;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.StringUtils;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.resource.Resource;
-import net.minecraft.resource.ResourceManager;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,16 +25,16 @@ public class MinecraftSourcePack implements ISourcePack
 
     public MinecraftSourcePack()
     {
-        this.manager = MinecraftClient.getInstance().getResourceManager();
+        this.manager = Minecraft.getInstance().getResourceManager();
 
         this.setupPaths();
     }
 
     public void setupPaths()
     {
-        Map<Identifier, List<Resource>> map = this.manager.findAllResources("textures", (l) -> l.getNamespace().equals("minecraft") && l.getPath().endsWith(".png"));
+        Map<ResourceLocation, List<Resource>> map = this.manager.listResourceStacks("textures", (location) -> location.getNamespace().equals("minecraft") && location.getPath().endsWith(".png"));
 
-        for (Identifier id : map.keySet())
+        for (ResourceLocation id : map.keySet())
         {
             DataPath path = new DataPath(id.getPath());
 
@@ -76,17 +76,26 @@ public class MinecraftSourcePack implements ISourcePack
     @Override
     public boolean hasAsset(Link link)
     {
-        return this.manager.getResource(new Identifier(link.toString())).isPresent();
+        ResourceLocation location = ResourceLocation.tryParse(link.toString());
+
+        return location != null && this.manager.getResource(location).isPresent();
     }
 
     @Override
     public InputStream getAsset(Link link) throws IOException
     {
-        Optional<Resource> resource = this.manager.getResource(new Identifier(link.toString()));
+        ResourceLocation location = ResourceLocation.tryParse(link.toString());
+
+        if (location == null)
+        {
+            return null;
+        }
+
+        Optional<Resource> resource = this.manager.getResource(location);
 
         if (resource.isPresent())
         {
-            return resource.get().getInputStream();
+            return resource.get().open();
         }
 
         return null;

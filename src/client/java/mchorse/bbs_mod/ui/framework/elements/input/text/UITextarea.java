@@ -1246,7 +1246,7 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
 
             return true;
         }
-        /* Text input */
+        /* Component input */
         else if (context.isPressed(GLFW.GLFW_KEY_TAB))
         {
             this.keyTab(shift, undo.ready());
