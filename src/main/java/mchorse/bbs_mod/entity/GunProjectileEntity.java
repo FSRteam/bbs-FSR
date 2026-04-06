@@ -260,7 +260,7 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
                 friction = 0.6F;
             }
 
-            this.setDeltaMovement(velocity.multiply(friction).subtract(0, gravity, 0));
+            this.setDeltaMovement(velocity.scale(friction).subtract(0, gravity, 0));
             this.setPos(x, y, z);
             this.checkInsideBlocks();
         }
@@ -334,7 +334,7 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
                 if (this.properties.knockback > 0)
                 {
                     double resistanceFactor = Math.max(0D, 1D - livingEntity.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE));
-                    Vec3 punchVector = this.getDeltaMovement().normalize().multiply(this.properties.knockback * 0.6D * resistanceFactor);
+                    Vec3 punchVector = this.getDeltaMovement().normalize().scale(this.properties.knockback * 0.6D * resistanceFactor);
 
                     if (punchVector.lengthSqr() > 0D)
                     {

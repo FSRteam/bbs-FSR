@@ -62,7 +62,10 @@ public final class FabricRegistryCompat
         Block... blocks
     )
     {
-        return BlockEntityType.Builder.of(factory, blocks).build(null);
+        @SuppressWarnings("unchecked")
+        BlockEntityType.BlockEntitySupplier<T> typedFactory = (BlockEntityType.BlockEntitySupplier<T>) factory;
+
+        return BlockEntityType.Builder.of(typedFactory, blocks).build(null);
     }
 
     public static CreativeModeTab.Builder itemGroupBuilder()

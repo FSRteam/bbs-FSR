@@ -395,7 +395,7 @@ public class BBSMod
         this.addonCollector = new BBSAddonCollector();
         this.addonBridge = new BBSAddonBridge(this.addonCollector);
 
-        if (!FMLEnvironment.isProduction())
+        if (!FMLEnvironment.production)
         {
             BBSAddonDemoBootstrap.bind(this.modBus);
         }

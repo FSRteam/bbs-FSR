@@ -79,7 +79,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     @Override
     public boolean shouldRenderAtSqrDistance(double distance)
     {
-        double d = this.getBoundingBox().getAverageSideLength();
+        double d = this.getBoundingBox().getSize();
 
         if (Double.isNaN(d))
         {
@@ -177,7 +177,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     }
 
     @Override
-    protected void readAdditionalSaveData(CompoundTag nbt)
+    public void readAdditionalSaveData(CompoundTag nbt)
     {
         super.readAdditionalSaveData(nbt);
 
@@ -185,7 +185,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     }
 
     @Override
-    protected void addAdditionalSaveData(CompoundTag nbt)
+    public void addAdditionalSaveData(CompoundTag nbt)
     {
         super.addAdditionalSaveData(nbt);
 

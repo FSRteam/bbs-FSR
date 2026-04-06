@@ -18,6 +18,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
@@ -106,7 +107,7 @@ public class ActionPlayer
     {
         for (LivingEntity entity : this.actors.values())
         {
-            if (!entity.isPlayer())
+            if (!(entity instanceof Player))
             {
                 entity.discard();
             }
@@ -324,7 +325,7 @@ public class ActionPlayer
     {
         for (LivingEntity value : this.actors.values())
         {
-            if (!value.isPlayer())
+            if (!(value instanceof Player))
             {
                 value.discard();
             }

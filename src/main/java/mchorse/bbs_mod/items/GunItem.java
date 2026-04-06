@@ -36,7 +36,7 @@ public class GunItem extends Item
         /* Launch the player */
         if (properties.launch)
         {
-            Vec3 rotationVector = owner.getRotationVector().scale(properties.launchPower);
+            Vec3 rotationVector = owner.getViewVector(1.0F).scale(properties.launchPower);
 
             if (properties.launchAdditive)
             {

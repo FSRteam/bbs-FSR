@@ -12,7 +12,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
-import net.minecraft.world.scores.Team;
+import net.minecraft.world.scores.PlayerTeam;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -87,7 +87,7 @@ public class SuperFakePlayer extends ServerPlayer
 
     @Nullable
     @Override
-    public Team getTeam()
+    public PlayerTeam getTeam()
     {
         return null;
     }

@@ -134,7 +134,7 @@ public class ProceduralAnimator implements IAnimator
 
         if (isRolling)
         {
-            coefficient = (float) (target.getVelocity().lengthSquared() / 2D);
+            coefficient = (float) (target.getVelocity().lengthSqr() / 2D);
             coefficient = Math.min(1F, coefficient * coefficient * coefficient);
         }
 
@@ -174,8 +174,8 @@ public class ProceduralAnimator implements IAnimator
 
                         Vec3 look = target.getRotationVec(transition);
                         Vec3 velocity = target.lerpVelocity(transition);
-                        double vl = velocity.horizontalLengthSquared();
-                        double ll = look.horizontalLengthSquared();
+                        double vl = velocity.horizontalDistanceSqr();
+                        double ll = look.horizontalDistanceSqr();
 
                         if (vl > 0 && ll > 0)
                         {
@@ -315,8 +315,8 @@ public class ProceduralAnimator implements IAnimator
 
                         Vec3 look = target.getRotationVec(transition);
                         Vec3 velocity = target.lerpVelocity(transition);
-                        double vl = velocity.horizontalLengthSquared();
-                        double ll = look.horizontalLengthSquared();
+                        double vl = velocity.horizontalDistanceSqr();
+                        double ll = look.horizontalDistanceSqr();
 
                         if (vl > 0 && ll > 0)
                         {

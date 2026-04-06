@@ -87,7 +87,7 @@ public class Morph
             this.form.playMain();
         }
 
-        this.entity.getMcEntity().calculateDimensions();
+        this.entity.getMcEntity().refreshDimensions();
     }
 
     public void update()

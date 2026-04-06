@@ -282,7 +282,7 @@ public class ServerNetwork
             return;
         }
 
-        String filmId = buf.readString();
+        String filmId = buf.readUtf();
         int replayId = buf.readInt();
         int tick = buf.readInt();
         int countdown = buf.readInt();
@@ -317,7 +317,7 @@ public class ServerNetwork
             return;
         }
 
-        String filmId = buf.readString();
+        String filmId = buf.readUtf();
         boolean withCamera = buf.readBoolean();
 
         server.execute(() ->
@@ -348,7 +348,7 @@ public class ServerNetwork
         }
 
         ActionManager actions = BBSMod.getActions();
-        String filmId = buf.readString();
+        String filmId = buf.readUtf();
         ActionState state = EnumUtils.getValue(buf.readByte(), ActionState.values(), ActionState.STOP);
         int tick = buf.readInt();
 
@@ -432,12 +432,12 @@ public class ServerNetwork
 
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
-            String filmId = packetByteBuf.readString();
+            String filmId = packetByteBuf.readUtf();
             List<String> path = new ArrayList<>();
 
             for (int i = 0, c = packetByteBuf.readInt(); i < c; i++)
             {
-                path.add(packetByteBuf.readString());
+                path.add(packetByteBuf.readUtf());
             }
 
             BaseType data = DataStorageUtils.readFromBytes(bytes);
@@ -475,12 +475,12 @@ public class ServerNetwork
 
     private static void handleAnimationStateTriggerPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
-        String string = buf.readString();
+        String string = buf.readUtf();
         int type = buf.readInt();
         FriendlyByteBuf newBuf = NetworkCompat.createBuffer();
 
         newBuf.writeInt(player.getId());
-        newBuf.writeString(string);
+        newBuf.writeUtf(string);
         newBuf.writeInt(type);
 
         NetworkCompat.sendToPlayersTrackingEntity(player, CLIENT_ANIMATION_STATE_TRIGGER, newBuf);
@@ -529,7 +529,7 @@ public class ServerNetwork
 
     private static void handlePauseFilmPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
     {
-        String filmId = buf.readString();
+        String filmId = buf.readUtf();
 
         ActionPlayer actionPlayer = BBSMod.getActions().getPlayer(filmId);
 
@@ -622,7 +622,7 @@ public class ServerNetwork
 
                 crusher.send(world.getPlayers((p) -> true).stream().map((p) -> (Player) p).toList(), CLIENT_PLAY_FILM_PACKET, data, (packetByteBuf) ->
                 {
-                    packetByteBuf.writeString(filmId);
+                    packetByteBuf.writeUtf(filmId);
                     packetByteBuf.writeBoolean(withCamera);
                 });
             }
@@ -645,7 +645,7 @@ public class ServerNetwork
 
                 crusher.send(player, CLIENT_PLAY_FILM_PACKET, film.toData(), (packetByteBuf) ->
                 {
-                    packetByteBuf.writeString(filmId);
+                    packetByteBuf.writeUtf(filmId);
                     packetByteBuf.writeBoolean(withCamera);
                 });
             }
@@ -660,7 +660,7 @@ public class ServerNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(filmId);
+        buf.writeUtf(filmId);
 
         NetworkCompat.sendToPlayer(player, CLIENT_STOP_FILM_PACKET, buf);
     }
@@ -678,7 +678,7 @@ public class ServerNetwork
     {
         crusher.send(player, CLIENT_RECORDED_ACTIONS, clips.toData(), (packetByteBuf) ->
         {
-            packetByteBuf.writeString(filmId);
+            packetByteBuf.writeUtf(filmId);
             packetByteBuf.writeInt(replayId);
             packetByteBuf.writeInt(tick);
         });
@@ -701,7 +701,7 @@ public class ServerNetwork
             id = "";
         }
 
-        buf.writeString(id);
+        buf.writeUtf(id);
 
         return buf;
     }
@@ -741,12 +741,12 @@ public class ServerNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(filmId);
+        buf.writeUtf(filmId);
         buf.writeInt(actors.size());
 
         for (Map.Entry<String, LivingEntity> entry : actors.entrySet())
         {
-            buf.writeString(entry.getKey());
+            buf.writeUtf(entry.getKey());
             buf.writeInt(entry.getValue().getId());
         }
 
@@ -768,7 +768,7 @@ public class ServerNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(filmId);
+        buf.writeUtf(filmId);
 
         NetworkCompat.sendToPlayer(player, CLIENT_PAUSE_FILM, buf);
     }
@@ -789,7 +789,7 @@ public class ServerNetwork
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeBlockPos(pos);
-        buf.writeString(trigger);
+        buf.writeUtf(trigger);
 
         NetworkCompat.sendToPlayer(player, CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, buf);
     }

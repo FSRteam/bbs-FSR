@@ -51,7 +51,7 @@ public class NeoForgeLoaderAccess implements LoaderAccess
     @Override
     public boolean isDevelopmentEnvironment()
     {
-        return !FMLEnvironment.isProduction();
+        return !FMLEnvironment.production;
     }
 
     @Override
