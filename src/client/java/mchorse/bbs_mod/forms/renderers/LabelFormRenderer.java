@@ -12,7 +12,7 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.font.Font;
+import net.minecraft.client.gui.Font;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import net.minecraft.client.renderer.GameRenderer;
@@ -86,7 +86,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             context.stack.last().setNormal().identity();
         }
 
-        Font renderer = Minecraft.getInstance().textRenderer;
+        Font renderer = Minecraft.getInstance().font;
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         float scale = 1F / 16F;
         int light = context.light;
@@ -127,8 +127,8 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
     {
         String content = StringUtils.processColoredText(this.form.text.get());
         float transition = context.getTransition();
-        int w = renderer.getWidth(content) - 1;
-        int h = renderer.fontHeight - 2;
+        int w = renderer.width(content) - 1;
+        int h = renderer.lineHeight - 2;
         int x = (int) (-w * this.form.anchorX.get());
         int y = (int) (-h * this.form.anchorY.get());
 
@@ -142,28 +142,28 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         {
             context.stack.pushPose();
             context.stack.translate(0F, 0F, -0.1F);
-            renderer.draw(
+            renderer.drawInBatch(
                 content,
                 x + this.form.shadowX.get(),
                 y + this.form.shadowY.get(),
                 shadowColor.getARGBColor(), false,
                 context.stack.last().pose(),
                 consumers,
-                Font.TextLayerType.NORMAL,
+                Font.DisplayMode.NORMAL,
                 0,
                 light
             );
             context.stack.popPose();
         }
 
-        renderer.draw(
+        renderer.drawInBatch(
             content,
             x,
             y,
             color.getARGBColor(), false,
             context.stack.last().pose(),
             consumers,
-            Font.TextLayerType.NORMAL,
+            Font.DisplayMode.NORMAL,
             0,
             light
         );
@@ -179,7 +179,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
     {
         float transition = context.getTransition();
         int w = 0;
-        int h = renderer.fontHeight - 2;
+        int h = renderer.lineHeight - 2;
         String content = StringUtils.processColoredText(this.form.text.get());
         List<String> lines = FontRenderer.wrap(renderer, content, this.form.max.get());
 
@@ -197,7 +197,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         for (String line : lines)
         {
-            w = Math.max(renderer.getWidth(line) - 1, w);
+            w = Math.max(renderer.width(line) - 1, w);
             h += 12;
         }
 
@@ -218,16 +218,16 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
             for (String line : lines)
             {
-                int x2 = x + (this.form.anchorLines.get() ? (int) ((w - renderer.getWidth(line)) * this.form.anchorX.get()) : 0);
+                int x2 = x + (this.form.anchorLines.get() ? (int) ((w - renderer.width(line)) * this.form.anchorX.get()) : 0);
 
-                renderer.draw(
+                renderer.drawInBatch(
                     line,
                     x2 + this.form.shadowX.get(),
                     y2 + this.form.shadowY.get(),
                     shadowColor.getARGBColor(), false,
                     context.stack.last().pose(),
                     consumers,
-                    Font.TextLayerType.NORMAL,
+                    Font.DisplayMode.NORMAL,
                     0,
                     light
                 );
@@ -248,16 +248,16 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         for (String line : lines)
         {
-            int x2 = x + (this.form.anchorLines.get() ? (int) ((w - renderer.getWidth(line)) * this.form.anchorX.get()) : 0);
+            int x2 = x + (this.form.anchorLines.get() ? (int) ((w - renderer.width(line)) * this.form.anchorX.get()) : 0);
 
-            renderer.draw(
+            renderer.drawInBatch(
                 line,
                 x2,
                 y2,
                 color, false,
                 context.stack.last().pose(),
                 consumers,
-                Font.TextLayerType.NORMAL,
+                Font.DisplayMode.NORMAL,
                 0,
                 light
             );
@@ -303,7 +303,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferUploader.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
         context.stack.popPose();
     }
 }

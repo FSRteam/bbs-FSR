@@ -6,7 +6,7 @@ import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.util.math.RotationAxis;
+import com.mojang.math.Axis;
 import org.joml.Vector3f;
 
 public interface ICubicRenderer
@@ -28,13 +28,13 @@ public interface ICubicRenderer
 
     public static void rotateGroup(PoseStack stack, ModelGroup group)
     {
-        if (group.current.rotate.z != 0F) stack.multiply(RotationAxis.POSITIVE_Z.rotation(MathUtils.toRad(group.current.rotate.z)));
-        if (group.current.rotate.y != 0F) stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.toRad(group.current.rotate.y)));
-        if (group.current.rotate.x != 0F) stack.multiply(RotationAxis.POSITIVE_X.rotation(MathUtils.toRad(group.current.rotate.x)));
+        if (group.current.rotate.z != 0F) stack.mulPose(Axis.ZP.rotation(MathUtils.toRad(group.current.rotate.z)));
+        if (group.current.rotate.y != 0F) stack.mulPose(Axis.YP.rotation(MathUtils.toRad(group.current.rotate.y)));
+        if (group.current.rotate.x != 0F) stack.mulPose(Axis.XP.rotation(MathUtils.toRad(group.current.rotate.x)));
 
-        if (group.current.rotate2.z != 0F) stack.multiply(RotationAxis.POSITIVE_Z.rotation(MathUtils.toRad(group.current.rotate2.z)));
-        if (group.current.rotate2.y != 0F) stack.multiply(RotationAxis.POSITIVE_Y.rotation(MathUtils.toRad(group.current.rotate2.y)));
-        if (group.current.rotate2.x != 0F) stack.multiply(RotationAxis.POSITIVE_X.rotation(MathUtils.toRad(group.current.rotate2.x)));
+        if (group.current.rotate2.z != 0F) stack.mulPose(Axis.ZP.rotation(MathUtils.toRad(group.current.rotate2.z)));
+        if (group.current.rotate2.y != 0F) stack.mulPose(Axis.YP.rotation(MathUtils.toRad(group.current.rotate2.y)));
+        if (group.current.rotate2.x != 0F) stack.mulPose(Axis.XP.rotation(MathUtils.toRad(group.current.rotate2.x)));
     }
 
     public static void scaleGroup(PoseStack stack, ModelGroup group)

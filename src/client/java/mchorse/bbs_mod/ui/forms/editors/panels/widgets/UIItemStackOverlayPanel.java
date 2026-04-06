@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.forms.editors.panels.widgets;
 
-import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -10,15 +9,16 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UI;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.nbt.StringNbtReader;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKey;
+import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,9 +38,9 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
 
     static
     {
-        for (RegistryKey<Item> key : Registries.ITEM.getKeys())
+        for (ResourceLocation key : BuiltInRegistries.ITEM.keySet())
         {
-            itemIDs.add(key.getValue().toString());
+            itemIDs.add(key.toString());
         }
 
         itemIDs.sort(String::compareToIgnoreCase);
@@ -54,11 +54,19 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
         this.stack = stack.copy();
         this.name = new UITextbox(1000, (v) ->
         {
-            this.stack.setCustomName(Component.literal(v));
+            if (v.isEmpty())
+            {
+                this.stack.remove(DataComponents.CUSTOM_NAME);
+            }
+            else
+            {
+                this.stack.set(DataComponents.CUSTOM_NAME, Component.literal(v));
+            }
+
             this.pickItemStack(this.stack);
             this.updateNbt();
         });
-        this.name.setText(stack.getName().getString());
+        this.name.setText(stack.getHoverName().getString());
         this.count = new UITrackpad((v) ->
         {
             this.stack.setCount(v.intValue());
@@ -70,11 +78,11 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
         {
             try
             {
-                NbtCompound nbtCompound = new StringNbtReader(new StringReader(v)).parseCompound();
-                ItemStack itemStack = ItemStack.fromNbt(nbtCompound);
+                CompoundTag nbtCompound = TagParser.parseTag(v);
+                ItemStack itemStack = ItemStack.CODEC.parse(NbtOps.INSTANCE, nbtCompound).result().orElse(ItemStack.EMPTY);
 
                 this.pickItemStack(itemStack);
-                this.itemList.list.setCurrentScroll(Registries.ITEM.getId(this.stack.getItem()).toString());
+                this.itemList.list.setCurrentScroll(BuiltInRegistries.ITEM.getKey(this.stack.getItem()).toString());
             }
             catch (Exception e)
             {
@@ -88,7 +96,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
         this.itemList.label(UIKeys.GENERAL_SEARCH).list.background();
         this.itemList.list.clear();
         this.itemList.list.add(itemIDs);
-        this.itemList.list.setCurrentScroll(Registries.ITEM.getId(stack.getItem()).toString());
+        this.itemList.list.setCurrentScroll(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
 
         UIElement element = UI.column(5, 6, this.name, this.count);
 
@@ -101,7 +109,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
 
     private void updateNbt()
     {
-        this.nbt.setText((ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, this.stack).result().get()).asString());
+        this.nbt.setText(ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, this.stack).result().map(Tag::getAsString).orElse("{}"));
     }
 
     private void pickItemStack(ItemStack itemStack)
@@ -114,7 +122,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
 
     private void setItem(String s)
     {
-        this.stack = new ItemStack(Registries.ITEM.get(new ResourceLocation(s)));
+        this.stack = new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(s)));
 
         this.pickItemStack(this.stack);
         this.updateNbt();

@@ -64,7 +64,7 @@ public class SelectorOwner
             this.nbtCheck = 10;
 
             Set<String> keys = createWhitelist();
-            CompoundTag compound = this.mcEntity.writeNbt(new CompoundTag());
+            CompoundTag compound = this.mcEntity.saveWithoutId(new CompoundTag());
             CompoundTag newCompound = new CompoundTag();
 
             for (String key : keys)

@@ -7,16 +7,16 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
-import net.minecraft.client.renderer.entity.model.ArmorEntityModel;
-import net.minecraft.client.renderer.entity.model.EntityModelLayers;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.entity.EntityPose;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Pose;
 import com.mojang.math.Axis;
 
 public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
@@ -28,8 +28,8 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         super(ctx);
 
         armorRenderer = new ArmorRenderer(
-            new ArmorEntityModel(ctx.getPart(EntityModelLayers.PLAYER_INNER_ARMOR)),
-            new ArmorEntityModel(ctx.getPart(EntityModelLayers.PLAYER_OUTER_ARMOR)),
+            new HumanoidModel<>(ctx.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+            new HumanoidModel<>(ctx.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
             ctx.getModelManager()
         );
 
@@ -39,7 +39,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
     @Override
     public ResourceLocation getTextureLocation(ActorEntity entity)
     {
-        return new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
+        return ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
     }
 
     @Override
@@ -47,7 +47,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
     {
         matrices.pushPose();
 
-        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, livingEntity.prevBodyYaw, livingEntity.bodyYaw);
+        float bodyYaw = Mth.rotLerp(tickDelta, livingEntity.yBodyRotO, livingEntity.yBodyRot);
         int overlay = LivingEntityRenderer.getOverlayCoords(livingEntity, 0F);
 
         this.setupTransforms(livingEntity, matrices, bodyYaw, tickDelta);
@@ -72,7 +72,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
 
     protected void setupTransforms(ActorEntity entity, PoseStack matrices, float bodyYaw, float tickDelta)
     {
-        if (!entity.isInPose(EntityPose.SLEEPING))
+        if (!entity.isInPose(Pose.SLEEPING))
         {
             matrices.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
         }
@@ -81,7 +81,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         {
             float deathAngle = (entity.deathTime + tickDelta - 1F) / 20F * 1.6F;
 
-            matrices.mulPose(Axis.ZP.rotationDegrees(Math.min(MathHelper.sqrt(deathAngle), 1F) * 90F));
+            matrices.mulPose(Axis.ZP.rotationDegrees(Math.min(Mth.sqrt(deathAngle), 1F) * 90F));
         }
     }
 }

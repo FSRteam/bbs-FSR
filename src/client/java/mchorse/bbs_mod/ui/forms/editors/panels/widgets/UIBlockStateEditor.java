@@ -9,10 +9,10 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.function.Consumer;
 
@@ -25,7 +25,7 @@ public class UIBlockStateEditor extends UIElement
     public UIBlockStateEditor(Consumer<BlockState> callback)
     {
         this.callback = callback;
-        this.blockState = Blocks.AIR.getDefaultState();
+        this.blockState = Blocks.AIR.defaultBlockState();
 
         this.h(UIConstants.CONTROL_HEIGHT);
     }
@@ -54,12 +54,12 @@ public class UIBlockStateEditor extends UIElement
 
     public void setBlockState(BlockState blockState)
     {
-        this.blockState = blockState == null ? Blocks.AIR.getDefaultState() : blockState;
+        this.blockState = blockState == null ? Blocks.AIR.defaultBlockState() : blockState;
     }
 
     private void acceptBlockState(BlockState blockState)
     {
-        this.blockState = blockState == null ? Blocks.AIR.getDefaultState() : blockState;
+        this.blockState = blockState == null ? Blocks.AIR.defaultBlockState() : blockState;
 
         if (this.callback != null)
         {
@@ -79,15 +79,15 @@ public class UIBlockStateEditor extends UIElement
 
         if (!stack.isEmpty())
         {
-            PoseStack matrices = context.batcher.getContext().getMatrices();
+            PoseStack matrices = context.batcher.getContext().pose();
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
-            matrices.push();
+            matrices.pushPose();
             consumers.setUI(true);
-            context.batcher.getContext().drawItem(stack, this.area.mx() - 8, this.area.my() - 8);
-            context.batcher.getContext().drawItemInSlot(context.batcher.getFont().getRenderer(), stack, this.area.mx() - 8, this.area.my() - 8);
+            context.batcher.getContext().renderItem(stack, this.area.mx() - 8, this.area.my() - 8);
+            context.batcher.getContext().renderItemDecorations(context.batcher.getFont().getRenderer(), stack, this.area.mx() - 8, this.area.my() - 8);
             consumers.setUI(false);
-            matrices.pop();
+            matrices.popPose();
         }
 
         super.render(context);

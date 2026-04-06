@@ -15,7 +15,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.Mth;
 import com.mojang.math.Axis;
 
 public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEntity>
@@ -28,7 +28,7 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
     @Override
     public ResourceLocation getTextureLocation(GunProjectileEntity entity)
     {
-        return new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
+        return ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
     }
 
     @Override
@@ -39,8 +39,8 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
         GunProperties properties = projectile.getProperties();
         int out = properties.lifeSpan - 2;
 
-        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, projectile.prevYaw, projectile.getYaw());
-        float pitch = MathHelper.lerpAngleDegrees(tickDelta, projectile.prevPitch, projectile.getPitch());
+        float bodyYaw = Mth.rotLerp(tickDelta, projectile.yRotO, projectile.getYRot());
+        float pitch = Mth.rotLerp(tickDelta, projectile.xRotO, projectile.getXRot());
         float scale = Lerps.envelope(projectile.age + tickDelta, 0, properties.fadeIn, out - properties.fadeOut, out);
 
         if (properties.yaw) matrices.mulPose(Axis.YP.rotationDegrees(bodyYaw));

@@ -115,7 +115,7 @@ public class BBSShaders
         {
             if (id.getPath().contains("/core/"))
             {
-                return this.manager.getResource(new ResourceLocation(BBSMod.MOD_ID, id.getPath()));
+                return this.manager.getResource(ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, id.getPath()));
             }
 
             return this.manager.getResource(id);

@@ -32,8 +32,8 @@ import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.gl.WindowFramebuffer;
+import com.mojang.blaze3d.pipeline.MainTarget;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.client.gui.GuiGraphics;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.platform.Window;
@@ -74,8 +74,8 @@ public class BBSRendering
     private static int height;
 
     private static boolean toggleFramebuffer;
-    private static Framebuffer framebuffer;
-    private static Framebuffer clientFramebuffer;
+    private static RenderTarget framebuffer;
+    private static RenderTarget clientFramebuffer;
     private static Texture texture;
 
     private static Runnable pendingExportResolutionAction;
@@ -212,7 +212,7 @@ public class BBSRendering
 
     /* Framebuffers */
 
-    public static Framebuffer getFramebuffer()
+    public static RenderTarget getFramebuffer()
     {
         return framebuffer;
     }
@@ -221,28 +221,28 @@ public class BBSRendering
     {
         Window window = Minecraft.getInstance().getWindow();
 
-        framebuffer = new WindowFramebuffer(window.getFramebufferWidth(), window.getFramebufferHeight());
+        framebuffer = new MainTarget(window.getFramebufferWidth(), window.getFramebufferHeight());
     }
 
     public static void resizeExtraFramebuffers()
     {
-        Set<Framebuffer> buffers = new HashSet<>();
+        Set<RenderTarget> buffers = new HashSet<>();
         Minecraft mc = Minecraft.getInstance();
 
-        buffers.add(mc.levelRenderer.getEntityOutlinesFramebuffer());
-        buffers.add(mc.levelRenderer.getTranslucentFramebuffer());
-        buffers.add(mc.levelRenderer.getEntityFramebuffer());
-        buffers.add(mc.levelRenderer.getParticlesFramebuffer());
-        buffers.add(mc.levelRenderer.getWeatherFramebuffer());
-        buffers.add(mc.levelRenderer.getCloudsFramebuffer());
+        buffers.add(mc.levelRenderer.entityTarget());
+        buffers.add(mc.levelRenderer.getTranslucentTarget());
+        buffers.add(mc.levelRenderer.getItemEntityTarget());
+        buffers.add(mc.levelRenderer.getParticlesTarget());
+        buffers.add(mc.levelRenderer.getWeatherTarget());
+        buffers.add(mc.levelRenderer.getCloudsTarget());
 
-        for (Framebuffer buffer : buffers)
+        for (RenderTarget buffer : buffers)
         {
             resizeFramebuffer(buffer);
         }
     }
 
-    public static void resizeFramebuffer(Framebuffer framebuffer)
+    public static void resizeFramebuffer(RenderTarget framebuffer)
     {
         if (framebuffer == null)
         {
@@ -253,7 +253,7 @@ public class BBSRendering
         int w = mc.getWindow().getFramebufferWidth();
         int h = mc.getWindow().getFramebufferHeight();
 
-        if (framebuffer.textureWidth == w && framebuffer.textureHeight == h)
+        if (framebuffer.width == w && framebuffer.height == h)
         {
             return;
         }
@@ -280,7 +280,7 @@ public class BBSRendering
 
             resizeExtraFramebuffers();
 
-            if (framebuffer.textureWidth != w || framebuffer.textureHeight != h)
+            if (framebuffer.width != w || framebuffer.height != h)
             {
                 framebuffer.resize(w, h, Minecraft.ON_OSX);
             }
@@ -289,7 +289,7 @@ public class BBSRendering
 
             reassignFramebuffer(framebuffer);
 
-            framebuffer.beginWrite(true);
+            framebuffer.bindWrite(true);
         }
         else
         {
@@ -297,7 +297,7 @@ public class BBSRendering
             int drawH = window.getFramebufferHeight();
             reassignFramebuffer(clientFramebuffer);
 
-            mc.getMainRenderTarget().beginWrite(true);
+            mc.getMainRenderTarget().bindWrite(true);
 
             if (width != 0)
             {
@@ -308,13 +308,13 @@ public class BBSRendering
                     && dashboard.getPanels().panel instanceof UIFilmPanel;
                 if (!filmPanelShowing)
                 {
-                    framebuffer.draw(drawW, drawH);
+                    framebuffer.blitToScreen(drawW, drawH);
                 }
             }
         }
     }
 
-    private static void reassignFramebuffer(Framebuffer framebuffer)
+    private static void reassignFramebuffer(RenderTarget framebuffer)
     {
         Minecraft.getInstance().mainRenderTarget = framebuffer;
     }
@@ -380,8 +380,8 @@ public class BBSRendering
         Texture texture = getTexture();
 
         texture.bind();
-        texture.setSize(framebuffer.textureWidth, framebuffer.textureHeight);
-        GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer.textureWidth, framebuffer.textureHeight);
+        texture.setSize(framebuffer.width, framebuffer.height);
+        GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer.width, framebuffer.height);
         texture.unbind();
 
         toggleFramebuffer(false);

@@ -107,6 +107,11 @@ java {
 tasks.withType(JavaCompile).configureEach {
     // NeoForge 1.21.1 targets Java 21
     options.release = java_version as int
+    options.compilerArgs.addAll([
+        '-Xdiags:verbose',
+        '-Xmaxerrs', '10000',
+        '-Xmaxwarns', '10000'
+    ])
 }
 
 processResources {

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.selectors;
 
-import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.selectors.EntitySelector;
@@ -19,7 +18,7 @@ import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.nbt.StringNbtReader;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
@@ -67,7 +66,7 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
 
             try
             {
-                this.current.entity = id.isEmpty() ? null : new ResourceLocation(id);
+                this.current.entity = id.isEmpty() ? null : ResourceLocation.parse(id);
             }
             catch (Exception e)
             {
@@ -92,7 +91,7 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
                 }
                 else
                 {
-                    this.current.nbt = (new StringNbtReader(new StringReader(t))).parseCompound();
+                    this.current.nbt = TagParser.parseTag(t);
                 }
 
                 BBSModClient.getSelectors().update();

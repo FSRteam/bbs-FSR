@@ -38,8 +38,8 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.network.LocalPlayer;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.player.LocalPlayer;
 
 import java.util.HashMap;
 import java.util.List;
@@ -102,8 +102,8 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
         this.uiOrbitCamera.setControl(true);
         this.uiOrbitCamera.orbit = orbit;
         this.orbitCameraController = new OrbitCameraController(this.uiOrbitCamera.orbit);
-        this.orbitCameraController.camera.position.set(player.getPos().x, player.getPos().y + 1D, player.getPos().z);
-        this.orbitCameraController.camera.rotation.set(0, MathUtils.toRad(player.bodyYaw), 0);
+        this.orbitCameraController.camera.position.set(player.getX(), player.getY() + 1D, player.getZ());
+        this.orbitCameraController.camera.rotation.set(0, MathUtils.toRad(player.yBodyRot), 0);
 
         if (this.gunProperties != null)
         {
@@ -435,12 +435,12 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
 
             if (element == this.sectionTp)
             {
-                Minecraft.getInstance().options.setPerspective(CameraType.THIRD_PERSON_FRONT);
+                Minecraft.getInstance().options.setCameraType(CameraType.THIRD_PERSON_FRONT);
                 BBSModClient.getCameraController().add(this.orbitCameraController);
             }
             else
             {
-                Minecraft.getInstance().options.setPerspective(CameraType.FIRST_PERSON);
+                Minecraft.getInstance().options.setCameraType(CameraType.FIRST_PERSON);
                 BBSModClient.getCameraController().remove(this.orbitCameraController);
             }
         }

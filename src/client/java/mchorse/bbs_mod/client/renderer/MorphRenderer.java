@@ -16,18 +16,18 @@ import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.entity.LivingEntity;
+import net.minecraft.world.entity.LivingEntity;
 import com.mojang.math.Axis;
 
 public class MorphRenderer
 {
     public static boolean hidePlayer = false;
 
-    public static boolean renderPlayer(AbstractClientPlayerEntity player, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i)
+    public static boolean renderPlayer(AbstractClientPlayer player, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i)
     {
         if (hidePlayer)
         {
@@ -45,7 +45,7 @@ public class MorphRenderer
             {
                 RenderSystem.enableDepthTest();
 
-                float bodyYaw = Lerps.lerp(player.prevBodyYaw, player.bodyYaw, g);
+                float bodyYaw = Lerps.lerp(player.yBodyRotO, player.yBodyRot, g);
                 int overlay = LivingEntityRenderer.getOverlayCoords(player, 0F);
 
                 matrixStack.pushPose();
@@ -100,7 +100,7 @@ public class MorphRenderer
         {
             RenderSystem.enableDepthTest();
 
-            float bodyYaw = Lerps.lerp(livingEntity.prevBodyYaw, livingEntity.bodyYaw, g);
+            float bodyYaw = Lerps.lerp(livingEntity.yBodyRotO, livingEntity.yBodyRot, g);
 
             matrixStack.pushPose();
             matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));

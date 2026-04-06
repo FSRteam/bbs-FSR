@@ -16,7 +16,6 @@ import org.lwjgl.opengl.GL11;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
-import com.mojang.blaze3d.platform.Window;
 
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
@@ -224,7 +223,7 @@ public class UIFilmController extends UIElement
 
     private void toggleMousePointer(boolean disable)
     {
-        Window window = Minecraft.getInstance().getWindow();
+        com.mojang.blaze3d.platform.Window window = Minecraft.getInstance().getWindow();
 
         if (disable)
         {
@@ -1157,11 +1156,11 @@ public class UIFilmController extends UIElement
         /* Render the stencil */
         PoseStack worldStack = this.worldRenderContext.matrixStack();
 
-        worldStack.push();
-        worldStack.loadIdentity();
+        worldStack.pushPose();
+        worldStack.setIdentity();
         MatrixStackUtils.multiply(worldStack, this.panel.lastView);
         this.renderStencil(this.worldRenderContext, this.getContext(), altPressed);
-        worldStack.pop();
+        worldStack.popPose();
 
         /* Return back to orthographic projection */
         MatrixStackUtils.restoreMatrices();

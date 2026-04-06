@@ -12,13 +12,13 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
+import net.minecraft.commands.arguments.ParticleArgument;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Camera;
-import net.minecraft.particle.ParticleEffect;
-import net.minecraft.particle.ParticleType;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
@@ -67,8 +67,9 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
         matrix.mul(context.stack.last().pose());
 
         Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
+        Vec3 cameraPosition = camera.getPosition();
 
-        translation.add(camera.getPos().x, camera.getPos().y, camera.getPos().z);
+        translation.add(cameraPosition.x, cameraPosition.y, cameraPosition.z);
         context.stack.pushPose();
         context.stack.setIdentity();
         context.stack.mulPose(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
@@ -98,15 +99,18 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
                 Matrix3f m = Matrices.TEMP_3F;
                 Vector3f v = Vectors.TEMP_3F;
                 ParticleSettings settings = this.form.settings.get();
-                ParticleType type = BuiltInRegistries.PARTICLE_TYPE.get(settings.particle);
-                ParticleEffect effect = ParticleTypes.FLAME;
+                ParticleOptions effect = ParticleTypes.FLAME;
 
                 try
                 {
-                    if (type != null)
+                    String particle = settings.particle.toString();
+
+                    if (!settings.arguments.isEmpty())
                     {
-                        effect = type.getParametersFactory().read(type, new StringReader(" " + settings.arguments));
+                        particle += " " + settings.arguments;
                     }
+
+                    effect = ParticleArgument.readParticle(new StringReader(particle), world.registryAccess());
                 }
                 catch (Exception e)
                 {}

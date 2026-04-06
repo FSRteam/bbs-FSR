@@ -37,7 +37,7 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.util.math.RotationAxis;
+import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -357,7 +357,7 @@ public class ModelInstance implements IModelInstance
 
                 builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
-                BufferUploader.drawWithGlobalProgram(builder.end());
+                BufferUploader.drawWithShader(builder.buildOrThrow());
             }
         }
         else if (this.model instanceof BOBJModel model)
@@ -366,14 +366,14 @@ public class ModelInstance implements IModelInstance
 
             if (vao != null)
             {
-                stack.push();
-                stack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180F));
+                stack.pushPose();
+                stack.mulPose(Axis.YP.rotationDegrees(180F));
 
                 vao.armature.setupMatrices();
                 vao.updateMesh(stencilMap);
                 vao.render(program.get(), stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
 
-                stack.pop();
+                stack.popPose();
             }
         }
     }

@@ -2,7 +2,6 @@ package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
@@ -20,14 +19,13 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
-import net.minecraft.client.renderer.entity.model.EntityModel;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.nbt.CompoundTag;
@@ -184,24 +182,24 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         try
         {
-            compound = (new TagParser(new StringReader(nbt))).parseCompound();
+            compound = TagParser.parseTag(nbt);
         }
         catch (Exception e)
         {}
 
-        this.entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)).create(Minecraft.getInstance().world);
+        this.entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)).create(Minecraft.getInstance().level);
 
         if (this.entity == null && this.form.isPlayer())
         {
-            this.entity = new OtherClientPlayerEntity(Minecraft.getInstance().world, slim ? SLIM : WIDE);
-            this.entity.getDataTracker().set(PlayerUtils.ProtectedAccess.getModelParts(), (byte) 0b1111111);
+            this.entity = new RemotePlayer(Minecraft.getInstance().level, slim ? SLIM : WIDE);
+            this.entity.getEntityData().set(PlayerUtils.ProtectedAccess.getModelParts(), (byte) 0b1111111);
         }
 
         if (this.entity != null)
         {
             compound.putString("id", id);
             this.entity.load(compound);
-            this.entity.noClip = true;
+            this.entity.noPhysics = true;
         }
     }
 
@@ -219,8 +217,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
             float scale = this.form.uiScale.get();
-            float width = this.entity.getWidth();
-            float height = this.entity.getHeight();
+            float width = this.entity.getBbWidth();
+            float height = this.entity.getBbHeight();
 
             scale = scale * Math.min(1.8F / Math.max(width, height), 1F);
 
@@ -341,13 +339,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             this.entity.tick();
 
-            this.entity.prevPitch = this.prevPitch;
-            this.entity.prevYaw = 0F;
+            this.entity.xRotO = this.prevPitch;
+            this.entity.yRotO = 0F;
 
             if (this.entity instanceof LivingEntity livingEntity)
             {
-                livingEntity.prevHeadYaw = this.prevYawHead;
-                livingEntity.prevBodyYaw = 0F;
+                livingEntity.yHeadRotO = this.prevYawHead;
+                livingEntity.yBodyRotO = 0F;
 
                 /* Limb swing is so ugly */
                 if (livingEntity.walkAnimation instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)
@@ -373,24 +371,24 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 this.prevHandSwing = handSwingProgress;
             }
 
-            this.entity.setYaw(0F);
-            this.entity.setHeadYaw(entity.getHeadYaw() - entity.getBodyYaw());
-            this.entity.setPitch(entity.getPitch());
-            this.entity.setBodyYaw(0F);
+            this.entity.setYRot(0F);
+            this.entity.setYHeadRot(entity.getHeadYaw() - entity.getBodyYaw());
+            this.entity.setXRot(entity.getPitch());
+            this.entity.setYBodyRot(0F);
 
             this.entity.setPos(entity.getX(), entity.getY(), entity.getZ());
             this.entity.setOnGround(entity.isOnGround());
-            this.entity.setShiftKeyDown(entity.isShiftKeyDown());
+            this.entity.setShiftKeyDown(entity.isSneaking());
             this.entity.setSprinting(entity.isSprinting());
-            this.entity.setPose(entity.isShiftKeyDown() ? Pose.CROUCHING : Pose.STANDING);
-            this.entity.setItemSlot(EquipmentSlot.MAINHAND, entity.getItemBySlot(EquipmentSlot.MAINHAND));
-            this.entity.setItemSlot(EquipmentSlot.OFFHAND, entity.getItemBySlot(EquipmentSlot.OFFHAND));
-            this.entity.setItemSlot(EquipmentSlot.HEAD, entity.getItemBySlot(EquipmentSlot.HEAD));
-            this.entity.setItemSlot(EquipmentSlot.CHEST, entity.getItemBySlot(EquipmentSlot.CHEST));
-            this.entity.setItemSlot(EquipmentSlot.LEGS, entity.getItemBySlot(EquipmentSlot.LEGS));
-            this.entity.setItemSlot(EquipmentSlot.FEET, entity.getItemBySlot(EquipmentSlot.FEET));
-            this.entity.age = entity.getAge();
-            this.entity.noClip = true;
+            this.entity.setPose(entity.isSneaking() ? net.minecraft.world.entity.Pose.CROUCHING : net.minecraft.world.entity.Pose.STANDING);
+            this.entity.setItemSlot(EquipmentSlot.MAINHAND, entity.getEquipmentStack(EquipmentSlot.MAINHAND));
+            this.entity.setItemSlot(EquipmentSlot.OFFHAND, entity.getEquipmentStack(EquipmentSlot.OFFHAND));
+            this.entity.setItemSlot(EquipmentSlot.HEAD, entity.getEquipmentStack(EquipmentSlot.HEAD));
+            this.entity.setItemSlot(EquipmentSlot.CHEST, entity.getEquipmentStack(EquipmentSlot.CHEST));
+            this.entity.setItemSlot(EquipmentSlot.LEGS, entity.getEquipmentStack(EquipmentSlot.LEGS));
+            this.entity.setItemSlot(EquipmentSlot.FEET, entity.getEquipmentStack(EquipmentSlot.FEET));
+            this.entity.tickCount = entity.getAge();
+            this.entity.noPhysics = true;
 
             this.prevYawHead = entity.getHeadYaw() - entity.getBodyYaw();
             this.prevPitch = entity.getPitch();

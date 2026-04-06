@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.selectors;
 
-import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import mchorse.bbs_mod.data.IMapSerializable;
 import mchorse.bbs_mod.data.types.MapType;
@@ -43,7 +42,7 @@ public class EntitySelector implements IMapSerializable
 
         if (this.nbt != null)
         {
-            CompoundTag entityCompound = mcEntity.writeNbt(new CompoundTag());
+            CompoundTag entityCompound = mcEntity.saveWithoutId(new CompoundTag());
 
             if (!this.compare(this.nbt, entityCompound))
             {
@@ -94,7 +93,7 @@ public class EntitySelector implements IMapSerializable
         {
             try
             {
-                this.nbt = (new TagParser(new StringReader(data.getString("nbt")))).parseCompound();
+                this.nbt = TagParser.parseTag(data.getString("nbt"));
             }
             catch (CommandSyntaxException e)
             {
