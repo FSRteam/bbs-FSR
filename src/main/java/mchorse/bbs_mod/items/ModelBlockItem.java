@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.items;
 
-import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -24,8 +23,26 @@ public class ModelBlockItem extends BlockItem
             @Override
             public BlockEntityWithoutLevelRenderer getCustomRenderer()
             {
-                return BBSItemRenderers.getModelBlockCustomRenderer();
+                return resolveRenderer("getModelBlockCustomRenderer");
             }
         });
+    }
+
+    private BlockEntityWithoutLevelRenderer resolveRenderer(String methodName)
+    {
+        try
+        {
+            Class<?> renderersClass = Class.forName("mchorse.bbs_mod.client.renderer.item.BBSItemRenderers");
+            Object renderer = renderersClass.getMethod(methodName).invoke(null);
+
+            if (renderer instanceof BlockEntityWithoutLevelRenderer typedRenderer)
+            {
+                return typedRenderer;
+            }
+        }
+        catch (Exception e)
+        {}
+
+        return null;
     }
 }

@@ -50,8 +50,12 @@ base {
 
 sourceSets {
     main {
-        java.srcDirs = ['src/main/java', 'src/client/java']
-        resources.srcDirs = ['src/main/resources', 'src/client/resources']
+        java.srcDirs = ['src/main/java']
+        resources.srcDirs = ['src/main/resources']
+    }
+    client {
+        java.srcDirs = ['src/client/java']
+        resources.srcDirs = ['src/client/resources']
     }
 }
 

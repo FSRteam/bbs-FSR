@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.items;
 
 import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.forms.FormUtils;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
@@ -98,8 +97,26 @@ public class GunItem extends Item
             @Override
             public BlockEntityWithoutLevelRenderer getCustomRenderer()
             {
-                return BBSItemRenderers.getGunCustomRenderer();
+                return resolveRenderer("getGunCustomRenderer");
             }
         });
+    }
+
+    private BlockEntityWithoutLevelRenderer resolveRenderer(String methodName)
+    {
+        try
+        {
+            Class<?> renderersClass = Class.forName("mchorse.bbs_mod.client.renderer.item.BBSItemRenderers");
+            Object renderer = renderersClass.getMethod(methodName).invoke(null);
+
+            if (renderer instanceof BlockEntityWithoutLevelRenderer typedRenderer)
+            {
+                return typedRenderer;
+            }
+        }
+        catch (Exception e)
+        {}
+
+        return null;
     }
 }

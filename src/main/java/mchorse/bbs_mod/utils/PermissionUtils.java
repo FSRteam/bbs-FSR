@@ -9,7 +9,7 @@ public class PermissionUtils
 {
     public static boolean arePanelsAllowed(MinecraftServer server, ServerPlayer player)
     {
-        GameRules.BooleanValue rule = server.overworld().getGameRules().get(BBSMod.BBS_EDITING_RULE);
+        GameRules.BooleanValue rule = server.overworld().getGameRules().getRule(BBSMod.BBS_EDITING_RULE);
         boolean allowed = rule.get() || server.getPlayerList().isOp(player.getGameProfile());
 
         return allowed;
