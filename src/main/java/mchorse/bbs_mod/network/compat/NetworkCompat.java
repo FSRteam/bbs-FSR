@@ -17,6 +17,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -32,6 +33,7 @@ public final class NetworkCompat
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network");
     private static final String NETWORK_VERSION = "1";
+    private static final String NETWORK_COMPAT_CLIENT_CLASS = "mchorse.bbs_mod.network.compat.NetworkCompatClient";
     private static final Set<String> CHUNKED_PAYLOAD_IDS = Set.of(
         "s1", "s2", "s3", "s4", "s8", "s11",
         "c2", "c3", "c4", "c7", "c10", "c11"
@@ -263,7 +265,21 @@ public final class NetworkCompat
 
     private static void handleClientPayload(RawPayload payload, IPayloadContext context)
     {
-        NetworkCompatClient.dispatchClientPayload(payload.binding().id, wrapBytes(payload.bytes()));
+        FriendlyByteBuf buf = wrapBytes(payload.bytes());
+
+        try
+        {
+            Class<?> bridgeClass = Class.forName(NETWORK_COMPAT_CLIENT_CLASS);
+            Method method = bridgeClass.getMethod("dispatchClientPayload", ResourceLocation.class, FriendlyByteBuf.class);
+
+            method.invoke(null, payload.binding().id, buf);
+        }
+        catch (ReflectiveOperationException | LinkageError e)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.client_dispatch phase=client_payload result=drop reason=bridge_unavailable id={}",
+                payloadKey(payload.binding().id),
+                e);
+        }
     }
 
     private static final class PayloadBinding
