@@ -56,7 +56,15 @@ sourceSets {
     client {
         java.srcDirs = ['src/client/java']
         resources.srcDirs = ['src/client/resources']
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
     }
+}
+
+configurations {
+    clientImplementation.extendsFrom implementation
+    clientCompileOnly.extendsFrom compileOnly
+    clientRuntimeOnly.extendsFrom runtimeOnly
 }
 
 repositories {
@@ -92,13 +100,15 @@ repositories.withType(MavenArtifactRepository).configureEach(rewriteNeoForgedRep
 
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
+    clientImplementation sourceSets.main.output
 
     implementation "org.anarres:jcpp:1.4.14"
     implementation "io.github.douira:glsl-transformer:2.0.0-pre13"
 
+    clientCompileOnly "maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge"
+    clientCompileOnly "maven.modrinth:iris:1.8.8+1.21.1-neoforge"
+
     // TODO: validate 1.21.1-compatible versions for optional client mods before re-enabling
-    // modImplementation "maven.modrinth:sodium:mc1.20.4-0.5.8"
-    // modCompileOnly "maven.modrinth:iris:1.7.2+1.20.4"
     // modCompileOnly "maven.modrinth:distanthorizons:2.1.0-a-1.20.4"
     // modCompileOnly "maven.modrinth:indium:1.0.31+mc1.20.4"
 }
@@ -116,6 +126,18 @@ tasks.withType(JavaCompile).configureEach {
         '-Xmaxerrs', '10000',
         '-Xmaxwarns', '10000'
     ])
+}
+
+tasks.named('clientClasses') {
+    dependsOn tasks.named('compileClientJava')
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('clientClasses')
+}
+
+tasks.named('jar') {
+    from sourceSets.client.output
 }
 
 processResources {
