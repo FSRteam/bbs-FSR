@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.forms;
 
-import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.forms.BlockForm;
@@ -29,7 +28,7 @@ import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
 import mchorse.bbs_mod.forms.renderers.TrailFormRenderer;
 import mchorse.bbs_mod.forms.renderers.VanillaParticleFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.resources.model.ModelBakery;
@@ -37,9 +36,10 @@ import net.minecraft.Util;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
+import java.util.SequencedMap;
 import java.util.Stack;
 
 public class FormUtilsClient
@@ -50,7 +50,7 @@ public class FormUtilsClient
 
     static
     {
-        SortedMap sortedMap = Util.make(new Object2ObjectLinkedOpenHashMap(), map -> {
+        SequencedMap<RenderType, ByteBufferBuilder> sortedMap = Util.make(new LinkedHashMap<>(), map -> {
             assignBufferBuilder(map, Sheets.solidBlockSheet());
             assignBufferBuilder(map, Sheets.cutoutBlockSheet());
             assignBufferBuilder(map, Sheets.bannerSheet());
@@ -60,7 +60,7 @@ public class FormUtilsClient
             assignBufferBuilder(map, Sheets.shulkerBoxSheet());
             assignBufferBuilder(map, Sheets.signSheet());
             assignBufferBuilder(map, Sheets.hangingSignSheet());
-            map.put(Sheets.chestSheet(), new BufferBuilder(786432));
+            map.put(Sheets.chestSheet(), new ByteBufferBuilder(786432));
             assignBufferBuilder(map, RenderType.glint());
             assignBufferBuilder(map, RenderType.armorEntityGlint());
             assignBufferBuilder(map, RenderType.glint());
@@ -72,7 +72,7 @@ public class FormUtilsClient
             ModelBakery.DESTROY_TYPES.forEach(renderLayer -> assignBufferBuilder(map, renderLayer));
         });
 
-        customVertexConsumerProvider = new CustomVertexConsumerProvider(new BufferBuilder(1536), sortedMap);
+        customVertexConsumerProvider = new CustomVertexConsumerProvider(new ByteBufferBuilder(1536), sortedMap);
 
         register(BillboardForm.class, BillboardFormRenderer::new);
         register(ExtrudedForm.class, ExtrudedFormRenderer::new);
@@ -88,9 +88,9 @@ public class FormUtilsClient
         register(FramebufferForm.class, FramebufferFormRenderer::new);
     }
 
-    private static void assignBufferBuilder(Object2ObjectLinkedOpenHashMap<RenderType, BufferBuilder> builderStorage, RenderType layer)
+    private static void assignBufferBuilder(Map<RenderType, ByteBufferBuilder> builderStorage, RenderType layer)
     {
-        builderStorage.put(layer, new BufferBuilder(layer.bufferSize()));
+        builderStorage.put(layer, new ByteBufferBuilder(layer.bufferSize()));
     }
 
     public static CustomVertexConsumerProvider getProvider()

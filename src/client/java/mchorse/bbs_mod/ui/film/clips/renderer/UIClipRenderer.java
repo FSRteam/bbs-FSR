@@ -97,7 +97,7 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
     private void renderEnvelope(UIContext context, Envelope envelope, int duration, int x1, int y1, int x2, int y2)
     {
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix = context.batcher.getContext().pose().last().pose();
 
         if (envelope.keyframes.get())
         {

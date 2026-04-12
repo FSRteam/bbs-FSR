@@ -227,11 +227,11 @@ public class UIFilmController extends UIElement
 
         if (disable)
         {
-            GLFW.glfwSetInputMode(window.getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+            GLFW.glfwSetInputMode(window.getWindow(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         }
         else
         {
-            GLFW.glfwSetInputMode(window.getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+            GLFW.glfwSetInputMode(window.getWindow(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         }
     }
 
@@ -1150,8 +1150,7 @@ public class UIFilmController extends UIElement
         /* Cache the global stuff */
         MatrixStackUtils.cacheMatrices();
 
-        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.BY_Z);
-        RenderSystem.setInverseViewRotationMatrix(new Matrix3f(this.panel.lastView).invert());
+        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.DISTANCE_TO_ORIGIN);
 
         /* Render the stencil */
         PoseStack worldStack = this.worldRenderContext.matrixStack();
@@ -1256,9 +1255,9 @@ public class UIFilmController extends UIElement
             }
         }
 
-        MouseHandler mouse = Minecraft.getInstance().mouse;
-        int x = (int) mouse.getX();
-        int y = (int) mouse.getY();
+        MouseHandler mouse = Minecraft.getInstance().mouseHandler;
+        int x = (int) mouse.xpos();
+        int y = (int) mouse.ypos();
 
         if (this.canControl())
         {
@@ -1366,7 +1365,7 @@ public class UIFilmController extends UIElement
         this.stencil.pick(x, y);
         this.stencil.unbind(this.stencilMap);
 
-        Minecraft.getInstance().getFramebuffer().beginWrite(true);
+        Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
     }
 
     private void ensureStencilFramebuffer()

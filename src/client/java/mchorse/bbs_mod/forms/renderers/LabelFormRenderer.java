@@ -83,7 +83,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
             modelMatrix.scale(scale);
 
-            context.stack.last().setNormal().identity();
+            context.stack.last().normal().identity();
         }
 
         Font renderer = Minecraft.getInstance().font;

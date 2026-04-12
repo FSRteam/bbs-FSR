@@ -43,7 +43,7 @@ public class AnchorFormRenderer extends FormRenderer<AnchorForm>
         }
         else
         {
-            PoseStack stack = context.batcher.getContext().getMatrices();
+            PoseStack stack = context.batcher.getContext().pose();
             Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
 
             RenderSystem.depthFunc(GL11.GL_LEQUAL);

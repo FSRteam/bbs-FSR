@@ -88,7 +88,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
         if (emitter != null)
         {
-            PoseStack stack = context.batcher.getContext().getMatrices();
+            PoseStack stack = context.batcher.getContext().pose();
             int scale = (y2 - y1) / 2;
 
             stack.pushPose();
@@ -124,7 +124,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             this.updateTexture(context.getTransition());
 
-            Matrix4f matrix = new Matrix4f(RenderSystem.getInverseViewRotationMatrix());
+            Matrix4f matrix = new Matrix4f(context.camera.view).invert();
 
             matrix.mul(context.stack.last().pose());
 
@@ -138,7 +138,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             context.stack.pushPose();
             context.stack.setIdentity();
-            context.stack.mulPose(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
+            context.stack.mulPose(new Matrix4f(context.camera.view));
 
             emitter.lastGlobal.set(translation);
             emitter.rotation.set(matrix);
@@ -150,7 +150,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
                 VertexFormat format = shadersEnabled ? DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : DefaultVertexFormat.POSITION_TEXTURE_COLOR_LIGHT;
                 Supplier<ShaderInstance> shader = shadersEnabled
                     ? this.getShader(context, GameRenderer::getRendertypeEntityTranslucentShader, BBSShaders::getPickerBillboardProgram)
-                    : this.getShader(context, GameRenderer::getParticleProgram, BBSShaders::getPickerParticlesProgram);
+                    : this.getShader(context, GameRenderer::getParticleShader, BBSShaders::getPickerParticlesProgram);
 
                 emitter.setupCameraProperties(context.camera);
                 emitter.render(format, shader, context.stack, context.overlay, context.getTransition());
@@ -174,7 +174,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
     @Override
     public void tick(IEntity entity)
     {
-        this.ensureEmitter(entity.getWorld(), 0F);
+        this.ensureEmitter(entity.level(), 0F);
 
         if (this.emitter != null)
         {

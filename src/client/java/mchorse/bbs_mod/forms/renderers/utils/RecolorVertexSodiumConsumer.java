@@ -1,10 +1,9 @@
 package mchorse.bbs_mod.forms.renderers.utils;
 
-import mchorse.bbs_mod.mixin.client.sodium.SodiumBufferBuilderAccessor;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.utils.colors.Color;
 import net.caffeinemc.mods.sodium.api.vertex.buffer.VertexBufferWriter;
-import net.caffeinemc.mods.sodium.api.vertex.format.VertexFormatDescription;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import org.lwjgl.system.MemoryStack;
 
 public class RecolorVertexSodiumConsumer extends RecolorVertexConsumer implements VertexBufferWriter
@@ -17,11 +16,13 @@ public class RecolorVertexSodiumConsumer extends RecolorVertexConsumer implement
     }
 
     @Override
-    public void push(MemoryStack memoryStack, long l, int i, VertexFormatDescription vertexFormatDescription)
+    public void push(MemoryStack memoryStack, long pointer, int count, VertexFormat vertexFormat)
     {
-        if (this.consumer instanceof SodiumBufferBuilderAccessor accessor)
+        VertexBufferWriter writer = VertexBufferWriter.tryOf(this.consumer);
+
+        if (writer != null)
         {
-            accessor.bbs$getBuilder().push(memoryStack, l, i, vertexFormatDescription);
+            writer.push(memoryStack, pointer, count, vertexFormat);
         }
     }
 }

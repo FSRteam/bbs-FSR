@@ -449,14 +449,14 @@ public class UIPropTransform extends UITransform
 
             if (rawX <= border)
             {
-                Window.moveCursor(w - borderPadding, (int) mc.mouse.getY());
+                Window.moveCursor(w - borderPadding, (int) mc.mouseHandler.ypos());
 
                 this.lastX = context.menu.width - (int) (borderPadding / fx);
                 this.checker.mark();
             }
             else if (rawX >= w - border)
             {
-                Window.moveCursor(borderPadding, (int) mc.mouse.getY());
+                Window.moveCursor(borderPadding, (int) mc.mouseHandler.ypos());
 
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();

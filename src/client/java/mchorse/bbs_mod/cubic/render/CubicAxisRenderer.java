@@ -11,7 +11,7 @@ public class CubicAxisRenderer implements ICubicRenderer
     @Override
     public boolean renderGroup(BufferBuilder builder, PoseStack stack, ModelGroup group, Model model)
     {
-        stack.push();
+        stack.pushPose();
         stack.translate(group.initial.translate.x / 16, group.initial.translate.y / 16, group.initial.translate.z / 16);
 
         Matrix4f matrix = stack.last().pose();
@@ -26,7 +26,7 @@ public class CubicAxisRenderer implements ICubicRenderer
         builder.addVertex(matrix, 0, 0, 0).setColor(0, 0, 1, 1);
         builder.addVertex(matrix, 0, 0, f).setColor(0, 0, 1, 1);
 
-        stack.pop();
+        stack.popPose();
 
         return false;
     }

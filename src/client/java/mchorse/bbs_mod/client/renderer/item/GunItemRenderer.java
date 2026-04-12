@@ -82,7 +82,7 @@ public class GunItemRenderer
                 RenderSystem.enableDepthTest();
                 FormUtilsClient.render(form, new FormRenderingContext()
                     .set(resolveRenderType(mode), item.formEntity, matrices, light, overlay, getTickDelta())
-                    .camera(Minecraft.getInstance().gameRenderer.getCamera()));
+                    .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
                 RenderSystem.disableDepthTest();
 
                 matrices.popPose();

@@ -184,10 +184,10 @@ public class Gizmo
             Draw.fillBox(builder, stack, -o, l, l, o, rr, rr, 0F, 1F, 1F); */
         }
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
-        BufferUploader.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
 
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
@@ -247,7 +247,7 @@ public class Gizmo
             Draw.fillBox(builder, stack, -o, l, l, o, rr, rr, STENCIL_ZY / 255F, 0F, 0F); */
         }
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.disableDepthTest();
         BufferUploader.drawWithShader(builder.buildOrThrow());
         RenderSystem.enableDepthTest();

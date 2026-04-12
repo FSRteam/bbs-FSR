@@ -80,7 +80,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.keyDude.keys().register(Keys.MODEL_BLOCKS_MOVE_TO, () ->
         {
             Minecraft mc = Minecraft.getInstance();
-            Camera camera = mc.gameRenderer.getCamera();
+            Camera camera = mc.gameRenderer.getMainCamera();
             BlockHitResult blockHitResult = RayTracing.rayTrace(mc.level, camera.getPosition(), RayTracing.fromVector3f(this.mouseDirection), 512F);
 
             if (blockHitResult.getType() != HitResult.Type.MISS)
@@ -379,8 +379,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         Vec3 pos = camera.getPosition();
 
         Minecraft mc = Minecraft.getInstance();
-        double x = mc.mouse.getX();
-        double y = mc.mouse.getY();
+        double x = mc.mouseHandler.xpos();
+        double y = mc.mouseHandler.ypos();
 
         this.mouseDirection.set(CameraUtils.getMouseDirection(
             RenderSystem.getProjectionMatrix(),
@@ -397,7 +397,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
             if (!this.isEditing(entity))
             {
-                context.matrixStack().push();
+                context.matrixStack().pushPose();
                 context.matrixStack().translate(blockPos.getX() - pos.x, blockPos.getY() - pos.y, blockPos.getZ() - pos.z);
 
                 if (this.hovered == entity || entity == this.modelBlock)
@@ -409,7 +409,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
                     Draw.renderBox(context.matrixStack(), 0D, 0D, 0D, 1D, 1D, 1D);
                 }
 
-                context.matrixStack().pop();
+                context.matrixStack().popPose();
             }
         }
 

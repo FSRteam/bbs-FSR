@@ -61,8 +61,8 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     {
         super.render3D(context);
 
-        Camera camera = Minecraft.getInstance().gameRenderer.getCamera();
-        Matrix4f matrix = new Matrix4f(RenderSystem.getInverseViewRotationMatrix());
+        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        Matrix4f matrix = new Matrix4f(context.camera.view).invert();
 
         matrix.mul(context.stack.last().pose());
 
@@ -72,7 +72,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
         translation.add(cameraPosition.x, cameraPosition.y, cameraPosition.z);
         context.stack.pushPose();
         context.stack.setIdentity();
-        context.stack.mulPose(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
+        context.stack.mulPose(new Matrix4f(context.camera.view));
 
         this.pos.set(translation);
         this.vel.set(0F, 0F, 1F);
@@ -84,7 +84,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     @Override
     public void tick(IEntity entity)
     {
-        Level world = entity.getWorld();
+        Level world = entity.level();
         boolean paused = this.form.paused.get();
         Vector3f temp3f = new Vector3f();
 

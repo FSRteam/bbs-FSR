@@ -147,7 +147,7 @@ public class ClientNetwork
     {
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
-            String filmId = packetByteBuf.readString();
+            String filmId = packetByteBuf.readUtf();
             boolean withCamera = packetByteBuf.readBoolean();
             Film film = new Film();
 
@@ -180,7 +180,7 @@ public class ClientNetwork
 
     private static void handleStopFilmPacket(Minecraft client, FriendlyByteBuf buf)
     {
-        String filmId = buf.readString();
+        String filmId = buf.readUtf();
 
         client.execute(() -> Films.stopFilm(filmId));
     }
@@ -194,7 +194,7 @@ public class ClientNetwork
     {
         crusher.receive(buf, (bytes, packetByteBuf) ->
         {
-            String filmId = packetByteBuf.readString();
+            String filmId = packetByteBuf.readUtf();
             int replayId = packetByteBuf.readInt();
             int tick = packetByteBuf.readInt();
             BaseType data = DataStorageUtils.readFromBytes(bytes);
@@ -209,7 +209,7 @@ public class ClientNetwork
     private static void handleFormTriggerPacket(Minecraft client, FriendlyByteBuf buf)
     {
         int id = buf.readInt();
-        String triggerId = buf.readString();
+        String triggerId = buf.readUtf();
         int type = buf.readInt();
 
         client.execute(() ->
@@ -301,11 +301,11 @@ public class ClientNetwork
     private static void handleActorsPacket(Minecraft client, FriendlyByteBuf buf)
     {
         Map<String, Integer> actors = new HashMap<>();
-        String filmId = buf.readString();
+        String filmId = buf.readUtf();
 
         for (int i = 0, c = buf.readInt(); i < c; i++)
         {
-            String key = buf.readString();
+            String key = buf.readUtf();
             int entityId = buf.readInt();
 
             actors.put(key, entityId);
@@ -342,7 +342,7 @@ public class ClientNetwork
 
     private static void handlePauseFilmPacket(Minecraft client, FriendlyByteBuf buf)
     {
-        String filmId = buf.readString();
+        String filmId = buf.readUtf();
 
         client.execute(() ->
         {
@@ -363,7 +363,7 @@ public class ClientNetwork
     private static void handleAnimationStateModelBlockPacket(Minecraft client, FriendlyByteBuf buf)
     {
         BlockPos pos = buf.readBlockPos();
-        String state = buf.readString();
+        String state = buf.readUtf();
 
         client.execute(() ->
         {
@@ -457,7 +457,7 @@ public class ClientNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(filmId);
+        buf.writeUtf(filmId);
         buf.writeInt(replayId);
         buf.writeInt(tick);
         buf.writeInt(countdown);
@@ -470,7 +470,7 @@ public class ClientNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(filmId);
+        buf.writeUtf(filmId);
         buf.writeBoolean(withCamera);
 
         NetworkCompatClient.sendToServer(ServerNetwork.SERVER_TOGGLE_FILM, buf);
@@ -480,7 +480,7 @@ public class ClientNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(filmId);
+        buf.writeUtf(filmId);
         buf.writeByte(state.ordinal());
         buf.writeInt(tick);
 
@@ -493,12 +493,12 @@ public class ClientNetwork
         {
             DataPath path = data.getPath();
 
-            packetByteBuf.writeString(filmId);
+            packetByteBuf.writeUtf(filmId);
             packetByteBuf.writeInt(path.strings.size());
 
             for (String string : path.strings)
             {
-                packetByteBuf.writeString(string);
+                packetByteBuf.writeUtf(string);
             }
         });
     }
@@ -526,7 +526,7 @@ public class ClientNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(triggerId);
+        buf.writeUtf(triggerId);
         buf.writeInt(type);
 
         NetworkCompatClient.sendToServer(ServerNetwork.SERVER_ANIMATION_STATE_TRIGGER, buf);
@@ -555,7 +555,7 @@ public class ClientNetwork
     {
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
-        buf.writeString(filmId);
+        buf.writeUtf(filmId);
 
         NetworkCompatClient.sendToServer(ServerNetwork.SERVER_PAUSE_FILM, buf);
     }

@@ -19,6 +19,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -70,7 +72,7 @@ public class ModelBlockItemRenderer
                 RenderSystem.enableDepthTest();
                 FormUtilsClient.render(form, new FormRenderingContext()
                     .set(resolveRenderType(mode), item.formEntity, matrices, light, overlay, getTickDelta())
-                    .camera(Minecraft.getInstance().gameRenderer.getCamera()));
+                    .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
                 RenderSystem.disableDepthTest();
 
                 matrices.popPose();
@@ -90,18 +92,18 @@ public class ModelBlockItemRenderer
             return this.map.get(stack);
         }
 
-        CompoundTag nbt = stack.getTag();
-        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ORIGIN, BBSMod.MODEL_BLOCK.getDefaultState());
+        CustomData blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ORIGIN, BBSMod.MODEL_BLOCK.defaultBlockState());
         Item item = new Item(entity);
 
         this.map.put(stack, item);
 
-        if (nbt == null)
+        if (blockEntityData == null || blockEntityData.isEmpty())
         {
             return item;
         }
 
-        applyBlockEntityTag(entity, nbt.getCompound("BlockEntityTag"));
+        applyBlockEntityTag(entity, blockEntityData.copyTag());
 
         return item;
     }

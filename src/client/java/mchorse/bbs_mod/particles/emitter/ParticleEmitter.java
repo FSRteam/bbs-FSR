@@ -460,7 +460,7 @@ public class ParticleEmitter
 
             if (meshData != null)
             {
-                RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
+                RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
                 RenderSystem.disableCull();
                 BufferUploader.drawWithShader(meshData);
                 RenderSystem.enableCull();

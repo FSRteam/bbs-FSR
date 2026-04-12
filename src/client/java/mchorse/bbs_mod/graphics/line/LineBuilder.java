@@ -79,14 +79,14 @@ public class LineBuilder <T>
 
     public void render(Batcher2D batcher2D, ILineRenderer<T> renderer)
     {
-        Matrix4f matrix = batcher2D.getContext().getMatrices().last().pose();
+        Matrix4f matrix = batcher2D.getContext().pose().last().pose();
         List<List<LinePoint<T>>> build = this.build();
 
         for (List<LinePoint<T>> points : build)
         {
             BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
 
-            RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+            RenderSystem.setShader(GameRenderer::getPositionColorShader);
             RenderSystem.enableBlend();
 
             for (LinePoint<T> point : points)

@@ -1,18 +1,18 @@
 package mchorse.bbs_mod.forms;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
-import com.mojang.blaze3d.vertex.BufferBuilder;
 import net.minecraft.client.renderer.RenderType;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import org.lwjgl.opengl.GL11;
 
-import java.util.Map;
+import java.util.SequencedMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-public class CustomVertexConsumerProvider extends MultiBufferSource.Immediate
+public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
 {
     private static Consumer<RenderType> runnables;
 
@@ -37,7 +37,7 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.Immediate
         runnables = null;
     }
 
-    public CustomVertexConsumerProvider(BufferBuilder fallback, Map<RenderType, BufferBuilder> layers)
+    public CustomVertexConsumerProvider(ByteBufferBuilder fallback, SequencedMap<RenderType, ByteBufferBuilder> layers)
     {
         super(fallback, layers);
     }
@@ -77,7 +77,7 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.Immediate
 
     public void draw()
     {
-        super.draw();
+        this.endBatch();
 
         if (this.ui)
         {

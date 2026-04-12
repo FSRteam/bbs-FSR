@@ -83,7 +83,7 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
 
     private void renderCube(List<Float> vertices, List<Float> normals, List<Float> uvs, PoseStack stack, ModelGroup group, ModelCube cube)
     {
-        stack.push();
+        stack.pushPose();
         CubicCubeRenderer.moveToPivot(stack, cube.pivot);
         CubicCubeRenderer.rotate(stack, cube.rotate);
         CubicCubeRenderer.moveBackFromPivot(stack, cube.pivot);
@@ -104,12 +104,12 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
             }
         }
 
-        stack.pop();
+        stack.popPose();
     }
 
     private void renderMesh(List<Float> vertices, List<Float> normals, List<Float> uvs, PoseStack stack, Model model, ModelGroup group, ModelMesh mesh)
     {
-        stack.push();
+        stack.pushPose();
         CubicCubeRenderer.moveToPivot(stack, mesh.origin);
         CubicCubeRenderer.rotate(stack, mesh.rotate);
         CubicCubeRenderer.moveBackFromPivot(stack, mesh.origin);
@@ -147,7 +147,7 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
             this.writeVertex(vertices, normals, uvs, stack, group, this.modelVertex, this.normal);
         }
 
-        stack.pop();
+        stack.popPose();
     }
 
     private void writeVertex(List<Float> vertices, List<Float> normals, List<Float> uvs, PoseStack stack, ModelGroup group, ModelVertex vertex, Vector3f normal)

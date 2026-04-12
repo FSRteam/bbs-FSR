@@ -15,7 +15,7 @@ import mchorse.bbs_mod.utils.MatrixStackUtils;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
-import net.minecraft.client.renderer.DiffuseLighting;
+import com.mojang.blaze3d.platform.Lighting;
 import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -23,7 +23,6 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Intersectiond;
 import org.joml.Matrix3d;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -211,24 +210,22 @@ public abstract class UIModelRenderer extends UIElement
         this.setupPosition();
         this.setupViewport(context);
 
-        PoseStack stack = context.render.batcher.getContext().getMatrices();
+        PoseStack stack = context.render.batcher.getContext().pose();
 
         /* Cache the global stuff */
         MatrixStackUtils.cacheMatrices();
 
-        RenderSystem.setProjectionMatrix(this.camera.projection, VertexSorting.BY_Z);
-        RenderSystem.setInverseViewRotationMatrix(new Matrix3f(this.camera.view).invert());
+        RenderSystem.setProjectionMatrix(this.camera.projection, VertexSorting.DISTANCE_TO_ORIGIN);
 
         /* Rendering begins... */
-        stack.push();
+        stack.pushPose();
         MatrixStackUtils.multiply(stack, this.camera.view);
         stack.translate(-this.camera.position.x, -this.camera.position.y, -this.camera.position.z);
         MatrixStackUtils.multiply(stack, this.transform);
 
         RenderSystem.setupLevelDiffuseLighting(
             new Vector3f(0, 0.85F, -1).normalize(),
-            new Vector3f(0, 0.85F, 1).normalize(),
-            this.camera.view
+            new Vector3f(0, 0.85F, 1).normalize()
         );
 
         if (this.grid)
@@ -238,14 +235,14 @@ public abstract class UIModelRenderer extends UIElement
 
         this.renderUserModel(context);
 
-        DiffuseLighting.disableGuiDepthLighting();
+        Lighting.setupForFlatItems();
 
-        stack.pop();
+        stack.popPose();
 
         /* Return back to orthographic projection */
         Minecraft mc = Minecraft.getInstance();
 
-        RenderSystem.viewport(0, 0, mc.getWindow().getFramebufferWidth(), mc.getWindow().getFramebufferHeight());
+        RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
         MatrixStackUtils.restoreMatrices();
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
@@ -346,10 +343,10 @@ public abstract class UIModelRenderer extends UIElement
      */
     protected void renderGrid(UIContext context)
     {
-        Matrix4f matrix4f = context.batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix4f = context.batcher.getContext().pose().last().pose();
         BufferBuilder builder;
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
         for (int x = 0; x <= 10; x ++)
@@ -380,6 +377,6 @@ public abstract class UIModelRenderer extends UIElement
             }
         }
 
-        BufferUploader.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 }

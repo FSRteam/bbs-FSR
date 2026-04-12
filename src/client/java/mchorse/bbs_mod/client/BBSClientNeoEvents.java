@@ -159,7 +159,7 @@ public final class BBSClientNeoEvents
         BBSRendering.lastAction = event.getAction();
 
         BBSModClient.onEndKey(
-            Minecraft.getInstance().getWindow().getHandle(),
+            Minecraft.getInstance().getWindow().getWindow(),
             event.getKey(),
             event.getScanCode(),
             event.getAction(),

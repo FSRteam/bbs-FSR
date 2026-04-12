@@ -527,7 +527,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
     protected void renderGraph(UIContext context)
     {
         BufferBuilder builder;
-        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix = context.batcher.getContext().pose().last().pose();
 
         UIKeyframeSheet sheet = this.sheet;
         List keyframes = sheet.channel.getKeyframes();
@@ -717,7 +717,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         }
 
         RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 

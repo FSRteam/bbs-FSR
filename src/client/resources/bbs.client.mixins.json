@@ -26,6 +26,7 @@
         "KeyboardInputMixin",
         "EntityRendererMixin",
         "ClientPlayerEntityAccessor",
+        "MinecraftAccessor",
         "iris.IrisRenderingPipelineAccessor",
         "iris.CustomUniformsBuilderMixin",
         "iris.CustomUniformsAccessor",

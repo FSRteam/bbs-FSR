@@ -31,7 +31,7 @@ public class EntitySelector implements IMapSerializable
             return false;
         }
 
-        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getId(mcEntity.getType());
+        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(mcEntity.getType());
 
         if (!id.equals(this.entity))
         {

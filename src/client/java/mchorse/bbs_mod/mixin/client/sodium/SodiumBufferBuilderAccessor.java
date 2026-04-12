@@ -1,13 +1,11 @@
 package mchorse.bbs_mod.mixin.client.sodium;
 
-import me.jellysquid.mods.sodium.client.render.vertex.buffer.ExtendedBufferBuilder;
-import me.jellysquid.mods.sodium.client.render.vertex.buffer.SodiumBufferBuilder;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import net.caffeinemc.mods.sodium.client.render.vertex.buffer.BufferBuilderExtension;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.gen.Accessor;
 
-@Mixin(SodiumBufferBuilder.class)
+@Mixin(BufferBuilder.class)
 public interface SodiumBufferBuilderAccessor
+    extends BufferBuilderExtension
 {
-    @Accessor(value = "builder", remap = false)
-    public ExtendedBufferBuilder bbs$getBuilder();
 }

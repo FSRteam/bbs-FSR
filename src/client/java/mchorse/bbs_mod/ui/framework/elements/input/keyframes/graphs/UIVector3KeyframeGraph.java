@@ -102,7 +102,7 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
 
         /* Render track bars (horizontal lines) */
         BufferBuilder builder;
-        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix = context.batcher.getContext().pose().last().pose();
         
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
@@ -112,8 +112,8 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
         }
         
         RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferUploader.drawWithGlobalProgram(builder.end());
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
     private void renderGraphLine(UIContext context, int axis, KeyframeSegment segment)

@@ -55,7 +55,7 @@ public class ExtraFormSection extends FormSection
 
         billboard.texture.set(Link.assets("textures/error.png"));
         extruded.texture.set(Link.assets("textures/error.png"));
-        block.blockState.set(Blocks.GRASS_BLOCK.getDefaultState());
+        block.blockState.set(Blocks.GRASS_BLOCK.defaultBlockState());
         item.stack.set(new ItemStack(Items.STICK));
 
         extra.addForm(anchor);

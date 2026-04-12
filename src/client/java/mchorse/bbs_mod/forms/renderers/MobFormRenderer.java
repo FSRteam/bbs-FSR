@@ -210,7 +210,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.entity != null)
         {
-            PoseStack stack = context.batcher.getContext().getMatrices();
+            PoseStack stack = context.batcher.getContext().pose();
 
             stack.pushPose();
 
@@ -228,7 +228,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (!this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
+                stack.mulPose(Axis.YP.rotation(MathUtils.PI));
             }
 
             stack.last().normal().getScale(Vectors.EMPTY_3F);
@@ -303,7 +303,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                context.stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
+                context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
             }
 
             if (this.entity instanceof LivingEntity entity)

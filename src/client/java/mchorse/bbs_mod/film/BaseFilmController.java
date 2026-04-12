@@ -128,8 +128,8 @@ public abstract class BaseFilmController
         }
 
         BlockPos pos = BlockPos.containing(position.x, position.y + 0.5D, position.z);
-        int sky = entity.getWorld().getBrightness(LightLayer.SKY, pos);
-        int torch = entity.getWorld().getBrightness(LightLayer.BLOCK, pos);
+        int sky = entity.level().getBrightness(LightLayer.SKY, pos);
+        int torch = entity.level().getBrightness(LightLayer.BLOCK, pos);
         int light = LightTexture.pack(torch, sky);
         int overlay = OverlayTexture.pack(OverlayTexture.u(0F), OverlayTexture.v(entity.getHurtTimer() > 0));
 

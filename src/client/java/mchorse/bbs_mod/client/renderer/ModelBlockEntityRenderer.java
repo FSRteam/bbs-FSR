@@ -56,7 +56,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
             return;
         }
 
-        if (entity == null || entity.getLevel() != world)
+        if (entity == null || entity.level() != world)
         {
             entity = new ActorEntity(BBSMod.ACTOR_ENTITY, world);
         }
@@ -69,14 +69,14 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         entity.prevY = y;
         entity.prevZ = z;
 
-        double distance = Minecraft.getInstance().getEntityRenderDispatcher().getSquaredDistanceToCamera(x, y, z);
+        double distance = Minecraft.getInstance().getEntityRenderDispatcher().distanceToSqr(x, y, z);
 
         opacity = (float) ((1D - distance / 256D) * opacity);
 
         matrices.pushPose();
         matrices.translate(tx, ty, tz);
 
-        EntityRendererDispatcherInvoker.bbs$renderShadow(matrices, provider, entity, opacity, tickDelta, entity.getLevel(), radius);
+        EntityRendererDispatcherInvoker.bbs$renderShadow(matrices, provider, entity, opacity, tickDelta, entity.level(), radius);
 
         matrices.popPose();
     }
@@ -141,8 +141,8 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
             MatrixStackUtils.applyTransform(matrices, applied);
 
-            int lightAbove = LevelRenderer.getLightColor(entity.getLevel(), pos.offset((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
-            Camera camera = mc.gameRenderer.getCamera();
+            int lightAbove = LevelRenderer.getLightColor(entity.level(), pos.offset((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
+            Camera camera = mc.gameRenderer.getMainCamera();
 
             RenderSystem.enableDepthTest();
             FormUtilsClient.render(properties.getForm(), new FormRenderingContext()
@@ -163,7 +163,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
         RenderSystem.disableDepthTest();
 
-        if (mc.getDebugHud().shouldShowDebugHud())
+        if (mc.getDebugOverlay().showDebugScreen())
         {
             Draw.renderBox(matrices, -0.5D, 0, -0.5D, 1, 1, 1, 0, 0.5F, 1F, 0.5F);
         }
@@ -186,7 +186,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
     private Transform applyLookingAnimation(Minecraft mc, ModelBlockEntity entity, ModelProperties properties, float tickDelta)
     {
         Transform transform = properties.getTransform();
-        Camera camera = mc.gameRenderer.getCamera();
+        Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 position = !mc.options.getCameraType().isFirstPerson() && mc.player != null
             ? mc.player.getEyePosition(tickDelta)
             : camera.getPosition();

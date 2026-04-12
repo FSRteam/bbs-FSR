@@ -64,19 +64,19 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
         Minecraft.getInstance().gameRenderer.getLightmapTextureManager().enable();
 
-        PoseStack stack = context.batcher.getContext().getMatrices();
+        PoseStack stack = context.batcher.getContext().pose();
 
-        stack.push();
+        stack.pushPose();
         stack.loadIdentity();
-        stack.multiplyPositionMatrix(new Matrix4f(RenderSystem.getInverseViewRotationMatrix()).invert());
+        stack.multiplyPositionMatrix(new Matrix4f(this.camera.view));
 
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
-        this.emitter.render(DefaultVertexFormat.POSITION_TEXTURE_COLOR_LIGHT, GameRenderer::getParticleProgram, stack, OverlayTexture.DEFAULT_UV, context.getTransition());
+        this.emitter.render(DefaultVertexFormat.POSITION_TEXTURE_COLOR_LIGHT, GameRenderer::getParticleShader, stack, OverlayTexture.DEFAULT_UV, context.getTransition());
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();
 
-        stack.pop();
+        stack.popPose();
 
         ParticleComponentKillPlane plane = this.emitter.scheme.get(ParticleComponentKillPlane.class);
 
@@ -88,7 +88,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
     private void renderPlane(UIContext context, float a, float b, float c, float d)
     {
-        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix = context.batcher.getContext().pose().last().pose();
         BufferBuilder builder;
         final float alpha = 0.5F;
 
@@ -108,9 +108,9 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
         this.calculate(1, 1, a, b, c, d);
         builder.addVertex(matrix, this.vector.x, this.vector.y, this.vector.z).setColor(0, 1, 0, alpha);
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.disableCull();
-        BufferUploader.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
         RenderSystem.enableCull();
     }
 
@@ -145,7 +145,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
         if (UIBaseMenu.renderAxes)
         {
-            Draw.coolerAxes(context.batcher.getContext().getMatrices(), 1F, 0.01F, 1.01F, 0.02F);
+            Draw.coolerAxes(context.batcher.getContext().pose(), 1F, 0.01F, 1.01F, 0.02F);
         }
     }
 }

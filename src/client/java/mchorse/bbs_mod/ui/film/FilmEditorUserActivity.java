@@ -67,7 +67,7 @@ public final class FilmEditorUserActivity
             return true;
         }
 
-        long handle = mc.getWindow().getHandle();
+        long handle = mc.getWindow().getWindow();
 
         for (int b = 0; b <= GLFW.GLFW_MOUSE_BUTTON_LAST; b++)
         {

@@ -30,6 +30,7 @@ import mchorse.bbs_mod.utils.sodium.SodiumUtils;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
+import mchorse.bbs_mod.mixin.client.MinecraftAccessor;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.pipeline.MainTarget;
@@ -196,7 +197,7 @@ public class BBSRendering
 
         ModelBlockEntityUpdateCallback.EVENT.register((entity) ->
         {
-            if (entity.getWorld().isClient())
+            if (entity.level().isClient())
             {
                 capturedModelBlocks.add(entity);
             }
@@ -221,7 +222,7 @@ public class BBSRendering
     {
         Window window = Minecraft.getInstance().getWindow();
 
-        framebuffer = new MainTarget(window.getFramebufferWidth(), window.getFramebufferHeight());
+        framebuffer = new MainTarget(window.getWidth(), window.getHeight());
     }
 
     public static void resizeExtraFramebuffers()
@@ -250,8 +251,8 @@ public class BBSRendering
         }
 
         Minecraft mc = Minecraft.getInstance();
-        int w = mc.getWindow().getFramebufferWidth();
-        int h = mc.getWindow().getFramebufferHeight();
+        int w = mc.getWindow().getWidth();
+        int h = mc.getWindow().getHeight();
 
         if (framebuffer.width == w && framebuffer.height == h)
         {
@@ -275,8 +276,8 @@ public class BBSRendering
 
         if (toggleFramebuffer)
         {
-            int w = mc.getWindow().getFramebufferWidth();
-            int h = mc.getWindow().getFramebufferHeight();
+            int w = mc.getWindow().getWidth();
+            int h = mc.getWindow().getHeight();
 
             resizeExtraFramebuffers();
 
@@ -293,8 +294,8 @@ public class BBSRendering
         }
         else
         {
-            int drawW = window.getFramebufferWidth();
-            int drawH = window.getFramebufferHeight();
+            int drawW = window.getWidth();
+            int drawH = window.getHeight();
             reassignFramebuffer(clientFramebuffer);
 
             mc.getMainRenderTarget().bindWrite(true);
@@ -316,7 +317,7 @@ public class BBSRendering
 
     private static void reassignFramebuffer(RenderTarget framebuffer)
     {
-        Minecraft.getInstance().mainRenderTarget = framebuffer;
+        ((MinecraftAccessor) Minecraft.getInstance()).bbs$setMainRenderTarget(framebuffer);
     }
 
     /* Rendering */
@@ -352,7 +353,7 @@ public class BBSRendering
             GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
             Batcher2D batcher = new Batcher2D(drawContext);
 
-            UISubtitleRenderer.renderSubtitles(batcher.getContext().getMatrices(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
+            UISubtitleRenderer.renderSubtitles(batcher.getContext().pose(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
         }
 
         if (!customSize)
@@ -368,7 +369,7 @@ public class BBSRendering
         {
             if (dashboard.getPanels().panel instanceof UIFilmPanel panel)
             {
-                UISubtitleRenderer.renderSubtitles(currentMenu.context.batcher.getContext().getMatrices(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
+                UISubtitleRenderer.renderSubtitles(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
             }
         }
 
@@ -406,7 +407,7 @@ public class BBSRendering
         if (isIrisShadersEnabled())
         {
             renderCoolStuff(new BbsWorldRenderContext(
-                mc.gameRenderer.getCamera(),
+                mc.gameRenderer.getMainCamera(),
                 stack,
                 mc.renderBuffers().bufferSource(),
                 getTickDelta(mc)
@@ -543,7 +544,7 @@ public class BBSRendering
 
     public static Long getTimeOfDay()
     {
-        if (!Minecraft.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isSameThread())
         {
             return null;
         }
@@ -564,7 +565,7 @@ public class BBSRendering
 
     public static Double getBrightness()
     {
-        if (!Minecraft.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isSameThread())
         {
             return null;
         }
@@ -585,7 +586,7 @@ public class BBSRendering
 
     public static Double getWeather()
     {
-        if (!Minecraft.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isSameThread())
         {
             return null;
         }
@@ -606,7 +607,7 @@ public class BBSRendering
 
     public static Integer getChromaSkyColorArgb()
     {
-        if (!Minecraft.getInstance().isOnThread())
+        if (!Minecraft.getInstance().isSameThread())
         {
             return null;
         }

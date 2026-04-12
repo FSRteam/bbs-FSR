@@ -80,10 +80,10 @@ public class UIColorPicker extends UIElement
 
     public static void renderAlphaPreviewQuad(Batcher2D batcher, int x1, int y1, int x2, int y2, Color color)
     {
-        Matrix4f matrix4f = batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix4f = batcher.getContext().pose().last().pose();
         BufferBuilder builder;
 
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.enableBlend();
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 

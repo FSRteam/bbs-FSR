@@ -256,7 +256,7 @@ public class UICurve extends UIElement
 
     private void drawGraph(UIContext context)
     {
-        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix = context.batcher.getContext().pose().last().pose();
         int c = this.curve.nodes.size();
 
         BufferBuilder builder;
@@ -290,7 +290,7 @@ public class UICurve extends UIElement
             builder.addVertex(matrix, (float) last.x, this.graph.ey(), 0F).setColor(0.25F, 0.25F, 0.25F, 0.5F);
         }
 
-        BufferUploader.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
 
         Color color = Colors.COLOR;
         LineBuilder line = new LineBuilder(0.75F);

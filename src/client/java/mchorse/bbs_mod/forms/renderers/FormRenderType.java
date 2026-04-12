@@ -8,7 +8,7 @@ public enum FormRenderType
 
     public static FormRenderType fromModelMode(ItemDisplayContext mode)
     {
-        if (mode.isFirstPerson())
+        if (mode.firstPerson())
         {
             return ITEM_FP;
         }

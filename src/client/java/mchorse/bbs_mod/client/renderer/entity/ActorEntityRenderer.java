@@ -56,7 +56,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         RenderSystem.enableDepthTest();
         FormUtilsClient.render(livingEntity.getForm(), new FormRenderingContext()
             .set(FormRenderType.ENTITY, livingEntity.getEntity(), matrices, light, overlay, tickDelta)
-            .camera(Minecraft.getInstance().gameRenderer.getCamera()));
+            .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();
 
@@ -72,7 +72,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
 
     protected void setupTransforms(ActorEntity entity, PoseStack matrices, float bodyYaw, float tickDelta)
     {
-        if (!entity.isInPose(Pose.SLEEPING))
+        if (entity.getPose() != Pose.SLEEPING)
         {
             matrices.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
         }

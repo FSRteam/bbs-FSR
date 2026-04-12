@@ -239,7 +239,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.animator != null && model != null)
         {
-            PoseStack stack = context.batcher.getContext().getMatrices();
+            PoseStack stack = context.batcher.getContext().pose();
 
             stack.pushPose();
 
@@ -347,7 +347,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             stack.pushPose();
             MatrixStackUtils.multiply(stack, matrix);
             MatrixStackUtils.applyTransform(stack, armorSlot.transform);
-            stack.mulPose(Axis.POSITIVE_X.rotationDegrees(180F));
+            stack.mulPose(Axis.XP.rotationDegrees(180F));
 
             CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
 
@@ -382,8 +382,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 stack.pushPose();
                 MatrixStackUtils.multiply(stack, matrix);
-                stack.mulPose(Axis.POSITIVE_X.rotationDegrees(90F));
-                stack.mulPose(Axis.POSITIVE_Y.rotationDegrees(180F));
+                stack.mulPose(Axis.XP.rotationDegrees(90F));
+                stack.mulPose(Axis.YP.rotationDegrees(180F));
                 stack.translate(0F, 0.125F, 0F);
                 MatrixStackUtils.applyTransform(stack, armorSlot.transform);
 
@@ -398,12 +398,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 {
                     stack.pushPose();
                     stack.scale(0F, 0F, 0F);
-                    Minecraft.getInstance().getItemRenderer().renderItem(null, new ItemStack(Items.OAK_BUTTON), mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.getWorld(), light, overlay, 0);
+                    Minecraft.getInstance().getItemRenderer().renderItem(null, new ItemStack(Items.OAK_BUTTON), mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                     consumers.draw();
                     stack.popPose();
                 }
 
-                Minecraft.getInstance().getItemRenderer().renderItem(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.getWorld(), light, overlay, 0);
+                Minecraft.getInstance().getItemRenderer().renderItem(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                 consumers.draw();
                 consumers.setSubstitute(null);
 
@@ -457,7 +457,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             model.model.resetPose();
 
             matrices.pushPose();
-            matrices.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
+            matrices.mulPose(Axis.YP.rotation(MathUtils.PI));
             MatrixStackUtils.applyTransform(matrices, slot.transform);
 
             BBSModClient.getTextures().bindTexture(texture);
@@ -503,7 +503,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             this.animator.applyActions(context.entity, model, context.getTransition());
             model.model.applyPose(this.getPose());
 
-            context.stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
+            context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
 
             BBSModClient.getTextures().bindTexture(texture);
 
@@ -552,7 +552,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             }
             else
             {
-                context.stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
+                context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
             }
 
             this.renderBodyPart(part, context);
@@ -590,7 +590,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             this.animator.applyActions(entity, model, transition);
             model.model.applyPose(this.getPose());
 
-            stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
+            stack.mulPose(Axis.YP.rotation(MathUtils.PI));
             this.captureMatrices(model);
         }
 
@@ -631,7 +631,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 }
                 else
                 {
-                    stack.mulPose(Axis.POSITIVE_Y.rotation(MathUtils.PI));
+                    stack.mulPose(Axis.YP.rotation(MathUtils.PI));
                 }
 
                 MatrixStackUtils.applyTransform(stack, part.transform.get());

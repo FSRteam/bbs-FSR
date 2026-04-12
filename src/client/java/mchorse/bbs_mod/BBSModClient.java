@@ -488,7 +488,7 @@ public class BBSModClient
                     color.r, color.g, color.b, 1F
                 );
 
-                RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+                RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
                 BufferUploader.drawWithShader(builder.buildOrThrow());
                 RenderSystem.disableDepthTest();
@@ -610,7 +610,7 @@ public class BBSModClient
 
         if (gunZoom != null)
         {
-            gunZoom.update(keyZoom.isDown(), Minecraft.getInstance().getDeltaFrameTime());
+            gunZoom.update(keyZoom.isDown(), Minecraft.getInstance().getTimer().getGameTimeDeltaTicks());
 
             if (gunZoom.canBeRemoved())
             {
@@ -632,7 +632,7 @@ public class BBSModClient
 
         Window window = Minecraft.getInstance().getWindow();
 
-        originalFramebufferScale = window.getFramebufferWidth() / window.getWidth();
+        originalFramebufferScale = window.getWidth() / window.getWidth();
     }
 
     private static void ensureKeyMappingsCreated()
@@ -840,7 +840,7 @@ public class BBSModClient
     {
         if (key.isEmpty())
         {
-            key = Minecraft.getInstance().options.language().get();
+            key = Minecraft.getInstance().options.languageCode;
         }
 
         return key;

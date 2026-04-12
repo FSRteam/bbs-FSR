@@ -5,7 +5,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.utils.OS;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.sound.SoundEvents;
+import net.minecraft.sounds.SoundEvents;
 
 import java.io.File;
 import java.io.IOException;

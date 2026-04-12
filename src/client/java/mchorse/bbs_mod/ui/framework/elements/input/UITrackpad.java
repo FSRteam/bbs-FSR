@@ -716,7 +716,7 @@ public class UITrackpad extends UIBaseTextbox
 
                 if (mouseX <= border)
                 {
-                    Window.moveCursor(ww - (int) (factor * borderPadding), (int) mc.mouse.getY());
+                    Window.moveCursor(ww - (int) (factor * borderPadding), (int) mc.mouseHandler.ypos());
 
                     this.shiftX -= context.menu.width - borderPadding * 2;
                     this.changed.mark();
@@ -724,7 +724,7 @@ public class UITrackpad extends UIBaseTextbox
                 }
                 else if (mouseX >= context.menu.width - border)
                 {
-                    Window.moveCursor((int) (factor * borderPadding), (int) mc.mouse.getY());
+                    Window.moveCursor((int) (factor * borderPadding), (int) mc.mouseHandler.ypos());
 
                     this.shiftX += context.menu.width - borderPadding * 2;
                     this.changed.mark();

@@ -53,7 +53,7 @@ public class MorphRenderer
 
                 FormUtilsClient.render(morph.getForm(), new FormRenderingContext()
                     .set(FormRenderType.ENTITY, morph.entity, matrixStack, i, overlay, g)
-                    .camera(Minecraft.getInstance().gameRenderer.getCamera()));
+                    .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
 
                 matrixStack.popPose();
 
@@ -107,7 +107,7 @@ public class MorphRenderer
 
             FormUtilsClient.render(form, new FormRenderingContext()
                 .set(FormRenderType.ENTITY, owner.entity, matrixStack, i, o, g)
-                .camera(Minecraft.getInstance().gameRenderer.getCamera()));
+                .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
 
             matrixStack.popPose();
 

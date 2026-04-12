@@ -88,7 +88,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
             RenderSystem.disableDepthTest();
 
-            BufferUploader.drawWithGlobalProgram(builder.end());
+            BufferUploader.drawWithShader(builder.buildOrThrow());
 
             return;
         }
@@ -99,7 +99,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         }
 
         PoseStack stack = context.stack;
-        Matrix4f camInverse = new Matrix4f(RenderSystem.getInverseViewRotationMatrix());
+        Matrix4f camInverse = new Matrix4f(context.camera.view).invert();
 
         Camera camera = context.camera;
         double baseX = camera.position.x;
@@ -143,7 +143,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
         while (it.hasNext())
         {
-            Trail trail = it;
+            Trail trail = it.next();
 
             if (trail.tick < end)
             {
@@ -177,7 +177,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
         for (it = trails.iterator(); it.hasNext(); last = trail)
         {
-            trail = it;
+            trail = it.next();
 
             if (last != null && !last.stop && !trail.stop)
             {
@@ -236,7 +236,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableBlend();
-        BufferUploader.drawWithGlobalProgram(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
         RenderSystem.enableDepthTest();
 
         stack.popPose();

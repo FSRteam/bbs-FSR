@@ -32,7 +32,7 @@ public class ContentType
 
     private static IRepository<? extends ValueGroup> getFilmsRepository()
     {
-        if (Minecraft.getInstance().isIntegratedServerRunning())
+        if (Minecraft.getInstance().hasSingleplayerServer())
         {
             return FILMS_REPOSITORY;
         }

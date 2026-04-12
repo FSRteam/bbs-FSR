@@ -31,7 +31,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         context.batcher.getContext().draw();
 
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
-        PoseStack matrices = context.batcher.getContext().getMatrices();
+        PoseStack matrices = context.batcher.getContext().pose();
 
         Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
 

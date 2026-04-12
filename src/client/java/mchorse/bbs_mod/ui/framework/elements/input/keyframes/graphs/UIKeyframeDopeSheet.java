@@ -901,7 +901,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         Area area = this.keyframes.graphArea;
         BufferBuilder builder;
-        Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+        Matrix4f matrix = context.batcher.getContext().pose().last().pose();
 
         context.batcher.clip(area, context);
         this.renderElements(context, builder, matrix, area, this.elements, 0, this.getDopeSheetY());
@@ -1056,7 +1056,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         context.batcher.fillRect(builder, matrix, area.x, my - 1, area.w, 2, cc, cc, cc, cc);
 
         RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
@@ -1175,7 +1175,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         }
 
         RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
@@ -1213,7 +1213,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         if (!this.elements.isEmpty())
         {
             BufferBuilder builder;
-            Matrix4f matrix = context.batcher.getContext().getMatrices().last().pose();
+            Matrix4f matrix = context.batcher.getContext().pose().last().pose();
 
             this.renderLabels(context, builder, matrix, this.elements, 0, this.getDopeSheetY());
         }

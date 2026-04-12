@@ -32,14 +32,14 @@ public class CubicRenderer
      */
     private static boolean processRenderRecursively(ICubicRenderer renderProcessor, BufferBuilder builder, PoseStack stack, Model model, ModelGroup group)
     {
-        stack.push();
+        stack.pushPose();
         renderProcessor.applyGroupTransformations(stack, group);
 
         if (group.visible)
         {
             if (renderProcessor.renderGroup(builder, stack, group, model))
             {
-                stack.pop();
+                stack.popPose();
 
                 return true;
             }
@@ -49,13 +49,13 @@ public class CubicRenderer
         {
             if (processRenderRecursively(renderProcessor, builder, stack, model, childGroup))
             {
-                stack.pop();
+                stack.popPose();
 
                 return true;
             }
         }
 
-        stack.pop();
+        stack.popPose();
 
         return false;
     }
