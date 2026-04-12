@@ -65,13 +65,10 @@ main:
         - name: build
           script: |
             set -eu
-            export GRADLE_USER_HOME=/tmp/gradle-home
-            rm -rf "$GRADLE_USER_HOME"
-            mkdir -p "$GRADLE_USER_HOME"
+            export GRADLE_USER_HOME=/workspace/.gradle-home
             chmod +x ./gradlew
             set -- \
               --no-daemon \
-              --refresh-dependencies \
               build \
               --stacktrace \
               -PbbsPreferMirror=true \
@@ -149,13 +146,10 @@ main:
         - name: build
           script: |
             set -eu
-            export GRADLE_USER_HOME=/tmp/gradle-home
-            rm -rf "$GRADLE_USER_HOME"
-            mkdir -p "$GRADLE_USER_HOME"
+            export GRADLE_USER_HOME=/workspace/.gradle-home
             chmod +x ./gradlew
             set -- \
               --no-daemon \
-              --refresh-dependencies \
               build \
               --stacktrace \
               -PbbsPreferMirror=true \
