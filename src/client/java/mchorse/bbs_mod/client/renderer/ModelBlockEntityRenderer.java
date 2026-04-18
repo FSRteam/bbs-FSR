@@ -62,12 +62,12 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         }
 
         entity.setPos(x, y, z);
-        entity.lastRenderX = x;
-        entity.lastRenderY = y;
-        entity.lastRenderZ = z;
-        entity.prevX = x;
-        entity.prevY = y;
-        entity.prevZ = z;
+        entity.xOld = x;
+        entity.yOld = y;
+        entity.zOld = z;
+        entity.xo = x;
+        entity.yo = y;
+        entity.zo = z;
 
         double distance = Minecraft.getInstance().getEntityRenderDispatcher().distanceToSqr(x, y, z);
 
@@ -141,7 +141,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
             MatrixStackUtils.applyTransform(matrices, applied);
 
-            int lightAbove = LevelRenderer.getLightColor(entity.level(), pos.offset((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
+            int lightAbove = LevelRenderer.getLightColor(entity.getLevel(), pos.offset((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
             Camera camera = mc.gameRenderer.getMainCamera();
 
             RenderSystem.enableDepthTest();

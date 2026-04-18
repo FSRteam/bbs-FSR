@@ -26,7 +26,7 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        context.batcher.getContext().draw();
+        context.batcher.getContext().flush();
 
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         PoseStack matrices = context.batcher.getContext().pose();
@@ -44,7 +44,7 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
         consumers.setUI(true);
-        Minecraft.getInstance().getItemRenderer().renderItem(this.form.stack.get(), this.form.modelTransform.get(), LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, matrices, consumers, Minecraft.getInstance().world, 0);
+        Minecraft.getInstance().getItemRenderer().renderItem(this.form.stack.get(), this.form.modelTransform.get(), LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, matrices, consumers, Minecraft.getInstance().level, 0);
         consumers.draw();
         consumers.setUI(false);
         consumers.setSubstitute(null);

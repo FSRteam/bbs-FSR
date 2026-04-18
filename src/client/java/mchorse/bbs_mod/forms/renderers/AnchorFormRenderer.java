@@ -52,7 +52,7 @@ public class AnchorFormRenderer extends FormRenderer<AnchorForm>
             this.applyTransforms(uiMatrix, context.getTransition());
             MatrixStackUtils.multiply(stack, uiMatrix);
             /* Why? I don't know, because fuck you */
-            stack.mulPose(Axis.NEGATIVE_Y.rotationDegrees(180F));
+            stack.mulPose(Axis.YN.rotationDegrees(180F));
             stack.last().normal().getScale(Vectors.EMPTY_3F);
             stack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 

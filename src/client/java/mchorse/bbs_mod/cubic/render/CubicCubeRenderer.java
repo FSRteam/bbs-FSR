@@ -252,7 +252,7 @@ public class CubicCubeRenderer implements ICubicRenderer
         }
         else
         {
-            int u = (int) Lerps.lerp(this.light & '\uffff', LightTexture.MAX_BLOCK_LIGHT_COORDINATE, MathUtils.clamp(group.lighting, 0F, 1F));
+            int u = (int) Lerps.lerp(this.light & '\uffff', LightTexture.FULL_BLOCK, MathUtils.clamp(group.lighting, 0F, 1F));
             int v = this.light >> 16 & '\uffff';
 
             vertexConsumer.setUv2(u, v);

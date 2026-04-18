@@ -355,7 +355,7 @@ public class ModelInstance implements IModelInstance
 
                 BufferBuilder builder;
 
-                builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
+                builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
                 BufferUploader.drawWithShader(builder.buildOrThrow());
             }

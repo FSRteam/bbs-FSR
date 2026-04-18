@@ -82,7 +82,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        this.ensureEmitter(Minecraft.getInstance().world, context.getTransition());
+        this.ensureEmitter(Minecraft.getInstance().level, context.getTransition());
 
         ParticleEmitter emitter = this.emitter;
 
@@ -107,7 +107,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
     @Override
     public void render3D(FormRenderingContext context)
     {
-        this.ensureEmitter(Minecraft.getInstance().world, context.transition);
+        this.ensureEmitter(Minecraft.getInstance().level, context.transition);
 
         ParticleEmitter emitter = this.emitter;
 
@@ -133,8 +133,8 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-            gameRenderer.getLightmapTextureManager().enable();
-            gameRenderer.getOverlayTexture().setupOverlayColor();
+            gameRenderer.lightTexture().enable();
+            gameRenderer.overlayTexture().setupOverlayColor();
 
             context.stack.pushPose();
             context.stack.setIdentity();
@@ -147,7 +147,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             {
                 boolean shadersEnabled = BBSRendering.isIrisShadersEnabled();
 
-                VertexFormat format = shadersEnabled ? DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : DefaultVertexFormat.POSITION_TEXTURE_COLOR_LIGHT;
+                VertexFormat format = shadersEnabled ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.PARTICLE;
                 Supplier<ShaderInstance> shader = shadersEnabled
                     ? this.getShader(context, GameRenderer::getRendertypeEntityTranslucentShader, BBSShaders::getPickerBillboardProgram)
                     : this.getShader(context, GameRenderer::getParticleShader, BBSShaders::getPickerParticlesProgram);
@@ -158,8 +158,8 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             context.stack.popPose();
 
-            gameRenderer.getLightmapTextureManager().disable();
-            gameRenderer.getOverlayTexture().teardownOverlayColor();
+            gameRenderer.lightTexture().disable();
+            gameRenderer.overlayTexture().teardownOverlayColor();
         }
     }
 

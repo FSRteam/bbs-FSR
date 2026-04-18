@@ -19,6 +19,8 @@ public interface IEntity
 
     public Level getWorld();
 
+    default Level level() { return getWorld(); }
+
     public Form getForm();
 
     public void setForm(Form form);

@@ -538,7 +538,7 @@ public class UIContext implements IViewportStack
 
     public void resetMatrix()
     {
-        this.render.batcher.getContext().pose().loadIdentity();
+        this.render.batcher.getContext().pose().identity();
     }
 
     public void update()

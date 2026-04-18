@@ -41,7 +41,7 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
 
         float bodyYaw = Mth.rotLerp(tickDelta, projectile.yRotO, projectile.getYRot());
         float pitch = Mth.rotLerp(tickDelta, projectile.xRotO, projectile.getXRot());
-        float scale = Lerps.envelope(projectile.age + tickDelta, 0, properties.fadeIn, out - properties.fadeOut, out);
+        float scale = Lerps.envelope(projectile.tickCount + tickDelta, 0, properties.fadeIn, out - properties.fadeOut, out);
 
         if (properties.yaw) matrices.mulPose(Axis.YP.rotationDegrees(bodyYaw));
         if (properties.pitch) matrices.mulPose(Axis.XP.rotationDegrees(-pitch));
@@ -50,7 +50,7 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
 
         RenderSystem.enableDepthTest();
         FormUtilsClient.render(projectile.getForm(), new FormRenderingContext()
-            .set(FormRenderType.ENTITY, projectile.getEntity(), matrices, light, OverlayTexture.DEFAULT_UV, tickDelta)
+            .set(FormRenderType.ENTITY, projectile.getEntity(), matrices, light, OverlayTexture.NO_OVERLAY, tickDelta)
             .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
         RenderSystem.disableDepthTest();
 

@@ -173,7 +173,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         m.set(camInverse);
         m.invert();
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEXTURE);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
 
         for (it = trails.iterator(); it.hasNext(); last = trail)
         {

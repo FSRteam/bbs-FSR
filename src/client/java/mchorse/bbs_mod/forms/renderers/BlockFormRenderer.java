@@ -28,7 +28,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        context.batcher.getContext().draw();
+        context.batcher.getContext().flush();
 
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         PoseStack matrices = context.batcher.getContext().pose();
@@ -47,7 +47,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
         consumers.setUI(true);
-        Minecraft.getInstance().getBlockRenderManager().renderBlockAsEntity(this.form.blockState.get(), matrices, consumers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+        Minecraft.getInstance().getBlockRenderer().renderBlockAsEntity(this.form.blockState.get(), matrices, consumers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
         consumers.draw();
         consumers.setUI(false);
         consumers.setSubstitute(null);
@@ -85,7 +85,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         color.mul(set);
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
-        Minecraft.getInstance().getBlockRenderManager().renderBlockAsEntity(this.form.blockState.get(), context.stack, consumers, light, context.overlay);
+        Minecraft.getInstance().getBlockRenderer().renderBlockAsEntity(this.form.blockState.get(), context.stack, consumers, light, context.overlay);
         consumers.draw();
         consumers.setSubstitute(null);
 

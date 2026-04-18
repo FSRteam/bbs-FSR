@@ -197,7 +197,7 @@ public class BBSRendering
 
         ModelBlockEntityUpdateCallback.EVENT.register((entity) ->
         {
-            if (entity.level().isClient())
+            if (entity.getLevel().isClient())
             {
                 capturedModelBlocks.add(entity);
             }

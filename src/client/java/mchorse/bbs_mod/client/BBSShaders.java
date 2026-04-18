@@ -45,15 +45,15 @@ public class BBSShaders
         {
             ResourceProvider factory = new ProxyResourceFactory(Minecraft.getInstance().getResourceManager());
 
-            model = new ShaderInstance(factory, "model", DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
-            multiLink = new ShaderInstance(factory, "multilink", DefaultVertexFormat.POSITION_TEXTURE_COLOR);
-            subtitles = new ShaderInstance(factory, "subtitles", DefaultVertexFormat.POSITION_TEXTURE_COLOR);
+            model = new ShaderInstance(factory, "model", DefaultVertexFormat.NEW_ENTITY);
+            multiLink = new ShaderInstance(factory, "multilink", DefaultVertexFormat.POSITION_TEX_COLOR);
+            subtitles = new ShaderInstance(factory, "subtitles", DefaultVertexFormat.POSITION_TEX_COLOR);
 
-            pickerPreview = new ShaderInstance(factory, "picker_preview", DefaultVertexFormat.POSITION_TEXTURE_COLOR);
-            pickerBillboard = new ShaderInstance(factory, "picker_billboard", DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
-            pickerBillboardNoShading = new ShaderInstance(factory, "picker_billboard_no_shading", DefaultVertexFormat.POSITION_TEXTURE_LIGHT_COLOR);
-            pickerParticles = new ShaderInstance(factory, "picker_particles", DefaultVertexFormat.POSITION_COLOR_TEXTURE_LIGHT);
-            pickerModels = new ShaderInstance(factory, "picker_models", DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL);
+            pickerPreview = new ShaderInstance(factory, "picker_preview", DefaultVertexFormat.POSITION_TEX_COLOR);
+            pickerBillboard = new ShaderInstance(factory, "picker_billboard", DefaultVertexFormat.NEW_ENTITY);
+            pickerBillboardNoShading = new ShaderInstance(factory, "picker_billboard_no_shading", DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR);
+            pickerParticles = new ShaderInstance(factory, "picker_particles", DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP);
+            pickerModels = new ShaderInstance(factory, "picker_models", DefaultVertexFormat.NEW_ENTITY);
         }
         catch (IOException e)
         {

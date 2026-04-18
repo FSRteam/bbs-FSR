@@ -289,7 +289,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         BufferBuilder builder;
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR_TEXTURE);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
 
         fillQuad(
             builder, context.stack,

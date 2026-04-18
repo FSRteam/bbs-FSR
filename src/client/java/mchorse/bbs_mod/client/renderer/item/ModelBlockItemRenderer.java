@@ -93,7 +93,7 @@ public class ModelBlockItemRenderer
         }
 
         CustomData blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
-        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ORIGIN, BBSMod.MODEL_BLOCK.defaultBlockState());
+        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ZERO, BBSMod.MODEL_BLOCK.defaultBlockState());
         Item item = new Item(entity);
 
         this.map.put(stack, item);

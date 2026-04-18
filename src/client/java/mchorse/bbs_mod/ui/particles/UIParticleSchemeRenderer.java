@@ -62,17 +62,17 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
         this.emitter.setupCameraProperties(this.camera);
         this.emitter.rotation.identity();
 
-        Minecraft.getInstance().gameRenderer.getLightmapTextureManager().enable();
+        Minecraft.getInstance().gameRenderer.lightTexture().enable();
 
         PoseStack stack = context.batcher.getContext().pose();
 
         stack.pushPose();
-        stack.loadIdentity();
-        stack.multiplyPositionMatrix(new Matrix4f(this.camera.view));
+        stack.setIdentity();
+        stack.mulPose(new Matrix4f(this.camera.view));
 
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
-        this.emitter.render(DefaultVertexFormat.POSITION_TEXTURE_COLOR_LIGHT, GameRenderer::getParticleShader, stack, OverlayTexture.DEFAULT_UV, context.getTransition());
+        this.emitter.render(DefaultVertexFormat.PARTICLE, GameRenderer::getParticleShader, stack, OverlayTexture.NO_OVERLAY, context.getTransition());
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();
 

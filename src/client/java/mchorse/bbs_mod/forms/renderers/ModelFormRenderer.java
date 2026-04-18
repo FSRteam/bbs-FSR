@@ -296,8 +296,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         RenderSystem.defaultBlendFunc();
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-        gameRenderer.getLightmapTextureManager().enable();
-        gameRenderer.getOverlayTexture().setupOverlayColor();
+        gameRenderer.lightTexture().enable();
+        gameRenderer.overlayTexture().setupOverlayColor();
 
         PoseStack newStack = new PoseStack();
 
@@ -312,8 +312,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get());
 
-        gameRenderer.getLightmapTextureManager().disable();
-        gameRenderer.getOverlayTexture().teardownOverlayColor();
+        gameRenderer.lightTexture().disable();
+        gameRenderer.overlayTexture().teardownOverlayColor();
         RenderSystem.disableBlend();
 
         if (!model.culling)
@@ -365,7 +365,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     private void renderItems(IEntity target, ModelInstance model, PoseStack stack, EquipmentSlot slot, ItemDisplayContext mode, List<ArmorSlot> items, Color color, int overlay, int light)
     {
-        ItemStack itemStack = target.getItemBySlot(slot);
+        ItemStack itemStack = target.getEquipmentStack(slot);
 
         if (itemStack != null && itemStack.isEmpty())
         {
