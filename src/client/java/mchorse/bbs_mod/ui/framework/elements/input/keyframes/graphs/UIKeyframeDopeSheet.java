@@ -900,7 +900,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.updateScrollSize();
 
         Area area = this.keyframes.graphArea;
-        BufferBuilder builder;
+        BufferBuilder builder = null;
         Matrix4f matrix = context.batcher.getContext().pose().last().pose();
 
         context.batcher.clip(area, context);
@@ -1212,7 +1212,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     {
         if (!this.elements.isEmpty())
         {
-            BufferBuilder builder;
+            BufferBuilder builder = null;
             Matrix4f matrix = context.batcher.getContext().pose().last().pose();
 
             this.renderLabels(context, builder, matrix, this.elements, 0, this.getDopeSheetY());
