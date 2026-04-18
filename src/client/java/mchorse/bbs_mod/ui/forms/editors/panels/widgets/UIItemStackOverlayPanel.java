@@ -73,7 +73,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
             this.pickItemStack(this.stack);
             this.updateNbt();
         });
-        this.count.limit(1.0, stack.getMaxCount(), true).setValue(stack.getCount());
+        this.count.limit(1.0, stack.getMaxStackSize(), true).setValue(stack.getCount());
         this.nbt = new UITextarea<>((v) ->
         {
             try

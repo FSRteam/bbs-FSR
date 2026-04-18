@@ -85,7 +85,7 @@ public class UIMorphingPanel extends UIDashboardPanel
         this.palette.setSelected(morph.getForm());
 
         BBSModClient.getCameraController().add(this.controller);
-        Minecraft.getInstance().options.setPerspective(CameraType.THIRD_PERSON_BACK);
+        Minecraft.getInstance().options.setCameraType(CameraType.THIRD_PERSON_BACK);
     }
 
     @Override
@@ -94,7 +94,7 @@ public class UIMorphingPanel extends UIDashboardPanel
         super.disappear();
 
         BBSModClient.getCameraController().remove(this.controller);
-        Minecraft.getInstance().options.setPerspective(CameraType.FIRST_PERSON);
+        Minecraft.getInstance().options.setCameraType(CameraType.FIRST_PERSON);
     }
 
     @Override

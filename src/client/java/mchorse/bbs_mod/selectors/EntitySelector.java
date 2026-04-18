@@ -52,7 +52,7 @@ public class EntitySelector implements IMapSerializable
 
         if (displayName != null && !this.name.isEmpty())
         {
-            String a = StringUtils.plainText(displayName.asOrderedText());
+            String a = StringUtils.plainText(displayName.getVisualOrderText());
 
             return Objects.equals(a, this.name);
         }
@@ -62,7 +62,7 @@ public class EntitySelector implements IMapSerializable
 
     private boolean compare(CompoundTag source, CompoundTag base)
     {
-        for (String key : source.getKeys())
+        for (String key : source.getAllKeys())
         {
             Tag a = source.get(key);
             Tag b = base.get(key);

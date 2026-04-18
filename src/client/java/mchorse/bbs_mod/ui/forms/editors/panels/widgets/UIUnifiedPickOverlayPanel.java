@@ -82,7 +82,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
     }
 
     /**
-     * Vanilla Minecraft UI language ({@code options.language}, e.g. {@code ru_ru}).
+     * Vanilla Minecraft UI language code (e.g. {@code ru_ru}).
      * Label caches are keyed with this so names update when the player changes language.
      */
     private static String minecraftLanguageKey()
@@ -94,7 +94,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             return "en_us";
         }
 
-        String lang = mc.options.language;
+        String lang = mc.options.languageCode;
 
         return lang == null || lang.isEmpty() ? "en_us" : lang;
     }
@@ -369,7 +369,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             }
 
             this.acceptItem(selected);
-            this.itemCount.limit(1, selected.getMaxCount(), true).setValue(selected.getCount());
+            this.itemCount.limit(1, selected.getMaxStackSize(), true).setValue(selected.getCount());
             this.itemName.setText(selected.getHoverName().getString());
             this.updateItemNbt();
         }

@@ -217,7 +217,7 @@ public class UIVanillaSoundList extends UIStringList
 
             if (resource.isPresent())
             {
-                try (InputStream inputStream = resource.get().getInputStream())
+                try (InputStream inputStream = resource.get().open())
                 {
                     String jsonContent = IOUtils.readText(inputStream);
 
@@ -568,7 +568,7 @@ public class UIVanillaSoundList extends UIStringList
 
                 if (resource.isPresent())
                 {
-                    try (InputStream inputStream = resource.get().getInputStream())
+                    try (InputStream inputStream = resource.get().open())
                     {
                         Files.copy(inputStream, cacheFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                     }
@@ -660,7 +660,7 @@ public class UIVanillaSoundList extends UIStringList
                     String newSoundName = this.generateSoundName(originalName, audioDir);
                     File targetFile = new File(audioDir, newSoundName + ".ogg");
 
-                    try (InputStream inputStream = resource.get().getInputStream())
+                    try (InputStream inputStream = resource.get().open())
                     {
                         Files.copy(inputStream, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                     }

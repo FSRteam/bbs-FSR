@@ -39,7 +39,7 @@ public class SelectorOwner
 
     public void update()
     {
-        Level world = this.entity.level();
+        Level world = this.entity.getWorld();
 
         if (!world.isClientSide)
         {

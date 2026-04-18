@@ -31,11 +31,11 @@ public class UIItemFormPanel extends UIFormPanel<ItemForm>
                 {
                     if (this.form.modelTransform.get() == value)
                     {
-                        menu.action(Icons.LINE, IKey.constant(value.asString()), true, () -> {});
+                        menu.action(Icons.LINE, IKey.constant(value.getSerializedName()), true, () -> {});
                     }
                     else
                     {
-                        menu.action(Icons.LINE, IKey.constant(value.asString()), () -> this.setModelTransform(value));
+                        menu.action(Icons.LINE, IKey.constant(value.getSerializedName()), () -> this.setModelTransform(value));
                     }
                 }
             });
@@ -50,7 +50,7 @@ public class UIItemFormPanel extends UIFormPanel<ItemForm>
     {
         this.form.modelTransform.set(value);
 
-        this.modelTransform.label = IKey.constant(value.asString());
+        this.modelTransform.label = IKey.constant(value.getSerializedName());
     }
 
     @Override
@@ -59,7 +59,7 @@ public class UIItemFormPanel extends UIFormPanel<ItemForm>
         super.startEdit(form);
 
         this.color.setColor(form.color.get().getARGBColor());
-        this.modelTransform.label = IKey.constant(form.modelTransform.get().asString());
+        this.modelTransform.label = IKey.constant(form.modelTransform.get().getSerializedName());
         this.itemStackEditor.setStack(form.stack.get());
     }
 }
