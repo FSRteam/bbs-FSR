@@ -7,6 +7,8 @@ plugins {
     id 'maven-publish'
 }
 
+minecraft.accessTransformers.file rootProject.file('src/main/resources/META-INF/accesstransformer.cfg')
+
 def bbsPreferMirror = (findProperty("bbsPreferMirror")?.toString() ?: "true").toBoolean()
 def bbsNeoMirrorUrl = findProperty("bbsNeoMirrorUrl")?.toString() ?: "https://cdnneo.sweatent.top/releases"
 def bbsProxyKey = findProperty("bbsProxyKey")?.toString() ?: (System.getenv("BBS_PROXY_KEY") ?: "")
