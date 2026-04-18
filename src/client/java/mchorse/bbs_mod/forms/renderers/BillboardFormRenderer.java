@@ -192,7 +192,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-        gameRenderer.lightTexture().enable();
+        gameRenderer.lightTexture().turnOnLightLayer();
         gameRenderer.overlayTexture().setupOverlayColor();
 
         BBSModClient.getTextures().bindTexture(texture);
@@ -226,7 +226,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         texture.setFilterMipmap(false, false);
 
-        gameRenderer.lightTexture().disable();
+        gameRenderer.lightTexture().turnOffLightLayer();
         gameRenderer.overlayTexture().teardownOverlayColor();
     }
 

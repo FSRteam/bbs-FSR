@@ -62,7 +62,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
         this.emitter.setupCameraProperties(this.camera);
         this.emitter.rotation.identity();
 
-        Minecraft.getInstance().gameRenderer.lightTexture().enable();
+        Minecraft.getInstance().gameRenderer.lightTexture().turnOnLightLayer();
 
         PoseStack stack = context.batcher.getContext().pose();
 

@@ -296,7 +296,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         RenderSystem.defaultBlendFunc();
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-        gameRenderer.lightTexture().enable();
+        gameRenderer.lightTexture().turnOnLightLayer();
         gameRenderer.overlayTexture().setupOverlayColor();
 
         PoseStack newStack = new PoseStack();
@@ -312,7 +312,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get());
 
-        gameRenderer.lightTexture().disable();
+        gameRenderer.lightTexture().turnOffLightLayer();
         gameRenderer.overlayTexture().teardownOverlayColor();
         RenderSystem.disableBlend();
 
@@ -398,12 +398,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 {
                     stack.pushPose();
                     stack.scale(0F, 0F, 0F);
-                    Minecraft.getInstance().getItemRenderer().renderItem(null, new ItemStack(Items.OAK_BUTTON), mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
+                    Minecraft.getInstance().getItemRenderer().renderStatic(null, new ItemStack(Items.OAK_BUTTON), mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                     consumers.draw();
                     stack.popPose();
                 }
 
-                Minecraft.getInstance().getItemRenderer().renderItem(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
+                Minecraft.getInstance().getItemRenderer().renderStatic(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                 consumers.draw();
                 consumers.setSubstitute(null);
 

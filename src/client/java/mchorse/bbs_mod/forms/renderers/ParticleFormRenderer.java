@@ -133,7 +133,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-            gameRenderer.lightTexture().enable();
+            gameRenderer.lightTexture().turnOnLightLayer();
             gameRenderer.overlayTexture().setupOverlayColor();
 
             context.stack.pushPose();
@@ -158,7 +158,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             context.stack.popPose();
 
-            gameRenderer.lightTexture().disable();
+            gameRenderer.lightTexture().turnOffLightLayer();
             gameRenderer.overlayTexture().teardownOverlayColor();
         }
     }

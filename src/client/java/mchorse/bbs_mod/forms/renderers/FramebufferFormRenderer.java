@@ -173,7 +173,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-        gameRenderer.lightTexture().enable();
+        gameRenderer.lightTexture().turnOnLightLayer();
         gameRenderer.overlayTexture().setupOverlayColor();
 
         BBSModClient.getTextures().bindTexture(texture);
@@ -205,7 +205,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         RenderSystem.enableBlend();
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        gameRenderer.lightTexture().disable();
+        gameRenderer.lightTexture().turnOffLightLayer();
         gameRenderer.overlayTexture().teardownOverlayColor();
     }
 

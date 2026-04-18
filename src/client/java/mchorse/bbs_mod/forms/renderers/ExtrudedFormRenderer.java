@@ -115,14 +115,14 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
 
-            gameRenderer.lightTexture().enable();
+            gameRenderer.lightTexture().turnOnLightLayer();
             gameRenderer.overlayTexture().setupOverlayColor();
 
             ModelVAORenderer.render(shader.get(), data, matrices, color.r * formColor.r, color.g * formColor.g, color.b * formColor.b, color.a * formColor.a, light, overlay);
 
             RenderSystem.disableBlend();
 
-            gameRenderer.lightTexture().disable();
+            gameRenderer.lightTexture().turnOffLightLayer();
             gameRenderer.overlayTexture().teardownOverlayColor();
         }
     }
