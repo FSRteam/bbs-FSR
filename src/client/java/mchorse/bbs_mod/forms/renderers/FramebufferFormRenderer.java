@@ -22,7 +22,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -94,9 +93,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         GL30.glCullFace(GL30.GL_FRONT);
         RenderSystem.setShaderLights(new Vector3f(0F, 0F, 1F), new Vector3f(0F, 0F, 1F));
         RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(-1F, 1F, 1F, -1F, -500F, 500F), VertexSorting.DISTANCE_TO_ORIGIN);
-        RenderSystem.getModelViewStack().pushPose();
-        RenderSystem.getModelViewStack().last().pose().identity();
-        RenderSystem.getModelViewStack().last().normal().identity();
+        RenderSystem.getModelViewStack().pushMatrix();
+        RenderSystem.getModelViewStack().identity();
 
         framebuffer.apply();
 
@@ -120,12 +118,12 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         GL30.glViewport(0, 0, width, height);
 
         RenderSystem.setShaderLights(light0, light1);
-        RenderSystem.getModelViewStack().popPose();
+        RenderSystem.getModelViewStack().popMatrix();
         RenderSystem.setProjectionMatrix(projectionMatrix, VertexSorting.DISTANCE_TO_ORIGIN);
         GL30.glCullFace(GL30.GL_BACK);
 
         boolean shading = !context.isPicking();
-        VertexFormat format = shading ? DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : DefaultVertexFormat.POSITION_TEXTURE_LIGHT_COLOR;
+        VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR;
         Supplier<ShaderInstance> shader = shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionColorTexLightmapShader;
 
         this.renderModel(framebuffer.getMainTexture(), format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
@@ -169,14 +167,14 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         BufferBuilder builder;
         Color color = Color.white();
         Matrix4f matrix = matrices.last().pose();
-        Matrix3f normal = matrices.last().normal();
+        PoseStack.Pose normal = matrices.last();
 
         color.mul(overlayColor);
 
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-        gameRenderer.getLightmapTextureManager().enable();
-        gameRenderer.getOverlayTexture().setupOverlayColor();
+        gameRenderer.lightTexture().enable();
+        gameRenderer.overlayTexture().setupOverlayColor();
 
         BBSModClient.getTextures().bindTexture(texture);
         RenderSystem.setShader(shader);
@@ -207,13 +205,13 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         RenderSystem.enableBlend();
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        gameRenderer.getLightmapTextureManager().disable();
-        gameRenderer.getOverlayTexture().teardownOverlayColor();
+        gameRenderer.lightTexture().disable();
+        gameRenderer.overlayTexture().teardownOverlayColor();
     }
 
-    private void fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, Matrix3f normal, float nz)
+    private void fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, PoseStack.Pose normal, float nz)
     {
-        if (format == DefaultVertexFormat.POSITION_TEXTURE_LIGHT_COLOR)
+        if (format == DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)
         {
             consumer.addVertex(matrix, x, y, 0F).setUv(u, v).setLight(light).setColor(color.r, color.g, color.b, color.a);
             return;

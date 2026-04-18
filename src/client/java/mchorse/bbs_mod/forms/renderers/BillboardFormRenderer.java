@@ -26,7 +26,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -60,7 +59,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         stack.scale(1.5F, 1.5F, 1.5F);
         stack.scale(this.form.uiScale.get(), this.form.uiScale.get(), this.form.uiScale.get());
 
-        VertexFormat format = DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL;
+        VertexFormat format = DefaultVertexFormat.NEW_ENTITY;
 
         this.renderModel(format, GameRenderer::getRendertypeEntityTranslucentShader,
             stack,
@@ -81,7 +80,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             shading = true;
         }
 
-        VertexFormat format = shading ? DefaultVertexFormat.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL : DefaultVertexFormat.POSITION_TEXTURE_LIGHT_COLOR;
+        VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR;
         Supplier<ShaderInstance> shader = this.getShader(context,
             shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionColorTexLightmapShader,
             shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
@@ -171,7 +170,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         BufferBuilder builder;
         Color color = this.form.color.get().copy();
         Matrix4f matrix = matrices.last().pose();
-        Matrix3f normal = matrices.last().normal();
+        PoseStack.Pose normal = matrices.last();
 
         color.mul(overlayColor);
 
@@ -193,8 +192,8 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
-        gameRenderer.getLightmapTextureManager().enable();
-        gameRenderer.getOverlayTexture().setupOverlayColor();
+        gameRenderer.lightTexture().enable();
+        gameRenderer.overlayTexture().setupOverlayColor();
 
         BBSModClient.getTextures().bindTexture(texture);
         RenderSystem.setShader(shader);
@@ -227,13 +226,13 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         texture.setFilterMipmap(false, false);
 
-        gameRenderer.getLightmapTextureManager().disable();
-        gameRenderer.getOverlayTexture().teardownOverlayColor();
+        gameRenderer.lightTexture().disable();
+        gameRenderer.overlayTexture().teardownOverlayColor();
     }
 
-    private void fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, Matrix3f normal, float nz)
+    private void fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, PoseStack.Pose normal, float nz)
     {
-        if (format == DefaultVertexFormat.POSITION_TEXTURE_LIGHT_COLOR)
+        if (format == DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)
         {
             consumer.addVertex(matrix, x, y, 0F).setUv(u, v).setLight(light).setColor(color.r, color.g, color.b, color.a);
             return;
