@@ -112,5 +112,5 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
         this.d.setValue(this.plane.d);
     }
 
-    /* TODO: reimplement block selection */
+    // block selection UI not wired up in current branch
 }

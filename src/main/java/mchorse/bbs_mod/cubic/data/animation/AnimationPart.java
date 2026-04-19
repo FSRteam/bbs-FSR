@@ -10,6 +10,7 @@ import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.math.molang.expressions.MolangValue;
 import mchorse.bbs_mod.utils.interps.IInterp;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 
 import java.util.List;
@@ -109,19 +110,28 @@ public class AnimationPart implements IMapSerializable
     private ListType serializeChannel(KeyframeChannel<MolangExpression> x, KeyframeChannel<MolangExpression> y, KeyframeChannel<MolangExpression> z)
     {
         ListType list = new ListType();
+        List<Keyframe<MolangExpression>> xKeyframes = x.getKeyframes();
+        List<Keyframe<MolangExpression>> yKeyframes = y.getKeyframes();
+        List<Keyframe<MolangExpression>> zKeyframes = z.getKeyframes();
+        int count = Math.min(xKeyframes.size(), Math.min(yKeyframes.size(), zKeyframes.size()));
 
-        /* TODO: for (AnimationVector keyframe : channel.keyframes)
+        /* x/y/z channels are built synchronously from 5-tuple [time, interp, x, y, z] entries
+         * by parseAnimationVector, so index i is aligned across the three channels. */
+        for (int i = 0; i < count; i++)
         {
+            Keyframe<MolangExpression> xKeyframe = xKeyframes.get(i);
+            Keyframe<MolangExpression> yKeyframe = yKeyframes.get(i);
+            Keyframe<MolangExpression> zKeyframe = zKeyframes.get(i);
             ListType keyframeList = new ListType();
 
-            keyframeList.addDouble(keyframe.time);
-            keyframeList.addString(AnimationInterpolation.toName(keyframe.interp));
-            keyframeList.add(keyframe.x.toData());
-            keyframeList.add(keyframe.y.toData());
-            keyframeList.add(keyframe.z.toData());
+            keyframeList.addDouble(xKeyframe.getTick() / 20D);
+            keyframeList.addString(AnimationInterpolation.toName(xKeyframe.getInterpolation().getInterp()));
+            keyframeList.add(xKeyframe.getValue().toData());
+            keyframeList.add(yKeyframe.getValue().toData());
+            keyframeList.add(zKeyframe.getValue().toData());
 
             list.add(keyframeList);
-        } */
+        }
 
         return list;
     }

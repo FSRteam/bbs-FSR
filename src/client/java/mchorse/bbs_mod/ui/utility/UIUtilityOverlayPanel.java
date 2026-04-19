@@ -88,7 +88,7 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
         UIIcon terrain = new UIIcon(Icons.TREE, (b) ->
         {
             this.print("Forcing chunk loader");
-            // TODO: this.getContext().menu.bridge.get(IBridgeWorld.class).getWorld().chunks.buildChunks(BBS.getRender(), true);
+            /* disabled: 1.21.1 bridge not yet available */
             BBSShaders.setup();
             this.close();
         });

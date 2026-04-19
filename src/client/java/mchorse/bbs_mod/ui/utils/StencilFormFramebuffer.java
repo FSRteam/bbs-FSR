@@ -113,7 +113,7 @@ public class StencilFormFramebuffer
 
             GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_FLOAT, floats);
 
-            /* TODO: make other channels work */
+            /* Only RGB + alpha selection is implemented; extra channels (e.g., stencil-derived masks) fall through. */
             int r = (int) (floats.get() * 255F);
             int g = (int) (floats.get() * 255F);
             int b = (int) (floats.get() * 255F);

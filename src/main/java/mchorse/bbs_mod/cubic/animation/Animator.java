@@ -234,33 +234,26 @@ public class Animator implements IAnimator
         {
             this.setActiveAction(!moves ? this.flyingIdle : this.flying);
         } */
-        if (false)
+        if (target.isSneaking())
         {
-            // TODO: implement more actions?
+            this.setActiveAction(!moves ? this.crouchingIdle : this.crouching);
+        }
+        else if (!target.isOnGround() && velocity.y < 0 && target.getFallDistance() > 1.25)
+        {
+            this.setActiveAction(this.falling);
+        }
+        else if (target.isSprinting() && this.sprinting != null)
+        {
+            this.setActiveAction(this.sprinting);
         }
         else
         {
-            if (target.isSneaking())
-            {
-                this.setActiveAction(!moves ? this.crouchingIdle : this.crouching);
-            }
-            else if (!target.isOnGround() && velocity.y < 0 && target.getFallDistance() > 1.25)
-            {
-                this.setActiveAction(this.falling);
-            }
-            else if (target.isSprinting() && this.sprinting != null)
-            {
-                this.setActiveAction(this.sprinting);
-            }
-            else
-            {
-                this.setActiveAction(!moves ? this.idle : this.running);
-            }
+            this.setActiveAction(!moves ? this.idle : this.running);
+        }
 
-            if (target.isOnGround() && !this.wasOnGround && /* !target.isSprinting() && */ this.prevMY < -0.5)
-            {
-                this.addAction(this.land);
-            }
+        if (target.isOnGround() && !this.wasOnGround && /* !target.isSprinting() && */ this.prevMY < -0.5)
+        {
+            this.addAction(this.land);
         }
 
         if (!target.isOnGround() && this.wasOnGround && Math.abs(velocity.y) > 0.2F)

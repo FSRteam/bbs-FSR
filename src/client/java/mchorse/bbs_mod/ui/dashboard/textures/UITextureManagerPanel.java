@@ -9,18 +9,23 @@ import mchorse.bbs_mod.utils.PNGEncoder;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.resources.Pixels;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 
 public class UITextureManagerPanel extends UIDashboardPanel
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(UITextureManagerPanel.class);
+
     public UITexturePicker picker;
 
     public static void extractTexture(Link link, Pixels pixels, int frames, int w, int h, int x, int y)
     {
         if (pixels == null)
         {
-            /* TODO: throw error */
+            LOGGER.warn("extractTexture: pixels is null for link {}", link);
 
             return;
         }
@@ -30,7 +35,7 @@ public class UITextureManagerPanel extends UIDashboardPanel
 
         if (endX > pixels.width || endY > pixels.height)
         {
-            /* TODO: throw error */
+            LOGGER.warn("extractTexture: frame range ({}x{}) exceeds texture bounds ({}x{})", endX, endY, pixels.width, pixels.height);
 
             return;
         }
