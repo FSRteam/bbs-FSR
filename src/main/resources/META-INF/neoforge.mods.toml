@@ -28,3 +28,11 @@ config="bbs.mixins.json"
 
 [[mixins]]
 config="bbs.client.mixins.json"
+
+[[mixins]]
+config="bbs.client.sodium.mixins.json"
+requiredMods=["sodium"]
+
+[[mixins]]
+config="bbs.client.iris.mixins.json"
+requiredMods=["iris"]
