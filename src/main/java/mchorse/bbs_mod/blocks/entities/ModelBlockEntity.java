@@ -30,7 +30,7 @@ public class ModelBlockEntity extends BlockEntity
 
     public ModelBlockEntity(BlockPos pos, BlockState state)
     {
-        super(BBSMod.MODEL_BLOCK_ENTITY, pos, state);
+        super(BBSMod.MODEL_BLOCK_ENTITY.get(), pos, state);
     }
 
     public String getName()

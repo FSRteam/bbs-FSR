@@ -56,7 +56,7 @@ public class GunItem extends Item
 
             for (int i = 0; i < projectiles; i++)
             {
-                GunProjectileEntity projectile = BBSMod.GUN_PROJECTILE_ENTITY.create(level);
+                GunProjectileEntity projectile = BBSMod.GUN_PROJECTILE_ENTITY.get().create(level);
 
                 if (projectile == null)
                 {

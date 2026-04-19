@@ -594,7 +594,7 @@ public class BBSModClient
             boolean zoom = keyZoom.isDown();
             ItemStack stack = mc.player.getMainHandItem();
 
-            if (gunZoom == null && zoom && stack.getItem() == BBSMod.GUN_ITEM)
+            if (gunZoom == null && zoom && stack.getItem() == BBSMod.GUN_ITEM.get())
             {
                 GunProperties properties = GunProperties.get(stack);
 

@@ -92,7 +92,7 @@ public class GunItemRenderer
 
     public Item get(ItemStack stack)
     {
-        if (stack == null || stack.getItem() != BBSMod.GUN_ITEM)
+        if (stack == null || stack.getItem() != BBSMod.GUN_ITEM.get())
         {
             return null;
         }

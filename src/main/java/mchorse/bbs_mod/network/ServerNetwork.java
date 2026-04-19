@@ -166,14 +166,14 @@ public class ServerNetwork
                 {
                     ItemStack stack = player.getItemBySlot(EquipmentSlot.MAINHAND).copy();
 
-                    if (stack.getItem() == BBSMod.MODEL_BLOCK_ITEM)
+                    if (stack.getItem() == BBSMod.MODEL_BLOCK_ITEM.get())
                     {
                         CustomData.update(DataComponents.BLOCK_ENTITY_DATA, stack, (compoundTag) ->
                         {
                             compoundTag.put("Properties", DataStorageUtils.toNbt(data));
                         });
                     }
-                    else if (stack.getItem() == BBSMod.GUN_ITEM)
+                    else if (stack.getItem() == BBSMod.GUN_ITEM.get())
                     {
                         CustomData.update(DataComponents.CUSTOM_DATA, stack, (compoundTag) ->
                         {
@@ -487,7 +487,15 @@ public class ServerNetwork
 
         server.execute(() ->
         {
-            /* TODO: State Triggers */
+            /* Keep server-side morph Form state in sync with the triggered animation state.
+             * Item-form triggers (type > 0) rely on client-only ModelProperties and are
+             * intentionally left to the broadcast above (CLIENT_ANIMATION_STATE_TRIGGER). */
+            Morph morph = Morph.getMorph(player);
+
+            if (morph != null && morph.getForm() != null)
+            {
+                morph.getForm().playState(string);
+            }
         });
     }
 
@@ -515,7 +523,7 @@ public class ServerNetwork
         boolean zoom = buf.readBoolean();
         ItemStack main = player.getMainHandItem();
 
-        if (main.getItem() == BBSMod.GUN_ITEM)
+        if (main.getItem() == BBSMod.GUN_ITEM.get())
         {
             GunProperties properties = GunProperties.get(main);
             String command = zoom ? properties.cmdZoomOn : properties.cmdZoomOff;

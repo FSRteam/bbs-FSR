@@ -82,7 +82,7 @@ public class ModelBlockItemRenderer
 
     public Item get(ItemStack stack)
     {
-        if (stack == null || stack.getItem() != BBSMod.MODEL_BLOCK_ITEM)
+        if (stack == null || stack.getItem() != BBSMod.MODEL_BLOCK_ITEM.get())
         {
             return null;
         }
@@ -93,7 +93,7 @@ public class ModelBlockItemRenderer
         }
 
         CustomData blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
-        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ZERO, BBSMod.MODEL_BLOCK.defaultBlockState());
+        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ZERO, BBSMod.MODEL_BLOCK.get().defaultBlockState());
         Item item = new Item(entity);
 
         this.map.put(stack, item);

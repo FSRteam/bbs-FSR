@@ -55,7 +55,7 @@ public class RayTracing
 
     public static HitResult rayTraceEntity(Level world, Vec3 pos, Vec3 direction, double d)
     {
-        ActorEntity entity = new ActorEntity(BBSMod.ACTOR_ENTITY, world);
+        ActorEntity entity = new ActorEntity(BBSMod.ACTOR_ENTITY.get(), world);
 
         entity.setPos(pos.x, pos.y, pos.z);
 

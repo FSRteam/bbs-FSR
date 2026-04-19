@@ -131,6 +131,10 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraft.core.registries.Registries;
+
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -175,75 +179,82 @@ public class BBSMod
     private static MapFactory<Clip, ClipFactoryData> factoryCameraClips;
     private static MapFactory<Clip, ClipFactoryData> factoryActionClips;
 
-    public static final EntityType<ActorEntity> ACTOR_ENTITY = FabricRegistryCompat.buildEntityTypeWithBlockRange(
+    public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
+    public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(Registries.BLOCK, MOD_ID);
+    public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(Registries.ITEM, MOD_ID);
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD_ID);
+    public static final DeferredRegister<SoundEvent> SOUND_EVENTS = DeferredRegister.create(Registries.SOUND_EVENT, MOD_ID);
+    public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
+
+    public static final DeferredHolder<EntityType<?>, EntityType<ActorEntity>> ACTOR_ENTITY = ENTITY_TYPES.register("actor", () -> FabricRegistryCompat.buildEntityTypeWithBlockRange(
         MOD_ID + ":actor",
         MobCategory.CREATURE,
         ActorEntity::new,
         EntityDimensions.fixed(0.6F, 1.8F),
         256,
         1
-    );
+    ));
 
-    public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = FabricRegistryCompat.buildEntityTypeWithChunkRange(
+    public static final DeferredHolder<EntityType<?>, EntityType<GunProjectileEntity>> GUN_PROJECTILE_ENTITY = ENTITY_TYPES.register("gun_projectile", () -> FabricRegistryCompat.buildEntityTypeWithChunkRange(
         MOD_ID + ":gun_projectile",
         MobCategory.CREATURE,
         GunProjectileEntity::new,
         EntityDimensions.fixed(0.25F, 0.25F),
         24,
         1
-    );
+    ));
 
-    public static final Block MODEL_BLOCK = new ModelBlock(FabricRegistryCompat.blockSettings()
+    public static final DeferredHolder<Block, ModelBlock> MODEL_BLOCK = BLOCKS.register("model", () -> new ModelBlock(FabricRegistryCompat.blockSettings()
         .noLootTable()
         .noCollission()
         .noOcclusion()
-        .strength(0F));
-    public static final Block CHROMA_RED_BLOCK = createChromaBlock();
-    public static final Block CHROMA_GREEN_BLOCK = createChromaBlock();
-    public static final Block CHROMA_BLUE_BLOCK = createChromaBlock();
-    public static final Block CHROMA_CYAN_BLOCK = createChromaBlock();
-    public static final Block CHROMA_MAGENTA_BLOCK = createChromaBlock();
-    public static final Block CHROMA_YELLOW_BLOCK = createChromaBlock();
-    public static final Block CHROMA_BLACK_BLOCK = createChromaBlock();
-    public static final Block CHROMA_WHITE_BLOCK = createChromaBlock();
+        .strength(0F)));
+    public static final DeferredHolder<Block, Block> CHROMA_RED_BLOCK = BLOCKS.register("chroma_red", BBSMod::createChromaBlock);
+    public static final DeferredHolder<Block, Block> CHROMA_GREEN_BLOCK = BLOCKS.register("chroma_green", BBSMod::createChromaBlock);
+    public static final DeferredHolder<Block, Block> CHROMA_BLUE_BLOCK = BLOCKS.register("chroma_blue", BBSMod::createChromaBlock);
+    public static final DeferredHolder<Block, Block> CHROMA_CYAN_BLOCK = BLOCKS.register("chroma_cyan", BBSMod::createChromaBlock);
+    public static final DeferredHolder<Block, Block> CHROMA_MAGENTA_BLOCK = BLOCKS.register("chroma_magenta", BBSMod::createChromaBlock);
+    public static final DeferredHolder<Block, Block> CHROMA_YELLOW_BLOCK = BLOCKS.register("chroma_yellow", BBSMod::createChromaBlock);
+    public static final DeferredHolder<Block, Block> CHROMA_BLACK_BLOCK = BLOCKS.register("chroma_black", BBSMod::createChromaBlock);
+    public static final DeferredHolder<Block, Block> CHROMA_WHITE_BLOCK = BLOCKS.register("chroma_white", BBSMod::createChromaBlock);
 
-    public static final ModelBlockItem MODEL_BLOCK_ITEM = new ModelBlockItem(MODEL_BLOCK, new Item.Properties());
-    public static final GunItem GUN_ITEM = new GunItem(new Item.Properties().stacksTo(1));
-    public static final BlockItem CHROMA_RED_BLOCK_ITEM = new BlockItem(CHROMA_RED_BLOCK, new Item.Properties());
-    public static final BlockItem CHROMA_GREEN_BLOCK_ITEM = new BlockItem(CHROMA_GREEN_BLOCK, new Item.Properties());
-    public static final BlockItem CHROMA_BLUE_BLOCK_ITEM = new BlockItem(CHROMA_BLUE_BLOCK, new Item.Properties());
-    public static final BlockItem CHROMA_CYAN_BLOCK_ITEM = new BlockItem(CHROMA_CYAN_BLOCK, new Item.Properties());
-    public static final BlockItem CHROMA_MAGENTA_BLOCK_ITEM = new BlockItem(CHROMA_MAGENTA_BLOCK, new Item.Properties());
-    public static final BlockItem CHROMA_YELLOW_BLOCK_ITEM = new BlockItem(CHROMA_YELLOW_BLOCK, new Item.Properties());
-    public static final BlockItem CHROMA_BLACK_BLOCK_ITEM = new BlockItem(CHROMA_BLACK_BLOCK, new Item.Properties());
-    public static final BlockItem CHROMA_WHITE_BLOCK_ITEM = new BlockItem(CHROMA_WHITE_BLOCK, new Item.Properties());
+    public static final DeferredHolder<Item, ModelBlockItem> MODEL_BLOCK_ITEM = ITEMS.register("model", () -> new ModelBlockItem(MODEL_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, GunItem> GUN_ITEM = ITEMS.register("gun", () -> new GunItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_RED_BLOCK_ITEM = ITEMS.register("chroma_red", () -> new BlockItem(CHROMA_RED_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_GREEN_BLOCK_ITEM = ITEMS.register("chroma_green", () -> new BlockItem(CHROMA_GREEN_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_BLUE_BLOCK_ITEM = ITEMS.register("chroma_blue", () -> new BlockItem(CHROMA_BLUE_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_CYAN_BLOCK_ITEM = ITEMS.register("chroma_cyan", () -> new BlockItem(CHROMA_CYAN_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_MAGENTA_BLOCK_ITEM = ITEMS.register("chroma_magenta", () -> new BlockItem(CHROMA_MAGENTA_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_YELLOW_BLOCK_ITEM = ITEMS.register("chroma_yellow", () -> new BlockItem(CHROMA_YELLOW_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_BLACK_BLOCK_ITEM = ITEMS.register("chroma_black", () -> new BlockItem(CHROMA_BLACK_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> CHROMA_WHITE_BLOCK_ITEM = ITEMS.register("chroma_white", () -> new BlockItem(CHROMA_WHITE_BLOCK.get(), new Item.Properties()));
 
     public static final GameRules.Key<GameRules.BooleanValue> BBS_EDITING_RULE = GameRules.register("bbsEditing", GameRules.Category.MISC, GameRules.BooleanValue.create(true));
 
-    public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = FabricRegistryCompat.buildBlockEntityType(
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ModelBlockEntity>> MODEL_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("model_block_entity", () -> FabricRegistryCompat.buildBlockEntityType(
         ModelBlockEntity::new,
-        MODEL_BLOCK
-    );
+        MODEL_BLOCK.get()
+    ));
 
-    public static final CreativeModeTab ITEM_GROUP = FabricRegistryCompat.itemGroupBuilder()
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> ITEM_GROUP = CREATIVE_MODE_TABS.register("main", () -> FabricRegistryCompat.itemGroupBuilder()
         .icon(() -> createModelBlockStack(Link.assets("textures/icon.png")))
         .title(Component.translatable("itemGroup.bbs.main"))
         .displayItems((context, entries) ->
         {
             entries.accept(createModelBlockStack(Link.assets("textures/model_block.png")));
-            entries.accept(CHROMA_RED_BLOCK_ITEM);
-            entries.accept(CHROMA_GREEN_BLOCK_ITEM);
-            entries.accept(CHROMA_BLUE_BLOCK_ITEM);
-            entries.accept(CHROMA_CYAN_BLOCK_ITEM);
-            entries.accept(CHROMA_MAGENTA_BLOCK_ITEM);
-            entries.accept(CHROMA_YELLOW_BLOCK_ITEM);
-            entries.accept(CHROMA_BLACK_BLOCK_ITEM);
-            entries.accept(CHROMA_WHITE_BLOCK_ITEM);
-            entries.accept(new ItemStack(GUN_ITEM));
+            entries.accept(new ItemStack(CHROMA_RED_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(CHROMA_GREEN_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(CHROMA_BLUE_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(CHROMA_CYAN_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(CHROMA_MAGENTA_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(CHROMA_YELLOW_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(CHROMA_BLACK_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(CHROMA_WHITE_BLOCK_ITEM.get()));
+            entries.accept(new ItemStack(GUN_ITEM.get()));
         })
-        .build();
+        .build());
 
-    public static final SoundEvent CLICK = createSound("click");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CLICK = SOUND_EVENTS.register("click", () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "click")));
 
     private static SoundEvent createSound(String path)
     {
@@ -262,7 +273,7 @@ public class BBSMod
 
     private static ItemStack createModelBlockStack(Link texture)
     {
-        ItemStack stack = new ItemStack(MODEL_BLOCK_ITEM);
+        ItemStack stack = new ItemStack(MODEL_BLOCK_ITEM.get());
         BillboardForm form = new BillboardForm();
         ModelProperties properties = new ModelProperties();
 
@@ -404,7 +415,12 @@ public class BBSMod
 
         this.modBus.addListener(this::onConstructMod);
         this.modBus.addListener(this::onCommonSetup);
-        this.modBus.addListener(BBSRegistries::onRegister);
+        BBSMod.ENTITY_TYPES.register(this.modBus);
+        BBSMod.BLOCKS.register(this.modBus);
+        BBSMod.ITEMS.register(this.modBus);
+        BBSMod.BLOCK_ENTITY_TYPES.register(this.modBus);
+        BBSMod.SOUND_EVENTS.register(this.modBus);
+        BBSMod.CREATIVE_MODE_TABS.register(this.modBus);
         this.modBus.addListener(BBSRegistries::onEntityAttributes);
         this.modBus.addListener(NetworkCompat::onRegisterPayloadHandlers);
 

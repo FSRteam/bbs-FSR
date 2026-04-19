@@ -136,7 +136,7 @@ public class ActionPlayer
             }
             else
             {
-                ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.level);
+                ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY.get(), this.level);
 
                 actor.setForm(FormUtils.copy(replay.form.get()));
 

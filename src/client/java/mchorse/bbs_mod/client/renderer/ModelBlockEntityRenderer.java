@@ -58,7 +58,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
         if (entity == null || entity.level() != world)
         {
-            entity = new ActorEntity(BBSMod.ACTOR_ENTITY, world);
+            entity = new ActorEntity(BBSMod.ACTOR_ENTITY.get(), world);
         }
 
         entity.setPos(x, y, z);

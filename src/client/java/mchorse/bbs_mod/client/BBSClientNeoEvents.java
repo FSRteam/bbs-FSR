@@ -76,9 +76,9 @@ public final class BBSClientNeoEvents
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event)
     {
-        event.registerEntityRenderer(BBSMod.ACTOR_ENTITY, ActorEntityRenderer::new);
-        event.registerEntityRenderer(BBSMod.GUN_PROJECTILE_ENTITY, GunProjectileEntityRenderer::new);
-        event.registerBlockEntityRenderer(BBSMod.MODEL_BLOCK_ENTITY, ModelBlockEntityRenderer::new);
+        event.registerEntityRenderer(BBSMod.ACTOR_ENTITY.get(), ActorEntityRenderer::new);
+        event.registerEntityRenderer(BBSMod.GUN_PROJECTILE_ENTITY.get(), GunProjectileEntityRenderer::new);
+        event.registerBlockEntityRenderer(BBSMod.MODEL_BLOCK_ENTITY.get(), ModelBlockEntityRenderer::new);
     }
 
     private static void onRenderLevelStage(RenderLevelStageEvent event)

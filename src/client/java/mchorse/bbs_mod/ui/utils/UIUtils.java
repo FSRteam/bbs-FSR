@@ -98,7 +98,7 @@ public class UIUtils
     {
         if (BBSSettings.clickSound.get())
         {
-            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(BBSMod.CLICK, pitch));
+            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(BBSMod.CLICK.get(), pitch));
         }
         else
         {

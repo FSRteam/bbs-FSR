@@ -69,7 +69,7 @@ public class ModelBlock extends Block implements EntityBlock, SimpleWaterloggedB
         if (entity instanceof ModelBlockEntity modelBlock)
         {
             ItemStack stack = new ItemStack(this);
-            BlockItem.setBlockEntityData(stack, BBSMod.MODEL_BLOCK_ENTITY, modelBlock.saveWithId(world.registryAccess()));
+            BlockItem.setBlockEntityData(stack, BBSMod.MODEL_BLOCK_ENTITY.get(), modelBlock.saveWithId(world.registryAccess()));
 
             return stack;
         }
@@ -95,7 +95,7 @@ public class ModelBlock extends Block implements EntityBlock, SimpleWaterloggedB
     {
         if (world.isClientSide())
         {
-            return validateTicker(type, BBSMod.MODEL_BLOCK_ENTITY, (theWorld, blockPos, blockState, blockEntity) -> blockEntity.tick(theWorld, blockPos, blockState));
+            return validateTicker(type, BBSMod.MODEL_BLOCK_ENTITY.get(), (theWorld, blockPos, blockState, blockEntity) -> blockEntity.tick(theWorld, blockPos, blockState));
         }
 
         return null;
@@ -162,7 +162,7 @@ public class ModelBlock extends Block implements EntityBlock, SimpleWaterloggedB
             if (be instanceof ModelBlockEntity model)
             {
                 ItemStack stack = new ItemStack(this);
-                BlockItem.setBlockEntityData(stack, BBSMod.MODEL_BLOCK_ENTITY, model.saveWithId(world.registryAccess()));
+                BlockItem.setBlockEntityData(stack, BBSMod.MODEL_BLOCK_ENTITY.get(), model.saveWithId(world.registryAccess()));
                 Block.popResource(world, pos, stack);
             }
         }
