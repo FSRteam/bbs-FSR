@@ -1,4 +1,4 @@
-package mchorse.bbs_mod.mixin.client.iris;
+package mchorse.bbs_mod.mixin.client.sodium;
 
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.utils.colors.Colors;

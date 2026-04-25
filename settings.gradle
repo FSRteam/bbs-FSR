@@ -2,7 +2,9 @@ import org.gradle.api.credentials.HttpHeaderCredentials
 import org.gradle.authentication.http.HttpHeaderAuthentication
 
 pluginManagement {
-    def bbsPreferMirror = providers.gradleProperty("bbsPreferMirror").orElse("true").get().toBoolean()
+    def cliPreferMirror = gradle.startParameter.projectProperties.get("bbsPreferMirror")
+    def envPreferMirror = System.getenv("BBS_PREFER_MIRROR")
+    def bbsPreferMirror = (cliPreferMirror ?: (envPreferMirror ?: providers.gradleProperty("bbsPreferMirror").orElse("false").get())).toBoolean()
     def bbsNeoMirrorUrl = providers.gradleProperty("bbsNeoMirrorUrl").orElse("https://cdnneo.sweatent.top/releases").get()
     def envProxyKey = System.getenv("BBS_PROXY_KEY")
     def bbsProxyKey = providers.gradleProperty("bbsProxyKey").orElse(envProxyKey != null ? envProxyKey : "").get()
@@ -37,12 +39,8 @@ pluginManagement {
             }
         } else {
             maven {
-                name = 'NeoForged Official Primary'
+                name = 'NeoForged Official'
                 url = neoForgedOfficial
-            }
-            maven {
-                name = 'NeoForged Mirror Fallback'
-                url = neoForgedMirror
             }
         }
         mavenCentral()

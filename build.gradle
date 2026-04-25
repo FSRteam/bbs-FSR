@@ -9,7 +9,9 @@ plugins {
 
 minecraft.accessTransformers.file rootProject.file('src/main/resources/META-INF/accesstransformer.cfg')
 
-def bbsPreferMirror = (findProperty("bbsPreferMirror")?.toString() ?: (System.getenv("BBS_PREFER_MIRROR") ?: "false")).toBoolean()
+def cliPreferMirror = gradle.startParameter.projectProperties.get("bbsPreferMirror")
+def envPreferMirror = System.getenv("BBS_PREFER_MIRROR")
+def bbsPreferMirror = (cliPreferMirror ?: (envPreferMirror ?: (findProperty("bbsPreferMirror")?.toString() ?: "false"))).toBoolean()
 def bbsNeoMirrorUrl = findProperty("bbsNeoMirrorUrl")?.toString() ?: "https://cdnneo.sweatent.top/releases"
 def bbsProxyKey = findProperty("bbsProxyKey")?.toString() ?: (System.getenv("BBS_PROXY_KEY") ?: "")
 def neoForgedOfficial = 'https://maven.neoforged.net/releases'

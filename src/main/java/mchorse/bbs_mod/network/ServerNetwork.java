@@ -492,7 +492,7 @@ public class ServerNetwork
              * intentionally left to the broadcast above (CLIENT_ANIMATION_STATE_TRIGGER). */
             Morph morph = Morph.getMorph(player);
 
-            if (morph != null && morph.getForm() != null)
+            if (type == STATE_TRIGGER_MORPH && morph != null && morph.getForm() != null)
             {
                 morph.getForm().playState(string);
             }

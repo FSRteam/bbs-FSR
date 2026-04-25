@@ -4,6 +4,7 @@
     "compatibilityLevel": "JAVA_17",
     "client": [
         "SodiumBufferBuilderAccessor",
+        "EntityVertexMixin",
         "ColorAttributeMixin"
     ],
     "injectors": {

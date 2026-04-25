@@ -217,7 +217,7 @@ public class ClientNetwork
             Entity entity = client.level.getEntity(id);
             Morph morph = Morph.getMorph(entity);
 
-            if (morph != null && morph.getForm() != null)
+            if (type == ServerNetwork.STATE_TRIGGER_MORPH && morph != null && morph.getForm() != null)
             {
                 morph.getForm().playState(triggerId);
             }

@@ -43,6 +43,9 @@ import java.util.List;
 public class DataStorageUtils
 {
     private static final byte[] EMPTY = new byte[0];
+    private static final String SHORT_ARRAY_TYPE_KEY = "__bbs_type";
+    private static final String SHORT_ARRAY_TYPE_VALUE = "short_array";
+    private static final String SHORT_ARRAY_DATA_KEY = "__bbs_data";
 
     /* FriendlyByteBuf */
 
@@ -186,16 +189,13 @@ public class DataStorageUtils
         }
         else if (type instanceof ShortArrayType shortArrayType)
         {
-            /* NBT has no native short array tag, widen to int array to preserve data */
-            short[] values = shortArrayType.value;
-            int[] widened = new int[values.length];
+            /* NBT has no native short array tag, store a tagged wrapper to keep type fidelity */
+            CompoundTag shortArray = new CompoundTag();
 
-            for (int i = 0; i < values.length; i++)
-            {
-                widened[i] = values[i];
-            }
+            shortArray.putString(SHORT_ARRAY_TYPE_KEY, SHORT_ARRAY_TYPE_VALUE);
+            shortArray.putIntArray(SHORT_ARRAY_DATA_KEY, widenShortArray(shortArrayType.value));
 
-            return new IntArrayTag(widened);
+            return shortArray;
         }
 
         return null;
@@ -244,6 +244,13 @@ public class DataStorageUtils
         }
         else if (element instanceof CompoundTag compoundTag)
         {
+            if (SHORT_ARRAY_TYPE_VALUE.equals(compoundTag.getString(SHORT_ARRAY_TYPE_KEY))
+                && compoundTag.contains(SHORT_ARRAY_DATA_KEY, Tag.TAG_INT_ARRAY)
+                && compoundTag.getAllKeys().size() == 2)
+            {
+                return new ShortArrayType(narrowIntArray(compoundTag.getIntArray(SHORT_ARRAY_DATA_KEY)));
+            }
+
             MapType map = new MapType();
 
             for (String key : compoundTag.getAllKeys())
@@ -263,6 +270,41 @@ public class DataStorageUtils
         }
 
         return null;
+    }
+
+    private static int[] widenShortArray(short[] values)
+    {
+        int[] widened = new int[values.length];
+
+        for (int i = 0; i < values.length; i++)
+        {
+            widened[i] = values[i];
+        }
+
+        return widened;
+    }
+
+    private static short[] narrowIntArray(int[] values)
+    {
+        short[] narrowed = new short[values.length];
+
+        for (int i = 0; i < values.length; i++)
+        {
+            int value = values[i];
+
+            if (value > Short.MAX_VALUE)
+            {
+                value = Short.MAX_VALUE;
+            }
+            else if (value < Short.MIN_VALUE)
+            {
+                value = Short.MIN_VALUE;
+            }
+
+            narrowed[i] = (short) value;
+        }
+
+        return narrowed;
     }
 
     public static void writeToNbtCompound(CompoundTag compound, String key, BaseType data)
