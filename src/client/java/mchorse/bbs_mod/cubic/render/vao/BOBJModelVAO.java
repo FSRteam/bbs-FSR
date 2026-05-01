@@ -213,6 +213,11 @@ public class BOBJModelVAO
 
     public void render(ShaderInstance shader, PoseStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
     {
+        if (shader == null)
+        {
+            return;
+        }
+
         boolean hasShaders = BBSRendering.isIrisShadersEnabled();
 
         GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);

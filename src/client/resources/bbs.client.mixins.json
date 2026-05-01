@@ -27,7 +27,8 @@
         "BlockEntityRenderDispatcherMixin",
         "WorldMixin",
         "LivingEntityRendererInvoker",
-        "EntityRenderDispatcherMixin"
+        "EntityRenderDispatcherMixin",
+        "KeyboardMixin"
     ],
     "injectors": {
         "defaultRequire": 1

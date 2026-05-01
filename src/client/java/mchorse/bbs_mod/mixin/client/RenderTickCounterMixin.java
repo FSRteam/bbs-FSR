@@ -30,7 +30,7 @@ public class RenderTickCounterMixin
     {
         VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
 
-        if (videoRecorder.isRecording())
+        if (videoRecorder != null && videoRecorder.isRecording())
         {
             if (videoRecorder.getCounter() == 0)
             {

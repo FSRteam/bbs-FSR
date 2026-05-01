@@ -19,7 +19,7 @@ public class IntegratedServerMixin
     {
         VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
 
-        if (videoRecorder.isRecording())
+        if (videoRecorder != null && videoRecorder.isRecording())
         {
             while (videoRecorder.lastServerTicks < videoRecorder.serverTicks)
             {

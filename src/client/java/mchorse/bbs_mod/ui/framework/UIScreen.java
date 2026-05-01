@@ -146,6 +146,12 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public void resize(Minecraft client, int width, int height)
     {
+        /* MC 1.21.1: Screen.resize() no longer assigns this.minecraft
+         * (only Screen.init() does).  During added() → guiScale().set()
+         * → resizeDisplay() → resize(), the field is still null because
+         * Minecraft.setScreen() calls init() AFTER added(). */
+        this.minecraft = client;
+
         super.resize(client, width, height);
 
         this.menu.resize(width, height);
@@ -172,6 +178,14 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers)
     {
+        /* Disable long-press repeat (GLFW_REPEAT) in BBS panel.
+         * MC 1.21.1 calls keyPressed() for both PRESS and REPEAT,
+         * but original BBS only processes initial PRESS. */
+        if (BBSRendering.lastAction == GLFW.GLFW_REPEAT)
+        {
+            return false;
+        }
+
         return this.menu.handleKey(keyCode, scanCode, BBSRendering.lastAction, modifiers);
     }
 

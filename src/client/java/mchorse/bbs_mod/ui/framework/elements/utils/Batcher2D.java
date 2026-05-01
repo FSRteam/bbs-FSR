@@ -17,6 +17,7 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.joml.Matrix4f;
+import org.lwjgl.opengl.GL11;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -111,9 +112,10 @@ public class Batcher2D
     public void box(float x, float y, float w, float h, int color1, int color2, int color3, int color4)
     {
         Matrix4f matrix4f = this.context.pose().last().pose();
-        BufferBuilder builder;
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        flushBeforeTesselator();
+
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
         this.fillRect(builder, matrix4f, x, y, w, h, color1, color2, color3, color4);
 
@@ -121,7 +123,7 @@ public class Batcher2D
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        this.context.flush();
+        restoreDepth();
     }
 
     public void fillRect(BufferBuilder builder, Matrix4f matrix4f, float x, float y, float w, float h, int color1, int color2, int color3, int color4)
@@ -143,9 +145,10 @@ public class Batcher2D
         bottom += offset;
 
         Matrix4f matrix4f = this.context.pose().last().pose();
-        BufferBuilder builder;
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        flushBeforeTesselator();
+
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
         /* Draw opaque part */
         builder.addVertex(matrix4f, left + offset, top + offset, 0).setColor(opaque);
@@ -180,6 +183,8 @@ public class Batcher2D
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        restoreDepth();
     }
 
     /* Gradients */
@@ -197,9 +202,10 @@ public class Batcher2D
     public void dropCircleShadow(int x, int y, int radius, int segments, int opaque, int shadow)
     {
         Matrix4f matrix4f = this.context.pose().last().pose();
-        BufferBuilder builder;
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        flushBeforeTesselator();
+
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         builder.addVertex(matrix4f, x, y, 0F).setColor(opaque);
 
         for (int i = 0; i <= segments; i ++)
@@ -212,6 +218,8 @@ public class Batcher2D
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        restoreDepth();
     }
 
     public void dropCircleShadow(int x, int y, int radius, int offset, int segments, int opaque, int shadow)
@@ -225,13 +233,13 @@ public class Batcher2D
 
         Matrix4f matrix4f = this.context.pose().last().pose();
 
-        BufferBuilder builder;
-
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
         /* Draw opaque base */
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        flushBeforeTesselator();
+
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         builder.addVertex(matrix4f, x, y, 0F).setColor(opaque);
 
         for (int i = 0; i <= segments; i ++)
@@ -260,6 +268,8 @@ public class Batcher2D
         }
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        restoreDepth();
     }
 
     /* Outline methods */
@@ -371,17 +381,19 @@ public class Batcher2D
 
     public void texturedBox(Texture texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
-        RenderSystem.setShaderTexture(0, texture.id);
-
         Matrix4f matrix = this.context.pose().last().pose();
-        BufferBuilder builder;
+
+        flushBeforeTesselator();
 
         RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+        RenderSystem.setShaderTexture(0, texture.id);
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
         this.fillTexturedBox(builder, matrix, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH);
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        restoreDepth();
     }
 
     public void texturedBox(int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
@@ -391,17 +403,19 @@ public class Batcher2D
 
     public void texturedBox(Supplier<ShaderInstance> shader, int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
-        RenderSystem.setShaderTexture(0, texture);
-
         Matrix4f matrix = this.context.pose().last().pose();
-        BufferBuilder builder;
+
+        flushBeforeTesselator();
 
         RenderSystem.setShader(shader);
+        RenderSystem.setShaderTexture(0, texture);
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
         this.fillTexturedBox(builder, matrix, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH);
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        restoreDepth();
     }
 
     private void fillTexturedBox(BufferBuilder builder, Matrix4f matrix, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
@@ -424,12 +438,13 @@ public class Batcher2D
         float fillerY = h - (countY - 1) * tileH;
 
         Matrix4f matrix = this.context.pose().last().pose();
-        BufferBuilder builder;
+
+        flushBeforeTesselator();
 
         RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
         RenderSystem.setShaderTexture(0, texture.id);
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
 
         for (int i = 0, c = countX * countY; i < c; i ++)
         {
@@ -444,6 +459,8 @@ public class Batcher2D
         }
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        restoreDepth();
     }
 
     /* Component with default font */
@@ -471,7 +488,10 @@ public class Batcher2D
     public void text(String label, float x, float y, int color, boolean shadow)
     {
         this.context.drawString(this.font.getRenderer(), label, (int) x, (int) y, color, shadow);
-        this.context.flush();
+        /* drawString() calls flushIfUnmanaged() internally which calls flush().
+         * flush() re-enables depth test and may change depth func via the text
+         * RenderType's setupRenderState().  Restore the depth func BBS expects. */
+        restoreDepth();
     }
 
     /* Component helpers */
@@ -536,5 +556,27 @@ public class Batcher2D
     public void flush()
     {
         this.context.flush();
+    }
+
+    /* MC 1.21.1 compatibility helpers */
+
+    /**
+     * MC 1.21.1: bufferSource and Tesselator share the same underlying BufferBuilder.
+     * Flush any pending text vertices before calling begin() so the Tesselator
+     * does not discard them.
+     */
+    private void flushBeforeTesselator()
+    {
+        this.context.flush();
+    }
+
+    /**
+     * MC 1.21.1: GuiGraphics.flush() re-enables depth test, and the text RenderType
+     * may change the depth func.  UIBaseMenu sets depthFunc(GL_ALWAYS) for painter's
+     * algorithm rendering.  Restore it after any operation that may call flush().
+     */
+    private void restoreDepth()
+    {
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
     }
 }

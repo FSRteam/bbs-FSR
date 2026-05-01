@@ -27,7 +27,7 @@ public class SystemTimeUniformsTimerMixin
     {
         VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
 
-        if (videoRecorder.isRecording())
+        if (videoRecorder != null && videoRecorder.isRecording())
         {
             float videoFrameRate = BBSRendering.getVideoFrameRate();
 

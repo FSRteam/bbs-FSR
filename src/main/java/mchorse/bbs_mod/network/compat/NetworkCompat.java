@@ -290,7 +290,7 @@ public final class NetworkCompat
         private PayloadBinding(ResourceLocation id)
         {
             this.id = id;
-            this.type = CustomPacketPayload.createType(id.toString());
+            this.type = new CustomPacketPayload.Type<>(id);
         }
     }
 
