@@ -127,7 +127,7 @@ public class UIVanillaSoundList extends UIStringList
     }
 
     /**
-     * Load vanilla sound files using Fabric API
+     * Load vanilla sound files from Minecraft's resource manager.
      */
     private void loadVanillaSoundFiles()
     {
@@ -144,6 +144,8 @@ public class UIVanillaSoundList extends UIStringList
             {
                 this.cachedSoundsJson = this.loadSoundsJson(resourceManager);
             }
+
+            boolean hasDownloadableSounds = false;
 
             for (ResourceLocation soundId : BuiltInRegistries.SOUND_EVENT.keySet())
             {
@@ -173,7 +175,7 @@ public class UIVanillaSoundList extends UIStringList
                                 ? soundPathFull.substring(0, soundPathFull.length() - 4)
                                 : soundPathFull;
                             
-                            String flatDisplayName = pathWithoutExt.replace("/", "_");
+                            String flatDisplayName = this.toFlatDisplayName(pathWithoutExt);
                             
                             String uniqueKey = flatDisplayName;
                             int uniqueSuffix = 1;
@@ -189,15 +191,21 @@ public class UIVanillaSoundList extends UIStringList
                             singlePath.add(soundPathFull);
                             
                             this.soundAssetMap.put(uniqueKey, new VanillaSoundAsset(uniqueKey, soundId.toString(), singlePath, category));
+                            hasDownloadableSounds = true;
                         }
                     }
                     else
                     {
-                        String flatDisplayName = soundPath.replace(".", "_");
-
-                        this.soundAssetMap.put(flatDisplayName, new VanillaSoundAsset(flatDisplayName, soundId.toString(), new ArrayList<>(), category));
+                        continue;
                     }
                 }
+            }
+
+            if (!hasDownloadableSounds)
+            {
+                this.soundAssetMap.clear();
+                existingDisplayNames.clear();
+                this.loadDirectSoundFiles(resourceManager, existingDisplayNames);
             }
         }
         catch (Exception e)
@@ -205,6 +213,43 @@ public class UIVanillaSoundList extends UIStringList
             e.printStackTrace();
         }
     }
+
+    private void loadDirectSoundFiles(ResourceManager resourceManager, Set<String> existingDisplayNames)
+    {
+        Map<ResourceLocation, List<Resource>> resources = resourceManager.listResourceStacks("sounds", (location) ->
+            location.getNamespace().equals("minecraft") && location.getPath().endsWith(".ogg"));
+
+        for (ResourceLocation location : resources.keySet())
+        {
+            String path = location.getPath();
+
+            if (!path.startsWith("sounds/"))
+            {
+                continue;
+            }
+
+            String soundPath = path.substring("sounds/".length());
+            String pathWithoutExt = soundPath.endsWith(".ogg")
+                ? soundPath.substring(0, soundPath.length() - 4)
+                : soundPath;
+            String flatDisplayName = this.toFlatDisplayName(pathWithoutExt);
+            String uniqueKey = flatDisplayName;
+            int uniqueSuffix = 1;
+
+            while (existingDisplayNames.contains(uniqueKey))
+            {
+                uniqueKey = flatDisplayName + "_" + uniqueSuffix++;
+            }
+
+            existingDisplayNames.add(uniqueKey);
+
+            List<String> singlePath = new ArrayList<>();
+
+            singlePath.add(soundPath);
+            this.soundAssetMap.put(uniqueKey, new VanillaSoundAsset(uniqueKey, location.toString(), singlePath, this.detectSoundCategory(pathWithoutExt.replace("/", "."))));
+        }
+    }
+
     /**
      * Load and cache sounds.json
      */
@@ -234,9 +279,14 @@ public class UIVanillaSoundList extends UIStringList
     }
 
     /**
-     * Find all actual sound file paths from cached sounds.json (skip event references)
+     * Find actual sound file paths from cached sounds.json, following event references.
      */
     private List<String> findAllSoundFilesFromCache(ResourceLocation soundId)
+    {
+        return this.findAllSoundFilesFromCache(soundId.getPath(), new HashSet<>());
+    }
+
+    private List<String> findAllSoundFilesFromCache(String soundPath, Set<String> visited)
     {
         if (this.cachedSoundsJson == null)
         {
@@ -245,7 +295,11 @@ public class UIVanillaSoundList extends UIStringList
 
         try
         {
-            String soundPath = soundId.getPath();
+            if (!visited.add(soundPath))
+            {
+                return null;
+            }
+
             JsonObject soundEntry = this.cachedSoundsJson.getAsJsonObject(soundPath);
             
             if (soundEntry == null)
@@ -273,6 +327,18 @@ public class UIVanillaSoundList extends UIStringList
                         
                         if (soundObj.has("type") && soundObj.get("type").getAsString().equals("event"))
                         {
+                            if (soundObj.has("name"))
+                            {
+                                ResourceLocation eventId = ResourceLocation.tryParse(soundObj.get("name").getAsString());
+                                String eventPath = eventId == null ? soundObj.get("name").getAsString() : eventId.getPath();
+                                List<String> eventPaths = this.findAllSoundFilesFromCache(eventPath, visited);
+
+                                if (eventPaths != null)
+                                {
+                                    actualPaths.addAll(eventPaths);
+                                }
+                            }
+
                             continue;
                         }
                         
@@ -562,7 +628,13 @@ public class UIVanillaSoundList extends UIStringList
                     return null;
                 }
                 
-                ResourceLocation soundFileId = ResourceLocation.fromNamespaceAndPath("minecraft", "sounds/" + soundPath);
+                ResourceLocation soundFileId = this.toSoundFileId(soundPath);
+
+                if (soundFileId == null)
+                {
+                    return null;
+                }
+
                 Minecraft client = Minecraft.getInstance();
                 Optional<Resource> resource = client.getResourceManager().getResource(soundFileId);
 
@@ -651,7 +723,13 @@ public class UIVanillaSoundList extends UIStringList
                     soundPath = soundPath + ".ogg";
                 }
                 
-                ResourceLocation soundFileId = ResourceLocation.fromNamespaceAndPath("minecraft", "sounds/" + soundPath);
+                ResourceLocation soundFileId = this.toSoundFileId(soundPath);
+
+                if (soundFileId == null)
+                {
+                    return null;
+                }
+
                 Minecraft client = Minecraft.getInstance();
                 Optional<Resource> resource = client.getResourceManager().getResource(soundFileId);
 
@@ -721,6 +799,32 @@ public class UIVanillaSoundList extends UIStringList
         while (candidateFile.exists());
 
         return candidateName;
+    }
+
+    private String toFlatDisplayName(String path)
+    {
+        return path.replace("/", "_").replace("\\", "_").replace(":", "_");
+    }
+
+    private ResourceLocation toSoundFileId(String soundPath)
+    {
+        String normalized = soundPath.replace("\\", "/");
+
+        if (!normalized.endsWith(".ogg"))
+        {
+            normalized += ".ogg";
+        }
+
+        ResourceLocation parsed = ResourceLocation.tryParse(normalized);
+        String namespace = parsed != null && normalized.contains(":") ? parsed.getNamespace() : "minecraft";
+        String path = parsed != null && normalized.contains(":") ? parsed.getPath() : normalized;
+
+        if (!path.startsWith("sounds/"))
+        {
+            path = "sounds/" + path;
+        }
+
+        return ResourceLocation.tryBuild(namespace, path);
     }
 
     /**

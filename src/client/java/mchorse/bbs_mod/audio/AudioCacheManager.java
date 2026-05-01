@@ -61,7 +61,7 @@ public class AudioCacheManager
             this.cleanupExcessCache();
         }
         
-        String flattenedPath = soundPath.replace("/", "_").replace("\\", "_");
+        String flattenedPath = soundPath.replace("/", "_").replace("\\", "_").replace(":", "_");
         String fileName = flattenedPath.endsWith(".ogg")
             ? "preview_" + flattenedPath
             : "preview_" + flattenedPath + ".ogg";

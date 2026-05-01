@@ -96,7 +96,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.MapFactory;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -108,7 +108,6 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -197,7 +196,7 @@ public class BBSMod
 
     public static final DeferredHolder<EntityType<?>, EntityType<GunProjectileEntity>> GUN_PROJECTILE_ENTITY = ENTITY_TYPES.register("gun_projectile", () -> FabricRegistryCompat.buildEntityTypeWithChunkRange(
         MOD_ID + ":gun_projectile",
-        MobCategory.CREATURE,
+        MobCategory.MISC,
         GunProjectileEntity::new,
         EntityDimensions.fixed(0.25F, 0.25F),
         24,
@@ -283,11 +282,10 @@ public class BBSMod
         properties.getTransformFirstPerson().translate.set(0F, 0F, -0.25F);
 
         MapType data = properties.toData();
+        CompoundTag nbt = new CompoundTag();
 
-        CustomData.update(DataComponents.BLOCK_ENTITY_DATA, stack, compoundTag ->
-        {
-            compoundTag.put("Properties", DataStorageUtils.toNbt(data));
-        });
+        nbt.put("Properties", DataStorageUtils.toNbt(data));
+        BlockItem.setBlockEntityData(stack, MODEL_BLOCK_ENTITY.get(), nbt);
 
         return stack;
     }

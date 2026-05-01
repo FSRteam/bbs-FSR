@@ -27,14 +27,16 @@ import mchorse.bbs_mod.utils.PermissionUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -168,10 +170,7 @@ public class ServerNetwork
 
                     if (stack.getItem() == BBSMod.MODEL_BLOCK_ITEM.get())
                     {
-                        CustomData.update(DataComponents.BLOCK_ENTITY_DATA, stack, (compoundTag) ->
-                        {
-                            compoundTag.put("Properties", DataStorageUtils.toNbt(data));
-                        });
+                        updateModelBlockStackData(stack, data);
                     }
                     else if (stack.getItem() == BBSMod.GUN_ITEM.get())
                     {
@@ -187,6 +186,14 @@ public class ServerNetwork
             catch (Exception e)
             {}
         });
+    }
+
+    private static void updateModelBlockStackData(ItemStack stack, MapType data)
+    {
+        CompoundTag nbt = stack.getOrDefault(DataComponents.BLOCK_ENTITY_DATA, CustomData.EMPTY).copyTag();
+
+        nbt.put("Properties", DataStorageUtils.toNbt(data));
+        BlockItem.setBlockEntityData(stack, BBSMod.MODEL_BLOCK_ENTITY.get(), nbt);
     }
 
     private static void handlePlayerFormPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
