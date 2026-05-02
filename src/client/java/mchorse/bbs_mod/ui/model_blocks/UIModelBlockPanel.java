@@ -385,7 +385,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.mouseDirection.set(CameraUtils.getMouseDirection(
             RenderSystem.getProjectionMatrix(),
             context.matrixStack().last().pose(),
-            (int) x, (int) y, 0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight()
+            (int) x, (int) y, 0, 0, mc.getWindow().getScreenWidth(), mc.getWindow().getScreenHeight()
         ));
         this.hovered = this.getClosestObject(new Vector3d(pos.x, pos.y, pos.z), this.mouseDirection);
 

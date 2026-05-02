@@ -12,6 +12,9 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.commands.arguments.item.ItemInput;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.function.Consumer;
@@ -38,6 +41,11 @@ public class UIItemStack extends UIElement
 
                 this.setStack(ItemStack.EMPTY);
             });
+
+            if (!this.stack.isEmpty())
+            {
+                menu.action(Icons.PLAYER, UIKeys.ITEM_STACK_CONTEXT_GIVE, () -> giveToPlayer(this.stack));
+            }
         });
 
         this.h(UIConstants.CONTROL_HEIGHT);
@@ -96,5 +104,29 @@ public class UIItemStack extends UIElement
         }
 
         super.render(context);
+    }
+
+    /**
+     * Delivers {@code stack} to the local player through the vanilla /give command.
+     * Requires the player to have enough permission for /give.
+     */
+    static void giveToPlayer(ItemStack stack)
+    {
+        if (stack == null || stack.isEmpty())
+        {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+
+        if (mc.player == null || mc.player.connection == null || mc.level == null)
+        {
+            return;
+        }
+
+        HolderLookup.Provider registries = mc.level.registryAccess();
+        String item = new ItemInput(stack.getItemHolder(), stack.getComponentsPatch()).serialize(registries);
+
+        mc.player.connection.sendCommand("give @s " + item + " " + stack.getCount());
     }
 }

@@ -182,9 +182,53 @@ public class VideoRecorder
         catch (Exception e)
         {
             e.printStackTrace();
+            this.cleanupFailedStart();
         }
 
         this.serverTicks = this.lastServerTicks = 0;
+    }
+
+    private void cleanupFailedStart()
+    {
+        if (this.pbos != null)
+        {
+            for (int pbo : this.pbos)
+            {
+                GL30.glDeleteBuffers(pbo);
+            }
+        }
+
+        this.pbos = null;
+        this.textureId = -1;
+
+        if (this.buffer != null)
+        {
+            MemoryUtil.memFree(this.buffer);
+
+            this.buffer = null;
+        }
+
+        try
+        {
+            if (this.channel != null && this.channel.isOpen())
+            {
+                this.channel.close();
+            }
+        }
+        catch (IOException ex)
+        {
+            ex.printStackTrace();
+        }
+
+        this.channel = null;
+
+        if (this.process != null)
+        {
+            this.process.destroy();
+        }
+
+        this.process = null;
+        this.recording = false;
     }
 
     /**

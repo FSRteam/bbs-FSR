@@ -103,8 +103,8 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
             this.window.setWindowed((int) this.width.getValue(), (int) this.height.getValue());
         });
 
-        this.width.delayedInput().limit(2, 4096, true).values(2, 1, 10).setValue(this.window.getWidth());
-        this.height.delayedInput().limit(2, 4096, true).values(2, 1, 10).setValue(this.window.getHeight());
+        this.width.delayedInput().limit(2, 4096, true).values(2, 1, 10).setValue(this.window.getScreenWidth());
+        this.height.delayedInput().limit(2, 4096, true).values(2, 1, 10).setValue(this.window.getScreenHeight());
 
         UIButton analyze = new UIButton(UIKeys.UTILITY_ANALYZE_LANG, (b) -> this.analyzeLanguageStrings());
         UIButton compile = new UIButton(UIKeys.UTILITY_COMPILE_LANG, (b) -> this.compileLanguageStrings());
@@ -270,8 +270,8 @@ public class UIUtilityOverlayPanel extends UIOverlayPanel
     {
         super.resize();
 
-        this.width.setValue(this.window.getWidth());
-        this.height.setValue(this.window.getHeight());
+        this.width.setValue(this.window.getScreenWidth());
+        this.height.setValue(this.window.getScreenHeight());
     }
 
     @Override

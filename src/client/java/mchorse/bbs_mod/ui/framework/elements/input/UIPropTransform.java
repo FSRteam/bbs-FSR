@@ -18,8 +18,13 @@ import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.Minecraft;
+import org.joml.Intersectiond;
 import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Vector2f;
+import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Supplier;
@@ -37,6 +42,7 @@ public class UIPropTransform extends UITransform
     private int mode;
     private Axis axis = Axis.X;
     private int lastX;
+    private int lastY;
     private Transform cache = new Transform();
     private Timer checker = new Timer(30);
 
@@ -44,6 +50,35 @@ public class UIPropTransform extends UITransform
     private boolean local;
 
     private UITransformHandler handler;
+
+    private boolean gizmoDrag;
+    private final Matrix4f gizmoMvp = new Matrix4f();
+    private final Matrix4f gizmoInvMvp = new Matrix4f();
+    private int gizmoViewportX;
+    private int gizmoViewportY;
+    private int gizmoViewportW;
+    private int gizmoViewportH;
+    private final Vector2f gizmoOrigin2D = new Vector2f();
+    private final Vector2f gizmoAxisX = new Vector2f();
+    private final Vector2f gizmoAxisY = new Vector2f();
+    private final Vector2f gizmoAxisZ = new Vector2f();
+    private float gizmoAxisXLenSq;
+    private float gizmoAxisYLenSq;
+    private float gizmoAxisZLenSq;
+    private boolean gizmoInvReady;
+    private final Vector2f gizmoTmp2D = new Vector2f();
+    private final Vector4f gizmoTmp4D = new Vector4f();
+    private final Vector4f gizmoNear4D = new Vector4f();
+    private final Vector4f gizmoFar4D = new Vector4f();
+    private final Vector3d gizmoRayStart = new Vector3d();
+    private final Vector3d gizmoRayEnd = new Vector3d();
+    private final Vector3d gizmoP0 = new Vector3d();
+    private final Vector3d gizmoP1 = new Vector3d();
+    private final Vector3d gizmoCross = new Vector3d();
+    private final Vector3d gizmoTangent = new Vector3d();
+    private final Vector3d gizmoAxisNormal = new Vector3d();
+    private final Vector2f gizmoP2D = new Vector2f();
+    private final Vector2f gizmoP2DNext = new Vector2f();
 
     public UIPropTransform()
     {
@@ -119,12 +154,12 @@ public class UIPropTransform extends UITransform
 
     private void updateLocalUI()
     {
-        this.tx.forcedLabel(null);
-        this.ty.forcedLabel(null);
-        this.tz.forcedLabel(null);
-        this.tx.relative(false);
-        this.ty.relative(false);
-        this.tz.relative(false);
+        this.tx.forcedLabel(this.local ? UIKeys.GENERAL_X : null);
+        this.ty.forcedLabel(this.local ? UIKeys.GENERAL_Y : null);
+        this.tz.forcedLabel(this.local ? UIKeys.GENERAL_Z : null);
+        this.tx.relative(this.local);
+        this.ty.relative(this.local);
+        this.tz.relative(this.local);
         this.iconT.tooltip(this.local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
     }
 
@@ -221,6 +256,8 @@ public class UIPropTransform extends UITransform
 
     public void enableMode(int mode, Axis axis)
     {
+        this.clearGizmoDrag();
+
         if (Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]) && axis == null)
         {
             return;
@@ -249,6 +286,7 @@ public class UIPropTransform extends UITransform
         {
             this.axis = axis == null ? Axis.X : axis;
             this.lastX = context.mouseX;
+            this.lastY = context.mouseY;
         }
 
         this.editing = true;
@@ -295,6 +333,7 @@ public class UIPropTransform extends UITransform
     private void disable()
     {
         this.editing = false;
+        this.clearGizmoDrag();
 
         if (this.handler.hasParent())
         {
@@ -440,10 +479,13 @@ public class UIPropTransform extends UITransform
             GLFW.glfwGetCursorPos(Window.getWindow(), CURSOR_X, CURSOR_Y);
 
             Minecraft mc = Minecraft.getInstance();
-            int w = mc.getWindow().getWidth();
+            int w = mc.getWindow().getScreenWidth();
+            int h = mc.getWindow().getScreenHeight();
 
             double rawX = CURSOR_X[0];
+            double rawY = CURSOR_Y[0];
             double fx = Math.ceil(w / (double) context.menu.width);
+            double fy = Math.ceil(h / (double) context.menu.height);
             int border = 5;
             int borderPadding = border + 1;
 
@@ -461,19 +503,47 @@ public class UIPropTransform extends UITransform
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();
             }
+            else if (rawY <= border)
+            {
+                Window.moveCursor((int) mc.mouseHandler.xpos(), h - borderPadding);
+
+                this.lastY = context.menu.height - (int) (borderPadding / fy);
+                this.checker.mark();
+            }
+            else if (rawY >= h - border)
+            {
+                Window.moveCursor((int) mc.mouseHandler.xpos(), borderPadding);
+
+                this.lastY = (int) (borderPadding / fy);
+                this.checker.mark();
+            }
             else
             {
                 int dx = context.mouseX - this.lastX;
+                int dy = context.mouseY - this.lastY;
                 Vector3f vector = this.getValue();
                 boolean all = this.mode == 1 && Window.isCtrlPressed();
                 UITrackpad reference = this.mode == 0 ? this.tx : (this.mode == 1 ? this.sx : this.rx);
                 float factor = (float) reference.getValueModifier();
 
-                if (this.local && this.mode == 0)
+                if (this.mode == 0 && this.applyGizmoTranslate(dx, dy, factor))
+                {
+                    this.setTransform(this.transform);
+                }
+                else if (this.mode == 1 && this.applyGizmoScale(dx, dy, factor, all))
+                {
+                    this.setTransform(this.transform);
+                }
+                else if (this.mode == 2 && this.applyGizmoRotate(context.mouseX, context.mouseY, this.lastX, this.lastY, factor))
+                {
+                    this.setTransform(this.transform);
+                }
+                else if (this.local && this.mode == 0)
                 {
                     Vector3f vector3f = this.calculateLocalVector(factor * dx, this.axis);
 
                     this.setT(null, vector.x + vector3f.x, vector.y + vector3f.y, vector.z + vector3f.z);
+                    this.setTransform(this.transform);
                 }
                 else
                 {
@@ -495,11 +565,12 @@ public class UIPropTransform extends UITransform
                         if (this.local && BBSSettings.gizmos.get()) this.setR2(null, vector3f.x, vector3f.y, vector3f.z);
                         else this.setR(null, vector3f.x, vector3f.y, vector3f.z);
                     }
+
+                    this.setTransform(this.transform);
                 }
 
-                this.setTransform(this.transform);
-
                 this.lastX = context.mouseX;
+                this.lastY = context.mouseY;
             }
         }
 
@@ -514,6 +585,368 @@ public class UIPropTransform extends UITransform
 
             context.batcher.textCard(label, x, y, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
         }
+    }
+
+    public void beginGizmoDrag(Gizmo.DragContext context)
+    {
+        this.gizmoDrag = false;
+        this.gizmoInvReady = false;
+
+        if (context == null || !context.ready)
+        {
+            return;
+        }
+
+        this.gizmoViewportX = context.viewportX;
+        this.gizmoViewportY = context.viewportY;
+        this.gizmoViewportW = context.viewportW;
+        this.gizmoViewportH = context.viewportH;
+
+        this.gizmoMvp.set(context.projection).mul(context.modelView);
+        this.gizmoMvp.invert(this.gizmoInvMvp);
+        this.gizmoInvReady = true;
+
+        if (!this.projectGizmoPoint(0F, 0F, 0F, this.gizmoOrigin2D))
+        {
+            return;
+        }
+
+        if (this.projectGizmoPoint(1F, 0F, 0F, this.gizmoTmp2D))
+        {
+            this.gizmoAxisX.set(this.gizmoTmp2D).sub(this.gizmoOrigin2D);
+            this.gizmoAxisXLenSq = this.gizmoAxisX.lengthSquared();
+        }
+        else
+        {
+            this.gizmoAxisXLenSq = 0F;
+        }
+
+        if (this.projectGizmoPoint(0F, 1F, 0F, this.gizmoTmp2D))
+        {
+            this.gizmoAxisY.set(this.gizmoTmp2D).sub(this.gizmoOrigin2D);
+            this.gizmoAxisYLenSq = this.gizmoAxisY.lengthSquared();
+        }
+        else
+        {
+            this.gizmoAxisYLenSq = 0F;
+        }
+
+        if (this.projectGizmoPoint(0F, 0F, 1F, this.gizmoTmp2D))
+        {
+            this.gizmoAxisZ.set(this.gizmoTmp2D).sub(this.gizmoOrigin2D);
+            this.gizmoAxisZLenSq = this.gizmoAxisZ.lengthSquared();
+        }
+        else
+        {
+            this.gizmoAxisZLenSq = 0F;
+        }
+
+        this.gizmoDrag = true;
+    }
+
+    private void clearGizmoDrag()
+    {
+        this.gizmoDrag = false;
+        this.gizmoInvReady = false;
+    }
+
+    private boolean applyGizmoTranslate(int dx, int dy, float factor)
+    {
+        if (!this.gizmoDrag || this.mode != 0)
+        {
+            return false;
+        }
+
+        if (dx == 0 && dy == 0)
+        {
+            return true;
+        }
+
+        Float units = this.getGizmoAxisDelta(dx, dy, this.axis, factor);
+
+        if (units == null)
+        {
+            return false;
+        }
+
+        Vector3f vector3f = new Vector3f(this.transform.translate);
+
+        if (this.local)
+        {
+            float localUnits = this.axis == Axis.Z ? -units : units;
+            Vector3f local = this.calculateLocalVector(localUnits, this.axis);
+
+            vector3f.add(local);
+        }
+        else if (this.axis == Axis.X)
+        {
+            vector3f.x += units;
+        }
+        else if (this.axis == Axis.Y)
+        {
+            vector3f.y += units;
+        }
+        else if (this.axis == Axis.Z)
+        {
+            vector3f.z -= units;
+        }
+
+        this.setT(null, vector3f.x, vector3f.y, vector3f.z);
+
+        return true;
+    }
+
+    private boolean applyGizmoScale(int dx, int dy, float factor, boolean all)
+    {
+        if (!this.gizmoDrag || this.mode != 1)
+        {
+            return false;
+        }
+
+        if (dx == 0 && dy == 0)
+        {
+            return true;
+        }
+
+        Float delta = this.getGizmoAxisDelta(dx, dy, this.axis, factor);
+
+        if (delta == null)
+        {
+            return false;
+        }
+
+        Vector3f vector3f = new Vector3f(this.transform.scale);
+
+        if (all)
+        {
+            vector3f.x += delta;
+            vector3f.y += delta;
+            vector3f.z += delta;
+        }
+        else if (this.axis == Axis.X)
+        {
+            vector3f.x += delta;
+        }
+        else if (this.axis == Axis.Y)
+        {
+            vector3f.y += delta;
+        }
+        else if (this.axis == Axis.Z)
+        {
+            vector3f.z += delta;
+        }
+
+        this.setS(null, vector3f.x, vector3f.y, vector3f.z);
+
+        return true;
+    }
+
+    private boolean applyGizmoRotate(int mouseX, int mouseY, int lastX, int lastY, float factor)
+    {
+        if (!this.gizmoDrag || !this.gizmoInvReady || this.mode != 2)
+        {
+            return false;
+        }
+
+        if (mouseX == lastX && mouseY == lastY)
+        {
+            return true;
+        }
+
+        Axis axis = this.axis;
+
+        if (!this.intersectGizmoPlane(lastX, lastY, axis, this.gizmoP0) || !this.intersectGizmoPlane(mouseX, mouseY, axis, this.gizmoP1))
+        {
+            return false;
+        }
+
+        if (this.gizmoP0.lengthSquared() < 1e-6 || this.gizmoP1.lengthSquared() < 1e-6)
+        {
+            return false;
+        }
+
+        this.gizmoCross.set(this.gizmoP0).cross(this.gizmoP1);
+
+        double dot = this.gizmoP0.dot(this.gizmoP1);
+        double axisDot = this.getGizmoAxisNormal(axis).dot(this.gizmoCross);
+        double angleRad = Math.atan2(axisDot, dot);
+        float dragSign = this.getAxisDragDirectionSign(axis, this.gizmoP1, mouseX, mouseY, lastX, lastY);
+
+        if (dragSign == 0F)
+        {
+            return true;
+        }
+
+        float deltaDeg = MathUtils.toDeg((float) Math.abs(angleRad)) * factor * dragSign;
+        Vector3f current = this.local && BBSSettings.gizmos.get() ? this.transform.rotate2 : this.transform.rotate;
+        Vector3f rotDeg = new Vector3f(
+            MathUtils.toDeg(current.x),
+            MathUtils.toDeg(current.y),
+            MathUtils.toDeg(current.z)
+        );
+
+        if (axis == Axis.X) rotDeg.x += deltaDeg;
+        else if (axis == Axis.Y) rotDeg.y += deltaDeg;
+        else if (axis == Axis.Z) rotDeg.z += deltaDeg;
+
+        if (this.local && BBSSettings.gizmos.get()) this.setR2(null, rotDeg.x, rotDeg.y, rotDeg.z);
+        else this.setR(null, rotDeg.x, rotDeg.y, rotDeg.z);
+
+        return true;
+    }
+
+    private Float getGizmoAxisDelta(int dx, int dy, Axis axis, float factor)
+    {
+        Vector2f vector = this.getGizmoAxis(axis);
+        float lenSq = this.getGizmoAxisLenSq(axis);
+        float len = (float) Math.sqrt(lenSq);
+
+        if (len < 1e-3F)
+        {
+            return null;
+        }
+
+        float units = (dx * vector.x + dy * vector.y) / len;
+        units *= factor;
+
+        return Float.isFinite(units) ? units : null;
+    }
+
+    private Vector2f getGizmoAxis(Axis axis)
+    {
+        if (axis == Axis.X) return this.gizmoAxisX;
+        if (axis == Axis.Y) return this.gizmoAxisY;
+
+        return this.gizmoAxisZ;
+    }
+
+    private float getGizmoAxisLenSq(Axis axis)
+    {
+        if (axis == Axis.X) return this.gizmoAxisXLenSq;
+        if (axis == Axis.Y) return this.gizmoAxisYLenSq;
+
+        return this.gizmoAxisZLenSq;
+    }
+
+    private Vector3d getGizmoAxisNormal(Axis axis)
+    {
+        if (axis == Axis.X) return this.gizmoAxisNormal.set(1, 0, 0);
+        if (axis == Axis.Y) return this.gizmoAxisNormal.set(0, 1, 0);
+
+        return this.gizmoAxisNormal.set(0, 0, 1);
+    }
+
+    private float getAxisDragDirectionSign(Axis axis, Vector3d pointOnRing, int mouseX, int mouseY, int lastX, int lastY)
+    {
+        this.gizmoTangent.set(this.getGizmoAxisNormal(axis)).cross(pointOnRing);
+
+        if (this.gizmoTangent.lengthSquared() < 1e-8)
+        {
+            return 0F;
+        }
+
+        this.gizmoTangent.normalize().mul(0.25D);
+
+        if (!this.projectGizmoPoint((float) pointOnRing.x, (float) pointOnRing.y, (float) pointOnRing.z, this.gizmoP2D))
+        {
+            return 0F;
+        }
+
+        if (!this.projectGizmoPoint(
+            (float) (pointOnRing.x + this.gizmoTangent.x),
+            (float) (pointOnRing.y + this.gizmoTangent.y),
+            (float) (pointOnRing.z + this.gizmoTangent.z),
+            this.gizmoP2DNext
+        ))
+        {
+            return 0F;
+        }
+
+        float tangentX = this.gizmoP2DNext.x - this.gizmoP2D.x;
+        float tangentY = this.gizmoP2D.y - this.gizmoP2DNext.y;
+        float dragX = mouseX - lastX;
+        float dragY = lastY - mouseY;
+        float alignment = dragX * tangentX + dragY * tangentY;
+
+        if (Math.abs(alignment) < 1e-6F)
+        {
+            return 0F;
+        }
+
+        float sign = Math.signum(alignment);
+
+        if (axis == Axis.X || axis == Axis.Z)
+        {
+            sign = -sign;
+        }
+
+        return sign;
+    }
+
+    private boolean intersectGizmoPlane(int mouseX, int mouseY, Axis axis, Vector3d out)
+    {
+        if (this.gizmoViewportW <= 0 || this.gizmoViewportH <= 0)
+        {
+            return false;
+        }
+
+        float ndcX = (mouseX - this.gizmoViewportX) / (float) this.gizmoViewportW * 2F - 1F;
+        float ndcY = 1F - (mouseY - this.gizmoViewportY) / (float) this.gizmoViewportH * 2F;
+
+        this.gizmoNear4D.set(ndcX, ndcY, -1F, 1F);
+        this.gizmoFar4D.set(ndcX, ndcY, 1F, 1F);
+
+        this.gizmoInvMvp.transform(this.gizmoNear4D);
+        this.gizmoInvMvp.transform(this.gizmoFar4D);
+
+        if (this.gizmoNear4D.w == 0F || this.gizmoFar4D.w == 0F)
+        {
+            return false;
+        }
+
+        this.gizmoNear4D.div(this.gizmoNear4D.w);
+        this.gizmoFar4D.div(this.gizmoFar4D.w);
+
+        this.gizmoRayStart.set(this.gizmoNear4D.x, this.gizmoNear4D.y, this.gizmoNear4D.z);
+        this.gizmoRayEnd.set(this.gizmoFar4D.x, this.gizmoFar4D.y, this.gizmoFar4D.z);
+
+        double a = 0;
+        double b = 0;
+        double c = 0;
+
+        if (axis == Axis.X) a = 1;
+        else if (axis == Axis.Y) b = 1;
+        else if (axis == Axis.Z) c = 1;
+
+        return Intersectiond.intersectLineSegmentPlane(
+            this.gizmoRayStart.x, this.gizmoRayStart.y, this.gizmoRayStart.z,
+            this.gizmoRayEnd.x, this.gizmoRayEnd.y, this.gizmoRayEnd.z,
+            a, b, c, 0, out
+        );
+    }
+
+    private boolean projectGizmoPoint(float x, float y, float z, Vector2f out)
+    {
+        if (this.gizmoViewportW <= 0 || this.gizmoViewportH <= 0)
+        {
+            return false;
+        }
+
+        this.gizmoTmp4D.set(x, y, z, 1F);
+        this.gizmoMvp.transform(this.gizmoTmp4D);
+
+        if (this.gizmoTmp4D.w == 0F)
+        {
+            return false;
+        }
+
+        float ndcX = this.gizmoTmp4D.x / this.gizmoTmp4D.w;
+        float ndcY = this.gizmoTmp4D.y / this.gizmoTmp4D.w;
+
+        out.x = this.gizmoViewportX + (ndcX * 0.5F + 0.5F) * this.gizmoViewportW;
+        out.y = this.gizmoViewportY + (1F - (ndcY * 0.5F + 0.5F)) * this.gizmoViewportH;
+
+        return true;
     }
 
     public static class UITransformHandler extends UIElement

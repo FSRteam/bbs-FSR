@@ -56,7 +56,7 @@ public class WindowMixin
     {
         if (BBSRendering.canReplaceFramebuffer())
         {
-            info.setReturnValue((int) (BBSRendering.getVideoWidth() * BBSModClient.getOriginalFramebufferScale()));
+            info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoWidth() / BBSModClient.getOriginalFramebufferScale())));
         }
     }
 
@@ -65,7 +65,7 @@ public class WindowMixin
     {
         if (BBSRendering.canReplaceFramebuffer())
         {
-            info.setReturnValue((int) (BBSRendering.getVideoHeight() * BBSModClient.getOriginalFramebufferScale()));
+            info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoHeight() / BBSModClient.getOriginalFramebufferScale())));
         }
     }
 
@@ -74,7 +74,7 @@ public class WindowMixin
     {
         if (BBSRendering.canReplaceFramebuffer())
         {
-            info.setReturnValue((int) (BBSRendering.getVideoWidth() / this.guiScale * BBSModClient.getOriginalFramebufferScale()));
+            info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoWidth() / this.guiScale)));
         }
     }
 
@@ -83,7 +83,7 @@ public class WindowMixin
     {
         if (BBSRendering.canReplaceFramebuffer())
         {
-            info.setReturnValue((int) (BBSRendering.getVideoHeight() / this.guiScale * BBSModClient.getOriginalFramebufferScale()));
+            info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoHeight() / this.guiScale)));
         }
     }
 }

@@ -139,6 +139,8 @@ public class ParticleEmitter
             return;
         }
 
+        this.scheme.setup();
+
         this.lit = true;
         this.stop();
         this.start();
@@ -166,6 +168,11 @@ public class ParticleEmitter
 
     public void setupVariables()
     {
+        if (this.scheme == null)
+        {
+            return;
+        }
+
         this.varIndex = this.scheme.parser.variables.get("variable.particle_index");
         this.varAge = this.scheme.parser.variables.get("variable.particle_age");
         this.varLifetime = this.scheme.parser.variables.get("variable.particle_lifetime");

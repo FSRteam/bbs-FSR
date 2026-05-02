@@ -33,10 +33,12 @@ public class FilmRepository implements IRepository<Film>
     {
         ClientNetwork.sendManagerDataLoad(id, (data) ->
         {
-            if (data.isMap())
+            if (callback == null)
             {
-                callback.accept(this.create(id, data.asMap()));
+                return;
             }
+
+            callback.accept(data != null && data.isMap() ? this.create(id, data.asMap()) : null);
         });
     }
 

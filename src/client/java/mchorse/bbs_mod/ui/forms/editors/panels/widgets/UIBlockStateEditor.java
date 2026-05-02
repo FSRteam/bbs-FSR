@@ -3,14 +3,18 @@ package mchorse.bbs_mod.ui.forms.editors.panels.widgets;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -26,6 +30,16 @@ public class UIBlockStateEditor extends UIElement
     {
         this.callback = callback;
         this.blockState = Blocks.AIR.defaultBlockState();
+
+        this.context((menu) ->
+        {
+            Item item = this.blockState.getBlock().asItem();
+
+            if (item != Items.AIR)
+            {
+                menu.action(Icons.PLAYER, UIKeys.ITEM_STACK_CONTEXT_GIVE, () -> UIItemStack.giveToPlayer(new ItemStack(item)));
+            }
+        });
 
         this.h(UIConstants.CONTROL_HEIGHT);
     }

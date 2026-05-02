@@ -143,6 +143,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
                 MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
             }
 
+            Gizmo.INSTANCE.setViewport(this.area);
             Gizmo.INSTANCE.renderStencil(context.batcher.getContext().pose(), this.stencilMap);
 
             stack.popPose();
@@ -176,6 +177,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
         if (UIBaseMenu.renderAxes)
         {
             RenderSystem.disableDepthTest();
+            Gizmo.INSTANCE.setViewport(this.area);
             Gizmo.INSTANCE.render(stack);
             RenderSystem.enableDepthTest();
         }
@@ -202,7 +204,7 @@ public class UIPickableFormRenderer extends UIFormRenderer
     {
         super.update();
 
-        if (this.update && this.target != null)
+        if (this.update && this.form != null)
         {
             this.form.update(this.entity);
         }

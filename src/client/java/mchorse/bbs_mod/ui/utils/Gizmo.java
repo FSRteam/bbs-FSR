@@ -13,10 +13,22 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
 public class Gizmo
 {
+    public static class DragContext
+    {
+        public final Matrix4f modelView = new Matrix4f();
+        public final Matrix4f projection = new Matrix4f();
+        public int viewportX;
+        public int viewportY;
+        public int viewportW;
+        public int viewportH;
+        public boolean ready;
+    }
+
     public final static int STENCIL_X = 1;
     public final static int STENCIL_Y = 2;
     public final static int STENCIL_Z = 3;
@@ -36,6 +48,7 @@ public class Gizmo
     private int mouseY;
 
     private UIPropTransform currentTransform;
+    private final DragContext dragContext = new DragContext();
 
     private Gizmo()
     {}
@@ -59,6 +72,23 @@ public class Gizmo
         return !same;
     }
 
+    public void setViewport(Area area)
+    {
+        if (area == null)
+        {
+            this.dragContext.viewportW = 0;
+            this.dragContext.viewportH = 0;
+            this.dragContext.ready = false;
+
+            return;
+        }
+
+        this.dragContext.viewportX = area.x;
+        this.dragContext.viewportY = area.y;
+        this.dragContext.viewportW = area.w;
+        this.dragContext.viewportH = area.h;
+    }
+
     public boolean start(int index, int mouseX, int mouseY, UIPropTransform transform)
     {
         if (!BBSSettings.gizmos.get())
@@ -79,6 +109,8 @@ public class Gizmo
                 if (this.index == STENCIL_X) transform.enableMode(this.mode.ordinal(), Axis.X);
                 else if (this.index == STENCIL_Y) transform.enableMode(this.mode.ordinal(), Axis.Y);
                 else if (this.index == STENCIL_Z) transform.enableMode(this.mode.ordinal(), Axis.Z);
+
+                transform.beginGizmoDrag(this.dragContext);
             }
 
             return true;
@@ -103,6 +135,7 @@ public class Gizmo
     {
         if (BBSSettings.gizmos.get())
         {
+            this.captureDragContext(stack);
             this.drawAxes(stack, 0.25F, 0.015F, 0.26F, 0.025F);
         }
         else
@@ -196,6 +229,7 @@ public class Gizmo
     {
         if (BBSSettings.gizmos.get())
         {
+            this.captureDragContext(stack);
             this.drawAxes(stack, map, 0.25F, 0.015F);
         }
     }
@@ -256,5 +290,19 @@ public class Gizmo
     public static enum Mode
     {
         TRANSLATE, SCALE, ROTATE;
+    }
+
+    private void captureDragContext(PoseStack stack)
+    {
+        if (this.dragContext.viewportW <= 0 || this.dragContext.viewportH <= 0)
+        {
+            this.dragContext.ready = false;
+
+            return;
+        }
+
+        this.dragContext.modelView.set(stack.last().pose());
+        this.dragContext.projection.set(RenderSystem.getProjectionMatrix());
+        this.dragContext.ready = true;
     }
 }

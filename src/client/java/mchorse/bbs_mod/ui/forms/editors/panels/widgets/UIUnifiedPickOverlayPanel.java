@@ -8,6 +8,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.context.UISimpleContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -15,6 +16,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.context.ContextAction;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.Minecraft;
@@ -277,15 +279,14 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
                 CompoundTag nbt = TagParser.parseTag(v.toString());
                 ItemStack parsed = ItemStack.CODEC.parse(NbtOps.INSTANCE, nbt).result().orElse(ItemStack.EMPTY);
 
-                this.acceptItem(parsed);
-                this.selectId(BuiltInRegistries.ITEM.getKey(parsed.getItem()).toString());
+                this.selectItemStack(parsed);
             }
             catch (Exception e)
             {}
         }).background();
         this.itemNbt.wrap();
 
-        this.blockProperties = UI.column(4);
+        this.blockProperties = UI.scrollView(4, 0);
         this.blockProperties.relative(this.blockPropertiesWrap).xy(0, 20).w(1F).h(1F, -20);
 
         if (mode == PickerMode.ITEM)
@@ -320,11 +321,14 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
         if (mode == PickerMode.ITEM)
         {
-            this.selectId(BuiltInRegistries.ITEM.getKey(this.itemStack.getItem()).toString());
+            this.selectedId = BuiltInRegistries.ITEM.getKey(this.itemStack.getItem()).toString();
+            this.itemCount.limit(1, this.itemStack.getMaxStackSize(), true).setValue(this.itemStack.getCount());
+            this.itemName.setText(this.itemStack.getHoverName().getString());
+            this.updateItemNbt();
         }
         else
         {
-            this.selectId(BuiltInRegistries.BLOCK.getKey(this.blockState.getBlock()).toString());
+            this.selectedId = BuiltInRegistries.BLOCK.getKey(this.blockState.getBlock()).toString();
             this.fillBlockProperties(this.blockState);
         }
 
@@ -360,10 +364,11 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         if (this.mode == PickerMode.ITEM)
         {
             Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(id));
-            ItemStack selected = new ItemStack(item);
+            ItemStack selected = this.itemStack != null && this.itemStack.getItem() == item ? this.itemStack.copy() : new ItemStack(item);
+            int count = this.itemStack == null ? selected.getCount() : this.itemStack.getCount();
 
-            selected.setCount(Math.max(1, this.itemStack.getCount()));
-            if (this.itemStack.has(DataComponents.CUSTOM_NAME))
+            selected.setCount(Math.max(1, Math.min(count, selected.getMaxStackSize())));
+            if (this.itemStack != null && this.itemStack.has(DataComponents.CUSTOM_NAME))
             {
                 selected.set(DataComponents.CUSTOM_NAME, this.itemStack.getHoverName());
             }
@@ -376,9 +381,35 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         else
         {
             Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(id));
-            this.acceptBlock(block.defaultBlockState());
+            BlockState selectedState = block.defaultBlockState();
+
+            if (this.blockState != null && this.blockState.getBlock() == block)
+            {
+                selectedState = this.blockState;
+            }
+
+            this.acceptBlock(selectedState);
             this.fillBlockProperties(this.blockState);
         }
+    }
+
+    private void selectItemStack(ItemStack stack)
+    {
+        if (stack == null || stack.isEmpty())
+        {
+            return;
+        }
+
+        ItemStack selected = stack.copy();
+
+        selected.setCount(Math.max(1, Math.min(selected.getCount(), selected.getMaxStackSize())));
+
+        this.selectedId = BuiltInRegistries.ITEM.getKey(selected.getItem()).toString();
+        this.acceptItem(selected);
+        this.itemCount.limit(1, selected.getMaxStackSize(), true).setValue(selected.getCount());
+        this.itemName.setText(selected.getHoverName().getString());
+        this.updateItemNbt();
+        this.refreshEntries();
     }
 
     private void acceptItem(ItemStack stack)
@@ -418,24 +449,9 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         {
             for (Property<?> property : state.getProperties())
             {
-                UIButton button = new UIButton(this.propertyLabel(state, property), (b) ->
-                {
-                    this.getContext().replaceContextMenu((menu) ->
-                    {
-                        for (Object value : property.getPossibleValues())
-                        {
-                            IKey key = IKey.constant(value.toString());
-
-                            menu.action(Icons.BLOCK, key, () ->
-                            {
-                                BlockState nextState = this.blockState.setValue((Property) property, (Comparable) value);
-
-                                this.acceptBlock(nextState);
-                                this.fillBlockProperties(nextState);
-                            });
-                        }
-                    });
-                });
+                final UIButton[] buttonRef = new UIButton[1];
+                buttonRef[0] = new UIButton(this.propertyLabel(state, property), (b) -> this.openPropertyContextMenu(buttonRef[0], property));
+                UIButton button = buttonRef[0];
 
                 button.tooltip(IKey.constant(property.getName()));
                 this.blockProperties.add(button);
@@ -446,6 +462,46 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         {
             this.getRoot().resize();
         }
+    }
+
+    private void openPropertyContextMenu(UIButton button, Property<?> property)
+    {
+        UISimpleContextMenu menu = new UISimpleContextMenu()
+        {
+            @Override
+            public void setMouse(UIContext context)
+            {
+                int w = 100;
+
+                for (ContextAction action : this.actions.getList())
+                {
+                    w = Math.max(action.getWidth(context.batcher.getFont()), w);
+                }
+
+                int x = button.area.ex() + 2;
+                int y = button.area.y;
+
+                this.set(x, y, w, 0)
+                    .h(this.actions.scroll.scrollSize)
+                    .maxH(context.menu.height - 10)
+                    .bounds(context.menu.overlay, 5);
+            }
+        };
+
+        for (Object value : property.getPossibleValues())
+        {
+            IKey key = IKey.constant(value.toString());
+
+            menu.actions.add(new ContextAction(Icons.BLOCK, key, () ->
+            {
+                BlockState nextState = this.blockState.setValue((Property) property, (Comparable) value);
+
+                this.acceptBlock(nextState);
+                this.fillBlockProperties(nextState);
+            }));
+        }
+
+        this.getContext().replaceContextMenu(menu);
     }
 
     private IKey propertyLabel(BlockState state, Property<?> property)
@@ -500,8 +556,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
             if (UIUnifiedPickOverlayPanel.this.mode == PickerMode.ITEM)
             {
-                UIUnifiedPickOverlayPanel.this.acceptItem(stack);
-                UIUnifiedPickOverlayPanel.this.selectId(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                UIUnifiedPickOverlayPanel.this.selectItemStack(stack);
             }
             else if (stack.getItem() instanceof BlockItem blockItem)
             {

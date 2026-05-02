@@ -701,7 +701,7 @@ public class UITrackpad extends UIBaseTextbox
         if (dragging)
         {
             Minecraft mc = Minecraft.getInstance();
-            int ww = mc.getWindow().getWidth();
+            int ww = mc.getWindow().getScreenWidth();
 
             double factor = Math.ceil(ww / (double) context.menu.width);
             int mouseX = context.globalX(context.mouseX);
@@ -776,18 +776,19 @@ public class UITrackpad extends UIBaseTextbox
     public double getValueModifier()
     {
         double value = this.normal;
+        int modifier = Window.getLastModifier();
 
-        if (Window.isShiftPressed())
+        if (modifier == Window.MOD_SHIFT)
         {
             value = this.strong;
         }
-        else if (Window.isAltPressed())
-        {
-            value = this.weak;
-        }
-        else if (Window.isCtrlPressed())
+        else if (modifier == Window.MOD_CTRL)
         {
             value = this.increment;
+        }
+        else if (modifier == Window.MOD_ALT)
+        {
+            value = this.weak;
         }
 
         return value * globalFactor.getValue();

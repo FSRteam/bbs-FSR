@@ -318,12 +318,12 @@ public abstract class UIModelRenderer extends UIElement
 
         Minecraft mc = Minecraft.getInstance();
 
-        float rx = (float) Math.round(mc.getWindow().getWidth() / (double) context.menu.width);
-        float ry = (float) Math.round(mc.getWindow().getHeight() / (double) context.menu.height);
+        float rx = (float) Math.round(mc.getWindow().getScreenWidth() / (double) context.menu.width);
+        float ry = (float) Math.round(mc.getWindow().getScreenHeight() / (double) context.menu.height);
         float size = BBSModClient.getOriginalFramebufferScale();
 
         int vx = (int) (this.area.x * rx);
-        int vy = (int) (mc.getWindow().getHeight() - (this.area.y + this.area.h) * ry);
+        int vy = (int) (mc.getWindow().getScreenHeight() - (this.area.y + this.area.h) * ry);
         int vw = (int) (this.area.w * rx);
         int vh = (int) (this.area.h * ry);
 
