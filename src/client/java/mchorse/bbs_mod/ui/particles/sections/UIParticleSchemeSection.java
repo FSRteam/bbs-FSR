@@ -9,7 +9,10 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.ui.particles.UISectionStateManager;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.function.Consumer;
@@ -22,17 +25,72 @@ public abstract class UIParticleSchemeSection extends UIElement
     protected ParticleScheme scheme;
     protected UIParticleSchemePanel editor;
 
+    protected boolean collapsed;
+
     public UIParticleSchemeSection(UIParticleSchemePanel editor)
     {
         super();
 
         this.editor = editor;
-        this.title = UI.label(this.getTitle()).background(() -> Colors.A50 | BBSSettings.primaryColor.get());
+        this.title = UI.label(this.getTitle()).background(() -> Colors.A100 | BBSSettings.primaryColor.get());
         this.fields = new UIElement();
         this.fields.column().stretch().vertical().height(20);
 
         this.column().stretch().vertical();
-        this.add(this.title, this.fields);
+
+        UISectionStateManager.setDefaultState(this.getClassId(), false);
+        this.collapseState();
+    }
+
+    public String getClassId()
+    {
+        return this.getClass().getSimpleName();
+    }
+
+    protected void collapseState()
+    {
+        this.collapsed = UISectionStateManager.isCollapsed(this.getClassId());
+
+        if (this.collapsed)
+        {
+            this.add(this.title);
+        }
+        else
+        {
+            this.add(this.title, this.fields);
+        }
+    }
+
+    /**
+     * Apply a collapsed state programmatically (used by layout presets).
+     */
+    public void applyCollapsedState(boolean collapsed)
+    {
+        this.collapsed = collapsed;
+        UISectionStateManager.setCollapsed(this.getClassId(), collapsed);
+
+        if (collapsed)
+        {
+            this.fields.removeFromParent();
+        }
+        else
+        {
+            if (!this.fields.hasParent())
+            {
+                this.add(this.fields);
+            }
+        }
+
+        this.resizeParent();
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        super.render(context);
+
+        Icon icon = this.collapsed ? Icons.ARROW_RIGHT : Icons.ARROW_DOWN;
+        context.batcher.icon(icon, this.title.area.ex() - 18, this.title.area.y + (this.title.area.h - 16) / 2);
     }
 
     protected void resizeParent()
@@ -102,10 +160,14 @@ public abstract class UIParticleSchemeSection extends UIElement
             if (this.fields.hasParent())
             {
                 this.fields.removeFromParent();
+                this.collapsed = true;
+                UISectionStateManager.setCollapsed(this.getClassId(), true);
             }
             else
             {
                 this.add(this.fields);
+                this.collapsed = false;
+                UISectionStateManager.setCollapsed(this.getClassId(), false);
             }
 
             this.resizeParent();

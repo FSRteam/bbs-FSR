@@ -139,6 +139,20 @@ public abstract class EditorLayoutNode
         );
     }
 
+    /** Default particle editor layout: horizontal 0.65 -> preview | (vertical stack of property panels). */
+    public static EditorLayoutNode defaultParticleLayout()
+    {
+        return new SplitterNode(
+            false,
+            0.65F,
+            new PanelNode("preview"),
+            new StackNode(
+                java.util.Arrays.asList("emitter", "file", "quickSetup", "motion", "appearance", "time", "curves"),
+                "emitter"
+            )
+        );
+    }
+
     /** Returns a new tree with panelId removed; parent splitter is collapsed to its other child. */
     public static EditorLayoutNode copyWithRemovedLeaf(EditorLayoutNode root, String panelId)
     {

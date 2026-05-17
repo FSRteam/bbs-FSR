@@ -12,6 +12,8 @@ public class ValueEditorLayout extends BaseValue
 {
     private EditorLayoutNode filmLayoutRoot = EditorLayoutNode.defaultFilmLayout();
     private List<EditorLayoutNode.SplitterNode> filmSplitters = new ArrayList<>();
+    private EditorLayoutNode particleLayoutRoot = EditorLayoutNode.defaultParticleLayout();
+    private List<EditorLayoutNode.SplitterNode> particleSplitters = new ArrayList<>();
     private float stateEditorSizeH = 0.7F;
     private float stateEditorSizeV = 0.25F;
     private int keyframeLabelWidth = 120;
@@ -34,6 +36,36 @@ public class ValueEditorLayout extends BaseValue
             this.filmSplitters.clear();
             EditorLayoutNode.collectSplitters(root, this.filmSplitters);
         });
+    }
+
+    public EditorLayoutNode getParticleLayoutRoot()
+    {
+        return this.particleLayoutRoot;
+    }
+
+    public void setParticleLayoutRoot(EditorLayoutNode root)
+    {
+        BaseValue.edit(this, (v) ->
+        {
+            this.particleLayoutRoot = root;
+            this.particleSplitters.clear();
+            EditorLayoutNode.collectSplitters(root, this.particleSplitters);
+        });
+    }
+
+    public List<EditorLayoutNode.SplitterNode> getParticleSplitters()
+    {
+        return this.particleSplitters;
+    }
+
+    public void setParticleSplitterRatio(int index, float ratio)
+    {
+        if (index < 0 || index >= this.particleSplitters.size())
+        {
+            return;
+        }
+        int i = index;
+        BaseValue.edit(this, (v) -> this.particleSplitters.get(i).setRatio(MathUtils.clamp(ratio, 0.05F, 0.95F)));
     }
 
     public List<EditorLayoutNode.SplitterNode> getFilmSplitters()
@@ -151,6 +183,7 @@ public class ValueEditorLayout extends BaseValue
     {
         MapType data = new MapType();
         data.put("film_layout", this.filmLayoutRoot.toData());
+        data.put("particle_layout", this.particleLayoutRoot.toData());
         data.putFloat("state_editor_size_h", this.stateEditorSizeH);
         data.putFloat("state_editor_size_v", this.stateEditorSizeV);
         data.putInt("keyframe_label_width", this.keyframeLabelWidth);
@@ -191,6 +224,23 @@ public class ValueEditorLayout extends BaseValue
                 }
                 this.filmSplitters.clear();
                 EditorLayoutNode.collectSplitters(this.filmLayoutRoot, this.filmSplitters);
+            }
+
+            if (map.has("particle_layout"))
+            {
+                this.particleLayoutRoot = EditorLayoutNode.fromData(map.get("particle_layout"));
+                if (this.particleLayoutRoot == null)
+                {
+                    this.particleLayoutRoot = EditorLayoutNode.defaultParticleLayout();
+                }
+                this.particleSplitters.clear();
+                EditorLayoutNode.collectSplitters(this.particleLayoutRoot, this.particleSplitters);
+            }
+            else
+            {
+                this.particleLayoutRoot = EditorLayoutNode.defaultParticleLayout();
+                this.particleSplitters.clear();
+                EditorLayoutNode.collectSplitters(this.particleLayoutRoot, this.particleSplitters);
             }
 
             this.stateEditorSizeH = map.getFloat("state_editor_size_h", 0.7F);
