@@ -17,18 +17,19 @@ public class UIParticleTabBar extends UIElement
 {
     public static final int TAB_HEIGHT = 24;
     public static final Icon[] TAB_ICONS = {
-        Icons.GEAR,            // quickSetup
-        Icons.FILE,            // file
-        Icons.SPRAY,           // emitter
-        Icons.ALL_DIRECTIONS,  // motion
-        Icons.IMAGE,           // appearance
-        Icons.TIME,            // time
-        Icons.CURVES,          // curves
-        Icons.VIDEO_CAMERA     // preview (monitor)
+        Icons.PARTICLE_TAB_QUICK_SETUP,
+        Icons.PARTICLE_TAB_FILE,
+        Icons.PARTICLE_TAB_EMITTER,
+        Icons.PARTICLE_TAB_MOTION,
+        Icons.PARTICLE_TAB_APPEARANCE,
+        Icons.PARTICLE_TAB_TIME,
+        Icons.PARTICLE_TAB_EVENTS,
+        Icons.PARTICLE_TAB_CURVES,
+        Icons.VIDEO_CAMERA
     };
 
     public static final String[] TAB_IDS = {
-        "quickSetup", "file", "emitter", "motion", "appearance", "time", "curves", "preview"
+        "quickSetup", "file", "emitter", "motion", "appearance", "time", "events", "curves", "preview"
     };
 
     private final List<UIIcon> tabs = new ArrayList<>();

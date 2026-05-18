@@ -31,6 +31,7 @@ import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeAppearanceSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCollisionSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCurvesSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeExpirationSection;
+import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeEventsSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeGeneralSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeInitializationSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeLifetimeSection;
@@ -75,6 +76,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private static final String PANEL_MOTION_ID = "motion";
     private static final String PANEL_APPEARANCE_ID = "appearance";
     private static final String PANEL_TIME_ID = "time";
+    private static final String PANEL_EVENTS_ID = "events";
     private static final String PANEL_CURVES_ID = "curves";
 
     private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
@@ -141,6 +143,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             }
         };
         previewPanel.add(this.renderer);
+        this.renderer.full(previewPanel);
 
         UIParticleTabPage quickSetupPage = new UIParticleTabPage();
         UIParticleTabPage filePage = new UIParticleTabPage();
@@ -148,6 +151,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         UIParticleTabPage motionPage = new UIParticleTabPage();
         UIParticleTabPage appearancePage = new UIParticleTabPage();
         UIParticleTabPage timePage = new UIParticleTabPage();
+        UIParticleTabPage eventsPage = new UIParticleTabPage();
         UIParticleTabPage curvesPage = new UIParticleTabPage();
 
         /* Add sections to tab pages */
@@ -163,6 +167,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         appearancePage.addSection(new UIParticleSchemeAppearanceSection(this));
         appearancePage.addSection(new UIParticleSchemeLightingSection(this));
         timePage.addSection(new UIParticleSchemeExpirationSection(this));
+        eventsPage.addSection(new UIParticleSchemeEventsSection(this));
         curvesPage.addSection(new UIParticleSchemeCurvesSection(this));
 
         /* Collect all sections for iteration */
@@ -172,6 +177,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.collectSections(motionPage);
         this.collectSections(appearancePage);
         this.collectSections(timePage);
+        this.collectSections(eventsPage);
         this.collectSections(curvesPage);
 
         /* Register panels by ID */
@@ -182,6 +188,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.panelById.put(PANEL_MOTION_ID, motionPage);
         this.panelById.put(PANEL_APPEARANCE_ID, appearancePage);
         this.panelById.put(PANEL_TIME_ID, timePage);
+        this.panelById.put(PANEL_EVENTS_ID, eventsPage);
         this.panelById.put(PANEL_CURVES_ID, curvesPage);
 
         /* Add panels to editor */
@@ -350,7 +357,8 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         boolean hasAll = ids.contains(PANEL_PREVIEW_ID)
             && ids.contains(PANEL_EMITTER_ID)
             && ids.contains(PANEL_FILE_ID)
-            && ids.contains(PANEL_CURVES_ID);
+            && ids.contains(PANEL_CURVES_ID)
+            && ids.contains(PANEL_EVENTS_ID);
 
         if (hasAll)
         {
@@ -788,13 +796,14 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         switch (panelId)
         {
             case PANEL_PREVIEW_ID: return Icons.VIDEO_CAMERA;
-            case PANEL_QUICK_SETUP_ID: return Icons.GEAR;
-            case PANEL_FILE_ID: return Icons.FILE;
-            case PANEL_EMITTER_ID: return Icons.SPRAY;
-            case PANEL_MOTION_ID: return Icons.ALL_DIRECTIONS;
-            case PANEL_APPEARANCE_ID: return Icons.IMAGE;
-            case PANEL_TIME_ID: return Icons.TIME;
-            case PANEL_CURVES_ID: return Icons.CURVES;
+            case PANEL_QUICK_SETUP_ID: return Icons.PARTICLE_TAB_QUICK_SETUP;
+            case PANEL_FILE_ID: return Icons.PARTICLE_TAB_FILE;
+            case PANEL_EMITTER_ID: return Icons.PARTICLE_TAB_EMITTER;
+            case PANEL_MOTION_ID: return Icons.PARTICLE_TAB_MOTION;
+            case PANEL_APPEARANCE_ID: return Icons.PARTICLE_TAB_APPEARANCE;
+            case PANEL_TIME_ID: return Icons.PARTICLE_TAB_TIME;
+            case PANEL_EVENTS_ID: return Icons.PARTICLE_TAB_EVENTS;
+            case PANEL_CURVES_ID: return Icons.PARTICLE_TAB_CURVES;
             default: return Icons.FILE;
         }
     }
@@ -1072,6 +1081,17 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     public void resize()
     {
         super.resize();
+        this.updateTabVisibility();
+
+        if (this.editor.area.w >= EDITOR_MIN_SIZE_FOR_PX_HANDLES && this.editor.area.h >= EDITOR_MIN_SIZE_FOR_PX_HANDLES)
+        {
+            if (!this.layoutLocked && this.splitterHandles.size() == this.splitterHandleInfos.size())
+            {
+                this.syncSplitterHandleBounds();
+            }
+            this.editor.resize();
+        }
+
         this.renderer.resize();
     }
 

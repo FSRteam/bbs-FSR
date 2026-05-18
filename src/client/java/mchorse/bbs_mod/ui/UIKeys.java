@@ -924,6 +924,9 @@ public class UIKeys
     public static final IKey SNOWSTORM_QUICK_SETUP_NONE = L10n.lang("bbs.ui.snowstorm.quick_setup.none");
     public static final IKey SNOWSTORM_QUICK_SETUP_SOLID = L10n.lang("bbs.ui.snowstorm.quick_setup.solid");
     public static final IKey SNOWSTORM_QUICK_SETUP_SMOKE = L10n.lang("bbs.ui.snowstorm.quick_setup.smoke");
+
+    /* Events panel */
+    public static final IKey SNOWSTORM_EVENTS_TITLE = L10n.lang("bbs.ui.snowstorm.events.title");
     public static final IKey TEXTURES_COPY = L10n.lang("bbs.ui.textures.copy");
     public static final IKey TEXTURES_CREATE_MCMETA = L10n.lang("bbs.ui.textures.create_mcmeta");
     public static final IKey TEXTURES_DOWNLOAD = L10n.lang("bbs.ui.textures.download");
