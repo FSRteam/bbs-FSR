@@ -138,7 +138,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             @Override
             public void render(UIContext context)
             {
-                context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A100);
+                this.area.render(context.batcher, Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F));
                 super.render(context);
             }
         };
@@ -463,7 +463,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                 continue;
             }
 
-            UIDockStackTabs tabs = new UIDockStackTabs(this);
+            UIDockStackTabs tabs = new UIDockStackTabs();
             tabs.configure(info);
             tabs.relative(this.editor).x(info.x).y(info.y).w(info.w).h(DOCK_STACK_TABS_HEIGHT_PX);
             this.dockStackTabs.add(tabs);
@@ -905,32 +905,64 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         @Override
         public void render(UIContext context)
         {
-            context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.CONTROL_BAR);
-
-            if (this.panelIds.isEmpty())
+            if (!this.isVisible() || this.panelIds.isEmpty())
             {
                 return;
             }
 
-            int tabWidth = this.area.w / this.panelIds.size();
+            int tabSize = this.area.w / this.panelIds.size();
+            int hovered = this.area.isInside(context.mouseX, context.mouseY) ? this.getTabIndex(context.mouseX) : -1;
+            int y = this.area.y;
+            int ey = this.area.ey();
+
+            context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A100);
 
             for (int i = 0; i < this.panelIds.size(); i++)
             {
-                String id = this.panelIds.get(i);
-                int tx = this.area.x + i * tabWidth;
-                boolean isActive = id.equals(this.activePanelId);
+                int x = this.area.x + i * tabSize;
 
-                if (isActive)
+                if (x >= this.area.ex())
                 {
-                    context.batcher.box(tx, this.area.ey() - 2, tx + tabWidth, this.area.ey(), Colors.ACTIVE);
+                    break;
                 }
 
+                int ex = Math.min(this.area.ex(), x + tabSize);
+                String id = this.panelIds.get(i);
+                boolean active = id.equals(this.activePanelId);
+                boolean hover = i == hovered;
                 Icon icon = UIParticleSchemePanel.this.getPanelIcon(id);
-                int iconColor = isActive ? Colors.ACTIVE : Colors.GRAY;
-                int cx = tx + tabWidth / 2;
-                int cy = this.area.y + this.area.h / 2;
-                context.batcher.icon(icon, iconColor, cx, cy, 0.5F, 0.5F);
+                int iconColor = active ? Colors.WHITE : (hover ? Colors.LIGHTEST_GRAY : Colors.mulRGB(Colors.WHITE, 0.75F));
+
+                if (active)
+                {
+                    int color = BBSSettings.primaryColor.get();
+
+                    context.batcher.box(x, ey - 2, ex, ey, Colors.A100 | color);
+                    context.batcher.gradientVBox(x, y, ex, ey - 2, color, Colors.A75 | color);
+                }
+
+                context.batcher.icon(icon, iconColor, (x + ex) / 2, (y + ey) / 2, 0.5F, 0.5F);
             }
+
+            super.render(context);
+        }
+
+        private int getTabSize()
+        {
+            return Math.max(20, this.area.w / Math.max(1, this.panelIds.size()));
+        }
+
+        private int getTabIndex(int mouseX)
+        {
+            if (this.panelIds.isEmpty() || this.area.w <= 0)
+            {
+                return -1;
+            }
+
+            int tabSize = this.getTabSize();
+            int index = (mouseX - this.area.x) / tabSize;
+
+            return index >= 0 && index < this.panelIds.size() ? index : -1;
         }
     }
 
@@ -1100,8 +1132,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         if (this.iconBar.isVisible())
         {
-            int bg = this.selectionPanel != null && this.selectionPanel.isVisible() ? Colors.A100 : Colors.CONTROL_BAR;
-            this.iconBar.area.render(context.batcher, bg);
+            this.iconBar.area.render(context.batcher, Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F));
             context.batcher.gradientHBox(this.iconBar.area.x - 6, this.iconBar.area.y, this.iconBar.area.x, this.iconBar.area.ey(), 0, 0x29000000);
         }
     }
@@ -1123,6 +1154,15 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     @Override
     public void render(UIContext context)
     {
+        int color = BBSSettings.primaryColor.get();
+        this.area.render(context.batcher, Colors.mulRGB(color | Colors.A100, 0.2F));
+
+        if (this.editor.isVisible())
+        {
+            UIElement preview = this.panelById.get(PANEL_PREVIEW_ID);
+            if (preview != null) preview.area.render(context.batcher, Colors.A75);
+        }
+
         super.render(context);
 
         if (this.molangId != null)

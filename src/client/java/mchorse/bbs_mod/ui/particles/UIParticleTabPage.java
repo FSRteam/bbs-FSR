@@ -45,7 +45,7 @@ public class UIParticleTabPage extends UIElement
     @Override
     public void render(UIContext context)
     {
-        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.CONTROL_BAR);
+        this.area.render(context.batcher, Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F));
         super.render(context);
     }
 }

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.particles;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -47,7 +48,6 @@ public class UIParticleTabBar extends UIElement
             final int index = i;
             UIIcon tab = new UIIcon(TAB_ICONS[i], (b) -> this.selectTab(index));
             tab.wh(TAB_HEIGHT, TAB_HEIGHT);
-            tab.activeColor(Colors.ACTIVE);
             tab.tooltip(IKey.constant(TAB_IDS[i]), Direction.BOTTOM);
             this.tabs.add(tab);
             this.add(tab);
@@ -107,11 +107,30 @@ public class UIParticleTabBar extends UIElement
     @Override
     public void render(UIContext context)
     {
-        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.CONTROL_BAR);
-        super.render(context);
+        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A100);
 
-        // Selected tab bottom highlight bar (2px)
-        UIIcon selected = this.tabs.get(this.currentTab);
-        context.batcher.box(selected.area.x, this.area.ey() - 2, selected.area.ex(), this.area.ey(), Colors.ACTIVE);
+        int color = BBSSettings.primaryColor.get();
+        int y = this.area.y;
+        int ey = this.area.ey();
+        int hovered = this.area.isInside(context.mouseX, context.mouseY)
+            ? (context.mouseX - this.area.x) / Math.max(1, TAB_HEIGHT) : -1;
+
+        for (int i = 0; i < this.tabs.size(); i++)
+        {
+            UIIcon tab = this.tabs.get(i);
+            boolean active = i == this.currentTab;
+            boolean hover = i == hovered;
+
+            if (active)
+            {
+                context.batcher.box(tab.area.x, ey - 2, tab.area.ex(), ey, Colors.A100 | color);
+                context.batcher.gradientVBox(tab.area.x, y, tab.area.ex(), ey - 2, color, Colors.A75 | color);
+            }
+
+            int iconColor = active ? Colors.WHITE : (hover ? Colors.LIGHTEST_GRAY : Colors.mulRGB(Colors.WHITE, 0.75F));
+            context.batcher.icon(TAB_ICONS[i], iconColor, tab.area.mx(), tab.area.my(), 0.5F, 0.5F);
+        }
+
+        super.render(context);
     }
 }
