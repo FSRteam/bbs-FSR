@@ -910,6 +910,15 @@ public class UIKeys
     public static final IKey PARTICLE_EDITOR_LAYOUT_UNLOCK = L10n.lang("bbs.ui.particle_editor.layout_unlock");
     public static final IKey PARTICLE_EDITOR_LAYOUT_PRESETS = L10n.lang("bbs.ui.particle_editor.layout_presets");
     public static final IKey PARTICLE_EDITOR_LAYOUT_RESET = L10n.lang("bbs.ui.particle_editor.layout_reset");
+    public static final IKey PARTICLE_TAB_QUICK_SETUP = L10n.lang("bbs.ui.particle_editor.tab.quick_setup");
+    public static final IKey PARTICLE_TAB_FILE = L10n.lang("bbs.ui.particle_editor.tab.file");
+    public static final IKey PARTICLE_TAB_EMITTER = L10n.lang("bbs.ui.particle_editor.tab.emitter");
+    public static final IKey PARTICLE_TAB_MOTION = L10n.lang("bbs.ui.particle_editor.tab.motion");
+    public static final IKey PARTICLE_TAB_APPEARANCE = L10n.lang("bbs.ui.particle_editor.tab.appearance");
+    public static final IKey PARTICLE_TAB_TIME = L10n.lang("bbs.ui.particle_editor.tab.time");
+    public static final IKey PARTICLE_TAB_EVENTS = L10n.lang("bbs.ui.particle_editor.tab.events");
+    public static final IKey PARTICLE_TAB_CURVES = L10n.lang("bbs.ui.particle_editor.tab.curves");
+    public static final IKey PARTICLE_TAB_PREVIEW = L10n.lang("bbs.ui.particle_editor.tab.preview");
 
     /* Quick Setup */
     public static final IKey SNOWSTORM_QUICK_SETUP_TITLE = L10n.lang("bbs.ui.snowstorm.quick_setup.title");

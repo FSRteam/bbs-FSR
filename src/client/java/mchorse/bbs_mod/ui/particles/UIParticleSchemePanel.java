@@ -603,25 +603,27 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     private void applySplitterHandleBounds(UIDraggable handle, EditorLayoutNode.SplitterHandleInfo info)
     {
-        int editorW = Math.max(1, this.editor.area.w);
-        int editorH = Math.max(1, this.editor.area.h);
-        int x = this.editor.area.x + (int) (info.px * editorW);
-        int y = this.editor.area.y + (int) (info.py * editorH);
-        int w = (int) (info.pw * editorW);
-        int h = (int) (info.ph * editorH);
+        int ew = this.editor.area.w;
+        int eh = this.editor.area.h;
+
+        if (ew < EDITOR_MIN_SIZE_FOR_PX_HANDLES || eh < EDITOR_MIN_SIZE_FOR_PX_HANDLES)
+        {
+            handle.relative(this.editor).x(info.hx).y(info.hy).w(info.hw).h(info.hh);
+            return;
+        }
 
         if (info.horizontal)
         {
-            y -= SPLITTER_HANDLE_PX / 2;
-            h = SPLITTER_HANDLE_PX;
+            float centerY = info.hy + info.hh * 0.5F;
+            float hyNew = centerY - (SPLITTER_HANDLE_PX / (2F * eh));
+            handle.relative(this.editor).x(info.hx).y(hyNew).w(info.hw).h(SPLITTER_HANDLE_PX);
         }
         else
         {
-            x -= SPLITTER_HANDLE_PX / 2;
-            w = SPLITTER_HANDLE_PX;
+            float centerX = info.hx + info.hw * 0.5F;
+            float hxNew = centerX - (SPLITTER_HANDLE_PX / (2F * ew));
+            handle.relative(this.editor).x(hxNew).y(info.hy).w(SPLITTER_HANDLE_PX).h(info.hh);
         }
-
-        handle.relative(this.editor).x(x - this.editor.area.x).y(y - this.editor.area.y).w(w).h(h);
     }
 
     private void syncSplitterHandleBounds()

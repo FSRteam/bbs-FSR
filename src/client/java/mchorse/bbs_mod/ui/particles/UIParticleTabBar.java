@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.particles;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -33,6 +34,18 @@ public class UIParticleTabBar extends UIElement
         "quickSetup", "file", "emitter", "motion", "appearance", "time", "events", "curves", "preview"
     };
 
+    public static final IKey[] TAB_TOOLTIPS = {
+        UIKeys.PARTICLE_TAB_QUICK_SETUP,
+        UIKeys.PARTICLE_TAB_FILE,
+        UIKeys.PARTICLE_TAB_EMITTER,
+        UIKeys.PARTICLE_TAB_MOTION,
+        UIKeys.PARTICLE_TAB_APPEARANCE,
+        UIKeys.PARTICLE_TAB_TIME,
+        UIKeys.PARTICLE_TAB_EVENTS,
+        UIKeys.PARTICLE_TAB_CURVES,
+        UIKeys.PARTICLE_TAB_PREVIEW
+    };
+
     private final List<UIIcon> tabs = new ArrayList<>();
     private int currentTab = 1;
     private final Consumer<Integer> callback;
@@ -48,7 +61,7 @@ public class UIParticleTabBar extends UIElement
             final int index = i;
             UIIcon tab = new UIIcon(TAB_ICONS[i], (b) -> this.selectTab(index));
             tab.wh(TAB_HEIGHT, TAB_HEIGHT);
-            tab.tooltip(IKey.constant(TAB_IDS[i]), Direction.BOTTOM);
+            tab.tooltip(TAB_TOOLTIPS[i], Direction.BOTTOM);
             this.tabs.add(tab);
             this.add(tab);
         }
