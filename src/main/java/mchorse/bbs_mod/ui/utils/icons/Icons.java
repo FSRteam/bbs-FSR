@@ -186,14 +186,14 @@ public class Icons
     public static final Icon LIKE = register(new Icon(ATLAS, "like", 208, 144));
     public static final Icon DISLIKE = register(new Icon(ATLAS, "dislike", 224, 144));
 
-    public static final Icon PARTICLE_TAB_QUICK_SETUP = register(new Icon(ATLAS, "particle_tab_quick_setup", 0, 0));
-    public static final Icon PARTICLE_TAB_FILE = register(new Icon(ATLAS, "particle_tab_file", 16, 0));
-    public static final Icon PARTICLE_TAB_EMITTER = register(new Icon(ATLAS, "particle_tab_emitter", 32, 0));
-    public static final Icon PARTICLE_TAB_MOTION = register(new Icon(ATLAS, "particle_tab_motion", 48, 0));
-    public static final Icon PARTICLE_TAB_APPEARANCE = register(new Icon(ATLAS, "particle_tab_appearance", 64, 0));
-    public static final Icon PARTICLE_TAB_TIME = register(new Icon(ATLAS, "particle_tab_time", 80, 0));
-    public static final Icon PARTICLE_TAB_EVENTS = register(new Icon(ATLAS, "particle_tab_events", 96, 0));
-    public static final Icon PARTICLE_TAB_CURVES = register(new Icon(ATLAS, "particle_tab_curves", 112, 0));
+    public static final Icon PARTICLE_TAB_QUICK_SETUP = register(new Icon(ATLAS, "particle_tab_quick_setup", 144, 80));
+    public static final Icon PARTICLE_TAB_FILE = register(new Icon(ATLAS, "particle_tab_file", 64, 32));
+    public static final Icon PARTICLE_TAB_EMITTER = register(new Icon(ATLAS, "particle_tab_emitter", 144, 64));
+    public static final Icon PARTICLE_TAB_MOTION = register(new Icon(ATLAS, "particle_tab_motion", 96, 96));
+    public static final Icon PARTICLE_TAB_APPEARANCE = register(new Icon(ATLAS, "particle_tab_appearance", 80, 0));
+    public static final Icon PARTICLE_TAB_TIME = register(new Icon(ATLAS, "particle_tab_time", 0, 128));
+    public static final Icon PARTICLE_TAB_EVENTS = register(new Icon(ATLAS, "particle_tab_events", 48, 128));
+    public static final Icon PARTICLE_TAB_CURVES = register(new Icon(ATLAS, "particle_tab_curves", 224, 16));
 
     public static final Icon HORIZONTAL = register(new Icon(ATLAS, "horizontal", 0, 160));
     public static final Icon VERTICAL = register(new Icon(ATLAS, "vertical", 16, 160));
