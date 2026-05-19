@@ -26,6 +26,7 @@ public class UIParticleTabPage extends UIElement
         this.scrollView.column().stretch().vertical();
 
         this.add(this.scrollView);
+        this.scrollView.full(this);
     }
 
     public void addSection(UIParticleSchemeSection section)

@@ -111,6 +111,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private String draggingPanelId;
     private String dropTargetPanelId;
     private int dropTargetZone = DROP_ZONE_CENTER;
+    private boolean pendingLayoutUpdate;
 
     public UIParticleSchemePanel(UIDashboard dashboard)
     {
@@ -318,7 +319,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                     if (ratio >= 0F)
                     {
                         layout.setParticleSplitterRatio(index, ratio);
-                        this.setupParticleEditorFlex(true);
+                        this.pendingLayoutUpdate = true;
                     }
                 });
                 handle.hoverOnly();
@@ -504,12 +505,57 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         List<DockStackInfo> stackInfos = new ArrayList<>();
         this.collectDockStacks(root, 0F, 0F, 1F, 1F, stackInfos);
         this.applyPanelBoundsFromStacks(stackInfos);
-        this.rebuildDockStackTabs(stackInfos);
+
+        if (!this.updateDockStackTabsBoundsOnly(stackInfos))
+        {
+            this.rebuildDockStackTabs(stackInfos);
+        }
+
         this.splitterHandleInfos.clear();
         EditorLayoutNode.computeSplitterHandles(root, 0F, 0F, 1F, 1F, this.splitterHandleInfos);
         this.syncSplitterHandleBounds();
         this.applyDragHandleBoundsFromStacks(stackInfos);
         this.updateTabVisibility();
+    }
+
+    private boolean updateDockStackTabsBoundsOnly(List<DockStackInfo> stackInfos)
+    {
+        List<DockStackInfo> stackedInfos = new ArrayList<>();
+
+        for (DockStackInfo info : stackInfos)
+        {
+            if (info.isStacked())
+            {
+                stackedInfos.add(info);
+            }
+        }
+
+        if (stackedInfos.size() != this.dockStackTabs.size())
+        {
+            return false;
+        }
+
+        for (int i = 0; i < stackedInfos.size(); i++)
+        {
+            UIDockStackTabs tabs = this.dockStackTabs.get(i);
+            DockStackInfo info = stackedInfos.get(i);
+
+            if (!tabs.matches(info))
+            {
+                return false;
+            }
+        }
+
+        for (int i = 0; i < stackedInfos.size(); i++)
+        {
+            UIDockStackTabs tabs = this.dockStackTabs.get(i);
+            DockStackInfo info = stackedInfos.get(i);
+
+            tabs.configure(info);
+            tabs.relative(this.editor).x(info.x).y(info.y).w(info.w).h(DOCK_STACK_TABS_HEIGHT_PX);
+        }
+
+        return true;
     }
 
     private void updateTabVisibility()
@@ -778,7 +824,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         if (newRoot != null && newRoot != root)
         {
             layout.setParticleLayoutRoot(newRoot);
-            this.setupParticleEditorFlex(true);
+            this.pendingLayoutUpdate = true;
         }
     }
 
@@ -898,7 +944,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             if (next != root)
             {
                 layout.setParticleLayoutRoot(next);
-                UIParticleSchemePanel.this.setupParticleEditorFlex(true);
+                UIParticleSchemePanel.this.pendingLayoutUpdate = true;
             }
         }
 
@@ -1154,6 +1200,12 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     @Override
     public void render(UIContext context)
     {
+        if (this.pendingLayoutUpdate)
+        {
+            this.pendingLayoutUpdate = false;
+            this.setupParticleEditorFlex(true);
+        }
+
         int color = BBSSettings.primaryColor.get();
         this.area.render(context.batcher, Colors.mulRGB(color | Colors.A100, 0.2F));
 
