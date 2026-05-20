@@ -910,7 +910,6 @@ public class UIKeys
     public static final IKey PARTICLE_EDITOR_LAYOUT_UNLOCK = L10n.lang("bbs.ui.particle_editor.layout_unlock");
     public static final IKey PARTICLE_EDITOR_LAYOUT_PRESETS = L10n.lang("bbs.ui.particle_editor.layout_presets");
     public static final IKey PARTICLE_EDITOR_LAYOUT_RESET = L10n.lang("bbs.ui.particle_editor.layout_reset");
-    public static final IKey PARTICLE_TAB_QUICK_SETUP = L10n.lang("bbs.ui.particle_editor.tab.quick_setup");
     public static final IKey PARTICLE_TAB_FILE = L10n.lang("bbs.ui.particle_editor.tab.file");
     public static final IKey PARTICLE_TAB_EMITTER = L10n.lang("bbs.ui.particle_editor.tab.emitter");
     public static final IKey PARTICLE_TAB_MOTION = L10n.lang("bbs.ui.particle_editor.tab.motion");
@@ -921,19 +920,6 @@ public class UIKeys
     public static final IKey PARTICLE_TAB_PREVIEW = L10n.lang("bbs.ui.particle_editor.tab.preview");
 
     /* Quick Setup */
-    public static final IKey SNOWSTORM_QUICK_SETUP_TITLE = L10n.lang("bbs.ui.snowstorm.quick_setup.title");
-    public static final IKey SNOWSTORM_QUICK_SETUP_SHAPE = L10n.lang("bbs.ui.snowstorm.quick_setup.shape");
-    public static final IKey SNOWSTORM_QUICK_SETUP_TIMING = L10n.lang("bbs.ui.snowstorm.quick_setup.timing");
-    public static final IKey SNOWSTORM_QUICK_SETUP_PHYSICS = L10n.lang("bbs.ui.snowstorm.quick_setup.physics");
-    public static final IKey SNOWSTORM_QUICK_SETUP_SPHERE = L10n.lang("bbs.ui.snowstorm.quick_setup.sphere");
-    public static final IKey SNOWSTORM_QUICK_SETUP_RAIN = L10n.lang("bbs.ui.snowstorm.quick_setup.rain");
-    public static final IKey SNOWSTORM_QUICK_SETUP_RING = L10n.lang("bbs.ui.snowstorm.quick_setup.ring");
-    public static final IKey SNOWSTORM_QUICK_SETUP_BURST = L10n.lang("bbs.ui.snowstorm.quick_setup.burst");
-    public static final IKey SNOWSTORM_QUICK_SETUP_STEADY = L10n.lang("bbs.ui.snowstorm.quick_setup.steady");
-    public static final IKey SNOWSTORM_QUICK_SETUP_NONE = L10n.lang("bbs.ui.snowstorm.quick_setup.none");
-    public static final IKey SNOWSTORM_QUICK_SETUP_SOLID = L10n.lang("bbs.ui.snowstorm.quick_setup.solid");
-    public static final IKey SNOWSTORM_QUICK_SETUP_SMOKE = L10n.lang("bbs.ui.snowstorm.quick_setup.smoke");
-
     /* Events panel */
     public static final IKey SNOWSTORM_EVENTS_TITLE = L10n.lang("bbs.ui.snowstorm.events.title");
     public static final IKey TEXTURES_COPY = L10n.lang("bbs.ui.textures.copy");

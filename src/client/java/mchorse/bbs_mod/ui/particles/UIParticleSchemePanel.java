@@ -6,7 +6,6 @@ import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
-import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
@@ -14,17 +13,18 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.ui.ContentType;
+import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
+import mchorse.bbs_mod.ui.forms.editors.UIFormUndoHandler;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.framework.elements.input.text.UITextEditor;
-import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeAppearanceSection;
@@ -37,13 +37,12 @@ import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeInitializationSecti
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeLifetimeSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeLightingSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeMotionSection;
-import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeQuickSetupSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeRateSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeShapeSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSpaceSection;
-import mchorse.bbs_mod.ui.particles.utils.MolangSyntaxHighlighter;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
@@ -70,7 +69,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     public static final Link PARTICLE_PLACEHOLDER = Link.assets("particles/default_placeholder.json");
 
     private static final String PANEL_PREVIEW_ID = "preview";
-    private static final String PANEL_QUICK_SETUP_ID = "quickSetup";
     private static final String PANEL_FILE_ID = "file";
     private static final String PANEL_EMITTER_ID = "emitter";
     private static final String PANEL_MOTION_ID = "motion";
@@ -87,7 +85,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private static final int DOCK_STACK_TABS_HEIGHT_PX = 20;
     private static final int EDITOR_MIN_SIZE_FOR_PX_HANDLES = 10;
 
-    public UITextEditor textEditor;
     public UIParticleSchemeRenderer renderer;
     public UIParticleSelectionPanel selectionPanel;
 
@@ -98,7 +95,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private boolean layoutLocked = true;
     private UICopyPasteController layoutPresetsController;
 
-    private String molangId;
+    private UIFormUndoHandler undoHandler;
 
     /* Layout system */
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
@@ -121,32 +118,24 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         /* Renderer (monitor preview) */
         this.renderer = new UIParticleSchemeRenderer();
 
-        /* MoLang text editor */
-        this.textEditor = new UITextEditor(null).highlighter(new MolangSyntaxHighlighter());
-        this.textEditor.background();
-        UIIcon close = new UIIcon(Icons.CLOSE, (b) -> this.editMoLang(null, null, null));
-        close.relative(this.textEditor).x(1F, -20);
-        this.textEditor.add(close);
-
         /* Selection panel */
         this.selectionPanel = new UIParticleSelectionPanel(this);
         this.selectionPanel.relative(this).y(UIDataTabs.TABS_HEIGHT_PX).wTo(this.iconBar.area).h(1F, -UIDataTabs.TABS_HEIGHT_PX);
         this.add(this.selectionPanel);
 
-        /* Build 8 panel containers */
+        /* Build 7 panel containers (no quickSetup) */
         UIElement previewPanel = new UIElement()
         {
             @Override
             public void render(UIContext context)
             {
-                this.area.render(context.batcher, Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F));
+                this.area.render(context.batcher, Colors.A100);
                 super.render(context);
             }
         };
         previewPanel.add(this.renderer);
         this.renderer.full(previewPanel);
 
-        UIParticleTabPage quickSetupPage = new UIParticleTabPage();
         UIParticleTabPage filePage = new UIParticleTabPage();
         UIParticleTabPage emitterPage = new UIParticleTabPage();
         UIParticleTabPage motionPage = new UIParticleTabPage();
@@ -156,7 +145,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         UIParticleTabPage curvesPage = new UIParticleTabPage();
 
         /* Add sections to tab pages */
-        quickSetupPage.addSection(new UIParticleSchemeQuickSetupSection(this));
         filePage.addSection(new UIParticleSchemeGeneralSection(this));
         filePage.addSection(new UIParticleSchemeSpaceSection(this));
         filePage.addSection(new UIParticleSchemeInitializationSection(this));
@@ -172,7 +160,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         curvesPage.addSection(new UIParticleSchemeCurvesSection(this));
 
         /* Collect all sections for iteration */
-        this.collectSections(quickSetupPage);
         this.collectSections(filePage);
         this.collectSections(emitterPage);
         this.collectSections(motionPage);
@@ -183,7 +170,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         /* Register panels by ID */
         this.panelById.put(PANEL_PREVIEW_ID, previewPanel);
-        this.panelById.put(PANEL_QUICK_SETUP_ID, quickSetupPage);
         this.panelById.put(PANEL_FILE_ID, filePage);
         this.panelById.put(PANEL_EMITTER_ID, emitterPage);
         this.panelById.put(PANEL_MOTION_ID, motionPage);
@@ -201,7 +187,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         /* Add overlay rendering */
         this.prepend(new UIRenderable(this::drawOverlay));
         this.editor.add(new UIRenderable(this::renderDropZoneHighlight));
-        this.editor.add(this.textEditor);
 
         /* Dock stack tabs and drag handles */
         for (String id : this.panelById.keySet())
@@ -239,6 +224,10 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         this.fill(null);
         this.setupParticleEditorFlex(false);
+
+        /* Undo/Redo keybinds */
+        this.setUndoId("particle_panel");
+        this.add(new UIParticleSchemePanelUndoKeys(this).full(this));
     }
 
     private void collectSections(UIParticleTabPage page)
@@ -844,7 +833,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         switch (panelId)
         {
             case PANEL_PREVIEW_ID: return Icons.VIDEO_CAMERA;
-            case PANEL_QUICK_SETUP_ID: return Icons.PARTICLE_TAB_QUICK_SETUP;
             case PANEL_FILE_ID: return Icons.PARTICLE_TAB_FILE;
             case PANEL_EMITTER_ID: return Icons.PARTICLE_TAB_EMITTER;
             case PANEL_MOTION_ID: return Icons.PARTICLE_TAB_MOTION;
@@ -1018,21 +1006,33 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     public void editMoLang(String id, Consumer<String> callback, MolangExpression expression)
     {
-        this.molangId = id;
-        this.textEditor.callback = callback;
-        this.textEditor.setText(expression == null ? "" : expression.toString());
-        this.textEditor.setVisible(callback != null);
+        /* Find currently active tab page's scroll view to place the textbox */
+        UIParticleTabPage activePage = null;
 
-        if (callback != null)
+        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
         {
-            this.textEditor.relative(this.editor).y(1F, -60).w(1F).h(60);
-        }
-        else
-        {
-            this.textEditor.relative(this.editor).y(1F).w(1F).h(0);
+            if (entry.getValue().isVisible() && entry.getValue() instanceof UIParticleTabPage)
+            {
+                activePage = (UIParticleTabPage) entry.getValue();
+                break;
+            }
         }
 
-        this.textEditor.resize();
+        if (activePage == null)
+        {
+            return;
+        }
+
+        String text = expression == null ? "" : expression.toString();
+
+        UITextbox textbox = new UITextbox(10000, callback);
+        textbox.setText(text);
+        textbox.relative(activePage.scrollView).w(1F).h(20);
+        textbox.border();
+        activePage.scrollView.add(textbox);
+        activePage.scrollView.resize();
+
+        this.getContext().focus(textbox);
     }
 
     /* ===== Data management ===== */
@@ -1069,7 +1069,11 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     @Override
     protected void fillData(ParticleScheme data)
     {
-        this.editMoLang(null, null, null);
+        if (data != null)
+        {
+            this.undoHandler = new UIFormUndoHandler(this);
+            data.preCallback(this.undoHandler::handlePreValues);
+        }
 
         this.renderer.setVisible(data != null);
         this.selectionPanel.setVisible(data == null);
@@ -1136,8 +1140,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     public void appear()
     {
         super.appear();
-
-        this.textEditor.updateHighlighter();
     }
 
     @Override
@@ -1219,11 +1221,9 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         super.render(context);
 
-        if (this.molangId != null)
+        if (this.undoHandler != null)
         {
-            FontRenderer font = context.batcher.getFont();
-            int w = font.getWidth(this.molangId);
-            context.batcher.textCard(this.molangId, this.textEditor.area.ex() - 6 - w, this.textEditor.area.ey() - 6 - font.getHeight());
+            this.undoHandler.submitUndo();
         }
     }
 
@@ -1301,5 +1301,44 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.clearPanelDragState();
         BBSSettings.editorLayoutSettings.setParticleLayoutRoot(EditorLayoutNode.defaultParticleLayout());
         this.setupParticleEditorFlex(true);
+    }
+
+    /* ===== Undo/Redo ===== */
+
+    public void undo()
+    {
+        if (this.data != null && this.undoHandler != null)
+        {
+            if (this.undoHandler.getUndoManager().undo(this.data))
+            {
+                this.dirty();
+                UIUtils.playClick();
+            }
+        }
+    }
+
+    public void redo()
+    {
+        if (this.data != null && this.undoHandler != null)
+        {
+            if (this.undoHandler.getUndoManager().redo(this.data))
+            {
+                this.dirty();
+                UIUtils.playClick();
+            }
+        }
+    }
+
+    /* ===== Undo keys overlay ===== */
+
+    private static class UIParticleSchemePanelUndoKeys extends UIElement
+    {
+        public UIParticleSchemePanelUndoKeys(UIParticleSchemePanel panel)
+        {
+            this.keys().ignoreFocus();
+            this.keys().register(Keys.UNDO, panel::undo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
+            this.keys().register(Keys.REDO, panel::redo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
+            this.noCulling();
+        }
     }
 }

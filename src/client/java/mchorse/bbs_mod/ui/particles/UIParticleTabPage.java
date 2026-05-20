@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.particles;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -46,7 +45,7 @@ public class UIParticleTabPage extends UIElement
     @Override
     public void render(UIContext context)
     {
-        this.area.render(context.batcher, Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F));
+        this.area.render(context.batcher, Colors.A75);
         super.render(context);
     }
 }

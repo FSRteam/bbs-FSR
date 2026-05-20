@@ -147,7 +147,7 @@ public abstract class EditorLayoutNode
             0.65F,
             new PanelNode("preview"),
             new StackNode(
-                java.util.Arrays.asList("emitter", "file", "quickSetup", "motion", "appearance", "time", "events", "curves"),
+                java.util.Arrays.asList("emitter", "file", "motion", "appearance", "time", "events", "curves"),
                 "emitter"
             )
         );

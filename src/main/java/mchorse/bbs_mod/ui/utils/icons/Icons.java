@@ -186,7 +186,6 @@ public class Icons
     public static final Icon LIKE = register(new Icon(ATLAS, "like", 208, 144));
     public static final Icon DISLIKE = register(new Icon(ATLAS, "dislike", 224, 144));
 
-    public static final Icon PARTICLE_TAB_QUICK_SETUP = register(new Icon(ATLAS, "particle_tab_quick_setup", 160, 96));
     public static final Icon PARTICLE_TAB_FILE = register(new Icon(ATLAS, "particle_tab_file", 80, 48));
     public static final Icon PARTICLE_TAB_EMITTER = register(new Icon(ATLAS, "particle_tab_emitter", 160, 80));
     public static final Icon PARTICLE_TAB_MOTION = register(new Icon(ATLAS, "particle_tab_motion", 112, 112));

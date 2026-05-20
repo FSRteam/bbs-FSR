@@ -19,7 +19,6 @@ public class UIParticleTabBar extends UIElement
 {
     public static final int TAB_HEIGHT = 24;
     public static final Icon[] TAB_ICONS = {
-        Icons.PARTICLE_TAB_QUICK_SETUP,
         Icons.PARTICLE_TAB_FILE,
         Icons.PARTICLE_TAB_EMITTER,
         Icons.PARTICLE_TAB_MOTION,
@@ -31,11 +30,10 @@ public class UIParticleTabBar extends UIElement
     };
 
     public static final String[] TAB_IDS = {
-        "quickSetup", "file", "emitter", "motion", "appearance", "time", "events", "curves", "preview"
+        "file", "emitter", "motion", "appearance", "time", "events", "curves", "preview"
     };
 
     public static final IKey[] TAB_TOOLTIPS = {
-        UIKeys.PARTICLE_TAB_QUICK_SETUP,
         UIKeys.PARTICLE_TAB_FILE,
         UIKeys.PARTICLE_TAB_EMITTER,
         UIKeys.PARTICLE_TAB_MOTION,
@@ -47,7 +45,7 @@ public class UIParticleTabBar extends UIElement
     };
 
     private final List<UIIcon> tabs = new ArrayList<>();
-    private int currentTab = 1;
+    private int currentTab = 0;
     private final Consumer<Integer> callback;
 
     public UIParticleTabBar(Consumer<Integer> callback)
@@ -142,8 +140,11 @@ public class UIParticleTabBar extends UIElement
 
             int iconColor = active ? Colors.WHITE : (hover ? Colors.LIGHTEST_GRAY : Colors.mulRGB(Colors.WHITE, 0.75F));
             context.batcher.icon(TAB_ICONS[i], iconColor, tab.area.mx(), tab.area.my(), 0.5F, 0.5F);
-        }
 
-        super.render(context);
+            if (hover && tab.tooltip != null)
+            {
+                context.tooltip.set(context, tab);
+            }
+        }
     }
 }

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.particles.sections;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
@@ -32,7 +31,7 @@ public abstract class UIParticleSchemeSection extends UIElement
         super();
 
         this.editor = editor;
-        this.title = UI.label(this.getTitle()).background(() -> Colors.A100 | BBSSettings.primaryColor.get());
+        this.title = UI.label(this.getTitle()).background(() -> Colors.A100);
         this.fields = new UIElement();
         this.fields.column().stretch().vertical().height(20);
 
