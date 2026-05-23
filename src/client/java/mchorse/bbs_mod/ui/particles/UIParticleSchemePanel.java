@@ -6,6 +6,7 @@ import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
@@ -19,7 +20,7 @@ import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
-import mchorse.bbs_mod.ui.forms.editors.UIFormUndoHandler;
+import mchorse.bbs_mod.ui.particles.utils.ParticleUndoManager;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -95,7 +96,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private boolean layoutLocked = true;
     private UICopyPasteController layoutPresetsController;
 
-    private UIFormUndoHandler undoHandler;
+    private ParticleUndoManager particleUndo;
 
     /* Layout system */
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
@@ -844,6 +845,22 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         }
     }
 
+    private IKey getPanelTooltip(String panelId)
+    {
+        switch (panelId)
+        {
+            case PANEL_PREVIEW_ID: return UIKeys.PARTICLE_TAB_PREVIEW;
+            case PANEL_FILE_ID: return UIKeys.PARTICLE_TAB_FILE;
+            case PANEL_EMITTER_ID: return UIKeys.PARTICLE_TAB_EMITTER;
+            case PANEL_MOTION_ID: return UIKeys.PARTICLE_TAB_MOTION;
+            case PANEL_APPEARANCE_ID: return UIKeys.PARTICLE_TAB_APPEARANCE;
+            case PANEL_TIME_ID: return UIKeys.PARTICLE_TAB_TIME;
+            case PANEL_EVENTS_ID: return UIKeys.PARTICLE_TAB_EVENTS;
+            case PANEL_CURVES_ID: return UIKeys.PARTICLE_TAB_CURVES;
+            default: return null;
+        }
+    }
+
     private static class DockStackInfo
     {
         public final List<String> panelIds;
@@ -1002,39 +1019,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         }
     }
 
-    /* ===== MoLang editing ===== */
-
-    public void editMoLang(String id, Consumer<String> callback, MolangExpression expression)
-    {
-        /* Find currently active tab page's scroll view to place the textbox */
-        UIParticleTabPage activePage = null;
-
-        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
-        {
-            if (entry.getValue().isVisible() && entry.getValue() instanceof UIParticleTabPage)
-            {
-                activePage = (UIParticleTabPage) entry.getValue();
-                break;
-            }
-        }
-
-        if (activePage == null)
-        {
-            return;
-        }
-
-        String text = expression == null ? "" : expression.toString();
-
-        UITextbox textbox = new UITextbox(10000, callback);
-        textbox.setText(text);
-        textbox.relative(activePage.scrollView).w(1F).h(20);
-        textbox.border();
-        activePage.scrollView.add(textbox);
-        activePage.scrollView.resize();
-
-        this.getContext().focus(textbox);
-    }
-
     /* ===== Data management ===== */
 
     @Override
@@ -1071,8 +1055,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         if (data != null)
         {
-            this.undoHandler = new UIFormUndoHandler(this);
-            data.preCallback(this.undoHandler::handlePreValues);
+            this.particleUndo = new ParticleUndoManager();
         }
 
         this.renderer.setVisible(data != null);
@@ -1182,7 +1165,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         if (this.iconBar.isVisible())
         {
-            this.iconBar.area.render(context.batcher, Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F));
+            this.iconBar.area.render(context.batcher, Colors.CONTROL_BAR);
             context.batcher.gradientHBox(this.iconBar.area.x - 6, this.iconBar.area.y, this.iconBar.area.x, this.iconBar.area.ey(), 0, 0x29000000);
         }
     }
@@ -1221,9 +1204,9 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         super.render(context);
 
-        if (this.undoHandler != null)
+        if (this.particleUndo != null)
         {
-            this.undoHandler.submitUndo();
+            this.particleUndo.trySubmit();
         }
     }
 
@@ -1305,27 +1288,69 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     /* ===== Undo/Redo ===== */
 
+    public void pushUndoSnapshot()
+    {
+        if (this.data != null && this.particleUndo != null)
+        {
+            this.particleUndo.pushSnapshot(this.data);
+        }
+    }
+
+    public void markUndoBoundary()
+    {
+        if (this.particleUndo != null)
+        {
+            this.particleUndo.markBoundary();
+        }
+    }
+
     public void undo()
     {
-        if (this.data != null && this.undoHandler != null)
+        if (this.data != null && this.particleUndo != null)
         {
-            if (this.undoHandler.getUndoManager().undo(this.data))
+            MapType previous = this.particleUndo.undo();
+
+            if (previous != null)
             {
-                this.dirty();
-                UIUtils.playClick();
+                try
+                {
+                    ParticleScheme.PARSER.fromData(this.data, previous);
+                    this.data.setup();
+                    this.dirty();
+                    this.refreshSections();
+                    UIUtils.playClick();
+                }
+                catch (Exception e) {}
             }
         }
     }
 
     public void redo()
     {
-        if (this.data != null && this.undoHandler != null)
+        if (this.data != null && this.particleUndo != null)
         {
-            if (this.undoHandler.getUndoManager().redo(this.data))
+            MapType next = this.particleUndo.redo();
+
+            if (next != null)
             {
-                this.dirty();
-                UIUtils.playClick();
+                try
+                {
+                    ParticleScheme.PARSER.fromData(this.data, next);
+                    this.data.setup();
+                    this.dirty();
+                    this.refreshSections();
+                    UIUtils.playClick();
+                }
+                catch (Exception e) {}
             }
+        }
+    }
+
+    private void refreshSections()
+    {
+        for (UIParticleSchemeSection section : this.sections)
+        {
+            section.setScheme(this.data);
         }
     }
 

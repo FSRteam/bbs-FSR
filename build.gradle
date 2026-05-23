@@ -71,7 +71,14 @@ configurations {
     clientRuntimeOnly.extendsFrom runtimeOnly
 }
 
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+    withSourcesJar()
+}
+
 repositories {
+    maven { url "https://bmclapi2.bangbang93.com/maven" }
+
     mavenCentral()
     if (bbsPreferMirror) {
         maven {
@@ -113,11 +120,6 @@ dependencies {
     // modCompileOnly "maven.modrinth:indium:1.0.31+mc1.20.4"
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
-    withSourcesJar()
-}
-
 tasks.withType(JavaCompile).configureEach {
     // NeoForge 1.21.1 targets Java 21
     options.release = java_version as int
@@ -134,6 +136,12 @@ tasks.named('clientClasses') {
 
 tasks.named('build') {
     dependsOn tasks.named('clientClasses')
+}
+
+tasks.named("cacheVersionExtractedServer${minecraft_version}") {
+    if (it.respondsTo('getOutput')) {
+        it.getOutput().set(layout.projectDirectory.file(".gradle/caches/minecraft/versions/${minecraft_version}/server-extracted.jar"))
+    }
 }
 
 tasks.named('jar') {

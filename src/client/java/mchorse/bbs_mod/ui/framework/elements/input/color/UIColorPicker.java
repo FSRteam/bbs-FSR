@@ -246,7 +246,7 @@ public class UIColorPicker extends UIElement
 
     private ValueColors getRecentColors()
     {
-        return BBSSettings.recentColors == null ? RECENT_COLORS_FALLBACK : BBSSettings.recentColors;
+        return BBSSettings.recentColors;
     }
 
     /* Managing recent and favorite colors */

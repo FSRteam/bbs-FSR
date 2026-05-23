@@ -5,10 +5,10 @@ import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -18,18 +18,18 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
     public UICirculate mode;
     public UILabel modeLabel;
 
-    public UIButton sizeW;
-    public UIButton sizeH;
-    public UIButton uvX;
-    public UIButton uvY;
-    public UIButton uvW;
-    public UIButton uvH;
+    public UITextbox sizeW;
+    public UITextbox sizeH;
+    public UITextbox uvX;
+    public UITextbox uvY;
+    public UITextbox uvW;
+    public UITextbox uvH;
 
     public UIElement flipbook;
     public UITrackpad stepX;
     public UITrackpad stepY;
     public UITrackpad fps;
-    public UIButton max;
+    public UITextbox max;
     public UIToggle stretch;
     public UIToggle loop;
 
@@ -47,16 +47,50 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         this.mode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_ANIMATED);
         this.modeLabel = UI.label(UIKeys.SNOWSTORM_MODE, 20).labelAnchor(0, 0.5F);
 
-        this.sizeW = new UIButton(UIKeys.SNOWSTORM_APPEARANCE_WIDTH, (b) -> this.editMoLang("appearance.width", (str) -> this.component.sizeW = this.parse(str, this.component.sizeW), this.component.sizeW));
-        this.sizeH = new UIButton(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT, (b) -> this.editMoLang("appearance.height", (str) -> this.component.sizeH = this.parse(str, this.component.sizeH), this.component.sizeH));
+        this.sizeW = new UITextbox(10000, (str) ->
+        {
+            this.component.sizeW = this.parse(str, this.component.sizeW);
+            this.editor.markUndoBoundary();
+        });
+        this.sizeW.placeholder(UIKeys.SNOWSTORM_APPEARANCE_WIDTH);
 
-        this.uvX = new UIButton(UIKeys.GENERAL_X, (b) -> this.editMoLang("appearance.uv_x", (str) -> this.component.uvX = this.parse(str, this.component.uvX), this.component.uvX));
+        this.sizeH = new UITextbox(10000, (str) ->
+        {
+            this.component.sizeH = this.parse(str, this.component.sizeH);
+            this.editor.markUndoBoundary();
+        });
+        this.sizeH.placeholder(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT);
+
+        this.uvX = new UITextbox(10000, (str) ->
+        {
+            this.component.uvX = this.parse(str, this.component.uvX);
+            this.editor.markUndoBoundary();
+        });
+        this.uvX.placeholder(UIKeys.GENERAL_X);
         this.uvX.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_X);
-        this.uvY = new UIButton(UIKeys.GENERAL_Y, (b) -> this.editMoLang("appearance.uv_y", (str) -> this.component.uvY = this.parse(str, this.component.uvY), this.component.uvY));
+
+        this.uvY = new UITextbox(10000, (str) ->
+        {
+            this.component.uvY = this.parse(str, this.component.uvY);
+            this.editor.markUndoBoundary();
+        });
+        this.uvY.placeholder(UIKeys.GENERAL_Y);
         this.uvY.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_Y);
-        this.uvW = new UIButton(UIKeys.SNOWSTORM_APPEARANCE_WIDTH, (b) -> this.editMoLang("appearance.uv_w", (str) -> this.component.uvW = this.parse(str, this.component.uvW), this.component.uvW));
+
+        this.uvW = new UITextbox(10000, (str) ->
+        {
+            this.component.uvW = this.parse(str, this.component.uvW);
+            this.editor.markUndoBoundary();
+        });
+        this.uvW.placeholder(UIKeys.SNOWSTORM_APPEARANCE_WIDTH);
         this.uvW.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_W);
-        this.uvH = new UIButton(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT, (b) -> this.editMoLang("appearance.uv_h", (str) -> this.component.uvH = this.parse(str, this.component.uvH), this.component.uvH));
+
+        this.uvH = new UITextbox(10000, (str) ->
+        {
+            this.component.uvH = this.parse(str, this.component.uvH);
+            this.editor.markUndoBoundary();
+        });
+        this.uvH.placeholder(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT);
         this.uvH.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_H);
 
         this.stepX = new UITrackpad((value) ->
@@ -77,7 +111,12 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.dirty();
         });
         this.fps.tooltip(UIKeys.SNOWSTORM_APPEARANCE_FPS);
-        this.max = new UIButton(UIKeys.SNOWSTORM_APPEARANCE_FRAMES, (b) -> this.editMoLang("appearance.max_frames", (str) -> this.component.maxFrame = this.parse(str, this.component.maxFrame), this.component.maxFrame));
+        this.max = new UITextbox(10000, (str) ->
+        {
+            this.component.maxFrame = this.parse(str, this.component.maxFrame);
+            this.editor.markUndoBoundary();
+        });
+        this.max.placeholder(UIKeys.SNOWSTORM_APPEARANCE_FRAMES);
         this.max.tooltip(UIKeys.SNOWSTORM_APPEARANCE_MAX);
 
         this.stretch = new UIToggle(UIKeys.SNOWSTORM_APPEARANCE_STRETCH, (b) ->
@@ -144,6 +183,14 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
 
         this.stretch.setValue(this.component.stretchFPS);
         this.loop.setValue(this.component.loop);
+
+        this.sizeW.setText(this.component.sizeW == null ? "" : this.component.sizeW.toString());
+        this.sizeH.setText(this.component.sizeH == null ? "" : this.component.sizeH.toString());
+        this.uvX.setText(this.component.uvX == null ? "" : this.component.uvX.toString());
+        this.uvY.setText(this.component.uvY == null ? "" : this.component.uvY.toString());
+        this.uvW.setText(this.component.uvW == null ? "" : this.component.uvW.toString());
+        this.uvH.setText(this.component.uvH == null ? "" : this.component.uvH.toString());
+        this.max.setText(this.component.maxFrame == null ? "" : this.component.maxFrame.toString());
 
         this.updateElements();
     }

@@ -7,7 +7,6 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.colors.Color;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.RenderType;
-import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
@@ -44,7 +43,7 @@ public abstract class WorldRendererMixin
     {
         if (BBSSettings.chromaSkyEnabled.get() && !BBSSettings.chromaSkyTerrain.get())
         {
-            BBSRendering.onRenderChunkLayer(new PoseStack());
+            BBSRendering.onRenderChunkLayer(RenderSystem.getModelViewMatrix(), projectionMatrix);
 
             info.cancel();
         }
@@ -55,7 +54,7 @@ public abstract class WorldRendererMixin
     {
         if (layer == RenderType.solid())
         {
-            BBSRendering.onRenderChunkLayer(new PoseStack());
+            BBSRendering.onRenderChunkLayer(RenderSystem.getModelViewMatrix(), projectionMatrix);
         }
     }
 

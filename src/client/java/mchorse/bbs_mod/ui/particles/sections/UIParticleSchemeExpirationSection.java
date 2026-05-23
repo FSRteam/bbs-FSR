@@ -7,16 +7,16 @@ import mchorse.bbs_mod.particles.components.expiration.ParticleComponentExpireNo
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentKillPlane;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentParticleLifetime;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.utils.UI;
 
 public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
 {
     public UICirculate mode;
-    public UIButton expression;
+    public UITextbox expression;
 
     public UITrackpad a;
     public UITrackpad b;
@@ -41,10 +41,15 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
         this.mode.addLabel(UIKeys.SNOWSTORM_EXPIRATION_EXPRESSION);
         this.mode.addLabel(UIKeys.SNOWSTORM_EXPIRATION_MAX);
 
-        this.expression = new UIButton(UIKeys.SNOWSTORM_EXPRESSION, (b) ->
+        this.expression = new UITextbox(10000, (str) ->
         {
-            this.editMoLang("expiration.lifetime", (str) -> this.lifetime.expression = this.parse(str, this.lifetime.expression), this.lifetime.expression);
+            if (this.lifetime != null)
+            {
+                this.lifetime.expression = this.parse(str, this.lifetime.expression);
+                this.editor.markUndoBoundary();
+            }
         });
+        this.expression.placeholder(UIKeys.SNOWSTORM_EXPRESSION);
         this.expression.tooltip(IKey.EMPTY);
 
         this.a = new UITrackpad((value) ->
@@ -110,7 +115,7 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
         this.b.setValue(this.plane.b);
         this.c.setValue(this.plane.c);
         this.d.setValue(this.plane.d);
-    }
 
-    // block selection UI not wired up in current branch
+        this.expression.setText(this.lifetime.expression == null ? "" : this.lifetime.expression.toString());
+    }
 }

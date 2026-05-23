@@ -135,11 +135,11 @@ public class BBSSettings {
 	}
 
 	public static int getDefaultDuration() {
-		return duration == null ? 30 : duration.get();
+		return duration.get();
 	}
 
 	public static float getFov() {
-		return BBSSettings.fov == null ? MathUtils.toRad(50) : MathUtils.toRad(BBSSettings.fov.get());
+		return MathUtils.toRad(BBSSettings.fov.get());
 	}
 
 	public static boolean isHorizontalClipEditorEffective() {
@@ -148,14 +148,9 @@ public class BBSSettings {
 
 	/**
 	 * Returns the user-configured default shape for newly created keyframes. Falls back to
-	 * {@link KeyframeShape#SQUARE} before settings are registered or if the stored ordinal
-	 * is out of range.
+	 * {@link KeyframeShape#SQUARE} if the stored ordinal is out of range.
 	 */
 	public static KeyframeShape getDefaultKeyframeShape() {
-		if (keyframeDefaultShape == null) {
-			return KeyframeShape.SQUARE;
-		}
-
 		int index = keyframeDefaultShape.get();
 		KeyframeShape[] values = KeyframeShape.values();
 

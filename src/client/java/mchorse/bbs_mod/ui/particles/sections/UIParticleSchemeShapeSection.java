@@ -12,46 +12,55 @@ import mchorse.bbs_mod.particles.components.shape.directions.ShapeDirectionInwar
 import mchorse.bbs_mod.particles.components.shape.directions.ShapeDirectionVector;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.utils.UI;
 
 public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<ParticleComponentShapeBase>
 {
-    public UIButton offsetX;
-    public UIButton offsetY;
-    public UIButton offsetZ;
+    public UITextbox offsetX;
+    public UITextbox offsetY;
+    public UITextbox offsetZ;
     public UIDirectionSection direction;
     public UIToggle surface;
 
     public UILabel radiusLabel;
-    public UIButton radius;
+    public UITextbox radius;
 
     public UILabel label;
     public UIElement xyz;
-    public UIButton x;
-    public UIButton y;
-    public UIButton z;
+    public UITextbox x;
+    public UITextbox y;
+    public UITextbox z;
 
     public UIParticleSchemeShapeSection(UIParticleSchemePanel parent)
     {
         super(parent);
 
-        this.offsetX = new UIButton(UIKeys.GENERAL_X, (b) ->
+        this.offsetX = new UITextbox(10000, (str) ->
         {
-            this.editMoLang("shape.offset_x", (str) -> this.component.offset[0] = this.parse(str, this.component.offset[0]), this.component.offset[0]);
+            this.component.offset[0] = this.parse(str, this.component.offset[0]);
+            this.editor.markUndoBoundary();
         });
-        this.offsetY = new UIButton(UIKeys.GENERAL_Y, (b) ->
+        this.offsetX.placeholder(UIKeys.GENERAL_X);
+
+        this.offsetY = new UITextbox(10000, (str) ->
         {
-            this.editMoLang("shape.offset_y", (str) -> this.component.offset[1] = this.parse(str, this.component.offset[1]), this.component.offset[1]);
+            this.component.offset[1] = this.parse(str, this.component.offset[1]);
+            this.editor.markUndoBoundary();
         });
-        this.offsetZ = new UIButton(UIKeys.GENERAL_Z, (b) ->
+        this.offsetY.placeholder(UIKeys.GENERAL_Y);
+
+        this.offsetZ = new UITextbox(10000, (str) ->
         {
-            this.editMoLang("shape.offset_z", (str) -> this.component.offset[2] = this.parse(str, this.component.offset[2]), this.component.offset[2]);
+            this.component.offset[2] = this.parse(str, this.component.offset[2]);
+            this.editor.markUndoBoundary();
         });
+        this.offsetZ.placeholder(UIKeys.GENERAL_Z);
+
         this.direction = new UIDirectionSection(this);
         this.surface = new UIToggle(UIKeys.SNOWSTORM_SHAPE_SURFACE, (b) ->
         {
@@ -61,17 +70,64 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         this.surface.tooltip(UIKeys.SNOWSTORM_SHAPE_SURFACE_TOOLTIP);
 
         this.radiusLabel = UI.label(UIKeys.SNOWSTORM_SHAPE_RADIUS, 20).labelAnchor(0, 1F);
-        this.radius = new UIButton(UIKeys.SNOWSTORM_SHAPE_RADIUS, (b) ->
+        this.radius = new UITextbox(10000, (str) ->
         {
             ParticleComponentShapeSphere sphere = (ParticleComponentShapeSphere) this.component;
-
-            this.editMoLang("shape.radius", (str) -> sphere.radius = this.parse(str, sphere.radius), sphere.radius);
+            sphere.radius = this.parse(str, sphere.radius);
+            this.editor.markUndoBoundary();
         });
+        this.radius.placeholder(UIKeys.SNOWSTORM_SHAPE_RADIUS);
 
         this.label = UI.label(IKey.EMPTY, 20).labelAnchor(0, 1F);
-        this.x = new UIButton(UIKeys.GENERAL_X, (str) -> this.updateNormalDimension(0));
-        this.y = new UIButton(UIKeys.GENERAL_Y, (str) -> this.updateNormalDimension(1));
-        this.z = new UIButton(UIKeys.GENERAL_Z, (str) -> this.updateNormalDimension(2));
+
+        this.x = new UITextbox(10000, (str) ->
+        {
+            if (this.component instanceof ParticleComponentShapeBox)
+            {
+                ParticleComponentShapeBox box = (ParticleComponentShapeBox) this.component;
+                box.halfDimensions[0] = this.parse(str, box.halfDimensions[0]);
+            }
+            else if (this.component instanceof ParticleComponentShapeDisc)
+            {
+                ParticleComponentShapeDisc disc = (ParticleComponentShapeDisc) this.component;
+                disc.normal[0] = this.parse(str, disc.normal[0]);
+            }
+            this.editor.markUndoBoundary();
+        });
+        this.x.placeholder(UIKeys.GENERAL_X);
+
+        this.y = new UITextbox(10000, (str) ->
+        {
+            if (this.component instanceof ParticleComponentShapeBox)
+            {
+                ParticleComponentShapeBox box = (ParticleComponentShapeBox) this.component;
+                box.halfDimensions[1] = this.parse(str, box.halfDimensions[1]);
+            }
+            else if (this.component instanceof ParticleComponentShapeDisc)
+            {
+                ParticleComponentShapeDisc disc = (ParticleComponentShapeDisc) this.component;
+                disc.normal[1] = this.parse(str, disc.normal[1]);
+            }
+            this.editor.markUndoBoundary();
+        });
+        this.y.placeholder(UIKeys.GENERAL_Y);
+
+        this.z = new UITextbox(10000, (str) ->
+        {
+            if (this.component instanceof ParticleComponentShapeBox)
+            {
+                ParticleComponentShapeBox box = (ParticleComponentShapeBox) this.component;
+                box.halfDimensions[2] = this.parse(str, box.halfDimensions[2]);
+            }
+            else if (this.component instanceof ParticleComponentShapeDisc)
+            {
+                ParticleComponentShapeDisc disc = (ParticleComponentShapeDisc) this.component;
+                disc.normal[2] = this.parse(str, disc.normal[2]);
+            }
+            this.editor.markUndoBoundary();
+        });
+        this.z.placeholder(UIKeys.GENERAL_Z);
+
         this.xyz = UI.row(this.x, this.y, this.z);
 
         this.modeLabel.label = UIKeys.SNOWSTORM_SHAPE_SHAPE;
@@ -79,22 +135,6 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         this.fields.add(UI.label(UIKeys.SNOWSTORM_SHAPE_OFFSET, 20).labelAnchor(0, 1F));
         this.fields.add(UI.row(this.offsetX, this.offsetY, this.offsetZ));
         this.fields.add(this.direction, this.surface);
-    }
-
-    private void updateNormalDimension(int index)
-    {
-        if (this.component instanceof ParticleComponentShapeBox)
-        {
-            ParticleComponentShapeBox box = (ParticleComponentShapeBox) this.component;
-
-            this.editMoLang("shape.size_" + index, (str) -> box.halfDimensions[index] = this.parse(str, box.halfDimensions[index]), box.halfDimensions[index]);
-        }
-        else if (this.component instanceof ParticleComponentShapeDisc)
-        {
-            ParticleComponentShapeDisc disc = (ParticleComponentShapeDisc) this.component;
-
-            this.editMoLang("shape.normal_" + index, (str) -> disc.normal[index] = this.parse(str, disc.normal[index]), disc.normal[index]);
-        }
     }
 
     @Override
@@ -169,6 +209,10 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         this.direction.fillData();
         this.surface.setValue(this.component.surface);
 
+        this.offsetX.setText(this.component.offset[0] == null ? "" : this.component.offset[0].toString());
+        this.offsetY.setText(this.component.offset[1] == null ? "" : this.component.offset[1].toString());
+        this.offsetZ.setText(this.component.offset[2] == null ? "" : this.component.offset[2].toString());
+
         this.radiusLabel.removeFromParent();
         this.radius.removeFromParent();
         this.label.removeFromParent();
@@ -177,12 +221,29 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
 
         if (this.component instanceof ParticleComponentShapeSphere)
         {
+            ParticleComponentShapeSphere sphere = (ParticleComponentShapeSphere) this.component;
+            this.radius.setText(sphere.radius == null ? "" : sphere.radius.toString());
             this.fields.add(this.radiusLabel, this.radius);
         }
 
         if (this.component instanceof ParticleComponentShapeBox || this.component instanceof ParticleComponentShapeDisc)
         {
             this.label.label = this.component instanceof ParticleComponentShapeBox ? UIKeys.SNOWSTORM_SHAPE_BOX_SIZE : UIKeys.SNOWSTORM_SHAPE_NORMAL;
+
+            if (this.component instanceof ParticleComponentShapeBox)
+            {
+                ParticleComponentShapeBox box = (ParticleComponentShapeBox) this.component;
+                this.x.setText(box.halfDimensions[0] == null ? "" : box.halfDimensions[0].toString());
+                this.y.setText(box.halfDimensions[1] == null ? "" : box.halfDimensions[1].toString());
+                this.z.setText(box.halfDimensions[2] == null ? "" : box.halfDimensions[2].toString());
+            }
+            else
+            {
+                ParticleComponentShapeDisc disc = (ParticleComponentShapeDisc) this.component;
+                this.x.setText(disc.normal[0] == null ? "" : disc.normal[0].toString());
+                this.y.setText(disc.normal[1] == null ? "" : disc.normal[1].toString());
+                this.z.setText(disc.normal[2] == null ? "" : disc.normal[2].toString());
+            }
 
             this.fields.add(this.label);
             this.fields.add(this.xyz);
@@ -199,9 +260,9 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
 
         public UICirculate mode;
         public UIElement xyz;
-        public UIButton x;
-        public UIButton y;
-        public UIButton z;
+        public UITextbox x;
+        public UITextbox y;
+        public UITextbox z;
 
         public UIDirectionSection(UIParticleSchemeShapeSection parent)
         {
@@ -232,24 +293,30 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.mode.addLabel(UIKeys.SNOWSTORM_SHAPE_DIRECTION_INWARDS);
             this.mode.addLabel(UIKeys.SNOWSTORM_SHAPE_DIRECTION_VECTOR);
 
-            this.x = new UIButton(UIKeys.GENERAL_X, (b) ->
+            this.x = new UITextbox(10000, (str) ->
             {
                 ShapeDirectionVector vector = this.getVector();
-
-                this.parent.editMoLang("shape.vector.z", (str) -> vector.x = this.parent.parse(str, vector.x), vector.x);
+                vector.x = this.parent.parse(str, vector.x);
+                this.parent.editor.markUndoBoundary();
             });
-            this.y = new UIButton(UIKeys.GENERAL_Y, (b) ->
+            this.x.placeholder(UIKeys.GENERAL_X);
+
+            this.y = new UITextbox(10000, (str) ->
             {
                 ShapeDirectionVector vector = this.getVector();
-
-                this.parent.editMoLang("shape.vector.y", (str) -> vector.y = this.parent.parse(str, vector.y), vector.y);
+                vector.y = this.parent.parse(str, vector.y);
+                this.parent.editor.markUndoBoundary();
             });
-            this.z = new UIButton(UIKeys.GENERAL_Z, (b) ->
+            this.y.placeholder(UIKeys.GENERAL_Y);
+
+            this.z = new UITextbox(10000, (str) ->
             {
                 ShapeDirectionVector vector = this.getVector();
-
-                this.parent.editMoLang("shape.vector.x", (str) -> vector.z = this.parent.parse(str, vector.z), vector.z);
+                vector.z = this.parent.parse(str, vector.z);
+                this.parent.editor.markUndoBoundary();
             });
+            this.z.placeholder(UIKeys.GENERAL_Z);
+
             this.xyz = UI.row(this.x, this.y, this.z);
 
             this.column().vertical().stretch().height(20);
@@ -281,6 +348,10 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
 
             if (isVector)
             {
+                ShapeDirectionVector vector = this.getVector();
+                this.x.setText(vector.x == null ? "" : vector.x.toString());
+                this.y.setText(vector.y == null ? "" : vector.y.toString());
+                this.z.setText(vector.z == null ? "" : vector.z.toString());
                 this.add(this.xyz);
             }
 

@@ -39,6 +39,18 @@ public interface BBSWorldRenderContext extends IBbsWorldRenderContext
             {
                 return context.tickDelta();
             }
+
+            @Override
+            public org.joml.Matrix4f modelViewMatrix()
+            {
+                return context.modelViewMatrix();
+            }
+
+            @Override
+            public org.joml.Matrix4f projectionMatrix()
+            {
+                return context.projectionMatrix();
+            }
         };
     }
 }

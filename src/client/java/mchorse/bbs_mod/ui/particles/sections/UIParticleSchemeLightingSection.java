@@ -13,10 +13,10 @@ import mchorse.bbs_mod.particles.components.appearance.colors.Solid;
 import mchorse.bbs_mod.particles.components.appearance.colors.Tint;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.particles.utils.UIGradientEditor;
@@ -30,16 +30,16 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
 {
     public UICirculate mode;
     public UIColor color;
-    public UIButton r;
-    public UIButton g;
-    public UIButton b;
-    public UIButton a;
+    public UITextbox r;
+    public UITextbox g;
+    public UITextbox b;
+    public UITextbox a;
     public UIToggle lighting;
 
     public UIGradientEditor gradientEditor;
     public UIElement gradient;
     public UIColor gradientColor;
-    public UIButton gradientInterpolant;
+    public UITextbox gradientInterpolant;
 
     public UIElement channels;
 
@@ -69,37 +69,41 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
         });
         this.color.withAlpha();
 
-        this.r = new UIButton(IKey.constant("R"), (b) ->
+        this.r = new UITextbox(10000, (str) ->
         {
             Solid solid = this.getSolid();
-
-            this.editMoLang("lighting.r", (str) -> solid.r = this.parse(str, solid.r), solid.r);
+            solid.r = this.parse(str, solid.r);
+            this.editor.markUndoBoundary();
         });
-        this.r.color(Colors.RED).tooltip(UIKeys.SNOWSTORM_LIGHTING_RED);
+        this.r.placeholder(IKey.constant("R"));
+        this.r.tooltip(UIKeys.SNOWSTORM_LIGHTING_RED);
 
-        this.g = new UIButton(IKey.constant("G"), (b) ->
+        this.g = new UITextbox(10000, (str) ->
         {
             Solid solid = this.getSolid();
-
-            this.editMoLang("lighting.g", (str) -> solid.g = this.parse(str, solid.g), solid.g);
+            solid.g = this.parse(str, solid.g);
+            this.editor.markUndoBoundary();
         });
-        this.g.color(Colors.GREEN).tooltip(UIKeys.SNOWSTORM_LIGHTING_GREEN);
+        this.g.placeholder(IKey.constant("G"));
+        this.g.tooltip(UIKeys.SNOWSTORM_LIGHTING_GREEN);
 
-        this.b = new UIButton(IKey.constant("B"), (b) ->
+        this.b = new UITextbox(10000, (str) ->
         {
             Solid solid = this.getSolid();
-
-            this.editMoLang("lighting.b", (str) -> solid.b = this.parse(str, solid.b), solid.b);
+            solid.b = this.parse(str, solid.b);
+            this.editor.markUndoBoundary();
         });
-        this.b.color(Colors.BLUE).tooltip(UIKeys.SNOWSTORM_LIGHTING_BLUE);
+        this.b.placeholder(IKey.constant("B"));
+        this.b.tooltip(UIKeys.SNOWSTORM_LIGHTING_BLUE);
 
-        this.a = new UIButton(IKey.constant("A"), (b) ->
+        this.a = new UITextbox(10000, (str) ->
         {
             Solid solid = this.getSolid();
-
-            this.editMoLang("lighting.a", (str) -> solid.a = this.parse(str, solid.a), solid.a);
+            solid.a = this.parse(str, solid.a);
+            this.editor.markUndoBoundary();
         });
-        this.a.color(0xff1a1a1a).tooltip(UIKeys.SNOWSTORM_LIGHTING_ALPHA);
+        this.a.placeholder(IKey.constant("A"));
+        this.a.tooltip(UIKeys.SNOWSTORM_LIGHTING_ALPHA);
 
         this.lighting = new UIToggle(UIKeys.SNOWSTORM_LIGHTING_LIGHTING, (b) ->
         {
@@ -117,12 +121,13 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
 
         this.gradientColor = new UIColor(this::setGradientColor).withAlpha();
         this.gradientEditor = new UIGradientEditor(this, this.gradientColor);
-        this.gradientInterpolant = new UIButton(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT, (b) ->
+        this.gradientInterpolant = new UITextbox(10000, (str) ->
         {
             Gradient gradient = (Gradient) this.component.color;
-
-            this.editMoLang("lighting.interpolant", (str) -> gradient.interpolant = this.parse(str, gradient.interpolant), gradient.interpolant);
+            gradient.interpolant = this.parse(str, gradient.interpolant);
+            this.editor.markUndoBoundary();
         });
+        this.gradientInterpolant.placeholder(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT);
         this.gradient = UI.row(this.gradientColor, this.gradientInterpolant);
 
         UILabel label = UI.label(UIKeys.SNOWSTORM_MODE, 20).labelAnchor(0, 0.5F);
@@ -277,9 +282,18 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
 
             this.fields.add(this.gradientEditor);
             this.fields.add(this.gradient);
+
+            Gradient gradient = (Gradient) this.component.color;
+            this.gradientInterpolant.setText(gradient.interpolant == null ? "" : gradient.interpolant.toString());
         }
         else
         {
+            Solid solid = (Solid) this.component.color;
+            this.r.setText(solid.r == null ? "" : solid.r.toString());
+            this.g.setText(solid.g == null ? "" : solid.g.toString());
+            this.b.setText(solid.b == null ? "" : solid.b.toString());
+            this.a.setText(solid.a == null ? "" : solid.a.toString());
+
             this.fields.add(this.channels);
         }
 

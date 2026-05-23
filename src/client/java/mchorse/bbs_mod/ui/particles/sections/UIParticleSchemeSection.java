@@ -1,11 +1,13 @@
 package mchorse.bbs_mod.ui.particles.sections;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.particles.UISectionStateManager;
@@ -31,7 +33,7 @@ public abstract class UIParticleSchemeSection extends UIElement
         super();
 
         this.editor = editor;
-        this.title = UI.label(this.getTitle()).background(() -> Colors.A100);
+        this.title = UI.label(this.getTitle()).background(() -> BBSSettings.primaryColor.get() | Colors.A100);
         this.fields = new UIElement();
         this.fields.column().stretch().vertical().height(20);
 
@@ -109,9 +111,21 @@ public abstract class UIParticleSchemeSection extends UIElement
 
     public abstract IKey getTitle();
 
-    public void editMoLang(String id, Consumer<String> callback, MolangExpression expression)
+    protected UITextbox molangField(IKey placeholder, IKey tooltip, Consumer<String> callback, MolangExpression expression)
     {
-        this.editor.editMoLang(id, callback, expression);
+        UITextbox textbox = new UITextbox(10000, (str) ->
+        {
+            if (callback != null)
+            {
+                callback.accept(str);
+            }
+
+            this.editor.markUndoBoundary();
+        });
+        textbox.placeholder(placeholder);
+        if (tooltip != null) textbox.tooltip(tooltip);
+        textbox.setText(expression == null ? "" : expression.toString());
+        return textbox;
     }
 
     public MolangExpression parse(String string, MolangExpression old)

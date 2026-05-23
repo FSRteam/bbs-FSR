@@ -7,7 +7,7 @@ import mchorse.bbs_mod.particles.ParticleCurve;
 import mchorse.bbs_mod.particles.ParticleCurveType;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -28,8 +28,8 @@ public class UICurveEditor extends UIElement
     public UIIcon delete;
     public UICirculate type;
     public UICurve curve;
-    public UIButton input;
-    public UIButton range;
+    public UITextbox input;
+    public UITextbox range;
 
     private ParticleCurve particleCurve;
 
@@ -50,8 +50,24 @@ public class UICurveEditor extends UIElement
         }
 
         this.curve = new UICurve(section);
-        this.input = new UIButton(UIKeys.SNOWSTORM_CURVES_INPUT, (b) -> this.section.editMoLang("curve." + this.particleCurve.variable.getName() + ".input", (str) -> this.particleCurve.input = this.section.parse(str, this.particleCurve.input), this.particleCurve.input));
-        this.range = new UIButton(UIKeys.SNOWSTORM_CURVES_RANGE, (b) -> this.section.editMoLang("curve." + this.particleCurve.variable.getName() + ".range", (str) -> this.particleCurve.range = this.section.parse(str, this.particleCurve.range), this.particleCurve.range));
+        this.input = new UITextbox(10000, (str) ->
+        {
+            if (this.particleCurve != null)
+            {
+                this.particleCurve.input = this.section.parse(str, this.particleCurve.input);
+                this.section.getEditor().markUndoBoundary();
+            }
+        });
+        this.input.placeholder(UIKeys.SNOWSTORM_CURVES_INPUT);
+        this.range = new UITextbox(10000, (str) ->
+        {
+            if (this.particleCurve != null)
+            {
+                this.particleCurve.range = this.section.parse(str, this.particleCurve.range);
+                this.section.getEditor().markUndoBoundary();
+            }
+        });
+        this.range.placeholder(UIKeys.SNOWSTORM_CURVES_RANGE);
 
         this.curve.h(100);
 
@@ -115,5 +131,7 @@ public class UICurveEditor extends UIElement
         this.name.label = IKey.constant(curve.variable.getName());
         this.type.setValue(curve.type.ordinal());
         this.curve.fill(curve);
+        this.input.setText(curve.input == null ? "" : curve.input.toString());
+        this.range.setText(curve.range == null ? "" : curve.range.toString());
     }
 }

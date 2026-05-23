@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -39,6 +40,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexSorting;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fStack;
 import org.lwjgl.opengl.GL11;
 import org.slf4j.Logger;
 
@@ -402,6 +406,20 @@ public class BBSRendering
 
     public static void onRenderChunkLayer(PoseStack stack)
     {
+        onRenderChunkLayer(stack, stack.last().pose(), RenderSystem.getProjectionMatrix());
+    }
+
+    public static void onRenderChunkLayer(Matrix4f modelViewMatrix, Matrix4f projectionMatrix)
+    {
+        PoseStack stack = new PoseStack();
+
+        stack.setIdentity();
+        MatrixStackUtils.multiply(stack, modelViewMatrix);
+        onRenderChunkLayer(stack, modelViewMatrix, projectionMatrix);
+    }
+
+    public static void onRenderChunkLayer(PoseStack stack, Matrix4f modelViewMatrix, Matrix4f projectionMatrix)
+    {
         Minecraft mc = Minecraft.getInstance();
 
         if (isIrisShadersEnabled())
@@ -410,7 +428,9 @@ public class BBSRendering
                 mc.gameRenderer.getMainCamera(),
                 stack,
                 mc.renderBuffers().bufferSource(),
-                getTickDelta(mc)
+                getTickDelta(mc),
+                modelViewMatrix,
+                projectionMatrix
             ));
         }
     }
@@ -458,12 +478,30 @@ public class BBSRendering
 
     public static void renderCoolStuff(IBbsWorldRenderContext worldRenderContext)
     {
-        if (Minecraft.getInstance().screen instanceof UIScreen screen)
-        {
-            screen.renderInWorld(worldRenderContext);
-        }
+        Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+        Matrix4f oldProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
 
-        BBSModClient.getFilms().render(worldRenderContext);
+        /* BBS world renderers carry the full view matrix in their PoseStack. */
+        RenderSystem.setProjectionMatrix(worldRenderContext.projectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
+        modelViewStack.pushMatrix();
+        modelViewStack.identity();
+        RenderSystem.applyModelViewMatrix();
+
+        try
+        {
+            if (Minecraft.getInstance().screen instanceof UIScreen screen)
+            {
+                screen.renderInWorld(worldRenderContext);
+            }
+
+            BBSModClient.getFilms().render(worldRenderContext);
+        }
+        finally
+        {
+            modelViewStack.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(oldProjection, VertexSorting.DISTANCE_TO_ORIGIN);
+        }
     }
 
     public static boolean isOptifinePresent()

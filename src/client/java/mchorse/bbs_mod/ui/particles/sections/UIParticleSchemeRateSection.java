@@ -5,30 +5,37 @@ import mchorse.bbs_mod.particles.components.rate.ParticleComponentRate;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateInstant;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateSteady;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 
 public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<ParticleComponentRate>
 {
-    public UIButton rate;
-    public UIButton particles;
+    public UITextbox rate;
+    public UITextbox particles;
 
     public UIParticleSchemeRateSection(UIParticleSchemePanel parent)
     {
         super(parent);
 
-        this.rate = new UIButton(UIKeys.SNOWSTORM_RATE_RATE, (b) ->
+        this.rate = new UITextbox(10000, (str) ->
         {
-            ParticleComponentRateSteady comp = (ParticleComponentRateSteady) this.component;
-
-            this.editMoLang("rate.rate", (str) -> comp.spawnRate = this.parse(str, comp.spawnRate), comp.spawnRate);
+            if (this.component instanceof ParticleComponentRateSteady)
+            {
+                ParticleComponentRateSteady comp = (ParticleComponentRateSteady) this.component;
+                comp.spawnRate = this.parse(str, comp.spawnRate);
+                this.editor.markUndoBoundary();
+            }
         });
+        this.rate.placeholder(UIKeys.SNOWSTORM_RATE_RATE);
         this.rate.tooltip(UIKeys.SNOWSTORM_RATE_SPAWN_RATE);
-        this.particles = new UIButton(UIKeys.SNOWSTORM_RATE_AMOUNT, (b) ->
+
+        this.particles = new UITextbox(10000, (str) ->
         {
-            this.editMoLang("rate.particles", (str) -> this.component.particles = this.parse(str, this.component.particles), this.component.particles);
+            this.component.particles = this.parse(str, this.component.particles);
+            this.editor.markUndoBoundary();
         });
+        this.particles.placeholder(UIKeys.SNOWSTORM_RATE_AMOUNT);
 
         this.fields.add(this.particles);
     }
@@ -76,9 +83,18 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
         super.fillData();
 
         this.updateVisibility();
+
         this.particles.tooltip(this.isInstant()
             ? UIKeys.SNOWSTORM_RATE_PARTICLES
             : UIKeys.SNOWSTORM_RATE_MAX_PARTICLES);
+
+        if (this.component instanceof ParticleComponentRateSteady)
+        {
+            ParticleComponentRateSteady comp = (ParticleComponentRateSteady) this.component;
+            this.rate.setText(comp.spawnRate == null ? "" : comp.spawnRate.toString());
+        }
+
+        this.particles.setText(this.component.particles == null ? "" : this.component.particles.toString());
     }
 
     private void updateVisibility()

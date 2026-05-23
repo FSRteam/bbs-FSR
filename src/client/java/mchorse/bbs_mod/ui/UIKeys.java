@@ -919,7 +919,6 @@ public class UIKeys
     public static final IKey PARTICLE_TAB_CURVES = L10n.lang("bbs.ui.particle_editor.tab.curves");
     public static final IKey PARTICLE_TAB_PREVIEW = L10n.lang("bbs.ui.particle_editor.tab.preview");
 
-    /* Quick Setup */
     /* Events panel */
     public static final IKey SNOWSTORM_EVENTS_TITLE = L10n.lang("bbs.ui.snowstorm.events.title");
     public static final IKey TEXTURES_COPY = L10n.lang("bbs.ui.textures.copy");

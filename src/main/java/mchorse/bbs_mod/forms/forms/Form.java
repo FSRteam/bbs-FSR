@@ -83,7 +83,7 @@ public abstract class Form extends ValueGroup
         this.add(this.transform);
         this.add(this.transformOverlay);
 
-        for (int i = 0; i < BBSSettings.recordingPoseTransformOverlays.get(); i++)
+        for (int i = 0; i < (BBSSettings.recordingPoseTransformOverlays.get()); i++)
         {
             ValueTransform valueTransform = new ValueTransform("transform_overlay" + i, new Transform());
 

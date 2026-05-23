@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.film;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -2218,10 +2217,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private void persistFlightFov()
     {
-        if (BBSSettings.fov != null)
-        {
-            BBSSettings.fov.set(this.position.angle.fov);
-        }
+        BBSSettings.fov.set(this.position.angle.fov);
     }
 
     public Vector2i getLoopingRange()
@@ -2482,8 +2478,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (!BBSRendering.isIrisShadowPass())
         {
-            this.lastProjection.set(RenderSystem.getProjectionMatrix());
-            this.lastView.set(context.matrixStack().last().pose());
+            this.lastProjection.set(context.projectionMatrix());
+            this.lastView.set(context.modelViewMatrix());
         }
 
         this.controller.renderFrame(context);

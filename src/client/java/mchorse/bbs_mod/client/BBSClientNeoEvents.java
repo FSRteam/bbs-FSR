@@ -7,6 +7,7 @@ import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.neoforged.api.distmarker.Dist;
@@ -93,11 +94,18 @@ public final class BBSClientNeoEvents
             }
 
             Minecraft mc = Minecraft.getInstance();
+            PoseStack worldStack = new PoseStack();
+
+            worldStack.setIdentity();
+            MatrixStackUtils.multiply(worldStack, event.getModelViewMatrix());
+
             BbsWorldRenderContext context = new BbsWorldRenderContext(
                 event.getCamera(),
-                stack,
+                worldStack,
                 mc.renderBuffers().bufferSource(),
-                resolveTickDelta(event.getPartialTick())
+                resolveTickDelta(event.getPartialTick()),
+                event.getModelViewMatrix(),
+                event.getProjectionMatrix()
             );
 
             BBSModClient.onRenderAfterEntities(context);

@@ -63,7 +63,7 @@ public class UILanguageEditorOverlayPanel extends UIOverlayPanel
 
     public static File getLangEditorFolder()
     {
-        return BBSMod.getAssetsPath("lang_editor/" + BBSSettings.language.get());
+        return BBSMod.getAssetsPath("lang_editor/" + (BBSSettings.language.get()));
     }
 
     public UILanguageEditorOverlayPanel()

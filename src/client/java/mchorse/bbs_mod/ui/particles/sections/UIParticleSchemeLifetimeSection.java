@@ -6,41 +6,43 @@ import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeEx
 import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeLooping;
 import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeOnce;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 
 public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection<ParticleComponentLifetime>
 {
-    public UIButton active;
-    public UIButton expiration;
+    public UITextbox active;
+    public UITextbox expiration;
 
     public UIParticleSchemeLifetimeSection(UIParticleSchemePanel parent)
     {
         super(parent);
 
-        this.active = new UIButton(UIKeys.SNOWSTORM_LIFETIME_TIME, (b) ->
+        this.active = new UITextbox(10000, (str) ->
         {
-            this.editMoLang("lifetime.active_time", (str) -> this.component.activeTime = this.parse(str, this.component.activeTime), this.component.activeTime);
+            this.component.activeTime = this.parse(str, this.component.activeTime);
+            this.editor.markUndoBoundary();
         });
+        this.active.placeholder(UIKeys.SNOWSTORM_LIFETIME_TIME);
         this.active.tooltip(IKey.EMPTY);
-        this.expiration = new UIButton(UIKeys.SNOWSTORM_EXPRESSION, (b) ->
+
+        this.expiration = new UITextbox(10000, (str) ->
         {
             if (this.component instanceof ParticleComponentLifetimeLooping)
             {
                 ParticleComponentLifetimeLooping component = (ParticleComponentLifetimeLooping) this.component;
-
-                this.editMoLang("lifetime.sleep_time", (str) -> component.sleepTime = this.parse(str, component.sleepTime), component.sleepTime);
+                component.sleepTime = this.parse(str, component.sleepTime);
             }
             else
             {
                 ParticleComponentLifetimeExpression component = (ParticleComponentLifetimeExpression) this.component;
-
-                this.editMoLang("lifetime.expiration", (str) -> component.expiration = this.parse(str, component.expiration), component.expiration);
+                component.expiration = this.parse(str, component.expiration);
             }
 
-            this.editor.dirty();
+            this.editor.markUndoBoundary();
         });
+        this.expiration.placeholder(UIKeys.SNOWSTORM_EXPRESSION);
         this.expiration.tooltip(IKey.EMPTY);
 
         this.fields.add(this.active);
@@ -115,6 +117,19 @@ public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection
         else
         {
             this.active.tooltip(UIKeys.SNOWSTORM_LIFETIME_ACTIVE_ONCE);
+        }
+
+        this.active.setText(this.component.activeTime == null ? "" : this.component.activeTime.toString());
+
+        if (this.component instanceof ParticleComponentLifetimeLooping)
+        {
+            ParticleComponentLifetimeLooping comp = (ParticleComponentLifetimeLooping) this.component;
+            this.expiration.setText(comp.sleepTime == null ? "" : comp.sleepTime.toString());
+        }
+        else if (this.component instanceof ParticleComponentLifetimeExpression)
+        {
+            ParticleComponentLifetimeExpression comp = (ParticleComponentLifetimeExpression) this.component;
+            this.expiration.setText(comp.expiration == null ? "" : comp.expiration.toString());
         }
 
         this.expiration.removeFromParent();

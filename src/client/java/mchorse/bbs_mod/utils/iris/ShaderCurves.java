@@ -45,7 +45,7 @@ public class ShaderCurves
 
     public static String processSource(String source)
     {
-        if (BBSSettings.shaderCurvesEnabled == null || !BBSSettings.shaderCurvesEnabled.get())
+        if (!BBSSettings.shaderCurvesEnabled.get())
         {
             return source;
         }

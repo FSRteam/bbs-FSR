@@ -458,6 +458,14 @@ public class BBSMod
     {
         LOGGER.info("[bbs-addon] opening registration window on mod bus");
 
+        /* Early settings registration — must happen before resource reload
+           triggers LanguageManagerMixin, which accesses BBSSettings.language */
+        LoaderAccess loader = LoaderAccessHolder.get();
+        gameFolder = loader.getGameDir().toFile();
+        settingsFolder = new File(gameFolder, "config/bbs/settings");
+        settings = new SettingsManager();
+        setupConfig(Icons.PROCESSOR, "bbs", new File(settingsFolder, "bbs.json"), BBSSettings::register);
+
         try
         {
             this.modBus.post(new BBSAddonRegisterEvent(this.addonCollector));
@@ -478,9 +486,7 @@ public class BBSMod
         BBSAddonProtocolSelfCheck.run(loader, this.addonCollector);
         List<BBSAddonMod> addonEntrypoints = loader.getEntrypoints("bbs-addon", BBSAddonMod.class);
         LOGGER.info("[bbs-addon] loader resolved {} registered addon(s)", addonEntrypoints.size());
-        gameFolder = loader.getGameDir().toFile();
         assetsFolder = new File(gameFolder, "config/bbs/assets");
-        settingsFolder = new File(gameFolder, "config/bbs/settings");
 
         assetsFolder.mkdirs();
         this.addonBridge.bridgeToInternalBus(events);
@@ -497,7 +503,6 @@ public class BBSMod
 
         events.post(new RegisterSourcePacksEvent(provider));
 
-        settings = new SettingsManager();
         forms = new FormArchitect();
         forms
             .register(Link.bbs("billboard"), BillboardForm.class, null)
@@ -556,8 +561,6 @@ public class BBSMod
             .register(Link.bbs("attack"), AttackActionClip.class, new ClipFactoryData(Icons.DROP, Colors.RED))
             .register(Link.bbs("damage"), DamageActionClip.class, new ClipFactoryData(Icons.SKULL, Colors.CURSOR))
             .register(Link.bbs("swipe"), SwipeActionClip.class, new ClipFactoryData(Icons.LIMB, Colors.ORANGE));
-
-        setupConfig(Icons.PROCESSOR, "bbs", new File(settingsFolder, "bbs.json"), BBSSettings::register);
 
         events.post(new RegisterSettingsEvent());
 
