@@ -135,15 +135,21 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         this.flipbook = new UIElement();
         this.flipbook.column().vertical().stretch();
         this.flipbook.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_ANIMATED, 20).labelAnchor(0, 1F));
-        this.flipbook.add(UI.row(5, 0, 20, this.stepX, this.stepY));
-        this.flipbook.add(UI.row(5, 0, 20, this.fps, this.max));
+        this.flipbook.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_STEP_X, this.stepX));
+        this.flipbook.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_STEP_Y, this.stepY));
+        this.flipbook.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_FPS, this.fps));
+        this.flipbook.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_FRAMES, this.max));
         this.flipbook.add(UI.row(5, 0, 20, this.stretch, this.loop));
 
         this.fields.add(UI.row(5, 0, 20, this.modeLabel, this.mode));
         this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_SIZE, 20).labelAnchor(0, 1F));
-        this.fields.add(UI.row(this.sizeW, this.sizeH));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_WIDTH, this.sizeW));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT, this.sizeH));
         this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_MAPPING, 20).labelAnchor(0, 1F));
-        this.fields.add(UI.row(this.uvX, this.uvY), UI.row(this.uvW, this.uvH));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_UV_X, this.uvX));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_UV_Y, this.uvY));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_UV_W, this.uvW));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_UV_H, this.uvH));
     }
 
     private void updateElements()

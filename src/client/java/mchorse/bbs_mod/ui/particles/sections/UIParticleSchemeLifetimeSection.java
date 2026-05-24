@@ -6,14 +6,19 @@ import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeEx
 import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeLooping;
 import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeOnce;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.ui.utils.UI;
 
 public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection<ParticleComponentLifetime>
 {
     public UITextbox active;
     public UITextbox expiration;
+    public UIElement expirationRow;
+    public UILabel expirationLabel;
 
     public UIParticleSchemeLifetimeSection(UIParticleSchemePanel parent)
     {
@@ -45,7 +50,10 @@ public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection
         this.expiration.placeholder(UIKeys.SNOWSTORM_EXPRESSION);
         this.expiration.tooltip(IKey.EMPTY);
 
-        this.fields.add(this.active);
+        this.expirationLabel = this.fieldLabel(UIKeys.SNOWSTORM_EXPRESSION);
+        this.expirationRow = UI.row(5, 0, 20, this.expirationLabel, this.expiration);
+
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_LIFETIME_TIME, this.active));
     }
 
     @Override
@@ -106,11 +114,13 @@ public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection
 
         if (this.component instanceof ParticleComponentLifetimeExpression)
         {
+            this.expirationLabel.label = UIKeys.SNOWSTORM_LIFETIME_EXPIRATION_EXPRESSION;
             this.expiration.tooltip(UIKeys.SNOWSTORM_LIFETIME_EXPIRATION_EXPRESSION);
             this.active.tooltip(UIKeys.SNOWSTORM_LIFETIME_ACTIVE_EXPRESSION);
         }
         else if (this.component instanceof ParticleComponentLifetimeLooping)
         {
+            this.expirationLabel.label = UIKeys.SNOWSTORM_LIFETIME_SLEEP_TIME;
             this.expiration.tooltip(UIKeys.SNOWSTORM_LIFETIME_SLEEP_TIME);
             this.active.tooltip(UIKeys.SNOWSTORM_LIFETIME_ACTIVE_LOOPING);
         }
@@ -132,11 +142,11 @@ public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection
             this.expiration.setText(comp.expiration == null ? "" : comp.expiration.toString());
         }
 
-        this.expiration.removeFromParent();
+        this.expirationRow.removeFromParent();
 
         if (!once)
         {
-            this.fields.add(this.expiration);
+            this.fields.add(this.expirationRow);
         }
 
         this.resizeParent();

@@ -56,7 +56,8 @@ public class UIParticleSchemeGeneralSection extends UIParticleSchemeSection
         this.material.addLabel(UIKeys.SNOWSTORM_GENERAL_PARTICLES_ALPHA);
         this.material.addLabel(UIKeys.SNOWSTORM_GENERAL_PARTICLES_BLEND);
 
-        this.fields.add(this.identifier, UI.row(5, 0, 20, this.pick, this.material));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_GENERAL_IDENTIFIER, this.identifier));
+        this.fields.add(UI.row(5, 0, 20, this.pick, this.material));
     }
 
     private void setTextureSize(Link link)

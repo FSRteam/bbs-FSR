@@ -22,12 +22,14 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
     public UITextbox positionY;
     public UITextbox positionZ;
     public UITextbox positionDrag;
+    public UIElement positionDragRow;
 
     public UIElement rotation;
     public UITextbox rotationAngle;
     public UITextbox rotationRate;
     public UITextbox rotationAcceleration;
     public UITextbox rotationDrag;
+    public UIElement rotationDragRow;
 
     private ParticleComponentInitialSpeed speed;
     private ParticleComponentInitialSpin spin;
@@ -139,13 +141,20 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
 
         this.position = new UIElement();
         this.position.column(UIConstants.MARGIN).vertical().stretch();
-        this.position.add(UI.label(UIKeys.SNOWSTORM_MOTION_POSITION, 20).labelAnchor(0, 1F), this.positionSpeed);
-        this.position.add(UI.row(this.positionX, this.positionY, this.positionZ));
+        this.positionDragRow = this.labeledField(UIKeys.SNOWSTORM_MOTION_POSITION_DRAG, this.positionDrag);
+        this.position.add(UI.label(UIKeys.SNOWSTORM_MOTION_POSITION, 20).labelAnchor(0, 1F));
+        this.position.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_POSITION_SPEED, this.positionSpeed));
+        this.position.add(this.labeledField(UIKeys.GENERAL_X, this.positionX));
+        this.position.add(this.labeledField(UIKeys.GENERAL_Y, this.positionY));
+        this.position.add(this.labeledField(UIKeys.GENERAL_Z, this.positionZ));
 
         this.rotation = new UIElement();
         this.rotation.column(UIConstants.MARGIN).vertical().stretch();
-        this.rotation.add(UI.label(UIKeys.SNOWSTORM_MOTION_ROTATION, 20).labelAnchor(0, 1F), this.rotationAngle, this.rotationRate);
-        this.rotation.add(this.rotationAcceleration);
+        this.rotationDragRow = this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_DRAG, this.rotationDrag);
+        this.rotation.add(UI.label(UIKeys.SNOWSTORM_MOTION_ROTATION, 20).labelAnchor(0, 1F));
+        this.rotation.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_ANGLE, this.rotationAngle));
+        this.rotation.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_SPEED, this.rotationRate));
+        this.rotation.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_ACCELERATION, this.rotationAcceleration));
 
         this.fields.add(this.position, this.rotation);
     }
@@ -217,13 +226,13 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.rotationAcceleration.setText(comp.rotation == null ? "" : comp.rotation.toString());
         }
 
-        this.positionDrag.removeFromParent();
-        this.rotationDrag.removeFromParent();
+        this.positionDragRow.removeFromParent();
+        this.rotationDragRow.removeFromParent();
 
         if (this.component instanceof ParticleComponentMotionDynamic)
         {
-            this.position.add(this.positionDrag);
-            this.rotation.add(this.rotationDrag);
+            this.position.add(this.positionDragRow);
+            this.rotation.add(this.rotationDragRow);
         }
 
         this.resizeParent();

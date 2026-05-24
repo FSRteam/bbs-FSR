@@ -74,7 +74,13 @@ public class UICurveEditor extends UIElement
         this.column().vertical().stretch();
         this.add(UI.row(0, this.name, this.rename, this.delete));
         this.add(UI.row(UI.label(UIKeys.SNOWSTORM_CURVES_TYPE, 20).labelAnchor(0, 0.5F), this.type));
-        this.add(this.curve, UI.row(this.input, this.range));
+        this.add(this.curve, this.labeledField(UIKeys.SNOWSTORM_CURVES_INPUT, this.input));
+        this.add(this.labeledField(UIKeys.SNOWSTORM_CURVES_RANGE, this.range));
+    }
+
+    private UIElement labeledField(IKey label, UIElement field)
+    {
+        return UI.row(5, 0, 20, UI.label(label, 20).labelAnchor(0, 0.5F).w(76), field);
     }
 
     private void rename(UIIcon b)

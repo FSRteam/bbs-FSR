@@ -20,6 +20,8 @@ import java.util.function.Consumer;
 
 public abstract class UIParticleSchemeSection extends UIElement
 {
+    protected static final int FIELD_LABEL_WIDTH = 76;
+
     public UILabel title;
     public UIElement fields;
 
@@ -102,6 +104,20 @@ public abstract class UIParticleSchemeSection extends UIElement
     public UIParticleSchemePanel getEditor()
     {
         return this.editor;
+    }
+
+    protected UILabel fieldLabel(IKey label)
+    {
+        UILabel element = UI.label(label, 20).labelAnchor(0, 0.5F);
+
+        element.w(FIELD_LABEL_WIDTH);
+
+        return element;
+    }
+
+    protected UIElement labeledField(IKey label, UIElement field)
+    {
+        return UI.row(5, 0, 20, this.fieldLabel(label), field);
     }
 
     public void dirty()

@@ -5,6 +5,7 @@ import mchorse.bbs_mod.particles.components.rate.ParticleComponentRate;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateInstant;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateSteady;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
@@ -13,6 +14,7 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
 {
     public UITextbox rate;
     public UITextbox particles;
+    public UIElement rateRow;
 
     public UIParticleSchemeRateSection(UIParticleSchemePanel parent)
     {
@@ -37,7 +39,9 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
         });
         this.particles.placeholder(UIKeys.SNOWSTORM_RATE_AMOUNT);
 
-        this.fields.add(this.particles);
+        this.rateRow = this.labeledField(UIKeys.SNOWSTORM_RATE_RATE, this.rate);
+
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_RATE_AMOUNT, this.particles));
     }
 
     @Override
@@ -101,11 +105,11 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
     {
         if (this.isInstant())
         {
-            this.rate.removeFromParent();
+            this.rateRow.removeFromParent();
         }
-        else if (!this.rate.hasParent())
+        else if (!this.rateRow.hasParent())
         {
-            this.fields.add(this.rate);
+            this.fields.add(this.rateRow);
         }
 
         this.resizeParent();

@@ -1151,21 +1151,30 @@ public class BBSModClient
 
     public static String getLanguageKey()
     {
-        return getLanguageKey(BBSSettings.language.get());
+        return getLanguageKey(BBSSettings.language == null ? "" : BBSSettings.language.get());
     }
 
     public static String getLanguageKey(String key)
     {
-        if (key.isEmpty())
+        if (key == null || key.isEmpty())
         {
-            key = Minecraft.getInstance().options.languageCode;
+            Minecraft minecraft = Minecraft.getInstance();
+
+            key = minecraft == null || minecraft.options == null ? "en_us" : minecraft.options.languageCode;
         }
 
-        return key;
+        return key == null || key.isEmpty() ? "en_us" : key;
     }
 
     public static void reloadLanguage(String language)
     {
-        l10n.reload(language, BBSMod.getProvider());
+        AssetProvider provider = BBSMod.getProvider();
+
+        if (l10n == null || provider == null)
+        {
+            return;
+        }
+
+        l10n.reload(language, provider);
     }
 }

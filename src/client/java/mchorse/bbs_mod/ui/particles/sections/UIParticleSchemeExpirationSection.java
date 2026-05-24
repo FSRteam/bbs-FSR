@@ -78,11 +78,13 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
         this.d.tooltip(IKey.constant("D"));
 
         this.fields.add(UI.row(5, 0, 20, UI.label(UIKeys.SNOWSTORM_MODE, 20).labelAnchor(0, 0.5F), this.mode));
-        this.fields.add(this.expression);
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_EXPIRATION_EXPRESSION, this.expression));
         this.fields.add(UI.label(UIKeys.SNOWSTORM_EXPIRATION_KILL_PLANE, 20).labelAnchor(0, 1F)
             .tooltip(UIKeys.SNOWSTORM_EXPIRATION_KILL_PLANE_TOOLTIP));
-        this.fields.add(UI.row(5, 0, 20, this.a, this.b));
-        this.fields.add(UI.row(5, 0, 20, this.c, this.d));
+        this.fields.add(this.labeledField(IKey.constant("A"), this.a));
+        this.fields.add(this.labeledField(IKey.constant("B"), this.b));
+        this.fields.add(this.labeledField(IKey.constant("C"), this.c));
+        this.fields.add(this.labeledField(IKey.constant("D"), this.d));
     }
 
     private void updateTooltip()

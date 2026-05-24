@@ -128,11 +128,16 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
             this.editor.markUndoBoundary();
         });
         this.gradientInterpolant.placeholder(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT);
-        this.gradient = UI.row(this.gradientColor, this.gradientInterpolant);
+        this.gradient = this.labeledField(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT, this.gradientInterpolant);
 
         UILabel label = UI.label(UIKeys.SNOWSTORM_MODE, 20).labelAnchor(0, 0.5F);
 
-        this.channels = UI.row(5, 0, 20, this.r, this.g, this.b, this.a);
+        this.channels = new UIElement();
+        this.channels.column().vertical().stretch().height(20);
+        this.channels.add(this.labeledField(UIKeys.SNOWSTORM_LIGHTING_RED, this.r));
+        this.channels.add(this.labeledField(UIKeys.SNOWSTORM_LIGHTING_GREEN, this.g));
+        this.channels.add(this.labeledField(UIKeys.SNOWSTORM_LIGHTING_BLUE, this.b));
+        this.channels.add(this.labeledField(UIKeys.SNOWSTORM_LIGHTING_ALPHA, this.a));
 
         this.fields.add(this.lighting);
         this.fields.add(UI.row(5, 0, 20, label, this.mode));
@@ -264,6 +269,7 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
     {
         this.gradientEditor.removeFromParent();
         this.gradient.removeFromParent();
+        this.gradientColor.removeFromParent();
         this.color.removeFromParent();
         this.color.picker.removeFromParent();
         this.channels.removeFromParent();
@@ -281,6 +287,7 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
             this.gradientEditor.setGradient((Gradient) this.component.color);
 
             this.fields.add(this.gradientEditor);
+            this.fields.add(this.gradientColor);
             this.fields.add(this.gradient);
 
             Gradient gradient = (Gradient) this.component.color;

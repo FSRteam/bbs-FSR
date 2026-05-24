@@ -48,7 +48,11 @@ public class UIParticleSchemeCollisionSection extends UIParticleSchemeComponentS
             this.editor.dirty();
         });
 
-        this.fields.add(this.enabled, this.drag, this.bounciness, this.radius, this.expire);
+        this.fields.add(this.enabled);
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_COLLISION_DRAG, this.drag));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_COLLISION_BOUNCINESS, this.bounciness));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_COLLISION_RADIUS, this.radius));
+        this.fields.add(this.expire);
     }
 
     @Override

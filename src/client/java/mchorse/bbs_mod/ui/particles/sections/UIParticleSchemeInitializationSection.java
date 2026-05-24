@@ -6,7 +6,6 @@ import mchorse.bbs_mod.particles.components.meta.ParticleComponentInitialization
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
-import mchorse.bbs_mod.ui.utils.UI;
 
 public class UIParticleSchemeInitializationSection extends UIParticleSchemeComponentSection<ParticleComponentInitialization>
 {
@@ -33,7 +32,8 @@ public class UIParticleSchemeInitializationSection extends UIParticleSchemeCompo
         this.update.placeholder(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE);
         this.update.tooltip(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE_TOOLTIP);
 
-        this.fields.add(UI.row(this.create, this.update));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_INITIALIZATION_CREATION, this.create));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE, this.update));
     }
 
     @Override

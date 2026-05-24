@@ -97,6 +97,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private UICopyPasteController layoutPresetsController;
 
     private ParticleUndoManager particleUndo;
+    private boolean applyingParticleUndo;
 
     /* Layout system */
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
@@ -917,7 +918,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             {
                 return null;
             }
-            int tabWidth = this.area.w / this.panelIds.size();
+            int tabWidth = this.getTabSize();
             int index = (mouseX - this.area.x) / tabWidth;
             if (index < 0 || index >= this.panelIds.size())
             {
@@ -963,11 +964,15 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                 return;
             }
 
-            int tabSize = this.area.w / this.panelIds.size();
+            int tabSize = this.getTabSize();
             int hovered = this.area.isInside(context.mouseX, context.mouseY) ? this.getTabIndex(context.mouseX) : -1;
             int y = this.area.y;
             int ey = this.area.ey();
+            IKey hoveredTooltip = null;
+            int hoveredX = this.area.x;
+            int hoveredEx = this.area.ex();
 
+            this.removeTooltip();
             context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A100);
 
             for (int i = 0; i < this.panelIds.size(); i++)
@@ -995,9 +1000,23 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                 }
 
                 context.batcher.icon(icon, iconColor, (x + ex) / 2, (y + ey) / 2, 0.5F, 0.5F);
+
+                if (hover)
+                {
+                    hoveredTooltip = UIParticleSchemePanel.this.getPanelTooltip(id);
+                    hoveredX = x;
+                    hoveredEx = ex;
+                }
             }
 
             super.render(context);
+
+            if (hoveredTooltip != null)
+            {
+                this.tooltip(hoveredTooltip, Direction.BOTTOM);
+                context.tooltip.set(context, this);
+                context.tooltip.area.set(context.globalX(hoveredX), context.globalY(y), hoveredEx - hoveredX, ey - y);
+            }
         }
 
         private int getTabSize()
@@ -1041,6 +1060,11 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     public void dirty()
     {
+        if (!this.applyingParticleUndo)
+        {
+            this.markUndoBoundary();
+        }
+
         ParticleEmitter emitter = this.renderer.emitter;
 
         if (emitter != null && emitter.scheme != null)
@@ -1055,7 +1079,11 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         if (data != null)
         {
-            this.particleUndo = new ParticleUndoManager();
+            this.particleUndo = new ParticleUndoManager(data);
+        }
+        else
+        {
+            this.particleUndo = null;
         }
 
         this.renderer.setVisible(data != null);
@@ -1314,6 +1342,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             {
                 try
                 {
+                    this.applyingParticleUndo = true;
                     ParticleScheme.PARSER.fromData(this.data, previous);
                     this.data.setup();
                     this.dirty();
@@ -1321,6 +1350,10 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                     UIUtils.playClick();
                 }
                 catch (Exception e) {}
+                finally
+                {
+                    this.applyingParticleUndo = false;
+                }
             }
         }
     }
@@ -1335,6 +1368,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             {
                 try
                 {
+                    this.applyingParticleUndo = true;
                     ParticleScheme.PARSER.fromData(this.data, next);
                     this.data.setup();
                     this.dirty();
@@ -1342,6 +1376,10 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                     UIUtils.playClick();
                 }
                 catch (Exception e) {}
+                finally
+                {
+                    this.applyingParticleUndo = false;
+                }
             }
         }
     }

@@ -13,43 +13,84 @@ public class ParticleUndoManager
     private int position = -1;
     private final int limit = 50;
 
-    private MapType editStartSnapshot;
-    private boolean hasEditStarted;
+    private ParticleScheme scheme;
+    private boolean dirty;
     private final Timer boundaryTimer = new Timer(800);
+
+    public ParticleUndoManager(ParticleScheme scheme)
+    {
+        this.reset(scheme);
+    }
+
+    public void reset(ParticleScheme scheme)
+    {
+        this.scheme = scheme;
+        this.snapshots.clear();
+        this.position = -1;
+        this.dirty = false;
+        this.boundaryTimer.reset();
+
+        if (scheme != null)
+        {
+            this.snapshots.add(ParticleScheme.toData(scheme));
+            this.position = 0;
+        }
+    }
 
     public void pushSnapshot(ParticleScheme scheme)
     {
-        MapType snapshot = ParticleScheme.toData(scheme);
-
-        if (this.editStartSnapshot == null)
+        if (scheme != null)
         {
-            this.editStartSnapshot = snapshot;
-            this.hasEditStarted = true;
+            this.scheme = scheme;
         }
+
+        this.markBoundary();
     }
 
     public void markBoundary()
     {
-        if (!this.hasEditStarted || this.editStartSnapshot == null)
+        if (this.scheme == null)
         {
             return;
         }
 
-        this.pushInternal(this.editStartSnapshot);
-        this.editStartSnapshot = null;
-        this.hasEditStarted = false;
+        this.dirty = true;
+        this.boundaryTimer.mark();
     }
 
     public void trySubmit()
     {
-        if (this.hasEditStarted && this.boundaryTimer.checkReset())
+        if (this.dirty && this.boundaryTimer.checkReset())
         {
-            this.markBoundary();
+            this.commitCurrentSnapshot();
+            this.dirty = false;
         }
     }
 
-    private void pushInternal(MapType snapshot)
+    private void flush()
     {
+        if (this.dirty)
+        {
+            this.commitCurrentSnapshot();
+            this.dirty = false;
+            this.boundaryTimer.reset();
+        }
+    }
+
+    private void commitCurrentSnapshot()
+    {
+        if (this.scheme == null)
+        {
+            return;
+        }
+
+        MapType snapshot = ParticleScheme.toData(this.scheme);
+
+        if (this.position >= 0 && this.position < this.snapshots.size() && snapshot.equals(this.snapshots.get(this.position)))
+        {
+            return;
+        }
+
         while (this.snapshots.size() > this.position + 1)
         {
             this.snapshots.remove(this.snapshots.size() - 1);
@@ -58,31 +99,31 @@ public class ParticleUndoManager
         if (this.snapshots.size() >= this.limit)
         {
             this.snapshots.remove(0);
-        }
-        else
-        {
-            this.position += 1;
+            this.position -= 1;
         }
 
+        this.position += 1;
         this.snapshots.add(snapshot);
-        this.boundaryTimer.mark();
     }
 
     public MapType undo()
     {
-        if (this.position < 0)
+        this.flush();
+
+        if (this.position <= 0)
         {
             return null;
         }
 
-        MapType snapshot = this.snapshots.get(this.position);
         this.position -= 1;
 
-        return snapshot;
+        return this.snapshots.get(this.position);
     }
 
     public MapType redo()
     {
+        this.flush();
+
         if (this.position + 1 >= this.snapshots.size())
         {
             return null;

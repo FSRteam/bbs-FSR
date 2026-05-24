@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.mixin.client;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
 import net.minecraft.client.resources.language.LanguageManager;
 import net.minecraft.server.packs.resources.ResourceManager;

@@ -28,6 +28,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
     public UIToggle surface;
 
     public UILabel radiusLabel;
+    public UIElement radiusRow;
     public UITextbox radius;
 
     public UILabel label;
@@ -128,12 +129,20 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         });
         this.z.placeholder(UIKeys.GENERAL_Z);
 
-        this.xyz = UI.row(this.x, this.y, this.z);
+        this.xyz = new UIElement();
+        this.xyz.column().vertical().stretch().height(20);
+        this.xyz.add(this.labeledField(UIKeys.GENERAL_X, this.x));
+        this.xyz.add(this.labeledField(UIKeys.GENERAL_Y, this.y));
+        this.xyz.add(this.labeledField(UIKeys.GENERAL_Z, this.z));
+
+        this.radiusRow = UI.row(5, 0, 20, this.radiusLabel, this.radius);
 
         this.modeLabel.label = UIKeys.SNOWSTORM_SHAPE_SHAPE;
 
         this.fields.add(UI.label(UIKeys.SNOWSTORM_SHAPE_OFFSET, 20).labelAnchor(0, 1F));
-        this.fields.add(UI.row(this.offsetX, this.offsetY, this.offsetZ));
+        this.fields.add(this.labeledField(UIKeys.GENERAL_X, this.offsetX));
+        this.fields.add(this.labeledField(UIKeys.GENERAL_Y, this.offsetY));
+        this.fields.add(this.labeledField(UIKeys.GENERAL_Z, this.offsetZ));
         this.fields.add(this.direction, this.surface);
     }
 
@@ -213,8 +222,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         this.offsetY.setText(this.component.offset[1] == null ? "" : this.component.offset[1].toString());
         this.offsetZ.setText(this.component.offset[2] == null ? "" : this.component.offset[2].toString());
 
-        this.radiusLabel.removeFromParent();
-        this.radius.removeFromParent();
+        this.radiusRow.removeFromParent();
         this.label.removeFromParent();
         this.xyz.removeFromParent();
         this.surface.removeFromParent();
@@ -223,7 +231,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         {
             ParticleComponentShapeSphere sphere = (ParticleComponentShapeSphere) this.component;
             this.radius.setText(sphere.radius == null ? "" : sphere.radius.toString());
-            this.fields.add(this.radiusLabel, this.radius);
+            this.fields.add(this.radiusRow);
         }
 
         if (this.component instanceof ParticleComponentShapeBox || this.component instanceof ParticleComponentShapeDisc)
@@ -317,10 +325,19 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             });
             this.z.placeholder(UIKeys.GENERAL_Z);
 
-            this.xyz = UI.row(this.x, this.y, this.z);
+            this.xyz = new UIElement();
+            this.xyz.column().vertical().stretch().height(20);
+            this.xyz.add(this.labeledField(UIKeys.GENERAL_X, this.x));
+            this.xyz.add(this.labeledField(UIKeys.GENERAL_Y, this.y));
+            this.xyz.add(this.labeledField(UIKeys.GENERAL_Z, this.z));
 
             this.column().vertical().stretch().height(20);
             this.add(UI.row(5, 0, 20, UI.label(UIKeys.SNOWSTORM_SHAPE_DIRECTION, 20).labelAnchor(0, 0.5F), this.mode));
+        }
+
+        private UIElement labeledField(IKey label, UIElement field)
+        {
+            return UI.row(5, 0, 20, UI.label(label, 20).labelAnchor(0, 0.5F).w(76), field);
         }
 
         private ShapeDirectionVector getVector()
