@@ -78,15 +78,15 @@ public abstract class Tint
      */
     public static Tint parseGradient(MapType color, MolangParser parser) throws MolangException
     {
-        BaseType gradient = color.get("gradient");
+        BaseType gradientData = color.get("gradient");
 
         MolangExpression expression = MolangParser.ZERO;
         List<Gradient.ColorStop> colorStops = new ArrayList<>();
         boolean equal = true;
 
-        if (gradient.isMap())
+        if (gradientData.isMap())
         {
-            for (Map.Entry<String, BaseType> entry : gradient.asMap())
+            for (Map.Entry<String, BaseType> entry : gradientData.asMap())
             {
                 Solid stopColor = parseColor(entry.getValue(), parser);
 
@@ -96,9 +96,9 @@ public abstract class Tint
             Collections.sort(colorStops, (a, b) -> a.stop > b.stop ? 1 : -1);
             equal = false;
         }
-        else if (gradient.isList())
+        else if (gradientData.isList())
         {
-            ListType colors = gradient.asList();
+            ListType colors = gradientData.asList();
 
             int i = 0;
 
@@ -115,14 +115,14 @@ public abstract class Tint
             expression = parser.parseDataSilently(color.get("interpolant"));
         }
 
-        Gradient gradient = new Gradient(colorStops, expression, equal);
+        Gradient grad = new Gradient(colorStops, expression, equal);
 
         if (color.has("range"))
         {
-            gradient.gradientRange = color.getFloat("range");
+            grad.gradientRange = color.getFloat("range");
         }
 
-        return gradient;
+        return grad;
     }
 
     public abstract void compute(Particle particle);

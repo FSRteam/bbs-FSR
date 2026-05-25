@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.particles.emitter;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.GlStateManager;
+import com.mojang.blaze3d.platform.GlStateManager;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -522,9 +522,9 @@ public class ParticleEmitter
                 {
                     RenderSystem.blendFuncSeparate(
                         GlStateManager.SourceFactor.SRC_ALPHA,
+                        GlStateManager.DestFactor.ONE,
                         GlStateManager.SourceFactor.ONE,
-                        GlStateManager.SourceFactor.ONE,
-                        GlStateManager.SourceFactor.ONE_MINUS_SRC_ALPHA
+                        GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA
                     );
                 }
                 else

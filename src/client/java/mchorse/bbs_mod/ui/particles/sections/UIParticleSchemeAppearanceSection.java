@@ -71,7 +71,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
 
         for (CameraFacing facing : CameraFacing.values())
         {
-            this.facingMode.addLabel(IKey.literal(facing.id));
+            this.facingMode.addLabel(IKey.raw(facing.id));
         }
 
         /* Direction sub-controls */
@@ -88,7 +88,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         {
             this.component.speedThreshold = v.floatValue();
             this.editor.dirty();
-        }).decimalSingle();
+        });
 
         this.customDirX = new UITextbox(10000, (str) ->
         {
@@ -98,7 +98,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             }
             this.editor.markUndoBoundary();
         });
-        this.customDirX.placeholder(IKey.str("X"));
+        this.customDirX.placeholder(IKey.raw("X"));
 
         this.customDirY = new UITextbox(10000, (str) ->
         {
@@ -108,7 +108,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             }
             this.editor.markUndoBoundary();
         });
-        this.customDirY.placeholder(IKey.str("Y"));
+        this.customDirY.placeholder(IKey.raw("Y"));
 
         this.customDirZ = new UITextbox(10000, (str) ->
         {
@@ -118,7 +118,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             }
             this.editor.markUndoBoundary();
         });
-        this.customDirZ.placeholder(IKey.str("Z"));
+        this.customDirZ.placeholder(IKey.raw("Z"));
 
         this.directionFields = new UIElement();
         this.directionFields.column().vertical().stretch();
@@ -126,9 +126,9 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         this.directionFields.add(this.directionMode);
         this.directionFields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_SPEED_THRESHOLD, this.speedThreshold));
         this.directionFields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_CUSTOM_DIRECTION, 20).labelAnchor(0, 1F));
-        this.directionFields.add(this.labeledField(IKey.str("X"), this.customDirX));
-        this.directionFields.add(this.labeledField(IKey.str("Y"), this.customDirY));
-        this.directionFields.add(this.labeledField(IKey.str("Z"), this.customDirZ));
+        this.directionFields.add(this.labeledField(IKey.raw("X"), this.customDirX));
+        this.directionFields.add(this.labeledField(IKey.raw("Y"), this.customDirY));
+        this.directionFields.add(this.labeledField(IKey.raw("Z"), this.customDirZ));
 
         this.sizeW = new UITextbox(10000, (str) ->
         {

@@ -140,7 +140,7 @@ public class ParticleCurve
 
                 float t0 = prev.getKey();
                 float t1 = entry.getKey();
-                float localT = (factor - t0) / (t1 - t0);
+                float localT = (float) ((factor - t0) / (t1 - t0));
 
                 BezierChainNode n0 = prev.getValue();
                 BezierChainNode n1 = entry.getValue();

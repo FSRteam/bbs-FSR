@@ -525,15 +525,30 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
             if (this.facing == CameraFacing.EMITTER_TRANSFORM_XY)
             {
-                this.rotation.set(basisX.x, basisY.x, 0, basisX.y, basisY.y, 0, basisX.z, basisY.z, 0);
+                this.rotation.set(
+                    basisX.x, basisY.x, 0, 0,
+                    basisX.y, basisY.y, 0, 0,
+                    basisX.z, basisY.z, 0, 0,
+                    0, 0, 0, 1
+                );
             }
             else if (this.facing == CameraFacing.EMITTER_TRANSFORM_XZ)
             {
-                this.rotation.set(basisX.x, 0, basisZ.x, basisX.y, 0, basisZ.y, basisX.z, 0, basisZ.z);
+                this.rotation.set(
+                    basisX.x, 0, basisZ.x, 0,
+                    basisX.y, 0, basisZ.y, 0,
+                    basisX.z, 0, basisZ.z, 0,
+                    0, 0, 0, 1
+                );
             }
             else
             {
-                this.rotation.set(0, basisY.x, basisZ.x, 0, basisY.y, basisZ.y, 0, basisY.z, basisZ.z);
+                this.rotation.set(
+                    0, basisY.x, basisZ.x, 0,
+                    0, basisY.y, basisZ.y, 0,
+                    0, basisY.z, basisZ.z, 0,
+                    0, 0, 0, 1
+                );
             }
 
             this.transform.mul(this.rotation);
