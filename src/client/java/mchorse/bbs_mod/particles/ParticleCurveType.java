@@ -2,7 +2,7 @@ package mchorse.bbs_mod.particles;
 
 public enum ParticleCurveType
 {
-    LINEAR("linear"), HERMITE("catmull_rom");
+    LINEAR("linear"), HERMITE("catmull_rom"), BEZIER("bezier"), BEZIER_CHAIN("bezier_chain");
 
     public final String id;
 

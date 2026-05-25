@@ -25,6 +25,9 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
     public float radius = 0.01F;
     public boolean expireOnImpact;
 
+    /* Collision events (event_speed_list) - stored for round-trip */
+    public BaseType collisionEvents = null;
+
     /* Runtime options */
     private Vector3d previous = new Vector3d();
     private Vector3d current = new Vector3d();
@@ -44,6 +47,7 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
         if (this.bounciness != 1) object.putFloat("coefficient_of_restitution", this.bounciness);
         if (this.radius != 0.01F) object.putFloat("collision_radius", this.radius);
         if (this.expireOnImpact) object.putBool("expire_on_contact", true);
+        if (this.collisionEvents != null) object.put("events", this.collisionEvents);
 
         return object;
     }
@@ -63,6 +67,7 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
         if (map.has("coefficient_of_restitution")) this.bounciness = map.getFloat("coefficient_of_restitution");
         if (map.has("collision_radius")) this.radius = map.getFloat("collision_radius");
         if (map.has("expire_on_contact")) this.expireOnImpact = map.getBool("expire_on_contact");
+        if (map.has("events")) this.collisionEvents = map.get("events");
 
         return super.fromData(map, parser);
     }

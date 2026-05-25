@@ -115,7 +115,14 @@ public abstract class Tint
             expression = parser.parseDataSilently(color.get("interpolant"));
         }
 
-        return new Gradient(colorStops, expression, equal);
+        Gradient gradient = new Gradient(colorStops, expression, equal);
+
+        if (color.has("range"))
+        {
+            gradient.gradientRange = color.getFloat("range");
+        }
+
+        return gradient;
     }
 
     public abstract void compute(Particle particle);

@@ -33,6 +33,7 @@ public class ParticleScheme extends ValueGroup {
 
     /* Particle description */
     public ParticleMaterial material = ParticleMaterial.OPAQUE;
+    public String customMaterialId = null;
     public Link texture = DEFAULT_TEXTURE;
 
     /* Particle's curves */

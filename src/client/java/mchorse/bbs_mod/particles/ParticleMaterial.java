@@ -2,7 +2,7 @@ package mchorse.bbs_mod.particles;
 
 public enum ParticleMaterial
 {
-	OPAQUE("particles_opaque"), ALPHA("particles_alpha"), BLEND("particles_blend");
+	OPAQUE("particles_opaque"), ALPHA("particles_alpha"), BLEND("particles_blend"), ADD("particles_add");
 
 	public final String id;
 

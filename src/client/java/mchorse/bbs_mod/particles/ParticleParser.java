@@ -8,6 +8,8 @@ import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceLighting;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceTinting;
+import mchorse.bbs_mod.particles.components.events.ParticleComponentEmitterLifetimeEvents;
+import mchorse.bbs_mod.particles.components.events.ParticleComponentParticleLifetimeEvents;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentExpireInBlocks;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentExpireNotInBlocks;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentKillPlane;
@@ -17,14 +19,17 @@ import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeLo
 import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeOnce;
 import mchorse.bbs_mod.particles.components.meta.ParticleComponentInitialization;
 import mchorse.bbs_mod.particles.components.meta.ParticleComponentLocalSpace;
+import mchorse.bbs_mod.particles.components.meta.ParticleComponentParticleInitialization;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentInitialSpeed;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentInitialSpin;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionCollision;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionDynamic;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionParametric;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateInstant;
+import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateManual;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateSteady;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeBox;
+import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeCustom;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeDisc;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeEntityAABB;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapePoint;
@@ -67,15 +72,21 @@ public class ParticleParser
         /* Meta components */
         this.components.put("emitter_local_space", ParticleComponentLocalSpace.class);
         this.components.put("emitter_initialization", ParticleComponentInitialization.class);
+        this.components.put("particle_initialization", ParticleComponentParticleInitialization.class);
 
         /* Rate */
         this.components.put("emitter_rate_instant", ParticleComponentRateInstant.class);
         this.components.put("emitter_rate_steady", ParticleComponentRateSteady.class);
+        this.components.put("emitter_rate_manual", ParticleComponentRateManual.class);
 
         /* Lifetime emitter */
         this.components.put("emitter_lifetime_looping", ParticleComponentLifetimeLooping.class);
         this.components.put("emitter_lifetime_once", ParticleComponentLifetimeOnce.class);
         this.components.put("emitter_lifetime_expression", ParticleComponentLifetimeExpression.class);
+
+        /* Emitter events */
+        this.components.put("emitter_lifetime_events", ParticleComponentEmitterLifetimeEvents.class);
+        this.components.put("particle_lifetime_events", ParticleComponentParticleLifetimeEvents.class);
 
         /* Shapes */
         this.components.put("emitter_shape_disc", ParticleComponentShapeDisc.class);
@@ -83,6 +94,7 @@ public class ParticleParser
         this.components.put("emitter_shape_entity_aabb", ParticleComponentShapeEntityAABB.class);
         this.components.put("emitter_shape_point", ParticleComponentShapePoint.class);
         this.components.put("emitter_shape_sphere", ParticleComponentShapeSphere.class);
+        this.components.put("emitter_shape_custom", ParticleComponentShapeCustom.class);
 
         /* Lifetime particle */
         this.components.put("particle_lifetime_expression", ParticleComponentParticleLifetime.class);
@@ -163,7 +175,17 @@ public class ParticleParser
 
         if (parameters.has("material"))
         {
-            scheme.material = ParticleMaterial.fromString(parameters.getString("material"));
+            String materialStr = parameters.getString("material");
+            ParticleMaterial parsed = ParticleMaterial.fromString(materialStr);
+
+            if (parsed == ParticleMaterial.OPAQUE && !materialStr.equals("particles_opaque"))
+            {
+                scheme.customMaterialId = materialStr;
+            }
+            else
+            {
+                scheme.material = parsed;
+            }
         }
 
         if (parameters.has("texture"))
@@ -274,7 +296,7 @@ public class ParticleParser
         desc.putString("identifier", scheme.identifier);
         desc.put("basic_render_parameters", render);
 
-        render.putString("material", scheme.material.id);
+        render.putString("material", scheme.customMaterialId != null ? scheme.customMaterialId : scheme.material.id);
         render.putString("texture", "textures/particle/particles");
 
         if (scheme.texture != null && !scheme.texture.equals(ParticleScheme.DEFAULT_TEXTURE))

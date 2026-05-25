@@ -46,6 +46,14 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
     public boolean stretchFPS = false;
     public boolean loop = false;
 
+    /* Billboard direction sub-feature */
+    public String directionMode = null; /* null = not set, "derive_from_velocity" or "custom" */
+    public float speedThreshold = 0.01F;
+    public MolangExpression[] customDirection = null; /* 3-element array: x, y, z */
+
+    /* Full texture UV mode */
+    public boolean fullTexture = false;
+
     /* Runtime properties */
     private float w;
     private float h;
@@ -75,82 +83,109 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
     protected void toData(MapType data)
     {
         ListType size = new ListType();
-        MapType uv = new MapType();
 
         size.add(this.sizeW.toData());
         size.add(this.sizeH.toData());
 
-        /* Adding "uv" properties */
-        uv.putInt("texture_width", this.textureWidth);
-        uv.putInt("texture_height", this.textureHeight);
-
-        if (!this.flipbook && !MolangExpression.isZero(this.uvX) || !MolangExpression.isZero(this.uvY))
-        {
-            ListType uvs = new ListType();
-
-            uvs.add(this.uvX.toData());
-            uvs.add(this.uvY.toData());
-
-            uv.put("uv", uvs);
-        }
-
-        if (!this.flipbook && !MolangExpression.isZero(this.uvW) || !MolangExpression.isZero(this.uvH))
-        {
-            ListType uvs = new ListType();
-
-            uvs.add(this.uvW.toData());
-            uvs.add(this.uvH.toData());
-
-            uv.put("uv_size", uvs);
-        }
-
-        /* Adding "flipbook" properties to "uv" */
-        if (this.flipbook)
-        {
-            MapType flipbook = new MapType();
-
-            if (!MolangExpression.isZero(this.uvX) || !MolangExpression.isZero(this.uvY))
-            {
-                ListType base = new ListType();
-
-                base.add(this.uvX.toData());
-                base.add(this.uvY.toData());
-
-                flipbook.put("base_UV", base);
-            }
-
-            if (!MolangExpression.isZero(this.uvW) || !MolangExpression.isZero(this.uvH))
-            {
-                ListType uvSize = new ListType();
-
-                uvSize.add(this.uvW.toData());
-                uvSize.add(this.uvH.toData());
-
-                flipbook.put("size_UV", uvSize);
-            }
-
-            if (this.stepX != 0 || this.stepY != 0)
-            {
-                ListType step = new ListType();
-
-                step.addFloat(this.stepX);
-                step.addFloat(this.stepY);
-
-                flipbook.put("step_UV", step);
-            }
-
-            if (this.fps != 0) flipbook.putFloat("frames_per_second", this.fps);
-            if (!MolangExpression.isZero(this.maxFrame)) flipbook.put("max_frame", this.maxFrame.toData());
-            if (this.stretchFPS) flipbook.putBool("stretch_to_lifetime", true);
-            if (this.loop) flipbook.putBool("loop", true);
-
-            uv.put("flipbook", flipbook);
-        }
-
-        /* Add main properties */
         data.put("size", size);
         data.putString("facing_camera_mode", this.facing.id);
-        data.put("uv", uv);
+
+        /* Billboard direction sub-feature */
+        if (this.directionMode != null)
+        {
+            MapType direction = new MapType();
+
+            direction.putString("mode", this.directionMode);
+
+            if ("derive_from_velocity".equals(this.directionMode))
+            {
+                direction.putFloat("min_speed_threshold", this.speedThreshold);
+            }
+            else if ("custom".equals(this.directionMode) && this.customDirection != null)
+            {
+                ListType customDir = new ListType();
+                customDir.add(this.customDirection[0].toData());
+                customDir.add(this.customDirection[1].toData());
+                customDir.add(this.customDirection[2].toData());
+                direction.put("custom_direction", customDir);
+            }
+
+            data.put("direction", direction);
+        }
+
+        /* UV data — omit if fullTexture mode */
+        if (!this.fullTexture)
+        {
+            MapType uv = new MapType();
+
+            uv.putInt("texture_width", this.textureWidth);
+            uv.putInt("texture_height", this.textureHeight);
+
+            if (!this.flipbook && !MolangExpression.isZero(this.uvX) || !MolangExpression.isZero(this.uvY))
+            {
+                ListType uvs = new ListType();
+
+                uvs.add(this.uvX.toData());
+                uvs.add(this.uvY.toData());
+
+                uv.put("uv", uvs);
+            }
+
+            if (!this.flipbook && !MolangExpression.isZero(this.uvW) || !MolangExpression.isZero(this.uvH))
+            {
+                ListType uvs = new ListType();
+
+                uvs.add(this.uvW.toData());
+                uvs.add(this.uvH.toData());
+
+                uv.put("uv_size", uvs);
+            }
+
+            /* Adding "flipbook" properties to "uv" */
+            if (this.flipbook)
+            {
+                MapType flipbook = new MapType();
+
+                if (!MolangExpression.isZero(this.uvX) || !MolangExpression.isZero(this.uvY))
+                {
+                    ListType base = new ListType();
+
+                    base.add(this.uvX.toData());
+                    base.add(this.uvY.toData());
+
+                    flipbook.put("base_UV", base);
+                }
+
+                if (!MolangExpression.isZero(this.uvW) || !MolangExpression.isZero(this.uvH))
+                {
+                    ListType uvSize = new ListType();
+
+                    uvSize.add(this.uvW.toData());
+                    uvSize.add(this.uvH.toData());
+
+                    flipbook.put("size_UV", uvSize);
+                }
+
+                if (this.stepX != 0 || this.stepY != 0)
+                {
+                    ListType step = new ListType();
+
+                    step.addFloat(this.stepX);
+                    step.addFloat(this.stepY);
+
+                    flipbook.put("step_UV", step);
+                }
+
+                if (this.fps != 0) flipbook.putFloat("frames_per_second", this.fps);
+                if (!MolangExpression.isZero(this.maxFrame)) flipbook.put("max_frame", this.maxFrame.toData());
+                if (this.stretchFPS) flipbook.putBool("stretch_to_lifetime", true);
+                if (this.loop) flipbook.putBool("loop", true);
+
+                uv.put("flipbook", flipbook);
+            }
+
+            data.put("uv", uv);
+        }
     }
 
     @Override
@@ -179,9 +214,43 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.facing = CameraFacing.fromString(map.getString("facing_camera_mode"));
         }
 
+        /* Parse direction sub-feature */
+        if (map.has("direction", BaseType.TYPE_MAP))
+        {
+            MapType direction = map.getMap("direction");
+
+            if (direction.has("mode"))
+            {
+                this.directionMode = direction.getString("mode");
+
+                if ("derive_from_velocity".equals(this.directionMode) && direction.has("min_speed_threshold"))
+                {
+                    this.speedThreshold = direction.getFloat("min_speed_threshold");
+                }
+                else if ("custom".equals(this.directionMode) && direction.has("custom_direction", BaseType.TYPE_LIST))
+                {
+                    ListType customDir = direction.getList("custom_direction");
+
+                    if (customDir.size() >= 3)
+                    {
+                        this.customDirection = new MolangExpression[]{
+                            parser.parseDataSilently(customDir.get(0)),
+                            parser.parseDataSilently(customDir.get(1), MolangParser.ONE),
+                            parser.parseDataSilently(customDir.get(2))
+                        };
+                    }
+                }
+            }
+        }
+
+        /* Detect fullTexture mode: no "uv" key means full texture */
         if (map.has("uv", BaseType.TYPE_MAP))
         {
             this.parseUv(map.getMap("uv"), parser);
+        }
+        else if (!map.has("uv"))
+        {
+            this.fullTexture = true;
         }
 
         return super.fromData(map, parser);
@@ -461,41 +530,51 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         this.w = (float) this.sizeW.get() * 2.25F;
         this.h = (float) this.sizeH.get() * 2.25F;
 
-        float u = (float) this.uvX.get();
-        float v = (float) this.uvY.get();
-        float w = (float) this.uvW.get();
-        float h = (float) this.uvH.get();
-
-        if (this.flipbook)
+        if (this.fullTexture)
         {
-            int index = (int) (particle.getAge(transition) * this.fps);
-            int max = (int) this.maxFrame.get();
-
-            if (this.stretchFPS)
-            {
-                float lifetime = particle.lifetime <= 0 ? 0 : (particle.age + transition) / particle.lifetime;
-
-                index = MathUtils.clamp((int) (lifetime * max), 0, max - 1);
-            }
-
-            if (this.loop && max != 0)
-            {
-                index = index % max;
-            }
-
-            if (index > max)
-            {
-                index = max;
-            }
-
-            u += this.stepX * index;
-            v += this.stepY * index;
+            this.u1 = 0;
+            this.v1 = 0;
+            this.u2 = this.textureWidth;
+            this.v2 = this.textureHeight;
         }
+        else
+        {
+            float u = (float) this.uvX.get();
+            float v = (float) this.uvY.get();
+            float w = (float) this.uvW.get();
+            float h = (float) this.uvH.get();
 
-        this.u1 = u;
-        this.v1 = v;
-        this.u2 = u + w;
-        this.v2 = v + h;
+            if (this.flipbook)
+            {
+                int index = (int) (particle.getAge(transition) * this.fps);
+                int max = (int) this.maxFrame.get();
+
+                if (this.stretchFPS)
+                {
+                    float lifetime = particle.lifetime <= 0 ? 0 : (particle.age + transition) / particle.lifetime;
+
+                    index = MathUtils.clamp((int) (lifetime * max), 0, max - 1);
+                }
+
+                if (this.loop && max != 0)
+                {
+                    index = index % max;
+                }
+
+                if (index > max)
+                {
+                    index = max;
+                }
+
+                u += this.stepX * index;
+                v += this.stepY * index;
+            }
+
+            this.u1 = u;
+            this.v1 = v;
+            this.u2 = u + w;
+            this.v2 = v + h;
+        }
 
         if (emitter == null || emitter.lit || emitter.world == null)
         {

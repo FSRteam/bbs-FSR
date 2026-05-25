@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.particles;
 
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.math.Variable;
@@ -11,6 +12,8 @@ import mchorse.bbs_mod.utils.MathUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class ParticleCurve
 {
@@ -19,6 +22,9 @@ public class ParticleCurve
     public MolangExpression input = MolangParser.ZERO;
     public MolangExpression range = MolangParser.ZERO;
     public Variable variable;
+
+    /* Bezier chain nodes: key=time, value=node data */
+    public TreeMap<Float, BezierChainNode> bezierChainNodes = new TreeMap<>();
 
     public ParticleCurve()
     {
@@ -35,6 +41,11 @@ public class ParticleCurve
     private double computeCurve(double factor)
     {
         int length = this.nodes.size();
+
+        if (this.type == ParticleCurveType.BEZIER_CHAIN)
+        {
+            return this.computeBezierChain(factor);
+        }
 
         if (length == 0)
         {
@@ -69,6 +80,21 @@ public class ParticleCurve
 
             return Lerps.cubicHermite(beforeFirst.get(), first.get(), next.get(), afterNext.get(), factor % 1);
         }
+        else if (this.type == ParticleCurveType.BEZIER)
+        {
+            /* Bezier: nodes = [y1, cp1, cp2, y2] — cubic bezier with 4 control points */
+            if (length < 4)
+            {
+                return this.nodes.get(0).get();
+            }
+
+            double y1 = this.nodes.get(0).get();
+            double cp1 = this.nodes.get(1).get();
+            double cp2 = this.nodes.get(2).get();
+            double y2 = this.nodes.get(3).get();
+
+            return Lerps.bezier(y1, cp1, cp2, y2, factor);
+        }
 
         factor *= length - 1;
         int index = (int) factor;
@@ -77,6 +103,79 @@ public class ParticleCurve
         MolangExpression next = this.getNode(index + 1);
 
         return Lerps.lerp(first.get(), next.get(), factor % 1);
+    }
+
+    private double computeBezierChain(double factor)
+    {
+        if (this.bezierChainNodes.isEmpty())
+        {
+            return 0;
+        }
+
+        factor = MathUtils.clamp(factor, 0, 1);
+
+        Map.Entry<Float, BezierChainNode> first = this.bezierChainNodes.firstEntry();
+        Map.Entry<Float, BezierChainNode> last = this.bezierChainNodes.lastEntry();
+
+        if (factor <= first.getKey())
+        {
+            return first.getValue().leftValue;
+        }
+
+        if (factor >= last.getKey())
+        {
+            return last.getValue().rightValue;
+        }
+
+        Map.Entry<Float, BezierChainNode> prev = null;
+
+        for (Map.Entry<Float, BezierChainNode> entry : this.bezierChainNodes.entrySet())
+        {
+            if (entry.getKey() >= factor)
+            {
+                if (prev == null)
+                {
+                    return entry.getValue().leftValue;
+                }
+
+                float t0 = prev.getKey();
+                float t1 = entry.getKey();
+                float localT = (factor - t0) / (t1 - t0);
+
+                BezierChainNode n0 = prev.getValue();
+                BezierChainNode n1 = entry.getValue();
+
+                double y0 = n0.rightValue;
+                double y1 = n1.leftValue;
+                double cp0 = y0 + n0.rightSlope * (t1 - t0);
+                double cp1 = y1 - n1.leftSlope * (t1 - t0);
+
+                return Lerps.bezier(y0, cp0, cp1, y1, localT);
+            }
+
+            prev = entry;
+        }
+
+        return last.getValue().rightValue;
+    }
+
+    /**
+     * Bezier chain node: stores value and slope data per time point
+     */
+    public static class BezierChainNode
+    {
+        public float leftValue;
+        public float rightValue;
+        public float leftSlope;
+        public float rightSlope;
+
+        public BezierChainNode(float leftValue, float rightValue, float leftSlope, float rightSlope)
+        {
+            this.leftValue = leftValue;
+            this.rightValue = rightValue;
+            this.leftSlope = leftSlope;
+            this.rightSlope = rightSlope;
+        }
     }
 
     private MolangExpression getNode(int index)
@@ -96,15 +195,40 @@ public class ParticleCurve
     public MapType toData()
     {
         MapType curve = new MapType();
-        ListType nodes = new ListType();
-
-        for (MolangExpression expression : this.nodes)
-        {
-            nodes.add(expression.toData());
-        }
 
         curve.putString("type", this.type.id);
-        curve.put("nodes", nodes);
+
+        if (this.type == ParticleCurveType.BEZIER_CHAIN)
+        {
+            MapType nodesMap = new MapType();
+
+            for (Map.Entry<Float, BezierChainNode> entry : this.bezierChainNodes.entrySet())
+            {
+                MapType node = new MapType();
+                BezierChainNode n = entry.getValue();
+
+                node.putFloat("left_value", n.leftValue);
+                node.putFloat("right_value", n.rightValue);
+                node.putFloat("left_slope", n.leftSlope);
+                node.putFloat("right_slope", n.rightSlope);
+
+                nodesMap.put(String.valueOf(entry.getKey()), node);
+            }
+
+            curve.put("nodes", nodesMap);
+        }
+        else
+        {
+            ListType nodes = new ListType();
+
+            for (MolangExpression expression : this.nodes)
+            {
+                nodes.add(expression.toData());
+            }
+
+            curve.put("nodes", nodes);
+        }
+
         curve.put("input", this.input.toData());
         curve.put("horizontal_range", this.range.toData());
 
@@ -119,13 +243,38 @@ public class ParticleCurve
 
         if (data.has("nodes"))
         {
-            ListType nodes = data.getList("nodes");
+            BaseType nodesData = data.get("nodes");
 
-            this.nodes.clear();
-
-            for (int i = 0, c = nodes.size(); i < c; i ++)
+            if (this.type == ParticleCurveType.BEZIER_CHAIN && nodesData.isMap())
             {
-                this.nodes.add(parser.parseDataSilently(nodes.get(i), MolangParser.ONE));
+                this.bezierChainNodes.clear();
+
+                for (Map.Entry<String, BaseType> entry : nodesData.asMap())
+                {
+                    float time = Float.parseFloat(entry.getKey());
+
+                    if (entry.getValue().isMap())
+                    {
+                        MapType nodeData = entry.getValue().asMap();
+                        float leftValue = nodeData.has("left_value") ? nodeData.getFloat("left_value") : 0;
+                        float rightValue = nodeData.has("right_value") ? nodeData.getFloat("right_value") : 0;
+                        float leftSlope = nodeData.has("left_slope") ? nodeData.getFloat("left_slope") : 0;
+                        float rightSlope = nodeData.has("right_slope") ? nodeData.getFloat("right_slope") : 0;
+
+                        this.bezierChainNodes.put(time, new BezierChainNode(leftValue, rightValue, leftSlope, rightSlope));
+                    }
+                }
+            }
+            else if (nodesData.isList())
+            {
+                ListType nodes = nodesData.asList();
+
+                this.nodes.clear();
+
+                for (int i = 0, c = nodes.size(); i < c; i ++)
+                {
+                    this.nodes.add(parser.parseDataSilently(nodes.get(i), MolangParser.ONE));
+                }
             }
         }
     }

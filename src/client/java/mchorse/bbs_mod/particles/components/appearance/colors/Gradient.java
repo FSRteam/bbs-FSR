@@ -24,6 +24,7 @@ public class Gradient extends Tint
     public MolangExpression interpolant;
     public boolean equal;
     public float range;
+    public float gradientRange = 1.0F;
 
     public Gradient(List<ColorStop> stops, MolangExpression interpolant, boolean equal)
     {
@@ -67,6 +68,11 @@ public class Gradient extends Tint
         }
 
         double factor = this.interpolant.get();
+
+        if (this.gradientRange != 0)
+        {
+            factor = factor / this.gradientRange;
+        }
 
         factor = MathUtils.clamp(factor, 0, 1);
 
@@ -134,6 +140,11 @@ public class Gradient extends Tint
         if (!MolangExpression.isZero(this.interpolant))
         {
             data.put("interpolant", this.interpolant.toData());
+        }
+
+        if (this.gradientRange != 1.0F)
+        {
+            data.putFloat("range", this.gradientRange);
         }
 
         return data;
