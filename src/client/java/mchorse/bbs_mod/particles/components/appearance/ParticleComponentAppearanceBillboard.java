@@ -20,6 +20,7 @@ import net.minecraft.client.renderer.LightTexture;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.core.BlockPos;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -374,17 +375,65 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         double entityX = emitter.cX;
         double entityY = emitter.cY;
         double entityZ = emitter.cZ;
-        boolean lookAt = this.facing == CameraFacing.LOOKAT_XYZ || this.facing == CameraFacing.LOOKAT_Y;
+        boolean lookAt = this.facing == CameraFacing.LOOKAT_XYZ || this.facing == CameraFacing.LOOKAT_Y || this.facing == CameraFacing.LOOKAT_DIRECTION;
 
         if (lookAt)
         {
             double dX = entityX - px;
             double dY = entityY - py;
             double dZ = entityZ - pz;
-            double horizontalDistance = Math.sqrt(dX * dX + dZ * dZ);
 
-            entityYaw = 180 - (float) (Math.atan2(dZ, dX) * (180D / Math.PI)) - 90.0F;
-            entityPitch = (float) (-(Math.atan2(dY, horizontalDistance) * (180D / Math.PI))) + 180;
+            if (this.facing == CameraFacing.LOOKAT_DIRECTION)
+            {
+                /* For lookat_direction, compute direction from velocity or custom direction */
+                double dirX, dirY, dirZ;
+
+                if ("custom".equals(this.directionMode) && this.customDirection != null)
+                {
+                    dirX = this.customDirection[0].get();
+                    dirY = this.customDirection[1].get();
+                    dirZ = this.customDirection[2].get();
+                }
+                else
+                {
+                    /* derive_from_velocity: use particle velocity direction */
+                    double speedX = particle.position.x - particle.prevPosition.x;
+                    double speedY = particle.position.y - particle.prevPosition.y;
+                    double speedZ = particle.position.z - particle.prevPosition.z;
+                    double speed = Math.sqrt(speedX * speedX + speedY * speedY + speedZ * speedZ);
+
+                    if (speed < this.speedThreshold)
+                    {
+                        /* Below threshold, fall back to camera-facing */
+                        double hDist = Math.sqrt(dX * dX + dZ * dZ);
+                        entityYaw = 180 - (float) (Math.atan2(dZ, dX) * (180D / Math.PI)) - 90.0F;
+                        entityPitch = (float) (-(Math.atan2(dY, hDist) * (180D / Math.PI))) + 180;
+                        lookAt = false; /* skip the lookAt block below, use the camera-facing angles */
+                        dirX = dirY = dirZ = 0;
+                    }
+                    else
+                    {
+                        dirX = speedX / speed;
+                        dirY = speedY / speed;
+                        dirZ = speedZ / speed;
+                    }
+                }
+
+                if (lookAt && this.facing == CameraFacing.LOOKAT_DIRECTION)
+                {
+                    /* Override dX/dY/dZ with the computed direction */
+                    dX = -dirX;
+                    dY = -dirY;
+                    dZ = -dirZ;
+                }
+            }
+
+            if (lookAt)
+            {
+                double hDist = Math.sqrt(dX * dX + dZ * dZ);
+                entityYaw = 180 - (float) (Math.atan2(dZ, dX) * (180D / Math.PI)) - 90.0F;
+                entityPitch = (float) (-(Math.atan2(dY, hDist) * (180D / Math.PI))) + 180;
+            }
         }
 
         px -= emitter.cX;
@@ -398,7 +447,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         this.vertices[3].set(-this.w / 2, this.h / 2, 0, 1);
         this.transform.identity();
 
-        if (this.facing == CameraFacing.ROTATE_XYZ || this.facing == CameraFacing.LOOKAT_XYZ)
+        if (this.facing == CameraFacing.ROTATE_XYZ || this.facing == CameraFacing.LOOKAT_XYZ || this.facing == CameraFacing.LOOKAT_DIRECTION)
         {
             this.rotation.identity();
             this.rotation.rotateY(entityYaw / 180 * (float) Math.PI);
@@ -411,6 +460,82 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         {
             this.rotation.identity();
             this.rotation.rotateY(entityYaw / 180 * (float) Math.PI);
+            this.transform.mul(this.rotation);
+        }
+        else if (this.facing == CameraFacing.DIRECTION_X || this.facing == CameraFacing.DIRECTION_Y || this.facing == CameraFacing.DIRECTION_Z)
+        {
+            double dirX = 0, dirY = 0, dirZ = 0;
+
+            if ("custom".equals(this.directionMode) && this.customDirection != null)
+            {
+                dirX = this.customDirection[0].get();
+                dirY = this.customDirection[1].get();
+                dirZ = this.customDirection[2].get();
+            }
+            else
+            {
+                double speedX = particle.position.x - particle.prevPosition.x;
+                double speedY = particle.position.y - particle.prevPosition.y;
+                double speedZ = particle.position.z - particle.prevPosition.z;
+                double speed = Math.sqrt(speedX * speedX + speedY * speedY + speedZ * speedZ);
+
+                if (speed >= this.speedThreshold)
+                {
+                    dirX = speedX / speed;
+                    dirY = speedY / speed;
+                    dirZ = speedZ / speed;
+                }
+            }
+
+            double yaw, pitch;
+
+            if (this.facing == CameraFacing.DIRECTION_X)
+            {
+                yaw = Math.atan2(-dirZ, dirX);
+                pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
+            }
+            else if (this.facing == CameraFacing.DIRECTION_Y)
+            {
+                yaw = Math.atan2(-dirZ, dirX);
+                pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
+            }
+            else
+            {
+                yaw = Math.atan2(dirX, dirZ);
+                pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
+            }
+
+            this.rotation.identity();
+            this.rotation.rotateY((float) yaw);
+            this.transform.mul(this.rotation);
+            this.rotation.identity();
+            this.rotation.rotateX((float) pitch);
+            this.transform.mul(this.rotation);
+        }
+        else if (this.facing == CameraFacing.EMITTER_TRANSFORM_XY || this.facing == CameraFacing.EMITTER_TRANSFORM_XZ || this.facing == CameraFacing.EMITTER_TRANSFORM_YZ)
+        {
+            Matrix3f emitterRot = emitter.rotation;
+
+            Vector3f basisX = emitterRot.getRow(0, new Vector3f());
+            Vector3f basisY = emitterRot.getRow(1, new Vector3f());
+            Vector3f basisZ = emitterRot.getRow(2, new Vector3f());
+
+            /* Build rotation matrix from emitter basis vectors */
+            this.rotation.identity();
+
+            if (this.facing == CameraFacing.EMITTER_TRANSFORM_XY)
+            {
+                this.rotation.set(basisX.x, basisY.x, 0, basisX.y, basisY.y, 0, basisX.z, basisY.z, 0);
+            }
+            else if (this.facing == CameraFacing.EMITTER_TRANSFORM_XZ)
+            {
+                this.rotation.set(basisX.x, 0, basisZ.x, basisX.y, 0, basisZ.y, basisX.z, 0, basisZ.z);
+            }
+            else
+            {
+                this.rotation.set(0, basisY.x, basisZ.x, 0, basisY.y, basisZ.y, 0, basisY.z, basisZ.z);
+            }
+
             this.transform.mul(this.rotation);
         }
 

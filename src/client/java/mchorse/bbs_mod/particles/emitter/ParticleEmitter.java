@@ -1,11 +1,13 @@
 package mchorse.bbs_mod.particles.emitter;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.GlStateManager;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.math.IExpression;
 import mchorse.bbs_mod.math.Variable;
+import mchorse.bbs_mod.particles.ParticleMaterial;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.IComponentEmitterInitialize;
 import mchorse.bbs_mod.particles.components.IComponentEmitterUpdate;
@@ -515,10 +517,30 @@ public class ParticleEmitter
             if (meshData != null)
             {
                 RenderSystem.setShader(program);
-                RenderSystem.disableBlend();
+
+                if (this.scheme.material == ParticleMaterial.ADD)
+                {
+                    RenderSystem.blendFuncSeparate(
+                        GlStateManager.SourceFactor.SRC_ALPHA,
+                        GlStateManager.SourceFactor.ONE,
+                        GlStateManager.SourceFactor.ONE,
+                        GlStateManager.SourceFactor.ONE_MINUS_SRC_ALPHA
+                    );
+                }
+                else
+                {
+                    RenderSystem.disableBlend();
+                }
+
                 RenderSystem.disableCull();
                 BufferUploader.drawWithShader(meshData);
                 RenderSystem.enableCull();
+
+                if (this.scheme.material == ParticleMaterial.ADD)
+                {
+                    RenderSystem.defaultBlendFunc();
+                }
+
                 RenderSystem.enableBlend();
             }
         }
