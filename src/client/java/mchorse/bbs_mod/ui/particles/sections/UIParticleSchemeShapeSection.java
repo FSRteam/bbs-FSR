@@ -4,6 +4,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeBase;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeBox;
+import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeCustom;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeDisc;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeEntityAABB;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapePoint;
@@ -160,6 +161,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         button.addLabel(UIKeys.SNOWSTORM_SHAPE_SPHERE);
         button.addLabel(UIKeys.SNOWSTORM_SHAPE_DISC);
         button.addLabel(UIKeys.SNOWSTORM_SHAPE_AABB);
+        button.addLabel(UIKeys.SNOWSTORM_SHAPE_CUSTOM);
     }
 
     @Override
@@ -205,6 +207,10 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
         else if (value == 4)
         {
             return ParticleComponentShapeEntityAABB.class;
+        }
+        else if (value == 5)
+        {
+            return ParticleComponentShapeCustom.class;
         }
 
         return ParticleComponentShapePoint.class;

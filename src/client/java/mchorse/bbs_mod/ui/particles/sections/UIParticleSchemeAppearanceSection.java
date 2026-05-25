@@ -2,7 +2,9 @@ package mchorse.bbs_mod.ui.particles.sections;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.particles.ParticleScheme;
+import mchorse.bbs_mod.particles.components.appearance.CameraFacing;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
+import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceLighting;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
@@ -17,6 +19,15 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
 {
     public UICirculate mode;
     public UILabel modeLabel;
+
+    public UICirculate facingMode;
+
+    public UICirculate directionMode;
+    public UITrackpad speedThreshold;
+    public UITextbox customDirX;
+    public UITextbox customDirY;
+    public UITextbox customDirZ;
+    public UIElement directionFields;
 
     public UITextbox sizeW;
     public UITextbox sizeH;
@@ -39,13 +50,85 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
 
         this.mode = new UICirculate((b) ->
         {
-            this.component.flipbook = this.mode.getValue() == 1;
+            int val = this.mode.getValue();
+            this.component.flipbook = val == 1;
+            this.component.fullTexture = val == 2;
             this.updateElements();
             this.editor.dirty();
         });
         this.mode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_REGULAR);
         this.mode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_ANIMATED);
+        this.mode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_FULL);
         this.modeLabel = UI.label(UIKeys.SNOWSTORM_MODE, 20).labelAnchor(0, 0.5F);
+
+        /* Camera facing mode selector */
+        this.facingMode = new UICirculate((b) ->
+        {
+            this.component.facing = CameraFacing.values()[this.facingMode.getValue()];
+            this.updateDirectionVisibility();
+            this.editor.dirty();
+        });
+
+        for (CameraFacing facing : CameraFacing.values())
+        {
+            this.facingMode.addLabel(IKey.literal(facing.id));
+        }
+
+        /* Direction sub-controls */
+        this.directionMode = new UICirculate((b) ->
+        {
+            this.component.directionMode = this.directionMode.getValue() == 0 ? "derive_from_velocity" : "custom";
+            this.updateDirectionVisibility();
+            this.editor.dirty();
+        });
+        this.directionMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_DERIVE);
+        this.directionMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_CUSTOM);
+
+        this.speedThreshold = new UITrackpad((v) ->
+        {
+            this.component.speedThreshold = v.floatValue();
+            this.editor.dirty();
+        }).decimalSingle();
+
+        this.customDirX = new UITextbox(10000, (str) ->
+        {
+            if (this.component.customDirection != null)
+            {
+                this.component.customDirection[0] = this.parse(str, this.component.customDirection[0]);
+            }
+            this.editor.markUndoBoundary();
+        });
+        this.customDirX.placeholder(IKey.str("X"));
+
+        this.customDirY = new UITextbox(10000, (str) ->
+        {
+            if (this.component.customDirection != null)
+            {
+                this.component.customDirection[1] = this.parse(str, this.component.customDirection[1]);
+            }
+            this.editor.markUndoBoundary();
+        });
+        this.customDirY.placeholder(IKey.str("Y"));
+
+        this.customDirZ = new UITextbox(10000, (str) ->
+        {
+            if (this.component.customDirection != null)
+            {
+                this.component.customDirection[2] = this.parse(str, this.component.customDirection[2]);
+            }
+            this.editor.markUndoBoundary();
+        });
+        this.customDirZ.placeholder(IKey.str("Z"));
+
+        this.directionFields = new UIElement();
+        this.directionFields.column().vertical().stretch();
+        this.directionFields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_MODE, 20).labelAnchor(0, 1F));
+        this.directionFields.add(this.directionMode);
+        this.directionFields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_SPEED_THRESHOLD, this.speedThreshold));
+        this.directionFields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_CUSTOM_DIRECTION, 20).labelAnchor(0, 1F));
+        this.directionFields.add(this.labeledField(IKey.str("X"), this.customDirX));
+        this.directionFields.add(this.labeledField(IKey.str("Y"), this.customDirY));
+        this.directionFields.add(this.labeledField(IKey.str("Z"), this.customDirZ));
 
         this.sizeW = new UITextbox(10000, (str) ->
         {
@@ -142,6 +225,8 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         this.flipbook.add(UI.row(5, 0, 20, this.stretch, this.loop));
 
         this.fields.add(UI.row(5, 0, 20, this.modeLabel, this.mode));
+        this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_FACING, 20).labelAnchor(0, 1F));
+        this.fields.add(this.facingMode);
         this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_SIZE, 20).labelAnchor(0, 1F));
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_WIDTH, this.sizeW));
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT, this.sizeH));
@@ -155,11 +240,40 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
     private void updateElements()
     {
         this.flipbook.removeFromParent();
+        this.directionFields.removeFromParent();
 
         if (this.component.flipbook)
         {
             this.fields.add(this.flipbook);
         }
+
+        if (!this.component.fullTexture)
+        {
+            /* UV fields already visible in fields, no extra action needed */
+        }
+
+        this.updateDirectionVisibility();
+        this.resizeParent();
+    }
+
+    private void updateDirectionVisibility()
+    {
+        this.directionFields.removeFromParent();
+
+        boolean showDirection = this.component.facing == CameraFacing.LOOKAT_DIRECTION
+            || this.component.facing == CameraFacing.DIRECTION_X
+            || this.component.facing == CameraFacing.DIRECTION_Y
+            || this.component.facing == CameraFacing.DIRECTION_Z;
+
+        if (showDirection)
+        {
+            this.fields.add(this.directionFields);
+        }
+
+        this.speedThreshold.setVisible("derive_from_velocity".equals(this.component.directionMode));
+        this.customDirX.setVisible("custom".equals(this.component.directionMode));
+        this.customDirY.setVisible("custom".equals(this.component.directionMode));
+        this.customDirZ.setVisible("custom".equals(this.component.directionMode));
 
         this.resizeParent();
     }
@@ -181,7 +295,27 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
     {
         super.fillData();
 
-        this.mode.setValue(this.component.flipbook ? 1 : 0);
+        int modeVal = this.component.fullTexture ? 2 : (this.component.flipbook ? 1 : 0);
+        this.mode.setValue(modeVal);
+        this.facingMode.setValue(this.component.facing.ordinal());
+
+        if (this.component.directionMode != null)
+        {
+            this.directionMode.setValue("derive_from_velocity".equals(this.component.directionMode) ? 0 : 1);
+        }
+        else
+        {
+            this.directionMode.setValue(0);
+        }
+
+        this.speedThreshold.setValue(this.component.speedThreshold);
+
+        if (this.component.customDirection != null)
+        {
+            this.customDirX.setText(this.component.customDirection[0] == null ? "" : this.component.customDirection[0].toString());
+            this.customDirY.setText(this.component.customDirection[1] == null ? "" : this.component.customDirection[1].toString());
+            this.customDirZ.setText(this.component.customDirection[2] == null ? "" : this.component.customDirection[2].toString());
+        }
 
         this.stepX.setValue(this.component.stepX);
         this.stepY.setValue(this.component.stepY);

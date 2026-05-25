@@ -785,6 +785,13 @@ public class UIKeys
     public static final IKey SHAPE_KEYS_CONTEXT_SAVE = L10n.lang("bbs.ui.shape_keys.context.save");
     public static final IKey SHAPE_KEYS_TITLE = L10n.lang("bbs.ui.shape_keys.title");
     public static final IKey SNOWSTORM_APPEARANCE_ANIMATED = L10n.lang("bbs.ui.snowstorm.appearance.animated");
+    public static final IKey SNOWSTORM_APPEARANCE_FULL = L10n.lang("bbs.ui.snowstorm.appearance.full");
+    public static final IKey SNOWSTORM_APPEARANCE_FACING = L10n.lang("bbs.ui.snowstorm.appearance.facing");
+    public static final IKey SNOWSTORM_APPEARANCE_DIRECTION_MODE = L10n.lang("bbs.ui.snowstorm.appearance.direction_mode");
+    public static final IKey SNOWSTORM_APPEARANCE_DIRECTION_DERIVE = L10n.lang("bbs.ui.snowstorm.appearance.direction_derive");
+    public static final IKey SNOWSTORM_APPEARANCE_DIRECTION_CUSTOM = L10n.lang("bbs.ui.snowstorm.appearance.direction_custom");
+    public static final IKey SNOWSTORM_APPEARANCE_SPEED_THRESHOLD = L10n.lang("bbs.ui.snowstorm.appearance.speed_threshold");
+    public static final IKey SNOWSTORM_APPEARANCE_CUSTOM_DIRECTION = L10n.lang("bbs.ui.snowstorm.appearance.custom_direction");
     public static final IKey SNOWSTORM_APPEARANCE_FPS = L10n.lang("bbs.ui.snowstorm.appearance.fps");
     public static final IKey SNOWSTORM_APPEARANCE_FRAMES = L10n.lang("bbs.ui.snowstorm.appearance.frames");
     public static final IKey SNOWSTORM_APPEARANCE_HEIGHT = L10n.lang("bbs.ui.snowstorm.appearance.height");
@@ -832,6 +839,7 @@ public class UIKeys
     public static final IKey SNOWSTORM_GENERAL_PARTICLES_ALPHA = L10n.lang("bbs.ui.snowstorm.general.particles_alpha");
     public static final IKey SNOWSTORM_GENERAL_PARTICLES_BLEND = L10n.lang("bbs.ui.snowstorm.general.particles_blend");
     public static final IKey SNOWSTORM_GENERAL_PARTICLES_OPAQUE = L10n.lang("bbs.ui.snowstorm.general.particles_opaque");
+    public static final IKey SNOWSTORM_GENERAL_PARTICLES_ADD = L10n.lang("bbs.ui.snowstorm.general.particles_add");
     public static final IKey SNOWSTORM_GENERAL_PICK = L10n.lang("bbs.ui.snowstorm.general.pick");
     public static final IKey SNOWSTORM_GENERAL_TITLE = L10n.lang("bbs.ui.snowstorm.general.title");
     public static final IKey SNOWSTORM_INITIALIZATION_CREATION = L10n.lang("bbs.ui.snowstorm.initialization.creation");
@@ -893,6 +901,7 @@ public class UIKeys
     public static final IKey SNOWSTORM_SHAPE_NORMAL = L10n.lang("bbs.ui.snowstorm.shape.normal");
     public static final IKey SNOWSTORM_SHAPE_OFFSET = L10n.lang("bbs.ui.snowstorm.shape.offset");
     public static final IKey SNOWSTORM_SHAPE_POINT = L10n.lang("bbs.ui.snowstorm.shape.point");
+    public static final IKey SNOWSTORM_SHAPE_CUSTOM = L10n.lang("bbs.ui.snowstorm.shape.custom");
     public static final IKey SNOWSTORM_SHAPE_RADIUS = L10n.lang("bbs.ui.snowstorm.shape.radius");
     public static final IKey SNOWSTORM_SHAPE_SHAPE = L10n.lang("bbs.ui.snowstorm.shape.shape");
     public static final IKey SNOWSTORM_SHAPE_SPHERE = L10n.lang("bbs.ui.snowstorm.shape.sphere");
