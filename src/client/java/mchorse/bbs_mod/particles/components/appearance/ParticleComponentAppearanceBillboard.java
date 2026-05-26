@@ -464,7 +464,11 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         }
         else if (this.facing == CameraFacing.DIRECTION_X || this.facing == CameraFacing.DIRECTION_Y || this.facing == CameraFacing.DIRECTION_Z)
         {
-            double dirX = 0, dirY = 0, dirZ = 0;
+            /* Direction facing: the particle's face normal aligns with the specified axis of the direction vector.
+             * Direction X: particle face normal = direction X component → billboard lies in YZ plane
+             * Direction Y: particle face normal = direction Y component → billboard lies in XZ plane
+             * Direction Z: particle face normal = direction Z component → billboard lies in XY plane */
+            double dirX = 0, dirY = 0, dirZ = 1; /* default: face +Z */
 
             if ("custom".equals(this.directionMode) && this.customDirection != null)
             {
@@ -487,66 +491,91 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
                 }
             }
 
-            double yaw, pitch;
+            this.rotation.identity();
 
             if (this.facing == CameraFacing.DIRECTION_X)
             {
-                yaw = Math.atan2(-dirZ, dirX);
-                pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
+                /* Face normal aligns with direction X axis → billboard in YZ plane */
+                this.rotation.rotateY((float) Math.PI / 2);
+                double yaw = Math.atan2(dirX, -dirZ);
+                double pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
+
+                Matrix4f adjust = new Matrix4f();
+                adjust.rotateY((float) yaw);
+                this.transform.mul(adjust);
+                adjust.identity();
+                adjust.rotateX((float) pitch);
+                this.transform.mul(adjust);
             }
             else if (this.facing == CameraFacing.DIRECTION_Y)
             {
-                yaw = Math.atan2(-dirZ, dirX);
-                pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
+                /* Face normal aligns with direction Y axis → billboard in XZ plane */
+                this.rotation.rotateX(-(float) Math.PI / 2);
+                double yaw = Math.atan2(-dirZ, dirX);
+                double pitch = Math.atan2(dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
+
+                Matrix4f adjust = new Matrix4f();
+                adjust.rotateY((float) yaw);
+                this.transform.mul(adjust);
+                adjust.identity();
+                adjust.rotateX((float) pitch);
+                this.transform.mul(adjust);
             }
             else
             {
-                yaw = Math.atan2(dirX, dirZ);
-                pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
-            }
+                /* Direction Z: face normal aligns with direction Z axis → billboard in XY plane (default) */
+                double yaw = Math.atan2(-dirX, dirZ);
+                double pitch = Math.atan2(-dirY, Math.sqrt(dirX * dirX + dirZ * dirZ));
 
-            this.rotation.identity();
-            this.rotation.rotateY((float) yaw);
-            this.transform.mul(this.rotation);
-            this.rotation.identity();
-            this.rotation.rotateX((float) pitch);
-            this.transform.mul(this.rotation);
+                Matrix4f adjust = new Matrix4f();
+                adjust.rotateY((float) yaw);
+                this.transform.mul(adjust);
+                adjust.identity();
+                adjust.rotateX((float) pitch);
+                this.transform.mul(adjust);
+            }
         }
         else if (this.facing == CameraFacing.EMITTER_TRANSFORM_XY || this.facing == CameraFacing.EMITTER_TRANSFORM_XZ || this.facing == CameraFacing.EMITTER_TRANSFORM_YZ)
         {
+            /* Emitter transform: billboard lies in the specified plane of the emitter's local coordinate system.
+             * XY-Plane: billboard face normal = emitter Z axis (forward)
+             * XZ-Plane: billboard face normal = emitter Y axis (up)
+             * YZ-Plane: billboard face normal = emitter X axis (right) */
             Matrix3f emitterRot = emitter.rotation;
 
-            Vector3f basisX = emitterRot.getRow(0, new Vector3f());
-            Vector3f basisY = emitterRot.getRow(1, new Vector3f());
-            Vector3f basisZ = emitterRot.getRow(2, new Vector3f());
+            Vector3f right = emitterRot.getRow(0, new Vector3f());   /* emitter X axis */
+            Vector3f up = emitterRot.getRow(1, new Vector3f());       /* emitter Y axis */
+            Vector3f forward = emitterRot.getRow(2, new Vector3f()); /* emitter Z axis */
 
-            /* Build rotation matrix from emitter basis vectors */
             this.rotation.identity();
 
             if (this.facing == CameraFacing.EMITTER_TRANSFORM_XY)
             {
+                /* Billboard in emitter XY plane → face normal = forward (Z) */
                 this.rotation.set(
-                    basisX.x, basisY.x, 0, 0,
-                    basisX.y, basisY.y, 0, 0,
-                    basisX.z, basisY.z, 0, 0,
+                    right.x, up.x, forward.x, 0,
+                    right.y, up.y, forward.y, 0,
+                    right.z, up.z, forward.z, 0,
                     0, 0, 0, 1
                 );
             }
             else if (this.facing == CameraFacing.EMITTER_TRANSFORM_XZ)
             {
+                /* Billboard in emitter XZ plane → face normal = up (Y) */
                 this.rotation.set(
-                    basisX.x, 0, basisZ.x, 0,
-                    basisX.y, 0, basisZ.y, 0,
-                    basisX.z, 0, basisZ.z, 0,
+                    right.x, -forward.x, up.x, 0,
+                    right.y, -forward.y, up.y, 0,
+                    right.z, -forward.z, up.z, 0,
                     0, 0, 0, 1
                 );
             }
             else
             {
+                /* Billboard in emitter YZ plane → face normal = right (X) */
                 this.rotation.set(
-                    0, basisY.x, basisZ.x, 0,
-                    0, basisY.y, basisZ.y, 0,
-                    0, basisY.z, basisZ.z, 0,
+                    -up.x, forward.x, right.x, 0,
+                    -up.y, forward.y, right.y, 0,
+                    -up.z, forward.z, right.z, 0,
                     0, 0, 0, 1
                 );
             }

@@ -225,11 +225,11 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         this.flipbook.add(UI.row(5, 0, 20, this.stretch, this.loop));
 
         this.fields.add(UI.row(5, 0, 20, this.modeLabel, this.mode));
-        this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_FACING, 20).labelAnchor(0, 1F));
-        this.fields.add(this.facingMode);
         this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_SIZE, 20).labelAnchor(0, 1F));
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_WIDTH, this.sizeW));
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT, this.sizeH));
+        this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_FACING, 20).labelAnchor(0, 1F));
+        this.fields.add(this.facingMode);
         this.fields.add(UI.label(UIKeys.SNOWSTORM_APPEARANCE_MAPPING, 20).labelAnchor(0, 1F));
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_UV_X, this.uvX));
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_APPEARANCE_UV_Y, this.uvY));

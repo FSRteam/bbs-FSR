@@ -297,40 +297,61 @@ public class UICurve extends UIElement
 
         color.set(BBSSettings.primaryColor.get(), false);
 
-        for (int i = 0; i < c; i++)
+        if (this.curve.type == ParticleCurveType.BEZIER && c == 4)
         {
-            Vector2d v1 = this.getVector(i, this.range.x, this.range.y);
-            Vector2d v2 = this.getVector(i + 1, this.range.x, this.range.y);
-            boolean last = i == c - 1;
+            /* Cubic bezier: 4 control points [y1, cp1, cp2, y2] */
+            final double d = 20;
+            Vector2d v0 = this.getVector(0, this.range.x, this.range.y);
+            Vector2d v1 = this.getVector(1, this.range.x, this.range.y);
+            Vector2d v2 = this.getVector(2, this.range.x, this.range.y);
+            Vector2d v3 = this.getVector(3, this.range.x, this.range.y);
 
-            if (this.curve.type == ParticleCurveType.LINEAR)
+            for (int j = 0; j <= d; j++)
             {
-                line.add((float) v1.x, (float) v1.y);
+                float t = (float) (j / d);
+                int x = (int) Lerps.lerp(v0.x, v3.x, t);
+                int y = (int) Lerps.bezier(v0.y, v1.y, v2.y, v3.y, t);
 
-                if (last)
-                {
-                    line.add((float) v2.x, (float) v2.y);
-                }
+                line.add(x, y);
             }
-            else
+        }
+        else
+        {
+            for (int i = 0; i < c; i++)
             {
-                Vector2d v0 = this.getVector(i - 1, this.range.x, this.range.y);
-                Vector2d v3 = this.getVector(i + 2, this.range.x, this.range.y);
-                final double d = 5;
+                Vector2d v1 = this.getVector(i, this.range.x, this.range.y);
+                Vector2d v2 = this.getVector(i + 1, this.range.x, this.range.y);
+                boolean last = i == c - 1;
 
-                for (int j = 0; j < d; j++)
+                if (this.curve.type == ParticleCurveType.LINEAR)
                 {
-                    int x1 = (int) Lerps.lerp(v1.x, v2.x, j / d);
-                    int vy1 = (int) Lerps.cubicHermite(v0.y, v1.y, v2.y, v3.y, j / d);
-
-                    line.add(x1, vy1);
+                    line.add((float) v1.x, (float) v1.y);
 
                     if (last)
                     {
-                        int x2 = (int) Lerps.lerp(v1.x, v2.x, (j + 1) / d);
-                        int vy2 = (int) Lerps.cubicHermite(v0.y, v1.y, v2.y, v3.y, (j + 1) / d);
+                        line.add((float) v2.x, (float) v2.y);
+                    }
+                }
+                else
+                {
+                    Vector2d v0 = this.getVector(i - 1, this.range.x, this.range.y);
+                    Vector2d v3 = this.getVector(i + 2, this.range.x, this.range.y);
+                    final double d = 5;
 
-                        line.add(x2, vy2);
+                    for (int j = 0; j < d; j++)
+                    {
+                        int x1 = (int) Lerps.lerp(v1.x, v2.x, j / d);
+                        int vy1 = (int) Lerps.cubicHermite(v0.y, v1.y, v2.y, v3.y, j / d);
+
+                        line.add(x1, vy1);
+
+                        if (last)
+                        {
+                            int x2 = (int) Lerps.lerp(v1.x, v2.x, (j + 1) / d);
+                            int vy2 = (int) Lerps.cubicHermite(v0.y, v1.y, v2.y, v3.y, (j + 1) / d);
+
+                            line.add(x2, vy2);
+                        }
                     }
                 }
             }
@@ -344,8 +365,26 @@ public class UICurve extends UIElement
             int x = (int) vector.x;
             int y = (int) vector.y;
 
-            context.batcher.box(x - 3, y - 3, x + 3, y + 3, this.index == i ? Colors.setA(Colors.ACTIVE, 1F) : Colors.WHITE);
-            context.batcher.box(x - 2, y - 2, x + 2, y + 2, Colors.A100);
+            if (this.curve.type == ParticleCurveType.BEZIER && (i == 1 || i == 2))
+            {
+                /* Bezier control points: draw as hollow circles with connecting lines */
+                context.batcher.box(x - 2, y - 2, x + 2, y + 2, this.index == i ? Colors.setA(Colors.ACTIVE, 1F) : Colors.GRAY);
+
+                /* Draw line from endpoint to its control point */
+                int endpointIdx = (i == 1) ? 0 : 3;
+                Vector2d ep = this.getVector(endpointIdx, this.range.x, this.range.y);
+
+                builder = Tesselator.getInstance().begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
+                builder.addVertex(matrix, (float) ep.x, (float) ep.y, 0F).setColor(0.5F, 0.5F, 0.5F, 0.5F);
+                builder.addVertex(matrix, x, y, 0F).setColor(0.5F, 0.5F, 0.5F, 0.5F);
+                BufferUploader.drawWithShader(builder.buildOrThrow());
+            }
+            else
+            {
+                /* Regular anchor points: filled squares */
+                context.batcher.box(x - 3, y - 3, x + 3, y + 3, this.index == i ? Colors.setA(Colors.ACTIVE, 1F) : Colors.WHITE);
+                context.batcher.box(x - 2, y - 2, x + 2, y + 2, Colors.A100);
+            }
         }
     }
 }
