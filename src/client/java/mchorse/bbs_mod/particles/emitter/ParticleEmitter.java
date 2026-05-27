@@ -545,7 +545,7 @@ public class ParticleEmitter
 
                 /* Check if particle should use collision appearance instead of base billboard */
                 ParticleComponentCollisionAppearance collisionAppearance = this.scheme.get(ParticleComponentCollisionAppearance.class);
-                boolean hasCollisionTexture = collisionAppearance != null && collisionAppearance.isCollisionTextureEnabled(this) && particle.intersected;
+                boolean hasCollisionTexture = collisionAppearance != null && collisionAppearance.isCollisionTextureEnabled() && particle.intersected;
 
                 for (IComponentParticleRender component : renders)
                 {

@@ -7,9 +7,13 @@ import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleMaterial;
 import mchorse.bbs_mod.particles.ParticleScheme;
+import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.resources.Link;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import org.joml.Matrix4f;
 
 /**
  * Collision appearance component — renders a different billboard appearance
@@ -66,24 +70,19 @@ public class ParticleComponentCollisionAppearance extends ParticleComponentAppea
             return;
         }
 
-        /* When collision texture is enabled, use this component's UV/appearance.
-         * When collision texture is NOT enabled but collision tinting IS enabled,
-         * use the base billboard with collision tinting's lit setting. */
-        if (!isCollisionTextureEnabled(emitter))
+        if (!isCollisionTextureEnabled())
         {
             return;
         }
 
-        /* Temporarily override lit for collision appearance */
         boolean tmpLit = emitter.lit;
         emitter.lit = this.lit;
 
         this.calculateUVs(particle, emitter, transition);
 
-        emitter.lit = tmpLit;
-
-        /* Render using the parent billboard rendering logic */
         super.render(emitter, format, particle, builder, matrix, overlay, transition);
+
+        emitter.lit = tmpLit;
     }
 
     @Override
@@ -104,7 +103,7 @@ public class ParticleComponentCollisionAppearance extends ParticleComponentAppea
         return 200;
     }
 
-    public boolean isCollisionTextureEnabled(ParticleEmitter emitter)
+    public boolean isCollisionTextureEnabled()
     {
         return MolangExpression.isOne(this.enabled);
     }

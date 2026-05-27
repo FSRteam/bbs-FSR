@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.particles.sections;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.MolangParser;
+import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionTinting;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -46,6 +47,6 @@ public class UIParticleSchemeCollisionTintingSection extends UIParticleSchemeCom
     @Override
     protected void fillData()
     {
-        this.enabled.setValue(mchorse.bbs_mod.math.molang.expressions.MolangExpression.isOne(this.component.enabled));
+        this.enabled.setValue(MolangExpression.isOne(this.component.enabled));
     }
 }

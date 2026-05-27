@@ -62,6 +62,7 @@ public class Particle
     public boolean intersected;
     public int firstIntersection = -1;
     public float rotationCollisionDrag;
+    public boolean realisticCollisionDrag;
 
     /* Expiration delay (set by collision with expirationDelay) */
     private int expireAge = -1;

@@ -2,13 +2,13 @@ package mchorse.bbs_mod.ui.particles.sections;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.MolangParser;
+import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleMaterial;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionAppearance;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 
@@ -51,38 +51,38 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
 
         this.sizeW = new UITextbox(10000, (str) ->
         {
-            this.component.sizeW = this.parse(str, this.sizeW, this.component.sizeW);
+            this.component.sizeW = this.parse(str, this.component.sizeW);
             this.editor.dirty();
         });
         this.sizeW.tooltip(IKey.constant("Width"));
         this.sizeH = new UITextbox(10000, (str) ->
         {
-            this.component.sizeH = this.parse(str, this.sizeH, this.component.sizeH);
+            this.component.sizeH = this.parse(str, this.component.sizeH);
             this.editor.dirty();
         });
         this.sizeH.tooltip(IKey.constant("Height"));
 
         this.uvX = new UITextbox(10000, (str) ->
         {
-            this.component.uvX = this.parse(str, this.uvX, this.component.uvX);
+            this.component.uvX = this.parse(str, this.component.uvX);
             this.editor.dirty();
         });
         this.uvX.tooltip(IKey.constant("UV X"));
         this.uvY = new UITextbox(10000, (str) ->
         {
-            this.component.uvY = this.parse(str, this.uvY, this.component.uvY);
+            this.component.uvY = this.parse(str, this.component.uvY);
             this.editor.dirty();
         });
         this.uvY.tooltip(IKey.constant("UV Y"));
         this.uvW = new UITextbox(10000, (str) ->
         {
-            this.component.uvW = this.parse(str, this.uvW, this.component.uvW);
+            this.component.uvW = this.parse(str, this.component.uvW);
             this.editor.dirty();
         });
         this.uvW.tooltip(IKey.constant("UV W"));
         this.uvH = new UITextbox(10000, (str) ->
         {
-            this.component.uvH = this.parse(str, this.uvH, this.component.uvH);
+            this.component.uvH = this.parse(str, this.component.uvH);
             this.editor.dirty();
         });
         this.uvH.tooltip(IKey.constant("UV H"));
@@ -119,7 +119,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
     @Override
     protected void fillData()
     {
-        this.enabled.setValue(mchorse.bbs_mod.math.molang.expressions.MolangExpression.isOne(this.component.enabled));
+        this.enabled.setValue(MolangExpression.isOne(this.component.enabled));
         this.lit.setValue(this.component.lit);
         this.material.setValue(this.component.material.ordinal());
         this.sizeW.setText(this.component.sizeW == null ? "" : this.component.sizeW.toString());

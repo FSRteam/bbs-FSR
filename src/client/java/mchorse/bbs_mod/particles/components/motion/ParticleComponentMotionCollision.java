@@ -14,7 +14,6 @@ import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Vector3d;
 
 import java.util.Collections;
@@ -239,8 +238,8 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
         {
             float randomness = this.randomBounciness * 0.1F;
             float random1 = (float) Math.random() * randomness;
-            float perpAxis1 = (axis + 1) % 3;
-            float perpAxis2 = (axis + 2) % 3;
+            int perpAxis1 = (axis + 1) % 3;
+            int perpAxis2 = (axis + 2) % 3;
             float random2 = (float) (randomness * 0.25F * (Math.random() * 2 - 1));
             float random3 = (float) (randomness * 0.25F * (Math.random() * 2 - 1));
 
