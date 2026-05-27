@@ -14,6 +14,8 @@ import mchorse.bbs_mod.particles.components.IComponentEmitterUpdate;
 import mchorse.bbs_mod.particles.components.IComponentParticleInitialize;
 import mchorse.bbs_mod.particles.components.IComponentParticleRender;
 import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
+import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
+import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionAppearance;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -111,6 +113,17 @@ public class ParticleEmitter
     private Variable varEmitterUser5;
     private Variable varEmitterUser6;
 
+    /* Speed/Position/Bounces cached variables */
+    private Variable varSpeedABS;
+    private Variable varSpeedX;
+    private Variable varSpeedY;
+    private Variable varSpeedZ;
+    private Variable varPosX;
+    private Variable varPosY;
+    private Variable varPosZ;
+    private Variable varPosDistance;
+    private Variable varBounces;
+
     public double getAge()
     {
         return this.getAge(0);
@@ -198,6 +211,16 @@ public class ParticleEmitter
         this.varEmitterUser4 = this.scheme.parser.variables.get("variable.emitter_user_4");
         this.varEmitterUser5 = this.scheme.parser.variables.get("variable.emitter_user_5");
         this.varEmitterUser6 = this.scheme.parser.variables.get("variable.emitter_user_6");
+
+        this.varSpeedABS = this.scheme.parser.variables.get("variable.particle_speed.length");
+        this.varSpeedX = this.scheme.parser.variables.get("variable.particle_speed.x");
+        this.varSpeedY = this.scheme.parser.variables.get("variable.particle_speed.y");
+        this.varSpeedZ = this.scheme.parser.variables.get("variable.particle_speed.z");
+        this.varPosX = this.scheme.parser.variables.get("variable.particle_pos.x");
+        this.varPosY = this.scheme.parser.variables.get("variable.particle_pos.y");
+        this.varPosZ = this.scheme.parser.variables.get("variable.particle_pos.z");
+        this.varPosDistance = this.scheme.parser.variables.get("variable.particle_pos.distance");
+        this.varBounces = this.scheme.parser.variables.get("variable.particle_bounces");
     }
 
     public void setParticleVariables(Particle particle, float transition)
@@ -214,6 +237,20 @@ public class ParticleEmitter
         if (this.varPositionX != null) this.varPositionX.set(Lerps.lerp(particle.prevPosition.x, particle.position.x, transition));
         if (this.varPositionY != null) this.varPositionY.set(Lerps.lerp(particle.prevPosition.y, particle.position.y, transition));
         if (this.varPositionZ != null) this.varPositionZ.set(Lerps.lerp(particle.prevPosition.z, particle.position.z, transition));
+
+        /* Speed/Position/Bounces variables */
+        Vector3d relPos = particle.getGlobalPosition(this);
+        relPos.sub(this.lastGlobal);
+
+        if (this.varPosDistance != null) this.varPosDistance.set(relPos.length());
+        if (this.varPosX != null) this.varPosX.set(relPos.x);
+        if (this.varPosY != null) this.varPosY.set(relPos.y);
+        if (this.varPosZ != null) this.varPosZ.set(relPos.z);
+        if (this.varSpeedABS != null) this.varSpeedABS.set(particle.speed.length());
+        if (this.varSpeedX != null) this.varSpeedX.set(particle.speed.x);
+        if (this.varSpeedY != null) this.varSpeedY.set(particle.speed.y);
+        if (this.varSpeedZ != null) this.varSpeedZ.set(particle.speed.z);
+        if (this.varBounces != null) this.varBounces.set(particle.bounces);
 
         this.scheme.updateCurves();
     }
@@ -506,8 +543,18 @@ public class ParticleEmitter
                 this.setEmitterVariables(transition);
                 this.setParticleVariables(particle, transition);
 
+                /* Check if particle should use collision appearance instead of base billboard */
+                ParticleComponentCollisionAppearance collisionAppearance = this.scheme.get(ParticleComponentCollisionAppearance.class);
+                boolean hasCollisionTexture = collisionAppearance != null && collisionAppearance.isCollisionTextureEnabled(this) && particle.intersected;
+
                 for (IComponentParticleRender component : renders)
                 {
+                    /* Skip base billboard when collision appearance handles rendering */
+                    if (hasCollisionTexture && component.getClass() == ParticleComponentAppearanceBillboard.class)
+                    {
+                        continue;
+                    }
+
                     component.render(this, format, particle, builder, matrix, overlay, transition);
                 }
             }

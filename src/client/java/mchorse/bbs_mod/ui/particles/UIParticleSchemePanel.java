@@ -29,7 +29,9 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeAppearanceSection;
+import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCollisionAppearanceSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCollisionSection;
+import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCollisionTintingSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCurvesSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeExpirationSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeEventsSection;
@@ -156,6 +158,8 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         motionPage.addSection(new UIParticleSchemeMotionSection(this));
         motionPage.addSection(new UIParticleSchemeCollisionSection(this));
         appearancePage.addSection(new UIParticleSchemeAppearanceSection(this));
+        appearancePage.addSection(new UIParticleSchemeCollisionAppearanceSection(this));
+        appearancePage.addSection(new UIParticleSchemeCollisionTintingSection(this));
         appearancePage.addSection(new UIParticleSchemeLightingSection(this));
         timePage.addSection(new UIParticleSchemeExpirationSection(this));
         eventsPage.addSection(new UIParticleSchemeEventsSection(this));

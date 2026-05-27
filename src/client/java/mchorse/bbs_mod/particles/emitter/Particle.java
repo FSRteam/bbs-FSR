@@ -56,6 +56,17 @@ public class Particle
     public float b = 1;
     public float a = 1;
 
+    /* Collision tracking */
+    public int bounces;
+    public boolean collided;
+    public boolean intersected;
+    public int firstIntersection = -1;
+    public float rotationCollisionDrag;
+
+    /* Expiration delay (set by collision with expirationDelay) */
+    private int expireAge = -1;
+    private int expirationDelay = -1;
+
     private Vector3d global = new Vector3d();
 
     public Map<String, Double> localValues = new HashMap<>();
@@ -77,6 +88,27 @@ public class Particle
     public boolean isDead()
     {
         return this.dead;
+    }
+
+    public int getExpireAge()
+    {
+        return this.expireAge;
+    }
+
+    public int getExpirationDelay()
+    {
+        return this.expirationDelay;
+    }
+
+    public void setExpirationDelay(double delay)
+    {
+        int expDelay = (int) delay;
+
+        if (this.age + expDelay < this.expireAge || this.expireAge == -1)
+        {
+            this.expirationDelay = Math.abs(expDelay);
+            this.expireAge = this.age + this.expirationDelay;
+        }
     }
 
     public double getAge(float transition)
@@ -172,7 +204,7 @@ public class Particle
             this.position.z += vec.z / 20F;
         }
 
-        if (this.lifetime >= 0 && this.age >= this.lifetime)
+        if (this.lifetime >= 0 && (this.age >= this.lifetime || (this.age >= this.expireAge && this.expireAge != -1)))
         {
             this.setDead();
         }

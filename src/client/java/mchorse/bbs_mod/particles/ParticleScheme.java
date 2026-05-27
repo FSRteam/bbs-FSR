@@ -97,6 +97,17 @@ public class ParticleScheme extends ValueGroup {
         this.parser.register("variable.emitter_random_2");
         this.parser.register("variable.emitter_random_3");
         this.parser.register("variable.emitter_random_4");
+
+        /* Speed/Position/Bounces variables (Blockbuster extension, Snowstorm compatible) */
+        this.parser.register("variable.particle_speed.length");
+        this.parser.register("variable.particle_speed.x");
+        this.parser.register("variable.particle_speed.y");
+        this.parser.register("variable.particle_speed.z");
+        this.parser.register("variable.particle_pos.x");
+        this.parser.register("variable.particle_pos.y");
+        this.parser.register("variable.particle_pos.z");
+        this.parser.register("variable.particle_pos.distance");
+        this.parser.register("variable.particle_bounces");
     }
 
     public void setup()

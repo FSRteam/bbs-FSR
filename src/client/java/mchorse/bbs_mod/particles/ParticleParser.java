@@ -8,6 +8,8 @@ import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceLighting;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceTinting;
+import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionAppearance;
+import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionTinting;
 import mchorse.bbs_mod.particles.components.events.ParticleComponentEmitterLifetimeEvents;
 import mchorse.bbs_mod.particles.components.events.ParticleComponentParticleLifetimeEvents;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentExpireInBlocks;
@@ -106,6 +108,10 @@ public class ParticleParser
         this.components.put("particle_appearance_billboard", ParticleComponentAppearanceBillboard.class);
         this.components.put("particle_appearance_lighting", ParticleComponentAppearanceLighting.class);
         this.components.put("particle_appearance_tinting", ParticleComponentAppearanceTinting.class);
+
+        /* Collision appearance (Blockbuster extension) */
+        this.components.put("particle_collision_appearance", ParticleComponentCollisionAppearance.class);
+        this.components.put("particle_collision_tinting", ParticleComponentCollisionTinting.class);
 
         /* Motion & Rotation */
         this.components.put("particle_initial_speed", ParticleComponentInitialSpeed.class);
