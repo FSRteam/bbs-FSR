@@ -432,7 +432,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             {
                 double hDist = Math.sqrt(dX * dX + dZ * dZ);
                 entityYaw = 180 - (float) (Math.atan2(dZ, dX) * (180D / Math.PI)) - 90.0F;
-                entityPitch = (float) (-(Math.atan2(dY, hDist) * (180D / Math.PI))) + 180;
+                entityPitch = this.facing == CameraFacing.LOOKAT_Y ? 0F : (float) (-(Math.atan2(dY, hDist) * (180D / Math.PI))) + 180;
             }
         }
 
