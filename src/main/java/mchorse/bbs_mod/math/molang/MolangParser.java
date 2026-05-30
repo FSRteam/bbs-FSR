@@ -113,7 +113,7 @@ public class MolangParser extends MathBuilder
     @Override
     protected Variable getVariable(String name)
     {
-        if (name.charAt(1) == '.')
+        if (name.length() >= 2 && name.charAt(1) == '.')
         {
             if (name.charAt(0) == 'q')
             {

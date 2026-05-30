@@ -241,7 +241,7 @@ public class ParticleParser
     {
         for (Map.Entry<String, BaseType> entry : components)
         {
-            String key = entry.getKey().replaceAll(PREFIX, "").replaceAll(PREFIX_BLOCKBUSTER, "");
+            String key = this.stripKnownPrefix(entry.getKey());
 
             if (this.components.containsKey(key))
             {
@@ -252,19 +252,29 @@ public class ParticleParser
                     component = this.components.get(key).getConstructor().newInstance();
                 }
                 catch (Exception e)
-                {}
+                {
+                    System.err.println("Failed to parse given component " + key + " in " + scheme.identifier + ": " + e.getMessage());
+                    continue;
+                }
 
-                if (component != null)
-                {
-                    component.fromData(entry.getValue(), scheme.parser);
-                    scheme.addComponent(component);
-                }
-                else
-                {
-                    System.out.println("Failed to parse given component " + key + " in " + scheme.identifier + "!");
-                }
+                component.fromData(entry.getValue(), scheme.parser);
+                scheme.addComponent(component);
             }
         }
+    }
+
+    private String stripKnownPrefix(String key)
+    {
+        if (key.startsWith(PREFIX))
+        {
+            return key.substring(PREFIX.length());
+        }
+        else if (key.startsWith(PREFIX_BLOCKBUSTER))
+        {
+            return key.substring(PREFIX_BLOCKBUSTER.length());
+        }
+
+        return key;
     }
 
     private MapType getObject(MapType map, String key, String message) throws Exception
