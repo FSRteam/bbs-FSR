@@ -41,7 +41,16 @@ public class ParticleCurve
 
     public double compute()
     {
-        return this.computeCurve(this.input.get() / this.range.get());
+        double input = this.input.get();
+
+        if (this.type == ParticleCurveType.BEZIER_CHAIN)
+        {
+            return this.computeCurve(input);
+        }
+
+        double range = this.range.get();
+
+        return this.computeCurve(range == 0 ? 0 : input / range);
     }
 
     private double computeCurve(double factor)
@@ -198,6 +207,17 @@ public class ParticleCurve
         }
     }
 
+    public void ensureDefaultBezierChainNodes()
+    {
+        if (!this.bezierChainNodes.isEmpty())
+        {
+            return;
+        }
+
+        this.bezierChainNodes.put(0F, new BezierChainNode(0F, 0F, 0F, 0F));
+        this.bezierChainNodes.put(1F, new BezierChainNode(1F, 1F, 0F, 0F));
+    }
+
     private MolangExpression getNode(int index)
     {
         if (index < 0)
@@ -227,10 +247,25 @@ public class ParticleCurve
                 MapType node = new MapType();
                 BezierChainNode n = entry.getValue();
 
-                node.putFloat("left_value", n.leftValue);
-                node.putFloat("right_value", n.rightValue);
-                node.putFloat("left_slope", n.leftSlope);
-                node.putFloat("right_slope", n.rightSlope);
+                if (n.leftValue == n.rightValue)
+                {
+                    node.putFloat("value", n.leftValue);
+                }
+                else
+                {
+                    node.putFloat("left_value", n.leftValue);
+                    node.putFloat("right_value", n.rightValue);
+                }
+
+                if (n.leftSlope == n.rightSlope)
+                {
+                    node.putFloat("slope", n.leftSlope);
+                }
+                else
+                {
+                    node.putFloat("left_slope", n.leftSlope);
+                    node.putFloat("right_slope", n.rightSlope);
+                }
 
                 nodesMap.put(String.valueOf(entry.getKey()), node);
             }
@@ -250,7 +285,11 @@ public class ParticleCurve
         }
 
         curve.put("input", this.input.toData());
-        curve.put("horizontal_range", this.range.toData());
+
+        if (this.type != ParticleCurveType.BEZIER_CHAIN)
+        {
+            curve.put("horizontal_range", this.range.toData());
+        }
 
         return curve;
     }
@@ -276,14 +315,18 @@ public class ParticleCurve
                     if (entry.getValue().isMap())
                     {
                         MapType nodeData = entry.getValue().asMap();
-                        float leftValue = nodeData.has("left_value") ? nodeData.getFloat("left_value") : 0;
-                        float rightValue = nodeData.has("right_value") ? nodeData.getFloat("right_value") : 0;
-                        float leftSlope = nodeData.has("left_slope") ? nodeData.getFloat("left_slope") : 0;
-                        float rightSlope = nodeData.has("right_slope") ? nodeData.getFloat("right_slope") : 0;
+                        float value = nodeData.getFloat("value");
+                        float slope = nodeData.getFloat("slope");
+                        float leftValue = nodeData.has("left_value") ? nodeData.getFloat("left_value") : value;
+                        float rightValue = nodeData.has("right_value") ? nodeData.getFloat("right_value") : value;
+                        float leftSlope = nodeData.has("left_slope") ? nodeData.getFloat("left_slope") : slope;
+                        float rightSlope = nodeData.has("right_slope") ? nodeData.getFloat("right_slope") : slope;
 
                         this.bezierChainNodes.put(time, new BezierChainNode(leftValue, rightValue, leftSlope, rightSlope));
                     }
                 }
+
+                this.ensureDefaultBezierChainNodes();
             }
             else if (nodesData.isList())
             {
@@ -296,6 +339,11 @@ public class ParticleCurve
                     this.nodes.add(parser.parseDataSilently(nodes.get(i), MolangParser.ONE));
                 }
             }
+        }
+
+        if (this.type == ParticleCurveType.BEZIER_CHAIN)
+        {
+            this.ensureDefaultBezierChainNodes();
         }
     }
 }

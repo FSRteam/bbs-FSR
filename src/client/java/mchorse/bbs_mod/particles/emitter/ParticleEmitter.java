@@ -626,8 +626,9 @@ public class ParticleEmitter
 
     public void setupCameraProperties(net.minecraft.client.Camera camera)
     {
-        this.cYaw = camera.getYRot();
-        this.cPitch = camera.getXRot();
+        /* Match the internal BBS Camera overload used by the particle editor preview. */
+        this.cYaw = 180 - camera.getYRot();
+        this.cPitch = -camera.getXRot();
         this.cX = camera.getPosition().x;
         this.cY = camera.getPosition().y;
         this.cZ = camera.getPosition().z;

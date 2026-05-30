@@ -36,6 +36,9 @@ import java.util.Map;
 
 public class UICurve extends UIElement
 {
+    private static final double MIN_VIEW_ZOOM = 0.1D;
+    private static final double MAX_VIEW_ZOOM = 100D;
+
     private UIParticleSchemeSection section;
     private UITrackpad value;
 
@@ -46,6 +49,13 @@ public class UICurve extends UIElement
     private boolean moving;
     private int lastX;
     private int lastY;
+    private boolean panning;
+    private double viewOffsetX;
+    private double viewOffsetY;
+    private double viewZoomX = 1D;
+    private double viewZoomY = 1D;
+    private double panOffsetX;
+    private double panOffsetY;
 
     /* Bezier chain: selected node key (-1 = none, -2 = cp_out of prev, -3 = cp_in of next) */
     private float chainSelectedKey = -1;
@@ -151,12 +161,50 @@ public class UICurve extends UIElement
 
         MolangExpression expression = this.curve.nodes.get(index);
         double value = expression.get();
-        double factor = 1 - (value - min) / (max - min);
+        double x = index / (float) (this.curve.nodes.size() - 1);
 
-        int x = this.graph.x + (int) (index / (float) (this.curve.nodes.size() - 1) * this.graph.w);
-        int y = this.graph.y + (int) (this.graph.h * factor);
+        return this.toGraph(x, value);
+    }
 
-        return new Vector2d(x, y);
+    private Vector2d toGraph(double x, double value)
+    {
+        double factor = (value - this.range.x) / this.getRangeSize();
+        int graphX = this.graph.x + (int) Math.round((x - this.viewOffsetX) * this.viewZoomX * this.graph.w);
+        int graphY = this.graph.y + (int) Math.round((1 - (factor - this.viewOffsetY) * this.viewZoomY) * this.graph.h);
+
+        return new Vector2d(graphX, graphY);
+    }
+
+    private double fromGraphX(int mouseX)
+    {
+        if (this.graph.w <= 0)
+        {
+            return 0D;
+        }
+
+        return (mouseX - this.graph.x) / (double) this.graph.w / this.viewZoomX + this.viewOffsetX;
+    }
+
+    private double fromGraphYFactor(int mouseY)
+    {
+        if (this.graph.h <= 0)
+        {
+            return 0D;
+        }
+
+        return (1 - (mouseY - this.graph.y) / (double) this.graph.h) / this.viewZoomY + this.viewOffsetY;
+    }
+
+    private double fromGraphY(int mouseY)
+    {
+        return this.range.x + this.fromGraphYFactor(mouseY) * this.getRangeSize();
+    }
+
+    private double getRangeSize()
+    {
+        double size = this.range.y - this.range.x;
+
+        return Math.abs(size) < 0.000001D ? 1D : size;
     }
 
     /**
@@ -176,10 +224,7 @@ public class UICurve extends UIElement
         else if (i == 1) xPos = this.curve.bezierCP1X;
         else xPos = this.curve.bezierCP2X;
 
-        int x = this.graph.x + (int) (xPos * this.graph.w);
-        int y = this.graph.y + (int) (this.graph.h * factor);
-
-        return new Vector2d(x, y);
+        return this.toGraph(xPos, value);
     }
 
     private void updateRange()
@@ -208,6 +253,7 @@ public class UICurve extends UIElement
         }
 
         if (min == Double.POSITIVE_INFINITY) { min = 0; max = 1; }
+        else if (min == max) { min -= 1; max += 1; }
 
         this.range.set(min, max);
     }
@@ -227,6 +273,17 @@ public class UICurve extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        if (this.graph.isInside(context) && context.mouseButton == 2)
+        {
+            this.panning = true;
+            this.lastX = context.mouseX;
+            this.lastY = context.mouseY;
+            this.panOffsetX = this.viewOffsetX;
+            this.panOffsetY = this.viewOffsetY;
+
+            return true;
+        }
+
         if (this.area.isInside(context) && context.mouseButton == 0)
         {
             boolean ctrl = Window.isCtrlPressed();
@@ -269,9 +326,35 @@ public class UICurve extends UIElement
         return super.subMouseClicked(context);
     }
 
+    @Override
+    protected boolean subMouseScrolled(UIContext context)
+    {
+        if (this.graph.isInside(context) && !this.dragging && !this.panning && context.mouseWheel != 0D)
+        {
+            if (this.graph.w <= 0 || this.graph.h <= 0)
+            {
+                return true;
+            }
+
+            double x = this.fromGraphX(context.mouseX);
+            double y = this.fromGraphYFactor(context.mouseY);
+            double factor = context.mouseWheel > 0 ? 1.1D : 1D / 1.1D;
+            double anchorX = (context.mouseX - this.graph.x) / (double) this.graph.w;
+            double anchorY = 1D - (context.mouseY - this.graph.y) / (double) this.graph.h;
+
+            this.viewZoomX = MathUtils.clamp(this.viewZoomX * factor, MIN_VIEW_ZOOM, MAX_VIEW_ZOOM);
+            this.viewZoomY = MathUtils.clamp(this.viewZoomY * factor, MIN_VIEW_ZOOM, MAX_VIEW_ZOOM);
+            this.viewOffsetX = x - anchorX / this.viewZoomX;
+            this.viewOffsetY = y - anchorY / this.viewZoomY;
+
+            return true;
+        }
+
+        return super.subMouseScrolled(context);
+    }
+
     /**
      * Handle mouse clicks for bezier curve mode.
-     * Ctrl+click on empty space: add a bezier curve segment (creates 4 nodes if empty, or splits existing)
      * Ctrl+click on a control point: remove it (if more than 4 nodes)
      * Regular click: select and drag
      */
@@ -313,64 +396,6 @@ public class UICurve extends UIElement
             }
         }
 
-        /* Ctrl+click on empty space: create a new bezier segment */
-        if (ctrl && this.graph.isInside(context))
-        {
-            double xPos = (context.mouseX - this.graph.x) / (double) this.graph.w;
-            double factor = 1 - (context.mouseY - this.graph.y) / (double) this.graph.h;
-            double value = this.range.x + factor * (this.range.y - this.range.x);
-
-            if (c == 0)
-            {
-                /* Create initial 4-node bezier: P0=0, P1=0.33, P2=0.66, P3=1 */
-                this.curve.nodes.add(new MolangValue(null, new Constant(0)));
-                this.curve.nodes.add(new MolangValue(null, new Constant(value * 0.5)));
-                this.curve.nodes.add(new MolangValue(null, new Constant(value * 0.5)));
-                this.curve.nodes.add(new MolangValue(null, new Constant(value)));
-                this.curve.bezierCP1X = 0.33F;
-                this.curve.bezierCP2X = 0.66F;
-            }
-            else if (c == 4)
-            {
-                /* Split the existing single segment into two segments.
-                 * Old P3 becomes new P0 of second segment.
-                 * We need 4 more nodes, making total 8.
-                 * Insert: [cp1', cp2', new_p0_start, new_p3_end] between existing points.
-                 * Actually for simplicity: we insert a new segment after the current one.
-                 * The new P0 = old P3 value.
-                 * New P3 at the clicked position.
-                 */
-                double endVal = this.curve.nodes.get(3).get();
-
-                /* Insert 4 new nodes after index 3 */
-                this.curve.nodes.add(4, new MolangValue(null, new Constant(endVal)));
-                this.curve.nodes.add(5, new MolangValue(null, new Constant((endVal + value) / 2)));
-                this.curve.nodes.add(6, new MolangValue(null, new Constant((endVal + value) / 2)));
-                this.curve.nodes.add(7, new MolangValue(null, new Constant(value)));
-
-                /* New segment's CP x positions are relative to the segment's t range.
-                 * For now we use additional fields on ParticleCurve for the second segment. */
-                this.curve.bezierCP3X = (float) (xPos + (1 - xPos) * 0.33);
-                this.curve.bezierCP4X = (float) (xPos + (1 - xPos) * 0.66);
-            }
-            else
-            {
-                /* Append new segment at the end */
-                double prevEnd = this.curve.nodes.get(c - 1).get();
-
-                this.curve.nodes.add(new MolangValue(null, new Constant(prevEnd)));
-                this.curve.nodes.add(new MolangValue(null, new Constant((prevEnd + value) / 2)));
-                this.curve.nodes.add(new MolangValue(null, new Constant((prevEnd + value) / 2)));
-                this.curve.nodes.add(new MolangValue(null, new Constant(value)));
-            }
-
-            this.setIndex(this.curve.nodes.size() - 1);
-            this.section.dirty();
-            this.updateRange();
-
-            return true;
-        }
-
         this.setIndex(-1);
 
         return true;
@@ -386,6 +411,7 @@ public class UICurve extends UIElement
 
         this.dragging = false;
         this.moving = false;
+        this.panning = false;
 
         return super.subMouseReleased(context);
     }
@@ -409,6 +435,17 @@ public class UICurve extends UIElement
 
     private void handleDragging(UIContext context)
     {
+        if (this.panning)
+        {
+            if (this.graph.w > 0 && this.graph.h > 0)
+            {
+                this.viewOffsetX = this.panOffsetX - (context.mouseX - this.lastX) / (double) this.graph.w / this.viewZoomX;
+                this.viewOffsetY = this.panOffsetY + (context.mouseY - this.lastY) / (double) this.graph.h / this.viewZoomY;
+            }
+
+            return;
+        }
+
         if (this.dragging && !this.moving)
         {
             int dx = context.mouseX - this.lastX;
@@ -429,8 +466,7 @@ public class UICurve extends UIElement
             }
             else
             {
-                double factor = -(context.mouseY - this.graph.ey()) / (double) this.graph.h;
-                double value = this.range.x + factor * (this.range.y - this.range.x);
+                double value = this.fromGraphY(context.mouseY);
 
                 this.curve.nodes.set(this.index, new MolangValue(null, new Constant(value)));
                 this.value.setValue(value);
@@ -450,8 +486,7 @@ public class UICurve extends UIElement
      */
     private void handleBezierDragging(UIContext context)
     {
-        double factor = -(context.mouseY - this.graph.ey()) / (double) this.graph.h;
-        double value = this.range.x + factor * (this.range.y - this.range.x);
+        double value = this.fromGraphY(context.mouseY);
 
         this.curve.nodes.set(this.index, new MolangValue(null, new Constant(value)));
 
@@ -459,12 +494,12 @@ public class UICurve extends UIElement
         if (this.index == 1)
         {
             this.curve.bezierCP1X = (float) MathUtils.clamp(
-                (context.mouseX - this.graph.x) / (double) this.graph.w, 0.01, 0.99);
+                this.fromGraphX(context.mouseX), 0.01, 0.99);
         }
         else if (this.index == 2)
         {
             this.curve.bezierCP2X = (float) MathUtils.clamp(
-                (context.mouseX - this.graph.x) / (double) this.graph.w, 0.01, 0.99);
+                this.fromGraphX(context.mouseX), 0.01, 0.99);
         }
 
         this.value.setValue(value);
@@ -677,10 +712,7 @@ public class UICurve extends UIElement
      */
     private Vector2d getChainAnchorPos(float time, float value, double min, double max)
     {
-        double factor = 1 - (value - min) / (max - min);
-        int x = this.graph.x + (int) (time * this.graph.w);
-        int y = this.graph.y + (int) (this.graph.h * factor);
-        return new Vector2d(x, y);
+        return this.toGraph(time, value);
     }
 
     /**
@@ -739,10 +771,8 @@ public class UICurve extends UIElement
                 float t = (float) j / steps;
                 double globalT = t0 + t * (t1 - t0);
                 double val = Lerps.bezier(y0, cp0, cp1, y1, t);
-                double factor = 1 - (val - this.range.x) / (this.range.y - this.range.x);
-                int x = this.graph.x + (int) (globalT * this.graph.w);
-                int y = this.graph.y + (int) (this.graph.h * factor);
-                line.add(x, y);
+                Vector2d point = this.toGraph(globalT, val);
+                line.add((int) point.x, (int) point.y);
             }
         }
     }
@@ -898,9 +928,8 @@ public class UICurve extends UIElement
         /* Ctrl+click on empty space: add a new node */
         if (ctrl && this.graph.isInside(context))
         {
-            double time = (context.mouseX - this.graph.x) / (double) this.graph.w;
-            double factor = 1 - (context.mouseY - this.graph.y) / (double) this.graph.h;
-            double value = this.range.x + factor * (this.range.y - this.range.x);
+            double time = this.fromGraphX(context.mouseX);
+            double value = this.fromGraphY(context.mouseY);
             float t = (float) MathUtils.clamp(time, 0, 1);
             float v = (float) value;
 
@@ -933,7 +962,7 @@ public class UICurve extends UIElement
             /* Dragging left handle: adjust left_slope from mouse delta relative to anchor */
             Vector2d anchor = this.getChainAnchorPos(time, node.leftValue, this.range.x, this.range.y);
             double dx = context.mouseX - anchor.x;
-            double dy = -(context.mouseY - anchor.y); /* invert Y because screen Y is flipped */
+            double dy = context.mouseY - anchor.y;
             if (Math.abs(dx) > 1)
             {
                 node.leftSlope = (float) (dy / Math.abs(dx));
@@ -955,9 +984,8 @@ public class UICurve extends UIElement
         else
         {
             /* Dragging anchor: move value and time position */
-            double newTime = (context.mouseX - this.graph.x) / (double) this.graph.w;
-            double factor = 1 - (context.mouseY - this.graph.y) / (double) this.graph.h;
-            double newValue = this.range.x + factor * (this.range.y - this.range.x);
+            double newTime = this.fromGraphX(context.mouseX);
+            double newValue = this.fromGraphY(context.mouseY);
 
             float oldKey = this.chainSelectedKey;
             float newKey = (float) MathUtils.clamp(newTime, 0, 1);

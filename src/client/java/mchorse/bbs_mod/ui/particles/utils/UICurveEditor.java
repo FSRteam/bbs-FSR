@@ -118,8 +118,17 @@ public class UICurveEditor extends UIElement
 
     private void remove(UIIcon b)
     {
+        String name = this.particleCurve.variable.getName();
+        Variable variable = this.section.getScheme().parser.variables.get(name);
+
+        if (variable != null)
+        {
+            variable.set(0);
+        }
+
         this.removeFromParent();
-        this.section.getScheme().curves.remove(this.particleCurve.variable.getName());
+        this.section.getScheme().curves.remove(name);
+        this.section.getEditor().renderer.setScheme(this.section.getScheme());
         this.section.getEditor().resize();
         this.section.dirty();
     }
@@ -127,6 +136,13 @@ public class UICurveEditor extends UIElement
     private void changeType(int value)
     {
         this.particleCurve.type = ParticleCurveType.values()[value];
+
+        if (this.particleCurve.type == ParticleCurveType.BEZIER_CHAIN)
+        {
+            this.particleCurve.ensureDefaultBezierChainNodes();
+        }
+
+        this.curve.fill(this.particleCurve);
         this.section.dirty();
     }
 

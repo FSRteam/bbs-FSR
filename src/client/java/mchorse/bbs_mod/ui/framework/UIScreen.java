@@ -8,6 +8,8 @@ import mchorse.bbs_mod.importers.ImporterContext;
 import mchorse.bbs_mod.importers.Importers;
 import mchorse.bbs_mod.importers.types.IImporter;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UIBaseTextbox;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
 import mchorse.bbs_mod.ui.utils.IFileDropListener;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.FFMpegUtils;
@@ -181,12 +183,18 @@ public class UIScreen extends Screen implements IFileDropListener
         /* Disable long-press repeat (GLFW_REPEAT) in BBS panel.
          * MC 1.21.1 calls keyPressed() for both PRESS and REPEAT,
          * but original BBS only processes initial PRESS. */
-        if (BBSRendering.lastAction == GLFW.GLFW_REPEAT)
+        if (BBSRendering.lastAction == GLFW.GLFW_REPEAT && !this.canFocusedElementRepeatKeys())
         {
             return false;
         }
 
         return this.menu.handleKey(keyCode, scanCode, BBSRendering.lastAction, modifiers);
+    }
+
+    private boolean canFocusedElementRepeatKeys()
+    {
+        return this.menu.context.activeElement instanceof UIBaseTextbox
+            || this.menu.context.activeElement instanceof UITextarea;
     }
 
     @Override
