@@ -537,50 +537,27 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         }
         else if (this.facing == CameraFacing.EMITTER_TRANSFORM_XY || this.facing == CameraFacing.EMITTER_TRANSFORM_XZ || this.facing == CameraFacing.EMITTER_TRANSFORM_YZ)
         {
-            /* Emitter transform: billboard lies in the specified plane of the emitter's local coordinate system.
-             * XY-Plane: billboard face normal = emitter Z axis (forward)
-             * XZ-Plane: billboard face normal = emitter Y axis (up)
-             * YZ-Plane: billboard face normal = emitter X axis (right) */
-            Matrix3f emitterRot = emitter.rotation;
-
-            Vector3f right = emitterRot.getRow(0, new Vector3f());   /* emitter X axis */
-            Vector3f up = emitterRot.getRow(1, new Vector3f());       /* emitter Y axis */
-            Vector3f forward = emitterRot.getRow(2, new Vector3f()); /* emitter Z axis */
-
+            /* Emitter transform: billboard oriented in the specified plane of the emitter's local frame.
+             * Snowstorm implementation: default billboard is in XY plane (facing +Z),
+             * then rotated to the target plane:
+             *   XY: no rotation (default)
+             *   XZ: rotate -90 degrees around X axis
+             *   YZ: rotate +90 degrees around Y axis
+             * The emitter rotation is then applied on top. */
             this.rotation.identity();
 
-            if (this.facing == CameraFacing.EMITTER_TRANSFORM_XY)
+            if (this.facing == CameraFacing.EMITTER_TRANSFORM_XZ)
             {
-                /* Billboard in emitter XY plane → face normal = forward (Z) */
-                this.rotation.set(
-                    right.x, up.x, forward.x, 0,
-                    right.y, up.y, forward.y, 0,
-                    right.z, up.z, forward.z, 0,
-                    0, 0, 0, 1
-                );
+                this.rotation.rotateX((float) (-Math.PI / 2));
             }
-            else if (this.facing == CameraFacing.EMITTER_TRANSFORM_XZ)
+            else if (this.facing == CameraFacing.EMITTER_TRANSFORM_YZ)
             {
-                /* Billboard in emitter XZ plane → face normal = up (Y) */
-                this.rotation.set(
-                    right.x, -forward.x, up.x, 0,
-                    right.y, -forward.y, up.y, 0,
-                    right.z, -forward.z, up.z, 0,
-                    0, 0, 0, 1
-                );
-            }
-            else
-            {
-                /* Billboard in emitter YZ plane → face normal = right (X) */
-                this.rotation.set(
-                    -up.x, forward.x, right.x, 0,
-                    -up.y, forward.y, right.y, 0,
-                    -up.z, forward.z, right.z, 0,
-                    0, 0, 0, 1
-                );
+                this.rotation.rotateY((float) (Math.PI / 2));
             }
 
-            this.transform.mul(this.rotation);
+            /* Apply emitter rotation to the base orientation */
+            Matrix4f emitterMatrix = new Matrix4f().set(emitter.rotation);
+            this.transform.mul(emitterMatrix).mul(this.rotation);
         }
 
         if (format != DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)

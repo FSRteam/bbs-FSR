@@ -2,8 +2,6 @@ package mchorse.bbs_mod.ui.particles.sections;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.particles.ParticleScheme;
-import mchorse.bbs_mod.particles.components.expiration.ParticleComponentExpireInBlocks;
-import mchorse.bbs_mod.particles.components.expiration.ParticleComponentExpireNotInBlocks;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentKillPlane;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentParticleLifetime;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -25,8 +23,6 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
 
     private ParticleComponentParticleLifetime lifetime;
     private ParticleComponentKillPlane plane;
-    private ParticleComponentExpireInBlocks inBlocks;
-    private ParticleComponentExpireNotInBlocks notInBlocks;
 
     public UIParticleSchemeExpirationSection(UIParticleSchemePanel parent)
     {
@@ -107,8 +103,6 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
 
         this.lifetime = scheme.getOrCreate(ParticleComponentParticleLifetime.class);
         this.plane = scheme.getOrCreate(ParticleComponentKillPlane.class);
-        this.inBlocks = scheme.getOrCreate(ParticleComponentExpireInBlocks.class);
-        this.notInBlocks = scheme.getOrCreate(ParticleComponentExpireNotInBlocks.class);
 
         this.mode.setValue(this.lifetime.max ? 1 : 0);
         this.updateTooltip();

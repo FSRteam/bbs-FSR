@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.particles.sections;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRate;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateInstant;
+import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateManual;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateSteady;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;

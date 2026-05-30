@@ -159,4 +159,7 @@ public class Keys
 
     /* Texture picker */
     public static final KeyCombo TEXTURE_PICKER_FIND = new KeyCombo("find", UIKeys.TEXTURE_KEYS_FIND_ALL, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("texture_picker");
+
+    /* Particle editor */
+    public static final KeyCombo PARTICLE_PLAUSE = new KeyCombo("particle_plause", UIKeys.SNOWSTORM_PLAUSE, GLFW.GLFW_KEY_SPACE).categoryKey("particle");
 }

@@ -15,11 +15,15 @@ public class ParticleComponentInitialization extends ParticleComponentBase imple
     public MolangExpression creation = MolangParser.ZERO;
     public MolangExpression update = MolangParser.ZERO;
 
+    /* Blockbuster specific expression - local inside a particle */
+    public MolangExpression particleUpdate = MolangParser.ZERO;
+
     @Override
     protected void toData(MapType data)
     {
         if (!MolangExpression.isZero(this.creation)) data.put("creation_expression", this.creation.toData());
         if (!MolangExpression.isZero(this.update)) data.put("per_update_expression", this.update.toData());
+        if (!MolangExpression.isZero(this.particleUpdate)) data.put("particle_update_expression", this.particleUpdate.toData());
     }
 
     public ParticleComponentBase fromData(BaseType data, MolangParser parser) throws MolangException
@@ -33,6 +37,7 @@ public class ParticleComponentInitialization extends ParticleComponentBase imple
 
         if (element.has("creation_expression")) this.creation = parser.parseGlobalData(element.get("creation_expression"));
         if (element.has("per_update_expression")) this.update = parser.parseGlobalData(element.get("per_update_expression"));
+        if (element.has("particle_update_expression")) this.particleUpdate = parser.parseGlobalData(element.get("particle_update_expression"));
 
         return super.fromData(element, parser);
     }

@@ -9,6 +9,7 @@ import mchorse.bbs_mod.math.IExpression;
 import mchorse.bbs_mod.math.Variable;
 import mchorse.bbs_mod.particles.ParticleMaterial;
 import mchorse.bbs_mod.particles.ParticleScheme;
+import mchorse.bbs_mod.particles.components.meta.ParticleComponentInitialization;
 import mchorse.bbs_mod.particles.components.IComponentEmitterInitialize;
 import mchorse.bbs_mod.particles.components.IComponentEmitterUpdate;
 import mchorse.bbs_mod.particles.components.IComponentParticleInitialize;
@@ -253,6 +254,13 @@ public class ParticleEmitter
         if (this.varBounces != null) this.varBounces.set(particle.bounces);
 
         this.scheme.updateCurves();
+
+        ParticleComponentInitialization initComponent = this.scheme.get(ParticleComponentInitialization.class);
+
+        if (initComponent != null)
+        {
+            initComponent.particleUpdate.get();
+        }
     }
 
     public void setEmitterVariables(float transition)
@@ -351,6 +359,11 @@ public class ParticleEmitter
             return;
         }
 
+        if (this.paused)
+        {
+            return;
+        }
+
         this.setEmitterVariables(0);
 
         for (IComponentEmitterUpdate component : this.scheme.emitterUpdates)
@@ -361,10 +374,7 @@ public class ParticleEmitter
         this.setEmitterVariables(0);
         this.updateParticles();
 
-        if (!this.paused)
-        {
-            this.age += 1;
-        }
+        this.age += 1;
     }
 
     /**
@@ -612,5 +622,14 @@ public class ParticleEmitter
         this.cX = camera.position.x;
         this.cY = camera.position.y;
         this.cZ = camera.position.z;
+    }
+
+    public void setupCameraProperties(net.minecraft.client.Camera camera)
+    {
+        this.cYaw = camera.getYRot();
+        this.cPitch = camera.getXRot();
+        this.cX = camera.getPosition().x;
+        this.cY = camera.getPosition().y;
+        this.cZ = camera.getPosition().z;
     }
 }

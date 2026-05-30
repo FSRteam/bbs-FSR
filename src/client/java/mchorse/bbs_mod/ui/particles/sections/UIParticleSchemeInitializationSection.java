@@ -11,6 +11,7 @@ public class UIParticleSchemeInitializationSection extends UIParticleSchemeCompo
 {
     public UITextbox create;
     public UITextbox update;
+    public UITextbox particleUpdate;
 
     public UIParticleSchemeInitializationSection(UIParticleSchemePanel parent)
     {
@@ -32,8 +33,17 @@ public class UIParticleSchemeInitializationSection extends UIParticleSchemeCompo
         this.update.placeholder(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE);
         this.update.tooltip(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE_TOOLTIP);
 
+        this.particleUpdate = new UITextbox(10000, (str) ->
+        {
+            this.component.particleUpdate = this.parse(str, this.component.particleUpdate);
+            this.editor.markUndoBoundary();
+        });
+        this.particleUpdate.placeholder(UIKeys.SNOWSTORM_PARTICLE_EXPRESSION_TITLE);
+        this.particleUpdate.tooltip(UIKeys.SNOWSTORM_PARTICLE_EXPRESSION_TOOLTIP);
+
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_INITIALIZATION_CREATION, this.create));
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE, this.update));
+        this.fields.add(this.labeledField(UIKeys.SNOWSTORM_PARTICLE_EXPRESSION_TITLE, this.particleUpdate));
     }
 
     @Override
@@ -55,5 +65,6 @@ public class UIParticleSchemeInitializationSection extends UIParticleSchemeCompo
 
         this.create.setText(this.component.creation == null ? "" : this.component.creation.toString());
         this.update.setText(this.component.update == null ? "" : this.component.update.toString());
+        this.particleUpdate.setText(this.component.particleUpdate == null ? "" : this.component.particleUpdate.toString());
     }
 }

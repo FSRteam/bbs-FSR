@@ -38,12 +38,16 @@ import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapePoint;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeSphere;
 import mchorse.bbs_mod.resources.Link;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class ParticleParser
 {
     public static final String PREFIX = "minecraft:";
+    public static final String PREFIX_BLOCKBUSTER = "blockbuster:";
 
     public Map<String, Class<? extends ParticleComponentBase>> components = new HashMap<>();
 
@@ -237,7 +241,7 @@ public class ParticleParser
     {
         for (Map.Entry<String, BaseType> entry : components)
         {
-            String key = entry.getKey().replaceAll(PREFIX, "");
+            String key = entry.getKey().replaceAll(PREFIX, "").replaceAll(PREFIX_BLOCKBUSTER, "");
 
             if (this.components.containsKey(key))
             {
@@ -323,6 +327,11 @@ public class ParticleParser
         }
     }
 
+    private Set<String> blockbusterKeys = new HashSet<>(Arrays.asList(
+        "particle_collision_appearance",
+        "particle_collision_tinting"
+    ));
+
     private void addComponents(MapType effect, ParticleScheme scheme)
     {
         MapType components = new MapType();
@@ -343,7 +352,8 @@ public class ParticleParser
             {
                 if (entry.getValue().equals(component.getClass()))
                 {
-                    components.put(PREFIX + entry.getKey(), element);
+                    String prefix = this.blockbusterKeys.contains(entry.getKey()) ? PREFIX_BLOCKBUSTER : PREFIX;
+                    components.put(prefix + entry.getKey(), element);
 
                     continue main;
                 }

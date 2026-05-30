@@ -832,8 +832,11 @@ public class UIKeys
     public static final IKey SNOWSTORM_COLLISION_APPEARANCE_TITLE = L10n.lang("bbs.ui.snowstorm.collision.appearance.title");
     public static final IKey SNOWSTORM_COLLISION_APPEARANCE_ENABLED = L10n.lang("bbs.ui.snowstorm.collision.appearance.enabled");
     public static final IKey SNOWSTORM_COLLISION_APPEARANCE_LIT = L10n.lang("bbs.ui.snowstorm.collision.appearance.lit");
+    public static final IKey SNOWSTORM_COLLISION_MATERIAL = L10n.lang("bbs.ui.snowstorm.collision.material");
+    public static final IKey SNOWSTORM_COLLISION_UV_MAPPING = L10n.lang("bbs.ui.snowstorm.collision.uv_mapping");
     public static final IKey SNOWSTORM_COLLISION_TINTING_TITLE = L10n.lang("bbs.ui.snowstorm.collision.tinting.title");
     public static final IKey SNOWSTORM_COLLISION_TINTING_ENABLED = L10n.lang("bbs.ui.snowstorm.collision.tinting.enabled");
+    public static final IKey SNOWSTORM_PLAUSE = L10n.lang("bbs.ui.snowstorm.plause");
     public static final IKey SNOWSTORM_CURVES_ADD = L10n.lang("bbs.ui.snowstorm.curves.add");
     public static final IKey SNOWSTORM_CURVES_CONTEXT_ADD = L10n.lang("bbs.ui.snowstorm.curves.context.add");
     public static final IKey SNOWSTORM_CURVES_CONTEXT_REMOVE = L10n.lang("bbs.ui.snowstorm.curves.context.remove");
@@ -851,6 +854,9 @@ public class UIKeys
     public static final IKey SNOWSTORM_EXPIRATION_MAX = L10n.lang("bbs.ui.snowstorm.expiration.max");
     public static final IKey SNOWSTORM_EXPIRATION_MAX_TOOLTIP = L10n.lang("bbs.ui.snowstorm.expiration.max_tooltip");
     public static final IKey SNOWSTORM_EXPIRATION_TITLE = L10n.lang("bbs.ui.snowstorm.expiration.title");
+    public static final IKey SNOWSTORM_EXPIRATION_IN_BLOCKS = L10n.lang("bbs.ui.snowstorm.expiration.in_blocks");
+    public static final IKey SNOWSTORM_EXPIRATION_NOT_IN_BLOCKS = L10n.lang("bbs.ui.snowstorm.expiration.not_in_blocks");
+    public static final IKey SNOWSTORM_EXPIRATION_ADD_BLOCK = L10n.lang("bbs.ui.snowstorm.expiration.add_block");
     public static final IKey SNOWSTORM_EXPRESSION = L10n.lang("bbs.ui.snowstorm.expression");
     public static final IKey SNOWSTORM_GENERAL_IDENTIFIER = L10n.lang("bbs.ui.snowstorm.general.identifier");
     public static final IKey SNOWSTORM_GENERAL_PARTICLES_ALPHA = L10n.lang("bbs.ui.snowstorm.general.particles_alpha");
@@ -864,6 +870,8 @@ public class UIKeys
     public static final IKey SNOWSTORM_INITIALIZATION_TITLE = L10n.lang("bbs.ui.snowstorm.initialization.title");
     public static final IKey SNOWSTORM_INITIALIZATION_UPDATE = L10n.lang("bbs.ui.snowstorm.initialization.update");
     public static final IKey SNOWSTORM_INITIALIZATION_UPDATE_TOOLTIP = L10n.lang("bbs.ui.snowstorm.initialization.update_tooltip");
+    public static final IKey SNOWSTORM_PARTICLE_EXPRESSION_TITLE = L10n.lang("bbs.ui.snowstorm.particle_expression.title");
+    public static final IKey SNOWSTORM_PARTICLE_EXPRESSION_TOOLTIP = L10n.lang("bbs.ui.snowstorm.particle_expression.tooltip");
     public static final IKey SNOWSTORM_LIFETIME_ACTIVE_EXPRESSION = L10n.lang("bbs.ui.snowstorm.lifetime.active_expression");
     public static final IKey SNOWSTORM_LIFETIME_ACTIVE_LOOPING = L10n.lang("bbs.ui.snowstorm.lifetime.active_looping");
     public static final IKey SNOWSTORM_LIFETIME_ACTIVE_ONCE = L10n.lang("bbs.ui.snowstorm.lifetime.active_once");

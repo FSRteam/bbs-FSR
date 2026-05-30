@@ -152,7 +152,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
                     ? this.getShader(context, GameRenderer::getRendertypeEntityTranslucentShader, BBSShaders::getPickerBillboardProgram)
                     : this.getShader(context, GameRenderer::getParticleShader, BBSShaders::getPickerParticlesProgram);
 
-                emitter.setupCameraProperties(context.camera);
+                emitter.setupCameraProperties(Minecraft.getInstance().gameRenderer.getMainCamera());
                 emitter.render(format, shader, context.stack, context.overlay, context.getTransition());
             }
 

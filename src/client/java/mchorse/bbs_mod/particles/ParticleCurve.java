@@ -26,6 +26,12 @@ public class ParticleCurve
     /* Bezier chain nodes: key=time, value=node data */
     public TreeMap<Float, BezierChainNode> bezierChainNodes = new TreeMap<>();
 
+    /* Bezier editor: X positions of control points (0..1 range) for visual editing */
+    public float bezierCP1X = 0.33F;
+    public float bezierCP2X = 0.66F;
+    public float bezierCP3X = 0.33F;
+    public float bezierCP4X = 0.66F;
+
     public ParticleCurve()
     {
         this.nodes.add(MolangParser.ZERO);
@@ -82,18 +88,32 @@ public class ParticleCurve
         }
         else if (this.type == ParticleCurveType.BEZIER)
         {
-            /* Bezier: nodes = [y1, cp1, cp2, y2] — cubic bezier with 4 control points */
+            /* Bezier: 4 nodes per segment [P0, P1, P2, P3] — cubic bezier
+             * P0=start value, P1=control point 1 value, P2=control point 2 value, P3=end value
+             * Multiple segments are supported: each 4 nodes = one segment */
             if (length < 4)
             {
                 return this.nodes.get(0).get();
             }
 
-            double y1 = this.nodes.get(0).get();
-            double cp1 = this.nodes.get(1).get();
-            double cp2 = this.nodes.get(2).get();
-            double y2 = this.nodes.get(3).get();
+            int segments = length / 4;
+            double segFactor = factor * segments;
+            int segIndex = (int) segFactor;
 
-            return Lerps.bezier(y1, cp1, cp2, y2, factor);
+            if (segIndex >= segments)
+            {
+                segIndex = segments - 1;
+            }
+
+            double localT = segFactor - segIndex;
+            int base = segIndex * 4;
+
+            double y0 = this.nodes.get(base).get();
+            double y1 = this.nodes.get(base + 1).get();
+            double y2 = this.nodes.get(base + 2).get();
+            double y3 = this.nodes.get(base + 3).get();
+
+            return Lerps.bezier(y0, y1, y2, y3, localT);
         }
 
         factor *= length - 1;

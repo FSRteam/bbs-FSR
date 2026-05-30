@@ -31,15 +31,16 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeAppearanceSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCollisionAppearanceSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCollisionSection;
-import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCollisionTintingSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeCurvesSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeExpirationSection;
+import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeExpireInBlocksSection;
+import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeExpireNotInBlocksSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeEventsSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeGeneralSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeInitializationSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeLifetimeSection;
-import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeLightingSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeMotionSection;
+import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeParticleInitializationSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeRateSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeShapeSection;
@@ -95,6 +96,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     public UIIcon lockLayoutButton;
     public UIIcon layoutPresetsButton;
+    public UIIcon playPauseBtn;
     private boolean layoutLocked = true;
     private UICopyPasteController layoutPresetsController;
 
@@ -137,8 +139,18 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                 super.render(context);
             }
         };
-        previewPanel.add(this.renderer);
+
+        /* Play/Pause button in the preview panel */
+        this.playPauseBtn = new UIIcon(() ->
+        {
+            ParticleEmitter e = UIParticleSchemePanel.this.renderer.emitter;
+            return (e != null && e.paused) ? Icons.PLAY : Icons.PAUSE;
+        }, (b) -> UIParticleSchemePanel.this.togglePlause());
+        this.playPauseBtn.tooltip(UIKeys.SNOWSTORM_PLAUSE, Direction.TOP);
+
+        previewPanel.add(this.renderer, this.playPauseBtn);
         this.renderer.full(previewPanel);
+        this.playPauseBtn.relative(previewPanel).x(4).y(1F, -24);
 
         UIParticleTabPage filePage = new UIParticleTabPage();
         UIParticleTabPage emitterPage = new UIParticleTabPage();
@@ -152,6 +164,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         filePage.addSection(new UIParticleSchemeGeneralSection(this));
         filePage.addSection(new UIParticleSchemeSpaceSection(this));
         filePage.addSection(new UIParticleSchemeInitializationSection(this));
+        filePage.addSection(new UIParticleSchemeParticleInitializationSection(this));
         emitterPage.addSection(new UIParticleSchemeRateSection(this));
         emitterPage.addSection(new UIParticleSchemeLifetimeSection(this));
         emitterPage.addSection(new UIParticleSchemeShapeSection(this));
@@ -159,9 +172,9 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         motionPage.addSection(new UIParticleSchemeCollisionSection(this));
         appearancePage.addSection(new UIParticleSchemeAppearanceSection(this));
         appearancePage.addSection(new UIParticleSchemeCollisionAppearanceSection(this));
-        appearancePage.addSection(new UIParticleSchemeCollisionTintingSection(this));
-        appearancePage.addSection(new UIParticleSchemeLightingSection(this));
         timePage.addSection(new UIParticleSchemeExpirationSection(this));
+        timePage.addSection(new UIParticleSchemeExpireInBlocksSection(this));
+        timePage.addSection(new UIParticleSchemeExpireNotInBlocksSection(this));
         eventsPage.addSection(new UIParticleSchemeEventsSection(this));
         curvesPage.addSection(new UIParticleSchemeCurvesSection(this));
 
@@ -233,7 +246,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         /* Undo/Redo keybinds */
         this.setUndoId("particle_panel");
-        this.add(new UIParticleSchemePanelUndoKeys(this).full(this));
+        this.add(new UIParticleSchemePanelKeys(this).full(this));
     }
 
     private void collectSections(UIParticleTabPage page)
@@ -1213,6 +1226,15 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             int y = (preview != null ? preview.area.ey() : this.area.ey()) - 12;
 
             context.batcher.textShadow(label, this.area.ex() - 4 - context.batcher.getFont().getWidth(label), y);
+
+            /* Draw play/pause button in preview bottom-left */
+            if (preview != null)
+            {
+                Icon icon = emitter.paused ? Icons.PLAY : Icons.PAUSE;
+                int bx = preview.area.x + 4;
+                int by = preview.area.ey() - 20;
+                context.batcher.icon(icon, Colors.WHITE, bx, by, 1F, 1F);
+            }
         }
     }
 
@@ -1398,14 +1420,29 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     /* ===== Undo keys overlay ===== */
 
-    private static class UIParticleSchemePanelUndoKeys extends UIElement
+    private static class UIParticleSchemePanelKeys extends UIElement
     {
-        public UIParticleSchemePanelUndoKeys(UIParticleSchemePanel panel)
+        public UIParticleSchemePanelKeys(UIParticleSchemePanel panel)
         {
             this.keys().ignoreFocus();
             this.keys().register(Keys.UNDO, panel::undo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
             this.keys().register(Keys.REDO, panel::redo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
+            this.keys().register(Keys.PARTICLE_PLAUSE, panel::togglePlause).category(UIKeys.PARTICLE_EDITOR_TITLE);
             this.noCulling();
         }
+    }
+
+    /* ===== Plause (play/pause toggle) ===== */
+
+    public void togglePlause()
+    {
+        ParticleEmitter emitter = this.renderer.emitter;
+
+        if (emitter == null)
+        {
+            return;
+        }
+
+        emitter.paused = !emitter.paused;
     }
 }

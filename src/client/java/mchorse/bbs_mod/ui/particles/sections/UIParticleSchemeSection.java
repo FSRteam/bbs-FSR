@@ -30,6 +30,14 @@ public abstract class UIParticleSchemeSection extends UIElement
 
     protected boolean collapsed;
 
+    /* Per-field expand: label click shows full text and moves field to next line */
+    private String expandedField = null;
+
+    private void setExpanded(IKey label, boolean expanded)
+    {
+        this.expandedField = expanded ? label.get() : null;
+    }
+
     public UIParticleSchemeSection(UIParticleSchemePanel editor)
     {
         super();
@@ -115,9 +123,75 @@ public abstract class UIParticleSchemeSection extends UIElement
         return element;
     }
 
+    /**
+     * Create a labeled field row. By default the label is truncated to FIELD_LABEL_WIDTH.
+     * Clicking the label expands it to show the full text and moves the input field to the next line.
+     */
     protected UIElement labeledField(IKey label, UIElement field)
     {
-        return UI.row(5, 0, 20, this.fieldLabel(label), field);
+        return new ExpandableLabeledField(this.fieldLabel(label), field, label, this);
+    }
+
+    /**
+     * Labeled field that toggles between inline (truncated label + field on same row)
+     * and expanded (full-width label on top row, field on next row) on label click.
+     */
+    private static class ExpandableLabeledField extends UIElement
+    {
+        private final UILabel label;
+        private final UIElement field;
+        private final IKey labelKey;
+        private final UIParticleSchemeSection section;
+        private boolean expanded;
+
+        ExpandableLabeledField(UILabel label, UIElement field, IKey labelKey, UIParticleSchemeSection section)
+        {
+            this.label = label;
+            this.field = field;
+            this.labelKey = labelKey;
+            this.section = section;
+            this.expanded = false;
+
+            this.row(5).height(20);
+            this.add(this.label, this.field);
+        }
+
+        @Override
+        public boolean subMouseClicked(UIContext context)
+        {
+            if (this.label.area.isInside(context) && context.mouseButton == 0)
+            {
+                this.expanded = !this.expanded;
+                this.section.setExpanded(this.labelKey, this.expanded);
+                this.rebuildLayout();
+                this.section.resizeParent();
+
+                return true;
+            }
+
+            return super.subMouseClicked(context);
+        }
+
+        private void rebuildLayout()
+        {
+            this.removeAll();
+
+            if (this.expanded)
+            {
+                /* Expanded: label takes full width on its own row, field on next row */
+                this.label.w(0);
+                this.column().vertical().stretch();
+                this.add(this.label);
+                this.add(this.field);
+            }
+            else
+            {
+                /* Inline: label truncated, field on same row */
+                this.label.w(FIELD_LABEL_WIDTH);
+                this.row(5).height(20);
+                this.add(this.label, this.field);
+            }
+        }
     }
 
     public void dirty()
