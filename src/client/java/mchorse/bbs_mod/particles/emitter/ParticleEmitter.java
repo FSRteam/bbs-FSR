@@ -77,6 +77,7 @@ public class ParticleEmitter
     /* Camera properties */
     public float cYaw;
     public float cPitch;
+    public Matrix3f cameraRotation = new Matrix3f();
 
     public double cX;
     public double cY;
@@ -617,8 +618,9 @@ public class ParticleEmitter
 
     public void setupCameraProperties(Camera camera)
     {
-        this.cYaw = 180 - MathUtils.toDeg(camera.rotation.y);
-        this.cPitch = MathUtils.toDeg(camera.rotation.x);
+        this.cYaw = -MathUtils.toDeg(camera.rotation.y);
+        this.cPitch = -MathUtils.toDeg(camera.rotation.x);
+        this.cameraRotation.set(camera.view).invert();
         this.cX = camera.position.x;
         this.cY = camera.position.y;
         this.cZ = camera.position.z;
@@ -626,9 +628,9 @@ public class ParticleEmitter
 
     public void setupCameraProperties(net.minecraft.client.Camera camera)
     {
-        /* Match the internal BBS Camera overload used by the particle editor preview. */
-        this.cYaw = 180 - camera.getYRot();
-        this.cPitch = -camera.getXRot();
+        this.cYaw = -camera.getYRot();
+        this.cPitch = camera.getXRot();
+        this.cameraRotation.set(new Matrix4f().rotate(camera.rotation())).invert();
         this.cX = camera.getPosition().x;
         this.cY = camera.getPosition().y;
         this.cZ = camera.getPosition().z;

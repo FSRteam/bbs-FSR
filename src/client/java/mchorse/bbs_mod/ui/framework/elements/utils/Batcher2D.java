@@ -381,6 +381,11 @@ public class Batcher2D
 
     public void texturedBox(Texture texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
+        if (w <= 0F || h <= 0F)
+        {
+            return;
+        }
+
         Matrix4f matrix = this.context.pose().last().pose();
 
         flushBeforeTesselator();
@@ -403,6 +408,11 @@ public class Batcher2D
 
     public void texturedBox(Supplier<ShaderInstance> shader, int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
+        if (w <= 0F || h <= 0F)
+        {
+            return;
+        }
+
         Matrix4f matrix = this.context.pose().last().pose();
 
         flushBeforeTesselator();
@@ -432,6 +442,11 @@ public class Batcher2D
 
     public void texturedArea(Texture texture, int color, float x, float y, float w, float h, float u, float v, float tileW, float tileH, int tw, int th)
     {
+        if (w <= 0F || h <= 0F || tileW <= 0F || tileH <= 0F)
+        {
+            return;
+        }
+
         int countX = (int) (((w - 1) / tileW) + 1);
         int countY = (int) (((h - 1) / tileH) + 1);
         float fillerX = w - (countX - 1) * tileW;

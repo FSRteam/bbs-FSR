@@ -85,12 +85,22 @@ public class UIColorPalette extends UIElement
         {
             int elements = this.area.w / this.cellSize;
 
+            if (elements <= 0)
+            {
+                return;
+            }
+
             if (this.area.h > this.cellSize)
             {
                 context.batcher.iconArea(Icons.CHECKBOARD, this.area.x, this.area.y, this.area.w, this.area.h - this.cellSize);
             }
 
-            context.batcher.iconArea(Icons.CHECKBOARD, this.area.x, this.area.ey() - this.cellSize, count % elements * this.cellSize, this.cellSize);
+            int remainder = count % elements;
+
+            if (remainder > 0)
+            {
+                context.batcher.iconArea(Icons.CHECKBOARD, this.area.x, this.area.ey() - this.cellSize, remainder * this.cellSize, this.cellSize);
+            }
 
             for (int i = count - 1, j = 0; i >= 0; i--, j++)
             {

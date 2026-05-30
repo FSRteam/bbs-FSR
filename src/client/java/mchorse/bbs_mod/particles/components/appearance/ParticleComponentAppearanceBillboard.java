@@ -447,7 +447,20 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         this.vertices[3].set(-this.w / 2, this.h / 2, 0, 1);
         this.transform.identity();
 
-        if (this.facing == CameraFacing.ROTATE_XYZ || this.facing == CameraFacing.LOOKAT_XYZ || this.facing == CameraFacing.LOOKAT_DIRECTION)
+        if (this.facing == CameraFacing.ROTATE_XYZ)
+        {
+            this.transform.set(emitter.cameraRotation);
+        }
+        else if (this.facing == CameraFacing.ROTATE_Y)
+        {
+            Vector3f forward = emitter.cameraRotation.transform(new Vector3f(0F, 0F, 1F));
+            float yaw = (float) Math.atan2(forward.x, forward.z);
+
+            this.rotation.identity();
+            this.rotation.rotateY(yaw);
+            this.transform.mul(this.rotation);
+        }
+        else if (this.facing == CameraFacing.LOOKAT_XYZ || this.facing == CameraFacing.LOOKAT_DIRECTION)
         {
             this.rotation.identity();
             this.rotation.rotateY(entityYaw / 180 * (float) Math.PI);
@@ -456,7 +469,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.rotation.rotateX(entityPitch / 180 * (float) Math.PI);
             this.transform.mul(this.rotation);
         }
-        else if (this.facing == CameraFacing.ROTATE_Y || this.facing == CameraFacing.LOOKAT_Y)
+        else if (this.facing == CameraFacing.LOOKAT_Y)
         {
             this.rotation.identity();
             this.rotation.rotateY(entityYaw / 180 * (float) Math.PI);
