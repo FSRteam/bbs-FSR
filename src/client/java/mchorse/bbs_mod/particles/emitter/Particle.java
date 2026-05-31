@@ -6,7 +6,9 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class Particle
 {
@@ -71,6 +73,7 @@ public class Particle
     private Vector3d global = new Vector3d();
 
     public Map<String, Double> localValues = new HashMap<>();
+    public Set<String> eventGuards = new HashSet<>();
 
     public Particle(int index, float offset)
     {

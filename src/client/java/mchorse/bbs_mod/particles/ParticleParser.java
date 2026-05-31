@@ -36,6 +36,7 @@ import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeDisc;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeEntityAABB;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapePoint;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeSphere;
+import mchorse.bbs_mod.particles.events.ParticleEventNode;
 import mchorse.bbs_mod.resources.Link;
 
 import java.util.Arrays;
@@ -142,6 +143,7 @@ public class ParticleParser
 
         try
         {
+            scheme.resetForParsing();
             this.parseEffect(scheme, this.getObject(root, "particle_effect", "No particle_effect was found..."));
         }
         catch (MolangException e)
@@ -165,6 +167,16 @@ public class ParticleParser
             if (curves.isMap())
             {
                 this.parseCurves(scheme, curves.asMap());
+            }
+        }
+
+        if (effect.has("events"))
+        {
+            BaseType events = effect.get("events");
+
+            if (events.isMap())
+            {
+                this.parseEvents(scheme, events.asMap());
             }
         }
 
@@ -237,6 +249,14 @@ public class ParticleParser
         }
     }
 
+    private void parseEvents(ParticleScheme scheme, MapType events) throws Exception
+    {
+        for (Map.Entry<String, BaseType> entry : events)
+        {
+            scheme.events.put(entry.getKey(), ParticleEventNode.fromData(entry.getValue(), scheme.parser));
+        }
+    }
+
     private void parseComponents(ParticleScheme scheme, MapType components) throws Exception
     {
         for (Map.Entry<String, BaseType> entry : components)
@@ -301,6 +321,7 @@ public class ParticleParser
 
         this.addDescription(effect, scheme);
         this.addCurves(effect, scheme);
+        this.addEvents(effect, scheme);
         this.addComponents(effect, scheme);
 
         return data;
@@ -334,6 +355,31 @@ public class ParticleParser
         for (Map.Entry<String, ParticleCurve> entry : scheme.curves.entrySet())
         {
             curves.put(entry.getKey(), entry.getValue().toData());
+        }
+    }
+
+    private void addEvents(MapType effect, ParticleScheme scheme)
+    {
+        if (scheme.events.isEmpty())
+        {
+            return;
+        }
+
+        MapType events = new MapType(false);
+
+        for (Map.Entry<String, ParticleEventNode> entry : scheme.events.entrySet())
+        {
+            if (entry.getKey() == null || entry.getKey().trim().isEmpty() || entry.getValue() == null)
+            {
+                continue;
+            }
+
+            events.put(entry.getKey(), entry.getValue().toData());
+        }
+
+        if (!events.isEmpty())
+        {
+            effect.put("events", events);
         }
     }
 

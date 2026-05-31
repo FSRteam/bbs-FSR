@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.particles.components.events;
 
 import mchorse.bbs_mod.data.types.BaseType;
-import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.math.molang.MolangException;
 import mchorse.bbs_mod.math.molang.MolangParser;
@@ -10,9 +9,12 @@ import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
-
-import java.util.HashMap;
+import mchorse.bbs_mod.particles.events.ParticleEventDispatcher;
+import mchorse.bbs_mod.particles.events.ParticleEventTimeline;
+import mchorse.bbs_mod.particles.events.ParticleEventTriggerList;
+import java.util.LinkedHashMap;
 import java.util.Map;
+
 
 /**
  * Particle lifetime events component (minecraft:particle_lifetime_events)
@@ -27,22 +29,27 @@ import java.util.Map;
  */
 public class ParticleComponentParticleLifetimeEvents extends ParticleComponentBase implements IComponentParticleInitialize, IComponentParticleUpdate
 {
-    public BaseType creationEvent = null;
-    public BaseType expirationEvent = null;
-    public BaseType timeline = null;
+    public final ParticleEventTriggerList creationEvent = new ParticleEventTriggerList();
+    public final ParticleEventTriggerList expirationEvent = new ParticleEventTriggerList();
+    public final ParticleEventTimeline timeline = new ParticleEventTimeline();
 
-    /* Parsed timeline: maps age in seconds (as float) to event data */
-    private Map<Float, BaseType> parsedTimeline = new HashMap<>();
-
-    /* Track which timeline events have fired for each particle */
-    private int lastTimelineIndex = -1;
+    private final Map<String, BaseType> extra = new LinkedHashMap<>();
 
     @Override
     protected void toData(MapType data)
     {
-        if (this.creationEvent != null) data.put("creation_event", this.creationEvent);
-        if (this.expirationEvent != null) data.put("expiration_event", this.expirationEvent);
-        if (this.timeline != null) data.put("timeline", this.timeline);
+        for (Map.Entry<String, BaseType> entry : this.extra.entrySet())
+        {
+            data.put(entry.getKey(), entry.getValue().copy());
+        }
+
+        BaseType creation = this.creationEvent.toData();
+        BaseType expiration = this.expirationEvent.toData();
+        BaseType timeline = this.timeline.toData();
+
+        if (creation != null) data.put("creation_event", creation);
+        if (expiration != null) data.put("expiration_event", expiration);
+        if (timeline != null) data.put("timeline", timeline);
     }
 
     @Override
@@ -54,78 +61,66 @@ public class ParticleComponentParticleLifetimeEvents extends ParticleComponentBa
         }
 
         MapType map = data.asMap();
+        this.extra.clear();
 
-        if (map.has("creation_event")) this.creationEvent = map.get("creation_event");
-        if (map.has("expiration_event")) this.expirationEvent = map.get("expiration_event");
-        if (map.has("timeline"))
+        for (Map.Entry<String, BaseType> entry : map)
         {
-            this.timeline = map.get("timeline");
-            this.parseTimeline();
-        }
+            String key = entry.getKey();
 
-        return super.fromData(map, parser);
-    }
-
-    private void parseTimeline()
-    {
-        this.parsedTimeline.clear();
-
-        if (this.timeline != null && this.timeline.isMap())
-        {
-            for (Map.Entry<String, BaseType> entry : this.timeline.asMap())
+            if (!key.equals("creation_event") && !key.equals("expiration_event") && !key.equals("timeline"))
             {
-                try
-                {
-                    float time = Float.parseFloat(entry.getKey());
-                    this.parsedTimeline.put(time, entry.getValue());
-                }
-                catch (NumberFormatException e)
-                {
-                    /* Skip invalid timeline keys */
-                }
+                this.extra.put(key, entry.getValue().copy());
             }
         }
+
+
+        if (map.has("creation_event")) this.creationEvent.fromData(map.get("creation_event"));
+        if (map.has("expiration_event")) this.expirationEvent.fromData(map.get("expiration_event"));
+        if (map.has("timeline")) this.timeline.fromData(map.get("timeline"));
+
+        return super.fromData(map, parser);
     }
 
     @Override
     public void apply(ParticleEmitter emitter, Particle particle)
     {
-        /* Dispatch creation_event — events are stored but not executed yet
-         * as the event system needs the full event resolver infrastructure.
-         * For now, the creation event data is preserved for round-trip. */
+        ParticleEventDispatcher.dispatch(emitter, particle, this.creationEvent);
     }
 
     @Override
     public void update(ParticleEmitter emitter, Particle particle)
     {
-        /* Dispatch timeline events based on particle age */
-        if (!this.parsedTimeline.isEmpty() && !particle.isDead())
+        if (!particle.isDead())
         {
-            float particleAge = (float) particle.getAge(0);
+            double previousAge = Math.max(0, (particle.age - 1) / 20D);
+            double currentAge = particle.getAge(0);
 
-            for (Map.Entry<Float, BaseType> entry : this.parsedTimeline.entrySet())
+            for (ParticleEventTimeline.Entry entry : this.timeline.sortedEntries())
             {
-                float eventTime = entry.getKey();
+                double time = entry.getKeyValue();
 
-                /* Fire event when particle age crosses the timeline threshold */
-                if (eventTime > 0 && particleAge >= eventTime && particleAge < eventTime + 0.05F)
+                if (ParticleEventDispatcher.crossed(previousAge, currentAge, time) && particle.eventGuards.add("particle.timeline." + entry.key))
                 {
-                    /* Event data is preserved but execution requires
-                     * the full event resolver (particle effect references, etc.) */
+                    ParticleEventDispatcher.dispatch(emitter, particle, entry.events);
                 }
             }
         }
 
-        /* Dispatch expiration_event when particle is about to die */
-        if (particle.isDead() && this.expirationEvent != null)
+        if (particle.isDead() && particle.eventGuards.add("particle.expiration"))
         {
-            /* Expiration event preserved for round-trip */
+            ParticleEventDispatcher.dispatch(emitter, particle, this.expirationEvent);
         }
     }
 
     @Override
     public boolean canBeEmpty()
     {
-        return true;
+        return false;
+    }
+
+    @Override
+    public int getSortingIndex()
+    {
+        return 100;
     }
 }

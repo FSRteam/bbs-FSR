@@ -13,6 +13,7 @@ import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentInitialSpeed;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
+import mchorse.bbs_mod.particles.events.ParticleEventNode;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +40,9 @@ public class ParticleScheme extends ValueGroup {
 
     /* Particle's curves */
     public Map<String, ParticleCurve> curves = new HashMap<>();
+
+    /* Particle named events */
+    public Map<String, ParticleEventNode> events = new LinkedHashMap<>();
 
     /* Particle's components */
     public List<ParticleComponentBase> components = new ArrayList<>();
@@ -108,6 +113,17 @@ public class ParticleScheme extends ValueGroup {
         this.parser.register("variable.particle_pos.z");
         this.parser.register("variable.particle_pos.distance");
         this.parser.register("variable.particle_bounces");
+    }
+
+    public void resetForParsing()
+    {
+        this.identifier = "";
+        this.material = ParticleMaterial.OPAQUE;
+        this.customMaterialId = null;
+        this.texture = DEFAULT_TEXTURE;
+        this.curves.clear();
+        this.events.clear();
+        this.components.clear();
     }
 
     public void setup()

@@ -10,6 +10,8 @@ import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
+import mchorse.bbs_mod.particles.events.ParticleEventDispatcher;
+import mchorse.bbs_mod.particles.events.ParticleEventTriggerList;
 import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
@@ -40,8 +42,8 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
     public int splitParticleCount;
     public float splitParticleSpeedThreshold;
 
-    /* Collision events - stored for round-trip */
-    public BaseType collisionEvents = null;
+    /* Collision events */
+    public final ParticleEventTriggerList collisionEvents = new ParticleEventTriggerList();
 
     /* Runtime options */
     private Vector3d previous = new Vector3d();
@@ -51,8 +53,9 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
     public BaseType toData()
     {
         MapType object = new MapType();
+        BaseType collisionEvents = this.collisionEvents.toData();
 
-        if (MolangExpression.isZero(this.enabled))
+        if (MolangExpression.isZero(this.enabled) && collisionEvents == null)
         {
             return object;
         }
@@ -74,7 +77,7 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
         if (this.radius != 0.01F) object.putFloat("collision_radius", this.radius);
         if (this.expireOnImpact) object.putBool("expire_on_contact", true);
         if (!MolangExpression.isZero(this.expirationDelay)) object.put("expirationDelay", this.expirationDelay.toData());
-        if (this.collisionEvents != null) object.put("events", this.collisionEvents);
+        if (collisionEvents != null) object.put("events", collisionEvents);
 
         return object;
     }
@@ -106,7 +109,7 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
         if (map.has("collision_radius")) this.radius = map.getFloat("collision_radius");
         if (map.has("expire_on_contact")) this.expireOnImpact = map.getBool("expire_on_contact");
         if (map.has("expirationDelay")) this.expirationDelay = parser.parseDataSilently(map.get("expirationDelay"));
-        if (map.has("events")) this.collisionEvents = map.get("events");
+        if (map.has("events")) this.collisionEvents.fromData(map.get("events"));
 
         return super.fromData(map, parser);
     }
@@ -187,6 +190,11 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
 
     private void collision(Particle particle, ParticleEmitter emitter, Vector3d prev)
     {
+        if (particle.eventGuards.add("particle.collision"))
+        {
+            ParticleEventDispatcher.dispatch(emitter, particle, this.collisionEvents);
+        }
+
         if (this.expireOnImpact)
         {
             double expDelay = this.expirationDelay.get();

@@ -17,6 +17,8 @@ import mchorse.bbs_mod.particles.components.IComponentParticleRender;
 import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionAppearance;
+import mchorse.bbs_mod.particles.components.events.ParticleComponentEmitterLifetimeEvents;
+import mchorse.bbs_mod.particles.events.ParticleEventDispatcher;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -38,9 +40,11 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class ParticleEmitter
@@ -68,6 +72,10 @@ public class ParticleEmitter
     public int lifetime;
     public boolean playing = true;
     public boolean paused;
+    public boolean eventParticleOnly;
+
+    public Set<String> eventGuards = new HashSet<>();
+    public double eventTravelDistance;
 
     public float random1 = (float) Math.random();
     public float random2 = (float) Math.random();
@@ -125,6 +133,13 @@ public class ParticleEmitter
     private Variable varPosZ;
     private Variable varPosDistance;
     private Variable varBounces;
+
+    private final List<ParticleEmitter> childEmitters = new ArrayList<>();
+    private final Vector3d eventLastGlobal = new Vector3d();
+    private boolean eventLastGlobalSet;
+    private ParticleEmitter boundParent;
+    private Particle boundParticle;
+    private boolean boundToEmitter;
 
     public double getAge()
     {
@@ -333,6 +348,10 @@ public class ParticleEmitter
         this.index = 0;
         this.age = 0;
         this.playing = true;
+        this.eventGuards.clear();
+        this.eventTravelDistance = 0;
+        this.eventLastGlobal.set(this.lastGlobal);
+        this.eventLastGlobalSet = true;
     }
 
     public void stop()
@@ -342,12 +361,50 @@ public class ParticleEmitter
             return;
         }
 
+        if (this.age > 0)
+        {
+            ParticleComponentEmitterLifetimeEvents events = this.scheme == null ? null : this.scheme.get(ParticleComponentEmitterLifetimeEvents.class);
+
+            if (events != null)
+            {
+                ParticleEventDispatcher.dispatch(this, events.expirationEvent);
+            }
+        }
+
         this.playing = false;
 
         this.random1 = (float) Math.random();
         this.random2 = (float) Math.random();
         this.random3 = (float) Math.random();
         this.random4 = (float) Math.random();
+    }
+
+    public void addChildEmitter(ParticleEmitter emitter, boolean boundToEmitter, Particle boundParticle)
+    {
+        if (emitter == null)
+        {
+            return;
+        }
+
+        emitter.boundParent = this;
+        emitter.boundToEmitter = boundToEmitter;
+        emitter.boundParticle = boundParticle;
+
+        this.childEmitters.add(emitter);
+    }
+
+    public void updateEventTravelDistance()
+    {
+        if (!this.eventLastGlobalSet)
+        {
+            this.eventLastGlobal.set(this.lastGlobal);
+            this.eventLastGlobalSet = true;
+
+            return;
+        }
+
+        this.eventTravelDistance += this.lastGlobal.distance(this.eventLastGlobal);
+        this.eventLastGlobal.set(this.lastGlobal);
     }
 
     /**
@@ -374,8 +431,46 @@ public class ParticleEmitter
 
         this.setEmitterVariables(0);
         this.updateParticles();
+        this.updateChildEmitters();
 
         this.age += 1;
+    }
+
+    private void updateChildEmitters()
+    {
+        Iterator<ParticleEmitter> it = this.childEmitters.iterator();
+
+        while (it.hasNext())
+        {
+            ParticleEmitter child = it.next();
+
+            child.updateEventBinding();
+            child.update();
+
+            if ((child.eventParticleOnly && child.particles.isEmpty() && child.age > 1) || (!child.playing && child.particles.isEmpty() && child.childEmitters.isEmpty()))
+            {
+                it.remove();
+            }
+        }
+    }
+
+    private void updateEventBinding()
+    {
+        if (this.boundParent == null)
+        {
+            return;
+        }
+
+        if (this.boundToEmitter)
+        {
+            this.lastGlobal.set(this.boundParent.lastGlobal);
+            this.rotation.set(this.boundParent.rotation);
+        }
+        else if (this.boundParticle != null && !this.boundParticle.isDead())
+        {
+            this.lastGlobal.set(this.boundParticle.getGlobalPosition(this.boundParent));
+            this.rotation.set(this.boundParent.rotation);
+        }
     }
 
     /**
@@ -607,6 +702,22 @@ public class ParticleEmitter
         {
             component.postRender(this, transition);
         }
+
+        for (ParticleEmitter child : this.childEmitters)
+        {
+            this.copyCameraProperties(child);
+            child.render(format, program, stack, overlay, transition);
+        }
+    }
+
+    private void copyCameraProperties(ParticleEmitter emitter)
+    {
+        emitter.cYaw = this.cYaw;
+        emitter.cPitch = this.cPitch;
+        emitter.cameraRotation.set(this.cameraRotation);
+        emitter.cX = this.cX;
+        emitter.cY = this.cY;
+        emitter.cZ = this.cZ;
     }
 
     private void bindTexture()
