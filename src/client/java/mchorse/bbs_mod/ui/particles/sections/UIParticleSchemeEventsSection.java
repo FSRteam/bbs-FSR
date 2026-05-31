@@ -6,6 +6,7 @@ import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.events.ParticleComponentEmitterLifetimeEvents;
 import mchorse.bbs_mod.particles.components.events.ParticleComponentParticleLifetimeEvents;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionCollision;
+import mchorse.bbs_mod.particles.events.ParticleCollisionEvents;
 import mchorse.bbs_mod.particles.events.ParticleEventEffect;
 import mchorse.bbs_mod.particles.events.ParticleEventNode;
 import mchorse.bbs_mod.particles.events.ParticleEventTimeline;
@@ -137,21 +138,56 @@ public class UIParticleSchemeEventsSection extends UIParticleSchemeSection
 
     private UIElement collisionTriggerField()
     {
-        UITextbox textbox = new UITextbox(10000, (str) ->
+        UIElement container = UI.column();
+
+        container.add(UI.label(UIKeys.SNOWSTORM_EVENTS_EVENTS, 16));
+
+        for (ParticleCollisionEvents.Entry entry : this.collisionEvents.collisionEvents.entries)
         {
-            this.collisionEvents.collisionEvents.setFromCSV(str);
-
-            if (!this.collisionEvents.collisionEvents.events.isEmpty())
+            UIElement row = UI.row(4);
+            UITextbox event = new UITextbox(10000, (str) ->
             {
-                this.collisionEvents.enabled = MolangParser.ONE;
-            }
+                entry.event = str == null ? "" : str.trim();
+                this.collisionEvents.collisionEvents.markEdited();
+                this.markDirty();
+            }).delayedInput();
+            UITrackpad minSpeed = new UITrackpad((value) ->
+            {
+                entry.setMinSpeed(value.doubleValue());
+                this.collisionEvents.collisionEvents.markEdited();
+                this.markDirty();
+            });
+            UIIcon remove = new UIIcon(Icons.REMOVE, (b) ->
+            {
+                this.collisionEvents.collisionEvents.entries.remove(entry);
+                this.collisionEvents.collisionEvents.markEdited();
+                this.markDirty();
+                this.rebuild();
+            });
 
+            event.setText(entry.event);
+            event.tooltip(UIKeys.SNOWSTORM_EVENTS_EVENTS);
+            minSpeed.setValue(entry.minSpeed);
+            minSpeed.limit(0);
+            minSpeed.tooltip(UIKeys.SNOWSTORM_EVENTS_MIN_SPEED);
+            remove.tooltip(UIKeys.SNOWSTORM_EVENTS_REMOVE);
+            minSpeed.w(58);
+            row.add(event, this.labeledField(UIKeys.SNOWSTORM_EVENTS_MIN_SPEED, minSpeed), remove);
+            container.add(row);
+        }
+
+        UIIcon add = new UIIcon(Icons.ADD, (b) ->
+        {
+            this.collisionEvents.collisionEvents.add("event", 0);
+            this.collisionEvents.enabled = MolangParser.ONE;
             this.markDirty();
-        }).delayedInput();
+            this.rebuild();
+        });
 
-        textbox.setText(this.collisionEvents.collisionEvents.toCSV());
+        add.tooltip(UIKeys.SNOWSTORM_EVENTS_ADD);
+        container.add(add);
 
-        return this.labeledField(UIKeys.SNOWSTORM_EVENTS_EVENTS, textbox);
+        return container;
     }
 
     private void rebuildTimeline(UIElement container, ParticleEventTimeline timeline, IKey label, String defaultKey)
@@ -295,7 +331,7 @@ public class UIParticleSchemeEventsSection extends UIParticleSchemeSection
         this.replaceTrigger(this.particleEvents.creationEvent, oldId, newId);
         this.replaceTrigger(this.particleEvents.expirationEvent, oldId, newId);
         this.replaceTimeline(this.particleEvents.timeline, oldId, newId);
-        this.replaceTrigger(this.collisionEvents.collisionEvents, oldId, newId);
+        this.collisionEvents.collisionEvents.replaceEvent(oldId, newId);
         this.markDirty();
         this.rebuild();
     }

@@ -15,13 +15,22 @@ public class ParticleEventEffect
     public MolangExpression preEffectExpression;
 
     private final Map<String, BaseType> extra = new LinkedHashMap<>();
+    private BaseType raw;
 
     public void fromData(BaseType data, MolangParser parser)
     {
         this.extra.clear();
+        this.raw = null;
 
-        if (data == null || !data.isMap())
+        if (data == null)
         {
+            return;
+        }
+
+        if (!data.isMap())
+        {
+            this.raw = data.copy();
+
             return;
         }
 
@@ -42,6 +51,11 @@ public class ParticleEventEffect
 
     public BaseType toData()
     {
+        if (this.raw != null)
+        {
+            return this.raw.copy();
+        }
+
         MapType map = new MapType(false);
 
         for (Map.Entry<String, BaseType> entry : this.extra.entrySet())

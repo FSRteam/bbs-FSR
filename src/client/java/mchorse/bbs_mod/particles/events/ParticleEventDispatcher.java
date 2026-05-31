@@ -36,6 +36,31 @@ public class ParticleEventDispatcher
         }
     }
 
+    public static void dispatch(ParticleEmitter emitter, Particle particle, ParticleCollisionEvents events, double speed)
+    {
+        if (events == null || events.entries.isEmpty())
+        {
+            return;
+        }
+
+        for (int i = 0; i < events.entries.size(); i++)
+        {
+            ParticleCollisionEvents.Entry entry = events.entries.get(i);
+
+            if (entry.event == null || entry.event.isEmpty() || speed < entry.minSpeed)
+            {
+                continue;
+            }
+
+            String guard = "particle.collision." + i + "." + entry.event + "." + entry.minSpeed;
+
+            if (particle == null || particle.eventGuards.add(guard))
+            {
+                dispatch(emitter, particle, entry.event);
+            }
+        }
+    }
+
     public static void dispatch(ParticleEmitter emitter, Particle particle, String event)
     {
         if (emitter == null || emitter.scheme == null || event == null || event.isEmpty())

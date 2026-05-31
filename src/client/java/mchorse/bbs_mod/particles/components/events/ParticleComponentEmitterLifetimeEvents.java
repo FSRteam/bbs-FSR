@@ -143,7 +143,7 @@ public class ParticleComponentEmitterLifetimeEvents extends ParticleComponentBas
                 int previousLoop = (int) Math.floor(previousDistance / distance);
                 int currentLoop = (int) Math.floor(currentDistance / distance);
 
-                if (currentLoop > previousLoop)
+                for (int loop = previousLoop + 1; loop <= currentLoop; loop++)
                 {
                     ParticleEventDispatcher.dispatch(emitter, entry.effects);
                 }

@@ -1016,6 +1016,7 @@
     "bbs.ui.snowstorm.events.looping_distance": "循环移动距离",
     "bbs.ui.snowstorm.events.time_or_distance": "时间/距离",
     "bbs.ui.snowstorm.events.events": "事件",
+    "bbs.ui.snowstorm.events.min_speed": "最小速度",
     "bbs.ui.snowstorm.title": "粒子",
     "bbs.ui.success": "成功",
     "bbs.ui.supporters.cc": "内容创作者",

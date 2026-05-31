@@ -56,7 +56,17 @@ public class ParticleEventNode
 
         MapType map = data.asMap();
 
-        if (map.has("weight") && map.get("weight").isNumeric()) this.weight = map.get("weight").asNumeric().floatValue();
+        if (map.has("weight"))
+        {
+            if (map.get("weight").isNumeric())
+            {
+                this.weight = map.get("weight").asNumeric().floatValue();
+            }
+            else
+            {
+                this.extra.put("weight", map.get("weight").copy());
+            }
+        }
         if (map.has("sequence") && map.get("sequence").isList())
         {
             for (BaseType element : map.get("sequence").asList())
@@ -64,12 +74,20 @@ public class ParticleEventNode
                 this.sequence.add(ParticleEventNode.fromData(element, parser));
             }
         }
+        else if (map.has("sequence"))
+        {
+            this.extra.put("sequence", map.get("sequence").copy());
+        }
         if (map.has("randomize") && map.get("randomize").isList())
         {
             for (BaseType element : map.get("randomize").asList())
             {
                 this.randomize.add(ParticleEventNode.fromData(element, parser));
             }
+        }
+        else if (map.has("randomize"))
+        {
+            this.extra.put("randomize", map.get("randomize").copy());
         }
         if (map.has("particle_effect"))
         {
@@ -89,6 +107,10 @@ public class ParticleEventNode
                     this.soundExtra.put(entry.getKey(), entry.getValue().copy());
                 }
             }
+        }
+        else if (map.has("sound_effect"))
+        {
+            this.extra.put("sound_effect", map.get("sound_effect").copy());
         }
         if (map.has("expression")) this.expression = parser.parseDataSilently(map.get("expression"));
         if (map.has("log")) this.log = map.getString("log");

@@ -1198,6 +1198,7 @@
 	"bbs.ui.snowstorm.events.looping_distance": "Looping travel distance",
 	"bbs.ui.snowstorm.events.time_or_distance": "Time/distance",
 	"bbs.ui.snowstorm.events.events": "Events",
+	"bbs.ui.snowstorm.events.min_speed": "Min speed",
 	"bbs.ui.success": "Success",
 	"bbs.ui.supporters.cc": "Content Creators",
 	"bbs.ui.supporters.community": "Community",

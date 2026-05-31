@@ -8,7 +8,9 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.data.types.StringType;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ParticleLoopingDistanceEvents
 {
@@ -59,6 +61,16 @@ public class ParticleLoopingDistanceEvents
                 entry.effects.fromData(map.get("effects"));
             }
 
+            for (Map.Entry<String, BaseType> mapEntry : map)
+            {
+                String key = mapEntry.getKey();
+
+                if (!key.equals("distance") && !key.equals("effects"))
+                {
+                    entry.extra.put(key, mapEntry.getValue().copy());
+                }
+            }
+
             this.entries.add(entry);
         }
 
@@ -99,6 +111,11 @@ public class ParticleLoopingDistanceEvents
 
             MapType map = new MapType(false);
 
+            for (Map.Entry<String, BaseType> extra : entry.extra.entrySet())
+            {
+                map.put(extra.getKey(), extra.getValue().copy());
+            }
+
             map.put("distance", entry.toDistanceData());
             map.put("effects", effects);
             list.add(map);
@@ -122,6 +139,7 @@ public class ParticleLoopingDistanceEvents
     {
         public String distance = "1";
         public final ParticleEventTriggerList effects = new ParticleEventTriggerList();
+        private final Map<String, BaseType> extra = new LinkedHashMap<>();
         private BaseType rawDistance;
 
         public double getDistance()

@@ -10,8 +10,8 @@ import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
+import mchorse.bbs_mod.particles.events.ParticleCollisionEvents;
 import mchorse.bbs_mod.particles.events.ParticleEventDispatcher;
-import mchorse.bbs_mod.particles.events.ParticleEventTriggerList;
 import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
@@ -43,7 +43,7 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
     public float splitParticleSpeedThreshold;
 
     /* Collision events */
-    public final ParticleEventTriggerList collisionEvents = new ParticleEventTriggerList();
+    public final ParticleCollisionEvents collisionEvents = new ParticleCollisionEvents();
 
     /* Runtime options */
     private Vector3d previous = new Vector3d();
@@ -157,7 +157,7 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
 
             if (hadCollision)
             {
-                this.collision(particle, emitter, prev);
+                this.collision(particle, emitter, prev, particle.speed.length());
 
                 now.set(prev.x + vec.x, prev.y + vec.y, prev.z + vec.z);
 
@@ -188,12 +188,9 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
         }
     }
 
-    private void collision(Particle particle, ParticleEmitter emitter, Vector3d prev)
+    private void collision(Particle particle, ParticleEmitter emitter, Vector3d prev, double speed)
     {
-        if (particle.eventGuards.add("particle.collision"))
-        {
-            ParticleEventDispatcher.dispatch(emitter, particle, this.collisionEvents);
-        }
+        ParticleEventDispatcher.dispatch(emitter, particle, this.collisionEvents, speed);
 
         if (this.expireOnImpact)
         {

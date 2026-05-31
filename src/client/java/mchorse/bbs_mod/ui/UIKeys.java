@@ -990,6 +990,7 @@ public class UIKeys
     public static final IKey SNOWSTORM_EVENTS_LOOPING_DISTANCE = L10n.lang("bbs.ui.snowstorm.events.looping_distance");
     public static final IKey SNOWSTORM_EVENTS_TIME_OR_DISTANCE = L10n.lang("bbs.ui.snowstorm.events.time_or_distance");
     public static final IKey SNOWSTORM_EVENTS_EVENTS = L10n.lang("bbs.ui.snowstorm.events.events");
+    public static final IKey SNOWSTORM_EVENTS_MIN_SPEED = L10n.lang("bbs.ui.snowstorm.events.min_speed");
     public static final IKey TEXTURES_COPY = L10n.lang("bbs.ui.textures.copy");
     public static final IKey TEXTURES_CREATE_MCMETA = L10n.lang("bbs.ui.textures.create_mcmeta");
     public static final IKey TEXTURES_DOWNLOAD = L10n.lang("bbs.ui.textures.download");
