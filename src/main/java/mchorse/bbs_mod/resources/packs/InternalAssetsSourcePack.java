@@ -24,6 +24,7 @@ public class InternalAssetsSourcePack implements ISourcePack
     private String prefix;
     private String internalPrefix;
     private Class clazz;
+    private String modId;
 
     private boolean isForge;
 
@@ -33,14 +34,20 @@ public class InternalAssetsSourcePack implements ISourcePack
 
     public InternalAssetsSourcePack()
     {
-        this(Link.ASSETS, "assets/bbs/assets", InternalAssetsSourcePack.class);
+        this(BBSMod.MOD_ID, Link.ASSETS, "assets/bbs/assets", InternalAssetsSourcePack.class);
     }
 
     public InternalAssetsSourcePack(String prefix, String internalPrefix, Class clazz)
     {
+        this(BBSMod.MOD_ID, prefix, internalPrefix, clazz);
+    }
+
+    public InternalAssetsSourcePack(String modId, String prefix, String internalPrefix, Class clazz)
+    {
         this.prefix = prefix;
         this.internalPrefix = internalPrefix;
         this.clazz = clazz;
+        this.modId = modId;
 
         try
         {
@@ -122,7 +129,7 @@ public class InternalAssetsSourcePack implements ISourcePack
 
         try
         {
-            modFile = LoaderAccessHolder.get().getModFile(BBSMod.MOD_ID).orElse(null);
+            modFile = LoaderAccessHolder.get().getModFile(this.modId).orElse(null);
         }
         catch (Exception e)
         {}
@@ -180,7 +187,15 @@ public class InternalAssetsSourcePack implements ISourcePack
          * don't think it works outside of IntelliJ, so RIP... */
         if (LoaderAccessHolder.get().isDevelopmentEnvironment())
         {
-            File resources = new File(file.getParentFile().getParentFile().getParentFile(), "resources/client/");
+            File buildFolder = file.getParentFile().getParentFile().getParentFile();
+            File resources = new File(buildFolder, "resources/main/");
+
+            if (new File(resources, this.internalPrefix).exists())
+            {
+                return resources;
+            }
+
+            resources = new File(buildFolder, "resources/client/");
 
             if (resources.isDirectory())
             {

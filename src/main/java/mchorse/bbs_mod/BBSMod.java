@@ -56,6 +56,7 @@ import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.events.EventBus;
 import mchorse.bbs_mod.events.BBSAddonMod;
 import mchorse.bbs_mod.events.register.RegisterSettingsEvent;
+import mchorse.bbs_mod.events.register.RegisterFormsEvent;
 import mchorse.bbs_mod.events.register.RegisterSourcePacksEvent;
 import mchorse.bbs_mod.film.FilmManager;
 import mchorse.bbs_mod.forms.FormArchitect;
@@ -69,7 +70,6 @@ import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.ParticleForm;
-import mchorse.bbs_mod.forms.forms.StructureForm;
 import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
 import mchorse.bbs_mod.items.GunItem;
@@ -140,6 +140,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Mod(BBSMod.MOD_ID)
 public class BBSMod
@@ -153,6 +154,9 @@ public class BBSMod
     private final IEventBus modBus;
     private final BBSAddonCollector addonCollector;
     private final BBSAddonBridge addonBridge;
+    private static final List<PendingAddonRegistration> pendingAddonRegistrations = new ArrayList<>();
+    private static volatile BBSAddonCollector activeAddonCollector;
+    private static volatile boolean addonsBridged;
 
     private static ActionManager actions;
 
@@ -304,6 +308,11 @@ public class BBSMod
         return new File(gameFolder, path);
     }
 
+    public static File getWorldFolder()
+    {
+        return worldFolder;
+    }
+
     /**
      * Assets folder within game's folder. It's used to store any assets that can
      * be loaded by {@link #provider}.
@@ -404,6 +413,8 @@ public class BBSMod
         this.modBus = ModLoadingContext.get().getActiveContainer().getEventBus();
         this.addonCollector = new BBSAddonCollector();
         this.addonBridge = new BBSAddonBridge(this.addonCollector);
+        bindAddonCollector(this.addonCollector);
+        addonsBridged = false;
 
         if (!FMLEnvironment.production)
         {
@@ -469,7 +480,9 @@ public class BBSMod
 
         try
         {
+            LOGGER.info("[bbs-addon] posting BBSAddonRegisterEvent; currently collected {} addon(s)", this.addonCollector.size());
             this.modBus.post(new BBSAddonRegisterEvent(this.addonCollector));
+            LOGGER.info("[bbs-addon] BBSAddonRegisterEvent finished; collected {} addon(s)", this.addonCollector.size());
         }
         catch (Exception e)
         {
@@ -487,10 +500,12 @@ public class BBSMod
         BBSAddonProtocolSelfCheck.run(loader, this.addonCollector);
         List<BBSAddonMod> addonEntrypoints = loader.getEntrypoints("bbs-addon", BBSAddonMod.class);
         LOGGER.info("[bbs-addon] loader resolved {} registered addon(s)", addonEntrypoints.size());
+        LOGGER.info("[bbs-addon] common setup sees collected addon ids: {}", this.addonCollector.getAddonIds());
         assetsFolder = new File(gameFolder, "config/bbs/assets");
 
         assetsFolder.mkdirs();
         this.addonBridge.bridgeToInternalBus(events);
+        addonsBridged = true;
 
         actions = new ActionManager();
         ActionEventCompat.register();
@@ -502,6 +517,7 @@ public class BBSMod
         provider.register(dynamicSourcePack);
         provider.register(new InternalAssetsSourcePack());
 
+        LOGGER.info("[bbs-addon] posting RegisterSourcePacksEvent");
         events.post(new RegisterSourcePacksEvent(provider));
 
         forms = new FormArchitect();
@@ -516,9 +532,11 @@ public class BBSMod
             .register(Link.bbs("anchor"), AnchorForm.class, null)
             .register(Link.bbs("mob"), MobForm.class, null)
             .register(Link.bbs("vanilla_particles"), VanillaParticleForm.class, null)
-            .register(Link.bbs("structure"), StructureForm.class, null)
             .register(Link.bbs("trail"), TrailForm.class, null)
             .register(Link.bbs("framebuffer"), FramebufferForm.class, null);
+
+        LOGGER.info("[bbs-addon] posting RegisterFormsEvent");
+        events.post(new RegisterFormsEvent(forms));
 
         films = new FilmManager(() -> new File(worldFolder, "bbs/films"));
 
@@ -692,6 +710,83 @@ public class BBSMod
         BBSMod.settings.load(settings, settings.file);
 
         return settings;
+    }
+
+    public static void registerAddon(String addonId, Supplier<? extends BBSAddonMod> supplier)
+    {
+        BBSAddonCollector collector;
+
+        synchronized (pendingAddonRegistrations)
+        {
+            collector = activeAddonCollector;
+
+            if (collector == null)
+            {
+                pendingAddonRegistrations.add(new PendingAddonRegistration(addonId, supplier));
+                LOGGER.info("[bbs-addon] queued external addon '{}' until BBS collector is available", addonId);
+
+                return;
+            }
+        }
+
+        registerAddon(collector, addonId, supplier);
+    }
+
+    private static void bindAddonCollector(BBSAddonCollector collector)
+    {
+        List<PendingAddonRegistration> registrations;
+
+        synchronized (pendingAddonRegistrations)
+        {
+            activeAddonCollector = collector;
+            registrations = new ArrayList<>(pendingAddonRegistrations);
+            pendingAddonRegistrations.clear();
+        }
+
+        for (PendingAddonRegistration registration : registrations)
+        {
+            registerAddon(collector, registration.addonId, registration.supplier);
+        }
+    }
+
+    private static void registerAddon(BBSAddonCollector collector, String addonId, Supplier<? extends BBSAddonMod> supplier)
+    {
+        if (collector == null || supplier == null)
+        {
+            return;
+        }
+
+        try
+        {
+            BBSAddonMod addon = supplier.get();
+            boolean accepted = collector.registerExternal(addonId, addon);
+
+            if (accepted && addonsBridged)
+            {
+                events.register(addon);
+                LOGGER.warn("[bbs-addon] external addon '{}' registered after the bridge; future events are connected, but startup events may already be missed", addonId);
+            }
+            else if (!accepted)
+            {
+                LOGGER.warn("[bbs-addon] external addon '{}' was not accepted by the collector", addonId);
+            }
+        }
+        catch (Exception e)
+        {
+            LOGGER.error("[bbs-addon] failed to register external addon '{}'", addonId, e);
+        }
+    }
+
+    private static final class PendingAddonRegistration
+    {
+        private final String addonId;
+        private final Supplier<? extends BBSAddonMod> supplier;
+
+        private PendingAddonRegistration(String addonId, Supplier<? extends BBSAddonMod> supplier)
+        {
+            this.addonId = addonId;
+            this.supplier = supplier;
+        }
     }
 
     private static String mapServerType(Commands.CommandSelection selection)

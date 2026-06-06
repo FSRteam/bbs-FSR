@@ -7,8 +7,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * In-memory collector for addon registrations posted through {@link BBSAddonRegisterEvent}.
@@ -31,23 +33,41 @@ public final class BBSAddonCollector
      */
     public synchronized boolean register(String addonId, BBSAddonMod addon)
     {
+        return this.register(addonId, addon, false, "event");
+    }
+
+    /**
+     * Registers an addon that came from the public external-addon API.
+     *
+     * <p>External NeoForge mods can be constructed after BBS' own construct
+     * event closes the event-only window, but still before common setup bridges
+     * collected addons into the internal BBS event bus. That path mirrors the
+     * old Fabric entrypoint scan more closely than the short mod-bus event.</p>
+     */
+    public synchronized boolean registerExternal(String addonId, BBSAddonMod addon)
+    {
+        return this.register(addonId, addon, true, "external");
+    }
+
+    private boolean register(String addonId, BBSAddonMod addon, boolean allowClosedWindow, String source)
+    {
         if (addonId == null || addonId.isBlank())
         {
-            LOGGER.warn("[bbs-addon] rejected registration: addonId is blank");
+            LOGGER.warn("[bbs-addon] rejected {} registration: addonId is blank", source);
             return false;
         }
 
         if (addon == null)
         {
-            LOGGER.warn("[bbs-addon] rejected registration: addon instance is null for '{}'", addonId);
+            LOGGER.warn("[bbs-addon] rejected {} registration: addon instance is null for '{}'", source, addonId);
             return false;
         }
 
         String key = addonId.trim();
 
-        if (!this.registrationOpen)
+        if (!this.registrationOpen && !allowClosedWindow)
         {
-            LOGGER.warn("[bbs-addon] rejected registration for '{}' because the window is closed", key);
+            LOGGER.warn("[bbs-addon] rejected {} registration for '{}' because the event window is closed", source, key);
             return false;
         }
 
@@ -68,35 +88,56 @@ public final class BBSAddonCollector
         }
 
         this.addons.put(key, addon);
+        LOGGER.info("[bbs-addon] accepted {} registration for '{}' ({}) while eventWindowOpen={}",
+            source,
+            key,
+            addon.getClass().getName(),
+            this.registrationOpen);
+
         return true;
     }
 
     /**
      * Bridges all collected addons into the internal BBS EventBus.
      */
-    public void bridgeTo(EventBus bus)
+    public synchronized void bridgeTo(EventBus bus)
     {
         if (bus == null)
         {
             return;
         }
 
-        for (BBSAddonMod addon : this.addons.values())
+        for (Map.Entry<String, BBSAddonMod> entry : this.addons.entrySet())
         {
             try
             {
+                BBSAddonMod addon = entry.getValue();
+
+                LOGGER.info("[bbs-addon] bridging '{}' ({}) into internal BBS event bus",
+                    entry.getKey(),
+                    addon == null ? "<null>" : addon.getClass().getName());
                 bus.register(addon);
             }
             catch (Exception e)
             {
-                LOGGER.error("[bbs-addon] failed to register addon into internal bus", e);
+                LOGGER.error("[bbs-addon] failed to register addon '{}' into internal bus", entry.getKey(), e);
             }
         }
     }
 
-    public Collection<BBSAddonMod> getAddons()
+    public synchronized Collection<BBSAddonMod> getAddons()
     {
-        return Collections.unmodifiableCollection(this.addons.values());
+        return Collections.unmodifiableCollection(new LinkedHashMap<>(this.addons).values());
+    }
+
+    public synchronized Set<String> getAddonIds()
+    {
+        return Collections.unmodifiableSet(new LinkedHashSet<>(this.addons.keySet()));
+    }
+
+    public synchronized int size()
+    {
+        return this.addons.size();
     }
 
     public synchronized void closeRegistrationWindow()

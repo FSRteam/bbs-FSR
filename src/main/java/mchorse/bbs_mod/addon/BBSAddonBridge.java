@@ -30,10 +30,15 @@ public final class BBSAddonBridge
     {
         if (this.collector == null)
         {
+            LOGGER.warn("[bbs-addon] cannot bridge addons because collector is null");
+
             return;
         }
 
+        LOGGER.info("[bbs-addon] preparing to bridge {} addon(s): {}",
+            this.collector.size(),
+            this.collector.getAddonIds());
         this.collector.bridgeTo(bus);
-        LOGGER.info("[bbs-addon] bridged {} addon(s) into internal bus", this.collector.getAddons().size());
+        LOGGER.info("[bbs-addon] bridged {} addon(s) into internal bus", this.collector.size());
     }
 }
