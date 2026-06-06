@@ -495,6 +495,8 @@ public class BBSRendering
             }
 
             BBSModClient.getFilms().render(worldRenderContext);
+
+            worldRenderContext.consumers().endBatch();
         }
         finally
         {

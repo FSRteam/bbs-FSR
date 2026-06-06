@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.client.renderer;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -22,6 +23,9 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.LivingEntity;
 import com.mojang.math.Axis;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fStack;
 
 public class MorphRenderer
 {
@@ -29,12 +33,19 @@ public class MorphRenderer
 
     public static boolean renderPlayer(AbstractClientPlayer player, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i)
     {
+        Form currentForm = FormUtilsClient.getCurrentForm();
+
         if (hidePlayer)
         {
-            if (FormUtilsClient.getCurrentForm() instanceof MobForm form && !form.isPlayer())
+            if (currentForm instanceof MobForm form && !form.isPlayer())
             {
                 return true;
             }
+        }
+
+        if (currentForm != null)
+        {
+            return false;
         }
 
         Morph morph = Morph.getMorph(player);
@@ -51,7 +62,7 @@ public class MorphRenderer
                 matrixStack.pushPose();
                 matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
 
-                FormUtilsClient.render(morph.getForm(), new FormRenderingContext()
+                renderForm(morph.getForm(), new FormRenderingContext()
                     .set(FormRenderType.ENTITY, morph.entity, matrixStack, i, overlay, g)
                     .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
 
@@ -85,6 +96,11 @@ public class MorphRenderer
 
     public static boolean renderLivingEntity(LivingEntity livingEntity, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i, int o)
     {
+        if (FormUtilsClient.getCurrentForm() != null)
+        {
+            return false;
+        }
+
         if (!(livingEntity instanceof ISelectorOwnerProvider))
         {
             return false;
@@ -105,7 +121,7 @@ public class MorphRenderer
             matrixStack.pushPose();
             matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
 
-            FormUtilsClient.render(form, new FormRenderingContext()
+            renderForm(form, new FormRenderingContext()
                 .set(FormRenderType.ENTITY, owner.entity, matrixStack, i, o, g)
                 .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
 
@@ -117,5 +133,41 @@ public class MorphRenderer
         }
 
         return false;
+    }
+
+    public static void renderForm(Form form, FormRenderingContext context)
+    {
+        if (!BBSRendering.isRenderingWorld())
+        {
+            FormUtilsClient.render(form, context);
+
+            return;
+        }
+
+        PoseStack originalStack = context.stack;
+        PoseStack bakedStack = new PoseStack();
+        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+        Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+
+        bakedStack.setIdentity();
+        bakedStack.last().pose().set(new Matrix4f(modelView).mul(originalStack.last().pose()));
+        bakedStack.last().normal().set(new Matrix3f(modelView).mul(originalStack.last().normal()));
+
+        modelViewStack.pushMatrix();
+        modelViewStack.identity();
+        RenderSystem.applyModelViewMatrix();
+        context.stack = bakedStack;
+
+        try
+        {
+            FormUtilsClient.render(form, context);
+            FormUtilsClient.getProvider().endBatch();
+        }
+        finally
+        {
+            context.stack = originalStack;
+            modelViewStack.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+        }
     }
 }

@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.client.renderer.entity;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.client.renderer.MorphRenderer;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.items.GunProperties;
@@ -49,7 +49,7 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
         MatrixStackUtils.applyTransform(matrices, properties.projectileTransform);
 
         RenderSystem.enableDepthTest();
-        FormUtilsClient.render(projectile.getForm(), new FormRenderingContext()
+        MorphRenderer.renderForm(projectile.getForm(), new FormRenderingContext()
             .set(FormRenderType.ENTITY, projectile.getEntity(), matrices, light, OverlayTexture.NO_OVERLAY, tickDelta)
             .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
         RenderSystem.disableDepthTest();
