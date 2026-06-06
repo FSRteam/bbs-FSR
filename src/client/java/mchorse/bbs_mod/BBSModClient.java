@@ -11,6 +11,7 @@ import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.compat.ClientApiCompat;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
@@ -543,6 +544,8 @@ public class BBSModClient
                 stack.popPose();
             }
         }
+
+        ClientApiCompat.emitAfterEntities(context);
     }
 
     public static void onRenderAfterLevel()
@@ -555,6 +558,8 @@ public class BBSModClient
 
     public static void onClientDisconnect()
     {
+        ClientApiCompat.emitDisconnect(Minecraft.getInstance());
+
         dashboard = null;
         films = new Films();
         stopVideoRecording();
@@ -567,6 +572,7 @@ public class BBSModClient
 
     public static void onClientTickPre()
     {
+        ClientApiCompat.emitStartClientTick(Minecraft.getInstance());
         BBSRendering.startTick();
     }
 
@@ -580,6 +586,7 @@ public class BBSModClient
         }
 
         BBSResources.tick();
+        ClientApiCompat.emitEndWorldTick(mc);
     }
 
     public static void onClientTickPost()
@@ -655,11 +662,14 @@ public class BBSModClient
                 gunZoom = new GunZoom(properties.fovTarget, properties.fovInterp, properties.fovDuration);
             }
         }
+
+        ClientApiCompat.emitEndClientTick(mc);
     }
 
     public static void onRenderGuiPost(GuiGraphics drawContext, float tickDelta)
     {
         BBSRendering.renderHud(drawContext, tickDelta);
+        ClientApiCompat.emitHudRender(drawContext, tickDelta);
 
         if (gunZoom != null)
         {
@@ -675,6 +685,7 @@ public class BBSModClient
 
     public static void onClientStopping()
     {
+        ClientApiCompat.emitClientStopping(Minecraft.getInstance());
         BBSResources.stopWatchdog();
     }
 
@@ -686,6 +697,7 @@ public class BBSModClient
         Window window = Minecraft.getInstance().getWindow();
 
         originalFramebufferScale = window.getWidth() / (float) Math.max(window.getScreenWidth(), 1);
+        ClientApiCompat.emitClientStarted(Minecraft.getInstance());
     }
 
     private static void ensureKeyMappingsCreated()

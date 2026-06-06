@@ -9,6 +9,8 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,6 +27,8 @@ import java.util.function.Consumer;
 @Deprecated(forRemoval = false, since = "M10")
 public final class ClientApiCompat
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-client-api");
+
     private static final List<WorldRenderHandler> AFTER_ENTITIES_HANDLERS = new CopyOnWriteArrayList<>();
     private static final List<WorldRenderHandler> LAST_HANDLERS = new CopyOnWriteArrayList<>();
     private static final List<DisconnectHandler> DISCONNECT_HANDLERS = new CopyOnWriteArrayList<>();
@@ -123,7 +127,14 @@ public final class ClientApiCompat
 
         for (WorldRenderHandler handler : AFTER_ENTITIES_HANDLERS)
         {
-            handler.render(compatContext);
+            try
+            {
+                handler.render(compatContext);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] after-entities handler failed", e);
+            }
         }
     }
 
@@ -133,7 +144,14 @@ public final class ClientApiCompat
 
         for (WorldRenderHandler handler : LAST_HANDLERS)
         {
-            handler.render(compatContext);
+            try
+            {
+                handler.render(compatContext);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] after-level handler failed", e);
+            }
         }
     }
 
@@ -141,7 +159,14 @@ public final class ClientApiCompat
     {
         for (DisconnectHandler handler : DISCONNECT_HANDLERS)
         {
-            handler.onDisconnect(client);
+            try
+            {
+                handler.onDisconnect(client);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] disconnect handler failed", e);
+            }
         }
     }
 
@@ -149,7 +174,14 @@ public final class ClientApiCompat
     {
         for (Consumer<Minecraft> handler : START_CLIENT_TICK_HANDLERS)
         {
-            handler.accept(client);
+            try
+            {
+                handler.accept(client);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] start-client-tick handler failed", e);
+            }
         }
     }
 
@@ -157,7 +189,14 @@ public final class ClientApiCompat
     {
         for (Consumer<Minecraft> handler : END_WORLD_TICK_HANDLERS)
         {
-            handler.accept(client);
+            try
+            {
+                handler.accept(client);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] end-world-tick handler failed", e);
+            }
         }
     }
 
@@ -165,7 +204,14 @@ public final class ClientApiCompat
     {
         for (Consumer<Minecraft> handler : END_CLIENT_TICK_HANDLERS)
         {
-            handler.accept(client);
+            try
+            {
+                handler.accept(client);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] end-client-tick handler failed", e);
+            }
         }
     }
 
@@ -173,7 +219,14 @@ public final class ClientApiCompat
     {
         for (HudRenderHandler handler : HUD_RENDER_HANDLERS)
         {
-            handler.render(drawContext, tickDelta);
+            try
+            {
+                handler.render(drawContext, tickDelta);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] hud-render handler failed", e);
+            }
         }
     }
 
@@ -181,7 +234,14 @@ public final class ClientApiCompat
     {
         for (Consumer<Minecraft> handler : CLIENT_STOPPING_HANDLERS)
         {
-            handler.accept(client);
+            try
+            {
+                handler.accept(client);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] client-stopping handler failed", e);
+            }
         }
     }
 
@@ -189,7 +249,14 @@ public final class ClientApiCompat
     {
         for (Consumer<Minecraft> handler : CLIENT_STARTED_HANDLERS)
         {
-            handler.accept(client);
+            try
+            {
+                handler.accept(client);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] client-started handler failed", e);
+            }
         }
     }
 

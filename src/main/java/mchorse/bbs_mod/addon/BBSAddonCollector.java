@@ -18,6 +18,7 @@ import java.util.Set;
  * Rules (protocol v1):
  * - Reject blank addonId or null addon and log a warning.
  * - First registration wins for the same addonId; later ones are rejected and warned once.
+ * - External constructor-time registrations are accepted only before the internal bridge.
  * - Never throw to avoid breaking core startup.
  */
 public final class BBSAddonCollector
@@ -27,6 +28,7 @@ public final class BBSAddonCollector
     private final Map<String, BBSAddonMod> addons = new LinkedHashMap<>();
     private final Map<String, Boolean> warnOnce = new LinkedHashMap<>();
     private boolean registrationOpen = true;
+    private boolean externalRegistrationOpen = true;
 
     /**
      * Registers an addon if the id is unique. Returns true when accepted.
@@ -40,9 +42,10 @@ public final class BBSAddonCollector
      * Registers an addon that came from the public external-addon API.
      *
      * <p>External NeoForge mods can be constructed after BBS' own construct
-     * event closes the event-only window, but still before common setup bridges
-     * collected addons into the internal BBS event bus. That path mirrors the
-     * old Fabric entrypoint scan more closely than the short mod-bus event.</p>
+     * event closes the event-only window, but only before common setup bridges
+     * collected addons into the internal BBS event bus. After that bridge, late
+     * v1 registrations are rejected instead of being half-attached to future
+     * events without receiving startup registration events.</p>
      */
     public synchronized boolean registerExternal(String addonId, BBSAddonMod addon)
     {
@@ -65,7 +68,15 @@ public final class BBSAddonCollector
 
         String key = addonId.trim();
 
-        if (!this.registrationOpen && !allowClosedWindow)
+        if (allowClosedWindow)
+        {
+            if (!this.externalRegistrationOpen)
+            {
+                LOGGER.warn("[bbs-addon] rejected {} registration for '{}' because the external bridge window is closed", source, key);
+                return false;
+            }
+        }
+        else if (!this.registrationOpen)
         {
             LOGGER.warn("[bbs-addon] rejected {} registration for '{}' because the event window is closed", source, key);
             return false;
@@ -88,11 +99,12 @@ public final class BBSAddonCollector
         }
 
         this.addons.put(key, addon);
-        LOGGER.info("[bbs-addon] accepted {} registration for '{}' ({}) while eventWindowOpen={}",
+        LOGGER.info("[bbs-addon] accepted {} registration for '{}' ({}) while eventWindowOpen={} externalWindowOpen={}",
             source,
             key,
             addon.getClass().getName(),
-            this.registrationOpen);
+            this.registrationOpen,
+            this.externalRegistrationOpen);
 
         return true;
     }
@@ -130,6 +142,11 @@ public final class BBSAddonCollector
         return Collections.unmodifiableCollection(new LinkedHashMap<>(this.addons).values());
     }
 
+    public synchronized Map<String, BBSAddonMod> getAddonMap()
+    {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(this.addons));
+    }
+
     public synchronized Set<String> getAddonIds()
     {
         return Collections.unmodifiableSet(new LinkedHashSet<>(this.addons.keySet()));
@@ -149,6 +166,17 @@ public final class BBSAddonCollector
 
         this.registrationOpen = false;
         LOGGER.info("[bbs-addon] registration window closed after collecting {} addon(s)", this.addons.size());
+    }
+
+    public synchronized void closeExternalRegistrationWindow()
+    {
+        if (!this.externalRegistrationOpen)
+        {
+            return;
+        }
+
+        this.externalRegistrationOpen = false;
+        LOGGER.info("[bbs-addon] external registration window closed after bridging {} addon(s)", this.addons.size());
     }
 
     private void warnOnce(String key, Runnable action)

@@ -22,6 +22,10 @@ import mchorse.bbs_mod.addon.BBSAddonCollector;
 import mchorse.bbs_mod.addon.BBSAddonProtocolSelfCheck;
 import mchorse.bbs_mod.addon.BBSAddonRegisterEvent;
 import mchorse.bbs_mod.addon.demo.BBSAddonDemoBootstrap;
+import mchorse.bbs_mod.addon.v2.BBSAddonManager;
+import mchorse.bbs_mod.api.addon.BBSAddon;
+import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
+import mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics;
 import mchorse.bbs_mod.blocks.ModelBlock;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
@@ -138,7 +142,9 @@ import net.minecraft.core.registries.Registries;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -154,8 +160,11 @@ public class BBSMod
     private final IEventBus modBus;
     private final BBSAddonCollector addonCollector;
     private final BBSAddonBridge addonBridge;
+    private final BBSAddonManager addonManager;
     private static final List<PendingAddonRegistration> pendingAddonRegistrations = new ArrayList<>();
+    private static final List<PendingApi2AddonRegistration> pendingApi2AddonRegistrations = new ArrayList<>();
     private static volatile BBSAddonCollector activeAddonCollector;
+    private static volatile BBSAddonManager activeAddonManager;
     private static volatile boolean addonsBridged;
 
     private static ActionManager actions;
@@ -413,15 +422,16 @@ public class BBSMod
         this.modBus = ModLoadingContext.get().getActiveContainer().getEventBus();
         this.addonCollector = new BBSAddonCollector();
         this.addonBridge = new BBSAddonBridge(this.addonCollector);
+        this.addonManager = new BBSAddonManager(() -> LoaderAccessHolder.get());
+        LoaderAccessHolder.set(new NeoForgeLoaderAccess(() -> new ArrayList<>(this.addonCollector.getAddons())));
         bindAddonCollector(this.addonCollector);
+        bindApi2AddonManager(this.addonManager);
         addonsBridged = false;
 
         if (!FMLEnvironment.production)
         {
             BBSAddonDemoBootstrap.bind(this.modBus);
         }
-
-        LoaderAccessHolder.set(new NeoForgeLoaderAccess(() -> new ArrayList<>(this.addonCollector.getAddons())));
 
         this.modBus.addListener(this::onConstructMod);
         this.modBus.addListener(this::onCommonSetup);
@@ -501,11 +511,14 @@ public class BBSMod
         List<BBSAddonMod> addonEntrypoints = loader.getEntrypoints("bbs-addon", BBSAddonMod.class);
         LOGGER.info("[bbs-addon] loader resolved {} registered addon(s)", addonEntrypoints.size());
         LOGGER.info("[bbs-addon] common setup sees collected addon ids: {}", this.addonCollector.getAddonIds());
+        this.addonManager.closeRegistrationWindow();
         assetsFolder = new File(gameFolder, "config/bbs/assets");
 
         assetsFolder.mkdirs();
         this.addonBridge.bridgeToInternalBus(events);
+        this.addonCollector.closeExternalRegistrationWindow();
         addonsBridged = true;
+        this.addonManager.indexLegacyAddons(this.addonCollector.getAddonMap());
 
         actions = new ActionManager();
         ActionEventCompat.register();
@@ -582,7 +595,9 @@ public class BBSMod
             .register(Link.bbs("damage"), DamageActionClip.class, new ClipFactoryData(Icons.SKULL, Colors.CURSOR))
             .register(Link.bbs("swipe"), SwipeActionClip.class, new ClipFactoryData(Icons.LIMB, Colors.ORANGE));
 
+        this.addonManager.runCommonRegistration(settingsFolder, provider, forms, factoryCameraClips, factoryActionClips, events);
         events.post(new RegisterSettingsEvent());
+        this.addonManager.runCommonSetup();
 
         ServerNetwork.setup();
     }
@@ -712,6 +727,46 @@ public class BBSMod
         return settings;
     }
 
+    public static void registerAddon(BBSAddonDescriptor descriptor, Supplier<? extends BBSAddon> supplier)
+    {
+        BBSAddonManager manager;
+
+        synchronized (pendingApi2AddonRegistrations)
+        {
+            manager = activeAddonManager;
+
+            if (manager == null)
+            {
+                pendingApi2AddonRegistrations.add(new PendingApi2AddonRegistration(descriptor, supplier));
+                LOGGER.info("[bbs-addon-api2] queued API 2.0 addon '{}' until BBS addon manager is available",
+                    descriptor == null ? "<descriptor-from-addon>" : descriptor.addonId());
+
+                return;
+            }
+        }
+
+        registerAddon(manager, descriptor, supplier);
+    }
+
+    public static void registerAddon(Supplier<? extends BBSAddon> supplier)
+    {
+        registerAddon((BBSAddonDescriptor) null, supplier);
+    }
+
+    public static List<BBSAddonDiagnostics> getAddonDiagnostics()
+    {
+        BBSAddonManager manager = activeAddonManager;
+
+        return manager == null ? Collections.emptyList() : manager.diagnostics();
+    }
+
+    public static Map<String, String> getAddonParticleComponentClasses()
+    {
+        BBSAddonManager manager = activeAddonManager;
+
+        return manager == null ? Collections.emptyMap() : manager.particleComponents();
+    }
+
     public static void registerAddon(String addonId, Supplier<? extends BBSAddonMod> supplier)
     {
         BBSAddonCollector collector;
@@ -749,6 +804,39 @@ public class BBSMod
         }
     }
 
+    private static void bindApi2AddonManager(BBSAddonManager manager)
+    {
+        List<PendingApi2AddonRegistration> registrations;
+
+        synchronized (pendingApi2AddonRegistrations)
+        {
+            activeAddonManager = manager;
+            registrations = new ArrayList<>(pendingApi2AddonRegistrations);
+            pendingApi2AddonRegistrations.clear();
+        }
+
+        for (PendingApi2AddonRegistration registration : registrations)
+        {
+            registerAddon(manager, registration.descriptor, registration.supplier);
+        }
+    }
+
+    private static void registerAddon(BBSAddonManager manager, BBSAddonDescriptor descriptor, Supplier<? extends BBSAddon> supplier)
+    {
+        if (manager == null || supplier == null)
+        {
+            return;
+        }
+
+        boolean accepted = manager.registerExternal(descriptor, supplier);
+
+        if (!accepted)
+        {
+            LOGGER.warn("[bbs-addon-api2] API 2.0 addon '{}' was not accepted",
+                descriptor == null ? "<descriptor-from-addon>" : descriptor.addonId());
+        }
+    }
+
     private static void registerAddon(BBSAddonCollector collector, String addonId, Supplier<? extends BBSAddonMod> supplier)
     {
         if (collector == null || supplier == null)
@@ -763,8 +851,7 @@ public class BBSMod
 
             if (accepted && addonsBridged)
             {
-                events.register(addon);
-                LOGGER.warn("[bbs-addon] external addon '{}' registered after the bridge; future events are connected, but startup events may already be missed", addonId);
+                LOGGER.error("[bbs-addon] external addon '{}' was accepted after the bridge; this violates the v1 timing contract and will not be attached", addonId);
             }
             else if (!accepted)
             {
@@ -785,6 +872,18 @@ public class BBSMod
         private PendingAddonRegistration(String addonId, Supplier<? extends BBSAddonMod> supplier)
         {
             this.addonId = addonId;
+            this.supplier = supplier;
+        }
+    }
+
+    private static final class PendingApi2AddonRegistration
+    {
+        private final BBSAddonDescriptor descriptor;
+        private final Supplier<? extends BBSAddon> supplier;
+
+        private PendingApi2AddonRegistration(BBSAddonDescriptor descriptor, Supplier<? extends BBSAddon> supplier)
+        {
+            this.descriptor = descriptor;
             this.supplier = supplier;
         }
     }

@@ -40,6 +40,25 @@ public final class BBSAddonProtocolSelfCheck
             LOGGER.info("[bbs-addon-selfcheck] late registration rejection OK");
         }
 
+        BBSAddonCollector externalWindowCollector = new BBSAddonCollector();
+        boolean externalBeforeBridgeAccepted = externalWindowCollector.registerExternal("bbs-addon-selfcheck-external-before-bridge", new BBSAddonMod() {});
+        externalWindowCollector.closeRegistrationWindow();
+        externalWindowCollector.closeExternalRegistrationWindow();
+        boolean externalAfterBridgeAccepted = externalWindowCollector.registerExternal("bbs-addon-selfcheck-external-after-bridge", new BBSAddonMod() {});
+
+        if (externalBeforeBridgeAccepted && !externalAfterBridgeAccepted)
+        {
+            LOGGER.info("[bbs-addon-selfcheck] external bridge-window policy OK");
+        }
+        else
+        {
+            LOGGER.error(
+                "[bbs-addon-selfcheck] external bridge-window policy mismatch (beforeBridgeAccepted={}, afterBridgeAccepted={})",
+                externalBeforeBridgeAccepted,
+                externalAfterBridgeAccepted
+            );
+        }
+
         // Duplicate id policy check: first wins, second is rejected.
         BBSAddonCollector duplicateCollector = new BBSAddonCollector();
         boolean firstAccepted = duplicateCollector.register("bbs-addon-selfcheck-duplicate", new BBSAddonMod() {});

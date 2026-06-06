@@ -2,13 +2,18 @@ package mchorse.bbs_mod.client;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.compat.ClientApiCompat;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.graphics.window.Window;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -79,6 +84,28 @@ public final class BBSClientNeoEvents
         event.registerEntityRenderer(BBSMod.ACTOR_ENTITY.get(), ActorEntityRenderer::new);
         event.registerEntityRenderer(BBSMod.GUN_PROJECTILE_ENTITY.get(), GunProjectileEntityRenderer::new);
         event.registerBlockEntityRenderer(BBSMod.MODEL_BLOCK_ENTITY.get(), ModelBlockEntityRenderer::new);
+
+        for (ClientApiCompat.EntityRendererRegistration<?> registration : ClientApiCompat.getEntityRendererRegistrations())
+        {
+            registerCompatEntityRenderer(event, registration);
+        }
+
+        for (ClientApiCompat.BlockEntityRendererRegistration<?> registration : ClientApiCompat.getBlockEntityRendererRegistrations())
+        {
+            registerCompatBlockEntityRenderer(event, registration);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void registerCompatEntityRenderer(EntityRenderersEvent.RegisterRenderers event, ClientApiCompat.EntityRendererRegistration<?> registration)
+    {
+        event.registerEntityRenderer((EntityType) registration.getType(), (EntityRendererProvider) registration.getFactory());
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void registerCompatBlockEntityRenderer(EntityRenderersEvent.RegisterRenderers event, ClientApiCompat.BlockEntityRendererRegistration<?> registration)
+    {
+        event.registerBlockEntityRenderer((BlockEntityType) registration.getType(), (BlockEntityRendererProvider) registration.getFactory());
     }
 
     private static void onRenderLevelStage(RenderLevelStageEvent event)
@@ -113,6 +140,31 @@ public final class BBSClientNeoEvents
         else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL)
         {
             BBSModClient.onRenderAfterLevel();
+
+            PoseStack stack = event.getPoseStack();
+
+            if (stack == null)
+            {
+                return;
+            }
+
+            Minecraft mc = Minecraft.getInstance();
+            PoseStack worldStack = new PoseStack();
+
+            worldStack.setIdentity();
+            worldStack.last().pose().set(stack.last().pose());
+            worldStack.last().normal().set(stack.last().normal());
+
+            BbsWorldRenderContext context = new BbsWorldRenderContext(
+                event.getCamera(),
+                worldStack,
+                mc.renderBuffers().bufferSource(),
+                resolveTickDelta(event.getPartialTick()),
+                event.getModelViewMatrix(),
+                event.getProjectionMatrix()
+            );
+
+            ClientApiCompat.emitLast(context);
         }
     }
 

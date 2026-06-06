@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.particles;
 
+import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.math.Operation;
@@ -38,6 +39,8 @@ import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapePoint;
 import mchorse.bbs_mod.particles.components.shape.ParticleComponentShapeSphere;
 import mchorse.bbs_mod.particles.events.ParticleEventNode;
 import mchorse.bbs_mod.resources.Link;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -47,6 +50,7 @@ import java.util.Set;
 
 public class ParticleParser
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-particles");
     public static final String PREFIX = "minecraft:";
     public static final String PREFIX_BLOCKBUSTER = "blockbuster:";
 
@@ -124,6 +128,37 @@ public class ParticleParser
         this.components.put("particle_motion_collision", ParticleComponentMotionCollision.class);
         this.components.put("particle_motion_dynamic", ParticleComponentMotionDynamic.class);
         this.components.put("particle_motion_parametric", ParticleComponentMotionParametric.class);
+
+        this.registerApi2Components();
+    }
+
+    private void registerApi2Components()
+    {
+        for (Map.Entry<String, String> entry : BBSMod.getAddonParticleComponentClasses().entrySet())
+        {
+            String id = entry.getKey();
+            String className = entry.getValue();
+
+            try
+            {
+                Class<?> rawClass = Class.forName(className);
+
+                if (!ParticleComponentBase.class.isAssignableFrom(rawClass))
+                {
+                    LOGGER.warn("[bbs-particles] ignored API 2.0 particle component '{}' because '{}' is not a ParticleComponentBase",
+                        id,
+                        className);
+                    continue;
+                }
+
+                this.components.put(id, rawClass.asSubclass(ParticleComponentBase.class));
+                LOGGER.info("[bbs-particles] registered API 2.0 particle component '{}' ({})", id, className);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.warn("[bbs-particles] failed to load API 2.0 particle component '{}' ({})", id, className, e);
+            }
+        }
     }
 
     public ParticleScheme fromData(MapType data) throws Exception
