@@ -7,6 +7,7 @@ import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -418,43 +419,45 @@ public abstract class BaseFilmController
             List<Replay> replays = this.film.replays.getList();
             Replay replay = CollectionUtils.getSafe(replays, i);
 
+            if (replay == null || !replay.enabled.get())
+            {
+                continue;
+            }
+
             if (!this.canUpdate(i, replay, entity, UpdateMode.UPDATE))
             {
                 continue;
             }
 
-            if (replay != null)
+            ticks = replay.getTick(ticks);
+
+            this.updateEntityAndForm(entity, ticks);
+            this.applyReplay(replay, ticks, entity);
+
+            Map<String, Integer> actors = this.getActors();
+
+            if (actors != null)
             {
-                ticks = replay.getTick(ticks);
+                Integer entityId = actors.get(replay.getId());
 
-                this.updateEntityAndForm(entity, ticks);
-                this.applyReplay(replay, ticks, entity);
-
-                Map<String, Integer> actors = this.getActors();
-
-                if (actors != null)
+                if (entityId != null)
                 {
-                    Integer entityId = actors.get(replay.getId());
+                    Entity anEntity = Minecraft.getInstance().level.getEntity(entityId);
 
-                    if (entityId != null)
+                    if (anEntity instanceof ActorEntity actor)
                     {
-                        Entity anEntity = Minecraft.getInstance().level.getEntity(entityId);
+                        this.applyActorReplay(replay, ticks, actor, entity);
+                    }
+                    else if (anEntity instanceof Player player)
+                    {
+                        double x = replay.keyframes.x.interpolate(ticks);
+                        double y = replay.keyframes.y.interpolate(ticks);
+                        double z = replay.keyframes.z.interpolate(ticks);
+                        double prevX = replay.keyframes.x.interpolate(ticks - 1);
+                        double prevY = replay.keyframes.y.interpolate(ticks - 1);
+                        double prevZ = replay.keyframes.z.interpolate(ticks - 1);
 
-                        if (anEntity instanceof ActorEntity actor)
-                        {
-                            this.applyActorReplay(replay, ticks, actor, entity);
-                        }
-                        else if (anEntity instanceof Player player)
-                        {
-                            double x = replay.keyframes.x.interpolate(ticks);
-                            double y = replay.keyframes.y.interpolate(ticks);
-                            double z = replay.keyframes.z.interpolate(ticks);
-                            double prevX = replay.keyframes.x.interpolate(ticks - 1);
-                            double prevY = replay.keyframes.y.interpolate(ticks - 1);
-                            double prevZ = replay.keyframes.z.interpolate(ticks - 1);
-
-                            player.setDeltaMovement(x - prevX, y - prevY, z - prevZ);
-                        }
+                        player.setDeltaMovement(x - prevX, y - prevY, z - prevZ);
                     }
                 }
             }
@@ -472,52 +475,54 @@ public abstract class BaseFilmController
             List<Replay> replays = this.film.replays.getList();
             Replay replay = CollectionUtils.getSafe(replays, i);
 
+            if (replay == null || !replay.enabled.get())
+            {
+                continue;
+            }
+
             if (!this.canUpdate(i, replay, entity, UpdateMode.UPDATE))
             {
                 continue;
             }
 
-            if (replay != null)
+            ticks = replay.getTick(ticks);
+
+            Map<String, Integer> actors = this.getActors();
+
+            if (actors != null)
             {
-                ticks = replay.getTick(ticks);
+                Integer entityId = actors.get(replay.getId());
 
-                Map<String, Integer> actors = this.getActors();
-
-                if (actors != null)
+                if (entityId != null)
                 {
-                    Integer entityId = actors.get(replay.getId());
+                    Entity anEntity = Minecraft.getInstance().level.getEntity(entityId);
 
-                    if (entityId != null)
+                    if (anEntity instanceof Player player)
                     {
-                        Entity anEntity = Minecraft.getInstance().level.getEntity(entityId);
+                        double x = replay.keyframes.x.interpolate(ticks);
+                        double y = replay.keyframes.y.interpolate(ticks);
+                        double z = replay.keyframes.z.interpolate(ticks);
+                        boolean sneaking = replay.keyframes.sneaking.interpolate(ticks) > 0;
 
-                        if (anEntity instanceof Player player)
+                        Vec3 pos = player.position();
+
+                        player.move(MoverType.SELF, new Vec3(x - pos.x, y - pos.y, z - pos.z));
+                        player.setPos(x, y, z);
+
+                        player.setShiftKeyDown(sneaking);
+                        player.setOnGround(replay.keyframes.grounded.interpolate(ticks) > 0);
+
+                        if (player instanceof ClientPlayerEntityAccessor accessor)
                         {
-                            double x = replay.keyframes.x.interpolate(ticks);
-                            double y = replay.keyframes.y.interpolate(ticks);
-                            double z = replay.keyframes.z.interpolate(ticks);
-                            boolean sneaking = replay.keyframes.sneaking.interpolate(ticks) > 0;
-
-                            Vec3 pos = player.position();
-
-                            player.move(MoverType.SELF, new Vec3(x - pos.x, y - pos.y, z - pos.z));
-                            player.setPos(x, y, z);
-
-                            player.setShiftKeyDown(sneaking);
-                            player.setOnGround(replay.keyframes.grounded.interpolate(ticks) > 0);
-
-                            if (player instanceof ClientPlayerEntityAccessor accessor)
-                            {
-                                accessor.bbs$setIsSneakingPose(sneaking);
-                            }
-
-                            if (player instanceof LocalPlayer playerEntity)
-                            {
-                                playerEntity.input.shiftKeyDown = sneaking;
-                            }
-
-                            player.fallDistance = replay.keyframes.fall.interpolate(ticks).floatValue();
+                            accessor.bbs$setIsSneakingPose(sneaking);
                         }
+
+                        if (player instanceof LocalPlayer playerEntity)
+                        {
+                            playerEntity.input.shiftKeyDown = sneaking;
+                        }
+
+                        player.fallDistance = replay.keyframes.fall.interpolate(ticks).floatValue();
                     }
                 }
             }
@@ -546,7 +551,7 @@ public abstract class BaseFilmController
         int hurtTimer = actorEntity.getHurtTimer();
 
         actorEntity.update();
-        replay.keyframes.apply(ticks, actorEntity);
+        replay.keyframes.apply(ticks, actorEntity, List.of(ReplayKeyframes.GROUP_POSITION));
         actorEntity.setHurtTimer(Math.max(hurtTimer, actorEntity.getHurtTimer()));
 
         if (this.getTransition(editorEntity, 1F) == 0F)
@@ -571,7 +576,7 @@ public abstract class BaseFilmController
             IEntity entity = entry.getValue();
             Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
 
-            if (replay == null)
+            if (replay == null || !replay.enabled.get())
             {
                 continue;
             }
@@ -656,7 +661,7 @@ public abstract class BaseFilmController
             IEntity entity = entry.getValue();
             Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
 
-            if (replay == null)
+            if (replay == null || !replay.enabled.get())
             {
                 continue;
             }
