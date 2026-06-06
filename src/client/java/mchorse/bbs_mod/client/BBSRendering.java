@@ -21,7 +21,6 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -414,7 +413,6 @@ public class BBSRendering
         PoseStack stack = new PoseStack();
 
         stack.setIdentity();
-        MatrixStackUtils.multiply(stack, modelViewMatrix);
         onRenderChunkLayer(stack, modelViewMatrix, projectionMatrix);
     }
 
@@ -481,10 +479,11 @@ public class BBSRendering
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
         Matrix4f oldProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
 
-        /* BBS world renderers carry the full view matrix in their PoseStack. */
+        /* BBS world renderers use camera-relative PoseStacks; the view matrix stays in RenderSystem. */
         RenderSystem.setProjectionMatrix(worldRenderContext.projectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
         modelViewStack.pushMatrix();
         modelViewStack.identity();
+        modelViewStack.mul(worldRenderContext.modelViewMatrix());
         RenderSystem.applyModelViewMatrix();
 
         try

@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.client.renderer;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -23,9 +22,6 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.LivingEntity;
 import com.mojang.math.Axis;
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
-import org.joml.Matrix4fStack;
 
 public class MorphRenderer
 {
@@ -137,37 +133,6 @@ public class MorphRenderer
 
     public static void renderForm(Form form, FormRenderingContext context)
     {
-        if (!BBSRendering.isRenderingWorld())
-        {
-            FormUtilsClient.render(form, context);
-
-            return;
-        }
-
-        PoseStack originalStack = context.stack;
-        PoseStack bakedStack = new PoseStack();
-        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
-        Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
-
-        bakedStack.setIdentity();
-        bakedStack.last().pose().set(new Matrix4f(modelView).mul(originalStack.last().pose()));
-        bakedStack.last().normal().set(new Matrix3f(modelView).mul(originalStack.last().normal()));
-
-        modelViewStack.pushMatrix();
-        modelViewStack.identity();
-        RenderSystem.applyModelViewMatrix();
-        context.stack = bakedStack;
-
-        try
-        {
-            FormUtilsClient.render(form, context);
-            FormUtilsClient.getProvider().endBatch();
-        }
-        finally
-        {
-            context.stack = originalStack;
-            modelViewStack.popMatrix();
-            RenderSystem.applyModelViewMatrix();
-        }
+        FormUtilsClient.render(form, context);
     }
 }
