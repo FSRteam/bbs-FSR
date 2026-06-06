@@ -6,6 +6,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Quaternionf;
 
 public class FormRenderingContext
 {
@@ -52,7 +53,7 @@ public class FormRenderingContext
         this.camera.position.set(camera.getPosition().x, camera.getPosition().y, camera.getPosition().z);
         this.camera.rotation.set(MathUtils.toRad(-camera.getXRot()), MathUtils.toRad(camera.getYRot()), 0F);
         this.camera.fov = MathUtils.toRad(Minecraft.getInstance().options.fov().get());
-        this.camera.view.identity().rotate(camera.rotation());
+        this.camera.view.identity().rotate(camera.rotation().conjugate(new Quaternionf()));
 
         return this;
     }

@@ -741,7 +741,7 @@ public class ParticleEmitter
     {
         this.cYaw = -camera.getYRot();
         this.cPitch = camera.getXRot();
-        this.cameraRotation.set(new Matrix4f().rotate(camera.rotation())).invert();
+        this.cameraRotation.set(new Matrix4f().rotate(camera.rotation()));
         this.cX = camera.getPosition().x;
         this.cY = camera.getPosition().y;
         this.cZ = camera.getPosition().z;
