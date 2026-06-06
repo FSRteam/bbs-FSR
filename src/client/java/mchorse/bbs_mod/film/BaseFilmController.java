@@ -442,12 +442,7 @@ public abstract class BaseFilmController
 
                         if (anEntity instanceof ActorEntity actor)
                         {
-                            /* Force synchronize entity angles */
-                            actor.setYRot(replay.keyframes.yaw.interpolate(ticks).floatValue());
-                            actor.setYHeadRot(replay.keyframes.headYaw.interpolate(ticks).floatValue());
-                            actor.setYBodyRot(replay.keyframes.bodyYaw.interpolate(ticks).floatValue());
-                            actor.setXRot(replay.keyframes.pitch.interpolate(ticks).floatValue());
-                            replay.applyClientActions(ticks, new MCEntity(anEntity), this.film);
+                            this.applyActorReplay(replay, ticks, actor, entity);
                         }
                         else if (anEntity instanceof Player player)
                         {
@@ -543,6 +538,29 @@ public abstract class BaseFilmController
     {
         replay.keyframes.apply(ticks, entity);
         replay.applyClientActions(ticks, entity, this.film);
+    }
+
+    private void applyActorReplay(Replay replay, int ticks, ActorEntity actor, IEntity editorEntity)
+    {
+        MCEntity actorEntity = actor.getEntity();
+        int hurtTimer = actorEntity.getHurtTimer();
+
+        actorEntity.update();
+        replay.keyframes.apply(ticks, actorEntity);
+        actorEntity.setHurtTimer(Math.max(hurtTimer, actorEntity.getHurtTimer()));
+
+        if (this.getTransition(editorEntity, 1F) == 0F)
+        {
+            actorEntity.setPrevX(actorEntity.getX());
+            actorEntity.setPrevY(actorEntity.getY());
+            actorEntity.setPrevZ(actorEntity.getZ());
+            actorEntity.setPrevYaw(actorEntity.getYaw());
+            actorEntity.setPrevHeadYaw(actorEntity.getHeadYaw());
+            actorEntity.setPrevBodyYaw(actorEntity.getBodyYaw());
+            actorEntity.setPrevPitch(actorEntity.getPitch());
+        }
+
+        replay.applyClientActions(ticks, actorEntity, this.film);
     }
 
     public void startRenderFrame(float transition)
