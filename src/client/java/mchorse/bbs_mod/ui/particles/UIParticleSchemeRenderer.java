@@ -25,6 +25,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
     public ParticleEmitter emitter;
 
     private Vector3f vector = new Vector3f(0, 0, 0);
+    private final Matrix4f cameraView = new Matrix4f();
 
     public UIParticleSchemeRenderer()
     {
@@ -59,7 +60,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
             return;
         }
 
-        this.emitter.setupCameraProperties(this.camera);
+        this.emitter.setupGuiCameraProperties(this.camera);
         this.emitter.rotation.identity();
 
         Minecraft.getInstance().gameRenderer.lightTexture().turnOnLightLayer();
@@ -68,7 +69,7 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
         stack.pushPose();
         stack.setIdentity();
-        stack.mulPose(new Matrix4f(this.camera.view));
+        stack.mulPose(this.cameraView.set(this.camera.view));
 
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();

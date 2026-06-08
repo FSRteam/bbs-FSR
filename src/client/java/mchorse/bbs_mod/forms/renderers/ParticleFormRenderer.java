@@ -33,6 +33,9 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
     private boolean checked;
     private boolean restart;
     private long lastParticleUpdate = lastUpdate;
+    private final Matrix4f renderMatrix = new Matrix4f();
+    private final Matrix4f cameraViewMatrix = new Matrix4f();
+    private final Vector3d renderTranslation = new Vector3d();
 
     public ParticleFormRenderer(ParticleForm form)
     {
@@ -96,7 +99,7 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             MatrixStackUtils.scaleStack(stack, scale, scale, scale);
 
             this.updateTexture(context.getTransition());
-            emitter.lastGlobal.set(new Vector3f(0, 0, 0));
+            emitter.lastGlobal.set(0, 0, 0);
             emitter.rotation.identity();
             emitter.renderUI(stack, context.getTransition());
 
@@ -124,12 +127,22 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             this.updateTexture(context.getTransition());
 
-            Matrix4f matrix = new Matrix4f(context.camera.view).invert();
+            boolean cameraRelativeWorld = this.isCameraRelativeWorld(context);
+            Matrix4f matrix = this.renderMatrix;
 
-            matrix.mul(context.stack.last().pose());
+            if (cameraRelativeWorld)
+            {
+                matrix.set(context.stack.last().pose());
+            }
+            else
+            {
+                matrix.set(context.camera.view).invert();
+                matrix.mul(context.stack.last().pose());
+            }
 
-            Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
-            translation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
+            Vector3f translation = matrix.getTranslation(Vectors.TEMP_3F);
+            this.renderTranslation.set(translation.x, translation.y, translation.z);
+            this.renderTranslation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
 
             GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
@@ -138,9 +151,13 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             context.stack.pushPose();
             context.stack.setIdentity();
-            context.stack.mulPose(new Matrix4f(context.camera.view));
 
-            emitter.lastGlobal.set(translation);
+            if (!cameraRelativeWorld)
+            {
+                context.stack.mulPose(this.cameraViewMatrix.set(context.camera.view));
+            }
+
+            emitter.lastGlobal.set(this.renderTranslation);
             emitter.rotation.set(matrix);
 
             if (!BBSRendering.isIrisShadowPass())
@@ -161,6 +178,12 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             gameRenderer.lightTexture().turnOffLightLayer();
             gameRenderer.overlayTexture().teardownOverlayColor();
         }
+    }
+
+    private boolean isCameraRelativeWorld(FormRenderingContext context)
+    {
+        /* World stacks are camera-relative; UI/model previews already include the camera view. */
+        return BBSRendering.isRenderingWorld() && !context.modelRenderer && !context.ui;
     }
 
     private void updateTexture(float transition)

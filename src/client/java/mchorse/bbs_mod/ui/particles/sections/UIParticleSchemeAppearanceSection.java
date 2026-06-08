@@ -479,10 +479,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
     {
         this.directionFields.removeFromParent();
 
-        boolean showDirection = this.component.facing == CameraFacing.LOOKAT_DIRECTION
-            || this.component.facing == CameraFacing.DIRECTION_X
-            || this.component.facing == CameraFacing.DIRECTION_Y
-            || this.component.facing == CameraFacing.DIRECTION_Z;
+        boolean showDirection = this.component.facing.isDirection;
 
         if (showDirection)
         {

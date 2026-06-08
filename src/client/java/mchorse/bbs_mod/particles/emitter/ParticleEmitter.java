@@ -9,7 +9,6 @@ import mchorse.bbs_mod.math.IExpression;
 import mchorse.bbs_mod.math.Variable;
 import mchorse.bbs_mod.particles.ParticleMaterial;
 import mchorse.bbs_mod.particles.ParticleScheme;
-import mchorse.bbs_mod.particles.components.meta.ParticleComponentInitialization;
 import mchorse.bbs_mod.particles.components.IComponentEmitterInitialize;
 import mchorse.bbs_mod.particles.components.IComponentEmitterUpdate;
 import mchorse.bbs_mod.particles.components.IComponentParticleInitialize;
@@ -22,6 +21,8 @@ import mchorse.bbs_mod.particles.events.ParticleEventDispatcher;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -49,6 +50,11 @@ import java.util.function.Supplier;
 
 public class ParticleEmitter
 {
+    public static final int PERSPECTIVE_FIRST_PERSON = 0;
+    public static final int PERSPECTIVE_THIRD_PERSON_BACK = 1;
+    public static final int PERSPECTIVE_THIRD_PERSON_FRONT = 2;
+    public static final int PERSPECTIVE_GUI = 100;
+
     public ParticleScheme scheme;
     public List<Particle> particles = new ArrayList<>();
     public Map<String, IExpression> variables;
@@ -83,6 +89,7 @@ public class ParticleEmitter
     public float random4 = (float) Math.random();
 
     /* Camera properties */
+    public int perspective;
     public float cYaw;
     public float cPitch;
     public Matrix3f cameraRotation = new Matrix3f();
@@ -136,6 +143,8 @@ public class ParticleEmitter
 
     private final List<ParticleEmitter> childEmitters = new ArrayList<>();
     private final Vector3d eventLastGlobal = new Vector3d();
+    private final Vector3f particlePosition = new Vector3f();
+    private final Matrix4f minecraftCameraRotation = new Matrix4f();
     private boolean eventLastGlobalSet;
     private ParticleEmitter boundParent;
     private Particle boundParticle;
@@ -180,9 +189,11 @@ public class ParticleEmitter
         this.setupVariables();
         this.setEmitterVariables(0);
 
-        for (IComponentEmitterInitialize component : this.scheme.emitterInitializes)
+        List<IComponentEmitterInitialize> emitterInitializes = this.scheme.emitterInitializes;
+
+        for (int i = 0; i < emitterInitializes.size(); i++)
         {
-            component.apply(this);
+            emitterInitializes.get(i).apply(this);
         }
     }
 
@@ -271,11 +282,9 @@ public class ParticleEmitter
 
         this.scheme.updateCurves();
 
-        ParticleComponentInitialization initComponent = this.scheme.get(ParticleComponentInitialization.class);
-
-        if (initComponent != null)
+        if (this.scheme.initialization != null)
         {
-            initComponent.particleUpdate.get();
+            this.scheme.initialization.particleUpdate.get();
         }
     }
 
@@ -363,7 +372,7 @@ public class ParticleEmitter
 
         if (this.age > 0)
         {
-            ParticleComponentEmitterLifetimeEvents events = this.scheme == null ? null : this.scheme.get(ParticleComponentEmitterLifetimeEvents.class);
+            ParticleComponentEmitterLifetimeEvents events = this.scheme == null ? null : this.scheme.emitterLifetimeEvents;
 
             if (events != null)
             {
@@ -424,9 +433,11 @@ public class ParticleEmitter
 
         this.setEmitterVariables(0);
 
-        for (IComponentEmitterUpdate component : this.scheme.emitterUpdates)
+        List<IComponentEmitterUpdate> emitterUpdates = this.scheme.emitterUpdates;
+
+        for (int i = 0; i < emitterUpdates.size(); i++)
         {
-            component.update(this);
+            emitterUpdates.get(i).update(this);
         }
 
         this.setEmitterVariables(0);
@@ -502,16 +513,20 @@ public class ParticleEmitter
 
         this.setParticleVariables(particle, 0);
 
-        for (IComponentParticleUpdate component : this.scheme.particleUpdates)
+        List<IComponentParticleUpdate> particleUpdates = this.scheme.particleUpdates;
+
+        for (int i = 0; i < particleUpdates.size(); i++)
         {
-            component.update(this, particle);
+            particleUpdates.get(i).update(this, particle);
         }
     }
 
     public Particle getParticleByIndex(int index)
     {
-        for (Particle particle : this.particles)
+        for (int i = 0; i < this.particles.size(); i++)
         {
+            Particle particle = this.particles.get(i);
+
             if (particle.index == index)
             {
                 return particle;
@@ -546,14 +561,16 @@ public class ParticleEmitter
         this.setParticleVariables(particle, offset);
         particle.setupMatrix(this);
 
-        for (IComponentParticleInitialize component : this.scheme.particleInitializes)
+        List<IComponentParticleInitialize> particleInitializes = this.scheme.particleInitializes;
+
+        for (int i = 0; i < particleInitializes.size(); i++)
         {
-            component.apply(this, particle);
+            particleInitializes.get(i).apply(this, particle);
         }
 
         if (!particle.relativeRotation)
         {
-            Vector3f vec = new Vector3f().set(particle.position);
+            Vector3f vec = this.particlePosition.set(particle.position);
 
             particle.matrix.transform(vec);
             particle.position.x = vec.x;
@@ -584,7 +601,7 @@ public class ParticleEmitter
             return;
         }
 
-        List<IComponentParticleRender> list = this.scheme.getComponents(IComponentParticleRender.class);
+        List<IComponentParticleRender> list = this.scheme.particleRender;
 
         if (!list.isEmpty())
         {
@@ -603,9 +620,9 @@ public class ParticleEmitter
             Matrix4f matrix = stack.last().pose();
             BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
 
-            for (IComponentParticleRender render : list)
+            for (int i = 0; i < list.size(); i++)
             {
-                render.renderUI(this.uiParticle, builder, matrix, transition);
+                list.get(i).renderUI(this.uiParticle, builder, matrix, transition);
             }
 
             MeshData meshData = builder.build();
@@ -632,29 +649,34 @@ public class ParticleEmitter
 
         List<IComponentParticleRender> renders = this.scheme.particleRender;
 
-        for (IComponentParticleRender component : renders)
+        for (int i = 0; i < renders.size(); i++)
         {
-            component.preRender(this, transition);
+            renders.get(i).preRender(this, transition);
         }
 
         if (!this.particles.isEmpty())
         {
             Matrix4f matrix = stack.last().pose();
             BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
+            ParticleComponentCollisionAppearance collisionAppearance = this.scheme.collisionAppearance;
+            boolean useCollisionTexture = collisionAppearance != null && collisionAppearance.isCollisionTextureEnabled();
 
             this.bindTexture();
 
-            for (Particle particle : this.particles)
+            for (int i = 0; i < this.particles.size(); i++)
             {
+                Particle particle = this.particles.get(i);
+
                 this.setEmitterVariables(transition);
                 this.setParticleVariables(particle, transition);
 
                 /* Check if particle should use collision appearance instead of base billboard */
-                ParticleComponentCollisionAppearance collisionAppearance = this.scheme.get(ParticleComponentCollisionAppearance.class);
-                boolean hasCollisionTexture = collisionAppearance != null && collisionAppearance.isCollisionTextureEnabled() && particle.intersected;
+                boolean hasCollisionTexture = useCollisionTexture && particle.intersected;
 
-                for (IComponentParticleRender component : renders)
+                for (int j = 0; j < renders.size(); j++)
                 {
+                    IComponentParticleRender component = renders.get(j);
+
                     /* Skip base billboard when collision appearance handles rendering */
                     if (hasCollisionTexture && component.getClass() == ParticleComponentAppearanceBillboard.class)
                     {
@@ -698,13 +720,15 @@ public class ParticleEmitter
             }
         }
 
-        for (IComponentParticleRender component : renders)
+        for (int i = 0; i < renders.size(); i++)
         {
-            component.postRender(this, transition);
+            renders.get(i).postRender(this, transition);
         }
 
-        for (ParticleEmitter child : this.childEmitters)
+        for (int i = 0; i < this.childEmitters.size(); i++)
         {
+            ParticleEmitter child = this.childEmitters.get(i);
+
             this.copyCameraProperties(child);
             child.render(format, program, stack, overlay, transition);
         }
@@ -712,6 +736,7 @@ public class ParticleEmitter
 
     private void copyCameraProperties(ParticleEmitter emitter)
     {
+        emitter.perspective = this.perspective;
         emitter.cYaw = this.cYaw;
         emitter.cPitch = this.cPitch;
         emitter.cameraRotation.set(this.cameraRotation);
@@ -729,8 +754,20 @@ public class ParticleEmitter
 
     public void setupCameraProperties(Camera camera)
     {
-        this.cYaw = -MathUtils.toDeg(camera.rotation.y);
-        this.cPitch = -MathUtils.toDeg(camera.rotation.x);
+        this.perspective = PERSPECTIVE_FIRST_PERSON;
+        this.cYaw = 180F - MathUtils.toDeg(camera.rotation.y);
+        this.cPitch = MathUtils.toDeg(camera.rotation.x);
+        this.cameraRotation.set(camera.view).invert();
+        this.cX = camera.position.x;
+        this.cY = camera.position.y;
+        this.cZ = camera.position.z;
+    }
+
+    public void setupGuiCameraProperties(Camera camera)
+    {
+        this.perspective = PERSPECTIVE_GUI;
+        this.cYaw = MathUtils.toDeg(camera.rotation.y);
+        this.cPitch = MathUtils.toDeg(camera.rotation.x);
         this.cameraRotation.set(camera.view).invert();
         this.cX = camera.position.x;
         this.cY = camera.position.y;
@@ -739,9 +776,14 @@ public class ParticleEmitter
 
     public void setupCameraProperties(net.minecraft.client.Camera camera)
     {
-        this.cYaw = -camera.getYRot();
-        this.cPitch = camera.getXRot();
-        this.cameraRotation.set(new Matrix4f().rotate(camera.rotation()));
+        CameraType cameraType = Minecraft.getInstance().options.getCameraType();
+
+        this.perspective = cameraType == CameraType.THIRD_PERSON_FRONT
+            ? PERSPECTIVE_THIRD_PERSON_FRONT
+            : cameraType == CameraType.THIRD_PERSON_BACK ? PERSPECTIVE_THIRD_PERSON_BACK : PERSPECTIVE_FIRST_PERSON;
+        this.cYaw = 180F - camera.getYRot();
+        this.cPitch = -camera.getXRot();
+        this.cameraRotation.set(this.minecraftCameraRotation.identity().rotate(camera.rotation()));
         this.cX = camera.getPosition().x;
         this.cY = camera.getPosition().y;
         this.cZ = camera.getPosition().z;
