@@ -43,7 +43,7 @@ public abstract class WorldRendererMixin
     {
         if (BBSSettings.chromaSkyEnabled.get() && !BBSSettings.chromaSkyTerrain.get())
         {
-            BBSRendering.onRenderChunkLayer(RenderSystem.getModelViewMatrix(), projectionMatrix);
+            BBSRendering.onRenderChunkLayer(frustumMatrix, projectionMatrix);
 
             info.cancel();
         }
@@ -54,7 +54,12 @@ public abstract class WorldRendererMixin
     {
         if (layer == RenderType.solid())
         {
-            BBSRendering.onRenderChunkLayer(RenderSystem.getModelViewMatrix(), projectionMatrix);
+            /* renderSectionLayer receives the layer's active world matrix as an
+             * argument. Do not replace it with RenderSystem.getModelViewMatrix():
+             * under Iris that global value can be from a different render scope,
+             * making non-actor replay forms drift as the camera moves.
+             */
+            BBSRendering.onRenderChunkLayer(frustumMatrix, projectionMatrix);
         }
     }
 
