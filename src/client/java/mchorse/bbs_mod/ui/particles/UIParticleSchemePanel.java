@@ -11,12 +11,14 @@ import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.ui.ContentType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
@@ -25,6 +27,8 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.layout.ILayoutSource;
+import mchorse.bbs_mod.ui.framework.elements.layout.UIDockLayout;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
@@ -57,6 +61,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 
 import org.joml.Vector2i;
+import org.lwjgl.glfw.GLFW;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -83,7 +88,8 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
     private static final float DRAG_HANDLE_TOP_OFFSET_NORM = 0.01F;
-    private static final int SPLITTER_HANDLE_PX = 6;
+    private static final int SPLITTER_HANDLE_PX = 14;
+    private static final int SPLITTER_HANDLE_LINE_PX = 1;
     private static final int DROP_ZONE_CENTER = -1;
     private static final float DROP_EDGE_MARGIN = 0.2F;
     private static final int DOCK_STACK_TABS_HEIGHT_PX = 20;
@@ -91,6 +97,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     public UIParticleSchemeRenderer renderer;
     public UIParticleSelectionPanel selectionPanel;
+    public UIDockLayout dock;
 
     public List<UIParticleSchemeSection> sections = new ArrayList<>();
 
@@ -197,23 +204,22 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.panelById.put(PANEL_EVENTS_ID, eventsPage);
         this.panelById.put(PANEL_CURVES_ID, curvesPage);
 
-        /* Add panels to editor */
-        for (UIElement panel : this.panelById.values())
+        this.dock = new UIDockLayout();
+        this.dock.relative(this.editor).w(1F).h(1F);
+        this.dock.source(this.createLayoutSource())
+            .frameless(PANEL_PREVIEW_ID)
+            .gate(() -> this.data != null)
+            .ensure(this::ensureParticleLayoutPanels)
+            .icons(this::getPanelIcon);
+
+        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
         {
-            this.editor.add(panel);
+            this.dock.addPanel(entry.getKey(), entry.getValue(), this.getPanelIcon(entry.getKey()));
         }
 
-        /* Add overlay rendering */
+        this.dock.mount();
+        this.editor.add(this.dock);
         this.prepend(new UIRenderable(this::drawOverlay));
-        this.editor.add(new UIRenderable(this::renderDropZoneHighlight));
-
-        /* Dock stack tabs and drag handles */
-        for (String id : this.panelById.keySet())
-        {
-            UIDraggable handle = this.createPanelDragHandle(id);
-            this.dragHandlesById.put(id, handle);
-            this.editor.add(handle);
-        }
 
         /* Icon bar buttons */
         UIIcon restart = new UIIcon(Icons.REFRESH, (b) ->
@@ -223,11 +229,11 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         restart.tooltip(UIKeys.SNOWSTORM_RESTART_EMITTER, Direction.LEFT);
         this.iconBar.add(restart);
 
-        this.lockLayoutButton = new UIIcon(() -> this.layoutLocked ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.toggleLayoutLock());
-        this.lockLayoutButton.tooltip(this.layoutLocked ? UIKeys.PARTICLE_EDITOR_LAYOUT_UNLOCK : UIKeys.PARTICLE_EDITOR_LAYOUT_LOCK, Direction.LEFT);
+        this.lockLayoutButton = new UIIcon(() -> this.dock.isLocked() ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.toggleLayoutLock());
+        this.updateLayoutLockTooltip();
         this.iconBar.add(this.lockLayoutButton);
 
-        this.layoutPresetsController = new UICopyPasteController(PresetManager.LAYOUTS, "_CopyParticleEditorLayout")
+        this.layoutPresetsController = new UICopyPasteController(PresetManager.PARTICLE_LAYOUTS, "_CopyParticleEditorLayout")
             .supplier(this::getLayoutPresetData)
             .consumer(this::applyLayoutFromPreset);
         this.layoutPresetsButton = new UIIcon(Icons.LAYOUT, (b) ->
@@ -239,10 +245,24 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.layoutPresetsButton.tooltip(UIKeys.PARTICLE_EDITOR_LAYOUT_PRESETS, Direction.LEFT);
         this.iconBar.add(this.layoutPresetsButton);
 
+        this.keys().register(Keys.FILM_CONTROLLER_NEXT_DOCK_TAB, () ->
+        {
+            if (this.dock.cycleDockStackTab(1))
+            {
+                UIUtils.playClick();
+            }
+        }).category(UIKeys.PARTICLE_EDITOR_TITLE);
+        this.keys().register(Keys.FILM_CONTROLLER_PREV_DOCK_TAB, () ->
+        {
+            if (this.dock.cycleDockStackTab(-1))
+            {
+                UIUtils.playClick();
+            }
+        }).category(UIKeys.PARTICLE_EDITOR_TITLE);
+
         this.overlay.namesList.setFileIcon(Icons.PARTICLE);
 
         this.fill(null);
-        this.setupParticleEditorFlex(false);
 
         /* Undo/Redo keybinds */
         this.setUndoId("particle_panel");
@@ -252,6 +272,58 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private void collectSections(UIParticleTabPage page)
     {
         this.sections.addAll(page.sections);
+    }
+
+    private ILayoutSource createLayoutSource()
+    {
+        ValueEditorLayout layout = BBSSettings.editorLayoutSettings;
+
+        return new ILayoutSource()
+        {
+            @Override
+            public BaseValue value()
+            {
+                return layout;
+            }
+
+            @Override
+            public EditorLayoutNode getRoot()
+            {
+                return layout.getParticleLayoutRoot();
+            }
+
+            @Override
+            public void setRoot(EditorLayoutNode root)
+            {
+                layout.setParticleLayoutRoot(root);
+            }
+
+            @Override
+            public List<EditorLayoutNode.SplitterNode> getSplitters()
+            {
+                return layout.getParticleSplitters();
+            }
+
+            @Override
+            public List<EditorLayoutNode.SplitterNode> getSplittersForWrite()
+            {
+                return layout.getParticleSplittersForWrite();
+            }
+
+            @Override
+            public EditorLayoutNode getDefault()
+            {
+                return EditorLayoutNode.defaultParticleLayout();
+            }
+        };
+    }
+
+    private void updateLayoutLockTooltip()
+    {
+        if (this.lockLayoutButton != null)
+        {
+            this.lockLayoutButton.tooltip(this.dock.isLocked() ? UIKeys.PARTICLE_EDITOR_LAYOUT_UNLOCK : UIKeys.PARTICLE_EDITOR_LAYOUT_LOCK, Direction.LEFT);
+        }
     }
 
     /* ===== Layout system (adapted from UIFilmPanel) ===== */
@@ -330,7 +402,9 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
                         this.pendingLayoutUpdate = true;
                     }
                 });
-                handle.hoverOnly();
+                int cursor = this.splitterHandleInfos.get(index).horizontal ? GLFW.GLFW_VRESIZE_CURSOR : GLFW.GLFW_HRESIZE_CURSOR;
+
+                handle.hoverOnly().cursors(cursor, cursor);
                 handle.reference(() -> this.getSplitterHandleReferencePosition(index, splitters));
                 handle.rendering((context) -> this.renderSplitter(context, index));
                 this.applySplitterHandleBounds(handle, this.splitterHandleInfos.get(index));
@@ -360,21 +434,22 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     private EditorLayoutNode ensureParticleLayoutPanels(EditorLayoutNode root)
     {
+        if (root == null)
+        {
+            return EditorLayoutNode.defaultParticleLayout();
+        }
+
         HashSet<String> ids = new HashSet<>();
         this.collectPanelIds(root, ids);
 
-        boolean hasAll = ids.contains(PANEL_PREVIEW_ID)
-            && ids.contains(PANEL_EMITTER_ID)
-            && ids.contains(PANEL_FILE_ID)
-            && ids.contains(PANEL_CURVES_ID)
-            && ids.contains(PANEL_EVENTS_ID);
+        boolean hasExpectedPanels = ids.containsAll(this.panelById.keySet()) && this.panelById.keySet().containsAll(ids);
 
-        if (hasAll)
+        if (hasExpectedPanels)
         {
             return root;
         }
 
-        return root == null ? EditorLayoutNode.defaultParticleLayout() : root;
+        return EditorLayoutNode.defaultParticleLayout();
     }
 
     private void collectPanelIds(EditorLayoutNode node, HashSet<String> out)
@@ -684,21 +759,24 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         }
         UIDraggable splitter = this.splitterHandles.get(index);
         EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
-        boolean active = splitter.area.isInside(context) || splitter.isDragging();
-        int lineColor = active ? BBSSettings.primaryColor(Colors.A50) : 0x22ffffff;
-        if (active)
+        int lineColor = BBSSettings.primaryColor(Colors.A100);
+
+        if (!splitter.isDragging())
         {
-            context.batcher.box(splitter.area.x, splitter.area.y, splitter.area.ex(), splitter.area.ey(), lineColor);
+            return;
         }
+
         if (info.horizontal)
         {
             int cy = splitter.area.y + splitter.area.h / 2;
-            context.batcher.box(splitter.area.x, cy - 1, splitter.area.ex(), cy + 1, lineColor);
+            int half = SPLITTER_HANDLE_LINE_PX / 2;
+            context.batcher.box(splitter.area.x, cy - half, splitter.area.ex(), cy - half + SPLITTER_HANDLE_LINE_PX, lineColor);
         }
         else
         {
             int cx = splitter.area.x + splitter.area.w / 2;
-            context.batcher.box(cx - 1, splitter.area.y, cx + 1, splitter.area.ey(), lineColor);
+            int half = SPLITTER_HANDLE_LINE_PX / 2;
+            context.batcher.box(cx - half, splitter.area.y, cx - half + SPLITTER_HANDLE_LINE_PX, splitter.area.ey(), lineColor);
         }
     }
 
@@ -1010,10 +1088,8 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
                 if (active)
                 {
-                    int color = BBSSettings.primaryColor.get();
-
-                    context.batcher.box(x, ey - 2, ex, ey, Colors.A100 | color);
-                    context.batcher.gradientVBox(x, y, ex, ey - 2, color, Colors.A75 | color);
+                    Area.SHARED.set(x, y, ex - x, ey - y);
+                    UIDashboardPanels.renderHighlight(context.batcher, Area.SHARED, Direction.BOTTOM);
                 }
 
                 context.batcher.icon(icon, iconColor, (x + ex) / 2, (y + ey) / 2, 0.5F, 0.5F);
@@ -1128,7 +1204,10 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             this.renderer.setScheme(null);
         }
 
-        this.updateTabVisibility();
+        if (this.dock != null)
+        {
+            this.dock.setupFlex(true);
+        }
     }
 
     @Override
@@ -1191,15 +1270,10 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     public void resize()
     {
         super.resize();
-        this.updateTabVisibility();
 
-        if (this.editor.area.w >= EDITOR_MIN_SIZE_FOR_PX_HANDLES && this.editor.area.h >= EDITOR_MIN_SIZE_FOR_PX_HANDLES)
+        if (this.dock != null)
         {
-            if (!this.layoutLocked && this.splitterHandles.size() == this.splitterHandleInfos.size())
-            {
-                this.syncSplitterHandleBounds();
-            }
-            this.editor.resize();
+            this.dock.setupFlex(true);
         }
 
         this.renderer.resize();
@@ -1210,7 +1284,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         if (this.iconBar.isVisible())
         {
-            this.iconBar.area.render(context.batcher, Colors.CONTROL_BAR);
+            this.iconBar.area.render(context.batcher, BBSSettings.chromeSurface());
             context.batcher.gradientHBox(this.iconBar.area.x - 6, this.iconBar.area.y, this.iconBar.area.x, this.iconBar.area.ey(), 0, 0x29000000);
         }
     }
@@ -1244,16 +1318,16 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         if (this.pendingLayoutUpdate)
         {
             this.pendingLayoutUpdate = false;
-            this.setupParticleEditorFlex(true);
+            this.dock.refresh();
         }
 
         int color = BBSSettings.primaryColor.get();
         this.area.render(context.batcher, Colors.mulRGB(color | Colors.A100, 0.2F));
 
-        if (this.editor.isVisible())
+        if (this.editor.isVisible() && this.data != null)
         {
             UIElement preview = this.panelById.get(PANEL_PREVIEW_ID);
-            if (preview != null) preview.area.render(context.batcher, Colors.A75);
+            if (preview != null && preview.isVisible()) preview.area.render(context.batcher, Colors.A75);
         }
 
         super.render(context);
@@ -1268,28 +1342,26 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
     private void toggleLayoutLock()
     {
-        this.layoutLocked = !this.layoutLocked;
-        this.lockLayoutButton.tooltip(this.layoutLocked ? UIKeys.PARTICLE_EDITOR_LAYOUT_UNLOCK : UIKeys.PARTICLE_EDITOR_LAYOUT_LOCK, Direction.LEFT);
-        this.clearPanelDragState();
-        this.setupParticleEditorFlex(true);
+        this.dock.toggleLock();
+        this.updateLayoutLockTooltip();
     }
 
     public boolean isLayoutLocked()
     {
-        return this.layoutLocked;
+        return this.dock == null || this.dock.isLocked();
     }
 
     private MapType getLayoutPresetData()
     {
         MapType data = new MapType();
-        data.put("particle_layout", BBSSettings.editorLayoutSettings.getParticleLayoutRoot().toData());
+        data.put("particle_layout", this.dock.getLayoutRoot().toData());
 
         for (UIParticleSchemeSection section : this.sections)
         {
             data.putBool(section.getClassId(), UISectionStateManager.isCollapsed(section.getClassId()));
         }
 
-        data.putBool("layoutLocked", this.layoutLocked);
+        data.putBool("layoutLocked", this.dock.isLocked());
         return data;
     }
 
@@ -1300,7 +1372,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             EditorLayoutNode root = EditorLayoutNode.fromData(data.get("particle_layout"));
             if (root != null)
             {
-                BBSSettings.editorLayoutSettings.setParticleLayoutRoot(root);
+                this.dock.applyLayoutRoot(root);
             }
         }
 
@@ -1317,11 +1389,17 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         if (data.has("layoutLocked"))
         {
-            this.layoutLocked = data.getBool("layoutLocked");
-            this.lockLayoutButton.tooltip(this.layoutLocked ? UIKeys.PARTICLE_EDITOR_LAYOUT_UNLOCK : UIKeys.PARTICLE_EDITOR_LAYOUT_LOCK, Direction.LEFT);
+            boolean locked = data.getBool("layoutLocked");
+
+            if (this.dock.isLocked() != locked)
+            {
+                this.dock.toggleLock();
+            }
+
+            this.updateLayoutLockTooltip();
         }
 
-        this.setupParticleEditorFlex(true);
+        this.dock.refresh();
     }
 
     private void resetLayout()
@@ -1333,11 +1411,13 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             section.applyCollapsedState(false);
         }
 
-        this.layoutLocked = true;
-        this.lockLayoutButton.tooltip(UIKeys.PARTICLE_EDITOR_LAYOUT_UNLOCK, Direction.LEFT);
-        this.clearPanelDragState();
-        BBSSettings.editorLayoutSettings.setParticleLayoutRoot(EditorLayoutNode.defaultParticleLayout());
-        this.setupParticleEditorFlex(true);
+        if (!this.dock.isLocked())
+        {
+            this.dock.toggleLock();
+        }
+
+        this.updateLayoutLockTooltip();
+        this.dock.resetLayout();
     }
 
     /* ===== Undo/Redo ===== */

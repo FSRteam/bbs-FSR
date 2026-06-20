@@ -14,11 +14,13 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.lwjgl.opengl.GL11;
 
 public class AnchorFormRenderer extends FormRenderer<AnchorForm>
 {
     public static final Link ANCHOR_PREVIEW = Link.assets("textures/anchor.png");
+    private static final Quaternionf ROTATE_Y_NEG_180 = Axis.YN.rotationDegrees(180F);
 
     private IEntity entity = new StubEntity();
 
@@ -52,7 +54,7 @@ public class AnchorFormRenderer extends FormRenderer<AnchorForm>
             this.applyTransforms(uiMatrix, context.getTransition());
             MatrixStackUtils.multiply(stack, uiMatrix);
             /* Why? I don't know, because fuck you */
-            stack.mulPose(Axis.YN.rotationDegrees(180F));
+            stack.mulPose(ROTATE_Y_NEG_180);
             stack.last().normal().getScale(Vectors.EMPTY_3F);
             stack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 

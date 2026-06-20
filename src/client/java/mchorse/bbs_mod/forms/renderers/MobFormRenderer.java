@@ -35,6 +35,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.resources.ResourceLocation;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.lwjgl.opengl.GL11;
 
 import java.lang.reflect.Field;
@@ -50,6 +51,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 {
     private static final Map<Class, Map<String, ModelPart>> parts = new HashMap<>();
     private static final Map<ModelPart, Transform> cache = new HashMap<>();
+    private static final Quaternionf ROTATE_Y_180 = Axis.YP.rotation(MathUtils.PI);
     private static Pose currentPose;
     private static Pose currentPoseOverlay;
 
@@ -228,7 +230,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (!this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+                stack.mulPose(ROTATE_Y_180);
             }
 
             stack.last().normal().getScale(Vectors.EMPTY_3F);
@@ -303,7 +305,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+                context.stack.mulPose(ROTATE_Y_180);
             }
 
             if (this.entity instanceof LivingEntity entity)

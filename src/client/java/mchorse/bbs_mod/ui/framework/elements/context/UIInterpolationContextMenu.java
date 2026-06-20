@@ -17,6 +17,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.ui.utils.renderers.InterpolationRenderer;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.IInterp;
@@ -87,6 +88,8 @@ public class UIInterpolationContextMenu extends UIContextMenu
         INTERP_ICON_MAP.put(Interpolations.CUBIC, Icons.INTERP_CUBIC_INOUT);
         INTERP_ICON_MAP.put(Interpolations.HERMITE, Icons.INTERP_CUBIC_INOUT);
         INTERP_ICON_MAP.put(Interpolations.BEZIER, Icons.INTERP_BEZIER);
+        INTERP_ICON_MAP.put(Interpolations.AUTO, Icons.INTERP_AUTO);
+        INTERP_ICON_MAP.put(Interpolations.AUTO_CLAMPED, Icons.INTERP_AUTO_CLAMPED);
         INTERP_ICON_MAP.put(Interpolations.BSPLINE, Icons.INTERP_BSPLINE);
     }
 
@@ -238,7 +241,7 @@ public class UIInterpolationContextMenu extends UIContextMenu
 
         if (icon != null)
         {
-            UIDashboardPanels.renderHighlight(context.batcher, icon.area);
+            UIDashboardPanels.renderHighlight(context.batcher, icon.area, Direction.BOTTOM);
         }
     }
 }

@@ -13,11 +13,14 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
+import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -31,6 +34,8 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -65,6 +70,9 @@ public abstract class BaseFilmController
 
     public boolean paused;
     public int exception = -1;
+
+    private static final Matrix4f IDENTITY = new Matrix4f();
+    private static final Vector3f TEMP_VECTOR = new Vector3f();
 
     /* Rendering helpers */
 
@@ -210,6 +218,11 @@ public abstract class BaseFilmController
 
     public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i)
     {
+        return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, false);
+    }
+
+    public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix)
+    {
         /* Stupid recursion stop, I don't think anyone would need more than that */
         if (i > 5)
         {
@@ -222,7 +235,10 @@ public abstract class BaseFilmController
 
         if (same || only)
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, same ? value : value.previous, defaultMatrix, transition, i);
+            Anchor anchor = same ? value : value.previous;
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, anchor, defaultMatrix, transition, i, fullMatrix);
+
+            matrix = applyAnchorTransform(matrix, anchor);
 
             if (matrix != defaultMatrix)
             {
@@ -232,8 +248,11 @@ public abstract class BaseFilmController
         }
         else
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i);
-            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i, fullMatrix);
+            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i, fullMatrix);
+
+            matrix = applyAnchorTransform(matrix, value);
+            lastMatrix = applyAnchorTransform(lastMatrix, value.previous);
 
             result.a = value.x >= 1F ? matrix : Matrices.lerp(lastMatrix, matrix, value.x);
 
@@ -245,7 +264,22 @@ public abstract class BaseFilmController
         return result;
     }
 
+    private static Matrix4f applyAnchorTransform(Matrix4f matrix, Anchor anchor)
+    {
+        if (matrix == null || anchor == null || anchor.transform.isDefault())
+        {
+            return matrix;
+        }
+
+        return matrix.mul(anchor.transform.createMatrix());
+    }
+
     public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i)
+    {
+        return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, false);
+    }
+
+    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix)
     {
         IEntity entity = entities.get(anchor.replay);
 
@@ -257,7 +291,7 @@ public abstract class BaseFilmController
 
             if (form != null)
             {
-                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1);
+                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1, fullMatrix);
 
                 if (totalMatrix.a != null)
                 {
@@ -271,7 +305,7 @@ public abstract class BaseFilmController
                 {
                     basic.mul(matrix);
 
-                    if (anchor.scale)
+                    if (!fullMatrix && anchor.scale)
                     {
                         Matrix3f mat = new Matrix3f();
                         Vector3f v = new Vector3f();
@@ -284,7 +318,7 @@ public abstract class BaseFilmController
                         basic.set3x3(mat);
                     }
 
-                    if (anchor.translate)
+                    if (!fullMatrix && anchor.translate)
                     {
                         Vector3f t = new Vector3f();
                         basic.getTranslation(t);
@@ -314,6 +348,73 @@ public abstract class BaseFilmController
         matrix.rotateY(MathUtils.toRad(-bodyYaw));
 
         return matrix;
+    }
+
+    public static Matrix4f getGizmoBoneCompositeMatrix(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath,
+        boolean useBoneMatrix
+    )
+    {
+        if (entity == null || entity.getForm() == null || bonePath == null)
+        {
+            return null;
+        }
+
+        Form form = entity.getForm();
+        boolean relative = replay != null && replay.relative.get();
+        double cx = cameraX;
+        double cy = cameraY;
+        double cz = cameraZ;
+
+        if (relative && replay != null)
+        {
+            cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
+            cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
+            cz = replay.keyframes.z.interpolate(0F) + replay.relativeOffset.get().z;
+        }
+
+        Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cx, cy, cz, transition);
+        Matrix4f target;
+
+        if (!relative)
+        {
+            Pair<Matrix4f, Float> pair = getTotalMatrix(entities, form.anchor.get(), defaultMatrix, cx, cy, cz, transition, 0);
+
+            target = pair.a != null ? pair.a : defaultMatrix;
+        }
+        else
+        {
+            target = defaultMatrix;
+        }
+
+        String mapKey = bonePath.contains(PerLimbService.POSE_BONES)
+            ? bonePath.replace(PerLimbService.POSE_BONES, "")
+            : bonePath;
+
+        Form root = FormUtils.getRoot(form);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
+        MatrixCacheEntry entry = map.get(mapKey);
+
+        if (entry == null)
+        {
+            return null;
+        }
+
+        Matrix4f bone = useBoneMatrix ? entry.matrix() : entry.origin();
+
+        if (bone == null)
+        {
+            return null;
+        }
+
+        return MatrixStackUtils.stripScale(new Matrix4f(target).mul(bone));
     }
 
     private static void renderNameTag(IEntity entity, Component text, PoseStack matrices, MultiBufferSource vertexConsumers, int light)
@@ -592,6 +693,7 @@ public abstract class BaseFilmController
             /* Apply property */
             Form form1 = entity.getForm();
             replay.properties.applyProperties(form1, tick + delta);
+            this.applyTargetOverrides(replay, form1, tick + delta, delta);
 
             Map<String, Integer> actors = this.getActors();
 
@@ -607,6 +709,7 @@ public abstract class BaseFilmController
                     {
                         Form form = actor.getForm();
                         replay.properties.applyProperties(form, tick + delta);
+                        this.applyTargetOverrides(replay, form, tick + delta, delta);
                     }
                     else if (anEntity instanceof Player player)
                     {
@@ -616,6 +719,7 @@ public abstract class BaseFilmController
                         {
                             Form form = morph.getForm();
                             replay.properties.applyProperties(form, tick + delta);
+                            this.applyTargetOverrides(replay, form, tick + delta, delta);
                         }
 
                         float yawHead = replay.keyframes.headYaw.interpolate(tick + delta).floatValue();
@@ -632,6 +736,120 @@ public abstract class BaseFilmController
                         player.yBodyRotO = yawBody;
                     }
                 }
+            }
+        }
+    }
+
+    public void update(Replay replay, Form root, float tick, float transition)
+    {
+        this.applyTargetOverrides(replay, root, tick, transition);
+    }
+
+    private void applyTargetOverrides(Replay replay, Form root, float tick, float transition)
+    {
+        if (replay == null || root == null)
+        {
+            return;
+        }
+
+        this.clearTargetOverrides(root);
+
+        if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
+        {
+            return;
+        }
+
+        for (KeyframeChannel<?> channel : replay.properties.properties.values())
+        {
+            if (channel == null)
+            {
+                continue;
+            }
+
+            String id = channel.getId();
+
+            if (id == null || id.isEmpty())
+            {
+                continue;
+            }
+
+            PerLimbService.IKTargetPath ikPath = PerLimbService.parseIKTargetPath(id);
+
+            if (ikPath != null)
+            {
+                this.applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, true);
+                continue;
+            }
+
+            PerLimbService.PhysicsTargetPath physicsPath = PerLimbService.parsePhysicsTargetPath(id);
+
+            if (physicsPath != null)
+            {
+                this.applyOverride(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, false);
+            }
+        }
+    }
+
+    private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, boolean isIK)
+    {
+        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
+
+        if (form instanceof ModelForm modelForm)
+        {
+            Vector3f position = this.resolveTargetPosition(channel, tick, transition);
+
+            if (position != null)
+            {
+                Map<String, Vector3f> overrides = isIK ? modelForm.ikTargetOverrides : modelForm.physicsTargetOverrides;
+                overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
+            }
+        }
+    }
+
+    private Vector3f resolveTargetPosition(KeyframeChannel<?> channel, float tick, float transition)
+    {
+        KeyframeSegment<?> segment = channel.find(tick);
+
+        if (segment == null)
+        {
+            return null;
+        }
+
+        Object v = segment.createInterpolated();
+
+        if (!(v instanceof Anchor anchor))
+        {
+            return null;
+        }
+
+        IEntity targetEntity = this.entities.get(anchor.replay);
+
+        if (targetEntity == null)
+        {
+            return null;
+        }
+
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, anchor, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
+
+        return resolved.getTranslation(TEMP_VECTOR);
+    }
+
+    private void clearTargetOverrides(Form form)
+    {
+        if (form instanceof ModelForm modelForm)
+        {
+            modelForm.ikTargetOverrides.clear();
+            modelForm.physicsTargetOverrides.clear();
+        }
+
+        for (BodyPart part : form.parts.getAllTyped())
+        {
+            Form child = part.getForm();
+
+            if (child != null)
+            {
+                this.clearTargetOverrides(child);
             }
         }
     }

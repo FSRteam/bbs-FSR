@@ -7,13 +7,17 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 import org.joml.Vector2f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
+import org.slf4j.Logger;
 
+import com.mojang.logging.LogUtils;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 
@@ -32,12 +36,14 @@ import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.film.Recorder;
+import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -49,6 +55,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.film.replays.UIRecordOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplayList;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
@@ -57,15 +64,17 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.context.UISimpleContextMenu;
-import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoInteraction;
+import mchorse.bbs_mod.ui.utils.GizmoViewport;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
@@ -87,16 +96,29 @@ import net.minecraft.client.Options;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.Level;
 
-public class UIFilmController extends UIElement
+public class UIFilmController extends UIElement implements GizmoViewport
 {
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     public static final int CAMERA_MODE_CAMERA = 0;
     public static final int CAMERA_MODE_FREE = 1;
     public static final int CAMERA_MODE_ORBIT = 2;
     public static final int CAMERA_MODE_FIRST_PERSON = 3;
     public static final int CAMERA_MODE_THIRD_PERSON_BACK = 4;
     public static final int CAMERA_MODE_THIRD_PERSON_FRONT = 5;
+    public static final int CAMERA_MODE_COUNT = 6;
+    private static final IKey[] CAMERA_MODE_LABELS = new IKey[] {
+        UIKeys.FILM_REPLAY_ORBIT_CAMERA,
+        UIKeys.FILM_REPLAY_ORBIT_FREE,
+        UIKeys.FILM_REPLAY_ORBIT_ORBIT,
+        UIKeys.FILM_REPLAY_ORBIT_FIRST_PERSON,
+        UIKeys.FILM_REPLAY_ORBIT_THIRD_PERSON_BACK,
+        UIKeys.FILM_REPLAY_ORBIT_THIRD_PERSON_FRONT
+    };
+    private static final int REPLAY_STENCIL_OFFSET = Gizmo.STENCIL_MAX + 1;
 
     public final UIFilmPanel panel;
 
@@ -120,10 +142,10 @@ public class UIFilmController extends UIElement
     private boolean instantKeyframes;
 
     /* Replay and group picking */
-    private IEntity hoveredEntity;
+    private int hoveredReplayIndex = -1;
     private StencilFormFramebuffer stencil = new StencilFormFramebuffer();
     private StencilMap stencilMap = new StencilMap();
-    private boolean gizmoActive;
+    private final GizmoInteraction gizmo = new GizmoInteraction(this);
 
     public final OrbitFilmCameraController orbit = new OrbitFilmCameraController(this);
     private int pov;
@@ -134,6 +156,7 @@ public class UIFilmController extends UIElement
     public UIFilmController(UIFilmPanel panel)
     {
         this.panel = panel;
+        this.setPov(BBSSettings.editorCameraMode.get());
 
         IKey category = UIKeys.FILM_CONTROLLER_KEYS_CATEGORY;
 
@@ -148,6 +171,12 @@ public class UIFilmController extends UIElement
         }).active(hasActor).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_CONTROL, this::toggleControl).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ORBIT_MODE, this::toggleOrbitMode).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_TELEPORT_ORBIT, this::teleportOrbitPivotToReplay).strict().active(() -> this.getPovMode() == CAMERA_MODE_ORBIT).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_ATTACH_ORBIT, () ->
+        {
+            this.toggleOrbitAttachment();
+            UIUtils.playClick();
+        }).strict().active(() -> this.getPovMode() == CAMERA_MODE_ORBIT).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_REPLAY_MENU, this::toggleReplayMenu).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_MOVE_REPLAY_TO_CURSOR, () ->
         {
@@ -250,6 +279,18 @@ public class UIFilmController extends UIElement
         return this.panel.replayEditor.getReplay();
     }
 
+    private int getCurrentReplayIndex()
+    {
+        if (this.panel.getData() == null)
+        {
+            return -1;
+        }
+
+        Replay replay = this.getReplay();
+
+        return replay == null ? -1 : this.panel.getData().replays.getList().indexOf(replay);
+    }
+
     public StencilFormFramebuffer getStencil()
     {
         return this.stencil;
@@ -262,32 +303,29 @@ public class UIFilmController extends UIElement
             return null;
         }
 
-        Replay r = this.panel.replayEditor.getReplay();
-
-        if (r == null)
-        {
-            return null;
-        }
-
-        int idx = this.panel.getData().replays.getList().indexOf(r);
+        int idx = this.getCurrentReplayIndex();
 
         return idx < 0 ? null : this.getEntities().get(idx);
     }
 
     public int getPovMode()
     {
-        return this.pov % 6;
+        return Math.floorMod(this.pov, CAMERA_MODE_COUNT);
     }
 
     public void setPov(int pov)
     {
-        this.pov = pov;
-        this.orbit.enabled = this.getPovMode() > 1;
+        int mode = Math.floorMod(pov, CAMERA_MODE_COUNT);
+
+        this.pov = mode;
+        this.orbit.enabled = mode > CAMERA_MODE_FREE;
+
+        BBSSettings.editorCameraMode.set(mode);
     }
 
     private int getMouseMode()
     {
-        return this.mouseMode % 6;
+        return Math.floorMod(this.mouseMode, 6);
     }
 
     private void setMouseMode(int mode)
@@ -464,6 +502,18 @@ public class UIFilmController extends UIElement
         return this.recordingGroups;
     }
 
+    private boolean hasTransformRecordingGroup()
+    {
+        return this.recordingGroups != null && this.recordingGroups.contains(ReplayKeyframes.GROUP_TRANSFORM);
+    }
+
+    public boolean isTransformRecording()
+    {
+        return this.recording
+            && this.recordingCountdown <= 0
+            && this.hasTransformRecordingGroup();
+    }
+
     public void startRecording(List<String> groups)
     {
         if (groups != null && groups.contains("outside"))
@@ -485,10 +535,20 @@ public class UIFilmController extends UIElement
         this.recording = true;
         this.recordingCountdown = Math.max(0, TimeUtils.toTick(BBSSettings.recordingCountdown.get()));
         this.recordingGroups = groups;
+        boolean transformRecording = groups != null && groups.contains(ReplayKeyframes.GROUP_TRANSFORM);
 
-        this.recordingOld = this.getReplay().keyframes.toData();
+        this.recordingOld = transformRecording ? this.getReplay().properties.toData() : this.getReplay().keyframes.toData();
 
-        if (groups != null)
+        if (transformRecording)
+        {
+            if (this.controlled != null)
+            {
+                this.toggleControl();
+            }
+
+            this.setMouseMode(0);
+        }
+        else if (groups != null)
         {
             if (groups.contains(ReplayKeyframes.GROUP_LEFT_STICK))
             {
@@ -516,12 +576,12 @@ public class UIFilmController extends UIElement
             }
         }
 
-        if (this.controlled == null)
+        if (!transformRecording && this.controlled == null)
         {
             this.toggleControl();
         }
 
-        this.toggleMousePointer(this.controlled != null);
+        this.toggleMousePointer(!transformRecording && this.controlled != null);
     }
 
     public void stopRecording()
@@ -531,10 +591,12 @@ public class UIFilmController extends UIElement
             return;
         }
 
+        boolean transformRecording = this.hasTransformRecordingGroup();
+
         this.recording = false;
         this.recordingGroups = null;
 
-        if (this.controlled != null)
+        if (!transformRecording && this.controlled != null)
         {
             this.toggleControl();
         }
@@ -555,17 +617,42 @@ public class UIFilmController extends UIElement
 
         if (replay != null && this.recordingOld != null)
         {
-            for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
+            if (transformRecording)
             {
-                channel.simplify();
+                for (KeyframeChannel<?> channel : replay.properties.properties.values())
+                {
+                    if (PerLimbService.isPoseBoneChannel(channel.getId()))
+                    {
+                        channel.simplify();
+                    }
+                }
+
+                BaseType newData = replay.properties.toData();
+
+                replay.properties.fromData(this.recordingOld);
+                replay.properties.preNotify();
+                replay.properties.fromData(newData);
+                replay.properties.postNotify();
+
+                if (this.panel.replayEditor.getReplay() == replay)
+                {
+                    this.panel.replayEditor.setReplay(replay, false, false);
+                }
             }
+            else
+            {
+                for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
+                {
+                    channel.simplify();
+                }
 
-            BaseType newData = replay.keyframes.toData();
+                BaseType newData = replay.keyframes.toData();
 
-            replay.keyframes.fromData(this.recordingOld);
-            replay.keyframes.preNotify();
-            replay.keyframes.fromData(newData);
-            replay.keyframes.postNotify();
+                replay.keyframes.fromData(this.recordingOld);
+                replay.keyframes.preNotify();
+                replay.keyframes.fromData(newData);
+                replay.keyframes.postNotify();
+            }
 
             this.recordingOld = null;
         }
@@ -583,54 +670,73 @@ public class UIFilmController extends UIElement
             return true;
         }
 
-        if (this.stencil.hasPicked())
-        {
-            int index = this.stencil.getIndex();
-            UIPropTransform transform = UIReplaysEditorUtils.getEditableTransform(this.panel.replayEditor.keyframeEditor);
+        boolean gizmoShown = this.canShowGizmo();
 
-            if (Gizmo.INSTANCE.start(index, context.mouseX, context.mouseY, transform))
-            {
-                this.gizmoActive = true;
-                return true;
-            }
+        if (gizmoShown && this.gizmo.mouseClickedHandle(context))
+        {
+            return true;
         }
 
-        if (context.mouseButton == 0)
+        if (context.mouseButton == 0 && this.hoveredReplayIndex >= 0)
         {
-            /* Alt pick the replay */
-            if (this.hoveredEntity != null)
-            {
-                this.pickEntity(this.hoveredEntity);
+            this.pickReplay(this.hoveredReplayIndex);
 
-                return true;
-            }
+            return true;
+        }
+
+        if (gizmoShown && this.gizmo.mouseClickedSphere(context))
+        {
+            return true;
         }
 
         return super.subMouseClicked(context);
     }
 
-    private void pickEntity(IEntity entity)
+    @Override
+    public StencilFormFramebuffer getGizmoStencil()
     {
-        Integer index = CollectionUtils.getKey(this.getEntities(), entity);
+        return this.stencil;
+    }
 
-        if (index == null)
-        {
-            return;
-        }
+    @Override
+    public Matrix4f getGizmoProjection()
+    {
+        return this.panel.lastProjection;
+    }
 
-        List<Replay> replays = this.panel.getData().replays.getList();
+    @Override
+    public Area getGizmoArea()
+    {
+        return this.panel.preview.getViewport();
+    }
 
-        if (index < 0 || index >= replays.size())
-        {
-            return;
-        }
+    @Override
+    public boolean startGizmo(UIContext context, int stencilIndex)
+    {
+        float gizmoTransition = this.isPlaying() ? context.getTransition() : 0F;
 
-        this.panel.replayEditor.setReplay(replays.get(index));
+        return UIReplaysEditorUtils.startFilmGizmo(this.panel, context, stencilIndex, gizmoTransition);
+    }
+
+    @Override
+    public void pickGizmoForm(UIContext context, Form form, String bone)
+    {
+        this.panel.replayEditor.pickForm(form, bone);
+    }
+
+    private void pickReplay(int index)
+    {
+        this.panel.replayEditor.setReplay(this.panel.getData().replays.getList().get(index));
 
         if (!this.panel.replayEditor.isVisible())
         {
             this.panel.showPanel(this.panel.replayEditor);
         }
+    }
+
+    public void stopGizmoInteraction()
+    {
+        this.gizmo.stop();
     }
 
     @Override
@@ -641,12 +747,10 @@ public class UIFilmController extends UIElement
             return true;
         }
 
-        if (this.gizmoActive)
-        {
-            Gizmo.INSTANCE.stop();
-            this.gizmoActive = false;
-        }
+        boolean consumed = this.gizmo.mouseReleased(context);
 
+        this.stopGizmoInteraction();
+        this.panel.replayEditor.releaseViewport(context, this.orbit.wasDragged());
         this.orbit.stop();
 
         if (this.panel.isFlying() && context.mouseButton == 2)
@@ -654,7 +758,7 @@ public class UIFilmController extends UIElement
             this.panel.dashboard.orbit.release();
         }
 
-        return super.subMouseReleased(context);
+        return consumed || super.subMouseReleased(context);
     }
 
     @Override
@@ -725,7 +829,8 @@ public class UIFilmController extends UIElement
         UIRecordOverlayPanel panel = new UIRecordOverlayPanel(
             UIKeys.FILM_CONTROLLER_RECORD_TITLE,
             UIKeys.FILM_CONTROLLER_RECORD_DESCRIPTION,
-            this::startRecording
+            this::startRecording,
+            true
         );
         UIIcon icon = new UIIcon(Icons.UPLOAD, (b) -> panel.submit(Arrays.asList("outside")));
 
@@ -743,13 +848,47 @@ public class UIFilmController extends UIElement
 
     public Icon getOrbitModeIcon(int povMode)
     {
-        if (povMode == UIFilmController.CAMERA_MODE_FREE) return Icons.REFRESH;
-        else if (povMode == UIFilmController.CAMERA_MODE_ORBIT) return Icons.ORBIT;
-        else if (povMode == UIFilmController.CAMERA_MODE_FIRST_PERSON) return Icons.VISIBLE;
-        else if (povMode == UIFilmController.CAMERA_MODE_THIRD_PERSON_BACK) return Icons.ARROW_UP;
-        else if (povMode == UIFilmController.CAMERA_MODE_THIRD_PERSON_FRONT) return Icons.ARROW_DOWN;
+        int mode = Math.floorMod(povMode, CAMERA_MODE_COUNT);
+
+        if (mode == UIFilmController.CAMERA_MODE_FREE) return Icons.REFRESH;
+        else if (mode == UIFilmController.CAMERA_MODE_ORBIT) return Icons.ORBIT;
+        else if (mode == UIFilmController.CAMERA_MODE_FIRST_PERSON) return Icons.VISIBLE;
+        else if (mode == UIFilmController.CAMERA_MODE_THIRD_PERSON_BACK) return Icons.ARROW_UP;
+        else if (mode == UIFilmController.CAMERA_MODE_THIRD_PERSON_FRONT) return Icons.ARROW_DOWN;
 
         return Icons.CAMERA;
+    }
+
+    private IKey getOrbitModeLabel(int povMode)
+    {
+        return CAMERA_MODE_LABELS[Math.floorMod(povMode, CAMERA_MODE_COUNT)];
+    }
+
+    public void populateCameraModeMenu(ContextMenuManager menu)
+    {
+        int povMode = this.getPovMode();
+
+        for (int mode = 0; mode < CAMERA_MODE_COUNT; mode++)
+        {
+            int finalMode = mode;
+
+            menu.action(this.getOrbitModeIcon(mode), this.getOrbitModeLabel(mode), povMode == mode, () -> this.setPov(finalMode));
+        }
+    }
+
+    public void teleportOrbitPivotToReplay()
+    {
+        this.orbit.teleportPivotToReplay();
+    }
+
+    public boolean zoomOrbit(double mouseWheel)
+    {
+        return this.orbit.zoom(mouseWheel);
+    }
+
+    public void toggleOrbitAttachment()
+    {
+        this.orbit.toggleAttachment();
     }
 
     public void toggleOrbitMode()
@@ -765,12 +904,7 @@ public class UIFilmController extends UIElement
         {
             menu.autoKeys();
 
-            menu.action(this.getOrbitModeIcon(0), UIKeys.FILM_REPLAY_ORBIT_CAMERA, this.pov == CAMERA_MODE_CAMERA, () -> this.setPov(0));
-            menu.action(this.getOrbitModeIcon(1), UIKeys.FILM_REPLAY_ORBIT_FREE, this.pov == CAMERA_MODE_FREE, () -> this.setPov(1));
-            menu.action(this.getOrbitModeIcon(2), UIKeys.FILM_REPLAY_ORBIT_ORBIT, this.pov == CAMERA_MODE_ORBIT, () -> this.setPov(2));
-            menu.action(this.getOrbitModeIcon(3), UIKeys.FILM_REPLAY_ORBIT_FIRST_PERSON, this.pov == CAMERA_MODE_FIRST_PERSON, () -> this.setPov(3));
-            menu.action(this.getOrbitModeIcon(4), UIKeys.FILM_REPLAY_ORBIT_THIRD_PERSON_BACK, this.pov == CAMERA_MODE_THIRD_PERSON_BACK, () -> this.setPov(4));
-            menu.action(this.getOrbitModeIcon(5), UIKeys.FILM_REPLAY_ORBIT_THIRD_PERSON_FRONT, this.pov == CAMERA_MODE_THIRD_PERSON_FRONT, () -> this.setPov(5));
+            this.populateCameraModeMenu(menu);
         });
     }
 
@@ -1155,7 +1289,7 @@ public class UIFilmController extends UIElement
         /* Cache the global stuff */
         MatrixStackUtils.cacheMatrices();
 
-        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.DISTANCE_TO_ORIGIN);
+        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.ORTHOGRAPHIC_Z);
 
         /* Render the stencil */
         PoseStack worldStack = this.worldRenderContext.matrixStack();
@@ -1171,7 +1305,13 @@ public class UIFilmController extends UIElement
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
-        this.hoveredEntity = null;
+        this.hoveredReplayIndex = -1;
+
+        if (this.canShowGizmo())
+        {
+            this.gizmo.update(context);
+            this.gizmo.renderSphereHighlight(context);
+        }
 
         if (!this.stencil.hasPicked())
         {
@@ -1194,27 +1334,39 @@ public class UIFilmController extends UIElement
             target.set(index);
         }
 
+        Uniform highlight = previewProgram.getUniform("HighlightColor");
+
+        if (highlight != null)
+        {
+            int color = BBSSettings.stencilHighlightColor.get();
+
+            highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+        }
+
         RenderSystem.enableBlend();
         context.batcher.texturedBox(getPickerPreviewProgram, texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, h, w, 0, w, h);
 
         if (altPressed)
         {
-            int stencilIndex = this.stencil.getIndex() - 7;
+            int selectedReplayIndex = this.getCurrentReplayIndex();
+            int stencilIndex = index - REPLAY_STENCIL_OFFSET;
 
-            this.hoveredEntity = this.getEntities().get(stencilIndex);
-
-            if (this.hoveredEntity != null)
+            if (stencilIndex >= 0 && stencilIndex < this.panel.getData().replays.getList().size() && stencilIndex != selectedReplayIndex)
             {
-                List<Replay> replays = this.panel.getData().replays.getList();
+                this.hoveredReplayIndex = stencilIndex;
 
-                if (stencilIndex < 0 || stencilIndex >= replays.size())
+                String label = this.panel.getData().replays.getList().get(stencilIndex).getName();
+
+                context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);
+            }
+            else if (pair != null && pair.a != null)
+            {
+                String label = pair.a.getFormIdOrName();
+
+                if (!pair.b.isEmpty())
                 {
-                    this.hoveredEntity = null;
-                    RenderSystem.depthFunc(GL11.GL_LEQUAL);
-                    return;
+                    label += " - " + pair.b;
                 }
-
-                String label = replays.get(stencilIndex).getName();
 
                 context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);
             }
@@ -1260,6 +1412,8 @@ public class UIFilmController extends UIElement
             }
         }
 
+        this.renderOrbitCenterMarker(context);
+
         MouseHandler mouse = Minecraft.getInstance().mouseHandler;
         int x = (int) mouse.xpos();
         int y = (int) mouse.ypos();
@@ -1292,11 +1446,53 @@ public class UIFilmController extends UIElement
         RenderSystem.disableDepthTest();
     }
 
+    private void renderOrbitCenterMarker(IBbsWorldRenderContext context)
+    {
+        if (this.getPovMode() != CAMERA_MODE_ORBIT || !BBSSettings.editorOrbitCenterMarker.get())
+        {
+            return;
+        }
+
+        Vector3d center = this.orbit.getOrbitCenter(this.getCurrentTransition());
+
+        if (center == null)
+        {
+            return;
+        }
+
+        Vec3 camera = context.camera().getPosition();
+        double x = center.x - camera.x;
+        double y = center.y - camera.y;
+        double z = center.z - camera.z;
+        float distanceScale = BBSSettings.getAxesDistanceScale((float) Math.sqrt(x * x + y * y + z * z));
+        PoseStack stack = context.matrixStack();
+
+        stack.pushPose();
+        stack.translate(x, y, z);
+        stack.scale(distanceScale, distanceScale, distanceScale);
+        Draw.coolerAxes(stack, 0.12F, 0.007F, 0.13F, 0.017F);
+        stack.popPose();
+
+        RenderSystem.enableDepthTest();
+    }
+
+    private float getCurrentTransition()
+    {
+        UIContext context = this.getContext();
+
+        return context == null ? 0F : context.getTransition();
+    }
+
     public Pair<String, Boolean> getBone()
     {
         UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
 
         return keyframeEditor != null ? keyframeEditor.getBone() : null;
+    }
+
+    private boolean canShowGizmo()
+    {
+        return UIBaseMenu.renderAxes && !this.isRecording() && this.getBone() != null;
     }
 
     private void renderStencil(IBbsWorldRenderContext renderContext, UIContext context, boolean altPressed)
@@ -1317,51 +1513,70 @@ public class UIFilmController extends UIElement
             return;
         }
 
+        Replay selectedReplay = this.panel.replayEditor.getReplay();
+
+        if (!altPressed && selectedReplay == null)
+        {
+            return;
+        }
+
         this.ensureStencilFramebuffer();
 
         boolean isPlaying = this.isPlaying();
         Texture mainTexture = this.stencil.getFramebuffer().getMainTexture();
 
         this.stencilMap.setup();
-        this.stencilMap.setIncrement(!altPressed);
         this.stencil.apply();
         Gizmo.INSTANCE.setViewport(viewport);
 
         if (altPressed)
         {
+            List<Replay> replays = this.panel.getData().replays.getList();
+            int selectedReplayIndex = this.getCurrentReplayIndex();
+            Pair<String, Boolean> bone = this.getBone();
+
             for (Map.Entry<Integer, IEntity> entry : this.getEntities().entrySet())
             {
-                this.stencilMap.objectIndex = entry.getKey() + 7;
-
-                Replay replay = CollectionUtils.getSafe(this.panel.getData().replays.getList(), entry.getKey());
+                Replay replay = CollectionUtils.getSafe(replays, entry.getKey());
 
                 if (replay == null)
                 {
                     continue;
                 }
 
-                BaseFilmController.renderEntity(FilmControllerContext.instance
+                FilmControllerContext filmContext = FilmControllerContext.instance
                     .setup(this.getEntities(), entry.getValue(), replay, renderContext)
                     .transition(isPlaying ? renderContext.tickDelta() : 0)
                     .stencil(this.stencilMap)
-                    .relative(replay.relative.get()));
+                    .relative(replay.relative.get());
+
+                if (entry.getKey() == selectedReplayIndex)
+                {
+                    this.stencilMap.objectIndex = replays.size() + REPLAY_STENCIL_OFFSET;
+                    this.stencilMap.setIncrement(true);
+
+                    filmContext.bone(bone == null ? null : bone.a, bone != null && bone.b);
+                }
+                else
+                {
+                    this.stencilMap.objectIndex = entry.getKey() + REPLAY_STENCIL_OFFSET;
+                    this.stencilMap.setIncrement(false);
+                }
+
+                BaseFilmController.renderEntity(filmContext);
             }
         }
         else
         {
-            Replay replay = this.panel.replayEditor.getReplay();
             Pair<String, Boolean> bone = this.getBone();
 
-            if (replay == null)
-            {
-                return;
-            }
+            this.stencilMap.setIncrement(true);
 
             BaseFilmController.renderEntity(FilmControllerContext.instance
-                .setup(this.getEntities(), entity, replay, renderContext)
+                .setup(this.getEntities(), entity, selectedReplay, renderContext)
                 .transition(isPlaying ? renderContext.tickDelta() : 0)
                 .stencil(this.stencilMap)
-                .relative(replay.relative.get())
+                .relative(selectedReplay.relative.get())
                 .bone(bone == null ? null : bone.a, bone != null && bone.b));
         }
 

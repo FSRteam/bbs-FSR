@@ -32,6 +32,10 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 {
     private int tick;
     private final Map<FormRenderType, ArrayDeque<Trail>> record = new HashMap<>();
+    private final ArrayDeque<Trail> trailPool = new ArrayDeque<>();
+    private final Matrix4f cameraInverse = new Matrix4f();
+    private final Vector4f top = new Vector4f();
+    private final Vector4f bottom = new Vector4f();
 
     public TrailFormRenderer(TrailForm form)
     {
@@ -99,7 +103,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         }
 
         PoseStack stack = context.stack;
-        Matrix4f camInverse = new Matrix4f(context.camera.view).invert();
+        Matrix4f camInverse = this.cameraInverse.set(context.camera.view).invert();
 
         Camera camera = context.camera;
         double baseX = camera.position.x;
@@ -113,8 +117,8 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         {
             Matrix4f modelView = stack.last().pose();
 
-            Vector4f top = new Vector4f(0F, 1F, 0F, 1F);
-            Vector4f bottom = new Vector4f(0F, -1F, 0F, 1F);
+            Vector4f top = this.top.set(0F, 1F, 0F, 1F);
+            Vector4f bottom = this.bottom.set(0F, -1F, 0F, 1F);
 
             modelView.transform(top);
             modelView.transform(bottom);
@@ -124,12 +128,22 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             top.mul(1F / top.w);
             bottom.mul(1F / bottom.w);
 
-            Trail record = new Trail();
+            Trail record = this.trailPool.pollFirst();
+
+            if (record == null)
+            {
+                record = new Trail();
+            }
 
             record.tick = current;
-            record.top = new Vector3d(top.x + baseX, top.y + baseY, top.z + baseZ);
-            record.bottom = new Vector3d(bottom.x + baseX, bottom.y + baseY, bottom.z + baseZ);
-            record.stop = new Vector3f(top.x - bottom.x, top.y - bottom.y, top.z - bottom.z).lengthSquared() < 1.0E-4D;
+            record.top.set(top.x + baseX, top.y + baseY, top.z + baseZ);
+            record.bottom.set(bottom.x + baseX, bottom.y + baseY, bottom.z + baseZ);
+
+            float dx = top.x - bottom.x;
+            float dy = top.y - bottom.y;
+            float dz = top.z - bottom.z;
+
+            record.stop = dx * dx + dy * dy + dz * dz < 1.0E-4D;
 
             trails.addLast(record);
         }
@@ -148,6 +162,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             if (trail.tick < end)
             {
                 it.remove();
+                this.trailPool.addLast(trail);
             }
             else
             {
@@ -251,8 +266,8 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
     public static class Trail
     {
         public float tick;
-        public Vector3d top;
-        public Vector3d bottom;
+        public Vector3d top = new Vector3d();
+        public Vector3d bottom = new Vector3d();
         public boolean stop;
     }
 }

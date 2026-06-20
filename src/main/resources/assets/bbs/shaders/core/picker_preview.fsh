@@ -3,6 +3,7 @@
 uniform sampler2D Sampler0;
 
 uniform vec4 ColorModulator;
+uniform vec4 HighlightColor;
 uniform int Target;
 
 in vec2 texCoord0;
@@ -23,14 +24,7 @@ void main()
 
     if (totalIndex == Target)
     {
-        if (Target >= 7)
-        {
-            color = vec4(0.0, 0.5, 1.0, 0.5);
-        }
-        else
-        {
-            color = vec4(1.0, 1.0, 1.0, 0.5);
-        }
+        color = HighlightColor;
     }
     else
     {

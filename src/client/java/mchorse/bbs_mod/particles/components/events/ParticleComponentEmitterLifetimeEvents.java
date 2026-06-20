@@ -13,6 +13,7 @@ import mchorse.bbs_mod.particles.events.ParticleEventTimeline;
 import mchorse.bbs_mod.particles.events.ParticleEventTriggerList;
 import mchorse.bbs_mod.particles.events.ParticleLoopingDistanceEvents;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 
@@ -81,7 +82,6 @@ public class ParticleComponentEmitterLifetimeEvents extends ParticleComponentBas
             }
         }
 
-
         if (map.has("creation_event")) this.creationEvent.fromData(map.get("creation_event"));
         if (map.has("expiration_event")) this.expirationEvent.fromData(map.get("expiration_event"));
         if (map.has("timeline")) this.timeline.fromData(map.get("timeline"));
@@ -108,8 +108,11 @@ public class ParticleComponentEmitterLifetimeEvents extends ParticleComponentBas
         double previousAge = Math.max(0, (emitter.age - 1) / 20D);
         double currentAge = emitter.getAge(0);
 
-        for (ParticleEventTimeline.Entry entry : this.timeline.sortedEntries())
+        List<ParticleEventTimeline.Entry> timelineEntries = this.timeline.runtimeSortedEntries();
+
+        for (int i = 0; i < timelineEntries.size(); i++)
         {
+            ParticleEventTimeline.Entry entry = timelineEntries.get(i);
             double time = entry.getKeyValue();
 
             if (ParticleEventDispatcher.crossed(previousAge, currentAge, time) && emitter.eventGuards.add("emitter.timeline." + entry.key))
@@ -124,8 +127,11 @@ public class ParticleComponentEmitterLifetimeEvents extends ParticleComponentBas
 
         double currentDistance = emitter.eventTravelDistance;
 
-        for (ParticleEventTimeline.Entry entry : this.travelDistanceEvents.sortedEntries())
+        List<ParticleEventTimeline.Entry> distanceEntries = this.travelDistanceEvents.runtimeSortedEntries();
+
+        for (int i = 0; i < distanceEntries.size(); i++)
         {
+            ParticleEventTimeline.Entry entry = distanceEntries.get(i);
             double distance = entry.getKeyValue();
 
             if (ParticleEventDispatcher.crossed(previousDistance, currentDistance, distance) && emitter.eventGuards.add("emitter.distance." + entry.key))
@@ -134,8 +140,9 @@ public class ParticleComponentEmitterLifetimeEvents extends ParticleComponentBas
             }
         }
 
-        for (ParticleLoopingDistanceEvents.Entry entry : this.loopingTravelDistanceEvents.entries)
+        for (int i = 0; i < this.loopingTravelDistanceEvents.entries.size(); i++)
         {
+            ParticleLoopingDistanceEvents.Entry entry = this.loopingTravelDistanceEvents.entries.get(i);
             double distance = entry.getDistance();
 
             if (distance > 0)

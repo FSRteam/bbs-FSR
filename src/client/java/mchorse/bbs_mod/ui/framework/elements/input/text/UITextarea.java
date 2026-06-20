@@ -1468,7 +1468,7 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
         int borderColor = this.focused ? Colors.A100 | BBSSettings.primaryColor.get() : Colors.LIGHTER_GRAY;
 
         this.area.render(context.batcher, borderColor);
-        this.area.render(context.batcher, Colors.A100, 1);
+        this.area.render(context.batcher, BBSSettings.inputSurface(), 1);
     }
 
     protected void renderForeground(FontRenderer font, UIContext context)

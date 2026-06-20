@@ -522,7 +522,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.transform.mul(emitterMatrix).mul(this.rotation);
         }
 
-        if (format != DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)
+        if (!isParticleLikeFormat(format))
         {
             this.n.set(0F, 0F, 1F);
 
@@ -614,9 +614,9 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
     private void writeVertex(BufferBuilder builder, VertexFormat format, Matrix4f matrix, Vector4f vertex, float u, float v, int overlay, Particle particle)
     {
-        if (format == DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)
+        if (isParticleLikeFormat(format))
         {
-            /* DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR */
+            /* DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR or DefaultVertexFormat.PARTICLE */
             builder.addVertex(matrix, vertex.x, vertex.y, vertex.z)
                 .setUv(u, v)
                 .setLight(this.light)
@@ -632,6 +632,11 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
                 .setLight(this.light)
                 .setNormal(this.n.x, this.n.y, this.n.z);
         }
+    }
+
+    private static boolean isParticleLikeFormat(VertexFormat format)
+    {
+        return format == DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR || format == DefaultVertexFormat.PARTICLE;
     }
 
     @Override

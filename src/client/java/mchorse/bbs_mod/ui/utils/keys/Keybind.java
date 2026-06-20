@@ -18,6 +18,7 @@ public class Keybind
     private KeyCombo combo;
     public Runnable callback;
     public boolean inside;
+    public boolean strict;
     public Supplier<Boolean> active;
 
     public Keybind(KeyCombo combo, Runnable callback)
@@ -29,6 +30,17 @@ public class Keybind
     public Keybind inside()
     {
         this.inside = true;
+
+        return this;
+    }
+
+    /**
+     * Require an exact modifier match so a plain-key bind can step aside for a
+     * longer combo using the same main key in another element.
+     */
+    public Keybind strict()
+    {
+        this.strict = true;
 
         return this;
     }
@@ -94,7 +106,32 @@ public class Keybind
             }
         }
 
+        if (this.strict && this.hasExtraModifier())
+        {
+            return false;
+        }
+
         return this.inside ? inside : true;
+    }
+
+    private boolean hasExtraModifier()
+    {
+        if (Window.isShiftPressed() && !this.comboHas(GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT))
+        {
+            return true;
+        }
+
+        if (Window.isCtrlPressed() && !this.comboHas(GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL))
+        {
+            return true;
+        }
+
+        return Window.isAltPressed() && !this.comboHas(GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT);
+    }
+
+    private boolean comboHas(int left, int right)
+    {
+        return this.combo.keys.contains(left) || this.combo.keys.contains(right);
     }
 
     public boolean checkMouse(int mouseButton, boolean inside)

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.addon.v2;
 
 import mchorse.bbs_mod.api.addon.BBSAddon;
+import mchorse.bbs_mod.api.addon.BBSAddonSide;
 import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
 import mchorse.bbs_mod.api.addon.BBSAddonDescriptorValidator;
 import mchorse.bbs_mod.api.addon.BBSAddonPhase;
@@ -17,6 +18,8 @@ import mchorse.bbs_mod.loader.LoaderAccess;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.factory.MapFactory;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +68,13 @@ public final class BBSAddonManager
             record.state(BBSAddonState.SKIPPED);
             record.record(BBSRegistrationResult.rejected(record.addonId(), "addon supplier is null"));
 
+            return false;
+        }
+
+        boolean descriptorValidated = descriptor != null;
+
+        if (descriptorValidated && !this.validateDescriptorForRegistration(descriptor))
+        {
             return false;
         }
 
@@ -127,19 +137,10 @@ public final class BBSAddonManager
             return false;
         }
 
-        List<String> issues = BBSAddonDescriptorValidator.validate(actualDescriptor, this::isModLoadedSafely);
         BBSAddonDiagnosticRecord diagnostics = this.diagnosticForRejected(actualDescriptor, BBSAddonProtocol.API2_DECLARED);
 
-        if (!issues.isEmpty())
+        if (!descriptorValidated && !this.validateDescriptorForRegistration(actualDescriptor))
         {
-            diagnostics.state(BBSAddonState.SKIPPED);
-
-            for (String issue : issues)
-            {
-                diagnostics.record(BBSRegistrationResult.rejected(diagnostics.addonId(), issue));
-                LOGGER.warn("[bbs-addon-api2] rejected addon '{}': {}", diagnostics.addonId(), issue);
-            }
-
             return false;
         }
 
@@ -313,13 +314,13 @@ public final class BBSAddonManager
             record.descriptor,
             record.diagnostics,
             this.safeLoader(),
-            BBSAddonRegistryAdapters.resources(record.diagnostics, provider),
-            BBSAddonRegistryAdapters.forms(record.diagnostics, forms),
-            BBSAddonRegistryAdapters.settings(record.diagnostics, settingsFolder),
-            BBSAddonRegistryAdapters.clips(record.diagnostics, cameraClips, actionClips),
-            BBSAddonRegistryAdapters.particles(record.diagnostics, this.particleComponents),
-            BBSAddonRegistryAdapters.network(record.diagnostics),
-            BBSAddonRegistryAdapters.events(record.diagnostics, eventBus)
+            BBSAddonRegistryAdapters.resources(record.diagnostics, record.descriptor, provider),
+            BBSAddonRegistryAdapters.forms(record.diagnostics, record.descriptor, forms),
+            BBSAddonRegistryAdapters.settings(record.diagnostics, record.descriptor, settingsFolder),
+            BBSAddonRegistryAdapters.clips(record.diagnostics, record.descriptor, cameraClips, actionClips),
+            BBSAddonRegistryAdapters.particles(record.diagnostics, record.descriptor, this.particleComponents),
+            BBSAddonRegistryAdapters.network(record.diagnostics, record.descriptor),
+            BBSAddonRegistryAdapters.events(record.diagnostics, record.descriptor, eventBus)
         );
     }
 
@@ -329,6 +330,34 @@ public final class BBSAddonManager
 
         return this.diagnostics.computeIfAbsent(addonId,
             (id) -> new BBSAddonDiagnosticRecord(descriptor, protocol, BBSAddonState.DISCOVERED));
+    }
+
+    private boolean validateDescriptorForRegistration(BBSAddonDescriptor descriptor)
+    {
+        List<String> issues = BBSAddonDescriptorValidator.validate(descriptor, this::isModLoadedSafely);
+        BBSAddonDiagnosticRecord diagnostics = this.diagnosticForRejected(descriptor, BBSAddonProtocol.API2_DECLARED);
+
+        this.recordDescriptorDiagnostics(diagnostics, descriptor);
+
+        if (!this.isSideAllowed(descriptor))
+        {
+            issues.add("side " + descriptor.side() + " does not match current distribution " + FMLEnvironment.dist);
+        }
+
+        if (issues.isEmpty())
+        {
+            return true;
+        }
+
+        diagnostics.state(BBSAddonState.SKIPPED);
+
+        for (String issue : issues)
+        {
+            diagnostics.record(BBSRegistrationResult.rejected(diagnostics.addonId(), issue));
+            LOGGER.warn("[bbs-addon-api2] rejected addon '{}': {}", diagnostics.addonId(), issue);
+        }
+
+        return false;
     }
 
     private boolean isModLoadedSafely(String modId)
@@ -349,6 +378,57 @@ public final class BBSAddonManager
             LOGGER.debug("[bbs-addon-api2] could not check dependency mod '{}'", modId, e);
             return true;
         }
+    }
+
+    private void recordDescriptorDiagnostics(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor)
+    {
+        if (descriptor == null)
+        {
+            return;
+        }
+
+        if (descriptor.compatPolicy() == BBSAddonCompatPolicy.API2_ONLY)
+        {
+            diagnostics.info("compatPolicy API2_ONLY disables Addon v1 compatibility bridging for this descriptor");
+        }
+        else if (descriptor.compatPolicy() == BBSAddonCompatPolicy.ALLOW_LEGACY_COMPAT)
+        {
+            diagnostics.info("compatPolicy ALLOW_LEGACY_COMPAT permits legacy compatibility diagnostics if a v1 addon shares this id");
+        }
+
+        for (String modId : descriptor.optionalMods())
+        {
+            if (this.isModLoadedSafely(modId))
+            {
+                diagnostics.info("optional mod '" + modId + "' is loaded");
+            }
+            else
+            {
+                diagnostics.warn("optional mod '" + modId + "' is not loaded; addon remains enabled without that integration");
+            }
+        }
+    }
+
+    private boolean isSideAllowed(BBSAddonDescriptor descriptor)
+    {
+        if (descriptor == null || descriptor.side() == null || descriptor.side() == BBSAddonSide.COMMON)
+        {
+            return true;
+        }
+
+        Dist current = FMLEnvironment.dist;
+
+        if (descriptor.side() == BBSAddonSide.CLIENT)
+        {
+            return current == Dist.CLIENT;
+        }
+
+        if (descriptor.side() == BBSAddonSide.DEDICATED_SERVER)
+        {
+            return current == Dist.DEDICATED_SERVER;
+        }
+
+        return false;
     }
 
     private LoaderAccess safeLoader()

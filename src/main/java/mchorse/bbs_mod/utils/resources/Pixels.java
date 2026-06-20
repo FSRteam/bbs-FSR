@@ -217,6 +217,28 @@ public class Pixels
         }
     }
 
+    public void draw(Pixels pixels, int x, int y, float opacity)
+    {
+        Color color = new Color();
+
+        opacity = Math.max(0F, Math.min(1F, opacity));
+
+        for (int i = Math.max(x, 0), ic = Math.min(x + pixels.width, this.width); i < ic; i++)
+        {
+            for (int j = Math.max(y, 0), jc = Math.min(y + pixels.height, this.height); j < jc; j++)
+            {
+                int px = i - x;
+                int py = j - y;
+
+                Color target = pixels.getColor(px, py);
+                Color source = this.getColor(i, j);
+
+                blend(color, target, source, opacity);
+                this.setColor(i, j, color);
+            }
+        }
+    }
+
     public void draw(Pixels pixels, int x, int y, int w, int h)
     {
         Color color = new Color();
@@ -241,6 +263,52 @@ public class Pixels
                 this.setColor(i, j, color);
             }
         }
+    }
+
+    public void draw(Pixels pixels, int x, int y, int w, int h, float opacity)
+    {
+        Color color = new Color();
+
+        opacity = Math.max(0F, Math.min(1F, opacity));
+
+        for (int i = Math.max(x, 0), ic = Math.min(x + w, this.width); i < ic; i++)
+        {
+            for (int j = Math.max(y, 0), jc = Math.min(y + h, this.height); j < jc; j++)
+            {
+                float fx = (i - x) / (float) w;
+                float fy = (j - y) / (float) h;
+                int px = (int) (pixels.width * fx);
+                int py = (int) (pixels.height * fy);
+
+                Color target = pixels.getColor(px, py);
+                Color source = this.getColor(i, j);
+
+                blend(color, target, source, opacity);
+                this.setColor(i, j, color);
+            }
+        }
+    }
+
+    private static void blend(Color output, Color foreground, Color background, float opacity)
+    {
+        float fa = foreground.a * opacity;
+        float ba = background.a;
+
+        output.a = 1F - (1F - fa) * (1F - ba);
+
+        if (output.a <= 0F)
+        {
+            output.r = 0F;
+            output.g = 0F;
+            output.b = 0F;
+            output.a = 0F;
+
+            return;
+        }
+
+        output.r = foreground.r * fa / output.a + background.r * ba * (1F - fa) / output.a;
+        output.g = foreground.g * fa / output.a + background.g * ba * (1F - fa) / output.a;
+        output.b = foreground.b * fa / output.a + background.b * ba * (1F - fa) / output.a;
     }
 
     public void drawRect(int x, int y, int w, int h, int c)

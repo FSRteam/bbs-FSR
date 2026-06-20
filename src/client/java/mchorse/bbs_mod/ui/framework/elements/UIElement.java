@@ -323,6 +323,14 @@ public class UIElement implements IUIElement, IUndoElement
         }
     }
 
+    public void moveToFront(IUIElement element)
+    {
+        if (element != null && this.children.remove(element))
+        {
+            this.children.add(element);
+        }
+    }
+
     private void markChild(IUIElement element)
     {
         if (element instanceof UIElement)

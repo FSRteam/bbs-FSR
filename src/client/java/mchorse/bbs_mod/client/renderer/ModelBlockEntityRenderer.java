@@ -42,6 +42,9 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 {
     private static ActorEntity entity;
 
+    private final Transform lookTransform = new Transform();
+    private final Vector3f headTranslation = new Vector3f();
+
     public static void renderShadow(MultiBufferSource provider, PoseStack matrices, float tickDelta, double x, double y, double z, float tx, float ty, float tz)
     {
         renderShadow(provider, matrices, tickDelta, x, y, z, tx, ty, tz, 0.5F, 1F);
@@ -161,6 +164,12 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
             matrices.popPose();
         }
 
+        if (UIScreen.getCurrentMenu() instanceof UIDashboard dashboard
+            && dashboard.getPanels().panel instanceof UIModelBlockPanel modelBlockPanel)
+        {
+            modelBlockPanel.renderWorldGizmo(matrices, entity);
+        }
+
         RenderSystem.disableDepthTest();
 
         if (mc.getDebugOverlay().showDebugScreen())
@@ -206,7 +215,9 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         float yawDelta = yawContinuous - initialYaw;
         float travel = Math.abs(yawDelta) % (MathUtils.PI * 2F);
 
-        Transform finalTransform = transform.copy();
+        Transform finalTransform = this.lookTransform;
+
+        finalTransform.copy(transform);
         Form form = properties.getForm();
         boolean lookAt = form instanceof MobForm;
         float headHeight = form.hitboxHeight.get() * form.hitboxEyeHeight.get() * finalTransform.scale.y;
@@ -235,7 +246,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
                     if (matrix != null)
                     {
-                        headHeight = matrix.getTranslation(new Vector3f()).y * finalTransform.scale.y;
+                        headHeight = matrix.getTranslation(this.headTranslation).y * finalTransform.scale.y;
                     }
                 }
             }
@@ -282,7 +293,10 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
     {
         if (UIScreen.getCurrentMenu() instanceof UIDashboard dashboard)
         {
-            return dashboard.getPanels().panel instanceof UIModelBlockPanel modelBlockPanel;
+            if (dashboard.getPanels().panel instanceof UIModelBlockPanel modelBlockPanel)
+            {
+                return !modelBlockPanel.isShowingGizmo(entity);
+            }
         }
 
         return false;

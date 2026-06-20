@@ -12,14 +12,18 @@ public class ParticleEventTimeline
 {
     public final List<Entry> entries = new ArrayList<>();
 
+    private final List<Entry> sortedEntries = new ArrayList<>();
     private BaseType raw;
     private boolean edited;
+    private boolean sortedDirty = true;
 
     public void fromData(BaseType data)
     {
         this.entries.clear();
+        this.sortedEntries.clear();
         this.raw = null;
         this.edited = false;
+        this.sortedDirty = true;
 
         if (data == null)
         {
@@ -83,21 +87,50 @@ public class ParticleEventTimeline
     {
         this.edited = true;
         this.raw = null;
+        this.sortedDirty = true;
     }
 
     public List<Entry> sortedEntries()
     {
-        List<Entry> sorted = new ArrayList<>(this.entries);
+        return new ArrayList<>(this.runtimeSortedEntries());
+    }
 
-        sorted.sort(Comparator.comparingDouble(Entry::getKeyValue));
+    public List<Entry> runtimeSortedEntries()
+    {
+        if (!this.sortedDirty && this.sortedEntries.size() == this.entries.size())
+        {
+            for (int i = 0; i < this.entries.size(); i++)
+            {
+                if (this.entries.get(i).isKeyChanged())
+                {
+                    this.sortedDirty = true;
 
-        return sorted;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            this.sortedDirty = true;
+        }
+
+        if (this.sortedDirty)
+        {
+            this.sortedEntries.clear();
+            this.sortedEntries.addAll(this.entries);
+            this.sortedEntries.sort(Comparator.comparingDouble(Entry::getKeyValue));
+            this.sortedDirty = false;
+        }
+
+        return this.sortedEntries;
     }
 
     public static class Entry
     {
         public String key;
         public final ParticleEventTriggerList events = new ParticleEventTriggerList();
+        private String parsedKey;
+        private double keyValue;
 
         public Entry(String key)
         {
@@ -106,14 +139,28 @@ public class ParticleEventTimeline
 
         public double getKeyValue()
         {
+            if (!this.isKeyChanged())
+            {
+                return this.keyValue;
+            }
+
             try
             {
-                return Double.parseDouble(this.key);
+                this.keyValue = Double.parseDouble(this.key);
             }
             catch (Exception e)
             {
-                return 0;
+                this.keyValue = 0;
             }
+
+            this.parsedKey = this.key;
+
+            return this.keyValue;
+        }
+
+        private boolean isKeyChanged()
+        {
+            return this.parsedKey == null ? this.key != null : !this.parsedKey.equals(this.key);
         }
 
         public void setKey(double key)

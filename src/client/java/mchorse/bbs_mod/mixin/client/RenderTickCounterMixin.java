@@ -24,6 +24,7 @@ public class RenderTickCounterMixin
     private long lastMs;
 
     private int heldFrames;
+    private long lastFrameTime;
 
     @Inject(method = "advanceTime", at = @At("HEAD"), cancellable = true)
     public void onAdvanceTime(long timeMillis, boolean processGameTime, CallbackInfoReturnable<Integer> info)
@@ -40,6 +41,22 @@ public class RenderTickCounterMixin
 
             if (this.heldFrames == 0)
             {
+                if (BBSSettings.videoLimitFrameRate.get())
+                {
+                    long frameInterval = (long) (1000F / BBSRendering.getVideoFrameRate());
+
+                    if (timeMillis - this.lastFrameTime < frameInterval)
+                    {
+                        BBSRendering.canRender = false;
+
+                        info.setReturnValue(0);
+
+                        return;
+                    }
+
+                    this.lastFrameTime = timeMillis;
+                }
+
                 this.lastMs = timeMillis;
                 this.deltaTickResidual += 20F / (float) BBSRendering.getVideoFrameRate();
 
@@ -70,6 +87,7 @@ public class RenderTickCounterMixin
         else
         {
             this.heldFrames = 0;
+            this.lastFrameTime = 0L;
         }
     }
 }

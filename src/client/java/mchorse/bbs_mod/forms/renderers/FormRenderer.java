@@ -31,6 +31,8 @@ import java.util.function.Supplier;
 public abstract class FormRenderer <T extends Form>
 {
     protected T form;
+    private final Transform combinedTransform = new Transform();
+    private final Matrix4f transformMatrix = new Matrix4f();
 
     public FormRenderer(T form)
     {
@@ -130,7 +132,7 @@ public abstract class FormRenderer <T extends Form>
 
     protected void applyTransforms(PoseStack stack, boolean origin, float transition)
     {
-        Transform transform = this.createTransform();
+        Transform transform = this.setupTransform(this.combinedTransform);
 
         if (origin)
         {
@@ -144,13 +146,16 @@ public abstract class FormRenderer <T extends Form>
 
     protected void applyTransforms(Matrix4f matrix, float transition)
     {
-        matrix.mul(this.createTransform().createMatrix());
+        matrix.mul(this.setupTransform(this.combinedTransform).setupMatrix(this.transformMatrix.identity()));
     }
 
     protected Transform createTransform()
     {
-        Transform transform = new Transform();
+        return this.setupTransform(new Transform());
+    }
 
+    protected Transform setupTransform(Transform transform)
+    {
         transform.copy(this.form.transform.get());
         this.applyTransform(transform, this.form.transformOverlay.get());
 

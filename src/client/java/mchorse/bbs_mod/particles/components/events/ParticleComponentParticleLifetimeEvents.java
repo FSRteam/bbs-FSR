@@ -13,6 +13,7 @@ import mchorse.bbs_mod.particles.events.ParticleEventDispatcher;
 import mchorse.bbs_mod.particles.events.ParticleEventTimeline;
 import mchorse.bbs_mod.particles.events.ParticleEventTriggerList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 
@@ -73,7 +74,6 @@ public class ParticleComponentParticleLifetimeEvents extends ParticleComponentBa
             }
         }
 
-
         if (map.has("creation_event")) this.creationEvent.fromData(map.get("creation_event"));
         if (map.has("expiration_event")) this.expirationEvent.fromData(map.get("expiration_event"));
         if (map.has("timeline")) this.timeline.fromData(map.get("timeline"));
@@ -95,8 +95,11 @@ public class ParticleComponentParticleLifetimeEvents extends ParticleComponentBa
             double previousAge = Math.max(0, (particle.age - 1) / 20D);
             double currentAge = particle.getAge(0);
 
-            for (ParticleEventTimeline.Entry entry : this.timeline.sortedEntries())
+            List<ParticleEventTimeline.Entry> entries = this.timeline.runtimeSortedEntries();
+
+            for (int i = 0; i < entries.size(); i++)
             {
+                ParticleEventTimeline.Entry entry = entries.get(i);
                 double time = entry.getKeyValue();
 
                 if (ParticleEventDispatcher.crossed(previousAge, currentAge, time) && particle.eventGuards.add("particle.timeline." + entry.key))

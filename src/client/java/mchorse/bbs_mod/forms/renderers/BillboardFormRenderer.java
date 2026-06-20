@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
+import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -38,6 +39,8 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
     private static final Quad uvQuad = new Quad();
 
     private static final Matrix4f matrix = new Matrix4f();
+
+    private final Color renderColor = new Color();
 
     public BillboardFormRenderer(BillboardForm form)
     {
@@ -168,11 +171,11 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
     private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
     {
         BufferBuilder builder;
-        Color color = this.form.color.get().copy();
+        Color color = this.renderColor.set(overlayColor, true);
         Matrix4f matrix = matrices.last().pose();
         PoseStack.Pose normal = matrices.last();
 
-        color.mul(overlayColor);
+        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
 
         if (this.form.billboard.get())
         {

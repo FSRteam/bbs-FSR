@@ -37,8 +37,10 @@ public class CubicCubeRenderer implements ICubicRenderer
     private final static Vector2f u2 = new Vector2f();
     private final static Vector2f u3 = new Vector2f();
 
-    private static Matrix4f modelM = new Matrix4f();
-    private static Matrix3f normalM = new Matrix3f();
+    private static final Matrix4f modelM = new Matrix4f();
+    private static final Matrix3f normalM = new Matrix3f();
+    private static final Matrix4f rotationM = new Matrix4f();
+    private static final Matrix3f rotationN = new Matrix3f();
 
     protected float r = 1F;
     protected float g = 1F;
@@ -67,28 +69,41 @@ public class CubicCubeRenderer implements ICubicRenderer
             return;
         }
 
-        Matrix4f matrix4f = new Matrix4f();
-        Matrix3f matrix3f = new Matrix3f();
-
         modelM.identity();
-        matrix4f.identity().rotateZ(MathUtils.toRad(rotation.z));
-        modelM.mul(matrix4f);
-
-        matrix4f.identity().rotateY(MathUtils.toRad(rotation.y));
-        modelM.mul(matrix4f);
-
-        matrix4f.identity().rotateX(MathUtils.toRad(rotation.x));
-        modelM.mul(matrix4f);
-
         normalM.identity();
-        matrix3f.identity().rotateZ(MathUtils.toRad(rotation.z));
-        normalM.mul(matrix3f);
 
-        matrix3f.identity().rotateY(MathUtils.toRad(rotation.y));
-        normalM.mul(matrix3f);
+        if (rotation.z != 0F)
+        {
+            float angle = MathUtils.toRad(rotation.z);
 
-        matrix3f.identity().rotateX(MathUtils.toRad(rotation.x));
-        normalM.mul(matrix3f);
+            rotationM.identity().rotateZ(angle);
+            modelM.mul(rotationM);
+
+            rotationN.identity().rotateZ(angle);
+            normalM.mul(rotationN);
+        }
+
+        if (rotation.y != 0F)
+        {
+            float angle = MathUtils.toRad(rotation.y);
+
+            rotationM.identity().rotateY(angle);
+            modelM.mul(rotationM);
+
+            rotationN.identity().rotateY(angle);
+            normalM.mul(rotationN);
+        }
+
+        if (rotation.x != 0F)
+        {
+            float angle = MathUtils.toRad(rotation.x);
+
+            rotationM.identity().rotateX(angle);
+            modelM.mul(rotationM);
+
+            rotationN.identity().rotateX(angle);
+            normalM.mul(rotationN);
+        }
 
         stack.last().pose().mul(modelM);
         stack.last().normal().mul(normalM);

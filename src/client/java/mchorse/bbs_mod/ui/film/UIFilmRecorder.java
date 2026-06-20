@@ -41,6 +41,8 @@ public class UIFilmRecorder extends UIElement
     private int pendingWidth;
     private int pendingHeight;
     private boolean restorePaused;
+    private boolean stopCancelled;
+    private FinishedListener finishedListener;
 
     public UIFilmRecorder(UIFilmPanel editor)
     {
@@ -59,6 +61,22 @@ public class UIFilmRecorder extends UIElement
     public boolean isExporting()
     {
         return this.preparing || this.isRecording();
+    }
+
+    public void setFinishedListener(FinishedListener listener)
+    {
+        this.finishedListener = listener;
+    }
+
+    public void cancel()
+    {
+        if (!this.isExporting())
+        {
+            return;
+        }
+
+        this.stopCancelled = true;
+        this.stop();
     }
 
     private UIContext getUIContext()
@@ -138,6 +156,7 @@ public class UIFilmRecorder extends UIElement
         catch (Exception e)
         {
             UIOverlay.addOverlay(context, new UIMessageOverlayPanel(UIKeys.GENERAL_ERROR, IKey.constant(e.getMessage())));
+            this.stopCancelled = true;
             this.stop();
             return;
         }
@@ -178,6 +197,7 @@ public class UIFilmRecorder extends UIElement
         catch (Exception e)
         {
             UIOverlay.addOverlay(context, new UIMessageOverlayPanel(UIKeys.GENERAL_ERROR, IKey.constant(e.getMessage())));
+            this.stopCancelled = true;
             this.stop();
             return;
         }
@@ -224,6 +244,17 @@ public class UIFilmRecorder extends UIElement
 
         context.menu.main.setEnabled(true);
         context.render.postRunnable(this::removeFromParent);
+
+        boolean cancelled = this.stopCancelled;
+        this.stopCancelled = false;
+
+        FinishedListener listener = this.finishedListener;
+        this.finishedListener = null;
+
+        if (listener != null)
+        {
+            listener.onFinished(cancelled);
+        }
     }
 
     @Override
@@ -280,12 +311,18 @@ public class UIFilmRecorder extends UIElement
         {
             if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
             {
-                this.recorder.stop();
+                this.recorder.cancel();
 
                 return true;
             }
 
             return super.subKeyPressed(context);
         }
+    }
+
+    @FunctionalInterface
+    public interface FinishedListener
+    {
+        void onFinished(boolean cancelled);
     }
 }

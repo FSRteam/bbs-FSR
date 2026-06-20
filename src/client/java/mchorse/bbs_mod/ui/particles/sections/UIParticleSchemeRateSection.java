@@ -56,6 +56,7 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
     {
         button.addLabel(UIKeys.SNOWSTORM_RATE_INSTANT);
         button.addLabel(UIKeys.SNOWSTORM_RATE_STEADY);
+        button.addLabel(UIKeys.SNOWSTORM_RATE_MANUAL);
     }
 
     @Override
@@ -79,7 +80,12 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
     @Override
     protected Class getModeClass(int value)
     {
-        return value == 0 ? ParticleComponentRateInstant.class : ParticleComponentRateSteady.class;
+        if (value == 0)
+        {
+            return ParticleComponentRateInstant.class;
+        }
+
+        return value == 1 ? ParticleComponentRateSteady.class : ParticleComponentRateManual.class;
     }
 
     @Override
@@ -93,7 +99,7 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
             ? UIKeys.SNOWSTORM_RATE_PARTICLES
             : UIKeys.SNOWSTORM_RATE_MAX_PARTICLES);
 
-        if (this.component instanceof ParticleComponentRateSteady)
+        if (this.isSteady())
         {
             ParticleComponentRateSteady comp = (ParticleComponentRateSteady) this.component;
             this.rate.setText(comp.spawnRate == null ? "" : comp.spawnRate.toString());
@@ -104,7 +110,7 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
 
     private void updateVisibility()
     {
-        if (this.isInstant())
+        if (!this.isSteady())
         {
             this.rateRow.removeFromParent();
         }
@@ -119,5 +125,10 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
     private boolean isInstant()
     {
         return this.component instanceof ParticleComponentRateInstant;
+    }
+
+    private boolean isSteady()
+    {
+        return this.component instanceof ParticleComponentRateSteady;
     }
 }

@@ -34,14 +34,30 @@ public final class NetworkCompat
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network");
     private static final String NETWORK_VERSION = "1";
     private static final String NETWORK_COMPAT_CLIENT_CLASS = "mchorse.bbs_mod.network.compat.NetworkCompatClient";
+    public static final int MAX_SERVERBOUND_RAW_PAYLOAD_BYTES = 32 * 1024 - 1;
+    public static final int MAX_CLIENTBOUND_RAW_PAYLOAD_BYTES = 1024 * 1024;
+    public static final ResourceLocation ADDON_BROKER_C2S = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s15");
+    public static final ResourceLocation ADDON_BROKER_S2C = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c18");
     private static final Set<String> CHUNKED_PAYLOAD_IDS = Set.of(
         "s1", "s2", "s3", "s4", "s8", "s11",
         "c2", "c3", "c4", "c7", "c10", "c11"
     );
 
-    private static final LinkedHashMap<ResourceLocation, PayloadBinding> C2S_BINDINGS = createBindings("s", 14);
-    private static final LinkedHashMap<ResourceLocation, PayloadBinding> S2C_BINDINGS = createBindings("c", 17);
+    private static final LinkedHashMap<ResourceLocation, PayloadBinding> C2S_BINDINGS = createBindings(
+        "s",
+        15,
+        MAX_SERVERBOUND_RAW_PAYLOAD_BYTES,
+        "play_to_server"
+    );
+    private static final LinkedHashMap<ResourceLocation, PayloadBinding> S2C_BINDINGS = createBindings(
+        "c",
+        18,
+        MAX_CLIENTBOUND_RAW_PAYLOAD_BYTES,
+        "play_to_client"
+    );
+    private static final Set<ResourceLocation> CORE_SERVER_CHANNELS = Set.copyOf(C2S_BINDINGS.keySet());
     private static final Map<ResourceLocation, ServerReceiver> SERVER_RECEIVERS = new HashMap<>();
+    private static final Map<ResourceLocation, ReceiverOwner> SERVER_RECEIVER_OWNERS = new HashMap<>();
 
     private NetworkCompat() {}
 
@@ -68,18 +84,65 @@ public final class NetworkCompat
         logRegistrationSummary();
         logPayloadTypes("play_to_server", C2S_BINDINGS);
         logPayloadTypes("play_to_client", S2C_BINDINGS);
-        verifyPayloadFreeze("s", 14, C2S_BINDINGS, "play_to_server");
-        verifyPayloadFreeze("c", 17, S2C_BINDINGS, "play_to_client");
+        verifyPayloadFreeze("s", 15, C2S_BINDINGS, "play_to_server");
+        verifyPayloadFreeze("c", 18, S2C_BINDINGS, "play_to_client");
     }
 
+    /**
+     * Legacy API2 receiver hook. This binds only already-registered C2S payload
+     * ids and refuses BBS core-owned frozen channels.
+     */
     public static void registerServerReceiver(ResourceLocation id, ServerReceiver receiver)
     {
+        registerServerReceiver(id, receiver, ReceiverOwner.ADDON);
+    }
+
+    /**
+     * Internal core receiver hook used by ServerNetwork.setup().
+     */
+    public static void registerCoreServerReceiver(ResourceLocation id, ServerReceiver receiver)
+    {
+        registerServerReceiver(id, receiver, ReceiverOwner.CORE);
+    }
+
+    private static synchronized void registerServerReceiver(ResourceLocation id, ServerReceiver receiver, ReceiverOwner owner)
+    {
+        if (id == null)
+        {
+            throw new IllegalArgumentException("C2S channel id is null");
+        }
+
+        if (receiver == null)
+        {
+            throw new IllegalArgumentException("Server receiver is null for C2S channel id: " + id);
+        }
+
         if (!C2S_BINDINGS.containsKey(id))
         {
             throw new IllegalArgumentException("Unknown C2S channel id: " + id);
         }
 
+        if (owner == ReceiverOwner.ADDON && CORE_SERVER_CHANNELS.contains(id))
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.receiver phase=register result=reject reason=core_owned_channel id={} incoming_owner={}",
+                payloadKey(id),
+                owner.logName);
+            throw new IllegalStateException("C2S channel is owned by BBS core: " + id);
+        }
+
+        ReceiverOwner existingOwner = SERVER_RECEIVER_OWNERS.get(id);
+
+        if (existingOwner != null)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.receiver phase=register result=reject reason=duplicate_receiver id={} existing_owner={} incoming_owner={}",
+                payloadKey(id),
+                existingOwner.logName,
+                owner.logName);
+            throw new IllegalStateException("C2S channel already has a " + existingOwner.logName + " receiver: " + id);
+        }
+
         SERVER_RECEIVERS.put(id, receiver);
+        SERVER_RECEIVER_OWNERS.put(id, owner);
     }
 
     public static void sendToServer(ResourceLocation id, FriendlyByteBuf buf)
@@ -102,12 +165,17 @@ public final class NetworkCompat
         PacketDistributor.sendToPlayersTrackingEntityAndSelf(player, createPayload(S2C_BINDINGS, id, buf));
     }
 
+    public static boolean isClientboundPayloadId(ResourceLocation id)
+    {
+        return S2C_BINDINGS.containsKey(id);
+    }
+
     public static FriendlyByteBuf createBuffer()
     {
         return new FriendlyByteBuf(Unpooled.buffer());
     }
 
-    private static LinkedHashMap<ResourceLocation, PayloadBinding> createBindings(String prefix, int amount)
+    private static LinkedHashMap<ResourceLocation, PayloadBinding> createBindings(String prefix, int amount, int maxBytes, String direction)
     {
         LinkedHashMap<ResourceLocation, PayloadBinding> bindings = new LinkedHashMap<>();
 
@@ -115,7 +183,7 @@ public final class NetworkCompat
         {
             ResourceLocation id = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, prefix + i);
 
-            bindings.put(id, new PayloadBinding(id));
+            bindings.put(id, new PayloadBinding(id, maxBytes, direction));
         }
 
         return bindings;
@@ -198,7 +266,7 @@ public final class NetworkCompat
     private static StreamCodec codec(PayloadBinding binding)
     {
         return StreamCodec.composite(
-            ByteBufCodecs.BYTE_ARRAY,
+            ByteBufCodecs.byteArray(binding.maxBytes),
             RawPayload::bytes,
             bytes -> new RawPayload(binding, bytes)
         );
@@ -213,16 +281,35 @@ public final class NetworkCompat
             throw new IllegalArgumentException("Unknown payload channel id: " + id);
         }
 
-        return new RawPayload(binding, copyReadableBytes(buf));
+        return new RawPayload(binding, copyReadableBytes(binding, buf));
     }
 
-    private static byte[] copyReadableBytes(FriendlyByteBuf buf)
+    private static byte[] copyReadableBytes(PayloadBinding binding, FriendlyByteBuf buf)
     {
-        byte[] bytes = new byte[buf.readableBytes()];
+        if (buf == null)
+        {
+            throw new IllegalArgumentException("Payload buffer is null for channel id: " + binding.id);
+        }
+
+        int readableBytes = buf.readableBytes();
+
+        validatePayloadSize(binding, readableBytes, "send");
+
+        byte[] bytes = new byte[readableBytes];
 
         buf.getBytes(buf.readerIndex(), bytes);
 
         return bytes;
+    }
+
+    private static void validatePayloadSize(PayloadBinding binding, int size, String phase)
+    {
+        if (size < 0 || size > binding.maxBytes)
+        {
+            throw new IllegalArgumentException(
+                "Payload " + payloadKey(binding.id) + " for " + binding.direction + " exceeds " + binding.maxBytes + " bytes during " + phase + ": " + size
+            );
+        }
     }
 
     private static FriendlyByteBuf wrapBytes(byte[] bytes)
@@ -286,20 +373,52 @@ public final class NetworkCompat
     {
         private final ResourceLocation id;
         private final CustomPacketPayload.Type<RawPayload> type;
+        private final int maxBytes;
+        private final String direction;
 
-        private PayloadBinding(ResourceLocation id)
+        private PayloadBinding(ResourceLocation id, int maxBytes, String direction)
         {
             this.id = id;
             this.type = new CustomPacketPayload.Type<>(id);
+            this.maxBytes = maxBytes;
+            this.direction = direction;
         }
     }
 
     private record RawPayload(PayloadBinding binding, byte[] bytes) implements CustomPacketPayload
     {
+        private RawPayload
+        {
+            if (binding == null)
+            {
+                throw new IllegalArgumentException("Payload binding is null");
+            }
+
+            if (bytes == null)
+            {
+                bytes = new byte[0];
+            }
+
+            validatePayloadSize(binding, bytes.length, "decode");
+        }
+
         @Override
         public Type<? extends CustomPacketPayload> type()
         {
             return this.binding.type;
+        }
+    }
+
+    private enum ReceiverOwner
+    {
+        CORE("core"),
+        ADDON("addon");
+
+        private final String logName;
+
+        ReceiverOwner(String logName)
+        {
+            this.logName = logName;
         }
     }
 }

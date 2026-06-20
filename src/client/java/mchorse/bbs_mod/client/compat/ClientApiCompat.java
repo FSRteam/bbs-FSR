@@ -40,6 +40,8 @@ public final class ClientApiCompat
     private static final List<Consumer<Minecraft>> CLIENT_STARTED_HANDLERS = new CopyOnWriteArrayList<>();
     private static final List<EntityRendererRegistration<?>> ENTITY_RENDERER_REGISTRATIONS = new CopyOnWriteArrayList<>();
     private static final List<BlockEntityRendererRegistration<?>> BLOCK_ENTITY_RENDERER_REGISTRATIONS = new CopyOnWriteArrayList<>();
+    private static final List<KeyMapping> KEY_BINDING_REGISTRATIONS = new CopyOnWriteArrayList<>();
+    private static volatile boolean keyMappingsEventFired;
 
     private ClientApiCompat() {}
 
@@ -63,7 +65,38 @@ public final class ClientApiCompat
 
     public static KeyMapping registerKeyBinding(KeyMapping keyBinding)
     {
-        return Objects.requireNonNull(keyBinding, "keyBinding");
+        KeyMapping mapping = Objects.requireNonNull(keyBinding, "keyBinding");
+
+        if (!KEY_BINDING_REGISTRATIONS.contains(mapping))
+        {
+            KEY_BINDING_REGISTRATIONS.add(mapping);
+        }
+
+        if (keyMappingsEventFired)
+        {
+            LOGGER.warn("[bbs-client-api] key binding '{}' was registered after RegisterKeyMappingsEvent and may not appear until restart", mapping.getName());
+        }
+
+        return mapping;
+    }
+
+    public static void registerQueuedKeyMappings(Consumer<KeyMapping> register)
+    {
+        Objects.requireNonNull(register, "register");
+
+        for (KeyMapping mapping : KEY_BINDING_REGISTRATIONS)
+        {
+            try
+            {
+                register.accept(mapping);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-client-api] key binding registration failed for '{}'", mapping.getName(), e);
+            }
+        }
+
+        keyMappingsEventFired = true;
     }
 
     public static void onAfterEntities(WorldRenderHandler handler)
@@ -74,6 +107,11 @@ public final class ClientApiCompat
     public static void onLast(WorldRenderHandler handler)
     {
         LAST_HANDLERS.add(Objects.requireNonNull(handler, "handler"));
+    }
+
+    public static boolean hasLastHandlers()
+    {
+        return !LAST_HANDLERS.isEmpty();
     }
 
     public static void onDisconnect(DisconnectHandler handler)
@@ -123,6 +161,11 @@ public final class ClientApiCompat
 
     public static void emitAfterEntities(IBbsWorldRenderContext context)
     {
+        if (AFTER_ENTITIES_HANDLERS.isEmpty())
+        {
+            return;
+        }
+
         BBSWorldRenderContext compatContext = BBSWorldRenderContext.bridge(Objects.requireNonNull(context, "context"));
 
         for (WorldRenderHandler handler : AFTER_ENTITIES_HANDLERS)
@@ -140,6 +183,11 @@ public final class ClientApiCompat
 
     public static void emitLast(IBbsWorldRenderContext context)
     {
+        if (LAST_HANDLERS.isEmpty())
+        {
+            return;
+        }
+
         BBSWorldRenderContext compatContext = BBSWorldRenderContext.bridge(Objects.requireNonNull(context, "context"));
 
         for (WorldRenderHandler handler : LAST_HANDLERS)

@@ -12,6 +12,8 @@ import org.lwjgl.opengl.GL30;
 
 public class ModelVAORenderer
 {
+    private static final Matrix4f modelView = new Matrix4f();
+
     public static void render(ShaderInstance shader, IModelVAO modelVAO, PoseStack stack, float r, float g, float b, float a, int light, int overlay)
     {
         if (shader == null || modelVAO == null)
@@ -39,7 +41,7 @@ public class ModelVAORenderer
             shader.setSampler("Sampler" + i, RenderSystem.getShaderTexture(i));
         }
 
-        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
+        Matrix4f modelView = ModelVAORenderer.modelView.set(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
         shader.setDefaultUniforms(VertexFormat.Mode.TRIANGLES, modelView, RenderSystem.getProjectionMatrix(), Minecraft.getInstance().getWindow());
 
         /* NormalMat is present by default in Iris' shaders, but when there is no Iris,

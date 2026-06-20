@@ -26,6 +26,7 @@ import mchorse.bbs_mod.utils.EnumUtils;
 import mchorse.bbs_mod.utils.PermissionUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
+import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
@@ -55,6 +56,8 @@ import java.util.UUID;
 public class ServerNetwork
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network");
+    public static final int APPLY_FILM_PLAYER_SETTINGS_FIXED_BYTES = Float.BYTES * 3 + Integer.BYTES * 2;
+    public static final int MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES = NetworkCompat.MAX_SERVERBOUND_RAW_PAYLOAD_BYTES - APPLY_FILM_PLAYER_SETTINGS_FIXED_BYTES;
 
     public static final int STATE_TRIGGER_MORPH = 0;
     public static final int STATE_TRIGGER_MAIN_HAND_ITEM = 1;
@@ -77,6 +80,7 @@ public class ServerNetwork
     public static final ResourceLocation CLIENT_SELECTED_SLOT = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c15");
     public static final ResourceLocation CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c16");
     public static final ResourceLocation CLIENT_REFRESH_MODEL_BLOCKS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c17");
+    public static final ResourceLocation CLIENT_ADDON_BROKER = NetworkCompat.ADDON_BROKER_S2C;
 
     public static final ResourceLocation SERVER_MODEL_BLOCK_FORM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s1");
     public static final ResourceLocation SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s2");
@@ -92,6 +96,7 @@ public class ServerNetwork
     public static final ResourceLocation SERVER_ZOOM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s12");
     public static final ResourceLocation SERVER_PAUSE_FILM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s13");
     public static final ResourceLocation SERVER_APPLY_FILM_PLAYER_SETTINGS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s14");
+    public static final ResourceLocation SERVER_ADDON_BROKER = NetworkCompat.ADDON_BROKER_C2S;
 
     private static ServerPacketCrusher crusher = new ServerPacketCrusher();
 
@@ -102,20 +107,21 @@ public class ServerNetwork
 
     public static void setup()
     {
-        NetworkCompat.registerServerReceiver(SERVER_MODEL_BLOCK_FORM_PACKET, (server, player, buf) -> handleModelBlockFormPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_MODEL_BLOCK_TRANSFORMS_PACKET, (server, player, buf) -> handleModelBlockTransformsPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_PLAYER_FORM_PACKET, (server, player, buf) -> handlePlayerFormPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_MANAGER_DATA_PACKET, (server, player, buf) -> handleManagerDataPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_ACTION_RECORDING, (server, player, buf) -> handleActionRecording(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_TOGGLE_FILM, (server, player, buf) -> handleToggleFilm(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_ACTION_CONTROL, (server, player, buf) -> handleActionControl(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_FILM_DATA_SYNC, (server, player, buf) -> handleSyncData(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_PLAYER_TP, (server, player, buf) -> handleTeleportPlayer(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_ANIMATION_STATE_TRIGGER, (server, player, buf) -> handleAnimationStateTriggerPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_SHARED_FORM, (server, player, buf) -> handleSharedFormPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_ZOOM, (server, player, buf) -> handleZoomPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_PAUSE_FILM, (server, player, buf) -> handlePauseFilmPacket(server, player, buf));
-        NetworkCompat.registerServerReceiver(SERVER_APPLY_FILM_PLAYER_SETTINGS, (server, player, buf) -> handleApplyFilmPlayerSettings(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_MODEL_BLOCK_FORM_PACKET, (server, player, buf) -> handleModelBlockFormPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_MODEL_BLOCK_TRANSFORMS_PACKET, (server, player, buf) -> handleModelBlockTransformsPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_PLAYER_FORM_PACKET, (server, player, buf) -> handlePlayerFormPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_MANAGER_DATA_PACKET, (server, player, buf) -> handleManagerDataPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_ACTION_RECORDING, (server, player, buf) -> handleActionRecording(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_TOGGLE_FILM, (server, player, buf) -> handleToggleFilm(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_ACTION_CONTROL, (server, player, buf) -> handleActionControl(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_FILM_DATA_SYNC, (server, player, buf) -> handleSyncData(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_PLAYER_TP, (server, player, buf) -> handleTeleportPlayer(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_ANIMATION_STATE_TRIGGER, (server, player, buf) -> handleAnimationStateTriggerPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_SHARED_FORM, (server, player, buf) -> handleSharedFormPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_ZOOM, (server, player, buf) -> handleZoomPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_PAUSE_FILM, (server, player, buf) -> handlePauseFilmPacket(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_APPLY_FILM_PLAYER_SETTINGS, (server, player, buf) -> handleApplyFilmPlayerSettings(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_ADDON_BROKER, AddonPayloadBroker::handleServerPayload);
     }
 
     /* Handlers */
@@ -571,11 +577,47 @@ public class ServerNetwork
             return;
         }
 
+        if (buf.readableBytes() < APPLY_FILM_PLAYER_SETTINGS_FIXED_BYTES)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=short_payload player={} readable={}",
+                player.getGameProfile().getName(),
+                buf.readableBytes());
+            return;
+        }
+
         float hp = buf.readFloat();
         float hunger = buf.readFloat();
         int xpLevel = buf.readInt();
         float xpProgress = buf.readFloat();
         int invSize = buf.readInt();
+
+        if (invSize < 0 || invSize > MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=invalid_inventory_size player={} size={} max={}",
+                player.getGameProfile().getName(),
+                invSize,
+                MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES);
+            return;
+        }
+
+        if (invSize > buf.readableBytes())
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=truncated_inventory player={} size={} readable={}",
+                player.getGameProfile().getName(),
+                invSize,
+                buf.readableBytes());
+            return;
+        }
+
+        if (invSize != buf.readableBytes())
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=trailing_bytes player={} size={} trailing={}",
+                player.getGameProfile().getName(),
+                invSize,
+                buf.readableBytes() - invSize);
+            return;
+        }
+
         byte[] invBytes = invSize > 0 ? new byte[invSize] : null;
 
         if (invBytes != null)
@@ -591,11 +633,20 @@ public class ServerNetwork
 
             if (invBytesFinal != null)
             {
-                BaseType invData = DataStorageUtils.readFromBytes(invBytesFinal);
-
-                if (invData.isList())
+                try
                 {
-                    Inventory.applyToPlayer(player, invData.asList());
+                    BaseType invData = DataStorageUtils.readFromBytes(invBytesFinal);
+
+                    if (invData != null && invData.isList())
+                    {
+                        Inventory.applyToPlayer(player, invData.asList());
+                    }
+                }
+                catch (Exception e)
+                {
+                    LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=apply_inventory result=drop reason=invalid_inventory_payload player={}",
+                        player.getGameProfile().getName(),
+                        e);
                 }
             }
         });

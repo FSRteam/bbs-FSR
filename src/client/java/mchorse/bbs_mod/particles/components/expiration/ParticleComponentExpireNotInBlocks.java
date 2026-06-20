@@ -17,10 +17,13 @@ public class ParticleComponentExpireNotInBlocks extends ParticleComponentExpireB
         }
 
         BlockState current = this.getBlock(emitter, particle);
+        String currentId = BuiltInRegistries.BLOCK.getKey(current.getBlock()).toString();
 
-        for (String block : this.blocks)
+        for (int i = 0; i < this.blocks.size(); i++)
         {
-            if (BuiltInRegistries.BLOCK.getKey(current.getBlock()).toString().equals(block))
+            String block = this.blocks.get(i);
+
+            if (currentId.equals(block))
             {
                 return;
             }

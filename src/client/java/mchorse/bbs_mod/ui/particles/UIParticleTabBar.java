@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.ui.particles;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -120,7 +120,6 @@ public class UIParticleTabBar extends UIElement
     {
         context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A100);
 
-        int color = BBSSettings.primaryColor.get();
         int y = this.area.y;
         int ey = this.area.ey();
         int hovered = this.area.isInside(context.mouseX, context.mouseY)
@@ -134,8 +133,7 @@ public class UIParticleTabBar extends UIElement
 
             if (active)
             {
-                context.batcher.box(tab.area.x, ey - 2, tab.area.ex(), ey, Colors.A100 | color);
-                context.batcher.gradientVBox(tab.area.x, y, tab.area.ex(), ey - 2, color, Colors.A75 | color);
+                UIDashboardPanels.renderHighlight(context.batcher, tab.area, Direction.BOTTOM);
             }
 
             int iconColor = active ? Colors.WHITE : (hover ? Colors.LIGHTEST_GRAY : Colors.mulRGB(Colors.WHITE, 0.75F));

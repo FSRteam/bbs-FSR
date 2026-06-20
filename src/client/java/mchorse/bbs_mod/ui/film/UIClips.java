@@ -33,6 +33,7 @@ import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
@@ -120,17 +121,18 @@ public class UIClips extends UIElement
         /* Draw the marker */
         FontRenderer font = context.batcher.getFont();
         int width = font.getWidth(label) + 3;
+        int color = BBSSettings.primaryColor.get();
 
-        context.batcher.box(x, area.y, x + 2, area.ey(), Colors.CURSOR);
+        context.batcher.box(x, area.y, x + 1, area.ey(), color | Colors.A100);
 
         /* Move the tick line left, so it won't overflow the timeline */
-        if (x + 2 + width > area.ex())
+        if (x + 1 + width > area.ex())
         {
             x -= width + 1;
         }
 
         /* Draw the tick label */
-        context.batcher.textCard(label, x + 4, area.ey() - 2 - font.getHeight(), Colors.WHITE, Colors.setA(Colors.CURSOR, 0.75F), 2);
+        context.batcher.textCard(label, x + 3, area.ey() - 2 - font.getHeight(), Colors.WHITE, Colors.setA(color, 0.78F), 2);
     }
 
     public UIClips(IUIClipsDelegate delegate, IFactory<Clip, ClipFactoryData> factory)
@@ -144,6 +146,8 @@ public class UIClips extends UIElement
 
         this.delegate = delegate;
         this.factory = factory;
+        this.vertical.smoothScrolling(() -> !BBSSettings.scrollingDisableSmoothnessInEditors.get());
+        this.vertical.wheelScrollStep(this::getLayerHeight);
 
         this.embeddedClose = new UIIcon(Icons.CLOSE, (b) -> this.embedView(null));
         this.embeddedClose.relative(this);
@@ -1710,14 +1714,17 @@ public class UIClips extends UIElement
         Area area = this.area;
         int h = this.getLayerHeight();
         int leftEdge = this.toGraphX(0);
+        int rulerBottom = TimelineRulerRenderer.getRulerBottom(area);
+        int contentTop = Math.min(rulerBottom, this.vertical.area.ey());
+        int contentHeight = Math.max(0, this.vertical.area.ey() - contentTop);
 
         if (leftEdge > this.area.x)
         {
-            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), Colors.A75);
+            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), BBSSettings.chromeSurface());
         }
 
-        area.render(batcher, Colors.A50);
-        batcher.clip(this.vertical.area, context);
+        area.render(batcher, BBSSettings.deepSurface());
+        batcher.clip(this.vertical.area.x, contentTop, this.vertical.area.w, contentHeight, context);
 
         for (int i = 0; i < this.layers; i++)
         {
@@ -1725,7 +1732,7 @@ public class UIClips extends UIElement
 
             if (i % 2 != 0)
             {
-                batcher.box(leftEdge, ly, this.area.ex(), ly + h, Colors.A50);
+                batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.baseSurface());
             }
         }
 
@@ -1735,7 +1742,21 @@ public class UIClips extends UIElement
         this.renderTickMarkers(context, area.y, area.h);
 
         batcher.unclip(context);
-        batcher.clip(this.vertical.area, context);
+
+        if (BBSSettings.editorTimelineGrid.get())
+        {
+            TimelineRulerRenderer.renderGrid(
+                context,
+                area,
+                rulerBottom,
+                (int) this.scale.getMinValue(),
+                this.clips.calculateDuration(),
+                this::toGraphX,
+                TimeUtils::formatTime
+            );
+        }
+
+        batcher.clip(this.vertical.area.x, contentTop, this.vertical.area.w, contentHeight, context);
 
         List<Clip> clips = this.clips.get();
 
@@ -1845,25 +1866,17 @@ public class UIClips extends UIElement
      */
     private void renderTickMarkers(UIContext context, int y, int h)
     {
-        int mult = this.scale.getMult() * 2;
         int start = (int) this.scale.getMinValue();
-        int end = (int) this.scale.getMaxValue();
-        int max = Integer.MAX_VALUE;
+        int duration = this.clips.calculateDuration();
 
-        start -= start % mult;
-        end -= end % mult;
-
-        start = MathUtils.clamp(start, 0, max);
-        end = MathUtils.clamp(end, mult, max);
-
-        for (int j = start; j <= end; j += mult)
-        {
-            int xx = this.toGraphX(j);
-            String value = TimeUtils.formatTime(j);
-
-            context.batcher.box(xx, y, xx + 1, y + h, Colors.setA(Colors.WHITE, 0.2F));
-            context.batcher.textShadow(value, xx + 3, this.area.y + 4, Colors.WHITE);
-        }
+        TimelineRulerRenderer.render(
+            context,
+            this.area,
+            start,
+            duration,
+            this::toGraphX,
+            TimeUtils::formatTime
+        );
     }
 
     /**
@@ -1873,7 +1886,7 @@ public class UIClips extends UIElement
     {
         if (this.selecting)
         {
-            context.batcher.normalizedBox(this.lastX, this.lastY, context.mouseX, context.mouseY, Colors.setA(Colors.ACTIVE, 0.25F));
+            context.batcher.normalizedBox(this.lastX, this.lastY, context.mouseX, context.mouseY, BBSSettings.accentOverlay(Colors.A25));
         }
     }
 

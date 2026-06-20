@@ -1,14 +1,20 @@
 package mchorse.bbs_mod.ui.model_blocks;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.shaders.Uniform;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.CameraUtils;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
+import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.network.ClientNetwork;
+import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
@@ -25,22 +31,32 @@ import mchorse.bbs_mod.ui.framework.elements.events.UIRemovedEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.model_blocks.camera.ImmersiveModelBlockCameraController;
+import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
+import mchorse.bbs_mod.ui.utils.GizmoInteraction;
+import mchorse.bbs_mod.ui.utils.GizmoViewport;
+import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.AABB;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.RayTracing;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
-import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
+import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -49,7 +65,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSupported
+public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSupported, GizmoViewport
 {
     public static boolean toggleRendering;
 
@@ -62,6 +78,12 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     public UIToggle global;
     public UIToggle lookAt;
     public UIPropTransform transform;
+
+    private final StencilFormFramebuffer gizmoStencil = new StencilFormFramebuffer();
+    private final StencilMap gizmoStencilMap = new StencilMap();
+    private final GizmoInteraction gizmo = new GizmoInteraction(this);
+    private final mchorse.bbs_mod.camera.Camera gizmoCamera = new mchorse.bbs_mod.camera.Camera();
+    private final Matrix4f gizmoProjection = new Matrix4f();
 
     private ModelBlockEntity modelBlock;
     private ModelBlockEntity hovered;
@@ -152,6 +174,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         this.transform = new UIPropTransform();
         this.transform.enableHotkeys();
+        this.transform.hotkeyDrag(this::buildGizmoDrag);
 
         this.editor = UI.column(this.pickEdit, this.enabled, this.shadow, this.global, this.lookAt, this.transform);
 
@@ -204,6 +227,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         this.keyDude.removeFromParent();
         this.dashboard.orbitKeysUI.setEnabled(null);
+        this.gizmo.stop();
 
         if (this.cameraController != null)
         {
@@ -214,6 +238,181 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     public ModelBlockEntity getModelBlock()
     {
         return this.modelBlock;
+    }
+
+    @Override
+    public StencilFormFramebuffer getGizmoStencil()
+    {
+        return this.gizmoStencil;
+    }
+
+    @Override
+    public Matrix4f getGizmoProjection()
+    {
+        return this.gizmoProjection;
+    }
+
+    @Override
+    public Area getGizmoArea()
+    {
+        return this.area;
+    }
+
+    @Override
+    public boolean startGizmo(UIContext context, int stencilIndex)
+    {
+        if (this.modelBlock == null)
+        {
+            return false;
+        }
+
+        return Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, this.transform, this.buildGizmoDrag());
+    }
+
+    @Override
+    public void pickGizmoForm(UIContext context, Form form, String bone)
+    {}
+
+    private GizmoDrag buildGizmoDrag()
+    {
+        if (this.modelBlock == null)
+        {
+            return null;
+        }
+
+        BlockPos pos = this.modelBlock.getBlockPos();
+        Transform transform = this.modelBlock.getProperties().getTransform();
+        GizmoDrag drag = new GizmoDrag().setup(
+            this.gizmoCamera,
+            this.area,
+            pos.getX() + 0.5D + transform.translate.x,
+            pos.getY() + transform.translate.y,
+            pos.getZ() + 0.5D + transform.translate.z
+        );
+
+        Matrix3f axes = new Matrix3f();
+
+        if (this.transform.isLocal())
+        {
+            axes.set(transform.createRotationMatrix());
+        }
+
+        drag.gizmoWorldAxes.set(axes);
+        drag.setJacobian(GizmoDrag.computeTranslateJacobian(
+            transform,
+            () -> new Vector3f(
+                pos.getX() + 0.5F + transform.translate.x,
+                pos.getY() + transform.translate.y,
+                pos.getZ() + 0.5F + transform.translate.z
+            )
+        ));
+        drag.setRotateAxes(GizmoDrag.computeRotateAxes(
+            transform,
+            () -> MatrixStackUtils.stripScale(new Matrix4f(transform.createMatrix()))
+        ));
+
+        return drag;
+    }
+
+    public boolean isShowingGizmo(ModelBlockEntity entity)
+    {
+        return this.modelBlock == entity && this.canShowGizmo();
+    }
+
+    private boolean canShowGizmo()
+    {
+        return this.modelBlock != null
+            && BBSSettings.gizmos.get()
+            && this.getChildren(UIFormPalette.class).isEmpty();
+    }
+
+    public void renderWorldGizmo(PoseStack matrices, ModelBlockEntity entity)
+    {
+        if (!this.isShowingGizmo(entity))
+        {
+            return;
+        }
+
+        Transform transform = entity.getProperties().getTransform();
+
+        matrices.pushPose();
+        matrices.translate(transform.translate.x, transform.translate.y, transform.translate.z);
+
+        if (this.transform.isLocal())
+        {
+            MatrixStackUtils.multiply(matrices, new Matrix4f().set(transform.createRotationMatrix()));
+        }
+
+        RenderSystem.disableDepthTest();
+        Gizmo.INSTANCE.render(matrices);
+        RenderSystem.enableDepthTest();
+
+        matrices.popPose();
+    }
+
+    private void renderGizmo(IBbsWorldRenderContext context, Vec3 cameraPos)
+    {
+        if (!this.canShowGizmo())
+        {
+            this.gizmoStencil.clearPicking();
+
+            return;
+        }
+
+        PoseStack stack = context.matrixStack();
+
+        this.gizmoProjection.set(context.projectionMatrix());
+        this.gizmoCamera.projection.set(this.gizmoProjection);
+        this.gizmoCamera.view.set(context.modelViewMatrix());
+        this.gizmoCamera.position.set(cameraPos.x, cameraPos.y, cameraPos.z);
+
+        this.renderGizmoStencil(stack, cameraPos, Minecraft.getInstance());
+        RenderSystem.enableDepthTest();
+    }
+
+    private void applyGizmoOrigin(PoseStack stack, Vec3 cameraPos)
+    {
+        BlockPos pos = this.modelBlock.getBlockPos();
+        Transform transform = this.modelBlock.getProperties().getTransform();
+
+        stack.translate(
+            pos.getX() + 0.5D + transform.translate.x - cameraPos.x,
+            pos.getY() + transform.translate.y - cameraPos.y,
+            pos.getZ() + 0.5D + transform.translate.z - cameraPos.z
+        );
+
+        if (this.transform.isLocal())
+        {
+            MatrixStackUtils.multiply(stack, new Matrix4f().set(transform.createRotationMatrix()));
+        }
+    }
+
+    private void renderGizmoStencil(PoseStack stack, Vec3 cameraPos, Minecraft mc)
+    {
+        this.gizmoStencil.setup(Link.bbs("stencil_model_block"));
+
+        int w = mc.getWindow().getScreenWidth();
+        int h = mc.getWindow().getScreenHeight();
+        Texture texture = this.gizmoStencil.getFramebuffer().getMainTexture();
+
+        if (texture.width != w || texture.height != h)
+        {
+            this.gizmoStencil.resize(w, h);
+        }
+
+        this.gizmoStencilMap.setup();
+        this.gizmoStencil.apply();
+
+        stack.pushPose();
+        this.applyGizmoOrigin(stack, cameraPos);
+        Gizmo.INSTANCE.setViewport(this.area);
+        Gizmo.INSTANCE.renderStencil(stack, this.gizmoStencilMap);
+        stack.popPose();
+
+        this.gizmoStencil.pick((int) mc.mouseHandler.xpos(), h - (int) mc.mouseHandler.ypos());
+        this.gizmoStencil.unbind(this.gizmoStencilMap);
+
+        mc.getMainRenderTarget().bindWrite(true);
     }
 
     private void addCameraController(UIFormPalette palette)
@@ -271,6 +470,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         super.close();
 
+        this.gizmo.stop();
         this.removeCameraController();
 
         for (ModelBlockEntity entity : this.toSave)
@@ -343,12 +543,27 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             return true;
         }
 
+        if (this.canShowGizmo() && this.gizmo.mouseClicked(context))
+        {
+            return true;
+        }
+
         if (this.hovered != null && context.mouseButton == 0 && BBSSettings.clickModelBlocks.get())
         {
             this.fill(this.hovered, true);
         }
 
         return false;
+    }
+
+    @Override
+    protected boolean subMouseReleased(UIContext context)
+    {
+        boolean consumed = this.canShowGizmo() && this.gizmo.mouseReleased(context);
+
+        this.gizmo.stop();
+
+        return super.subMouseReleased(context) || consumed;
     }
 
     @Override
@@ -360,6 +575,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     @Override
     public void render(UIContext context)
     {
+        if (this.canShowGizmo())
+        {
+            this.gizmo.update(context);
+        }
+
         String label = UIKeys.FILM_CONTROLLER_SPEED.format(this.dashboard.orbit.speed.getValue()).get();
         FontRenderer font = context.batcher.getFont();
         int w = font.getWidth(label);
@@ -368,6 +588,41 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         context.batcher.textCard(label, x, y, Colors.WHITE, Colors.A50);
         super.render(context);
+
+        this.renderGizmoHover(context);
+        this.gizmo.renderSphereHighlight(context);
+    }
+
+    private void renderGizmoHover(UIContext context)
+    {
+        if (!this.canShowGizmo() || !this.gizmoStencil.hasPicked())
+        {
+            return;
+        }
+
+        Texture texture = this.gizmoStencil.getFramebuffer().getMainTexture();
+        int w = texture.width;
+        int h = texture.height;
+
+        ShaderInstance previewProgram = BBSShaders.getPickerPreviewProgram();
+        Uniform target = previewProgram.getUniform("Target");
+
+        if (target != null)
+        {
+            target.set(this.gizmoStencil.getIndex());
+        }
+
+        Uniform highlight = previewProgram.getUniform("HighlightColor");
+
+        if (highlight != null)
+        {
+            int color = BBSSettings.stencilHighlightColor.get();
+
+            highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+        }
+
+        RenderSystem.enableBlend();
+        context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, 0, 0, context.menu.width, context.menu.height, 0, h, w, 0, w, h);
     }
 
     @Override
@@ -383,8 +638,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         double y = mc.mouseHandler.ypos();
 
         this.mouseDirection.set(CameraUtils.getMouseDirection(
-            RenderSystem.getProjectionMatrix(),
-            context.matrixStack().last().pose(),
+            context.projectionMatrix(),
+            context.modelViewMatrix(),
             (int) x, (int) y, 0, 0, mc.getWindow().getScreenWidth(), mc.getWindow().getScreenHeight()
         ));
         this.hovered = this.getClosestObject(new Vector3d(pos.x, pos.y, pos.z), this.mouseDirection);
@@ -414,6 +669,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         }
 
         RenderSystem.disableDepthTest();
+
+        this.renderGizmo(context, pos);
     }
 
     private ModelBlockEntity getClosestObject(Vector3d finalPosition, Vector3f mouseDirection)

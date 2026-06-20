@@ -256,6 +256,9 @@ public interface IUIKeyframeGraph
 
     public void postRender(UIContext context);
 
+    public default void renderTopmostKeyframes(UIContext context)
+    {}
+
     /* State recovery */
 
     public void saveState(MapType extra);

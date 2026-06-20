@@ -10,6 +10,7 @@ import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -17,6 +18,13 @@ import org.joml.Vector4f;
 public class ParticleComponentShapeDisc extends ParticleComponentShapeSphere
 {
     public MolangExpression[] normal = {MolangParser.ZERO, MolangParser.ONE, MolangParser.ZERO};
+
+    private final Vector3f forwardVector = new Vector3f();
+    private final Vector3f rightVector = new Vector3f();
+    private final Vector3f upVector = new Vector3f();
+    private final Matrix3f directionMatrix = new Matrix3f();
+    private final Matrix4f rotationMatrix = new Matrix4f();
+    private final Vector4f positionVector = new Vector4f();
 
     @Override
     public void toData(MapType data)
@@ -85,7 +93,7 @@ public class ParticleComponentShapeDisc extends ParticleComponentShapeSphere
         float centerY = (float) this.offset[1].get();
         float centerZ = (float) this.offset[2].get();
 
-        Vector3f forward = new Vector3f((float) this.normal[0].get(), (float) this.normal[1].get(), (float) this.normal[2].get());
+        Vector3f forward = this.forwardVector.set((float) this.normal[0].get(), (float) this.normal[1].get(), (float) this.normal[2].get());
 
         if (forward.distanceSquared(0, 0, 0) == 0)
         {
@@ -94,13 +102,15 @@ public class ParticleComponentShapeDisc extends ParticleComponentShapeSphere
 
         forward.normalize();
 
-        Matrix4f rotation = new Matrix4f(Matrices.direction(forward));
-        Vector4f position = new Vector4f((float) Math.random() - 0.5F, 0, (float) Math.random() - 0.5F, 0);
+        Matrix4f rotation = this.rotationMatrix.set(Matrices.direction(forward, this.directionMatrix, this.rightVector, this.upVector));
+        Vector4f position = this.positionVector.set((float) Math.random() - 0.5F, 0, (float) Math.random() - 0.5F, 0);
         position.normalize();
         rotation.transform(position);
 
         position.mul((float) (this.radius.get() * (this.surface ? 1 : Math.random())));
-        position.add(new Vector4f(centerX, centerY, centerZ, 0));
+        position.x += centerX;
+        position.y += centerY;
+        position.z += centerZ;
 
         particle.position.x += position.x;
         particle.position.y += position.y;

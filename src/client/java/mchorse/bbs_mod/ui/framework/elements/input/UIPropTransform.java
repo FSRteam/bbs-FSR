@@ -3,16 +3,24 @@ package mchorse.bbs_mod.ui.framework.elements.input;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.math.MathBuilder;
 import mchorse.bbs_mod.settings.values.IValueNotifier;
+import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
+import mchorse.bbs_mod.ui.utils.TransformSpace;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -21,18 +29,24 @@ import net.minecraft.client.Minecraft;
 import org.joml.Intersectiond;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector2f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 public class UIPropTransform extends UITransform
 {
     private static final double[] CURSOR_X = new double[1];
     private static final double[] CURSOR_Y = new double[1];
+    private static final float STEP_MODIFIER = 5F;
+    private static final float DEPTH_WHEEL_FACTOR = 0.05F;
+    private static final float TRACKBALL_WHEEL_DEG = 5F;
 
     private Transform transform;
     private Runnable preCallback;
@@ -41,6 +55,8 @@ public class UIPropTransform extends UITransform
     private boolean editing;
     private int mode;
     private Axis axis = Axis.X;
+    private Axis axis2;
+    private boolean hotkeyMode;
     private int lastX;
     private int lastY;
     private Transform cache = new Transform();
@@ -48,9 +64,47 @@ public class UIPropTransform extends UITransform
 
     private boolean model;
     private boolean local;
+    private TransformSpace uiSpace;
 
     private UITransformHandler handler;
 
+    private Supplier<GizmoDrag> hotkeyDragSupplier;
+    private final Gizmo.DragContext gizmoDragContext = new Gizmo.DragContext();
+    private final Matrix4f gizmoDragModel = new Matrix4f();
+    private GizmoDrag drag;
+    private final Matrix3f dragWorldBasis = new Matrix3f();
+    private final Matrix3f dragTranslateBasis = new Matrix3f();
+    private final Matrix3f dragScreenInverseJacobian = new Matrix3f();
+    private final Vector3f dragPlaneNormal = new Vector3f();
+    private final Vector3d dragStartHit = new Vector3d();
+    private final Vector3f dragStartTranslate = new Vector3f();
+    private final Vector3f dragStartScale = new Vector3f();
+    private final Vector3f dragStartRotateDeg = new Vector3f();
+    private final Vector3f initialDragRingVec = new Vector3f();
+    private float accumulatedRotateDeg;
+    private final Vector3f dragAxisDir = new Vector3f();
+    private final Vector2f dragScreenCenter = new Vector2f();
+    private float dragLastScreenAngle;
+    private float dragRotateSign = 1F;
+    private boolean dragRotateGizmoSpace;
+    private boolean dragHasStart;
+    private final Vector3f viewLocalAxis = new Vector3f();
+    private final Vector3f trackballRightLocal = new Vector3f();
+    private final Vector3f trackballUpLocal = new Vector3f();
+    private final Vector3f trackballViewLocal = new Vector3f();
+    private Axis trackballAxis = Axis.X;
+    private int trackballLastX;
+    private int trackballLastY;
+    private float trackballAccumX;
+    private float trackballAccumY;
+    private float trackballRollDeg;
+    private final Vector3f arcballViewWorld = new Vector3f();
+    private final Matrix3f arcballParentInverse = new Matrix3f();
+    private final Vector3f arcballStartLocal = new Vector3f();
+    private final Vector3f arcballCurrentLocal = new Vector3f();
+    private final Quaternionf arcballAccum = new Quaternionf();
+    private float arcballRadius;
+    private boolean arcballAnchored;
     private boolean gizmoDrag;
     private final Matrix4f gizmoMvp = new Matrix4f();
     private final Matrix4f gizmoInvMvp = new Matrix4f();
@@ -79,26 +133,49 @@ public class UIPropTransform extends UITransform
     private final Vector3d gizmoAxisNormal = new Vector3d();
     private final Vector2f gizmoP2D = new Vector2f();
     private final Vector2f gizmoP2DNext = new Vector2f();
+    private DragKind dragKind = DragKind.AXIS;
+    private final StringBuilder numericInput = new StringBuilder();
+    private boolean numericActive;
+
+    private UIElement spacesBar;
+    private UIIcon spaceParent;
+    private UIIcon spaceLocal;
+    private UIIcon spaceWorld;
+    private boolean spacesBarBackground;
+
+    private UIIcon mirror;
+    private UIIcon invert;
 
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.local = BBSSettings.transformLocalDefault.get();
+        this.uiSpace = this.getSpace();
+        this.local = this.uiSpace == TransformSpace.LOCAL;
 
-        this.context((menu) ->
+        this.spaceParent = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.setSpace(TransformSpace.PARENT));
+        this.spaceParent.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL);
+        this.spaceLocal = new UIIcon(Icons.MINIMIZE, (b) -> this.setSpace(TransformSpace.LOCAL));
+        this.spaceLocal.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
+        this.spaceWorld = new UIIcon(Icons.GLOBE, (b) -> this.setSpace(TransformSpace.WORLD));
+        this.spaceWorld.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_WORLD);
+
+        this.spacesBar = new UIElement();
+        this.spacesBar.h(UIConstants.CONTROL_HEIGHT).row(0).resize();
+        this.spacesBar.add(this.spaceParent, this.spaceLocal, this.spaceWorld);
+
+        if (this.supportsMirror())
         {
-            menu.action(
-                this.local ? Icons.FULLSCREEN : Icons.MINIMIZE,
-                this.local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL,
-                this::toggleLocal
-            );
+            this.mirror = new UIIcon(Icons.CONVERT, (b) -> this.toggleMirrorEdit());
+            this.mirror.tooltip(UIKeys.TRANSFORMS_MIRROR_EDIT);
+            this.invert = new UIIcon(Icons.REVERSE, (b) -> this.toggleAlternateInvert());
+            this.invert.tooltip(UIKeys.TRANSFORMS_ALTERNATE_INVERT);
 
-            menu.actions.add(0, menu.actions.remove(menu.actions.size() - 1));
-        });
+            this.spacesBar.add(new UIElement(), this.mirror, this.invert);
+        }
 
-        this.iconT.callback = (b) -> this.toggleLocal();
-        this.iconT.hoverColor = Colors.LIGHTEST_GRAY;
-        this.iconT.setEnabled(true);
+        this.prepend(this.spacesBar);
+        this.h(5 * UIConstants.CONTROL_HEIGHT);
+
         this.updateLocalUI();
 
         this.noCulling();
@@ -135,32 +212,184 @@ public class UIPropTransform extends UITransform
         this.model = true;
     }
 
-    public boolean isLocal()
+    public UIPropTransform hotkeyDrag(Supplier<GizmoDrag> supplier)
     {
-        return this.local;
+        this.hotkeyDragSupplier = supplier;
+
+        return this;
     }
 
-    private void toggleLocal()
+    public GizmoDrag getHotkeyDrag()
     {
-        this.local = !this.local;
+        return this.hotkeyDragSupplier == null ? null : this.hotkeyDragSupplier.get();
+    }
 
-        if (!this.local && this.transform != null)
+    public boolean isEditing()
+    {
+        return this.editing;
+    }
+
+    public int getMode()
+    {
+        return this.mode;
+    }
+
+    public Axis getAxis()
+    {
+        return this.axis;
+    }
+
+    public Axis getAxis2()
+    {
+        return this.axis2;
+    }
+
+    public boolean isLocal()
+    {
+        return this.getSpace() == TransformSpace.LOCAL;
+    }
+
+    public boolean isTrackball()
+    {
+        return this.isSphereRotate();
+    }
+
+    public boolean isSphereRotate()
+    {
+        return this.dragKind == DragKind.TRACKBALL || this.dragKind == DragKind.ARCBALL;
+    }
+
+    public boolean isViewRotate()
+    {
+        return this.dragKind == DragKind.VIEW;
+    }
+
+    public Vector3f getInitialDragRingVec()
+    {
+        return this.initialDragRingVec;
+    }
+
+    public float getAccumulatedRotateDeg()
+    {
+        return this.accumulatedRotateDeg;
+    }
+
+    public GizmoDrag getDrag()
+    {
+        return this.drag;
+    }
+
+    public int getDebugLineStencilIndex()
+    {
+        if (!BBSSettings.hideInactiveHandles.get() || !this.editing || this.dragKind == DragKind.SCREEN)
+        {
+            return -1;
+        }
+
+        if (this.axis2 != null)
+        {
+            if ((this.axis == Axis.X && this.axis2 == Axis.Z) || (this.axis == Axis.Z && this.axis2 == Axis.X))
+            {
+                return Gizmo.STENCIL_XZ;
+            }
+
+            if ((this.axis == Axis.X && this.axis2 == Axis.Y) || (this.axis == Axis.Y && this.axis2 == Axis.X))
+            {
+                return Gizmo.STENCIL_XY;
+            }
+
+            if ((this.axis == Axis.Z && this.axis2 == Axis.Y) || (this.axis == Axis.Y && this.axis2 == Axis.Z))
+            {
+                return Gizmo.STENCIL_ZY;
+            }
+        }
+
+        if (this.axis == Axis.X) return Gizmo.STENCIL_X;
+        if (this.axis == Axis.Y) return Gizmo.STENCIL_Y;
+        if (this.axis == Axis.Z) return Gizmo.STENCIL_Z;
+
+        return -1;
+    }
+
+    public UIPropTransform barBackground()
+    {
+        this.spacesBarBackground = true;
+
+        return this;
+    }
+
+    protected boolean supportsMirror()
+    {
+        return false;
+    }
+
+    public boolean isMirrorEdit()
+    {
+        return BBSSettings.poseMirrorEdit.get();
+    }
+
+    private void toggleMirrorEdit()
+    {
+        BBSSettings.poseMirrorEdit.set(!BBSSettings.poseMirrorEdit.get());
+        UIUtils.playClick();
+    }
+
+    public boolean isAlternateInvert()
+    {
+        return BBSSettings.poseAlternateInvert.get();
+    }
+
+    private void toggleAlternateInvert()
+    {
+        BBSSettings.poseAlternateInvert.set(!BBSSettings.poseAlternateInvert.get());
+        UIUtils.playClick();
+    }
+
+    public TransformSpace getSpace()
+    {
+        TransformSpace[] values = TransformSpace.values();
+
+        return values[MathUtils.clamp(BBSSettings.transformSpace.get(), 0, values.length - 1)];
+    }
+
+    private UIIcon activeSpaceIcon()
+    {
+        TransformSpace space = this.getSpace();
+
+        if (space == TransformSpace.LOCAL) return this.spaceLocal;
+        if (space == TransformSpace.WORLD) return this.spaceWorld;
+
+        return this.spaceParent;
+    }
+
+    private void setSpace(TransformSpace space)
+    {
+        BBSSettings.transformSpace.set(space.ordinal());
+
+        if (space == TransformSpace.PARENT && this.transform != null)
         {
             this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
         }
 
+        this.uiSpace = space;
         this.updateLocalUI();
+        UIUtils.playClick();
+    }
+
+    private void toggleLocal()
+    {
+        this.setSpace(this.getSpace().next());
     }
 
     private void updateLocalUI()
     {
+        this.local = this.getSpace() == TransformSpace.LOCAL;
         this.tx.forcedLabel(this.local ? UIKeys.GENERAL_X : null);
         this.ty.forcedLabel(this.local ? UIKeys.GENERAL_Y : null);
         this.tz.forcedLabel(this.local ? UIKeys.GENERAL_Z : null);
         this.tx.relative(this.local);
         this.ty.relative(this.local);
         this.tz.relative(this.local);
-        this.iconT.tooltip(this.local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
     }
 
     private Vector3f calculateLocalVector(double factor, Axis axis)
@@ -193,9 +422,10 @@ public class UIPropTransform extends UITransform
         this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.axis = Axis.X).active(active).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.axis = Axis.Y).active(active).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.axis = Axis.Z).active(active).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.setEditingAxis(Axis.X)).active(active).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.setEditingAxis(Axis.Y)).active(active).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.setEditingAxis(Axis.Z)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_LOCAL, () ->
         {
             this.toggleLocal();
@@ -251,19 +481,140 @@ public class UIPropTransform extends UITransform
 
     public void enableMode(int mode)
     {
-        this.enableMode(mode, null);
+        GizmoDrag drag = this.getHotkeyDrag();
+        boolean ray = BBSSettings.transformHotkeys3dRay.get() && drag != null;
+        HotkeyTarget target = this.nextHotkeyTarget(mode, ray);
+
+        if (target == HotkeyTarget.VIEW)
+        {
+            this.enableViewRotate(drag, true);
+        }
+        else if (target == HotkeyTarget.SPHERE)
+        {
+            this.enableSphereRotate(drag, true);
+        }
+        else if (target == HotkeyTarget.SCREEN)
+        {
+            this.enableScreenTranslate(drag, true);
+        }
+        else
+        {
+            this.enableHotkeyAxis(mode, target.axis, drag);
+        }
     }
 
-    public void enableMode(int mode, Axis axis)
+    private HotkeyTarget currentHotkeyTarget(int mode)
     {
-        this.clearGizmoDrag();
+        if (!this.editing || this.mode != mode)
+        {
+            return null;
+        }
 
-        if (Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]) && axis == null)
+        if (this.dragKind == DragKind.VIEW) return HotkeyTarget.VIEW;
+        if (this.isSphereRotate()) return HotkeyTarget.SPHERE;
+        if (this.dragKind == DragKind.SCREEN) return HotkeyTarget.SCREEN;
+        if (this.axis == Axis.Y) return HotkeyTarget.Y;
+        if (this.axis == Axis.Z) return HotkeyTarget.Z;
+
+        return HotkeyTarget.X;
+    }
+
+    private HotkeyTarget nextHotkeyTarget(int mode, boolean ray)
+    {
+        ValueOrder order = mode == 0 ? BBSSettings.translateHotkeyOrder : (mode == 1 ? BBSSettings.scaleHotkeyOrder : BBSSettings.rotateHotkeyOrder);
+        List<HotkeyTarget> steps = new ArrayList<>();
+
+        for (String token : order.get())
+        {
+            HotkeyTarget target = HotkeyTarget.byToken(token);
+
+            if (target == null || (target.needsRay && !ray))
+            {
+                continue;
+            }
+
+            if (target == HotkeyTarget.SPHERE && !BBSSettings.rotate3dSphere.get())
+            {
+                continue;
+            }
+
+            steps.add(target);
+        }
+
+        if (steps.isEmpty())
+        {
+            return HotkeyTarget.X;
+        }
+
+        int index = steps.indexOf(this.currentHotkeyTarget(mode));
+
+        return steps.get((index + 1) % steps.size());
+    }
+
+    private void enableHotkeyAxis(int mode, Axis axis, GizmoDrag drag)
+    {
+        if (Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
         {
             return;
         }
 
         UIContext context = this.getContext();
+
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.clearGizmoDrag();
+        this.editing = true;
+        this.mode = mode;
+        this.dragKind = DragKind.AXIS;
+        this.axis = axis;
+        this.axis2 = null;
+        this.hotkeyMode = true;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        if (this.useRayDrag())
+        {
+            this.beginRayDrag(context.mouseX, context.mouseY);
+        }
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
+    public void enableMode(int mode, Axis axis)
+    {
+        this.enableMode(mode, axis, null, null);
+    }
+
+    public void enableMode(int mode, Axis axis, Axis axis2, GizmoDrag drag)
+    {
+        DragKind previousKind = this.dragKind;
+
+        this.clearGizmoDrag();
+
+        if (axis == null && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
+        {
+            return;
+        }
+
+        UIContext context = this.getContext();
+
         if (context == null)
         {
             return;
@@ -274,30 +625,312 @@ public class UIPropTransform extends UITransform
             return;
         }
 
+        this.clearNumericInput();
+
         if (this.editing)
         {
-            Axis[] values = Axis.values();
+            if (axis == null)
+            {
+                if (previousKind == DragKind.SCREEN)
+                {
+                    this.axis = Axis.X;
+                }
+                else
+                {
+                    Axis[] values = Axis.values();
 
-            this.axis = values[MathUtils.cycler(this.axis.ordinal() + 1, 0, values.length - 1)];
+                    this.axis = values[MathUtils.cycler(this.axis != null ? this.axis.ordinal() + 1 : 0, 0, values.length - 1)];
+                }
 
+                this.axis2 = null;
+            }
+            else
+            {
+                this.axis = axis;
+                this.axis2 = axis2;
+            }
+
+            this.dragKind = DragKind.AXIS;
+            this.drag = drag;
             this.restore(true);
         }
         else
         {
-            this.axis = axis == null ? Axis.X : axis;
+            if (axis == null && mode == 0 && BBSSettings.transformHotkeys3dRay.get() && drag != null)
+            {
+                this.axis = Axis.X;
+                this.axis2 = Axis.Y;
+                this.dragKind = DragKind.SCREEN;
+            }
+            else
+            {
+                this.axis = axis == null ? Axis.X : axis;
+                this.axis2 = axis2;
+                this.dragKind = DragKind.AXIS;
+            }
+
+            this.drag = drag;
             this.lastX = context.mouseX;
             this.lastY = context.mouseY;
         }
 
         this.editing = true;
         this.mode = mode;
+        this.hotkeyMode = axis == null;
 
         this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        if (this.useRayDrag())
+        {
+            this.beginRayDrag(context.mouseX, context.mouseY);
+        }
+        else if (drag != null && !this.hotkeyMode)
+        {
+            this.beginGizmoDrag(drag);
+        }
 
         if (!this.handler.hasParent())
         {
             context.menu.overlay.add(this.handler);
         }
+    }
+
+    public void enableTrackball(GizmoDrag drag)
+    {
+        this.enableTrackball(drag, false);
+    }
+
+    public void enableTrackball(GizmoDrag drag, boolean hotkeyMode)
+    {
+        UIContext context = this.getContext();
+
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        {
+            return;
+        }
+
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.clearGizmoDrag();
+        this.editing = true;
+        this.mode = 2;
+        this.axis = null;
+        this.axis2 = null;
+        this.dragKind = DragKind.TRACKBALL;
+        this.trackballAxis = Axis.X;
+        this.hotkeyMode = hotkeyMode;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        this.trackballAccumX = 0F;
+        this.trackballAccumY = 0F;
+        this.trackballRollDeg = 0F;
+        this.beginRayRotateTrackball(context.mouseX, context.mouseY);
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
+    public void enableArcball(GizmoDrag drag)
+    {
+        this.enableArcball(drag, false);
+    }
+
+    public void enableArcball(GizmoDrag drag, boolean hotkeyMode)
+    {
+        UIContext context = this.getContext();
+
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        {
+            return;
+        }
+
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.clearGizmoDrag();
+        this.editing = true;
+        this.mode = 2;
+        this.axis = null;
+        this.axis2 = null;
+        this.dragKind = DragKind.ARCBALL;
+        this.trackballAxis = Axis.X;
+        this.hotkeyMode = hotkeyMode;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        this.trackballRollDeg = 0F;
+        this.arcballAccum.identity();
+        this.arcballAnchored = false;
+        this.beginRayRotateArcball(context.mouseX, context.mouseY);
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
+    public void enableViewRotate(GizmoDrag drag)
+    {
+        this.enableViewRotate(drag, false);
+    }
+
+    public void enableViewRotate(GizmoDrag drag, boolean hotkeyMode)
+    {
+        UIContext context = this.getContext();
+
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        {
+            return;
+        }
+
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.clearGizmoDrag();
+        this.editing = true;
+        this.mode = 2;
+        this.axis = null;
+        this.axis2 = null;
+        this.dragKind = DragKind.VIEW;
+        this.hotkeyMode = hotkeyMode;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+        this.beginRayRotateView(context.mouseX, context.mouseY);
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
+    public void enableScreenTranslate(GizmoDrag drag)
+    {
+        this.enableScreenTranslate(drag, false);
+    }
+
+    public void enableScreenTranslate(GizmoDrag drag, boolean hotkeyMode)
+    {
+        UIContext context = this.getContext();
+
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.clearGizmoDrag();
+        this.editing = true;
+        this.mode = 0;
+        this.axis = Axis.X;
+        this.axis2 = Axis.Y;
+        this.dragKind = DragKind.SCREEN;
+        this.hotkeyMode = hotkeyMode;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        if (this.useRayDrag())
+        {
+            this.beginRayDrag(context.mouseX, context.mouseY);
+        }
+        else if (drag != null && !this.hotkeyMode)
+        {
+            this.beginGizmoDrag(drag);
+        }
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
+    private void setEditingAxis(Axis axis)
+    {
+        this.axis = axis;
+        this.axis2 = null;
+        this.dragKind = DragKind.AXIS;
+
+        if (!this.editing)
+        {
+            return;
+        }
+
+        this.restore(true);
+
+        if (this.useRayDrag())
+        {
+            UIContext context = this.getContext();
+
+            if (context != null)
+            {
+                this.beginRayDrag(context.mouseX, context.mouseY);
+            }
+        }
+
+        if (this.numericActive)
+        {
+            this.applyNumericInput();
+        }
+    }
+
+    public void enableSphereRotate(GizmoDrag drag)
+    {
+        this.enableSphereRotate(drag, false);
+    }
+
+    public void enableSphereRotate(GizmoDrag drag, boolean hotkeyMode)
+    {
+        if (BBSSettings.rotate3dSphereMode.get() == 1) this.enableArcball(drag, hotkeyMode);
+        else this.enableTrackball(drag, hotkeyMode);
     }
 
     private Vector3f getValue()
@@ -333,7 +966,10 @@ public class UIPropTransform extends UITransform
     private void disable()
     {
         this.editing = false;
+        this.hotkeyMode = false;
         this.clearGizmoDrag();
+        this.clearNumericInput();
+        Gizmo.INSTANCE.clearTrackedTransform(this);
 
         if (this.handler.hasParent())
         {
@@ -358,6 +994,275 @@ public class UIPropTransform extends UITransform
 
         this.restore(true);
         this.setTransform(this.transform);
+    }
+
+    private void clearNumericInput()
+    {
+        this.numericInput.setLength(0);
+        this.numericActive = false;
+    }
+
+    private void stopNumericInput(UIContext context)
+    {
+        this.clearNumericInput();
+        this.restore(true);
+
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+        this.setTransform(this.transform);
+    }
+
+    private boolean handleNumericInputKey(UIContext context)
+    {
+        if (!this.acceptsNumericInput())
+        {
+            return false;
+        }
+
+        if (this.mode == 2 && this.isSphereRotate())
+        {
+            if (context.isPressed(GLFW.GLFW_KEY_X) || context.isRepeated(GLFW.GLFW_KEY_X))
+            {
+                this.trackballAxis = Axis.X;
+
+                if (this.numericActive)
+                {
+                    this.applyNumericInput();
+                }
+
+                return true;
+            }
+
+            if (context.isPressed(GLFW.GLFW_KEY_Y) || context.isRepeated(GLFW.GLFW_KEY_Y))
+            {
+                this.trackballAxis = Axis.Y;
+
+                if (this.numericActive)
+                {
+                    this.applyNumericInput();
+                }
+
+                return true;
+            }
+        }
+
+        if (context.isPressed(GLFW.GLFW_KEY_BACKSPACE) || context.isRepeated(GLFW.GLFW_KEY_BACKSPACE))
+        {
+            if (!this.numericActive)
+            {
+                return false;
+            }
+
+            if (this.numericInput.length() > 0)
+            {
+                this.numericInput.deleteCharAt(this.numericInput.length() - 1);
+            }
+
+            if (this.numericInput.length() == 0)
+            {
+                this.stopNumericInput(context);
+            }
+            else
+            {
+                this.applyNumericInput();
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isNumericInputCharacter(char character)
+    {
+        return (character >= '0' && character <= '9')
+            || character == '.'
+            || character == '-'
+            || character == '+'
+            || character == '*'
+            || character == '/'
+            || character == '('
+            || character == ')';
+    }
+
+    private boolean acceptsNumericInput()
+    {
+        if (!this.editing || !this.hotkeyMode || this.transform == null)
+        {
+            return false;
+        }
+
+        if (this.dragKind == DragKind.SCREEN)
+        {
+            return false;
+        }
+
+        return this.mode != 2 || this.dragKind != DragKind.AXIS || this.axis != null;
+    }
+
+    private Double evaluateNumericInput()
+    {
+        String text = this.numericInput.toString().trim();
+
+        if (text.isEmpty())
+        {
+            return null;
+        }
+
+        try
+        {
+            MathBuilder builder = new MathBuilder();
+
+            return builder.parse(text).get().doubleValue();
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    private String numericInputDisplay()
+    {
+        return this.numericInput.length() == 0 ? "0" : this.numericInput.toString();
+    }
+
+    private void applyNumericInput()
+    {
+        if (this.transform == null)
+        {
+            return;
+        }
+
+        Double value = this.evaluateNumericInput();
+
+        if (value == null || !Double.isFinite(value))
+        {
+            return;
+        }
+
+        if (this.mode == 0)
+        {
+            this.applyNumericTranslate(value);
+        }
+        else if (this.mode == 1)
+        {
+            this.applyNumericScale(value);
+        }
+        else if (this.mode == 2)
+        {
+            if (this.dragKind == DragKind.VIEW)
+            {
+                this.applyNumericAxisRotation(value, this.viewLocalAxis);
+            }
+            else if (this.isSphereRotate())
+            {
+                this.applyNumericAxisRotation(value, this.trackballAxis == Axis.Y ? this.trackballRightLocal : this.trackballUpLocal);
+            }
+            else
+            {
+                this.applyNumericRotate(value);
+            }
+        }
+
+        this.setTransform(this.transform);
+    }
+
+    private void applyNumericTranslate(double value)
+    {
+        if (this.local)
+        {
+            Vector3f offset = this.calculateLocalVector(value, this.axis);
+
+            if (this.axis2 != null)
+            {
+                offset.add(this.calculateLocalVector(value, this.axis2));
+            }
+
+            this.setT(null,
+                this.cache.translate.x + offset.x,
+                this.cache.translate.y + offset.y,
+                this.cache.translate.z + offset.z
+            );
+
+            return;
+        }
+
+        Vector3f translate = new Vector3f(this.cache.translate);
+
+        if (this.axis == Axis.X || this.axis2 == Axis.X) translate.x = this.cache.translate.x + (float) (double) value;
+        if (this.axis == Axis.Y || this.axis2 == Axis.Y) translate.y = this.cache.translate.y + (float) (double) value;
+        if (this.axis == Axis.Z || this.axis2 == Axis.Z) translate.z = this.cache.translate.z + (float) (double) value;
+
+        this.setT(null, translate.x, translate.y, translate.z);
+    }
+
+    private void applyNumericScale(double value)
+    {
+        boolean all = Window.isCtrlPressed();
+        Vector3f scale = new Vector3f(this.cache.scale);
+
+        if (all || this.axis == Axis.X || this.axis2 == Axis.X) scale.x = (float) (this.cache.scale.x * value);
+        if (all || this.axis == Axis.Y || this.axis2 == Axis.Y) scale.y = (float) (this.cache.scale.y * value);
+        if (all || this.axis == Axis.Z || this.axis2 == Axis.Z) scale.z = (float) (this.cache.scale.z * value);
+
+        this.setS(null, scale.x, scale.y, scale.z);
+    }
+
+    private void applyNumericRotate(double value)
+    {
+        boolean gizmoSpace = this.local && BBSSettings.gizmos.get();
+        Vector3f source = gizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        float x = MathUtils.toDeg(source.x);
+        float y = MathUtils.toDeg(source.y);
+        float z = MathUtils.toDeg(source.z);
+
+        if (this.axis == Axis.X || this.axis2 == Axis.X) x += value;
+        if (this.axis == Axis.Y || this.axis2 == Axis.Y) y += value;
+        if (this.axis == Axis.Z || this.axis2 == Axis.Z) z += value;
+
+        if (gizmoSpace) this.setR2(null, x, y, z);
+        else this.setR(null, x, y, z);
+    }
+
+    private void applyNumericAxisRotation(double degrees, Vector3f localAxis)
+    {
+        if (localAxis.lengthSquared() < 1.0E-8F)
+        {
+            return;
+        }
+
+        boolean gizmoSpace = this.dragRotateGizmoSpace;
+        Vector3f source = gizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        Vector3f euler = new Matrix3f()
+            .rotation(MathUtils.toRad((float) degrees), localAxis)
+            .mul(new Matrix3f().rotationZ(source.z).rotateY(source.y).rotateX(source.x))
+            .getEulerAnglesZYX(new Vector3f());
+        float x = unwrapDeg(MathUtils.toDeg(euler.x), MathUtils.toDeg(source.x));
+        float y = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(source.y));
+        float z = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(source.z));
+
+        if (gizmoSpace) this.setR2(null, x, y, z);
+        else this.setR(null, x, y, z);
+    }
+
+    private boolean shouldSnap(int mode)
+    {
+        return this.editing && this.mode == mode && Window.isCtrlPressed() && !this.numericActive;
+    }
+
+    private static double snap(double value, float step)
+    {
+        return step <= 0F ? value : Math.round(value / step) * (double) step;
+    }
+
+    private double snapGizmoValue(double value)
+    {
+        if (this.dragKind != DragKind.AXIS || !this.shouldSnap(2))
+        {
+            return value;
+        }
+
+        return snap(value, BBSSettings.snapRotate.get());
     }
 
     @Override
@@ -460,15 +1365,54 @@ public class UIPropTransform extends UITransform
 
                 return true;
             }
+            else if (this.handleNumericInputKey(context))
+            {
+                return true;
+            }
         }
 
         return super.subKeyPressed(context);
     }
 
     @Override
+    protected boolean subTextInput(UIContext context)
+    {
+        if (!this.acceptsNumericInput())
+        {
+            return super.subTextInput(context);
+        }
+
+        char character = context.getInputCharacter();
+
+        if (!this.isNumericInputCharacter(character))
+        {
+            return super.subTextInput(context);
+        }
+
+        this.numericInput.append(character);
+        this.numericActive = true;
+        this.applyNumericInput();
+
+        return true;
+    }
+
+    @Override
     public void render(UIContext context)
     {
-        if (this.editing && this.checker.isTime())
+        TransformSpace currentSpace = this.getSpace();
+
+        if (currentSpace != this.uiSpace)
+        {
+            if (currentSpace == TransformSpace.PARENT && this.transform != null)
+            {
+                this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
+            }
+
+            this.uiSpace = currentSpace;
+            this.updateLocalUI();
+        }
+
+        if (this.editing && !this.numericActive && this.checker.isTime())
         {
             /* UIContext.mouseX can't be used because when cursor is outside of window
              * its position stops being updated. That's why it has to be queried manually
@@ -495,6 +1439,8 @@ public class UIPropTransform extends UITransform
 
                 this.lastX = context.menu.width - (int) (borderPadding / fx);
                 this.checker.mark();
+
+                if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
             else if (rawX >= w - border)
             {
@@ -502,6 +1448,8 @@ public class UIPropTransform extends UITransform
 
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();
+
+                if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
             else if (rawY <= border)
             {
@@ -509,6 +1457,8 @@ public class UIPropTransform extends UITransform
 
                 this.lastY = context.menu.height - (int) (borderPadding / fy);
                 this.checker.mark();
+
+                if (this.useRayDrag()) this.beginRayDrag(context.mouseX, this.lastY);
             }
             else if (rawY >= h - border)
             {
@@ -516,6 +1466,8 @@ public class UIPropTransform extends UITransform
 
                 this.lastY = (int) (borderPadding / fy);
                 this.checker.mark();
+
+                if (this.useRayDrag()) this.beginRayDrag(context.mouseX, this.lastY);
             }
             else
             {
@@ -526,7 +1478,12 @@ public class UIPropTransform extends UITransform
                 UITrackpad reference = this.mode == 0 ? this.tx : (this.mode == 1 ? this.sx : this.rx);
                 float factor = (float) reference.getValueModifier();
 
-                if (this.mode == 0 && this.applyGizmoTranslate(dx, dy, factor))
+                if (this.useRayDrag())
+                {
+                    this.applyRayDrag(context.mouseX, context.mouseY);
+                    this.setTransform(this.transform);
+                }
+                else if (this.mode == 0 && this.applyGizmoTranslate(dx, dy, factor))
                 {
                     this.setTransform(this.transform);
                 }
@@ -542,7 +1499,23 @@ public class UIPropTransform extends UITransform
                 {
                     Vector3f vector3f = this.calculateLocalVector(factor * dx, this.axis);
 
-                    this.setT(null, vector.x + vector3f.x, vector.y + vector3f.y, vector.z + vector3f.z);
+                    if (this.axis2 != null)
+                    {
+                        vector3f.add(this.calculateLocalVector(factor * dx, this.axis2));
+                    }
+
+                    float x = vector.x + vector3f.x;
+                    float y = vector.y + vector3f.y;
+                    float z = vector.z + vector3f.z;
+
+                    if (this.shouldSnap(0))
+                    {
+                        x = (float) snap(x, BBSSettings.snapTranslate.get());
+                        y = (float) snap(y, BBSSettings.snapTranslate.get());
+                        z = (float) snap(z, BBSSettings.snapTranslate.get());
+                    }
+
+                    this.setT(null, x, y, z);
                     this.setTransform(this.transform);
                 }
                 else
@@ -557,6 +1530,20 @@ public class UIPropTransform extends UITransform
                     if (this.axis == Axis.X || all) vector3f.x += factor * dx;
                     if (this.axis == Axis.Y || all) vector3f.y += factor * dx;
                     if (this.axis == Axis.Z || all) vector3f.z += factor * dx;
+                    if (!all && this.axis2 == Axis.X) vector3f.x += factor * dx;
+                    if (!all && this.axis2 == Axis.Y) vector3f.y += factor * dx;
+                    if (!all && this.axis2 == Axis.Z) vector3f.z += factor * dx;
+
+                    if (this.shouldSnap(this.mode))
+                    {
+                        float step = this.mode == 0 ? BBSSettings.snapTranslate.get()
+                            : this.mode == 1 ? BBSSettings.snapScale.get()
+                            : BBSSettings.snapRotate.get();
+
+                        vector3f.x = (float) snap(vector3f.x, step);
+                        vector3f.y = (float) snap(vector3f.y, step);
+                        vector3f.z = (float) snap(vector3f.z, step);
+                    }
 
                     if (this.mode == 0) this.setT(null, vector3f.x, vector3f.y, vector3f.z);
                     if (this.mode == 1) this.setS(null, vector3f.x, vector3f.y, vector3f.z);
@@ -574,6 +1561,23 @@ public class UIPropTransform extends UITransform
             }
         }
 
+        if (this.spacesBarBackground)
+        {
+            this.spacesBar.area.render(context.batcher, Colors.A50);
+        }
+
+        UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area, Direction.BOTTOM);
+
+        if (this.mirror != null && BBSSettings.poseMirrorEdit.get())
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area, Direction.BOTTOM);
+        }
+
+        if (this.invert != null && BBSSettings.poseAlternateInvert.get())
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area, Direction.BOTTOM);
+        }
+
         super.render(context);
 
         if (this.editing)
@@ -584,6 +1588,16 @@ public class UIPropTransform extends UITransform
             int y = this.area.my(font.getHeight());
 
             context.batcher.textCard(label, x, y, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
+
+            if (this.numericActive)
+            {
+                String numericLabel = this.numericInputDisplay();
+                int nx = this.area.mx(font.getWidth(numericLabel));
+                int ny = y + font.getHeight() + 8;
+
+                context.batcher.textCard(numericLabel, nx, ny, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
+                context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, Colors.WHITE, Colors.A50);
+            }
         }
     }
 
@@ -644,10 +1658,872 @@ public class UIPropTransform extends UITransform
         this.gizmoDrag = true;
     }
 
+    public void beginGizmoDrag(GizmoDrag drag)
+    {
+        if (drag == null)
+        {
+            this.clearGizmoDrag();
+
+            return;
+        }
+
+        this.drag = drag;
+
+        UIContext context = this.getContext();
+
+        if (context != null)
+        {
+            this.beginRayDrag(context.mouseX, context.mouseY);
+        }
+    }
+
     private void clearGizmoDrag()
     {
         this.gizmoDrag = false;
         this.gizmoInvReady = false;
+        this.drag = null;
+        this.dragHasStart = false;
+        this.arcballAnchored = false;
+        this.axis2 = null;
+        this.dragKind = DragKind.AXIS;
+    }
+
+    private boolean useRayDrag()
+    {
+        if (this.hotkeyMode && !BBSSettings.transformHotkeys3dRay.get())
+        {
+            return false;
+        }
+
+        return this.editing
+            && this.transform != null
+            && this.drag != null
+            && (this.mode != 2 || this.axis2 == null || this.isSphereRotate());
+    }
+
+    private boolean isScreenTranslate()
+    {
+        return this.mode == 0 && this.dragKind == DragKind.SCREEN;
+    }
+
+    private void beginRayDrag(int mouseX, int mouseY)
+    {
+        if (this.drag == null || this.transform == null)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        if (this.mode == 0)
+        {
+            this.beginRayTranslate(mouseX, mouseY);
+        }
+        else if (this.mode == 1)
+        {
+            this.beginRayScale(mouseX, mouseY);
+        }
+        else if (this.mode == 2)
+        {
+            if (this.dragKind == DragKind.TRACKBALL) this.beginRayRotateTrackball(mouseX, mouseY);
+            else if (this.dragKind == DragKind.ARCBALL) this.beginRayRotateArcball(mouseX, mouseY);
+            else if (this.dragKind == DragKind.VIEW) this.beginRayRotateView(mouseX, mouseY);
+            else this.beginRayRotate(mouseX, mouseY);
+        }
+        else
+        {
+            this.dragHasStart = false;
+        }
+    }
+
+    private void applyRayDrag(int mouseX, int mouseY)
+    {
+        if (!this.dragHasStart || this.transform == null)
+        {
+            return;
+        }
+
+        if (this.mode == 2)
+        {
+            if (this.dragKind == DragKind.TRACKBALL) this.applyRayRotateTrackball(mouseX, mouseY);
+            else if (this.dragKind == DragKind.ARCBALL) this.applyRayRotateArcball(mouseX, mouseY);
+            else if (this.dragKind == DragKind.VIEW) this.applyRayRotateView(mouseX, mouseY);
+            else this.applyScreenRotate(mouseX, mouseY);
+
+            return;
+        }
+
+        Vector3d hit = new Vector3d();
+
+        if (!this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, hit))
+        {
+            return;
+        }
+
+        if (this.mode == 0)
+        {
+            this.applyRayTranslate(hit);
+        }
+        else if (this.mode == 1)
+        {
+            this.applyRayScale(hit);
+        }
+    }
+
+    private void beginRayTranslate(int mouseX, int mouseY)
+    {
+        if (this.isScreenTranslate())
+        {
+            this.beginRayTranslateScreen(mouseX, mouseY);
+
+            return;
+        }
+
+        Matrix3f jacobian = new Matrix3f(this.drag.translateJacobian);
+
+        if (this.local)
+        {
+            Matrix3f rotation = new Matrix3f()
+                .rotateX(this.model ? MathUtils.PI : 0F)
+                .mul(this.transform.createRotationMatrix());
+
+            this.dragTranslateBasis.set(rotation);
+            this.dragWorldBasis.set(jacobian).mul(rotation);
+        }
+        else
+        {
+            Matrix3f inverse = new Matrix3f(jacobian);
+
+            if (Math.abs(inverse.determinant()) < 1.0E-8F) inverse.identity();
+            else inverse.invert();
+
+            this.dragTranslateBasis.set(inverse).mul(this.drag.gizmoWorldAxes);
+            this.dragWorldBasis.set(this.drag.gizmoWorldAxes);
+        }
+
+        if (this.axis2 == null) this.drag.planeNormalForAxis(mouseX, mouseY, this.dragWorldBasis, this.axis, this.dragPlaneNormal);
+        else this.drag.planeNormalForPlane(this.dragWorldBasis, this.axis, this.axis2, this.dragPlaneNormal);
+
+        this.dragStartTranslate.set(this.transform.translate);
+        this.dragHasStart = this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit);
+    }
+
+    private void beginRayTranslateScreen(int mouseX, int mouseY)
+    {
+        Matrix3f invView = this.drag.view.get3x3(new Matrix3f());
+
+        if (Math.abs(invView.determinant()) < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        invView.invert();
+
+        Vector3f right = invView.getColumn(0, new Vector3f());
+        Vector3f up = invView.getColumn(1, new Vector3f());
+        Vector3f forward = invView.getColumn(2, new Vector3f());
+
+        if (right.lengthSquared() < 1.0E-8F || up.lengthSquared() < 1.0E-8F || forward.lengthSquared() < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        right.normalize();
+        up.normalize();
+        forward.normalize();
+
+        Matrix3f cameraBasis = new Matrix3f();
+
+        cameraBasis.setColumn(0, right);
+        cameraBasis.setColumn(1, up);
+        cameraBasis.setColumn(2, forward);
+
+        Matrix3f inverse = new Matrix3f(this.drag.translateJacobian);
+
+        if (Math.abs(inverse.determinant()) < 1.0E-8F) inverse.identity();
+        else inverse.invert();
+
+        this.dragTranslateBasis.set(inverse).mul(cameraBasis);
+        this.dragScreenInverseJacobian.set(inverse);
+        this.dragWorldBasis.set(cameraBasis);
+        this.dragPlaneNormal.set(forward);
+
+        this.dragStartTranslate.set(this.transform.translate);
+        this.dragHasStart = this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit);
+    }
+
+    private void applyRayTranslate(Vector3d hit)
+    {
+        Vector3f delta = new Vector3f(
+            (float) (hit.x - this.dragStartHit.x),
+            (float) (hit.y - this.dragStartHit.y),
+            (float) (hit.z - this.dragStartHit.z)
+        );
+        Vector3f result = new Vector3f();
+
+        this.accumulateAlongAxis(delta, this.axis, result);
+
+        if (this.axis2 != null)
+        {
+            this.accumulateAlongAxis(delta, this.axis2, result);
+        }
+
+        float x = this.dragStartTranslate.x + result.x;
+        float y = this.dragStartTranslate.y + result.y;
+        float z = this.dragStartTranslate.z + result.z;
+
+        if (this.shouldSnap(0))
+        {
+            x = (float) snap(x, BBSSettings.snapTranslate.get());
+            y = (float) snap(y, BBSSettings.snapTranslate.get());
+            z = (float) snap(z, BBSSettings.snapTranslate.get());
+        }
+
+        this.setT(null, x, y, z);
+    }
+
+    private void accumulateAlongAxis(Vector3f delta, Axis axis, Vector3f out)
+    {
+        Vector3f worldAxis = this.dragWorldBasis.getColumn(axis.ordinal(), new Vector3f());
+        float lenSq = worldAxis.lengthSquared();
+
+        if (lenSq < 1.0E-12F)
+        {
+            return;
+        }
+
+        float t = worldAxis.dot(delta) / lenSq;
+        Vector3f translateAxis = this.dragTranslateBasis.getColumn(axis.ordinal(), new Vector3f());
+
+        out.add(translateAxis.mul(t));
+    }
+
+    private void beginRayScale(int mouseX, int mouseY)
+    {
+        this.dragWorldBasis.set(this.drag.gizmoWorldAxes);
+
+        if (this.axis2 == null) this.drag.planeNormalForAxis(mouseX, mouseY, this.dragWorldBasis, this.axis, this.dragPlaneNormal);
+        else this.drag.planeNormalForPlane(this.dragWorldBasis, this.axis, this.axis2, this.dragPlaneNormal);
+
+        if (!this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit))
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.dragStartScale.set(this.transform.scale);
+        this.dragHasStart = true;
+    }
+
+    private void applyRayScale(Vector3d hit)
+    {
+        boolean all = Window.isCtrlPressed();
+        Vector3f scale = new Vector3f(this.dragStartScale);
+
+        this.applyRayScaleAxis(hit, this.axis, all, scale);
+
+        if (this.axis2 != null)
+        {
+            this.applyRayScaleAxis(hit, this.axis2, all, scale);
+        }
+
+        if (this.shouldSnap(1))
+        {
+            scale.x = (float) snap(scale.x, BBSSettings.snapScale.get());
+            scale.y = (float) snap(scale.y, BBSSettings.snapScale.get());
+            scale.z = (float) snap(scale.z, BBSSettings.snapScale.get());
+        }
+
+        this.setS(null, scale.x, scale.y, scale.z);
+    }
+
+    private void applyRayScaleAxis(Vector3d hit, Axis currentAxis, boolean all, Vector3f scale)
+    {
+        Vector3f axisDir = this.dragWorldBasis.getColumn(currentAxis.ordinal(), new Vector3f());
+
+        if (axisDir.lengthSquared() < 1.0E-8F)
+        {
+            return;
+        }
+
+        axisDir.normalize();
+
+        float currentProj = (float) ((hit.x - this.drag.gizmoOrigin.x) * axisDir.x
+            + (hit.y - this.drag.gizmoOrigin.y) * axisDir.y
+            + (hit.z - this.drag.gizmoOrigin.z) * axisDir.z);
+        float startProj = (float) ((this.dragStartHit.x - this.drag.gizmoOrigin.x) * axisDir.x
+            + (this.dragStartHit.y - this.drag.gizmoOrigin.y) * axisDir.y
+            + (this.dragStartHit.z - this.drag.gizmoOrigin.z) * axisDir.z);
+        float delta = currentProj - startProj;
+
+        if (Math.abs(startProj) < 1.0E-4F)
+        {
+            if (all || currentAxis == Axis.X) scale.x += delta;
+            if (all || currentAxis == Axis.Y) scale.y += delta;
+            if (all || currentAxis == Axis.Z) scale.z += delta;
+        }
+        else
+        {
+            float ratio = currentProj / startProj;
+
+            if (all || currentAxis == Axis.X) scale.x *= ratio;
+            if (all || currentAxis == Axis.Y) scale.y *= ratio;
+            if (all || currentAxis == Axis.Z) scale.z *= ratio;
+        }
+    }
+
+    private void beginRayRotate(int mouseX, int mouseY)
+    {
+        if (this.axis == null)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        Vector3f axisDir = this.drag.rotateAxes.getColumn(this.axis.ordinal(), new Vector3f());
+
+        if (axisDir.lengthSquared() < 1.0E-8F || !this.drag.projectToScreen(this.drag.gizmoOrigin, this.dragScreenCenter))
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        axisDir.normalize();
+        this.dragAxisDir.set(axisDir);
+        this.dragLastScreenAngle = this.screenAngle(mouseX, mouseY);
+
+        Vector3f intoScreen = new Vector3f(
+            (float) (this.drag.gizmoOrigin.x - this.drag.cameraOrigin.x),
+            (float) (this.drag.gizmoOrigin.y - this.drag.cameraOrigin.y),
+            (float) (this.drag.gizmoOrigin.z - this.drag.cameraOrigin.z)
+        );
+
+        this.dragRotateSign = Math.signum(axisDir.dot(intoScreen));
+
+        if (this.dragRotateSign == 0F)
+        {
+            this.dragRotateSign = 1F;
+        }
+
+        this.initialDragRingVec.set(this.computeStartRingVec(mouseX, mouseY, axisDir));
+        this.accumulatedRotateDeg = 0F;
+        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
+        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+
+        this.dragStartRotateDeg.set(
+            MathUtils.toDeg(source.x),
+            MathUtils.toDeg(source.y),
+            MathUtils.toDeg(source.z)
+        );
+        this.dragHasStart = true;
+    }
+
+    private void applyScreenRotate(int mouseX, int mouseY)
+    {
+        float current = this.screenAngle(mouseX, mouseY);
+        float delta = current - this.dragLastScreenAngle;
+
+        if (delta > MathUtils.PI) delta -= MathUtils.PI * 2F;
+        else if (delta < -MathUtils.PI) delta += MathUtils.PI * 2F;
+
+        this.dragLastScreenAngle = current;
+
+        float angleDeg = MathUtils.toDeg(delta) * this.dragRotateSign;
+        this.accumulatedRotateDeg += angleDeg;
+        float x = this.dragStartRotateDeg.x;
+        float y = this.dragStartRotateDeg.y;
+        float z = this.dragStartRotateDeg.z;
+
+        if (this.axis == Axis.X) x += angleDeg;
+        else if (this.axis == Axis.Y) y += angleDeg;
+        else if (this.axis == Axis.Z) z += angleDeg;
+
+        this.dragStartRotateDeg.set(x, y, z);
+
+        if (this.axis != null)
+        {
+            switch (this.axis)
+            {
+                case X: x = (float) this.snapGizmoValue(x); break;
+                case Y: y = (float) this.snapGizmoValue(y); break;
+                case Z: z = (float) this.snapGizmoValue(z); break;
+            }
+        }
+
+        if (this.dragRotateGizmoSpace) this.setR2(null, x, y, z);
+        else this.setR(null, x, y, z);
+    }
+
+    private void beginRayRotateView(int mouseX, int mouseY)
+    {
+        if (this.drag == null)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        Vector3f viewAxis = new Vector3f(
+            (float) (this.drag.cameraOrigin.x - this.drag.gizmoOrigin.x),
+            (float) (this.drag.cameraOrigin.y - this.drag.gizmoOrigin.y),
+            (float) (this.drag.cameraOrigin.z - this.drag.gizmoOrigin.z)
+        );
+
+        if (viewAxis.lengthSquared() < 1.0E-8F || !this.drag.projectToScreen(this.drag.gizmoOrigin, this.dragScreenCenter))
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.dragAxisDir.set(viewAxis.normalize());
+        this.dragLastScreenAngle = this.screenAngle(mouseX, mouseY);
+        this.dragRotateSign = -1F;
+        this.accumulatedRotateDeg = 0F;
+        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
+
+        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Matrix3f parentInverse = this.computeParentInverse(source);
+
+        if (parentInverse == null)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        parentInverse.transform(this.dragAxisDir, this.viewLocalAxis);
+
+        if (this.viewLocalAxis.lengthSquared() < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.viewLocalAxis.normalize();
+        this.dragHasStart = true;
+    }
+
+    private void applyRayRotateView(int mouseX, int mouseY)
+    {
+        float current = this.screenAngle(mouseX, mouseY);
+        float delta = current - this.dragLastScreenAngle;
+
+        if (delta > MathUtils.PI) delta -= MathUtils.PI * 2F;
+        else if (delta < -MathUtils.PI) delta += MathUtils.PI * 2F;
+
+        this.dragLastScreenAngle = current;
+        float angle = delta * this.dragRotateSign;
+
+        if (angle == 0F)
+        {
+            return;
+        }
+
+        this.accumulatedRotateDeg += MathUtils.toDeg(angle);
+        this.applyAxisRotationRadians(angle, this.viewLocalAxis);
+    }
+
+    private void beginRayRotateTrackball(int mouseX, int mouseY)
+    {
+        if (this.drag == null)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
+        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        Matrix3f parentInverse = this.computeParentInverse(source);
+        Matrix3f invView = this.drag.view.get3x3(new Matrix3f());
+
+        if (parentInverse == null || Math.abs(invView.determinant()) < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        invView.invert();
+        parentInverse.transform(invView.getColumn(0, new Vector3f()).normalize(), this.trackballRightLocal);
+        parentInverse.transform(invView.getColumn(1, new Vector3f()).normalize(), this.trackballUpLocal);
+        parentInverse.transform(invView.getColumn(2, new Vector3f()).normalize(), this.trackballViewLocal);
+
+        if (this.trackballRightLocal.lengthSquared() < 1.0E-8F || this.trackballUpLocal.lengthSquared() < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.trackballRightLocal.normalize();
+        this.trackballUpLocal.normalize();
+        this.trackballViewLocal.normalize();
+        this.trackballLastX = mouseX;
+        this.trackballLastY = mouseY;
+        this.dragHasStart = true;
+    }
+
+    private void applyRayRotateTrackball(int mouseX, int mouseY)
+    {
+        int dx = mouseX - this.trackballLastX;
+        int dy = mouseY - this.trackballLastY;
+
+        this.trackballLastX = mouseX;
+        this.trackballLastY = mouseY;
+
+        if (dx == 0 && dy == 0)
+        {
+            return;
+        }
+
+        this.trackballAccumX += dx;
+        this.trackballAccumY += dy;
+        this.updateTrackballRotation();
+    }
+
+    private void updateTrackballRotation()
+    {
+        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+        Matrix3f startRotation = new Matrix3f()
+            .rotationZ(source.z)
+            .rotateY(source.y)
+            .rotateX(source.x);
+        float sensitivity = BBSSettings.trackballSensitivity.get();
+        float yaw = MathUtils.toRad(this.trackballAccumX * sensitivity);
+        float pitch = MathUtils.toRad(this.trackballAccumY * sensitivity);
+        float roll = MathUtils.toRad(this.trackballRollDeg);
+        Vector3f euler = new Matrix3f()
+            .rotation(roll, this.trackballViewLocal)
+            .rotate(yaw, this.trackballUpLocal.x, this.trackballUpLocal.y, this.trackballUpLocal.z)
+            .rotate(pitch, this.trackballRightLocal.x, this.trackballRightLocal.y, this.trackballRightLocal.z)
+            .mul(startRotation)
+            .getEulerAnglesZYX(new Vector3f());
+        Vector3f live = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        float x = unwrapDeg(MathUtils.toDeg(euler.x), MathUtils.toDeg(live.x));
+        float y = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(live.y));
+        float z = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(live.z));
+
+        if (this.dragRotateGizmoSpace) this.setR2(null, x, y, z);
+        else this.setR(null, x, y, z);
+    }
+
+    private float getSphereWorldRadius()
+    {
+        if (this.drag == null)
+        {
+            return 0F;
+        }
+
+        double dx = this.drag.gizmoOrigin.x - this.drag.cameraOrigin.x;
+        double dy = this.drag.gizmoOrigin.y - this.drag.cameraOrigin.y;
+        double dz = this.drag.gizmoOrigin.z - this.drag.cameraOrigin.z;
+        float distance = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        return 0.22F * BBSSettings.axesScale.get() * BBSSettings.getAxesDistanceScale(distance);
+    }
+
+    private void beginRayRotateArcball(int mouseX, int mouseY)
+    {
+        if (this.arcballAnchored)
+        {
+            this.arcballAccum.premul(new Quaternionf().rotationTo(this.arcballStartLocal, this.arcballCurrentLocal));
+            this.arcballAnchored = false;
+        }
+
+        Matrix3f parentInverse = this.computeParentInverse(this.cache.rotate);
+        float radius = this.getSphereWorldRadius();
+
+        if (parentInverse == null || radius <= 0F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        Vector3f view = new Vector3f(
+            (float) (this.drag.cameraOrigin.x - this.drag.gizmoOrigin.x),
+            (float) (this.drag.cameraOrigin.y - this.drag.gizmoOrigin.y),
+            (float) (this.drag.cameraOrigin.z - this.drag.gizmoOrigin.z)
+        );
+
+        if (view.lengthSquared() < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.arcballViewWorld.set(view.normalize());
+        this.arcballRadius = radius;
+        this.arcballParentInverse.set(parentInverse);
+
+        Matrix3f invView = this.drag.view.get3x3(new Matrix3f());
+
+        if (Math.abs(invView.determinant()) < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        invView.invert();
+        parentInverse.transform(invView.getColumn(0, new Vector3f()).normalize(), this.trackballRightLocal);
+        parentInverse.transform(invView.getColumn(1, new Vector3f()).normalize(), this.trackballUpLocal);
+        parentInverse.transform(invView.getColumn(2, new Vector3f()).normalize(), this.trackballViewLocal);
+
+        if (this.trackballRightLocal.lengthSquared() < 1.0E-8F || this.trackballUpLocal.lengthSquared() < 1.0E-8F)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.trackballRightLocal.normalize();
+        this.trackballUpLocal.normalize();
+        this.trackballViewLocal.normalize();
+
+        Vector3f grab = this.mapArcball(mouseX, mouseY, new Vector3f());
+
+        if (grab == null)
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        this.arcballParentInverse.transform(grab, this.arcballStartLocal).normalize();
+        this.arcballCurrentLocal.set(this.arcballStartLocal);
+        this.arcballAnchored = true;
+        this.dragHasStart = true;
+    }
+
+    private Vector3f mapArcball(int mouseX, int mouseY, Vector3f out)
+    {
+        Vector3d hit = new Vector3d();
+
+        if (!this.drag.intersectPlane(mouseX, mouseY, this.arcballViewWorld, hit))
+        {
+            return null;
+        }
+
+        float px = (float) (hit.x - this.drag.gizmoOrigin.x);
+        float py = (float) (hit.y - this.drag.gizmoOrigin.y);
+        float pz = (float) (hit.z - this.drag.gizmoOrigin.z);
+        float r = this.arcballRadius;
+        float dSq = px * px + py * py + pz * pz;
+        float z = dSq < r * r / 2F
+            ? (float) Math.sqrt(r * r - dSq)
+            : r * r / (2F * (float) Math.sqrt(dSq));
+
+        out.set(this.arcballViewWorld).mul(z).add(px, py, pz);
+
+        return out.normalize();
+    }
+
+    private void applyRayRotateArcball(int mouseX, int mouseY)
+    {
+        Vector3f current = this.mapArcball(mouseX, mouseY, new Vector3f());
+
+        if (current == null)
+        {
+            return;
+        }
+
+        this.arcballParentInverse.transform(current, this.arcballCurrentLocal).normalize();
+        this.updateArcballRotation();
+    }
+
+    private void updateArcballRotation()
+    {
+        Vector3f source = this.cache.rotate;
+        Matrix3f startRotation = new Matrix3f()
+            .rotationZ(source.z)
+            .rotateY(source.y)
+            .rotateX(source.x);
+        Quaternionf arc = new Quaternionf()
+            .rotationTo(this.arcballStartLocal, this.arcballCurrentLocal)
+            .mul(this.arcballAccum);
+        Vector3f euler = new Matrix3f()
+            .rotation(MathUtils.toRad(this.trackballRollDeg), this.trackballViewLocal)
+            .rotate(arc)
+            .mul(startRotation)
+            .getEulerAnglesZYX(new Vector3f());
+        Vector3f live = this.transform.rotate;
+        float x = unwrapDeg(MathUtils.toDeg(euler.x), MathUtils.toDeg(live.x));
+        float y = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(live.y));
+        float z = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(live.z));
+
+        this.setR(null, x, y, z);
+    }
+
+    private void applyAxisRotationRadians(float radians, Vector3f localAxis)
+    {
+        if (localAxis.lengthSquared() < 1.0E-8F)
+        {
+            return;
+        }
+
+        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+        Vector3f euler = new Matrix3f()
+            .rotation(radians, localAxis)
+            .mul(new Matrix3f().rotationZ(source.z).rotateY(source.y).rotateX(source.x))
+            .getEulerAnglesZYX(new Vector3f());
+        float x = unwrapDeg(MathUtils.toDeg(euler.x), MathUtils.toDeg(source.x));
+        float y = unwrapDeg(MathUtils.toDeg(euler.y), MathUtils.toDeg(source.y));
+        float z = unwrapDeg(MathUtils.toDeg(euler.z), MathUtils.toDeg(source.z));
+
+        if (this.dragRotateGizmoSpace) this.setR2(null, x, y, z);
+        else this.setR(null, x, y, z);
+    }
+
+    private Matrix3f computeParentInverse(Vector3f sourceRadians)
+    {
+        if (this.drag == null)
+        {
+            return null;
+        }
+
+        Matrix3f rotateAxesInverse = new Matrix3f(this.drag.rotateAxes);
+
+        if (Math.abs(rotateAxesInverse.determinant()) < 1.0E-4F)
+        {
+            return null;
+        }
+
+        return this.eulerAxes(sourceRadians).mul(rotateAxesInverse.invert());
+    }
+
+    private Matrix3f eulerAxes(Vector3f rotateRadians)
+    {
+        Matrix3f axes = new Matrix3f();
+
+        axes.setColumn(0, new Matrix3f().rotationZ(rotateRadians.z).rotateY(rotateRadians.y).transform(new Vector3f(1F, 0F, 0F)));
+        axes.setColumn(1, new Matrix3f().rotationZ(rotateRadians.z).transform(new Vector3f(0F, 1F, 0F)));
+        axes.setColumn(2, new Vector3f(0F, 0F, 1F));
+
+        return axes;
+    }
+
+    private float screenAngle(int mouseX, int mouseY)
+    {
+        return (float) Math.atan2(mouseY - this.dragScreenCenter.y, mouseX - this.dragScreenCenter.x);
+    }
+
+    private static float unwrapDeg(float valueDeg, float referenceDeg)
+    {
+        return valueDeg + Math.round((referenceDeg - valueDeg) / 360F) * 360F;
+    }
+
+    private Vector3f computeStartRingVec(int mouseX, int mouseY, Vector3f axisDir)
+    {
+        Vector3f ring = new Vector3f();
+        Vector3d hit = new Vector3d();
+
+        if (this.drag.intersectPlane(mouseX, mouseY, axisDir, hit))
+        {
+            ring.set(
+                (float) (hit.x - this.drag.gizmoOrigin.x),
+                (float) (hit.y - this.drag.gizmoOrigin.y),
+                (float) (hit.z - this.drag.gizmoOrigin.z)
+            );
+
+            float along = ring.dot(axisDir);
+
+            ring.sub(new Vector3f(axisDir).mul(along));
+        }
+
+        if (ring.lengthSquared() < 1.0E-8F)
+        {
+            Vector3f fallback = Math.abs(axisDir.y) < 0.9F ? new Vector3f(0F, 1F, 0F) : new Vector3f(1F, 0F, 0F);
+
+            axisDir.cross(fallback, ring);
+        }
+
+        return ring.normalize();
+    }
+
+    private static float applyStepModifiers(float step)
+    {
+        if (Window.isAltPressed()) step /= STEP_MODIFIER;
+        if (Window.isCtrlPressed()) step *= STEP_MODIFIER;
+
+        return step;
+    }
+
+    public boolean scrollDepth(UIContext context)
+    {
+        if (!this.editing || !this.isScreenTranslate() || !this.dragHasStart || this.transform == null)
+        {
+            return false;
+        }
+
+        GizmoDrag fresh = this.getHotkeyDrag();
+
+        if (fresh != null)
+        {
+            this.drag = fresh;
+            this.beginRayTranslateScreen(context.mouseX, context.mouseY);
+        }
+
+        if (this.drag == null)
+        {
+            return true;
+        }
+
+        Vector3d ray = new Vector3d(this.drag.gizmoOrigin).sub(this.drag.cameraOrigin);
+        double distance = ray.length();
+
+        if (distance < 1.0E-4)
+        {
+            return true;
+        }
+
+        ray.div(distance);
+
+        float step = applyStepModifiers((float) (context.mouseWheel * distance * DEPTH_WHEEL_FACTOR));
+        Vector3f translateStep = this.dragScreenInverseJacobian.transform(
+            new Vector3f((float) (ray.x * step), (float) (ray.y * step), (float) (ray.z * step))
+        );
+
+        this.setT(null,
+            this.transform.translate.x + translateStep.x,
+            this.transform.translate.y + translateStep.y,
+            this.transform.translate.z + translateStep.z
+        );
+
+        this.drag.gizmoOrigin.add(ray.x * step, ray.y * step, ray.z * step);
+        this.dragStartTranslate.set(this.transform.translate);
+        this.drag.intersectPlane(context.mouseX, context.mouseY, this.dragPlaneNormal, this.dragStartHit);
+        this.setTransform(this.transform);
+
+        return true;
+    }
+
+    public boolean scrollTrackballRoll(UIContext context)
+    {
+        if (!this.editing || !this.isSphereRotate() || !this.dragHasStart || this.transform == null)
+        {
+            return false;
+        }
+
+        this.trackballRollDeg += applyStepModifiers((float) (context.mouseWheel * TRACKBALL_WHEEL_DEG));
+
+        if (this.dragKind == DragKind.ARCBALL) this.updateArcballRotation();
+        else this.updateTrackballRotation();
+
+        this.setTransform(this.transform);
+
+        return true;
     }
 
     private boolean applyGizmoTranslate(int dx, int dy, float factor)
@@ -663,6 +2539,7 @@ public class UIPropTransform extends UITransform
         }
 
         Float units = this.getGizmoAxisDelta(dx, dy, this.axis, factor);
+        Float units2 = this.axis2 == null ? null : this.getGizmoAxisDelta(dx, dy, this.axis2, factor);
 
         if (units == null)
         {
@@ -671,24 +2548,18 @@ public class UIPropTransform extends UITransform
 
         Vector3f vector3f = new Vector3f(this.transform.translate);
 
-        if (this.local)
-        {
-            float localUnits = this.axis == Axis.Z ? -units : units;
-            Vector3f local = this.calculateLocalVector(localUnits, this.axis);
+        this.applyTranslateDelta(vector3f, this.axis, units);
 
-            vector3f.add(local);
-        }
-        else if (this.axis == Axis.X)
+        if (this.axis2 != null && units2 != null)
         {
-            vector3f.x += units;
+            this.applyTranslateDelta(vector3f, this.axis2, units2);
         }
-        else if (this.axis == Axis.Y)
+
+        if (this.shouldSnap(0))
         {
-            vector3f.y += units;
-        }
-        else if (this.axis == Axis.Z)
-        {
-            vector3f.z -= units;
+            vector3f.x = (float) snap(vector3f.x, BBSSettings.snapTranslate.get());
+            vector3f.y = (float) snap(vector3f.y, BBSSettings.snapTranslate.get());
+            vector3f.z = (float) snap(vector3f.z, BBSSettings.snapTranslate.get());
         }
 
         this.setT(null, vector3f.x, vector3f.y, vector3f.z);
@@ -736,6 +2607,25 @@ public class UIPropTransform extends UITransform
             vector3f.z += delta;
         }
 
+        if (!all && this.axis2 != null)
+        {
+            Float delta2 = this.getGizmoAxisDelta(dx, dy, this.axis2, factor);
+
+            if (delta2 != null)
+            {
+                if (this.axis2 == Axis.X) vector3f.x += delta2;
+                else if (this.axis2 == Axis.Y) vector3f.y += delta2;
+                else if (this.axis2 == Axis.Z) vector3f.z += delta2;
+            }
+        }
+
+        if (this.shouldSnap(1))
+        {
+            vector3f.x = (float) snap(vector3f.x, BBSSettings.snapScale.get());
+            vector3f.y = (float) snap(vector3f.y, BBSSettings.snapScale.get());
+            vector3f.z = (float) snap(vector3f.z, BBSSettings.snapScale.get());
+        }
+
         this.setS(null, vector3f.x, vector3f.y, vector3f.z);
 
         return true;
@@ -751,6 +2641,11 @@ public class UIPropTransform extends UITransform
         if (mouseX == lastX && mouseY == lastY)
         {
             return true;
+        }
+
+        if (this.isSphereRotate() || this.dragKind == DragKind.VIEW)
+        {
+            return this.applySpecialGizmoRotate(mouseX, mouseY, lastX, lastY, factor);
         }
 
         Axis axis = this.axis;
@@ -788,6 +2683,70 @@ public class UIPropTransform extends UITransform
         if (axis == Axis.X) rotDeg.x += deltaDeg;
         else if (axis == Axis.Y) rotDeg.y += deltaDeg;
         else if (axis == Axis.Z) rotDeg.z += deltaDeg;
+
+        if (this.shouldSnap(2))
+        {
+            rotDeg.x = (float) snap(rotDeg.x, BBSSettings.snapRotate.get());
+            rotDeg.y = (float) snap(rotDeg.y, BBSSettings.snapRotate.get());
+            rotDeg.z = (float) snap(rotDeg.z, BBSSettings.snapRotate.get());
+        }
+
+        if (this.local && BBSSettings.gizmos.get()) this.setR2(null, rotDeg.x, rotDeg.y, rotDeg.z);
+        else this.setR(null, rotDeg.x, rotDeg.y, rotDeg.z);
+
+        return true;
+    }
+
+    private void applyTranslateDelta(Vector3f vector, Axis axis, float units)
+    {
+        if (this.local)
+        {
+            float localUnits = axis == Axis.Z ? -units : units;
+
+            vector.add(this.calculateLocalVector(localUnits, axis));
+        }
+        else if (axis == Axis.X)
+        {
+            vector.x += units;
+        }
+        else if (axis == Axis.Y)
+        {
+            vector.y += units;
+        }
+        else if (axis == Axis.Z)
+        {
+            vector.z -= units;
+        }
+    }
+
+    private boolean applySpecialGizmoRotate(int mouseX, int mouseY, int lastX, int lastY, float factor)
+    {
+        Vector3f current = this.local && BBSSettings.gizmos.get() ? this.transform.rotate2 : this.transform.rotate;
+        Vector3f rotDeg = new Vector3f(
+            MathUtils.toDeg(current.x),
+            MathUtils.toDeg(current.y),
+            MathUtils.toDeg(current.z)
+        );
+
+        int dx = mouseX - lastX;
+        int dy = mouseY - lastY;
+
+        if (this.dragKind == DragKind.VIEW)
+        {
+            rotDeg.z += dx * factor;
+        }
+        else
+        {
+            rotDeg.y += dx * factor;
+            rotDeg.x += dy * factor;
+        }
+
+        if (this.shouldSnap(2))
+        {
+            rotDeg.x = (float) snap(rotDeg.x, BBSSettings.snapRotate.get());
+            rotDeg.y = (float) snap(rotDeg.y, BBSSettings.snapRotate.get());
+            rotDeg.z = (float) snap(rotDeg.z, BBSSettings.snapRotate.get());
+        }
 
         if (this.local && BBSSettings.gizmos.get()) this.setR2(null, rotDeg.x, rotDeg.y, rotDeg.z);
         else this.setR(null, rotDeg.x, rotDeg.y, rotDeg.z);
@@ -949,6 +2908,45 @@ public class UIPropTransform extends UITransform
         return true;
     }
 
+    private enum DragKind
+    {
+        AXIS, SCREEN, TRACKBALL, ARCBALL, VIEW
+    }
+
+    public enum HotkeyTarget
+    {
+        VIEW("view", null, true),
+        SPHERE("sphere", null, true),
+        SCREEN("screen", null, true),
+        X("x", Axis.X, false),
+        Y("y", Axis.Y, false),
+        Z("z", Axis.Z, false);
+
+        public final String token;
+        public final Axis axis;
+        public final boolean needsRay;
+
+        HotkeyTarget(String token, Axis axis, boolean needsRay)
+        {
+            this.token = token;
+            this.axis = axis;
+            this.needsRay = needsRay;
+        }
+
+        public static HotkeyTarget byToken(String token)
+        {
+            for (HotkeyTarget target : values())
+            {
+                if (target.token.equals(token))
+                {
+                    return target;
+                }
+            }
+
+            return null;
+        }
+    }
+
     public static class UITransformHandler extends UIElement
     {
         private UIPropTransform transform;
@@ -983,6 +2981,16 @@ public class UIPropTransform extends UITransform
         @Override
         protected boolean subMouseScrolled(UIContext context)
         {
+            if (this.transform.scrollTrackballRoll(context))
+            {
+                return true;
+            }
+
+            if (this.transform.scrollDepth(context))
+            {
+                return true;
+            }
+
             UITrackpad.updateAmplifier(context);
 
             return true;

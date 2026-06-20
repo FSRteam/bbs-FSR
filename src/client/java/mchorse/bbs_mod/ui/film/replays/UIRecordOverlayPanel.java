@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
@@ -25,12 +26,18 @@ public class UIRecordOverlayPanel extends UIMessageOverlayPanel
     public UIIcon position;
     public UIIcon rotation;
     public UIIcon posRot;
+    public UIIcon transform;
 
     public UIElement bar;
 
     private Consumer<List<String>> callback;
 
     public UIRecordOverlayPanel(IKey title, IKey message, Consumer<List<String>> callback)
+    {
+        this(title, message, callback, false);
+    }
+
+    public UIRecordOverlayPanel(IKey title, IKey message, Consumer<List<String>> callback, boolean includeTransform)
     {
         super(title, message);
 
@@ -45,6 +52,7 @@ public class UIRecordOverlayPanel extends UIMessageOverlayPanel
         this.position = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.submit(Arrays.asList(ReplayKeyframes.GROUP_POSITION)));
         this.rotation = new UIIcon(Icons.REFRESH, (b) -> this.submit(Arrays.asList(ReplayKeyframes.GROUP_ROTATION)));
         this.posRot = new UIIcon(Icons.FULLSCREEN, (b) -> this.submit(Arrays.asList(ReplayKeyframes.GROUP_POSITION, ReplayKeyframes.GROUP_ROTATION)));
+        this.transform = includeTransform ? new UIIcon(Icons.LIMB, (b) -> this.submit(Arrays.asList(ReplayKeyframes.GROUP_TRANSFORM))) : null;
 
         this.all.tooltip(UIKeys.FILM_GROUPS_ALL);
         this.left.tooltip(UIKeys.FILM_GROUPS_LEFT_STICK);
@@ -55,8 +63,26 @@ public class UIRecordOverlayPanel extends UIMessageOverlayPanel
         this.position.tooltip(UIKeys.FILM_GROUPS_ONLY_POSITION);
         this.rotation.tooltip(UIKeys.FILM_GROUPS_ONLY_ROTATION);
         this.posRot.tooltip(UIKeys.FILM_GROUPS_ONLY_POS_ROT);
+        if (this.transform != null) this.transform.tooltip(UIKeys.FILM_GROUPS_TRANSFORM);
 
-        this.bar = UI.row(this.all, this.left, this.right, this.triggers, this.extra1, this.extra2, this.position, this.rotation, this.posRot);
+        List<UIElement> buttons = new ArrayList<>();
+
+        buttons.add(this.all);
+        buttons.add(this.left);
+        buttons.add(this.right);
+        buttons.add(this.triggers);
+        buttons.add(this.extra1);
+        buttons.add(this.extra2);
+        buttons.add(this.position);
+        buttons.add(this.rotation);
+        buttons.add(this.posRot);
+
+        if (this.transform != null)
+        {
+            buttons.add(this.transform);
+        }
+
+        this.bar = UI.row(buttons.toArray(new UIElement[0]));
 
         this.bar.relative(this.content).x(0.5F).y(1F, -6).w(1F, -12).anchor(0.5F, 1F).row().resize();
         this.content.add(this.bar);
@@ -70,6 +96,11 @@ public class UIRecordOverlayPanel extends UIMessageOverlayPanel
         this.keys().register(Keys.RECORDING_GROUP_ONLY_POSITION, this.position::clickItself);
         this.keys().register(Keys.RECORDING_GROUP_ONLY_ROTATION, this.rotation::clickItself);
         this.keys().register(Keys.RECORDING_GROUP_POS_ROT, this.posRot::clickItself);
+
+        if (this.transform != null)
+        {
+            this.keys().register(Keys.RECORDING_GROUP_TRANSFORM, this.transform::clickItself);
+        }
     }
 
     public void submit(List<String> groups)

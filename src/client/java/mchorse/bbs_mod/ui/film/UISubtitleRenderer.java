@@ -25,12 +25,17 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
 
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
 public class UISubtitleRenderer
 {
+    private static final Matrix4f projectionCache = new Matrix4f();
+    private static final Matrix4f screenOrtho = new Matrix4f();
+    private static final Matrix4f subtitleOrtho = new Matrix4f();
+    private static final Transform subtitleTransform = new Transform();
+
     private static Framebuffer getTextFramebuffer()
     {
         return BBSModClient.getFramebuffers().getFramebuffer(Link.bbs("camera_subtitles"), (f) ->
@@ -63,14 +68,14 @@ public class UISubtitleRenderer
         int width = fb.width;
         int height = fb.height;
 
-        Matrix4f cache = new Matrix4f(RenderSystem.getProjectionMatrix());
+        Matrix4f cache = projectionCache.set(RenderSystem.getProjectionMatrix());
 
         width /= 2;
         height /= 2;
 
         Framebuffer framebuffer = getTextFramebuffer();
         Texture texture = framebuffer.getMainTexture();
-        Matrix4f ortho = new Matrix4f().ortho(0, width, height, 0, -100, 100);
+        Matrix4f ortho = screenOrtho.identity().ortho(0, width, height, 0, -100, 100);
         FontRenderer font = Batcher2D.getDefaultTextRenderer();
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
@@ -93,7 +98,7 @@ public class UISubtitleRenderer
             float scale = subtitle.size;
             int subColor = subtitle.color;
 
-            List<String> strings = subtitle.maxWidth <= 10 ? Arrays.asList(label) : font.wrap(label, subtitle.maxWidth);
+            List<String> strings = subtitle.maxWidth <= 10 ? Collections.singletonList(label) : font.wrap(label, subtitle.maxWidth);
 
             for (String string : strings)
             {
@@ -129,7 +134,7 @@ public class UISubtitleRenderer
             int fw = (int) ((contentW + 10) * scale);
             int fh = (int) ((contentH + 10) * scale);
 
-            RenderSystem.setProjectionMatrix(new Matrix4f().ortho(0, contentW + 10, 0, contentH + 10, -100, 100), VertexSorting.DISTANCE_TO_ORIGIN);
+            RenderSystem.setProjectionMatrix(subtitleOrtho.identity().ortho(0, contentW + 10, 0, contentH + 10, -100, 100), VertexSorting.DISTANCE_TO_ORIGIN);
 
             framebuffer.resize(fw, fh);
             framebuffer.applyClear();
@@ -174,20 +179,30 @@ public class UISubtitleRenderer
 
             RenderSystem.setProjectionMatrix(ortho, VertexSorting.DISTANCE_TO_ORIGIN);
 
-            Transform transform = new Transform();
+            Transform transform = subtitleTransform;
 
+            transform.identity();
             transform.lerp(subtitle.transform, 1F - subtitle.factor);
 
             stack.pushPose();
             stack.translate(x, y, 0);
-            stack.translate(transform.translate.x, transform.translate.y, transform.translate.z);
-            stack.mulPose(Axis.ZP.rotation(transform.rotate.z));
-            stack.mulPose(Axis.YP.rotation(transform.rotate.y));
-            stack.mulPose(Axis.XP.rotation(transform.rotate.x));
-            stack.mulPose(Axis.ZP.rotation(transform.rotate2.z));
-            stack.mulPose(Axis.YP.rotation(transform.rotate2.y));
-            stack.mulPose(Axis.XP.rotation(transform.rotate2.x));
-            stack.scale(transform.scale.x, transform.scale.y, transform.scale.z);
+
+            if (transform.translate.x != 0F || transform.translate.y != 0F || transform.translate.z != 0F)
+            {
+                stack.translate(transform.translate.x, transform.translate.y, transform.translate.z);
+            }
+
+            if (transform.rotate.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate.z));
+            if (transform.rotate.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate.y));
+            if (transform.rotate.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate.x));
+            if (transform.rotate2.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate2.z));
+            if (transform.rotate2.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate2.y));
+            if (transform.rotate2.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate2.x));
+
+            if (transform.scale.x != 1F || transform.scale.y != 1F || transform.scale.z != 1F)
+            {
+                stack.scale(transform.scale.x, transform.scale.y, transform.scale.z);
+            }
 
             if (blur != null)
             {

@@ -147,12 +147,10 @@ public class Color
 
     public void mul(int color)
     {
-        Color newColor = new Color().set(color, true);
-
-        this.r *= newColor.r;
-        this.g *= newColor.g;
-        this.b *= newColor.b;
-        this.a *= newColor.a;
+        this.r *= (color >> 16 & 0xff) / 255F;
+        this.g *= (color >> 8 & 0xff) / 255F;
+        this.b *= (color & 0xff) / 255F;
+        this.a *= (color >> 24 & 0xff) / 255F;
     }
 
     public void mul(Color set)

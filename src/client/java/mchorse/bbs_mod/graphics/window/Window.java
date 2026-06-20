@@ -12,6 +12,8 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Window
 {
@@ -22,6 +24,8 @@ public class Window
 
     private static int verticalScroll;
     private static long lastScroll;
+    private static final Map<Integer, Long> standardCursors = new HashMap<>();
+    private static int currentCursorShape = -1;
 
     private static long lastShiftPress;
     private static long lastCtrlPress;
@@ -197,5 +201,32 @@ public class Window
     public static void moveCursor(int x, int y)
     {
         GLFW.glfwSetCursorPos(getWindow(), x, y);
+    }
+
+    public static void setStandardCursor(int shape)
+    {
+        long window = getWindow();
+
+        if (GLFW.glfwGetInputMode(window, GLFW.GLFW_CURSOR) == GLFW.GLFW_CURSOR_DISABLED)
+        {
+            currentCursorShape = -1;
+
+            return;
+        }
+
+        if (currentCursorShape == shape)
+        {
+            return;
+        }
+
+        long cursor = standardCursors.computeIfAbsent(shape, GLFW::glfwCreateStandardCursor);
+
+        GLFW.glfwSetCursor(window, cursor);
+        currentCursorShape = shape;
+    }
+
+    public static void resetCursor()
+    {
+        setStandardCursor(GLFW.GLFW_ARROW_CURSOR);
     }
 }

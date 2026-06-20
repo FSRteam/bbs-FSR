@@ -108,6 +108,13 @@ public class UIOverlay extends UIElement
 
         overlay.full(context.menu.overlay);
         context.menu.overlay.add(overlay);
+        UIElement root = context.menu.getRoot();
+
+        if (root != null)
+        {
+            root.moveToFront(context.menu.overlay);
+        }
+
         overlay.add(panel);
         context.menu.overlay.resize();
     }

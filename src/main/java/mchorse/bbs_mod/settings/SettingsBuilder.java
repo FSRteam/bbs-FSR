@@ -41,6 +41,14 @@ public class SettingsBuilder
         return this;
     }
 
+    public SettingsBuilder category(String id, Icon icon)
+    {
+        this.category(id);
+        this.category.icon = icon;
+
+        return this;
+    }
+
     public SettingsBuilder register(BaseValue value)
     {
         if (this.category == null)

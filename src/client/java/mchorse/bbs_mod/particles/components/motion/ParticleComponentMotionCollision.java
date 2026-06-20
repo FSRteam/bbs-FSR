@@ -124,7 +124,7 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
             return;
         }
 
-        if (!particle.manual && !Operation.equals(this.enabled.get(), 0))
+        if (!particle.manualPosition && !Operation.equals(this.enabled.get(), 0))
         {
             float r = this.radius;
 

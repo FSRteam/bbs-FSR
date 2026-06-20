@@ -401,6 +401,8 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         int hx = this.keyframes.getDuration() / mult;
         int ht = (int) this.keyframes.fromGraphX(area.x);
 
+        this.keyframes.renderRuler(context);
+
         for (int j = Math.max(ht / mult, 0); j <= hx; j++)
         {
             int x = this.keyframes.toGraphX(j * mult);
@@ -719,6 +721,122 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    protected void renderGraphPointShapes(UIContext context, BufferBuilder builder, Matrix4f matrix, List keyframes)
+    {
+        int forcedIndex = 0;
+
+        for (int i = 0; i < keyframes.size(); i++)
+        {
+            Keyframe frame = (Keyframe) keyframes.get(i);
+            Keyframe prev = i > 0 ? (Keyframe) keyframes.get(i - 1) : null;
+            float tick = frame.getTick();
+            int x1 = this.keyframes.toGraphX(tick);
+            int x2 = this.keyframes.toGraphX(tick + frame.getDuration());
+            int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
+
+            if (x1 != x2)
+            {
+                int y1 = y - 8 + (forcedIndex % 2 == 1 ? -4 : 0);
+                int color = sheet.selection.has(i) ? Colors.WHITE :  Colors.setA(Colors.mulRGB(sheet.color, 0.9F), 0.75F);
+
+                context.batcher.fillRect(builder, matrix, x1, y1 - 2, 1, 5, color, color, color, color);
+                context.batcher.fillRect(builder, matrix, x2, y1 - 2, 1, 5, color, color, color, color);
+                context.batcher.fillRect(builder, matrix, x1 + 1, y1, x2 - x1, 1, color, color, color, color);
+
+                forcedIndex += 1;
+            }
+
+            boolean isPointHover = this.isNear(this.keyframes.toGraphX(frame.getTick()), y, context.mouseX, context.mouseY);
+            boolean toRemove = Window.isCtrlPressed() && isPointHover;
+
+            if (this.keyframes.isSelecting())
+            {
+                isPointHover = isPointHover || this.keyframes.getGrabbingArea(context).isInside(x1, y);
+            }
+
+            int kc = frame.getColor() != null ? frame.getColor().getRGBColor() | Colors.A100 : sheet.color;
+            int c = (sheet.selection.has(i) || isPointHover ? Colors.WHITE : kc) | Colors.A100;
+
+            if (toRemove)
+            {
+                c = Colors.RED | Colors.A100;
+            }
+
+            int offset = toRemove ? 4 : 3;
+
+            UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, x1, y, offset, c);
+
+            if (frame.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                int rx = this.keyframes.toGraphX(frame.getTick() + frame.rx);
+                int ry = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ry);
+
+                UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, rx, ry, 3, c);
+            }
+
+            if (prev != null && prev.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                int lx = this.keyframes.toGraphX(frame.getTick() - frame.lx);
+                int ly = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ly);
+
+                UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, lx, ly, 3, c);
+            }
+        }
+
+        for (int j = 0; j < keyframes.size(); j++)
+        {
+            Keyframe frame = (Keyframe) keyframes.get(j);
+            Keyframe prev = j > 0 ? (Keyframe) keyframes.get(j - 1) : null;
+            int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
+
+            int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
+            int mx = this.keyframes.toGraphX(frame.getTick());
+            int mc = c | Colors.A100;
+            IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);
+
+            shapeResult.renderKeyframeBackground(context, builder, matrix, mx, y, 2, mc);
+
+            if (frame.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                int rx = this.keyframes.toGraphX(frame.getTick() + frame.rx);
+                int ry = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ry);
+
+                shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, rx, ry, 2, c | Colors.A100);
+                shapeResult.renderKeyframeBackground(context, builder, matrix, rx, ry, 2, c | Colors.A100);
+            }
+
+            if (prev != null && prev.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                int lx = this.keyframes.toGraphX(frame.getTick() - frame.lx);
+                int ly = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ly);
+
+                shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, lx, ly, 2, c | Colors.A100);
+                shapeResult.renderKeyframeBackground(context, builder, matrix, lx, ly, 2, c | Colors.A100);
+            }
+        }
+    }
+
+    @Override
+    public void renderTopmostKeyframes(UIContext context)
+    {
+        Area area = this.keyframes.graphArea;
+        Matrix4f matrix = context.batcher.getContext().pose().last().pose();
+        List keyframes = this.sheet.channel.getKeyframes();
+
+        if (keyframes.isEmpty())
+        {
+            return;
+        }
+
+        context.batcher.clip(area, context);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        this.renderGraphPointShapes(context, builder, matrix, keyframes);
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+        context.batcher.unclip(context);
     }
 
     @Override

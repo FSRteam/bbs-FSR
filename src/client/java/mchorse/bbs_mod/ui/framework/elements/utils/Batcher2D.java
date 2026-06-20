@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -119,11 +120,11 @@ public class Batcher2D
 
         this.fillRect(builder, matrix4f, x, y, w, h, color1, color2, color3, color4);
 
-        RenderSystem.enableBlend();
+        this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        restoreDepth();
+        this.restoreDepth();
     }
 
     public void fillRect(BufferBuilder builder, Matrix4f matrix4f, float x, float y, float w, float h, int color1, int color2, int color3, int color4)
@@ -135,6 +136,36 @@ public class Batcher2D
         builder.addVertex(matrix4f, x, y + h, 0).setColor(color3);
         builder.addVertex(matrix4f, x + w, y + h, 0).setColor(color4);
         builder.addVertex(matrix4f, x + w, y, 0).setColor(color2);
+    }
+
+    public void bevelBox(int x1, int y1, int x2, int y2, int fill, boolean shadow, boolean border)
+    {
+        if (border)
+        {
+            this.box(x1, y1, x2, y2, Colors.A100);
+
+            x1++;
+            y1++;
+            x2--;
+            y2--;
+        }
+
+        this.box(x1, y1, x2, y2, fill);
+
+        if (!BBSSettings.interfaceShadows.get())
+        {
+            return;
+        }
+
+        int light = Colors.lerp(fill, Colors.WHITE, 0.35F);
+
+        this.box(x1, y1, x2, y1 + 1, light);
+        this.box(x1, y1, x1 + 1, y2, light);
+
+        if (shadow)
+        {
+            this.box(x1, y2 - 2, x2, y2, Colors.lerp(fill, Colors.A100, 0.4F));
+        }
     }
 
     public void dropShadow(int left, int top, int right, int bottom, int offset, int opaque, int shadow)
@@ -180,11 +211,11 @@ public class Batcher2D
         builder.addVertex(matrix4f, right, bottom, 0).setColor(shadow);
         builder.addVertex(matrix4f,right, top, 0).setColor(shadow);
 
-        RenderSystem.enableBlend();
+        this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        restoreDepth();
+        this.restoreDepth();
     }
 
     /* Gradients */
@@ -215,11 +246,11 @@ public class Batcher2D
             builder.addVertex(matrix4f, (float) (x - Math.cos(a) * radius), (float) (y + Math.sin(a) * radius), 0F).setColor(shadow);
         }
 
-        RenderSystem.enableBlend();
+        this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        restoreDepth();
+        this.restoreDepth();
     }
 
     public void dropCircleShadow(int x, int y, int radius, int offset, int segments, int opaque, int shadow)
@@ -233,11 +264,11 @@ public class Batcher2D
 
         Matrix4f matrix4f = this.context.pose().last().pose();
 
-        RenderSystem.enableBlend();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-
         /* Draw opaque base */
         flushBeforeTesselator();
+
+        this.prepareUiBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         builder.addVertex(matrix4f, x, y, 0F).setColor(opaque);
@@ -252,6 +283,9 @@ public class Batcher2D
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
         /* Draw outer shadow */
+        this.prepareUiBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
         for (int i = 0; i < segments; i ++)
@@ -269,7 +303,7 @@ public class Batcher2D
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        restoreDepth();
+        this.restoreDepth();
     }
 
     /* Outline methods */
@@ -302,6 +336,11 @@ public class Batcher2D
 
     /* Icon */
 
+    private static int darkenWhite(int color)
+    {
+        return (color & 0xFFFFFF) == 0xFFFFFF ? (color & 0xFF000000) : color;
+    }
+
     public void icon(Icon icon, float x, float y)
     {
         this.icon(icon, Colors.WHITE, x, y);
@@ -324,6 +363,11 @@ public class Batcher2D
             return;
         }
 
+        if (BBSSettings.isLightTheme())
+        {
+            color = darkenWhite(color);
+        }
+
         x -= icon.w * ax;
         y -= icon.h * ay;
 
@@ -337,6 +381,11 @@ public class Batcher2D
 
     public void iconArea(Icon icon, int color, float x, float y, float w, float h)
     {
+        if (BBSSettings.isLightTheme())
+        {
+            color = darkenWhite(color);
+        }
+
         this.texturedArea(BBSModClient.getTextures().getTexture(icon.texture), color, x, y, w, h, icon.x, icon.y, icon.w, icon.h, icon.textureW, icon.textureH);
     }
 
@@ -390,6 +439,7 @@ public class Batcher2D
 
         flushBeforeTesselator();
 
+        this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
         RenderSystem.setShaderTexture(0, texture.id);
 
@@ -398,7 +448,7 @@ public class Batcher2D
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        restoreDepth();
+        this.restoreDepth();
     }
 
     public void texturedBox(int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
@@ -417,6 +467,7 @@ public class Batcher2D
 
         flushBeforeTesselator();
 
+        this.prepareUiBlend();
         RenderSystem.setShader(shader);
         RenderSystem.setShaderTexture(0, texture);
 
@@ -425,7 +476,7 @@ public class Batcher2D
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        restoreDepth();
+        this.restoreDepth();
     }
 
     private void fillTexturedBox(BufferBuilder builder, Matrix4f matrix, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
@@ -456,6 +507,7 @@ public class Batcher2D
 
         flushBeforeTesselator();
 
+        this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
         RenderSystem.setShaderTexture(0, texture.id);
 
@@ -475,7 +527,7 @@ public class Batcher2D
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
-        restoreDepth();
+        this.restoreDepth();
     }
 
     /* Component with default font */
@@ -502,11 +554,27 @@ public class Batcher2D
 
     public void text(String label, float x, float y, int color, boolean shadow)
     {
+        if (BBSSettings.isLightTheme())
+        {
+            shadow = false;
+            color = darkenWhite(color);
+        }
+
+        this.drawTextDirect(label, x, y, color, shadow);
+    }
+
+    private void drawTextDirect(String label, float x, float y, int color, boolean shadow)
+    {
+        if (Colors.getA(color) <= 0F)
+        {
+            color = Colors.opaque(color);
+        }
+
         this.context.drawString(this.font.getRenderer(), label, (int) x, (int) y, color, shadow);
         /* drawString() calls flushIfUnmanaged() internally which calls flush().
          * flush() re-enables depth test and may change depth func via the text
          * RenderType's setupRenderState().  Restore the depth func BBS expects. */
-        restoreDepth();
+        this.restoreDepth();
     }
 
     /* Component helpers */
@@ -523,6 +591,11 @@ public class Batcher2D
 
     public int wallText(String text, int x, int y, int color, int width, int lineHeight, float ax, float ay)
     {
+        return this.wallText(text, x, y, color, width, lineHeight, ax, ay, true);
+    }
+
+    public int wallText(String text, int x, int y, int color, int width, int lineHeight, float ax, float ay, boolean shadow)
+    {
         List<String> list = this.font.wrap(text, width);
         int h = (lineHeight * (list.size() - 1)) + this.font.getHeight();
 
@@ -530,7 +603,7 @@ public class Batcher2D
 
         for (String string : list)
         {
-            this.text(string.toString(), (int) (x + (width - this.font.getWidth(string)) * ax), y, color, true);
+            this.text(string.toString(), (int) (x + (width - this.font.getWidth(string)) * ax), y, color, shadow);
 
             y += lineHeight;
         }
@@ -562,6 +635,11 @@ public class Batcher2D
 
         if (a != 0)
         {
+            if (BBSSettings.isLightTheme() && (background & 0xFFFFFF) == 0)
+            {
+                background = (background & 0xFF000000) | 0xFFFFFF;
+            }
+
             this.box(x - offset, y - offset, x + this.font.getWidth(text) + offset - 1, y + this.font.getHeight() + offset, background);
         }
 
@@ -586,12 +664,24 @@ public class Batcher2D
     }
 
     /**
+     * Keep BBSFS 2.0 UI boxes on the normal alpha-blend path. World previews,
+     * particles, and subtitle blur can leave custom blend functions active.
+     */
+    private void prepareUiBlend()
+    {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+    }
+
+    /**
      * MC 1.21.1: GuiGraphics.flush() re-enables depth test, and the text RenderType
      * may change the depth func.  UIBaseMenu sets depthFunc(GL_ALWAYS) for painter's
      * algorithm rendering.  Restore it after any operation that may call flush().
      */
     private void restoreDepth()
     {
+        RenderSystem.defaultBlendFunc();
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
     }
 }

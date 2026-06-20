@@ -20,6 +20,7 @@ public class UIFilmPlayerSettingsOverlayPanel extends UIMessageBarOverlayPanel
     public final UITrackpad hunger;
     public final UITrackpad xpLevel;
     public final UITrackpad xpProgress;
+    public final UITrackpad mobRecordingRadius;
 
     public final UIButton replaceInventory;
     public final UIButton applyToPlayer;
@@ -46,6 +47,10 @@ public class UIFilmPlayerSettingsOverlayPanel extends UIMessageBarOverlayPanel
         this.xpProgress = new UITrackpad((v) -> BaseValue.edit(this.film.xpProgress, (value) -> value.set(v.floatValue())));
         this.xpProgress.limit(0, 1).increment(0.01D).setValue(this.film.xpProgress.get());
 
+        this.mobRecordingRadius = new UITrackpad((v) -> BaseValue.edit(this.film.mobRecordingRadius, (value) -> value.set(v.floatValue())));
+        this.mobRecordingRadius.limit(0).integer().setValue(this.film.mobRecordingRadius.get());
+        this.mobRecordingRadius.tooltip(UIKeys.FILM_PLAYER_SETTINGS_MOB_RECORDING_RADIUS_TOOLTIP);
+
         this.replaceInventory = new UIButton(UIKeys.FILM_REPLACE_INVENTORY, (b) ->
             BaseValue.edit(this.film.inventory, (inv) -> inv.fromPlayer(Minecraft.getInstance().player)));
         this.replaceInventory.setEnabled(Minecraft.getInstance().player != null);
@@ -64,6 +69,8 @@ public class UIFilmPlayerSettingsOverlayPanel extends UIMessageBarOverlayPanel
             this.xpLevel,
             UI.label(UIKeys.FILM_PLAYER_SETTINGS_XP_PROGRESS).marginTop(UIConstants.SECTION_GAP),
             this.xpProgress,
+            UI.label(UIKeys.FILM_PLAYER_SETTINGS_MOB_RECORDING_RADIUS).marginTop(UIConstants.SECTION_GAP),
+            this.mobRecordingRadius,
             this.replaceInventory.marginTop(10),
             this.applyToPlayer.marginTop(4)
         );

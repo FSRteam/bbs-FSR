@@ -8,8 +8,11 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.resources.ResourceLocation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,8 +22,11 @@ import java.util.function.Consumer;
 public abstract class PacketCrusher
 {
     public static final int BUFFER_SIZE = 30_000;
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network");
+    private static final int HEADER_BYTES = Integer.BYTES * 4;
+    private static final int MAX_TRANSFER_BYTES = 16 * 1024 * 1024;
 
-    private Map<Integer, ByteArrayOutputStream> chunks = new HashMap<>();
+    private Map<Integer, TransferState> chunks = new HashMap<>();
     private int counter;
 
     public void reset()
@@ -31,21 +37,94 @@ public abstract class PacketCrusher
 
     public void receive(FriendlyByteBuf buf, IBufferReceiver receiver)
     {
+        if (buf == null || receiver == null)
+        {
+            return;
+        }
+
+        if (buf.readableBytes() < HEADER_BYTES)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.crusher phase=receive result=drop reason=short_header readable={}",
+                buf.readableBytes());
+            return;
+        }
+
         int id = buf.readInt();
         int index = buf.readInt();
         int total = buf.readInt();
         int size = buf.readInt();
-        byte[] bytes = new byte[size];
+        boolean finalChunk = index == total - 1;
 
+        if (!this.validateFrameHeader(id, index, total, size, buf.readableBytes()))
+        {
+            return;
+        }
+
+        if (!finalChunk && size != BUFFER_SIZE)
+        {
+            this.dropTransfer(id, "non_final_size", index, total, size, buf.readableBytes());
+            return;
+        }
+
+        if (!finalChunk && size != buf.readableBytes())
+        {
+            this.dropTransfer(id, "trailing_bytes", index, total, size, buf.readableBytes());
+            return;
+        }
+
+        TransferState state = this.chunks.get(id);
+
+        if (state == null)
+        {
+            if (index != 0)
+            {
+                this.dropTransfer(id, "missing_start", index, total, size, buf.readableBytes());
+                return;
+            }
+
+            state = new TransferState(total);
+            this.chunks.put(id, state);
+        }
+        else if (index == 0)
+        {
+            this.dropTransfer(id, "duplicate_start", index, total, size, buf.readableBytes());
+            return;
+        }
+
+        if (state.total != total)
+        {
+            this.dropTransfer(id, "total_changed", index, total, size, buf.readableBytes());
+            return;
+        }
+
+        if (state.seen.get(index))
+        {
+            this.dropTransfer(id, "duplicate_chunk", index, total, size, buf.readableBytes());
+            return;
+        }
+
+        if (index != state.nextIndex)
+        {
+            this.dropTransfer(id, "out_of_order", index, total, size, buf.readableBytes());
+            return;
+        }
+
+        if (!state.canAccept(size))
+        {
+            this.dropTransfer(id, "transfer_capacity", index, total, size, buf.readableBytes());
+            return;
+        }
+
+        byte[] bytes = new byte[size];
         buf.readBytes(bytes);
 
-        ByteArrayOutputStream map = this.chunks.computeIfAbsent(id, (k) -> new ByteArrayOutputStream(total * BUFFER_SIZE));
+        state.write(bytes, index);
 
-        map.writeBytes(bytes);
-
-        if (index == total - 1)
+        if (finalChunk)
         {
-            byte[] finalBytes = map.toByteArray();
+            byte[] finalBytes = state.bytes.toByteArray();
+
+            this.chunks.remove(id);
 
             if (finalBytes.length == 1 && finalBytes[0] == 69)
             {
@@ -53,8 +132,56 @@ public abstract class PacketCrusher
             }
 
             receiver.receiveBuffer(finalBytes, buf);
-            this.chunks.remove(id);
         }
+    }
+
+    private boolean validateFrameHeader(int id, int index, int total, int size, int readableBytes)
+    {
+        if (total <= 0)
+        {
+            this.dropTransfer(id, "invalid_total", index, total, size, readableBytes);
+            return false;
+        }
+
+        if (index < 0 || index >= total)
+        {
+            this.dropTransfer(id, "invalid_index", index, total, size, readableBytes);
+            return false;
+        }
+
+        if (size <= 0 || size > BUFFER_SIZE)
+        {
+            this.dropTransfer(id, "invalid_size", index, total, size, readableBytes);
+            return false;
+        }
+
+        if (size > readableBytes)
+        {
+            this.dropTransfer(id, "truncated_chunk", index, total, size, readableBytes);
+            return false;
+        }
+
+        long capacity = (long) total * (long) BUFFER_SIZE;
+
+        if (capacity <= 0L || capacity > MAX_TRANSFER_BYTES)
+        {
+            this.dropTransfer(id, "declared_capacity", index, total, size, readableBytes);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void dropTransfer(int id, String reason, int index, int total, int size, int readableBytes)
+    {
+        this.chunks.remove(id);
+        LOGGER.warn("[BBS-SEM] topic=net.crusher phase=receive result=drop reason={} id={} index={} total={} size={} readable={}",
+            reason,
+            id,
+            index,
+            total,
+            size,
+            readableBytes);
     }
 
     public void send(Player entity, ResourceLocation identifier, BaseType baseType, Consumer<FriendlyByteBuf> consumer)
@@ -139,4 +266,31 @@ public abstract class PacketCrusher
     }
 
     protected abstract void sendBuffer(Player entity, ResourceLocation identifier, FriendlyByteBuf buf);
+
+    private static final class TransferState
+    {
+        private final ByteArrayOutputStream bytes = new ByteArrayOutputStream(BUFFER_SIZE);
+        private final BitSet seen = new BitSet();
+        private final int total;
+        private int nextIndex;
+        private int written;
+
+        private TransferState(int total)
+        {
+            this.total = total;
+        }
+
+        private boolean canAccept(int size)
+        {
+            return this.written <= MAX_TRANSFER_BYTES - size;
+        }
+
+        private void write(byte[] bytes, int index)
+        {
+            this.bytes.writeBytes(bytes);
+            this.seen.set(index);
+            this.nextIndex += 1;
+            this.written += bytes.length;
+        }
+    }
 }

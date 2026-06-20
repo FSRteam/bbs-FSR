@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.morphing;
 
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.IMorphProvider;
 import mchorse.bbs_mod.morphing.Morph;
@@ -28,7 +29,7 @@ public class UIMorphingPanel extends UIDashboardPanel
     {
         super(dashboard);
 
-        this.palette = new UIFormPalette(this::setForm);
+        this.palette = new UIFormPalette(this::setForm, true);
         this.palette.updatable().cantExit();
         this.palette.immersive();
         this.palette.full(this);
@@ -83,6 +84,11 @@ public class UIMorphingPanel extends UIDashboardPanel
 
         this.palette.list.setupForms(BBSModClient.getFormCategories());
         this.palette.setSelected(morph.getForm());
+
+        if (BBSSettings.morphingFocusSearch.get())
+        {
+            Minecraft.getInstance().execute(this.palette.list::focusSearch);
+        }
 
         BBSModClient.getCameraController().add(this.controller);
         Minecraft.getInstance().options.setCameraType(CameraType.THIRD_PERSON_BACK);

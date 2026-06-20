@@ -85,6 +85,7 @@ public class UIKeyframes extends UIElement
 
     private final Consumer<Keyframe> callback;
     private Consumer<UIContext> backgroundRender;
+    private Consumer<UIContext> rulerRender;
     private Supplier<Integer> duration;
 
     private SheetCache cache;
@@ -111,7 +112,7 @@ public class UIKeyframes extends UIElement
                 p.resize();
             }
         });
-        this.labelResizer.hoverOnly();
+        this.labelResizer.hoverOnly().cursors(GLFW.GLFW_HRESIZE_CURSOR, GLFW.GLFW_HRESIZE_CURSOR);
         this.add(this.labelResizer);
 
         this.copyPasteController = new UICopyPasteController(PresetManager.KEYFRAMES, "_CopyKeyframes")
@@ -161,6 +162,7 @@ public class UIKeyframes extends UIElement
 
             if (hasSelected)
             {
+                menu.action(Icons.EXCHANGE, UIKeys.KEYFRAMES_CONTEXT_FLIP, this::flipKeyframes);
                 menu.action(Icons.CONVERT, UIKeys.KEYFRAMES_CONTEXT_SPREAD, this::spreadKeyframes);
                 menu.action(Icons.OUTLINE_SPHERE, UIKeys.KEYFRAMES_CONTEXT_ROUND, () ->
                 {
@@ -235,6 +237,7 @@ public class UIKeyframes extends UIElement
         this.keys().register(Keys.KEYFRAMES_SELECT_PREV, () -> this.selectNextKeyframe(-1)).category(category);
         this.keys().register(Keys.KEYFRAMES_SELECT_NEXT, () -> this.selectNextKeyframe(1)).category(category);
         this.keys().register(Keys.KEYFRAMES_SPREAD, this::spreadKeyframes).category(category);
+        this.keys().register(Keys.KEYFRAMES_FLIP, this::flipKeyframes).category(category).active(canModify);
         this.keys().register(Keys.KEYFRAMES_ADJUST_VALUES, this::adjustValues).category(category);
     }
 
@@ -542,6 +545,48 @@ public class UIKeyframes extends UIElement
         return this.stackOffset;
     }
 
+    private void flipKeyframes()
+    {
+        float min = Float.MAX_VALUE;
+        float max = -Float.MAX_VALUE;
+
+        for (UIKeyframeSheet sheet : this.getGraph().getSheets())
+        {
+            for (Keyframe keyframe : sheet.selection.getSelected())
+            {
+                min = Math.min(min, keyframe.getTick());
+                max = Math.max(max, keyframe.getTick());
+            }
+        }
+
+        if (min > max)
+        {
+            return;
+        }
+
+        float pivot = min + max;
+
+        for (UIKeyframeSheet sheet : this.getGraph().getSheets())
+        {
+            if (!sheet.selection.hasAny())
+            {
+                continue;
+            }
+
+            sheet.channel.preNotify();
+
+            for (Keyframe keyframe : sheet.selection.getSelected())
+            {
+                keyframe.setTick(pivot - keyframe.getTick(), false);
+            }
+
+            sheet.channel.postNotify();
+            sheet.sort();
+        }
+
+        this.getGraph().pickSelected();
+    }
+
     private void spreadKeyframes()
     {
         for (UIKeyframeSheet sheet : this.getGraph().getSheets())
@@ -827,6 +872,13 @@ public class UIKeyframes extends UIElement
     public UIKeyframes backgroundRenderer(Consumer<UIContext> backgroundRender)
     {
         this.backgroundRender = backgroundRender;
+
+        return this;
+    }
+
+    public UIKeyframes rulerRenderer(Consumer<UIContext> rulerRender)
+    {
+        this.rulerRender = rulerRender;
 
         return this;
     }
@@ -1220,10 +1272,11 @@ public class UIKeyframes extends UIElement
 
         if (this.selecting)
         {
-            context.batcher.normalizedBox(this.originalX, this.originalY, context.mouseX, context.mouseY, Colors.setA(Colors.ACTIVE, 0.25F));
+            context.batcher.normalizedBox(this.originalX, this.originalY, context.mouseX, context.mouseY, BBSSettings.accentOverlay(Colors.A25));
         }
 
         this.currentGraph.postRender(context);
+        this.renderOverlay(context);
 
         context.batcher.unclip(context);
 
@@ -1231,7 +1284,20 @@ public class UIKeyframes extends UIElement
         if (this.labelResizer.isVisible() && (this.labelResizer.area.isInside(context) || this.labelResizer.isDragging()))
         {
             Area a = this.labelResizer.area;
-            Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey(), Colors.A100);
+            Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey());
+        }
+    }
+
+    protected void renderOverlay(UIContext context)
+    {
+        this.currentGraph.renderTopmostKeyframes(context);
+    }
+
+    public void renderRuler(UIContext context)
+    {
+        if (this.rulerRender != null)
+        {
+            this.rulerRender.accept(context);
         }
     }
 
@@ -1294,17 +1360,21 @@ public class UIKeyframes extends UIElement
      */
     protected void renderBackground(UIContext context)
     {
-        this.area.render(context.batcher, Colors.A50);
+        this.area.render(context.batcher, BBSSettings.baseSurface());
+        this.graphArea.render(context.batcher, BBSSettings.deepSurface());
 
         int duration = this.getDuration();
 
         if (duration > 0)
         {
             int leftBorder = this.toGraphX(0);
-            int rightBorder = this.toGraphX(duration);
 
-            if (leftBorder > this.graphArea.x) context.batcher.box(this.graphArea.x, this.graphArea.y, Math.min(this.graphArea.ex(), leftBorder), this.graphArea.y + this.graphArea.h, Colors.A50);
-            if (rightBorder < this.graphArea.ex()) context.batcher.box(Math.max(this.graphArea.x, rightBorder), this.graphArea.y, this.graphArea.ex() , this.graphArea.y + this.graphArea.h, Colors.A50);
+            if (leftBorder > this.graphArea.x)
+            {
+                int leftEx = Math.min(this.graphArea.ex(), leftBorder);
+
+                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.chromeSurface());
+            }
         }
 
         if (this.backgroundRender != null)

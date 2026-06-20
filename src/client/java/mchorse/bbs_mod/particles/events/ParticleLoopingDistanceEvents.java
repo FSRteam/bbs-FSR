@@ -141,17 +141,28 @@ public class ParticleLoopingDistanceEvents
         public final ParticleEventTriggerList effects = new ParticleEventTriggerList();
         private final Map<String, BaseType> extra = new LinkedHashMap<>();
         private BaseType rawDistance;
+        private String parsedDistance;
+        private double distanceValue;
 
         public double getDistance()
         {
+            if (this.parsedDistance == null ? this.distance == null : this.parsedDistance.equals(this.distance))
+            {
+                return this.distanceValue;
+            }
+
             try
             {
-                return Double.parseDouble(this.distance);
+                this.distanceValue = Double.parseDouble(this.distance);
             }
             catch (Exception e)
             {
-                return 0;
+                this.distanceValue = 0;
             }
+
+            this.parsedDistance = this.distance;
+
+            return this.distanceValue;
         }
 
         public void setDistance(double distance)

@@ -28,7 +28,8 @@ public class Particle
     public boolean relativeRotation;
     public boolean relativeVelocity;
     public boolean textureScale;
-    public boolean manual;
+    public boolean manualPosition;
+    public boolean manualRotation;
 
     /* Rotation */
     public float rotation;
@@ -71,6 +72,8 @@ public class Particle
     private int expirationDelay = -1;
 
     private Vector3d global = new Vector3d();
+    private final Vector3f globalVector = new Vector3f();
+    private final Vector3f updateVector = new Vector3f();
 
     public Map<String, Double> localValues = new HashMap<>();
     public Set<String> eventGuards = new HashSet<>();
@@ -133,7 +136,7 @@ public class Particle
 
         if (this.relativePosition && this.relativeRotation)
         {
-            Vector3f v = new Vector3f((float) px, (float) py, (float) pz);
+            Vector3f v = this.globalVector.set((float) px, (float) py, (float) pz);
             emitter.rotation.transform(v);
 
             px = v.x;
@@ -157,15 +160,18 @@ public class Particle
 
         this.setupMatrix(emitter);
 
-        if (!this.manual)
+        if (!this.manualRotation)
         {
             float rotationAcceleration = this.rotationAcceleration / 20F -this.rotationDrag * this.rotationVelocity;
 
             this.rotationVelocity += rotationAcceleration / 20F;
             this.rotation = this.initialRotation + this.rotationVelocity * this.age;
+        }
 
+        if (!this.manualPosition)
+        {
             /* Position */
-            Vector3f vec = new Vector3f(this.speed);
+            Vector3f vec = this.updateVector.set(this.speed);
             vec.mul(-(this.drag + this.dragFactor));
 
             this.acceleration.add(vec);

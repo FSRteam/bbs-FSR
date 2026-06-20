@@ -11,10 +11,15 @@ import mchorse.bbs_mod.cubic.animation.ActionsConfig;
 import mchorse.bbs_mod.cubic.animation.Animator;
 import mchorse.bbs_mod.cubic.animation.IAnimator;
 import mchorse.bbs_mod.cubic.animation.ProceduralAnimator;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
+import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
@@ -23,6 +28,7 @@ import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.resources.Link;
@@ -50,10 +56,13 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.InteractionHand;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,12 +73,23 @@ import java.util.function.Supplier;
 public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITickable
 {
     private static Matrix4f uiMatrix = new Matrix4f();
+    private static final Quaternionf ROTATE_X_90 = Axis.XP.rotationDegrees(90F);
+    private static final Quaternionf ROTATE_X_180 = Axis.XP.rotationDegrees(180F);
+    private static final Quaternionf ROTATE_Y_180 = Axis.YP.rotation(MathUtils.PI);
+    private static final ItemStack OAK_BUTTON_STACK = new ItemStack(Items.OAK_BUTTON);
 
     private MatrixCache bones = new MatrixCache();
+    private PoseStack modelStack = new PoseStack();
+    private final Pose renderPose = new Pose();
+    private final Color renderColor = new Color();
 
     private ActionsConfig lastConfigs;
     private IAnimator animator;
     private ModelInstance lastModel;
+    private boolean ikAppliedThisRender;
+    private boolean physicsAppliedThisRender;
+    private boolean constraintsAppliedThisRender;
+    private final Map<String, Float> poseFixByBone = new HashMap<>();
 
     private IEntity entity = new StubEntity();
 
@@ -142,7 +162,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     public Pose getPose()
     {
-        Pose pose = this.form.pose.get().copy();
+        return this.getPose(new Pose());
+    }
+
+    private Pose getPose(Pose pose)
+    {
+        pose.copy(this.form.pose.get());
         Pose overlay = this.form.poseOverlay.get();
 
         this.applyPose(pose, overlay);
@@ -249,13 +274,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             Link link = this.form.texture.get();
             Link texture = link == null ? model.texture : link;
-            Color color = this.form.color.get();
+            Color color = this.renderColor.set(1F, 1F, 1F, 1F);
             float scale = this.form.uiScale.get() * model.uiScale;
 
+            FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
             model.model.resetPose();
 
             this.animator.applyActions(null, model, context.getTransition());
-            model.model.applyPose(this.getPose());
+            model.model.applyPose(this.getPose(this.renderPose));
 
             MatrixStackUtils.multiply(stack, uiMatrix);
             stack.scale(scale, scale, scale);
@@ -287,6 +313,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     private void renderModel(IEntity target, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition)
     {
+        this.ikAppliedThisRender = false;
+        this.physicsAppliedThisRender = false;
+        this.constraintsAppliedThisRender = false;
+
         if (!model.culling)
         {
             RenderSystem.disableCull();
@@ -299,7 +329,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         gameRenderer.lightTexture().turnOnLightLayer();
         gameRenderer.overlayTexture().setupOverlayColor();
 
-        PoseStack newStack = new PoseStack();
+        PoseStack newStack = this.getModelStack();
 
         MatrixStackUtils.multiply(newStack, stack.last().pose());
         newStack.last().normal().set(stack.last().normal());
@@ -310,7 +340,18 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             newStack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
         }
 
+        Matrix4f baseTransform = ui ? null : new Matrix4f(stack.last().pose());
+
+        this.collectPoseFixByBone();
+        this.applyIKOnce(model, baseTransform);
+        this.applyPhysicsOnce(target, model, transition, baseTransform);
+        this.applyConstraintsOnce(model);
         model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get());
+
+        if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
+        {
+            ModelIKDebug.render(newStack, model.model, ikMap, "");
+        }
 
         gameRenderer.lightTexture().turnOffLightLayer();
         gameRenderer.overlayTexture().teardownOverlayColor();
@@ -336,6 +377,117 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
+    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform)
+    {
+        if (this.ikAppliedThisRender)
+        {
+            return;
+        }
+
+        this.ikAppliedThisRender = true;
+        model.form = this.form;
+
+        if (baseTransform == null || this.form == null || this.form.ikTargetOverrides.isEmpty())
+        {
+            ModelIKRuntime.applyWithPoseFix(model, this.poseFixByBone);
+
+            return;
+        }
+
+        Matrix4f inv = new Matrix4f(baseTransform).invert();
+        Map<String, Vector3f> local = new HashMap<>(this.form.ikTargetOverrides.size() * 2);
+
+        for (Map.Entry<String, Vector3f> entry : this.form.ikTargetOverrides.entrySet())
+        {
+            String controller = entry.getKey();
+            Vector3f worldPos = entry.getValue();
+
+            if (controller == null || controller.isEmpty() || worldPos == null)
+            {
+                continue;
+            }
+
+            local.put(controller, inv.transformPosition(new Vector3f(worldPos)));
+        }
+
+        if (local.isEmpty())
+        {
+            ModelIKRuntime.applyWithPoseFix(model, this.poseFixByBone);
+
+            return;
+        }
+
+        ModelIKRuntime.apply(model, local, this.poseFixByBone);
+    }
+
+    private void applyPhysicsOnce(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)
+    {
+        if (this.physicsAppliedThisRender)
+        {
+            return;
+        }
+
+        this.physicsAppliedThisRender = true;
+        model.lastBaseTransform = baseTransform;
+        model.form = this.form;
+        ModelPhysicsRuntime.apply(target, model, transition, baseTransform, this.poseFixByBone);
+    }
+
+    private void collectPoseFixByBone()
+    {
+        this.poseFixByBone.clear();
+
+        if (this.form == null)
+        {
+            return;
+        }
+
+        Pose pose = this.getPose(new Pose());
+
+        for (Map.Entry<String, PoseTransform> entry : pose.transforms.entrySet())
+        {
+            String bone = entry.getKey();
+            PoseTransform transform = entry.getValue();
+
+            if (bone == null || bone.isEmpty() || transform == null)
+            {
+                continue;
+            }
+
+            float fix = transform.fix;
+
+            if (fix > 0F)
+            {
+                this.poseFixByBone.put(bone, MathUtils.clamp(fix, 0F, 1F));
+            }
+        }
+    }
+
+    private void applyConstraintsOnce(ModelInstance model)
+    {
+        if (this.constraintsAppliedThisRender)
+        {
+            return;
+        }
+
+        this.constraintsAppliedThisRender = true;
+        ModelConstraintsRuntime.apply(model);
+    }
+
+    private PoseStack getModelStack()
+    {
+        if (!this.modelStack.clear())
+        {
+            this.modelStack = new PoseStack();
+        }
+        else
+        {
+            this.modelStack.setIdentity();
+        }
+
+        return this.modelStack;
+    }
+
     private void renderArmor(IEntity target, PoseStack stack, ArmorType type, ArmorSlot armorSlot, Color color, int overlay, int light)
     {
         Matrix4f matrix = this.bones.get(armorSlot.group).matrix();
@@ -347,7 +499,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             stack.pushPose();
             MatrixStackUtils.multiply(stack, matrix);
             MatrixStackUtils.applyTransform(stack, armorSlot.transform);
-            stack.mulPose(Axis.XP.rotationDegrees(180F));
+            stack.mulPose(ROTATE_X_180);
 
             CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
 
@@ -382,8 +534,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 stack.pushPose();
                 MatrixStackUtils.multiply(stack, matrix);
-                stack.mulPose(Axis.XP.rotationDegrees(90F));
-                stack.mulPose(Axis.YP.rotationDegrees(180F));
+                stack.mulPose(ROTATE_X_90);
+                stack.mulPose(ROTATE_Y_180);
                 stack.translate(0F, 0.125F, 0F);
                 MatrixStackUtils.applyTransform(stack, armorSlot.transform);
 
@@ -398,7 +550,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 {
                     stack.pushPose();
                     stack.scale(0F, 0F, 0F);
-                    Minecraft.getInstance().getItemRenderer().renderStatic(null, new ItemStack(Items.OAK_BUTTON), mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
+                    Minecraft.getInstance().getItemRenderer().renderStatic(null, OAK_BUTTON_STACK, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                     consumers.draw();
                     stack.popPose();
                 }
@@ -432,7 +584,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             Link link = this.form.texture.get();
             Link texture = link == null ? model.texture : link;
-            Color color = this.form.color.get().copy();
+            Color color = this.renderColor.set(1F, 1F, 1F, 1F);
+
+            FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
 
             for (ModelGroup group : model.getModel().getAllGroups())
             {
@@ -457,7 +611,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             model.model.resetPose();
 
             matrices.pushPose();
-            matrices.mulPose(Axis.YP.rotation(MathUtils.PI));
+            matrices.mulPose(ROTATE_Y_180);
             MatrixStackUtils.applyTransform(matrices, slot.transform);
 
             BBSModClient.getTextures().bindTexture(texture);
@@ -495,15 +649,23 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         {
             Link link = this.form.texture.get();
             Link texture = link == null ? model.texture : link;
-            Color color = this.form.color.get().copy();
+            Color color = this.renderColor.set(context.color, true);
 
-            color.mul(context.color);
+            if (context.isPicking())
+            {
+                color.mul(this.form.color.get());
+            }
+            else
+            {
+                FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+            }
+
             model.model.resetPose();
 
             this.animator.applyActions(context.entity, model, context.getTransition());
-            model.model.applyPose(this.getPose());
+            model.model.applyPose(this.getPose(this.renderPose));
 
-            context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+            context.stack.mulPose(ROTATE_Y_180);
 
             BBSModClient.getTextures().bindTexture(texture);
 
@@ -527,6 +689,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         model.fillStencilMap(context.stencilMap, this.form);
+
+        if (ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
+        {
+            ModelIKDebug.renderStencil(context.stack, model.model, ikMap, context.stencilMap, this.form);
+        }
     }
 
     private void captureMatrices(ModelInstance model)
@@ -552,7 +719,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             }
             else
             {
-                context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+                context.stack.mulPose(ROTATE_Y_180);
             }
 
             this.renderBodyPart(part, context);
@@ -588,9 +755,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             model.model.resetPose();
 
             this.animator.applyActions(entity, model, transition);
-            model.model.applyPose(this.getPose());
+            model.model.applyPose(this.getPose(this.renderPose));
 
-            stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+            stack.mulPose(ROTATE_Y_180);
             this.captureMatrices(model);
         }
 
@@ -631,7 +798,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 }
                 else
                 {
-                    stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+                    stack.mulPose(ROTATE_Y_180);
                 }
 
                 MatrixStackUtils.applyTransform(stack, part.transform.get());

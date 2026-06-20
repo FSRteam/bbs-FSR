@@ -5,6 +5,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.settings.values.base.BaseValueGroup;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,6 +16,8 @@ import java.util.Map;
 public class ValueGroup extends BaseValueGroup
 {
     private Map<String, BaseValue> children = new LinkedHashMap<>();
+
+    public Icon icon;
 
     public ValueGroup(String id)
     {

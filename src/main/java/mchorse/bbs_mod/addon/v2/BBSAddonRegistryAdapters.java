@@ -1,9 +1,12 @@
 package mchorse.bbs_mod.addon.v2;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.api.addon.BBSAddonCapability;
+import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
 import mchorse.bbs_mod.api.clips.BBSClipRegistry;
 import mchorse.bbs_mod.api.events.BBSEventRegistry;
 import mchorse.bbs_mod.api.forms.BBSFormRegistry;
+import mchorse.bbs_mod.api.network.BBSAddonServerNetworkReceiver;
 import mchorse.bbs_mod.api.network.BBSNetworkRegistry;
 import mchorse.bbs_mod.api.particles.BBSParticleRegistry;
 import mchorse.bbs_mod.api.registry.BBSRegistrationResult;
@@ -13,6 +16,7 @@ import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.events.EventBus;
 import mchorse.bbs_mod.forms.FormArchitect;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.ISourcePack;
@@ -21,7 +25,10 @@ import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.factory.MapFactory;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 
 import java.io.File;
 import java.util.Map;
@@ -31,29 +38,36 @@ final class BBSAddonRegistryAdapters
 {
     private BBSAddonRegistryAdapters() {}
 
-    static BBSResourceRegistry resources(BBSAddonDiagnosticRecord diagnostics, AssetProvider provider)
+    static BBSResourceRegistry resources(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, AssetProvider provider)
     {
         return new BBSResourceRegistry()
         {
             @Override
             public BBSRegistrationResult registerSourcePack(ISourcePack sourcePack)
             {
-                return registerPack(diagnostics, provider, sourcePack, false);
+                return registerPack(diagnostics, descriptor, provider, sourcePack, false);
             }
 
             @Override
             public BBSRegistrationResult registerSourcePackFirst(ISourcePack sourcePack)
             {
-                return registerPack(diagnostics, provider, sourcePack, true);
+                return registerPack(diagnostics, descriptor, provider, sourcePack, true);
             }
         };
     }
 
-    static BBSFormRegistry forms(BBSAddonDiagnosticRecord diagnostics, FormArchitect forms)
+    static BBSFormRegistry forms(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, FormArchitect forms)
     {
         return (id, formType) ->
         {
             String key = stringId(id);
+
+            BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.FORMS, key, "forms");
+
+            if (capability != null)
+            {
+                return capability;
+            }
 
             if (forms == null)
             {
@@ -78,7 +92,7 @@ final class BBSAddonRegistryAdapters
         };
     }
 
-    static BBSSettingsRegistry settings(BBSAddonDiagnosticRecord diagnostics, File settingsFolder)
+    static BBSSettingsRegistry settings(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, File settingsFolder)
     {
         return new BBSSettingsRegistry()
         {
@@ -93,6 +107,13 @@ final class BBSAddonRegistryAdapters
             @Override
             public BBSRegistrationResult register(Icon icon, String id, File destination, Consumer<SettingsBuilder> registerer)
             {
+                BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.SETTINGS, id, "settings");
+
+                if (capability != null)
+                {
+                    return capability;
+                }
+
                 if (id == null || id.isBlank())
                 {
                     return diagnostics.record(BBSRegistrationResult.rejected("<blank>", "settings id is blank"));
@@ -122,28 +143,35 @@ final class BBSAddonRegistryAdapters
         };
     }
 
-    static BBSClipRegistry clips(BBSAddonDiagnosticRecord diagnostics, MapFactory<Clip, ClipFactoryData> cameraClips, MapFactory<Clip, ClipFactoryData> actionClips)
+    static BBSClipRegistry clips(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, MapFactory<Clip, ClipFactoryData> cameraClips, MapFactory<Clip, ClipFactoryData> actionClips)
     {
         return new BBSClipRegistry()
         {
             @Override
             public BBSRegistrationResult registerCameraClip(Link id, Class<? extends Clip> clipType, ClipFactoryData data)
             {
-                return registerClip(diagnostics, cameraClips, id, clipType, data, "camera clip");
+                return registerClip(diagnostics, descriptor, cameraClips, id, clipType, data, "camera clip");
             }
 
             @Override
             public BBSRegistrationResult registerActionClip(Link id, Class<? extends Clip> clipType, ClipFactoryData data)
             {
-                return registerClip(diagnostics, actionClips, id, clipType, data, "action clip");
+                return registerClip(diagnostics, descriptor, actionClips, id, clipType, data, "action clip");
             }
         };
     }
 
-    static BBSParticleRegistry particles(BBSAddonDiagnosticRecord diagnostics, Map<String, String> particleComponents)
+    static BBSParticleRegistry particles(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, Map<String, String> particleComponents)
     {
         return (id, componentClassName) ->
         {
+            BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.PARTICLES, id, "particles");
+
+            if (capability != null)
+            {
+                return capability;
+            }
+
             if (id == null || id.isBlank())
             {
                 return diagnostics.record(BBSRegistrationResult.rejected("<blank>", "particle component id is blank"));
@@ -167,34 +195,90 @@ final class BBSAddonRegistryAdapters
         };
     }
 
-    static BBSNetworkRegistry network(BBSAddonDiagnosticRecord diagnostics)
+    static BBSNetworkRegistry network(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor)
     {
-        return (id, receiver) ->
+        return new BBSNetworkRegistry()
         {
-            String key = id == null ? "<null>" : id.toString();
-
-            if (id == null || receiver == null)
+            @Override
+            public BBSRegistrationResult registerLegacyServerReceiver(ResourceLocation id, NetworkCompat.ServerReceiver receiver)
             {
-                return diagnostics.record(BBSRegistrationResult.rejected(key, "network id or receiver is null"));
+                String key = id == null ? "<null>" : id.toString();
+                BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.NETWORK, key, "network");
+
+                if (capability != null)
+                {
+                    return capability;
+                }
+
+                if (id == null || receiver == null)
+                {
+                    return diagnostics.record(BBSRegistrationResult.rejected(key, "network id or receiver is null"));
+                }
+
+                try
+                {
+                    NetworkCompat.registerServerReceiver(id, receiver);
+                    return diagnostics.record(BBSRegistrationResult.accepted(key));
+                }
+                catch (Exception e)
+                {
+                    diagnostics.error("legacy network receiver registration failed for '" + key + "'", e);
+                    return diagnostics.record(BBSRegistrationResult.rejected(key, e.getMessage()));
+                }
             }
 
-            try
+            @Override
+            public BBSRegistrationResult registerServerReceiver(ResourceLocation id, BBSAddonServerNetworkReceiver receiver)
             {
-                NetworkCompat.registerServerReceiver(id, receiver);
-                return diagnostics.record(BBSRegistrationResult.accepted(key));
+                String key = id == null ? "<null>" : id.toString();
+                BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.NETWORK, key, "network");
+
+                if (capability != null)
+                {
+                    return capability;
+                }
+
+                return diagnostics.record(AddonPayloadBroker.registerServerReceiver(descriptor, id, receiver));
             }
-            catch (Exception e)
+
+            @Override
+            public FriendlyByteBuf createBuffer()
             {
-                diagnostics.error("legacy network receiver registration failed for '" + key + "'", e);
-                return diagnostics.record(BBSRegistrationResult.rejected(key, e.getMessage()));
+                return AddonPayloadBroker.createBuffer();
+            }
+
+            @Override
+            public boolean sendToPlayer(ServerPlayer player, ResourceLocation id, FriendlyByteBuf payload)
+            {
+                return AddonPayloadBroker.sendToPlayer(descriptor, player, id, payload);
+            }
+
+            @Override
+            public boolean sendToPlayersTrackingEntity(Entity entity, ResourceLocation id, FriendlyByteBuf payload)
+            {
+                return AddonPayloadBroker.sendToPlayersTrackingEntity(descriptor, entity, id, payload);
+            }
+
+            @Override
+            public boolean sendToPlayersTrackingEntityAndSelf(ServerPlayer player, ResourceLocation id, FriendlyByteBuf payload)
+            {
+                return AddonPayloadBroker.sendToPlayersTrackingEntityAndSelf(descriptor, player, id, payload);
             }
         };
     }
 
-    static BBSEventRegistry events(BBSAddonDiagnosticRecord diagnostics, EventBus eventBus)
+    static BBSEventRegistry events(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, EventBus eventBus)
     {
         return (subscriber) ->
         {
+            String key = subscriber == null ? "<null>" : subscriber.getClass().getName();
+            BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.EVENTS, key, "events");
+
+            if (capability != null)
+            {
+                return capability;
+            }
+
             if (subscriber == null)
             {
                 return diagnostics.record(BBSRegistrationResult.rejected("<null>", "subscriber is null"));
@@ -207,13 +291,19 @@ final class BBSAddonRegistryAdapters
 
             eventBus.register(subscriber);
 
-            return diagnostics.record(BBSRegistrationResult.accepted(subscriber.getClass().getName()));
+            return diagnostics.record(BBSRegistrationResult.accepted(key));
         };
     }
 
-    private static BBSRegistrationResult registerPack(BBSAddonDiagnosticRecord diagnostics, AssetProvider provider, ISourcePack sourcePack, boolean first)
+    private static BBSRegistrationResult registerPack(BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, AssetProvider provider, ISourcePack sourcePack, boolean first)
     {
         String key = sourcePack == null ? "<null>" : sourcePack.getPrefix();
+        BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.SOURCE_PACKS, key, "resources");
+
+        if (capability != null)
+        {
+            return capability;
+        }
 
         if (provider == null)
         {
@@ -239,6 +329,7 @@ final class BBSAddonRegistryAdapters
 
     private static BBSRegistrationResult registerClip(
         BBSAddonDiagnosticRecord diagnostics,
+        BBSAddonDescriptor descriptor,
         MapFactory<Clip, ClipFactoryData> factory,
         Link id,
         Class<? extends Clip> clipType,
@@ -247,6 +338,12 @@ final class BBSAddonRegistryAdapters
     )
     {
         String key = stringId(id);
+        BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.CLIPS, key, "clips");
+
+        if (capability != null)
+        {
+            return capability;
+        }
 
         if (factory == null)
         {
@@ -273,5 +370,24 @@ final class BBSAddonRegistryAdapters
     private static String stringId(Link id)
     {
         return id == null ? "<null>" : id.toString();
+    }
+
+    private static BBSRegistrationResult requireCapability(
+        BBSAddonDiagnosticRecord diagnostics,
+        BBSAddonDescriptor descriptor,
+        BBSAddonCapability capability,
+        String id,
+        String facade
+    )
+    {
+        String key = id == null || id.isBlank() ? "<blank>" : id;
+
+        if (descriptor == null || !descriptor.capabilities().contains(capability))
+        {
+            return diagnostics.record(BBSRegistrationResult.rejected(key,
+                "addon did not declare " + capability + " capability required by " + facade + " facade"));
+        }
+
+        return null;
     }
 }

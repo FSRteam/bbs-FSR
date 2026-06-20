@@ -16,6 +16,7 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.CameraUtils;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
+import mchorse.bbs_mod.client.BBSFlickerDiagnostics;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
@@ -37,7 +38,6 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
-import mchorse.bbs_mod.ui.film.clips.renderer.IUIClipRenderer;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPanel;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
@@ -56,6 +56,7 @@ import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -74,13 +75,35 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.Level;
 import org.joml.Vector3d;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class UIReplaysEditor extends UIElement {
+
+    private static final FlickerLogger LOGGER = new FlickerLogger(LoggerFactory.getLogger(UIReplaysEditor.class));
 
     private static final Map<String, Integer> COLORS = new HashMap<>();
     private static final Map<String, Icon> ICONS = new HashMap<>();
     private static String lastFilm = "";
     private static int lastReplay;
+
+    private static class FlickerLogger
+    {
+        private final Logger logger;
+
+        public FlickerLogger(Logger logger)
+        {
+            this.logger = logger;
+        }
+
+        public void info(String message, Object... args)
+        {
+            if (BBSFlickerDiagnostics.ENABLED)
+            {
+                this.logger.info(message, args);
+            }
+        }
+    }
 
     public UIReplaysListPanel replaysList;
     public UIReplayPropertiesPanel replayProperties;
@@ -92,13 +115,23 @@ public class UIReplaysEditor extends UIElement {
     /* Keyframes */
     public UIKeyframeEditor keyframeEditor;
 
+    /* Action clips share this editor's timeline area. */
+    private UIClipsPanel actionTimeline;
+    private UIIcon actionsToggle;
+    private boolean actionsMode;
+
     /* Clips */
     private UIFilmPanel filmPanel;
     private Film film;
     private Replay replay;
+    private Pair<Form, String> pendingPick;
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
+    private String keyframeEditorSignature;
+    private String lastTimelineVisibilitySignature = "";
+    private String lastRenderVisibilitySignature = "";
+    private long lastRenderVisibilityLog;
     private final Map<String, Set<String>> expandedPoseTabsByReplay = new HashMap<>();
 
     public enum ReplayCategory {
@@ -238,11 +271,36 @@ public class UIReplaysEditor extends UIElement {
         return Colors.BLUE;
     }
 
-    public static boolean renderBackground(
+    public static void renderRuler(
+            UIContext context,
+            UIKeyframes keyframes,
+            UIClipsPanel clipsPanel,
+            Clips camera,
+            int clipOffset
+    ) {
+        Area area = keyframes.graphArea;
+        int rulerBottom = TimelineRulerRenderer.getRulerBottom(area);
+
+        if (rulerBottom <= area.y)
+        {
+            return;
+        }
+
+        context.batcher.clip(area.x, area.y, area.w, rulerBottom - area.y, context);
+
+        renderRulerAudio(context, keyframes, camera, clipOffset, area, rulerBottom);
+        renderRulerClipGradient(context, keyframes, clipsPanel, clipOffset, area, rulerBottom);
+
+        context.batcher.unclip(context);
+    }
+
+    private static boolean renderRulerAudio(
             UIContext context,
             UIKeyframes keyframes,
             Clips camera,
-            int clipOffset
+            int clipOffset,
+            Area area,
+            int rulerBottom
     ) {
         if (!BBSSettings.audioWaveformVisibleInKeyframes.get()) {
             return false;
@@ -250,54 +308,98 @@ public class UIReplaysEditor extends UIElement {
 
         Scale scale = keyframes.getXAxis();
         boolean renderedOnce = false;
+        int y = area.y + 1;
+        int h = Math.max(1, rulerBottom - y - 1);
 
         for (Clip clip : camera.get()) {
-            if (clip instanceof AudioClip audioClip) {
-                Link link = audioClip.audio.get();
-
-                if (link == null) {
-                    continue;
-                }
-
-                SoundBuffer buffer = BBSModClient.getSounds().get(link, true);
-
-                if (buffer == null || buffer.getWaveform() == null) {
-                    continue;
-                }
-
-                Waveform wave = buffer.getWaveform();
-
-                if (wave != null) {
-                    int audioOffset = audioClip.offset.get();
-                    float offset = audioClip.tick.get() - clipOffset;
-                    int duration = Math.min((int) (wave.getDuration() * 20), clip.duration.get());
-
-                    int x1 = (int) scale.to(offset);
-                    int x2 = (int) scale.to(offset + duration);
-
-                    wave.render(
-                            context.batcher,
-                            Colors.WHITE,
-                            x1,
-                            keyframes.area.y + 15,
-                            x2 - x1,
-                            20,
-                            TimeUtils.toSeconds(audioOffset),
-                            TimeUtils.toSeconds(audioOffset + duration)
-                    );
-
-                    renderedOnce = true;
-                }
+            if (!(clip instanceof AudioClip audioClip)) {
+                continue;
             }
+
+            Link link = audioClip.audio.get();
+
+            if (link == null) {
+                continue;
+            }
+
+            SoundBuffer buffer = BBSModClient.getSounds().get(link, true);
+
+            if (buffer == null || buffer.getWaveform() == null) {
+                continue;
+            }
+
+            Waveform wave = buffer.getWaveform();
+            int audioOffset = audioClip.offset.get();
+            float offset = audioClip.tick.get() - clipOffset;
+            int duration = Math.min((int) (wave.getDuration() * 20), clip.duration.get());
+            int x1 = (int) scale.to(offset);
+            int x2 = (int) scale.to(offset + duration);
+
+            if (x2 <= area.x || x1 >= area.ex()) {
+                continue;
+            }
+
+            wave.render(
+                    context.batcher,
+                    Colors.WHITE,
+                    x1,
+                    y,
+                    x2 - x1,
+                    h,
+                    TimeUtils.toSeconds(audioOffset),
+                    TimeUtils.toSeconds(audioOffset + duration)
+            );
+
+            renderedOnce = true;
         }
 
         return renderedOnce;
     }
 
+    private static void renderRulerClipGradient(
+            UIContext context,
+            UIKeyframes keyframes,
+            UIClipsPanel clipsPanel,
+            int clipOffset,
+            Area area,
+            int rulerBottom
+    ) {
+        Clip clip = clipsPanel.getClip();
+
+        if (clip == null || clip instanceof AudioClip || !BBSSettings.editorClipPreview.get()) {
+            return;
+        }
+
+        Scale scale = keyframes.getXAxis();
+        int x1 = (int) scale.to(clip.tick.get() - clipOffset);
+        int x2 = (int) scale.to(clip.tick.get() + clip.duration.get() - clipOffset);
+
+        if (x2 <= area.x || x1 >= area.ex()) {
+            return;
+        }
+
+        int color = clipsPanel.clips.getFactory().getData(clip).color;
+        int left = Math.max(area.x, x1);
+        int right = Math.min(area.ex(), x2);
+        int top = area.y + 1;
+        int bottom = Math.max(top + 1, rulerBottom - 1);
+
+        context.batcher.gradientVBox(left, top, right, bottom, Colors.setA(color, 0.03F), Colors.setA(color, 0.78F));
+        context.batcher.box(left, Math.max(top, bottom - 2), right, bottom, Colors.setA(color, 0.92F));
+    }
+
     public UIReplaysEditor(UIFilmPanel filmPanel) {
         this.filmPanel = filmPanel;
         this.replayProperties = new UIReplayPropertiesPanel(filmPanel);
-        this.replaysList = new UIReplaysListPanel(filmPanel, (l) -> this.setReplay(l.isEmpty() ? null : l.get(0), false, false), this.replayProperties.getFormConsumer());
+        this.replaysList = new UIReplaysListPanel(filmPanel, (l) ->
+        {
+            Replay selected = l.isEmpty() ? null : l.get(0);
+
+            if (selected != this.replay)
+            {
+                this.setReplay(selected, false, false);
+            }
+        }, this.replayProperties.getFormConsumer());
         this.replayProperties.attachReplayList(this.replaysList.replays);
 
         this.iconBar = new UIElement();
@@ -309,10 +411,10 @@ public class UIReplaysEditor extends UIElement {
                     int labelWidth = this.getLabelWidth();
                     Area area = this.iconBar.area;
 
-                    context.batcher.box(area.x, area.y, area.x + labelWidth, area.ey(), Colors.A100);
+                    context.batcher.box(area.x, area.y, area.x + labelWidth, area.ey(), BBSSettings.chromeSurface());
 
                     /* Render active tab indicator */
-                    UIIcon activeIcon = this.tabButtons.get(this.category);
+                    UIIcon activeIcon = this.actionsMode ? this.actionsToggle : this.tabButtons.get(this.category);
 
                     if (activeIcon != null) {
                         int color = BBSSettings.primaryColor.get();
@@ -345,6 +447,10 @@ public class UIReplaysEditor extends UIElement {
             this.tabButtons.put(category, button);
         }
 
+        this.actionsToggle = new UIIcon(Icons.ACTION, b -> this.toggleActionsMode());
+        this.actionsToggle.tooltip(UIKeys.FILM_REPLAY_ACTIONS_TIMELINE, Direction.LEFT);
+        this.layoutActionsToggle();
+
         this.setCategory(ReplayCategory.PLAYER);
 
         this.keys()
@@ -357,11 +463,22 @@ public class UIReplaysEditor extends UIElement {
                 .register(Keys.REPLAYS_TAB_3, () -> this.setCategory(ReplayCategory.POSE))
                 .category(UIKeys.FILM_REPLAY_TITLE);
 
-        this.add(this.iconBar);
+        this.add(this.iconBar, this.actionsToggle);
         this.markContainer();
     }
 
     private void setCategory(ReplayCategory c) {
+        LOGGER.info("[BBS-FLICKER] replayEditor.setCategory from={} to={} same={} actionMode={} replay={} visible={}",
+                this.category, c, this.category == c, this.actionsMode, this.replayId(this.replay), this.isVisible());
+
+        if (this.category == c && !this.actionsMode) {
+            LOGGER.info("[BBS-FLICKER] replayEditor.setCategory.skip category={} reason=same replay={} visible={}",
+                    c, this.replayId(this.replay), this.isVisible());
+
+            return;
+        }
+
+        this.actionsMode = false;
         this.category = c;
         this.updateChannelsList();
     }
@@ -386,7 +503,9 @@ public class UIReplaysEditor extends UIElement {
         this.savePoseTabState(this.replay);
         this.expandedPoseTabsByReplay.clear();
         this.film = film;
-        this.filmPanel.getController().orbit.clearReplayStates();
+
+        LOGGER.info("[BBS-FLICKER] replayEditor.setFilm film={} previousReplay={} visible={} category={}",
+                film == null ? "null" : film.getId(), this.replayId(this.replay), this.isVisible(), this.category);
 
         if (film != null) {
             List<Replay> replays = film.replays.getList();
@@ -410,18 +529,20 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void setReplay(Replay replay, boolean select, boolean resetOrbit) {
-        this.savePoseTabState(this.replay);
-        Replay previousReplay = this.replay;
+        Replay previous = this.replay;
 
-        this.filmPanel.getController().orbit.saveReplayState(previousReplay);
+        LOGGER.info("[BBS-FLICKER] replayEditor.setReplay from={} to={} select={} resetOrbit={} same={} category={} visible={} keyframeEditor={}",
+                this.replayId(previous), this.replayId(replay), select, resetOrbit, previous == replay, this.category, this.isVisible(), this.keyframeEditor != null);
+
+        this.savePoseTabState(this.replay);
         this.replay = replay;
 
         if (resetOrbit) {
             this.filmPanel.getController().orbit.reset();
         }
-        else
+        else if (replay != null && BBSSettings.editorOrbitTeleportOnSwitch.get())
         {
-            this.filmPanel.getController().orbit.restoreReplayState(replay, true);
+            this.filmPanel.getController().orbit.teleportPivotToReplay();
         }
 
         this.replayProperties.setReplay(replay);
@@ -429,7 +550,7 @@ public class UIReplaysEditor extends UIElement {
         this.updateChannelsList();
 
         if (select && replay != null) {
-            this.replaysList.replays.scrollToReplay(replay);
+            this.replaysList.replays.scrollToReplay(replay, false);
         }
     }
 
@@ -446,12 +567,13 @@ public class UIReplaysEditor extends UIElement {
     public void updateChannelsList() {
         UIKeyframes lastEditor = this.keyframeEditor != null ? this.keyframeEditor.view : null;
 
-        if (this.keyframeEditor != null) {
-            this.keyframeEditor.removeFromParent();
-            this.keyframeEditor = null;
-        }
+        LOGGER.info("[BBS-FLICKER] replayEditor.updateChannels.begin replay={} category={} visible={} tabs={} existingEditor={} existingSignature={}",
+                this.replayId(this.replay), this.category, this.isVisible(), BBSSettings.editorReplayTabs.get(), this.keyframeEditor != null, this.keyframeEditorSignature);
 
         if (this.replay == null) {
+            this.removeKeyframeEditor();
+            this.updateTimelineModeVisibility();
+            LOGGER.info("[BBS-FLICKER] replayEditor.updateChannels.nullReplay category={} visible={}", this.category, this.isVisible());
             return;
         }
 
@@ -546,6 +668,25 @@ public class UIReplaysEditor extends UIElement {
             lastForm = form;
         }
 
+        String signature = this.createKeyframeEditorSignature(sheets, tabsEnabled);
+
+        if (Objects.equals(signature, this.keyframeEditorSignature) && this.keyframeEditor != null) {
+            LOGGER.info("[BBS-FLICKER] replayEditor.updateChannels.reuse replay={} category={} sheets={} tabs={} signatureHash={} editorVisible={} actionMode={}",
+                    this.replayId(this.replay), this.category, sheets.size(), tabsEnabled, signature.hashCode(), this.keyframeEditor.isVisible(), this.actionsMode);
+            this.layoutActionsToggle();
+            this.bringBarToFront();
+            this.updateTimelineModeVisibility();
+            this.resize();
+
+            return;
+        }
+
+        this.removeKeyframeEditor();
+        this.keyframeEditorSignature = signature;
+
+        LOGGER.info("[BBS-FLICKER] replayEditor.updateChannels.rebuild replay={} category={} sheets={} tabs={} signatureHash={} lastEditor={} visible={} actionMode={}",
+                this.replayId(this.replay), this.category, sheets.size(), tabsEnabled, signature.hashCode(), lastEditor != null, this.isVisible(), this.actionsMode);
+
         if (!sheets.isEmpty()) {
             this.keyframeEditor = new UIKeyframeEditor(consumer
                     -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute()
@@ -554,39 +695,21 @@ public class UIReplaysEditor extends UIElement {
                     .editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
             this.keyframeEditor.relative(this).x(0).y(0).w(1F).h(1F);
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
-            this.applyKeyframeVisibility();
+            this.updateTimelineModeVisibility();
 
             /* Update iconBar width to match label width */
             int labelWidth = this.keyframeEditor.view.getLabelWidth();
             this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
+            this.layoutActionsToggle();
 
             /* Reset */
             if (lastEditor != null) {
                 this.keyframeEditor.view.copyViewport(lastEditor);
             }
 
-            this.keyframeEditor.view.backgroundRenderer(context -> {
-                UIKeyframes view = this.keyframeEditor.view;
-                boolean yes = renderBackground(context, view, this.film.camera, 0);
-                int shift = yes ? 35 : 15;
-
-                UIClipsPanel cameraEditor = this.filmPanel.cameraEditor;
-                Clip clip = cameraEditor.getClip();
-
-                if (clip != null && BBSSettings.editorClipPreview.get()) {
-                    IUIClipRenderer<Clip> renderer = cameraEditor.clips.getRenderers().get(clip);
-                    Scale scale = view.getXAxis();
-                    Area area = new Area();
-
-                    float offset = clip.tick.get();
-                    int duration = clip.duration.get();
-                    int x1 = (int) scale.to(offset);
-                    int x2 = (int) scale.to(offset + duration);
-
-                    area.setPoints(x1, view.area.y + shift, x2, view.area.y + shift + 20);
-                    renderer.renderClip(context, cameraEditor.clips, clip, area, true, true);
-                }
-            });
+            this.keyframeEditor.view.rulerRenderer(context ->
+                    renderRuler(context, this.keyframeEditor.view, this.filmPanel.cameraEditor, this.film.camera, 0)
+            );
             this.keyframeEditor.view.duration(() -> this.film.camera.calculateDuration());
             this.keyframeEditor.view.context(menu -> {
                 if (this.replay.form.get() instanceof ModelForm modelForm) {
@@ -687,11 +810,8 @@ public class UIReplaysEditor extends UIElement {
             this.keyframeEditor.view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
 
             this.add(this.keyframeEditor);
-            /* Icon bar on top so it overlays the track names column (left labelWidth pixels) */
-            if (this.iconBar.getParent() != null) {
-                this.iconBar.removeFromParent();
-            }
-            this.add(this.iconBar);
+            this.bringBarToFront();
+            this.updateTimelineModeVisibility();
         }
 
         this.resize();
@@ -699,6 +819,43 @@ public class UIReplaysEditor extends UIElement {
         if (this.keyframeEditor != null && lastEditor == null) {
             this.keyframeEditor.view.resetView();
         }
+    }
+
+    private void removeKeyframeEditor() {
+        if (this.keyframeEditor != null) {
+            LOGGER.info("[BBS-FLICKER] replayEditor.removeKeyframeEditor replay={} category={} signature={} visible={} actionMode={}",
+                    this.replayId(this.replay), this.category, this.keyframeEditorSignature, this.isVisible(), this.actionsMode);
+            this.keyframeEditor.removeFromParent();
+            this.keyframeEditor = null;
+        }
+
+        this.keyframeEditorSignature = null;
+    }
+
+    private String createKeyframeEditorSignature(List<UIKeyframeSheet> sheets, boolean tabsEnabled) {
+        StringBuilder builder = new StringBuilder();
+
+        builder.append(System.identityHashCode(this.replay))
+                .append('|')
+                .append(this.category)
+                .append('|')
+                .append(tabsEnabled);
+
+        for (UIKeyframeSheet sheet : sheets) {
+            builder.append('|')
+                    .append(sheet.id)
+                    .append(':')
+                    .append(System.identityHashCode(sheet.channel))
+                    .append(':')
+                    .append(sheet.separator);
+        }
+
+        return builder.toString();
+    }
+
+    private String replayId(Replay replay)
+    {
+        return replay == null ? "null" : replay.getId();
     }
 
     private void flushForm(
@@ -793,49 +950,177 @@ public class UIReplaysEditor extends UIElement {
 
     public void setTimelineVisible(boolean visible)
     {
-        this.timelineVisible = visible;
+        if (this.timelineVisible != visible)
+        {
+            LOGGER.info("[BBS-FLICKER] replayEditor.setTimelineVisible replay={} from={} to={} visible={} actionMode={}",
+                    this.replayId(this.replay), this.timelineVisible, visible, this.isVisible(), this.actionsMode);
+        }
 
-        this.applyKeyframeVisibility();
+        this.timelineVisible = visible;
+        this.updateTimelineModeVisibility();
     }
 
     public void setPropertiesVisible(boolean visible)
     {
+        if (this.propertiesVisible != visible)
+        {
+            LOGGER.info("[BBS-FLICKER] replayEditor.setPropertiesVisible replay={} from={} to={} visible={} actionMode={}",
+                    this.replayId(this.replay), this.propertiesVisible, visible, this.isVisible(), this.actionsMode);
+        }
+
         this.propertiesVisible = visible;
 
-        this.applyKeyframeVisibility();
+        this.updateTimelineModeVisibility();
     }
 
-    private void applyKeyframeVisibility()
+    public void attachActionTimeline(UIClipsPanel actionTimeline)
     {
+        this.actionTimeline = actionTimeline;
+        actionTimeline.relative(this).x(0).y(0).w(1F).h(1F);
+        this.add(actionTimeline);
+        this.bringBarToFront();
+        this.updateTimelineModeVisibility();
+    }
+
+    public boolean isActionsMode()
+    {
+        return this.actionsMode;
+    }
+
+    private void toggleActionsMode()
+    {
+        this.setActionsMode(!this.actionsMode);
+    }
+
+    public void setActionsMode(boolean actionsMode)
+    {
+        if (this.actionsMode == actionsMode)
+        {
+            return;
+        }
+
+        LOGGER.info("[BBS-FLICKER] replayEditor.setActionsMode replay={} from={} to={} visible={} timelineVisible={} propertiesVisible={}",
+                this.replayId(this.replay), this.actionsMode, actionsMode, this.isVisible(), this.timelineVisible, this.propertiesVisible);
+
+        this.actionsMode = actionsMode;
+        this.updateTimelineModeVisibility();
+    }
+
+    private void updateTimelineModeVisibility()
+    {
+        boolean keyframes = !this.actionsMode;
+        boolean keyframeTimeline = this.timelineVisible && keyframes;
+        boolean keyframeProperties = this.propertiesVisible && keyframes;
+        boolean actionVisible = (this.timelineVisible || this.propertiesVisible) && this.actionsMode;
+        boolean actionTimelineVisible = this.timelineVisible && this.actionsMode;
+        boolean actionPropertiesVisible = this.propertiesVisible && this.actionsMode;
+        String signature = this.replayId(this.replay)
+                + "|" + this.isVisible()
+                + "|" + this.actionsMode
+                + "|" + this.timelineVisible
+                + "|" + this.propertiesVisible
+                + "|" + (this.keyframeEditor != null)
+                + "|" + (this.actionTimeline != null)
+                + "|" + keyframeTimeline
+                + "|" + keyframeProperties
+                + "|" + actionVisible
+                + "|" + actionTimelineVisible
+                + "|" + actionPropertiesVisible;
+
+        if (!signature.equals(this.lastTimelineVisibilitySignature))
+        {
+            LOGGER.info("[BBS-FLICKER] replayEditor.timelineVisibility replay={} editorVisible={} actionMode={} timeline={} properties={} keyframeEditor={} actionTimeline={} keyframeTimeline={} keyframeProperties={} actionVisible={} actionTimelineVisible={} actionPropertiesVisible={}",
+                    this.replayId(this.replay), this.isVisible(), this.actionsMode, this.timelineVisible, this.propertiesVisible,
+                    this.keyframeEditor != null, this.actionTimeline != null, keyframeTimeline, keyframeProperties,
+                    actionVisible, actionTimelineVisible, actionPropertiesVisible);
+            this.lastTimelineVisibilitySignature = signature;
+        }
+
         if (this.keyframeEditor != null)
         {
-            this.keyframeEditor.view.setVisible(this.timelineVisible);
-
-            if (this.keyframeEditor.editor != null)
-            {
-                this.keyframeEditor.editor.setVisible(this.propertiesVisible);
-            }
+            this.keyframeEditor.setTimelineVisible(keyframeTimeline);
+            this.keyframeEditor.setPropertiesVisible(keyframeProperties);
         }
+
+        if (this.actionTimeline != null)
+        {
+            this.actionTimeline.setVisible(actionVisible);
+            this.actionTimeline.setTimelineVisible(actionTimelineVisible);
+            this.actionTimeline.setPropertiesVisible(actionPropertiesVisible);
+        }
+    }
+
+    private void bringBarToFront()
+    {
+        if (this.iconBar.getParent() != null)
+        {
+            this.iconBar.removeFromParent();
+        }
+
+        if (this.actionsToggle.getParent() != null)
+        {
+            this.actionsToggle.removeFromParent();
+        }
+
+        this.add(this.iconBar, this.actionsToggle);
+    }
+
+    private void layoutActionsToggle()
+    {
+        this.actionsToggle.relative(this).x(0, this.getLabelWidth() - 20).y(0).wh(20, 20);
     }
 
     public void pickForm(Form form, String bone) {
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone);
     }
 
+    public void releaseViewport(UIContext context, boolean dragged)
+    {
+        Pair<Form, String> pending = this.pendingPick;
+
+        this.pendingPick = null;
+
+        LOGGER.info("[BBS-FLICKER] replayEditor.releaseViewport replay={} pending={} dragged={} button={} editorVisible={} orbitEnabled={}",
+                this.replayId(this.replay), pending != null, dragged, context.mouseButton, this.isVisible(), this.filmPanel.getController().orbit.enabled);
+
+        if (pending == null || dragged || context.mouseButton != 0)
+        {
+            return;
+        }
+
+        if (!this.isVisible())
+        {
+            LOGGER.info("[BBS-FLICKER] replayEditor.releaseViewport.showPanel replay={} reason=pendingPick", this.replayId(this.replay));
+            this.filmPanel.showPanel(this);
+        }
+
+        UIReplaysEditorUtils.pickFormWithOffers(context, pending, (form, bone, insert) ->
+                UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert));
+    }
+
     public boolean clickViewport(UIContext context, Area area) {
-        if (this.filmPanel.isFlying() && area.isInside(context)) {
+        boolean inside = area.isInside(context);
+        StencilFormFramebuffer stencil = this.filmPanel.getController().getStencil();
+
+        LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport replay={} button={} inside={} flying={} editorVisible={} orbitEnabled={} stencilPicked={}",
+                this.replayId(this.replay), context.mouseButton, inside, this.filmPanel.isFlying(), this.isVisible(),
+                this.filmPanel.getController().orbit.enabled, stencil != null && stencil.hasPicked());
+
+        if (this.filmPanel.isFlying() && inside) {
             if (context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
+                LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.consume replay={} reason=flyingOrbitLeft", this.replayId(this.replay));
                 this.filmPanel.getController().orbit.start(context);
 
                 return true;
             }
             if (context.mouseButton == 2) {
-                if (Window.isKeyPressed(Keys.FLIGHT_ORBIT.getMainKey())
-                        && this.filmPanel.getController().orbit.enabled) {
+                if (this.filmPanel.getController().orbit.enabled) {
                     this.filmPanel.getController().orbit.start(context);
                 } else {
                     this.filmPanel.dashboard.orbit.start(2, context.mouseX, context.mouseY);
                 }
+
+                LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.consume replay={} reason=flyingMiddle", this.replayId(this.replay));
 
                 return true;
             }
@@ -845,81 +1130,45 @@ public class UIReplaysEditor extends UIElement {
             return false;
         }
 
-        StencilFormFramebuffer stencil = this.filmPanel.getController().getStencil();
+        if (inside && context.mouseButton == 2 && this.filmPanel.getController().orbit.enabled) {
+            LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.consume replay={} reason=orbitMiddle", this.replayId(this.replay));
+            this.filmPanel.getController().orbit.start(context);
 
-        if (stencil.hasPicked()) {
+            return true;
+        }
+
+        if (inside && context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
+            this.pendingPick = stencil != null && stencil.hasPicked() ? stencil.getPicked() : null;
+            LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.consume replay={} reason=orbitLeft pendingPick={}",
+                    this.replayId(this.replay), this.pendingPick != null);
+            this.filmPanel.getController().orbit.start(context);
+
+            return true;
+        }
+
+        if (stencil != null && stencil.hasPicked()) {
             Pair<Form, String> pair = stencil.getPicked();
 
-            if (pair != null && context.mouseButton < 2) {
+            if (pair != null && (context.mouseButton < 2 || (context.mouseButton == 2 && Window.isCtrlPressed()))) {
                 if (!this.isVisible()) {
+                    LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.showPanel replay={} reason=stencilPick", this.replayId(this.replay));
                     this.filmPanel.showPanel(this);
                 }
 
-                if (Gizmo.INSTANCE.start(
+                if (UIReplaysEditorUtils.startFilmGizmo(
+                        this.filmPanel,
+                        context,
                         stencil.getIndex(),
-                        context.mouseX,
-                        context.mouseY,
-                        UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor)
+                        context.getTransition()
                 )) {
+                    LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.consume replay={} reason=gizmoStart", this.replayId(this.replay));
                     return true;
                 }
 
-                if (context.mouseButton == 0) {
-                    if (Window.isCtrlPressed()) {
-                        UIReplaysEditorUtils.offerAdjacent(
-                                this.getContext(),
-                                pair.a,
-                                pair.b,
-                                bone -> this.pickForm(pair.a, bone)
-                        ); 
-                    }else if (Window.isShiftPressed()) {
-                        UIReplaysEditorUtils.offerHierarchy(
-                                this.getContext(),
-                                pair.a,
-                                pair.b,
-                                bone -> this.pickForm(pair.a, bone)
-                        ); 
-                    }else {
-                        this.pickForm(pair.a, pair.b);
-                    }
-
+                if (UIReplaysEditorUtils.pickFormWithOffers(context, pair, (form, bone, insert) ->
+                        UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert))) {
+                    LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.consume replay={} reason=pickFormOffer", this.replayId(this.replay));
                     return true;
-                } else if (context.mouseButton == 1) {
-                    if (Window.isCtrlPressed()) {
-                        UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, bone
-                                -> UIReplaysEditorUtils.pickForm(
-                                        this.keyframeEditor,
-                                        this.filmPanel,
-                                        pair.a,
-                                        bone,
-                                        true
-                                )
-                        );
-
-                        return true;
-                    } else if (Window.isShiftPressed()) {
-                        UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, bone
-                                -> UIReplaysEditorUtils.pickForm(
-                                        this.keyframeEditor,
-                                        this.filmPanel,
-                                        pair.a,
-                                        bone,
-                                        true
-                                )
-                        );
-
-                        return true;
-                    } else {
-                        UIReplaysEditorUtils.pickForm(
-                                this.keyframeEditor,
-                                this.filmPanel,
-                                pair.a,
-                                pair.b,
-                                true
-                        );
-
-                        return true;
-                    }
                 }
             }
         } else if (context.mouseButton == 1 && this.isVisible()) {
@@ -973,14 +1222,10 @@ public class UIReplaysEditor extends UIElement {
                     );
                 });
 
+                LOGGER.info("[BBS-FLICKER] replayEditor.clickViewport.consume replay={} reason=blockContext", this.replayId(this.replay));
+
                 return true;
             }
-        }
-
-        if (area.isInside(context) && this.filmPanel.getController().orbit.enabled) {
-            this.filmPanel.getController().orbit.start(context);
-
-            return true;
         }
 
         return false;
@@ -1023,12 +1268,35 @@ public class UIReplaysEditor extends UIElement {
 
     @Override
     public void render(UIContext context) {
-        /* Hide category bar when tabs are disabled or "edit track" overlay is open */
-        this.iconBar.setVisible(
-            this.timelineVisible
-            && BBSSettings.editorReplayTabs.get()
-                && (this.keyframeEditor == null || !this.keyframeEditor.view.isEditing())
-        );
+        /* Hide category bar and action toggle while the "edit track" overlay is open. */
+        boolean notEditing = this.keyframeEditor == null || !this.keyframeEditor.view.isEditing();
+
+        this.iconBar.setVisible(this.timelineVisible && notEditing);
+        this.actionsToggle.setVisible(this.timelineVisible && notEditing);
+
+        String signature = this.replayId(this.replay)
+                + "|" + this.isVisible()
+                + "|" + this.timelineVisible
+                + "|" + this.propertiesVisible
+                + "|" + this.actionsMode
+                + "|" + notEditing
+                + "|" + this.iconBar.isVisible()
+                + "|" + this.actionsToggle.isVisible()
+                + "|" + (this.keyframeEditor != null)
+                + "|" + (this.actionTimeline != null && this.actionTimeline.isVisible());
+        long now = System.currentTimeMillis();
+
+        if (!signature.equals(this.lastRenderVisibilitySignature) || now - this.lastRenderVisibilityLog > 5000L)
+        {
+            LOGGER.info("[BBS-FLICKER] replayEditor.renderVisibility replay={} editorVisible={} timeline={} properties={} actionMode={} notEditing={} iconBar={} actionsToggle={} keyframeEditor={} actionTimelineVisible={}",
+                    this.replayId(this.replay), this.isVisible(), this.timelineVisible, this.propertiesVisible, this.actionsMode,
+                    notEditing, this.iconBar.isVisible(), this.actionsToggle.isVisible(),
+                    this.keyframeEditor != null, this.actionTimeline != null && this.actionTimeline.isVisible());
+            this.lastRenderVisibilitySignature = signature;
+            this.lastRenderVisibilityLog = now;
+        }
+
+        UIReplaysEditorUtils.configureFilmHotkeyDrag(this.filmPanel, context);
 
         super.render(context);
     }
@@ -1042,6 +1310,8 @@ public class UIReplaysEditor extends UIElement {
             int labelWidth = this.keyframeEditor.view.getLabelWidth();
             this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
         }
+
+        this.layoutActionsToggle();
     }
 
     @Override

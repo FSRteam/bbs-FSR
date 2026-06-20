@@ -5,6 +5,7 @@ import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
@@ -50,9 +51,9 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
         super.registerUI();
 
         this.keyframes = new UIKeyframeEditor((consumer) -> new UIFilmKeyframes(this.editor, consumer));
-        this.keyframes.view.backgroundRenderer((context) ->
+        this.keyframes.view.rulerRenderer((context) ->
         {
-            UIReplaysEditor.renderBackground(context, this.keyframes.view, (Clips) this.clip.getParent(), this.clip.tick.get());
+            UIReplaysEditor.renderRuler(context, this.keyframes.view, (UIClipsPanel) this.editor, (Clips) this.clip.getParent(), this.clip.tick.get());
         });
         this.keyframes.view.duration(() -> this.clip.duration.get());
         this.keyframes.setUndoId("keyframe_keyframes");

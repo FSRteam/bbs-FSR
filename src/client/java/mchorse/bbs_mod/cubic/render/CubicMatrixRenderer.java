@@ -26,6 +26,15 @@ public class CubicMatrixRenderer implements ICubicRenderer
         }
     }
 
+    public void reset()
+    {
+        for (int i = 0; i < this.matrices.size(); i++)
+        {
+            this.matrices.get(i).identity();
+            this.origins.get(i).identity();
+        }
+    }
+
     @Override
     public void applyGroupTransformations(PoseStack stack, ModelGroup group)
     {

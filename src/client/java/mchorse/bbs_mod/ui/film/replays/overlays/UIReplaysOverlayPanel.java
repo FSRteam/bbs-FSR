@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays.overlays;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -19,7 +20,6 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIDataUtils;
-import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.function.Consumer;
 
@@ -203,7 +203,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
     {
         super.renderBackground(context);
 
-        this.content.area.render(context.batcher, Colors.A100);
+        this.content.area.render(context.batcher, BBSSettings.baseSurface());
 
         if (this.replays.getList().size() < 3)
         {

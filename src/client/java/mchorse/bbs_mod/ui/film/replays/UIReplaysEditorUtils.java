@@ -1,9 +1,11 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
+import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -12,9 +14,11 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.ui.film.ICursor;
+import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
@@ -23,7 +27,11 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKey
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
+import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -34,6 +42,8 @@ import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -170,6 +180,117 @@ public class UIReplaysEditorUtils
         }
 
         return null;
+    }
+
+    public static boolean startFilmGizmo(UIFilmPanel panel, UIContext context, int stencilIndex, float gizmoTransition)
+    {
+        if (panel == null || panel.isFlying())
+        {
+            return false;
+        }
+
+        UIPropTransform transform = getEditableTransform(panel.replayEditor.keyframeEditor);
+        GizmoDrag drag = buildFilmGizmoDrag(
+            panel,
+            panel.getCamera(),
+            panel.preview.getViewport(),
+            transform,
+            gizmoTransition
+        );
+
+        return transform != null && Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
+    }
+
+    public static void configureFilmHotkeyDrag(UIFilmPanel panel, UIContext context)
+    {
+        UIPropTransform transform = panel == null ? null : getEditableTransform(panel.replayEditor.keyframeEditor);
+
+        if (transform == null)
+        {
+            return;
+        }
+
+        transform.hotkeyDrag(() -> buildFilmGizmoDrag(
+            panel,
+            panel.getCamera(),
+            panel.preview.getViewport(),
+            transform,
+            panel.replayEditor.getContext() == null ? 0F : panel.replayEditor.getContext().getTransition()
+        ));
+    }
+
+    public static GizmoDrag buildFilmGizmoDrag(
+        UIFilmPanel panel,
+        Camera camera,
+        Area viewport,
+        UIPropTransform transform,
+        float transition
+    )
+    {
+        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(camera, viewport);
+
+        if (drag == null || transform == null || transform.getTransform() == null || panel == null)
+        {
+            return drag;
+        }
+
+        UIKeyframeEditor keyframeEditor = panel.replayEditor.keyframeEditor;
+
+        if (keyframeEditor == null)
+        {
+            return drag;
+        }
+
+        Pair<String, Boolean> bone = keyframeEditor.getBone();
+        Replay replay = panel.replayEditor.getReplay();
+        IEntity entity = panel.getController().getCurrentEntity();
+
+        if (bone == null || bone.a == null || replay == null || entity == null)
+        {
+            return drag;
+        }
+
+        java.util.function.Supplier<Matrix4f> matrixSampler = () ->
+        {
+            Form form = entity.getForm();
+            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
+
+            if (form != null)
+            {
+                replay.properties.applyProperties(form, tick);
+            }
+
+            Matrix4f matrix = BaseFilmController.getGizmoBoneCompositeMatrix(
+                panel.getController().getEntities(),
+                entity,
+                replay,
+                camera.position.x,
+                camera.position.y,
+                camera.position.z,
+                transition,
+                bone.a,
+                true
+            );
+
+            return matrix == null ? new Matrix4f() : matrix;
+        };
+
+        drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
+        drag.setJacobian(GizmoDrag.computeTranslateJacobian(
+            transform.getTransform(),
+            () -> matrixSampler.get().getTranslation(new Vector3f())
+        ));
+
+        Form form = entity.getForm();
+
+        if (form != null)
+        {
+            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
+
+            replay.properties.applyProperties(form, tick);
+        }
+
+        return drag;
     }
 
     /* Picking form and form properties */
@@ -357,7 +478,7 @@ public class UIReplaysEditorUtils
 
         String prefix = formPath.isEmpty() ? "" : formPath + FormUtils.PATH_SEPARATOR;
 
-        return sheet.id.equals(prefix + "pose") || sheet.id.equals(prefix + "pose_overlay");
+        return sheet.id.equals(prefix + "pose") || sheet.id.startsWith(prefix + "pose_overlay");
     }
 
     private static void forceSelectInSheet(IUIKeyframeGraph graph, UIKeyframeSheet sheet, Keyframe keyframe)
@@ -520,6 +641,37 @@ public class UIReplaysEditorUtils
     }
 
     /* Offer bone hierarchy options */
+
+    public interface FormPicker
+    {
+        void pick(Form form, String bone, boolean insert);
+    }
+
+    public static boolean pickFormWithOffers(UIContext context, Pair<Form, String> pair, FormPicker picker)
+    {
+        boolean select = context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed());
+        boolean insert = context.mouseButton == 1;
+
+        if (pair == null || pair.a == null || (!select && !insert))
+        {
+            return false;
+        }
+
+        if (Window.isCtrlPressed())
+        {
+            offerAdjacent(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
+        }
+        else if (Window.isShiftPressed())
+        {
+            offerHierarchy(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
+        }
+        else
+        {
+            picker.pick(pair.a, pair.b, insert);
+        }
+
+        return true;
+    }
 
     public static void offerAdjacent(UIContext context, Form form, String bone, Consumer<String> consumer)
     {

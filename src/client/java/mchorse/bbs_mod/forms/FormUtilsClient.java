@@ -34,19 +34,20 @@ import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.Util;
 
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
-import java.util.Stack;
 
 public class FormUtilsClient
 {
     private static Map<Class, IFormRendererFactory> map = new HashMap<>();
     private static CustomVertexConsumerProvider customVertexConsumerProvider;
-    private static Stack<Form> currentForm = new Stack<>();
+    private static Deque<Form> currentForm = new ArrayDeque<>();
 
     static
     {

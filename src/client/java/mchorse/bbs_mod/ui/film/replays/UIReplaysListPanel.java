@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.client.BBSFlickerDiagnostics;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -11,7 +12,6 @@ import mchorse.bbs_mod.ui.utils.UIDataUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.utils.Direction;
-import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -34,11 +34,30 @@ public class UIReplaysListPanel extends UIElement
     public final UIReplayList replays;
 
     private final Area rightClickAnchorArea = new Area();
+    private String lastSelectionSignature = "";
 
     public UIReplaysListPanel(UIFilmPanel panel, Consumer<List<Replay>> callback, Consumer<Form> formConsumer)
     {
         this.filmPanel = panel;
-        this.replays = new UIReplayList(callback, formConsumer, panel);
+        this.replays = new UIReplayList((selected) ->
+        {
+            if (BBSFlickerDiagnostics.ENABLED)
+            {
+                String signature = this.selectionSignature(selected);
+
+                if (!signature.equals(this.lastSelectionSignature))
+                {
+                    BBSFlickerDiagnostics.log("replaysListPanel.selectionCallback selected={} count={} film={} caller={}",
+                        BBSFlickerDiagnostics.replays(selected),
+                        selected == null ? 0 : selected.size(),
+                        BBSFlickerDiagnostics.film(this.filmPanel.getData()),
+                        BBSFlickerDiagnostics.callerOutside(UIReplaysListPanel.class));
+                    this.lastSelectionSignature = signature;
+                }
+            }
+
+            callback.accept(selected);
+        }, formConsumer, panel);
 
         this.addReplay = new UIIcon(Icons.ADD, (b) -> this.replays.addReplay());
         this.dupeReplay = new UIIcon(Icons.DUPE, (b) -> this.replays.dupeReplay());
@@ -83,12 +102,32 @@ public class UIReplaysListPanel extends UIElement
     @Override
     public void render(UIContext context)
     {
-        int panelBg = Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.1F);
-        int barBg = Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F);
+        int barBg = BBSSettings.baseSurface();
 
-        this.area.render(context.batcher, panelBg);
         this.updateButtonsState();
         context.batcher.box(this.bar.area.x, this.bar.area.y, this.bar.area.ex(), this.bar.area.ey(), barBg);
         super.render(context);
+    }
+
+    private String selectionSignature(List<Replay> selected)
+    {
+        if (selected == null || selected.isEmpty())
+        {
+            return "empty";
+        }
+
+        StringBuilder builder = new StringBuilder();
+
+        for (Replay replay : selected)
+        {
+            if (builder.length() > 0)
+            {
+                builder.append('|');
+            }
+
+            builder.append(replay == null ? "null" : replay.getId() + "@" + System.identityHashCode(replay));
+        }
+
+        return builder.toString();
     }
 }

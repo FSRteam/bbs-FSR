@@ -27,20 +27,37 @@ public class UIDashboardPanels extends UIElement
     public UIElement pinned;
     public UIScrollView panelButtons;
 
-    public static void renderHighlight(Batcher2D batcher, Area area)
+    /**
+     * Render a selection highlight on one edge of the area: a solid color bar on the {@code direction}
+     * side, fading into a gradient towards the opposite edge.
+     */
+    public static void renderHighlight(Batcher2D batcher, Area area, Direction direction)
     {
         int color = BBSSettings.primaryColor.get();
+        int bar = Colors.A100 | color;
+        int near = Colors.A75 | color;
+        int far = color;
+        int t = 2;
 
-        batcher.box(area.x, area.ey() - 2, area.ex(), area.ey(), Colors.A100 | color);
-        batcher.gradientVBox(area.x, area.y, area.ex(), area.ey() - 2, color, Colors.A75 | color);
-    }
-
-    public static void renderHighlightHorizontal(Batcher2D batcher, Area area)
-    {
-        int color = BBSSettings.primaryColor.get();
-
-        batcher.box(area.ex() - 2, area.y, area.ex(), area.ey(), Colors.A100 | color);
-        batcher.gradientHBox(area.x, area.y, area.ex() - 2, area.ey(), color, Colors.A75 | color);
+        switch (direction)
+        {
+            case TOP:
+                batcher.box(area.x, area.y, area.ex(), area.y + t, bar);
+                batcher.gradientVBox(area.x, area.y + t, area.ex(), area.ey(), near, far);
+                break;
+            case BOTTOM:
+                batcher.box(area.x, area.ey() - t, area.ex(), area.ey(), bar);
+                batcher.gradientVBox(area.x, area.y, area.ex(), area.ey() - t, far, near);
+                break;
+            case LEFT:
+                batcher.box(area.x, area.y, area.x + t, area.ey(), bar);
+                batcher.gradientHBox(area.x + t, area.y, area.ex(), area.ey(), near, far);
+                break;
+            case RIGHT:
+                batcher.box(area.ex() - t, area.y, area.ex(), area.ey(), bar);
+                batcher.gradientHBox(area.x, area.y, area.ex() - t, area.ey(), far, near);
+                break;
+        }
     }
 
     public UIDashboardPanels()
@@ -59,7 +76,7 @@ public class UIDashboardPanels extends UIElement
             {
                 if (this.panel == this.panels.get(i))
                 {
-                    renderHighlight(context.batcher, ((UIIcon) this.panelButtons.getChildren().get(i)).area);
+                    renderHighlight(context.batcher, ((UIIcon) this.panelButtons.getChildren().get(i)).area, Direction.BOTTOM);
                 }
             }
         });
@@ -106,6 +123,11 @@ public class UIDashboardPanels extends UIElement
     {
         UIDashboardPanel lastPanel = this.panel;
 
+        if (lastPanel == panel)
+        {
+            return;
+        }
+
         if (this.panel != null)
         {
             this.panel.disappear();
@@ -148,8 +170,8 @@ public class UIDashboardPanels extends UIElement
         Area area = this.taskBar.area;
         Area a = this.pinned.area;
 
-        context.batcher.box(area.x, area.y, area.ex(), area.ey(), Colors.CONTROL_BAR);
-        context.batcher.box(a.ex() + 2, a.y + 3, a.ex() + 3, a.ey() - 3, 0x44ffffff);
+        context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
+        context.batcher.box(a.ex() + 2, a.y + 3, a.ex() + 3, a.ey() - 3, BBSSettings.color(BBSSettings.dividerColor(), Colors.A50));
     }
 
     public static class PanelEvent extends UIEvent<UIDashboardPanels>

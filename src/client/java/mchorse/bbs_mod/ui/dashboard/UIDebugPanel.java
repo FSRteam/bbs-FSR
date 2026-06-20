@@ -5,8 +5,10 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanel;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
 import mchorse.bbs_mod.utils.PNGEncoder;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -19,6 +21,8 @@ public class UIDebugPanel extends UIDashboardPanel
 {
     public UIKeyframes keyframes;
     public UIButton button;
+    public UISliderTrackpad slider;
+    public UIText sliderLabel;
 
     public UIDebugPanel(UIDashboard dashboard)
     {
@@ -128,7 +132,15 @@ public class UIDebugPanel extends UIDashboardPanel
 
         this.button.relative(this).xy(10, 10).w(80);
 
-        this.add(this.button);
+        this.sliderLabel = new UIText(IKey.raw("Slider Trackpad")).padding(0, 0);
+        this.sliderLabel.relative(this).xy(10, 42).w(180);
+
+        this.slider = new UISliderTrackpad();
+        this.slider.limit(-1D, 1D).values(0.05D, 0.01D, 0.25D).increment(0.1D);
+        this.slider.setValue(0.35D);
+        this.slider.relative(this).xy(10, 56).wh(180, 20);
+
+        this.add(this.button, this.sliderLabel, this.slider);
         // this.add(this.keyframes);
     }
 

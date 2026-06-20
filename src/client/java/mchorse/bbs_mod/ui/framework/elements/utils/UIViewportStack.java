@@ -4,9 +4,10 @@ import mchorse.bbs_mod.ui.framework.elements.IViewport;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.utils.Area;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
-import java.util.Stack;
 
 /**
  * Viewport stack
@@ -16,7 +17,7 @@ import java.util.Stack;
  */
 public class UIViewportStack implements IViewportStack
 {
-    private Stack<Area> viewportStack = new Stack<>();
+    private Deque<Area> viewportStack = new ArrayDeque<>();
     private List<Area> viewportAreas = new ArrayList<>();
     private int shiftX;
     private int shiftY;

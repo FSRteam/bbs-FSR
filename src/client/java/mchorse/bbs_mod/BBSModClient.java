@@ -414,6 +414,11 @@ public class BBSModClient
             }
         });
 
+        BBSSettings.theme.modes(
+            UIKeys.ENGINE_THEME_LIGHT,
+            UIKeys.ENGINE_THEME_DARK
+        );
+
         BBSSettings.tooltipStyle.modes(
             UIKeys.ENGINE_TOOLTIP_STYLE_LIGHT,
             UIKeys.ENGINE_TOOLTIP_STYLE_DARK
@@ -425,6 +430,26 @@ public class BBSModClient
             UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_RIGHT,
             UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_RIGHT,
             UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_LEFT
+        );
+
+        BBSSettings.rotate3dSphereMode.modes(
+            UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL,
+            UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL
+        );
+
+        BBSSettings.translateHotkeyOrder.labels(
+            UIKeys.TRANSFORMS_TARGET_SCREEN,
+            UIKeys.GENERAL_X,
+            UIKeys.GENERAL_Y,
+            UIKeys.GENERAL_Z
+        );
+        BBSSettings.scaleHotkeyOrder.labels(UIKeys.GENERAL_X, UIKeys.GENERAL_Y, UIKeys.GENERAL_Z);
+        BBSSettings.rotateHotkeyOrder.labels(
+            UIKeys.TRANSFORMS_TARGET_VIEW,
+            UIKeys.TRANSFORMS_TARGET_SPHERE,
+            UIKeys.GENERAL_X,
+            UIKeys.GENERAL_Y,
+            UIKeys.GENERAL_Z
         );
 
         UIKeys.C_KEYBIND_CATGORIES.load(KeyCombo.getCategoryKeys());

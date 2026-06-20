@@ -8,11 +8,13 @@ import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.graphics.window.Window;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -77,6 +79,7 @@ public final class BBSClientNeoEvents
     private static void onRegisterKeyMappings(RegisterKeyMappingsEvent event)
     {
         BBSModClient.registerKeyMappings(event::register);
+        ClientApiCompat.registerQueuedKeyMappings(event::register);
     }
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event)
@@ -119,27 +122,16 @@ public final class BBSClientNeoEvents
                 return;
             }
 
-            Minecraft mc = Minecraft.getInstance();
-            PoseStack worldStack = new PoseStack();
-
-            worldStack.setIdentity();
-            worldStack.last().pose().set(stack.last().pose());
-            worldStack.last().normal().set(stack.last().normal());
-
-            BbsWorldRenderContext context = new BbsWorldRenderContext(
-                event.getCamera(),
-                worldStack,
-                mc.renderBuffers().bufferSource(),
-                resolveTickDelta(event.getPartialTick()),
-                event.getModelViewMatrix(),
-                event.getProjectionMatrix()
-            );
-
-            BBSModClient.onRenderAfterEntities(context);
+            BBSModClient.onRenderAfterEntities(createWorldRenderContext(event, stack));
         }
         else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL)
         {
             BBSModClient.onRenderAfterLevel();
+
+            if (!ClientApiCompat.hasLastHandlers())
+            {
+                return;
+            }
 
             PoseStack stack = event.getPoseStack();
 
@@ -148,23 +140,7 @@ public final class BBSClientNeoEvents
                 return;
             }
 
-            Minecraft mc = Minecraft.getInstance();
-            PoseStack worldStack = new PoseStack();
-
-            worldStack.setIdentity();
-            worldStack.last().pose().set(stack.last().pose());
-            worldStack.last().normal().set(stack.last().normal());
-
-            BbsWorldRenderContext context = new BbsWorldRenderContext(
-                event.getCamera(),
-                worldStack,
-                mc.renderBuffers().bufferSource(),
-                resolveTickDelta(event.getPartialTick()),
-                event.getModelViewMatrix(),
-                event.getProjectionMatrix()
-            );
-
-            ClientApiCompat.emitLast(context);
+            ClientApiCompat.emitLast(createWorldRenderContext(event, stack));
         }
     }
 
@@ -191,7 +167,7 @@ public final class BBSClientNeoEvents
 
     private static void onLevelTickPost(LevelTickEvent.Post event)
     {
-        if (!isClientLevel(event.getLevel()))
+        if (!(event.getLevel() instanceof ClientLevel))
         {
             return;
         }
@@ -247,58 +223,27 @@ public final class BBSClientNeoEvents
         }
     }
 
-    private static float resolveTickDelta(Object partialTick)
+    private static BbsWorldRenderContext createWorldRenderContext(RenderLevelStageEvent event, PoseStack stack)
     {
-        if (partialTick instanceof Number number)
-        {
-            return number.floatValue();
-        }
+        Minecraft mc = Minecraft.getInstance();
+        PoseStack worldStack = new PoseStack();
 
-        try
-        {
-            Object value = partialTick.getClass()
-                .getMethod("getGameTimeDeltaPartialTick", boolean.class)
-                .invoke(partialTick, false);
+        worldStack.setIdentity();
+        worldStack.last().pose().set(stack.last().pose());
+        worldStack.last().normal().set(stack.last().normal());
 
-            if (value instanceof Number number)
-            {
-                return number.floatValue();
-            }
-        }
-        catch (Exception ignored)
-        {}
-
-        try
-        {
-            return Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
-        }
-        catch (Exception ignored)
-        {}
-
-        return 0F;
+        return new BbsWorldRenderContext(
+            event.getCamera(),
+            worldStack,
+            mc.renderBuffers().bufferSource(),
+            resolveTickDelta(event.getPartialTick()),
+            event.getModelViewMatrix(),
+            event.getProjectionMatrix()
+        );
     }
 
-    private static boolean isClientLevel(Object level)
+    private static float resolveTickDelta(DeltaTracker partialTick)
     {
-        try
-        {
-            Object value = level.getClass().getMethod("isClientSide").invoke(level);
-
-            if (value instanceof Boolean bool)
-            {
-                return bool;
-            }
-        }
-        catch (Exception ignored)
-        {}
-
-        try
-        {
-            return level.getClass().getField("isClient").getBoolean(level);
-        }
-        catch (Exception ignored)
-        {}
-
-        return false;
+        return partialTick.getGameTimeDeltaPartialTick(false);
     }
 }

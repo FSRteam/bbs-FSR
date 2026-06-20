@@ -14,6 +14,8 @@ public class ParticleComponentShapeSphere extends ParticleComponentShapeBase
 {
     public MolangExpression radius = MolangParser.ZERO;
 
+    private final Vector3f directionVector = new Vector3f();
+
     @Override
     public void toData(MapType data)
     {
@@ -51,7 +53,7 @@ public class ParticleComponentShapeSphere extends ParticleComponentShapeBase
         float centerZ = (float) this.offset[2].get();
         float radius = (float) this.radius.get();
 
-        Vector3f direction = new Vector3f((float) Math.random() * 2 - 1, (float) Math.random() * 2 - 1, (float) Math.random() * 2 - 1);
+        Vector3f direction = this.directionVector.set((float) Math.random() * 2 - 1, (float) Math.random() * 2 - 1, (float) Math.random() * 2 - 1);
         direction.normalize();
 
         if (!this.surface)

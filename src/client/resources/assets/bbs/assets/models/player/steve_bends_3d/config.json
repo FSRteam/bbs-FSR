@@ -101,6 +101,9 @@
 			"r": [180, 0, 5.729]
 		}
 	},
+	"picking_overrides": {
+		"torso": "low_body"
+	},
 	"disabledBones": [
 		"body",
 		"torso",

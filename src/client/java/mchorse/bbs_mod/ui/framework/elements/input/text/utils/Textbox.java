@@ -706,7 +706,7 @@ public class Textbox
 
         if (this.background)
         {
-            this.area.render(context.batcher, 0xff000000);
+            this.area.render(context.batcher, BBSSettings.inputSurface());
 
             if (this.border)
             {
@@ -733,7 +733,7 @@ public class Textbox
             int sx = x + offset;
             int sw = this.font.getWidth(text.substring(min, max));
 
-            context.batcher.box(sx, y - 2, sx + sw, y + this.font.getHeight() + 2, 0x88000000 + BBSSettings.primaryColor.get());
+            context.batcher.box(sx, y - 2, sx + sw, y + this.font.getHeight() + 2, BBSSettings.accentOverlay(Colors.A50));
         }
 
         context.batcher.textShadow(text, x, y, color);

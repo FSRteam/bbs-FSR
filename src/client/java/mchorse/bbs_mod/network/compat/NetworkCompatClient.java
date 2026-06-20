@@ -24,8 +24,36 @@ public final class NetworkCompatClient
         void receive(FriendlyByteBuf buf);
     }
 
-    public static void registerClientReceiver(ResourceLocation id, ClientReceiver receiver)
+    public static synchronized void registerClientReceiver(ResourceLocation id, ClientReceiver receiver)
     {
+        if (id == null)
+        {
+            throw new IllegalArgumentException("S2C channel id is null");
+        }
+
+        if (receiver == null)
+        {
+            throw new IllegalArgumentException("Client receiver is null for S2C channel id: " + id);
+        }
+
+        if (!NetworkCompat.isClientboundPayloadId(id))
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.client_receiver phase=register result=reject reason=unknown_channel id={}",
+                id);
+            throw new IllegalArgumentException("Unknown S2C channel id: " + id);
+        }
+
+        ClientReceiver existing = CLIENT_RECEIVERS.get(id);
+
+        if (existing != null)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.client_receiver phase=register result=reject reason=duplicate_receiver id={} existing={} incoming={}",
+                id,
+                existing.getClass().getName(),
+                receiver.getClass().getName());
+            throw new IllegalStateException("S2C channel already has a client receiver: " + id);
+        }
+
         CLIENT_RECEIVERS.put(id, receiver);
     }
 

@@ -29,6 +29,20 @@ public final class BBSAddonDescriptorValidator
             issues.add("unsupported apiVersion '" + descriptor.apiVersion() + "'");
         }
 
+        if (descriptor.side() == null)
+        {
+            issues.add("side is null");
+        }
+
+        if (descriptor.compatPolicy() == null)
+        {
+            issues.add("compatPolicy is null");
+        }
+        else if (descriptor.compatPolicy() == BBSAddonCompatPolicy.LEGACY_COMPAT_ONLY)
+        {
+            issues.add("compatPolicy LEGACY_COMPAT_ONLY is reserved for Addon v1 diagnostics and cannot be used for API 2.0 registration");
+        }
+
         for (String namespace : descriptor.namespaces())
         {
             validateId("namespace", namespace, issues);
@@ -44,6 +58,11 @@ public final class BBSAddonDescriptorValidator
             {
                 issues.add("required mod '" + modId + "' is not loaded");
             }
+        }
+
+        for (String modId : descriptor.optionalMods())
+        {
+            validateId("optionalMod", modId, issues);
         }
 
         return issues;

@@ -8,6 +8,7 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.OrbitCamera;
 import mchorse.bbs_mod.camera.controller.OrbitCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.events.register.RegisterDashboardPanelsEvent;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -97,7 +98,7 @@ public class UIDashboard extends UIBaseMenu
 
         this.settings = new UIIcon(Icons.SETTINGS, (b) ->
         {
-            UIOverlay.addOverlayRight(this.context, this.settingsPanel, 240);
+            UIOverlay.addOverlay(this.context, this.settingsPanel, 430, 380);
         });
         this.settings.tooltip(UIKeys.CONFIG_TITLE, Direction.TOP);
         this.selectors = new UIIcon(Icons.PROPERTIES, (b) ->
@@ -130,6 +131,7 @@ public class UIDashboard extends UIBaseMenu
                 }
             }
         }).category(category);
+        this.overlay.keys().register(Keys.TOGGLE_IK_DEBUG, () -> ModelIKDebug.enabled = !ModelIKDebug.enabled).category(category);
         this.overlay.keys().register(Keys.OPEN_UTILITY_PANEL, () ->
         {
             if (UIOverlay.has(this.context))

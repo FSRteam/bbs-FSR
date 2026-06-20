@@ -55,6 +55,8 @@ public class ParticleParser
     public static final String PREFIX_BLOCKBUSTER = "blockbuster:";
 
     public Map<String, Class<? extends ParticleComponentBase>> components = new HashMap<>();
+    private final Map<String, String> registeredApi2ComponentClasses = new HashMap<>();
+    private final Map<String, String> failedApi2ComponentClasses = new HashMap<>();
 
     public static boolean isEmpty(BaseType element)
     {
@@ -129,15 +131,45 @@ public class ParticleParser
         this.components.put("particle_motion_dynamic", ParticleComponentMotionDynamic.class);
         this.components.put("particle_motion_parametric", ParticleComponentMotionParametric.class);
 
-        this.registerApi2Components();
+        this.refreshApi2Components();
     }
 
-    private void registerApi2Components()
+    public synchronized void refreshApi2Components()
     {
-        for (Map.Entry<String, String> entry : BBSMod.getAddonParticleComponentClasses().entrySet())
+        Map<String, String> addonComponents;
+
+        try
+        {
+            addonComponents = BBSMod.getAddonParticleComponentClasses();
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.warn("[bbs-particles] failed to query API 2.0 particle component registry", e);
+
+            return;
+        }
+
+        for (Map.Entry<String, String> entry : addonComponents.entrySet())
         {
             String id = entry.getKey();
             String className = entry.getValue();
+
+            if (id == null || id.isBlank() || className == null || className.isBlank())
+            {
+                LOGGER.warn("[bbs-particles] ignored API 2.0 particle component with blank id or class name");
+
+                continue;
+            }
+
+            id = id.trim();
+            className = className.trim();
+
+            if (className.equals(this.registeredApi2ComponentClasses.get(id)))
+            {
+                continue;
+            }
+
+            boolean previouslyFailed = className.equals(this.failedApi2ComponentClasses.get(id));
 
             try
             {
@@ -145,18 +177,31 @@ public class ParticleParser
 
                 if (!ParticleComponentBase.class.isAssignableFrom(rawClass))
                 {
-                    LOGGER.warn("[bbs-particles] ignored API 2.0 particle component '{}' because '{}' is not a ParticleComponentBase",
-                        id,
-                        className);
+                    if (!previouslyFailed)
+                    {
+                        LOGGER.warn("[bbs-particles] ignored API 2.0 particle component '{}' because '{}' is not a ParticleComponentBase",
+                            id,
+                            className);
+                    }
+
+                    this.failedApi2ComponentClasses.put(id, className);
+
                     continue;
                 }
 
                 this.components.put(id, rawClass.asSubclass(ParticleComponentBase.class));
+                this.registeredApi2ComponentClasses.put(id, className);
+                this.failedApi2ComponentClasses.remove(id);
                 LOGGER.info("[bbs-particles] registered API 2.0 particle component '{}' ({})", id, className);
             }
             catch (Exception | LinkageError e)
             {
-                LOGGER.warn("[bbs-particles] failed to load API 2.0 particle component '{}' ({})", id, className, e);
+                this.failedApi2ComponentClasses.put(id, className);
+
+                if (!previouslyFailed)
+                {
+                    LOGGER.warn("[bbs-particles] failed to load API 2.0 particle component '{}' ({})", id, className, e);
+                }
             }
         }
     }
@@ -168,6 +213,8 @@ public class ParticleParser
 
     public ParticleScheme fromData(ParticleScheme scheme, MapType data) throws Exception
     {
+        this.refreshApi2Components();
+
         if (!data.isMap())
         {
             throw new Exception("The root element of Bedrock particle should be an object!");
@@ -348,6 +395,8 @@ public class ParticleParser
      */
     public MapType toData(ParticleScheme scheme)
     {
+        this.refreshApi2Components();
+
         MapType data = new MapType();
         MapType effect = new MapType();
 

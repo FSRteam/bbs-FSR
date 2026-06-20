@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.settings;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.DataToString;
+import mchorse.bbs_mod.data.types.BaseType;
 
 import java.io.File;
 import java.util.HashMap;
@@ -29,7 +31,15 @@ public class SettingsManager
 
         try
         {
-            settings.fromData(DataToString.read(file));
+            BaseType data = DataToString.read(file);
+            boolean migrated = settings.getId().equals("bbs") && data.isMap() && BBSSettings.migrateLegacySettings(data.asMap());
+
+            settings.fromData(data);
+
+            if (migrated)
+            {
+                settings.save(file);
+            }
 
             return true;
         }

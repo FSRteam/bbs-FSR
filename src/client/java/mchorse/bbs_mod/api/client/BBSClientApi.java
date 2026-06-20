@@ -2,11 +2,17 @@ package mchorse.bbs_mod.api.client;
 
 import mchorse.bbs_mod.client.compat.ClientApiCompat;
 import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
+import mchorse.bbs_mod.api.network.BBSAddonClientNetworkReceiver;
+import mchorse.bbs_mod.api.registry.BBSRegistrationResult;
+import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -69,6 +75,25 @@ public final class BBSClientApi
     public static void onEndClientTick(Consumer<Minecraft> handler)
     {
         ClientApiCompat.onEndClientTick(handler);
+    }
+
+    public static BBSRegistrationResult registerNetworkReceiver(
+        BBSAddonDescriptor descriptor,
+        ResourceLocation id,
+        BBSAddonClientNetworkReceiver receiver
+    )
+    {
+        return AddonPayloadBroker.registerClientReceiver(descriptor, id, receiver);
+    }
+
+    public static FriendlyByteBuf createNetworkBuffer()
+    {
+        return AddonPayloadBroker.createBuffer();
+    }
+
+    public static boolean sendNetworkToServer(BBSAddonDescriptor descriptor, ResourceLocation id, FriendlyByteBuf payload)
+    {
+        return AddonPayloadBroker.sendToServer(descriptor, id, payload);
     }
 
     public static <T extends Entity> void registerEntityRenderer(EntityType<T> type, EntityRendererProvider<T> factory)

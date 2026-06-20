@@ -26,6 +26,7 @@ public class ReplayKeyframes extends ValueGroup
     public static final String GROUP_TRIGGERS = "triggers";
     public static final String GROUP_EXTRA1 = "extra1";
     public static final String GROUP_EXTRA2 = "extra2";
+    public static final String GROUP_TRANSFORM = "transform";
 
     public static final List<String> CURATED_CHANNELS = Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw", "sneaking", "sprinting", "item_main_hand", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "grounded", "damage", "vX", "vY", "vZ");
 

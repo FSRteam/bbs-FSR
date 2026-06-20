@@ -5,7 +5,10 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIActionsFormPanel;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIModelConstraintsFormPanel;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIModelFormPanel;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIModelIKFormPanel;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIModelPhysicsFormPanel;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
@@ -22,6 +25,9 @@ public class UIModelForm extends UIForm<ModelForm>
         this.defaultPanel = this.modelPanel;
 
         this.registerPanel(this.defaultPanel, UIKeys.FORMS_EDITORS_MODEL_POSE, Icons.POSE);
+        this.registerPanel(new UIModelIKFormPanel(this), UIKeys.FORMS_EDITORS_MODEL_IK, Icons.LIMB);
+        this.registerPanel(new UIModelPhysicsFormPanel(this), UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TITLE, Icons.DROP);
+        this.registerPanel(new UIModelConstraintsFormPanel(this), UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_TITLE, Icons.LOCKED);
         this.registerPanel(new UIActionsFormPanel(this), UIKeys.FORMS_EDITORS_ACTIONS_TITLE, Icons.MORE);
         this.registerDefaultPanels();
 
@@ -49,5 +55,14 @@ public class UIModelForm extends UIForm<ModelForm>
         UIPoseEditor poseEditor = this.modelPanel.poseEditor;
 
         return this.getOrigin(transition, StringUtils.combinePaths(path, poseEditor.groups.getCurrentFirst()), poseEditor.transform.isLocal());
+    }
+
+    @Override
+    public Matrix4f getOriginMatrix(float transition)
+    {
+        String path = FormUtils.getPath(this.form);
+        UIPoseEditor poseEditor = this.modelPanel.poseEditor;
+
+        return this.getOrigin(transition, StringUtils.combinePaths(path, poseEditor.groups.getCurrentFirst()), true);
     }
 }

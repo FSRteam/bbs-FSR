@@ -83,57 +83,38 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
         return this;
     }
 
+    private static final int TRACK_W = 22;
+    private static final int TRACK_H = 10;
+    private static final int KNOB = 12;
+
     @Override
     protected void renderSkin(UIContext context)
     {
         FontRenderer font = context.batcher.getFont();
-        String label = font.limitToWidth(this.label.get(), this.area.w - 18);
+        String label = font.limitToWidth(this.label.get(), this.area.w - TRACK_W - 6);
 
         context.batcher.text(label, this.area.x, this.area.my(font.getHeight()), this.color, this.textShadow);
 
-        /* Draw toggle switch */
-        int w = 16;
-        int h = 10;
-        int x = this.area.ex() - w - 2;
-        int y = this.area.my();
-        int color = BBSSettings.primaryColor.get();
+        int my = this.area.my();
+        int trackRight = this.area.ex() - 2;
+        int trackLeft = trackRight - TRACK_W;
+        int trackTop = my + KNOB / 2 - TRACK_H;
+        int trackBottom = my + KNOB / 2;
 
-        if (this.hover)
-        {
-            color = Colors.mulRGB(color, 0.85F);
-        }
+        int trackFill = this.value ? Colors.A100 | BBSSettings.primaryColor.get() : 0xff3a3d41;
 
-        /* Draw toggle background */
-        context.batcher.box(x, y - h / 2, x + w, y - h / 2 + h, Colors.A100);
-        context.batcher.box(x + 1, y - h / 2 + 1, x + w - 1, y - h / 2 + h - 1, Colors.A100 | (this.value ? color : (this.hover ? 0x3a3a3a : 0x444444)));
+        context.batcher.bevelBox(trackLeft, trackTop, trackRight, trackBottom, trackFill, false, true);
 
-        if (this.value)
-        {
-            context.batcher.gradientHBox(x + 1, y - h / 2 + 1, x + w / 2, y - h / 2 + h - 1, Colors.setA(Colors.WHITE, 0.33F), Colors.setA(Colors.WHITE, 0F));
-        }
-        else
-        {
-            context.batcher.gradientHBox(x + w / 2, y - h / 2 + 1, x + w - 1, y - h / 2 + h - 1, 0, Colors.A50);
-        }
+        int knobLeft = trackLeft + (this.value ? TRACK_W - KNOB : 0);
+        int knobTop = my - KNOB / 2;
+        int knobColor = this.hover ? Colors.lerp(0xffc9cdd2, Colors.WHITE, 0.2F) : 0xffc9cdd2;
+
+        context.batcher.bevelBox(knobLeft, knobTop, knobLeft + KNOB, knobTop + KNOB, knobColor, true, true);
 
         if (!this.isEnabled())
         {
-            context.batcher.box(x, y - h / 2, x + w, y - h / 2 + h, Colors.A50);
-        }
-
-        x += this.value ? w - 2 : 2;
-
-        /* Draw toggle switch */
-        context.batcher.box(x - 4, y - 8, x + 4, y + 8, Colors.A100);
-        context.batcher.box(x - 3, y - 7, x + 3, y + 7, Colors.WHITE);
-        context.batcher.box(x - 2, y - 6, x + 3, y + 7, Colors.GRAY);
-        context.batcher.box(x - 2, y - 6, x + 2, y + 6, Colors.LIGHTER_GRAY);
-
-        if (!this.isEnabled())
-        {
-            context.batcher.box(x - 4, y - 8, x + 4, y + 8, Colors.A50);
-
-            context.batcher.outlinedIcon(Icons.LOCKED, this.area.ex() - w / 2 - 2, y, 0.5F, 0.5F);
+            context.batcher.box(knobLeft, knobTop, knobLeft + KNOB, knobTop + KNOB, Colors.A50);
+            context.batcher.outlinedIcon(Icons.LOCKED, trackLeft + TRACK_W / 2, my, 0.5F, 0.5F);
         }
     }
 }

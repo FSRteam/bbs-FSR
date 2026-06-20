@@ -30,9 +30,9 @@ public class ParticleEventDispatcher
             return;
         }
 
-        for (String event : triggers.events)
+        for (int i = 0; i < triggers.events.size(); i++)
         {
-            dispatch(emitter, particle, event);
+            dispatch(emitter, particle, triggers.events.get(i));
         }
     }
 
@@ -122,9 +122,9 @@ public class ParticleEventDispatcher
             spawnParticleEffect(emitter, particle, node.particleEffect);
         }
 
-        for (ParticleEventNode child : node.sequence)
+        for (int i = 0; i < node.sequence.size(); i++)
         {
-            execute(emitter, particle, child, depth + 1);
+            execute(emitter, particle, node.sequence.get(i), depth + 1);
         }
 
         if (!node.randomize.isEmpty())
@@ -139,8 +139,10 @@ public class ParticleEventDispatcher
     {
         float total = 0F;
 
-        for (ParticleEventNode child : node.randomize)
+        for (int i = 0; i < node.randomize.size(); i++)
         {
+            ParticleEventNode child = node.randomize.get(i);
+
             total += Math.max(0F, child.weight);
         }
 
@@ -151,8 +153,10 @@ public class ParticleEventDispatcher
 
         float value = (float) (Math.random() * total);
 
-        for (ParticleEventNode child : node.randomize)
+        for (int i = 0; i < node.randomize.size(); i++)
         {
+            ParticleEventNode child = node.randomize.get(i);
+
             value -= Math.max(0F, child.weight);
 
             if (value <= 0F)
@@ -227,10 +231,10 @@ public class ParticleEventDispatcher
     {
         if (particle != null)
         {
-            return new Vector3d(particle.getGlobalPosition(emitter));
+            return particle.getGlobalPosition(emitter);
         }
 
-        return new Vector3d(emitter.lastGlobal);
+        return emitter.lastGlobal;
     }
 
     private static void playSound(ParticleEmitter emitter, Particle particle, String event)

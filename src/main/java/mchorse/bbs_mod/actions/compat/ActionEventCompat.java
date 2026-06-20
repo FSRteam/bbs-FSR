@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.actions.compat;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -36,7 +37,7 @@ public final class ActionEventCompat
     @FunctionalInterface
     public interface BlockBreakAfterHandler
     {
-        void handle(Level level, Player player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity);
+        void handle(Level level, Player player, BlockPos pos, BlockState state, @Nullable CompoundTag blockEntityTag);
     }
 
     public static void onChatMessage(ChatMessageHandler handler)
@@ -111,7 +112,10 @@ public final class ActionEventCompat
 
         BlockPos pos = event.getPos().immutable();
 
-        pendingBreaks.add(new PendingBreak(level, serverPlayer, pos, event.getState(), level.getBlockEntity(pos)));
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        CompoundTag blockEntityTag = blockEntity == null ? null : blockEntity.saveWithId(level.registryAccess());
+
+        pendingBreaks.add(new PendingBreak(level, serverPlayer, pos, event.getState(), blockEntityTag));
     }
 
     public static void flushBlockBreakAfterQueue()
@@ -139,7 +143,7 @@ public final class ActionEventCompat
                     pendingBreak.player,
                     pendingBreak.pos,
                     pendingBreak.state,
-                    pendingBreak.blockEntity
+                    pendingBreak.blockEntityTag
                 );
             }
         }
@@ -156,15 +160,16 @@ public final class ActionEventCompat
         private final Player player;
         private final BlockPos pos;
         private final BlockState state;
-        private final BlockEntity blockEntity;
+        @Nullable
+        private final CompoundTag blockEntityTag;
 
-        private PendingBreak(Level world, Player player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity)
+        private PendingBreak(Level world, Player player, BlockPos pos, BlockState state, @Nullable CompoundTag blockEntityTag)
         {
             this.world = world;
             this.player = player;
             this.pos = pos;
             this.state = state;
-            this.blockEntity = blockEntity;
+            this.blockEntityTag = blockEntityTag;
         }
     }
 }

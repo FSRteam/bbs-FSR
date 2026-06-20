@@ -26,6 +26,7 @@ import mchorse.bbs_mod.ui.model_blocks.UIModelBlockPanel;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
+import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import mchorse.bbs_mod.network.compat.NetworkCompatClient;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -37,6 +38,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.core.BlockPos;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -45,6 +48,7 @@ import java.util.function.Consumer;
 
 public class ClientNetwork
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network-client");
     private static int ids = 0;
     private static Map<Integer, Consumer<BaseType>> callbacks = new HashMap<>();
     private static ClientPacketCrusher crusher = new ClientPacketCrusher();
@@ -89,6 +93,7 @@ public class ClientNetwork
         NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_SELECTED_SLOT, (buf) -> handleSelectedSlotPacket(Minecraft.getInstance(), buf));
         NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, (buf) -> handleAnimationStateModelBlockPacket(Minecraft.getInstance(), buf));
         NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_REFRESH_MODEL_BLOCKS, (buf) -> handleRefreshModelBlocksPacket(Minecraft.getInstance(), buf));
+        NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_ADDON_BROKER, AddonPayloadBroker::handleClientPayload);
     }
 
     /* Handlers */
@@ -562,15 +567,22 @@ public class ClientNetwork
 
     public static void sendApplyFilmPlayerSettingsToPlayer(Film film)
     {
+        byte[] invBytes = DataStorageUtils.writeToBytes(film.inventory.toData());
+
+        if (invBytes.length > ServerNetwork.MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=send result=reject reason=inventory_size size={} max={}",
+                invBytes.length,
+                ServerNetwork.MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES);
+            return;
+        }
+
         FriendlyByteBuf buf = NetworkCompat.createBuffer();
 
         buf.writeFloat(film.hp.get());
         buf.writeFloat(film.hunger.get());
         buf.writeInt(film.xpLevel.get());
         buf.writeFloat(film.xpProgress.get());
-
-        byte[] invBytes = DataStorageUtils.writeToBytes(film.inventory.toData());
-
         buf.writeInt(invBytes.length);
         buf.writeBytes(invBytes);
 

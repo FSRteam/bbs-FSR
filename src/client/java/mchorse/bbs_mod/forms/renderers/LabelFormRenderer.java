@@ -5,6 +5,7 @@ import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.LabelForm;
+import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
@@ -27,6 +28,10 @@ import java.util.List;
 
 public class LabelFormRenderer extends FormRenderer<LabelForm>
 {
+    private final Color textColor = new Color();
+    private final Color shadowColor = new Color();
+    private final Color backgroundColor = new Color();
+
     public static void fillQuad(BufferBuilder builder, PoseStack stack, float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3, float x4, float y4, float z4, float r, float g, float b, float a)
     {
         Matrix4f matrix4f = stack.last().pose();
@@ -132,10 +137,10 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         int x = (int) (-w * this.form.anchorX.get());
         int y = (int) (-h * this.form.anchorY.get());
 
-        Color shadowColor = this.form.shadowColor.get().copy();
-        Color color = this.form.color.get().copy();
+        Color shadowColor = this.shadowColor.copy(this.form.shadowColor.get());
+        Color color = this.textColor.set(context.color, true);
 
-        color.mul(context.color);
+        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
         shadowColor.mul(context.color);
 
         if (shadowColor.a > 0)
@@ -207,7 +212,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         int y = (int) (-h * this.form.anchorY.get());
         int y2 = y;
 
-        Color shadowColor = this.form.shadowColor.get().copy();
+        Color shadowColor = this.shadowColor.copy(this.form.shadowColor.get());
 
         shadowColor.mul(context.color);
 
@@ -240,9 +245,9 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             y2 = y;
         }
 
-        Color cColor = this.form.color.get();
+        Color cColor = this.textColor.set(context.color, true);
 
-        cColor.mul(context.color);
+        FormColorBlend.blend(cColor, this.form.color.get(), this.form.additiveColor.get());
 
         int color = cColor.getARGBColor();
 
@@ -275,7 +280,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
     private void renderShadow(FormRenderingContext context, int x, int y, int w, int h)
     {
         float offset = this.form.offset.get();
-        Color color = this.form.background.get().copy();
+        Color color = this.backgroundColor.copy(this.form.background.get());
 
         color.mul(context.color);
 

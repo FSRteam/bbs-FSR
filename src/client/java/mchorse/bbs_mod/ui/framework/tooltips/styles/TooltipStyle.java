@@ -11,7 +11,7 @@ public abstract class TooltipStyle
 
     public static TooltipStyle get()
     {
-        return get(BBSSettings.tooltipStyle.get());
+        return get(BBSSettings.theme == null ? 1 : BBSSettings.theme.get());
     }
 
     public static TooltipStyle get(int style)

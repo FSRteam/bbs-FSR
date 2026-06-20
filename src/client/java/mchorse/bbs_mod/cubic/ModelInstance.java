@@ -39,6 +39,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -49,6 +50,8 @@ import java.util.function.Supplier;
 
 public class ModelInstance implements IModelInstance
 {
+    private static final Quaternionf ROTATE_Y_180 = Axis.YP.rotationDegrees(180F);
+
     public final String id;
     public IModel model;
     public Animations animations;
@@ -71,12 +74,18 @@ public class ModelInstance implements IModelInstance
     public List<ArmorSlot> itemsOff = new ArrayList<>();
     public List<String> disabledBones = new ArrayList<>();
     public Map<String, String> flippedParts = new HashMap<>();
+    public Map<String, String> pickingOverrides = new HashMap<>();
     public Map<ArmorType, ArmorSlot> armorSlots = new HashMap<>();
 
     public ArmorSlot fpMain;
     public ArmorSlot fpOffhand;
 
+    public transient ModelForm form;
+    public transient Matrix4f lastBaseTransform;
+
     private Map<ModelGroup, ModelVAO> vaos = new HashMap<>();
+    private CubicMatrixRenderer matrixRenderer;
+    private PoseStack matrixStack = new PoseStack();
 
     public ModelInstance(String id, IModel model, Animations animations, Link texture)
     {
@@ -194,6 +203,20 @@ public class ModelInstance implements IModelInstance
                 }
             }
         }
+        if (config.has("picking_overrides"))
+        {
+            MapType map = config.getMap("picking_overrides");
+
+            for (String key : map.keys())
+            {
+                String string = map.getString(key);
+
+                if (!string.trim().isEmpty())
+                {
+                    this.pickingOverrides.put(key, string);
+                }
+            }
+        }
         if (config.has("armor_slots"))
         {
             MapType map = config.getMap("armor_slots");
@@ -277,25 +300,46 @@ public class ModelInstance implements IModelInstance
         {
             for (ModelGroup group : model.getOrderedGroups())
             {
-                stencilMap.addPicking(form, group.id);
+                stencilMap.addPicking(form, this.getPickingBone(form, group.id));
             }
         }
         else if (this.model instanceof BOBJModel model)
         {
             for (BOBJBone orderedBone : model.getArmature().orderedBones)
             {
-                stencilMap.addPicking(form, orderedBone.name);
+                stencilMap.addPicking(form, this.getPickingBone(form, orderedBone.name));
             }
         }
+    }
+
+    private String getPickingBone(ModelForm form, String bone)
+    {
+        if (form != null && form.pickingOverrides.get() instanceof MapType map)
+        {
+            String string = map.getString(bone);
+
+            if (!string.trim().isEmpty())
+            {
+                return string;
+            }
+        }
+
+        return this.pickingOverrides.getOrDefault(bone, bone);
     }
 
     public void captureMatrices(MatrixCache bones)
     {
         if (this.model instanceof Model model)
         {
-            PoseStack stack = new PoseStack();
-            CubicMatrixRenderer renderer = new CubicMatrixRenderer(model);
+            if (this.matrixRenderer == null || this.matrixRenderer.matrices.size() != model.getAllGroupKeys().size())
+            {
+                this.matrixRenderer = new CubicMatrixRenderer(model);
+            }
 
+            CubicMatrixRenderer renderer = this.matrixRenderer;
+            PoseStack stack = this.getMatrixStack();
+
+            renderer.reset();
             CubicRenderer.processRenderModel(renderer, null, stack, model);
 
             for (ModelGroup group : model.getAllGroups())
@@ -334,6 +378,20 @@ public class ModelInstance implements IModelInstance
         }
     }
 
+    private PoseStack getMatrixStack()
+    {
+        if (!this.matrixStack.clear())
+        {
+            this.matrixStack = new PoseStack();
+        }
+        else
+        {
+            this.matrixStack.setIdentity();
+        }
+
+        return this.matrixStack;
+    }
+
     public void render(PoseStack stack, Supplier<ShaderInstance> program, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys)
     {
         if (this.model instanceof Model model)
@@ -367,7 +425,7 @@ public class ModelInstance implements IModelInstance
             if (vao != null)
             {
                 stack.pushPose();
-                stack.mulPose(Axis.YP.rotationDegrees(180F));
+                stack.mulPose(ROTATE_Y_180);
 
                 vao.armature.setupMatrices();
                 vao.updateMesh(stencilMap);

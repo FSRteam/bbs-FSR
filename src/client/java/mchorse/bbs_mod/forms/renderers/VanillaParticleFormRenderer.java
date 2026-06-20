@@ -31,6 +31,10 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     private Vector3d pos = new Vector3d();
     private Vector3f vel = new Vector3f();
     private Matrix3f rot = new Matrix3f();
+    private Matrix4f renderMatrix = new Matrix4f();
+    private Matrix4f cameraViewMatrix = new Matrix4f();
+    private Vector3d renderTranslation = new Vector3d();
+    private Vector3f tempOffset = new Vector3f();
     private int tick;
 
     public VanillaParticleFormRenderer(VanillaParticleForm form)
@@ -62,19 +66,20 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
         super.render3D(context);
 
         Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-        Matrix4f matrix = new Matrix4f(context.camera.view).invert();
+        Matrix4f matrix = this.renderMatrix.set(context.camera.view).invert();
 
         matrix.mul(context.stack.last().pose());
 
-        Vector3d translation = new Vector3d(matrix.getTranslation(Vectors.TEMP_3F));
+        Vector3f translation = matrix.getTranslation(Vectors.TEMP_3F);
         Vec3 cameraPosition = camera.getPosition();
 
-        translation.add(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+        this.renderTranslation.set(translation.x, translation.y, translation.z);
+        this.renderTranslation.add(cameraPosition.x, cameraPosition.y, cameraPosition.z);
         context.stack.pushPose();
         context.stack.setIdentity();
-        context.stack.mulPose(new Matrix4f(context.camera.view));
+        context.stack.mulPose(this.cameraViewMatrix.set(context.camera.view));
 
-        this.pos.set(translation);
+        this.pos.set(this.renderTranslation);
         this.vel.set(0F, 0F, 1F);
         this.rot.set(matrix).transform(this.vel);
 
@@ -86,7 +91,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     {
         Level world = entity.level();
         boolean paused = this.form.paused.get();
-        Vector3f temp3f = new Vector3f();
+        Vector3f temp3f = this.tempOffset;
 
         if (world != null && !paused)
         {

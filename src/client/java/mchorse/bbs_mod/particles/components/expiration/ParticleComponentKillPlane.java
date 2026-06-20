@@ -9,7 +9,6 @@ import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
-import org.joml.Vector3d;
 
 public class ParticleComponentKillPlane extends ParticleComponentBase implements IComponentParticleUpdate
 {
@@ -65,17 +64,25 @@ public class ParticleComponentKillPlane extends ParticleComponentBase implements
             return;
         }
 
-        Vector3d prevLocal = new Vector3d(particle.prevPosition);
-        Vector3d local = new Vector3d(particle.position);
+        double prevX = particle.prevPosition.x;
+        double prevY = particle.prevPosition.y;
+        double prevZ = particle.prevPosition.z;
+        double x = particle.position.x;
+        double y = particle.position.y;
+        double z = particle.position.z;
 
         if (!particle.relativePosition)
         {
-            local.sub(emitter.lastGlobal);
-            prevLocal.sub(emitter.lastGlobal);
+            prevX -= emitter.lastGlobal.x;
+            prevY -= emitter.lastGlobal.y;
+            prevZ -= emitter.lastGlobal.z;
+            x -= emitter.lastGlobal.x;
+            y -= emitter.lastGlobal.y;
+            z -= emitter.lastGlobal.z;
         }
 
-        double prev = this.a * prevLocal.x + this.b * prevLocal.y + this.c * prevLocal.z + this.d;
-        double now = this.a * local.x + this.b * local.y + this.c * local.z + this.d;
+        double prev = this.a * prevX + this.b * prevY + this.c * prevZ + this.d;
+        double now = this.a * x + this.b * y + this.c * z + this.d;
 
         if ((prev > 0 && now < 0) || (prev < 0 && now > 0))
         {

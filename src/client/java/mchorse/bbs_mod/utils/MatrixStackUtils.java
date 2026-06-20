@@ -53,14 +53,22 @@ public class MatrixStackUtils
 
     public static void applyTransform(PoseStack stack, Transform transform)
     {
-        stack.translate(transform.translate.x, transform.translate.y, transform.translate.z);
-        stack.mulPose(Axis.ZP.rotation(transform.rotate.z));
-        stack.mulPose(Axis.YP.rotation(transform.rotate.y));
-        stack.mulPose(Axis.XP.rotation(transform.rotate.x));
-        stack.mulPose(Axis.ZP.rotation(transform.rotate2.z));
-        stack.mulPose(Axis.YP.rotation(transform.rotate2.y));
-        stack.mulPose(Axis.XP.rotation(transform.rotate2.x));
-        scaleStack(stack, transform.scale.x, transform.scale.y, transform.scale.z);
+        if (transform.translate.x != 0F || transform.translate.y != 0F || transform.translate.z != 0F)
+        {
+            stack.translate(transform.translate.x, transform.translate.y, transform.translate.z);
+        }
+
+        if (transform.rotate.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate.z));
+        if (transform.rotate.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate.y));
+        if (transform.rotate.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate.x));
+        if (transform.rotate2.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate2.z));
+        if (transform.rotate2.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate2.y));
+        if (transform.rotate2.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate2.x));
+
+        if (transform.scale.x != 1F || transform.scale.y != 1F || transform.scale.z != 1F)
+        {
+            scaleStack(stack, transform.scale.x, transform.scale.y, transform.scale.z);
+        }
     }
 
     public static void multiply(PoseStack stack, Matrix4f matrix)

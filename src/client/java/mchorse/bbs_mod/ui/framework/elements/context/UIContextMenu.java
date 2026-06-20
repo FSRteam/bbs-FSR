@@ -59,9 +59,7 @@ public abstract class UIContextMenu extends UIElement
 
     protected void renderBackground(UIContext context)
     {
-        int color = BBSSettings.primaryColor.get();
-
-        context.batcher.dropShadow(this.area.x, this.area.y, this.area.ex(), this.area.ey(), 10, Colors.A25 | color, color);
-        this.area.render(context.batcher, Colors.A100);
+        context.batcher.dropShadow(this.area.x, this.area.y, this.area.ex(), this.area.ey(), 10, BBSSettings.panelShadowOpaqueColor(), BBSSettings.panelShadowTransparentColor());
+        this.area.render(context.batcher, BBSSettings.raisedSurface());
     }
 }

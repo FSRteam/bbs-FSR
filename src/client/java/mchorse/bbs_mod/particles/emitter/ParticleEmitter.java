@@ -17,6 +17,7 @@ import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionAppearance;
 import mchorse.bbs_mod.particles.components.events.ParticleComponentEmitterLifetimeEvents;
+import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateManual;
 import mchorse.bbs_mod.particles.events.ParticleEventDispatcher;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -546,6 +547,13 @@ public class ParticleEmitter
             return;
         }
 
+        ParticleComponentRateManual manualRate = this.scheme == null ? null : this.scheme.get(ParticleComponentRateManual.class);
+
+        if (manualRate != null && this.particles.size() >= (int) manualRate.particles.get())
+        {
+            return;
+        }
+
         this.particles.add(this.createParticle(offset));
     }
 
@@ -659,7 +667,7 @@ public class ParticleEmitter
             Matrix4f matrix = stack.last().pose();
             BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
             ParticleComponentCollisionAppearance collisionAppearance = this.scheme.collisionAppearance;
-            boolean useCollisionTexture = collisionAppearance != null && collisionAppearance.isCollisionTextureEnabled();
+            boolean useCollisionTexture = collisionAppearance != null;
 
             this.bindTexture();
 
@@ -671,7 +679,7 @@ public class ParticleEmitter
                 this.setParticleVariables(particle, transition);
 
                 /* Check if particle should use collision appearance instead of base billboard */
-                boolean hasCollisionTexture = useCollisionTexture && particle.intersected;
+                boolean hasCollisionTexture = useCollisionTexture && particle.intersected && collisionAppearance.isCollisionTextureEnabled();
 
                 for (int j = 0; j < renders.size(); j++)
                 {
@@ -683,40 +691,20 @@ public class ParticleEmitter
                         continue;
                     }
 
+                    if (hasCollisionTexture && component == collisionAppearance)
+                    {
+                        continue;
+                    }
+
                     component.render(this, format, particle, builder, matrix, overlay, transition);
                 }
             }
 
-            MeshData meshData = builder.build();
+            this.drawParticleBatch(builder.build(), program, this.scheme.material);
 
-            if (meshData != null)
+            if (useCollisionTexture)
             {
-                RenderSystem.setShader(program);
-
-                if (this.scheme.material == ParticleMaterial.ADD)
-                {
-                    RenderSystem.blendFuncSeparate(
-                        GlStateManager.SourceFactor.SRC_ALPHA,
-                        GlStateManager.DestFactor.ONE,
-                        GlStateManager.SourceFactor.ONE,
-                        GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA
-                    );
-                }
-                else
-                {
-                    RenderSystem.disableBlend();
-                }
-
-                RenderSystem.disableCull();
-                BufferUploader.drawWithShader(meshData);
-                RenderSystem.enableCull();
-
-                if (this.scheme.material == ParticleMaterial.ADD)
-                {
-                    RenderSystem.defaultBlendFunc();
-                }
-
-                RenderSystem.enableBlend();
+                this.renderCollisionAppearanceBatch(collisionAppearance, format, program, matrix, overlay, transition);
             }
         }
 
@@ -734,6 +722,64 @@ public class ParticleEmitter
         }
     }
 
+    private void renderCollisionAppearanceBatch(ParticleComponentCollisionAppearance collisionAppearance, VertexFormat format, Supplier<ShaderInstance> program, Matrix4f matrix, int overlay, float transition)
+    {
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
+
+        this.bindTexture(collisionAppearance.texture);
+
+        for (int i = 0; i < this.particles.size(); i++)
+        {
+            Particle particle = this.particles.get(i);
+
+            if (!particle.intersected)
+            {
+                continue;
+            }
+
+            this.setEmitterVariables(transition);
+            this.setParticleVariables(particle, transition);
+            collisionAppearance.render(this, format, particle, builder, matrix, overlay, transition);
+        }
+
+        this.drawParticleBatch(builder.build(), program, collisionAppearance.material);
+    }
+
+    private void drawParticleBatch(MeshData meshData, Supplier<ShaderInstance> program, ParticleMaterial material)
+    {
+        if (meshData == null)
+        {
+            return;
+        }
+
+        RenderSystem.setShader(program);
+
+        if (material == ParticleMaterial.ADD)
+        {
+            RenderSystem.blendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA,
+                GlStateManager.DestFactor.ONE,
+                GlStateManager.SourceFactor.ONE,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA
+            );
+        }
+        else
+        {
+            RenderSystem.disableBlend();
+        }
+
+        RenderSystem.disableCull();
+        BufferUploader.drawWithShader(meshData);
+        RenderSystem.enableCull();
+
+        if (material == ParticleMaterial.ADD)
+        {
+            RenderSystem.defaultBlendFunc();
+        }
+
+        RenderSystem.enableBlend();
+    }
+
     private void copyCameraProperties(ParticleEmitter emitter)
     {
         emitter.perspective = this.perspective;
@@ -747,7 +793,12 @@ public class ParticleEmitter
 
     private void bindTexture()
     {
-        Texture texture = BBSModClient.getTextures().getTexture(this.texture == null ? this.scheme.texture : this.texture);
+        this.bindTexture(this.texture == null ? this.scheme.texture : this.texture);
+    }
+
+    private void bindTexture(Link link)
+    {
+        Texture texture = BBSModClient.getTextures().getTexture(link == null ? ParticleScheme.DEFAULT_TEXTURE : link);
 
         BBSModClient.getTextures().bindTexture(texture);
     }

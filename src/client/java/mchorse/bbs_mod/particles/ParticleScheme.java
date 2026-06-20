@@ -10,6 +10,9 @@ import mchorse.bbs_mod.particles.components.IComponentParticleInitialize;
 import mchorse.bbs_mod.particles.components.IComponentParticleRender;
 import mchorse.bbs_mod.particles.components.IComponentParticleUpdate;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
+import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionAppearance;
+import mchorse.bbs_mod.particles.components.events.ParticleComponentEmitterLifetimeEvents;
+import mchorse.bbs_mod.particles.components.meta.ParticleComponentInitialization;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentInitialSpeed;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
@@ -51,6 +54,9 @@ public class ParticleScheme extends ValueGroup {
     public List<IComponentParticleInitialize> particleInitializes = Collections.emptyList();
     public List<IComponentParticleUpdate> particleUpdates = Collections.emptyList();
     public List<IComponentParticleRender> particleRender = Collections.emptyList();
+    public ParticleComponentInitialization initialization;
+    public ParticleComponentEmitterLifetimeEvents emitterLifetimeEvents;
+    public ParticleComponentCollisionAppearance collisionAppearance;
 
     /* MoLang integration */
     public final ParticleMolangParser parser;
@@ -124,6 +130,9 @@ public class ParticleScheme extends ValueGroup {
         this.curves.clear();
         this.events.clear();
         this.components.clear();
+        this.initialization = null;
+        this.emitterLifetimeEvents = null;
+        this.collisionAppearance = null;
     }
 
     public void setup()
@@ -135,6 +144,9 @@ public class ParticleScheme extends ValueGroup {
         this.particleInitializes = this.getComponents(IComponentParticleInitialize.class);
         this.particleUpdates = this.getComponents(IComponentParticleUpdate.class);
         this.particleRender = this.getComponents(IComponentParticleRender.class);
+        this.initialization = this.get(ParticleComponentInitialization.class);
+        this.emitterLifetimeEvents = this.get(ParticleComponentEmitterLifetimeEvents.class);
+        this.collisionAppearance = this.get(ParticleComponentCollisionAppearance.class);
 
         /* Link variables with curves */
         for (Map.Entry<String, ParticleCurve> entry : this.curves.entrySet())

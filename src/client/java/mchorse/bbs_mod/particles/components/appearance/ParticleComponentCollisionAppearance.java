@@ -2,6 +2,7 @@ package mchorse.bbs_mod.particles.components.appearance;
 
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.math.Operation;
 import mchorse.bbs_mod.math.molang.MolangException;
 import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
@@ -76,13 +77,16 @@ public class ParticleComponentCollisionAppearance extends ParticleComponentAppea
         }
 
         boolean tmpLit = emitter.lit;
-        emitter.lit = this.lit;
 
-        this.calculateUVs(particle, emitter, transition);
-
-        super.render(emitter, format, particle, builder, matrix, overlay, transition);
-
-        emitter.lit = tmpLit;
+        try
+        {
+            emitter.lit = this.lit;
+            super.render(emitter, format, particle, builder, matrix, overlay, transition);
+        }
+        finally
+        {
+            emitter.lit = tmpLit;
+        }
     }
 
     @Override
@@ -105,6 +109,6 @@ public class ParticleComponentCollisionAppearance extends ParticleComponentAppea
 
     public boolean isCollisionTextureEnabled()
     {
-        return MolangExpression.isOne(this.enabled);
+        return !Operation.equals(this.enabled.get(), 0);
     }
 }

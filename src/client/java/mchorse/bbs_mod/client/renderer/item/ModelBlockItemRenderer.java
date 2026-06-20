@@ -19,6 +19,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
 
@@ -30,6 +31,12 @@ import java.lang.reflect.Method;
 public class ModelBlockItemRenderer
 {
     private Map<ItemStack, Item> map = new HashMap<>();
+    private static Method loadWithComponentsMethod;
+    private static Method loadMethod;
+    private static Method readNbtMethod;
+    private static boolean loadWithComponentsResolved;
+    private static boolean loadResolved;
+    private static boolean readNbtResolved;
 
     public void update()
     {
@@ -87,9 +94,11 @@ public class ModelBlockItemRenderer
             return null;
         }
 
-        if (this.map.containsKey(stack))
+        Item cached = this.map.get(stack);
+
+        if (cached != null)
         {
-            return this.map.get(stack);
+            return cached;
         }
 
         CustomData blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
@@ -159,21 +168,16 @@ public class ModelBlockItemRenderer
     {
         try
         {
-            Object level = Minecraft.getInstance().level;
-            Object registryAccess = level == null ? null : level.getClass().getMethod("registryAccess").invoke(level);
+            HolderLookup.Provider registryAccess = Minecraft.getInstance().level == null ? null : Minecraft.getInstance().level.registryAccess();
 
             if (registryAccess != null)
             {
-                for (Method method : entity.getClass().getMethods())
+                Method method = getLoadWithComponentsMethod(entity.getClass(), registryAccess);
+
+                if (method != null)
                 {
-                    if (method.getName().equals("loadWithComponents")
-                        && method.getParameterCount() == 2
-                        && method.getParameterTypes()[0] == CompoundTag.class
-                        && method.getParameterTypes()[1].isInstance(registryAccess))
-                    {
-                        method.invoke(entity, tag, registryAccess);
-                        return;
-                    }
+                    method.invoke(entity, tag, registryAccess);
+                    return;
                 }
             }
         }
@@ -182,17 +186,83 @@ public class ModelBlockItemRenderer
 
         try
         {
-            entity.getClass().getMethod("load", CompoundTag.class).invoke(entity, tag);
-            return;
+            Method method = getLoadMethod(entity.getClass());
+
+            if (method != null)
+            {
+                method.invoke(entity, tag);
+                return;
+            }
         }
         catch (Exception ignored)
         {}
 
         try
         {
-            entity.getClass().getMethod("readNbt", CompoundTag.class).invoke(entity, tag);
+            Method method = getReadNbtMethod(entity.getClass());
+
+            if (method != null)
+            {
+                method.invoke(entity, tag);
+            }
         }
         catch (Exception ignored)
         {}
+    }
+
+    private static Method getLoadWithComponentsMethod(Class<?> clazz, HolderLookup.Provider registryAccess)
+    {
+        if (!loadWithComponentsResolved)
+        {
+            for (Method method : clazz.getMethods())
+            {
+                if (method.getName().equals("loadWithComponents")
+                    && method.getParameterCount() == 2
+                    && method.getParameterTypes()[0] == CompoundTag.class
+                    && method.getParameterTypes()[1].isInstance(registryAccess))
+                {
+                    loadWithComponentsMethod = method;
+                    break;
+                }
+            }
+
+            loadWithComponentsResolved = true;
+        }
+
+        return loadWithComponentsMethod;
+    }
+
+    private static Method getLoadMethod(Class<?> clazz)
+    {
+        if (!loadResolved)
+        {
+            try
+            {
+                loadMethod = clazz.getMethod("load", CompoundTag.class);
+            }
+            catch (Exception ignored)
+            {}
+
+            loadResolved = true;
+        }
+
+        return loadMethod;
+    }
+
+    private static Method getReadNbtMethod(Class<?> clazz)
+    {
+        if (!readNbtResolved)
+        {
+            try
+            {
+                readNbtMethod = clazz.getMethod("readNbt", CompoundTag.class);
+            }
+            catch (Exception ignored)
+            {}
+
+            readNbtResolved = true;
+        }
+
+        return readNbtMethod;
     }
 }

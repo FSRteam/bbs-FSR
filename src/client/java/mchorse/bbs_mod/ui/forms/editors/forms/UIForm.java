@@ -60,6 +60,11 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         return this.getOrigin(transition, FormUtils.getPath(this.form), this.generalPanel != null && this.generalPanel.transform.isLocal());
     }
 
+    public Matrix4f getOriginMatrix(float transition)
+    {
+        return this.getOrigin(transition);
+    }
+
     protected Matrix4f getOrigin(float transition, String path, boolean local)
     {
         Form root = FormUtils.getRoot(this.form);
@@ -86,6 +91,11 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     public void startEdit(T form)
     {
+        this.startEdit(form, null);
+    }
+
+    public void startEdit(T form, Class<?> preferredPanel)
+    {
         this.form = form;
 
         for (UIFormPanel<T> panel : this.panels)
@@ -93,7 +103,23 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
             panel.startEdit(form);
         }
 
-        this.setPanel(this.defaultPanel);
+        this.setPanel(this.findPanel(preferredPanel));
+    }
+
+    private UIFormPanel<T> findPanel(Class<?> panelClass)
+    {
+        if (panelClass != null)
+        {
+            for (UIFormPanel<T> panel : this.panels)
+            {
+                if (panel.getClass() == panelClass)
+                {
+                    return panel;
+                }
+            }
+        }
+
+        return this.defaultPanel;
     }
 
     public void finishEdit()
@@ -110,6 +136,35 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         {
             this.view.pickBone(bone);
         }
+    }
+
+    public Class<?> getActivePanelClass()
+    {
+        return this.view == null ? null : this.view.getClass();
+    }
+
+    public void pickBoneFromViewport(String bone, Class<?> preferredPanel)
+    {
+        if (preferredPanel != null)
+        {
+            for (UIFormPanel<T> panel : this.panels)
+            {
+                if (panel.getClass() == preferredPanel)
+                {
+                    if (panel.pickBoneInList(bone))
+                    {
+                        this.setPanel(panel);
+
+                        return;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        this.setPanel(this.defaultPanel);
+        this.pickBone(bone);
     }
 
     @Override

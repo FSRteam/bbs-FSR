@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPane
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -28,9 +29,11 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDo
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -38,7 +41,9 @@ import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.joml.Vector2i;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -78,6 +83,7 @@ public class UIAnimationStateEditor extends UIElement
             this.editArea.x(BBSSettings.editorLayoutSettings.getStateEditorSizeH());
             this.getParent().resize();
         });
+        draggable.cursors(GLFW.GLFW_CROSSHAIR_CURSOR, GLFW.GLFW_CROSSHAIR_CURSOR);
 
         draggable.reference(() -> new Vector2i(this.editArea.area.x, this.area.y));
         draggable.rendering((context) ->
@@ -104,6 +110,19 @@ public class UIAnimationStateEditor extends UIElement
     public AnimationState getState()
     {
         return this.state;
+    }
+
+    public UIPropTransform getEditableTransform()
+    {
+        return UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor);
+    }
+
+    public boolean startGizmo(UIContext context, int stencilIndex)
+    {
+        UIPropTransform transform = this.getEditableTransform();
+        GizmoDrag drag = this.buildGizmoDrag(transform, context.getTransition());
+
+        return transform != null && Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
     }
 
     public void setState(AnimationState state)
@@ -291,18 +310,11 @@ public class UIAnimationStateEditor extends UIElement
         {
             Pair<Form, String> pair = stencil.getPicked();
 
-            if (pair != null && context.mouseButton < 2)
+            if (pair != null && pair.a != null && context.mouseButton < 2)
             {
-                if (Gizmo.INSTANCE.start(stencil.getIndex(), context.mouseX, context.mouseY, UIReplaysEditorUtils.getEditableTransform(this.keyframeEditor)))
-                {
-                    return true;
-                }
-
                 if (context.mouseButton == 0)
                 {
-                    if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> this.pickForm(pair.a, bone));
-                    else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> this.pickForm(pair.a, bone));
-                    else this.pickForm(pair.a, pair.b);
+                    this.pickFormFromViewport(pair.a, pair.b);
 
                     return true;
                 }
@@ -333,12 +345,71 @@ public class UIAnimationStateEditor extends UIElement
         return false;
     }
 
+    public void pickFormFromViewport(Form form, String bone)
+    {
+        if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), form, bone, (pickedBone) -> this.pickForm(form, pickedBone));
+        else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), form, bone, (pickedBone) -> this.pickForm(form, pickedBone));
+        else this.pickForm(form, bone);
+    }
+
     public void pickForm(Form form, String bone)
     {
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, false);
     }
 
+    private GizmoDrag buildGizmoDrag(UIPropTransform transform, float transition)
+    {
+        if (transform == null || transform.getTransform() == null)
+        {
+            return null;
+        }
+
+        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(this.editor.renderer.camera, this.editor.renderer.area);
+
+        if (drag != null)
+        {
+            float tick = this.editor.getSamplingTick();
+
+            drag.setJacobian(GizmoDrag.computeTranslateJacobian(
+                transform.getTransform(),
+                () ->
+                {
+                    this.editor.applyStateForSampling(tick);
+
+                    Matrix4f origin = this.getOrigin(transition);
+
+                    return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
+                }
+            ));
+            drag.setRotateAxes(GizmoDrag.computeRotateAxes(
+                transform.getTransform(),
+                () ->
+                {
+                    this.editor.applyStateForSampling(tick);
+
+                    Matrix4f origin = this.getOriginMatrix(transition);
+
+                    return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
+                }
+            ));
+
+            this.editor.applyStateForSampling(tick);
+        }
+
+        return drag;
+    }
+
     public Matrix4f getOrigin(float transition)
+    {
+        return this.getOriginInternal(transition, false);
+    }
+
+    public Matrix4f getOriginMatrix(float transition)
+    {
+        return this.getOriginInternal(transition, true);
+    }
+
+    private Matrix4f getOriginInternal(float transition, boolean forceMatrix)
     {
         if (this.keyframeEditor == null)
         {
@@ -354,7 +425,7 @@ public class UIAnimationStateEditor extends UIElement
 
         Form root = FormUtils.getRoot(this.editor.form);
         MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(this.editor.renderer.getTargetEntity(), transition);
-        Matrix4f matrix = bone.b ? map.get(bone.a).origin() : map.get(bone.a).matrix();
+        Matrix4f matrix = (!forceMatrix && bone.b) ? map.get(bone.a).origin() : map.get(bone.a).matrix();
 
         return matrix == null ? Matrices.EMPTY_4F : matrix;
     }
@@ -364,6 +435,18 @@ public class UIAnimationStateEditor extends UIElement
     {
         if (this.keyframeEditor != null)
         {
+            UIPropTransform transform = this.getEditableTransform();
+
+            if (transform != null)
+            {
+                transform.hotkeyDrag(() ->
+                {
+                    UIContext current = this.getContext();
+
+                    return this.buildGizmoDrag(transform, current == null ? 0F : current.getTransition());
+                });
+            }
+
             this.editArea.area.render(context.batcher, Colors.A75);
         }
 

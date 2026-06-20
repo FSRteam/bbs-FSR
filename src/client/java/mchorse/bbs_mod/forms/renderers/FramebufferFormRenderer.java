@@ -24,7 +24,6 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
-import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
@@ -38,6 +37,12 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
     private static final Quad quad = new Quad();
     private static final Quad uvQuad = new Quad();
     private static final Link framebufferKey = Link.bbs("framebuffer_form");
+    private static final Vector3f framebufferLight0 = new Vector3f(0F, 0F, 1F);
+    private static final Vector3f framebufferLight1 = new Vector3f(0F, 0F, 1F);
+
+    private final Matrix4f projectionMatrix = new Matrix4f();
+    private final Matrix4f orthoMatrix = new Matrix4f();
+    private final Color quadColor = new Color();
 
     public FramebufferFormRenderer(FramebufferForm form)
     {
@@ -88,11 +93,11 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         int prevRead = GL30.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         Vector3f light0 = RenderSystem.shaderLightDirections[0];
         Vector3f light1 = RenderSystem.shaderLightDirections[1];
-        Matrix4f projectionMatrix = new Matrix4f(RenderSystem.getProjectionMatrix());
+        Matrix4f projectionMatrix = this.projectionMatrix.set(RenderSystem.getProjectionMatrix());
 
         GL30.glCullFace(GL30.GL_FRONT);
-        RenderSystem.setShaderLights(new Vector3f(0F, 0F, 1F), new Vector3f(0F, 0F, 1F));
-        RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(-1F, 1F, 1F, -1F, -500F, 500F), VertexSorting.DISTANCE_TO_ORIGIN);
+        RenderSystem.setShaderLights(framebufferLight0, framebufferLight1);
+        RenderSystem.setProjectionMatrix(this.orthoMatrix.identity().setOrtho(-1F, 1F, 1F, -1F, -500F, 500F), VertexSorting.DISTANCE_TO_ORIGIN);
         RenderSystem.getModelViewStack().pushMatrix();
         RenderSystem.getModelViewStack().identity();
 
@@ -135,11 +140,10 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         float h = texture.height;
 
         /* TL = top left, BR = bottom right*/
-        Vector4f crop = new Vector4f(0, 0, 0, 0);
-        float uvTLx = crop.x / w;
-        float uvTLy = crop.y / h;
-        float uvBRx = 1 - crop.z / w;
-        float uvBRy = 1 - crop.w / h;
+        float uvTLx = 0F;
+        float uvTLy = 0F;
+        float uvBRx = 1F;
+        float uvBRy = 1F;
 
         uvQuad.p1.set(uvTLx, uvTLy, 0);
         uvQuad.p2.set(uvBRx, uvTLy, 0);
@@ -165,7 +169,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
     private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
     {
         BufferBuilder builder;
-        Color color = Color.white();
+        Color color = this.quadColor.set(1F, 1F, 1F, 1F);
         Matrix4f matrix = matrices.last().pose();
         PoseStack.Pose normal = matrices.last();
 

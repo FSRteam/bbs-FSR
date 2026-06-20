@@ -17,6 +17,7 @@ import java.util.List;
 public abstract class ParticleComponentExpireBlocks extends ParticleComponentBase
 {
     public List<String> blocks = new ArrayList<>();
+    private final BlockPos.MutableBlockPos blockPos = new BlockPos.MutableBlockPos();
 
     @Override
     public BaseType toData()
@@ -46,6 +47,6 @@ public abstract class ParticleComponentExpireBlocks extends ParticleComponentBas
 
         Vector3d position = particle.getGlobalPosition(emitter);
 
-        return emitter.world.getBlockState(BlockPos.containing(position.x, position.y, position.z));
+        return emitter.world.getBlockState(this.blockPos.set(position.x, position.y, position.z));
     }
 }

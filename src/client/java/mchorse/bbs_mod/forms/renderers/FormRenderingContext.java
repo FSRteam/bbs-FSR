@@ -22,6 +22,8 @@ public class FormRenderingContext
     public int color;
     public boolean modelRenderer;
 
+    private final Quaternionf cameraRotation = new Quaternionf();
+
     public FormRenderingContext()
     {}
 
@@ -53,7 +55,7 @@ public class FormRenderingContext
         this.camera.position.set(camera.getPosition().x, camera.getPosition().y, camera.getPosition().z);
         this.camera.rotation.set(MathUtils.toRad(-camera.getXRot()), MathUtils.toRad(camera.getYRot()), 0F);
         this.camera.fov = MathUtils.toRad(Minecraft.getInstance().options.fov().get());
-        this.camera.view.identity().rotate(camera.rotation().conjugate(new Quaternionf()));
+        this.camera.view.identity().rotate(camera.rotation().conjugate(this.cameraRotation));
 
         return this;
     }

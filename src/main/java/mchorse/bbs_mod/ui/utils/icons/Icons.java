@@ -212,6 +212,8 @@ public class Icons
     public static final Icon INTERP_CIRCLE_INOUT = register(new Icon(ATLAS, "interp_circle_inout", 192, 192));
     public static final Icon INTERP_BEZIER = register(new Icon(ATLAS, "interp_bezier", 208, 192));
     public static final Icon INTERP_BSPLINE = register(new Icon(ATLAS, "interp_bspline", 208, 208));
+    public static final Icon INTERP_AUTO = register(new Icon(ATLAS, "interp_auto", 224, 192));
+    public static final Icon INTERP_AUTO_CLAMPED = register(new Icon(ATLAS, "interp_auto_clamped", 224, 208));
 
     public static final Icon INTERP_QUAD_OUT = register(new Icon(ATLAS, "interp_quad_out", 48, 208));
     public static final Icon INTERP_CUBIC_OUT = register(new Icon(ATLAS, "interp_cubic_out", 64, 208));
@@ -238,6 +240,9 @@ public class Icons
     public static final Icon CHECKBOARD = register(new Icon(ATLAS, "checkboard", 0, 240));
     public static final Icon DISABLED = register(new Icon(ATLAS, "disabled", 16, 240));
     public static final Icon CURSOR = register(new Icon(ATLAS, "cursor", 32, 240));
+    public static final Icon ERASER = new Icon(ATLAS, "eraser", 32, 160, 16, 16);
+    public static final Icon EYEDROPPER = new Icon(ATLAS, "eyedropper", 48, 160, 16, 16);
+    public static final Icon BRUSH = new Icon(ATLAS, "brush", 64, 160, 16, 16);
 
     public static final Icon MOUSE_BODY = new Icon(ATLAS, "mouse_body", 241, 237, 14, 18);
     public static final Icon MOUSE_LMB = new Icon(ATLAS, "mouse_lmb", 242, 229, 6, 7);

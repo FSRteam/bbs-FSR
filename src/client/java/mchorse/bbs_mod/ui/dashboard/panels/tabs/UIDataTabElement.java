@@ -113,9 +113,11 @@ public class UIDataTabElement extends UIClickable<UIDataTabElement>
 
         if (active)
         {
-            int color = Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.2F);
-
-            context.batcher.box(this.area.x, this.area.y, ex, this.area.ey(), color);
+            context.batcher.box(this.area.x, this.area.y, ex, this.area.ey(), BBSSettings.baseSurface());
+        }
+        else if (hover)
+        {
+            context.batcher.box(this.area.x, this.area.y, ex, this.area.ey(), BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
         }
 
         FontRenderer font = context.batcher.getFont();

@@ -29,27 +29,33 @@ public class Morph
 
         if (hitResult.getType() == HitResult.Type.ENTITY)
         {
-            Entity target = ((EntityHitResult) hitResult).getEntity();
-            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(target.getType());
-
-            if (key != null)
-            {
-                MobForm form = new MobForm();
-                CompoundTag compound = target.saveWithoutId(new CompoundTag());
-
-                for (String s : Arrays.asList("Pos", "Motion", "Rotation", "FallDistance", "Fire", "Air", "OnGround", "Invulnerable", "PortalCooldown", "UUID"))
-                {
-                    compound.remove(s);
-                }
-
-                form.mobID.set(key.toString());
-                form.mobNBT.set(compound.toString());
-
-                return form;
-            }
+            return createMobForm(((EntityHitResult) hitResult).getEntity());
         }
 
         return null;
+    }
+
+    public static MobForm createMobForm(Entity target)
+    {
+        ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(target.getType());
+
+        if (key == null)
+        {
+            return null;
+        }
+
+        MobForm form = new MobForm();
+        CompoundTag compound = target.saveWithoutId(new CompoundTag());
+
+        for (String s : Arrays.asList("Pos", "Motion", "Rotation", "FallDistance", "Fire", "Air", "OnGround", "Invulnerable", "PortalCooldown", "UUID"))
+        {
+            compound.remove(s);
+        }
+
+        form.mobID.set(key.toString());
+        form.mobNBT.set(compound.toString());
+
+        return form;
     }
 
     public static Morph getMorph(Entity entity)

@@ -59,9 +59,14 @@ public class UIFormPalette extends UIElement implements IUIFormList
 
     public UIFormPalette(Consumer<Form> callback)
     {
+        this(callback, false);
+    }
+
+    public UIFormPalette(Consumer<Form> callback, boolean morphCategoryFilter)
+    {
         this.callback = callback;
 
-        this.list = new UIFormList(this);
+        this.list = new UIFormList(this, morphCategoryFilter);
         this.list.full(this);
 
         this.editor = new UIFormEditor(this);

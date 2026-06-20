@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.utils.colors;
 
 import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 
 public class Colors
@@ -23,9 +24,12 @@ public class Colors
     public static final int DARKER_GRAY = 0xff444444;
     public static final int DARK_GRAY = 0x676767;
     public static final int DARKEST_GRAY = 0xff222222;
-    public static final int RED = 0xff3333;
-    public static final int GREEN = 0x33ff33;
-    public static final int BLUE = 0x3366ff;
+    public static final int RED = 0xff4059;
+    public static final int GREEN = 0x59d940;
+    public static final int BLUE = 0x4073ff;
+    public static final int PLANE_XZ = 0xffd940d9;
+    public static final int PLANE_XY = 0xff40a6d9;
+    public static final int PLANE_ZY = 0xffd9d940;
     public static final int YELLOW = 0xffff33;
     public static final int CYAN = 0x33ffff;
     public static final int MAGENTA = 0xff66ff;
@@ -54,11 +58,52 @@ public class Colors
         return COLOR.getARGBColor();
     }
 
+    public static int lerp(int a, int b, float x)
+    {
+        x = MathUtils.clamp(x, 0F, 1F);
+
+        Color aColor = new Color().set(a);
+        Color bColor = new Color().set(b);
+
+        return COLOR.set(
+            Lerps.lerp(aColor.r, bColor.r, x),
+            Lerps.lerp(aColor.g, bColor.g, x),
+            Lerps.lerp(aColor.b, bColor.b, x),
+            Lerps.lerp(aColor.a, bColor.a, x)
+        ).getARGBColor();
+    }
+
+    public static int opaque(int color)
+    {
+        return A100 | (color & RGB);
+    }
+
     public static float getA(int color)
     {
         COLOR.set(color);
 
         return COLOR.a;
+    }
+
+    public static float getR(int color)
+    {
+        COLOR.set(color);
+
+        return COLOR.r;
+    }
+
+    public static float getG(int color)
+    {
+        COLOR.set(color);
+
+        return COLOR.g;
+    }
+
+    public static float getB(int color)
+    {
+        COLOR.set(color);
+
+        return COLOR.b;
     }
 
     public static int setA(int color, float alpha)

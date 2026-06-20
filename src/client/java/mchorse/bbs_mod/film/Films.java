@@ -176,6 +176,14 @@ public class Films
                 channel.simplify();
             }
 
+            for (Recorder.RecordedMob mob : recorder.mobs)
+            {
+                for (KeyframeChannel<?> channel : mob.keyframes.getChannels())
+                {
+                    channel.simplify();
+                }
+            }
+
             if (ClientNetwork.isIsBBSModOnServer())
             {
                 ClientNetwork.sendActionRecording(recorder.film.getId(), recorder.exception, recorder.initialTick, 0, false);

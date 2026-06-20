@@ -3,7 +3,6 @@ package mchorse.bbs_mod.particles.components.shape.directions;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.StringType;
 import mchorse.bbs_mod.particles.emitter.Particle;
-import org.joml.Vector3d;
 
 public class ShapeDirectionInwards extends ShapeDirection
 {
@@ -30,21 +29,21 @@ public class ShapeDirectionInwards extends ShapeDirection
     @Override
     public void applyDirection(Particle particle, double x, double y, double z)
     {
-        Vector3d vector = new Vector3d(particle.position);
+        double dx = particle.position.x - x;
+        double dy = particle.position.y - y;
+        double dz = particle.position.z - z;
+        double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        vector.sub(new Vector3d(x, y, z));
-
-        if (vector.length() <= 0)
+        if (length <= 0)
         {
-            vector.set(0, 0, 0);
+            particle.speed.set(0, 0, 0);
         }
         else
         {
-            vector.normalize();
-            vector.mul(this.factor);
-        }
+            double scale = this.factor / length;
 
-        particle.speed.set(vector);
+            particle.speed.set((float) (dx * scale), (float) (dy * scale), (float) (dz * scale));
+        }
     }
 
     @Override

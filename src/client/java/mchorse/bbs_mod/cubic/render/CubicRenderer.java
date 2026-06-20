@@ -2,11 +2,21 @@ package mchorse.bbs_mod.cubic.render;
 
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class CubicRenderer
 {
+    private static final float EPS = 1.0e-6f;
+
     /**
      * Process/render given model
      *
@@ -58,5 +68,203 @@ public class CubicRenderer
         stack.popPose();
 
         return false;
+    }
+
+    public static record PivotFrame(Vector3f position, Quaternionf parentRotation, Quaternionf worldRotation)
+    {}
+
+    public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out)
+    {
+        collectPivotFrames(model, wanted, out, null);
+    }
+
+    public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out, Matrix4f baseTransform)
+    {
+        if (model == null || wanted == null || wanted.isEmpty() || out == null)
+        {
+            return;
+        }
+
+        PoseStack stack = new PoseStack();
+
+        if (baseTransform != null)
+        {
+            Vector3f t = baseTransform.getTranslation(new Vector3f());
+            Quaternionf r = baseTransform.getNormalizedRotation(new Quaternionf());
+            Matrix4f rigid = new Matrix4f().rotation(r).setTranslation(t);
+
+            stack.last().pose().set(rigid);
+        }
+
+        for (ModelGroup group : model.topGroups)
+        {
+            collectPivotFramesRec(stack, group, wanted, out);
+        }
+    }
+
+    private static void collectPivotFramesRec(PoseStack stack, ModelGroup group, Set<String> wanted, Map<String, PivotFrame> out)
+    {
+        stack.pushPose();
+
+        ICubicRenderer.translateGroup(stack, group);
+        ICubicRenderer.moveToGroupPivot(stack, group);
+
+        boolean store = wanted.contains(group.id);
+        Vector3f pos;
+        Quaternionf parentRot;
+
+        if (store)
+        {
+            Matrix4f mat = stack.last().pose();
+            pos = mat.getTranslation(new Vector3f());
+            parentRot = mat.getNormalizedRotation(new Quaternionf());
+        }
+        else
+        {
+            pos = null;
+            parentRot = null;
+        }
+
+        ICubicRenderer.rotateGroup(stack, group);
+
+        if (store)
+        {
+            Matrix4f mat = stack.last().pose();
+            Quaternionf worldRot = mat.getNormalizedRotation(new Quaternionf());
+            out.put(group.id, new PivotFrame(pos, parentRot, worldRot));
+        }
+
+        ICubicRenderer.scaleGroup(stack, group);
+        ICubicRenderer.moveBackFromGroupPivot(stack, group);
+
+        for (ModelGroup child : group.children)
+        {
+            collectPivotFramesRec(stack, child, wanted, out);
+        }
+
+        stack.popPose();
+    }
+
+    public static void applyRotations(Model model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions)
+    {
+        if (model == null || rootParentRotation == null || ids == null || positions == null || ids.isEmpty() || positions.length < 2)
+        {
+            return;
+        }
+
+        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
+        int boneCount = ids.size();
+        boolean hasTip = positions.length >= boneCount + 1;
+        int rotCount = boneCount - 1 + (hasTip ? 1 : 0);
+
+        for (int i = 0; i < rotCount; i++)
+        {
+            ModelGroup bone = model.getGroup(ids.get(i));
+            ModelGroup child = i + 1 < boneCount ? model.getGroup(ids.get(i + 1)) : null;
+
+            if (bone == null)
+            {
+                return;
+            }
+
+            Vector3f restDirLocal;
+
+            if (child != null)
+            {
+                restDirLocal = new Vector3f(child.initial.translate).sub(bone.initial.translate).mul(1.0f / 16.0f);
+            }
+            else
+            {
+                if (boneCount >= 2)
+                {
+                    ModelGroup parent = model.getGroup(ids.get(i - 1));
+
+                    if (parent == null)
+                    {
+                        return;
+                    }
+
+                    restDirLocal = new Vector3f(bone.initial.translate).sub(parent.initial.translate).mul(1.0f / 16.0f);
+                }
+                else if (bone.children != null && !bone.children.isEmpty())
+                {
+                    ModelGroup firstChild = bone.children.get(0);
+                    restDirLocal = new Vector3f(firstChild.initial.translate).sub(bone.initial.translate).mul(1.0f / 16.0f);
+                }
+                else
+                {
+                    restDirLocal = new Vector3f(0F, -1F, 0F);
+                }
+            }
+
+            Vector3f desiredDirWorld = new Vector3f(positions[i + 1]).sub(positions[i]);
+
+            if (restDirLocal.lengthSquared() < EPS * EPS || desiredDirWorld.lengthSquared() < EPS * EPS)
+            {
+                continue;
+            }
+
+            restDirLocal.normalize();
+            desiredDirWorld.normalize();
+
+            Quaternionf invParent = new Quaternionf(parentWorld).invert();
+            Vector3f desiredDirLocal = new Vector3f(desiredDirWorld);
+
+            invParent.transform(desiredDirLocal);
+
+            if (desiredDirLocal.lengthSquared() < EPS * EPS)
+            {
+                continue;
+            }
+
+            desiredDirLocal.normalize();
+
+            Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
+            localRot.mul(twistAround(bone.current.rotate, bone.current.rotate2, restDirLocal));
+            Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
+
+            float rx = bone.current.rotate.x;
+            float ry = bone.current.rotate.y;
+            float rz = bone.current.rotate.z;
+            eulerDeg.x = wrapDegreesNear(eulerDeg.x, rx);
+            eulerDeg.y = wrapDegreesNear(eulerDeg.y, ry);
+            eulerDeg.z = wrapDegreesNear(eulerDeg.z, rz);
+
+            bone.current.rotate.set(eulerDeg);
+            bone.current.rotate2.set(0F, 0F, 0F);
+
+            parentWorld.mul(Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z));
+        }
+    }
+
+    private static Quaternionf twistAround(Vector3f rotate, Vector3f rotate2, Vector3f axisLocal)
+    {
+        Quaternionf local = Matrices.toQuaternionZYXDegrees(rotate.x, rotate.y, rotate.z);
+
+        if (rotate2.x != 0F || rotate2.y != 0F || rotate2.z != 0F)
+        {
+            local.mul(Matrices.toQuaternionZYXDegrees(rotate2.x, rotate2.y, rotate2.z));
+        }
+
+        return Matrices.twistAbout(local, axisLocal);
+    }
+
+    private static float wrapDegreesNear(float angle, float reference)
+    {
+        float delta = angle - reference;
+
+        while (delta > 180F)
+        {
+            angle -= 360F;
+            delta -= 360F;
+        }
+
+        while (delta < -180F)
+        {
+            angle += 360F;
+            delta += 360F;
+        }
+
+        return angle;
     }
 }

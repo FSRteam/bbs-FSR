@@ -5,10 +5,10 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.utils.DataPath;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -209,7 +209,7 @@ public class ActionManager
         }
     }
 
-    public void changedBlock(BlockPos pos, BlockState state, BlockEntity blockEntity)
+    public void changedBlock(BlockPos pos, BlockState state, CompoundTag blockEntity)
     {
         for (DamageControl control : this.dc.values())
         {

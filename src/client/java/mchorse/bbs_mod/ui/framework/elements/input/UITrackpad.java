@@ -268,7 +268,11 @@ public class UITrackpad extends UIBaseTextbox
     public void setValue(double value)
     {
         this.setValueInternal(value);
-        this.updateTextField();
+
+        if (!this.textbox.isFocused())
+        {
+            this.updateTextField();
+        }
     }
 
     private void updateTextField()
@@ -664,13 +668,19 @@ public class UITrackpad extends UIBaseTextbox
         boolean plus = !dragging && this.plusOne.isInside(context);
         boolean minus = !dragging && this.minusOne.isInside(context);
 
+        if (this.isEnabled() && (this.textbox.isFocused() || (!dragging && this.area.isInside(context))))
+        {
+            context.requestCursor(GLFW.GLFW_IBEAM_CURSOR);
+        }
+
         if (this.textbox.isFocused())
         {
             this.textbox.render(context);
+            context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), Colors.opaque(BBSSettings.primaryColor.get()));
         }
         else
         {
-            this.area.render(context.batcher, Colors.A100);
+            this.area.render(context.batcher, BBSSettings.inputSurface());
 
             if (dragging)
             {
@@ -776,19 +786,18 @@ public class UITrackpad extends UIBaseTextbox
     public double getValueModifier()
     {
         double value = this.normal;
-        int modifier = Window.getLastModifier();
 
-        if (modifier == Window.MOD_SHIFT)
+        if (Window.isShiftPressed())
         {
             value = this.strong;
         }
-        else if (modifier == Window.MOD_CTRL)
-        {
-            value = this.increment;
-        }
-        else if (modifier == Window.MOD_ALT)
+        else if (Window.isAltPressed())
         {
             value = this.weak;
+        }
+        else if (Window.isCtrlPressed())
+        {
+            value = this.increment;
         }
 
         return value * globalFactor.getValue();

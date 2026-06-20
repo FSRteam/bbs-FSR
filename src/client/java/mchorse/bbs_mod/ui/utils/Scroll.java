@@ -8,6 +8,9 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.Minecraft;
 
+import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
+
 /**
  * Scroll
  * 
@@ -69,44 +72,25 @@ public class Scroll
 
     private float scrollbarRatio;
     private double targetScroll;
+    private BooleanSupplier smoothScrolling;
+    private IntSupplier wheelScrollStep;
 
-    public static void bar(Batcher2D batcher, int x1, int y1, int x2, int y2, int color)
+    public static final int HANDLE_COLOR = 0xff4d525a;
+    public static final int HANDLE_ACTIVE_COLOR = 0xff6e747c;
+
+    public static void bar(Batcher2D batcher, int x1, int y1, int x2, int y2)
+    {
+        bar(batcher, x1, y1, x2, y2, HANDLE_COLOR);
+    }
+
+    public static void bar(Batcher2D batcher, int x1, int y1, int x2, int y2, int fill)
     {
         if (x2 - x1 == 0 || y2 - y1 == 0)
         {
             return;
         }
 
-        batcher.dropShadow(x1, y1, x2, y2, 5, color, Colors.setA(color, 0F));
-
-        batcher.box(x1, y1, x2, y2, 0xffeeeeee);
-        batcher.box(x1 + 1, y1 + 1, x2, y2, 0xff666666);
-        batcher.box(x1 + 1, y1 + 1, x2 - 1, y2 - 1, 0xffaaaaaa);
-
-        int dx = x2 - x1;
-        int dy = y2 - y1;
-
-        if (dx + dy < 30)
-        {
-            return;
-        }
-
-        int x = (x2 + x1) / 2;
-        int y = (y2 + y1) / 2;
-
-        /* Little handle */
-        if (dx > dy)
-        {
-            batcher.box(x - 3, y - 1, x - 2, y + 1, Colors.GRAY);
-            batcher.box(x, y - 1, x + 1, y + 1, Colors.GRAY);
-            batcher.box(x + 3, y - 1, x + 4, y + 1, Colors.GRAY);
-        }
-        else
-        {
-            batcher.box(x - 1, y - 3, x + 1, y - 2, Colors.GRAY);
-            batcher.box(x - 1, y, x + 1, y + 1, Colors.GRAY);
-            batcher.box(x - 1, y + 3, x + 1, y + 4, Colors.GRAY);
-        }
+        batcher.bevelBox(x1, y1, x2, y2, fill, true, false);
     }
 
     public Scroll(Area area)
@@ -148,6 +132,74 @@ public class Scroll
         this.scrollbar = false;
 
         return this;
+    }
+
+    public Scroll smoothScrolling(BooleanSupplier supplier)
+    {
+        this.smoothScrolling = supplier;
+
+        return this;
+    }
+
+    public Scroll wheelScrollStep(IntSupplier supplier)
+    {
+        this.wheelScrollStep = supplier;
+
+        return this;
+    }
+
+    private boolean shouldSmoothScrolling()
+    {
+        return BBSSettings.scrollingSmoothness.get() && (this.smoothScrolling == null || this.smoothScrolling.getAsBoolean());
+    }
+
+    private int getWheelScrollStep()
+    {
+        return this.wheelScrollStep == null ? 0 : Math.max(0, this.wheelScrollStep.getAsInt());
+    }
+
+    private void scrollByStep(double scroll)
+    {
+        int step = this.getWheelScrollStep();
+
+        if (step <= 0 || scroll == 0D)
+        {
+            this.scrollBy(scroll);
+
+            return;
+        }
+
+        double target = this.targetScroll;
+        double epsilon = 0.0001D;
+        boolean forward = scroll > 0D;
+        double snapped;
+
+        if (forward)
+        {
+            snapped = Math.floor(target / step) * step;
+
+            if (target - snapped > epsilon)
+            {
+                this.scrollTo(snapped + step);
+            }
+            else
+            {
+                this.scrollTo(target + step);
+            }
+        }
+        else
+        {
+            snapped = Math.ceil(target / step) * step;
+
+            if (snapped - target > epsilon)
+            {
+                this.scrollTo(snapped - step);
+            }
+            else
+            {
+                this.scrollTo(target - step);
+            }
+        }
     }
 
     public int getScrollbarWidth()
@@ -417,7 +469,16 @@ public class Scroll
             }
             else if (scroll != 0D)
             {
-                this.scrollBy((int) (Math.copySign(this.scrollSpeed, scroll) * BBSSettings.scrollingSensitivity.get()));
+                int step = this.getWheelScrollStep();
+
+                if (step > 0)
+                {
+                    this.scrollByStep(Math.copySign(1D, scroll));
+                }
+                else
+                {
+                    this.scrollBy((int) (Math.copySign(this.scrollSpeed, scroll) * BBSSettings.scrollingSensitivity.get()));
+                }
             }
         }
 
@@ -448,7 +509,7 @@ public class Scroll
      */
     public void drag(int x, int y)
     {
-        if (BBSSettings.scrollingSmoothness.get())
+        if (this.shouldSmoothScrolling())
         {
             float delta = Minecraft.getInstance().getTimer().getGameTimeDeltaTicks();
 
@@ -488,9 +549,8 @@ public class Scroll
         if (this.scrollbar)
         {
             Area scrollbar = this.getScrollbarArea();
-            int color = BBSSettings.scrollbarShadow.get();
 
-            bar(batcher, scrollbar.x, scrollbar.y, scrollbar.ex(), scrollbar.ey(), color);
+            bar(batcher, scrollbar.x, scrollbar.y, scrollbar.ex(), scrollbar.ey(), this.dragging ? HANDLE_ACTIVE_COLOR : HANDLE_COLOR);
         }
         else if (this.direction == ScrollDirection.VERTICAL)
         {

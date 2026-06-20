@@ -34,6 +34,11 @@ public class BOBJModelVAO
     private int[] tmpLight;
     private float[] tmpTangents;
 
+    private final Vector4f sum = new Vector4f();
+    private final Vector4f result = new Vector4f();
+    private final Vector3f sumNormal = new Vector3f();
+    private final Vector3f resultNormal = new Vector3f();
+
     public BOBJModelVAO(BOBJLoader.CompiledData data)
     {
         this.data = data;
@@ -113,10 +118,8 @@ public class BOBJModelVAO
      */
     public void updateMesh(StencilMap stencilMap)
     {
-        Vector4f sum = new Vector4f();
-        Vector4f result = new Vector4f(0F, 0F, 0F, 0F);
-        Vector3f sumNormal = new Vector3f();
-        Vector3f resultNormal = new Vector3f();
+        this.result.set(0F, 0F, 0F, 0F);
+        this.resultNormal.set(0F, 0F, 0F);
 
         float[] oldVertices = this.data.posData;
         float[] newVertices = this.tmpVertices;
@@ -139,13 +142,13 @@ public class BOBJModelVAO
                 {
                     int index = this.data.boneIndexData[i * 4 + w];
 
-                    sum.set(oldVertices[i * 3], oldVertices[i * 3 + 1], oldVertices[i * 3 + 2], 1F);
-                    matrices[index].transform(sum);
-                    result.add(sum.mul(weight));
+                    this.sum.set(oldVertices[i * 3], oldVertices[i * 3 + 1], oldVertices[i * 3 + 2], 1F);
+                    matrices[index].transform(this.sum);
+                    this.result.add(this.sum.mul(weight));
 
-                    sumNormal.set(oldNormals[i * 3], oldNormals[i * 3 + 1], oldNormals[i * 3 + 2]);
-                    Matrices.TEMP_3F.set(matrices[index]).transform(sumNormal);
-                    resultNormal.add(sumNormal.mul(weight));
+                    this.sumNormal.set(oldNormals[i * 3], oldNormals[i * 3 + 1], oldNormals[i * 3 + 2]);
+                    Matrices.TEMP_3F.set(matrices[index]).transform(this.sumNormal);
+                    this.resultNormal.add(this.sumNormal.mul(weight));
 
                     count++;
 
@@ -159,24 +162,24 @@ public class BOBJModelVAO
 
             if (count == 0)
             {
-                result.set(oldVertices[i * 3], oldVertices[i * 3 + 1], oldVertices[i * 3 + 2], 1F);
-                resultNormal.set(oldNormals[i * 3], oldNormals[i * 3 + 1], oldNormals[i * 3 + 2]);
+                this.result.set(oldVertices[i * 3], oldVertices[i * 3 + 1], oldVertices[i * 3 + 2], 1F);
+                this.resultNormal.set(oldNormals[i * 3], oldNormals[i * 3 + 1], oldNormals[i * 3 + 2]);
             }
 
-            result.x /= result.w;
-            result.y /= result.w;
-            result.z /= result.w;
+            this.result.x /= this.result.w;
+            this.result.y /= this.result.w;
+            this.result.z /= this.result.w;
 
-            newVertices[i * 3] = result.x;
-            newVertices[i * 3 + 1] = result.y;
-            newVertices[i * 3 + 2] = result.z;
+            newVertices[i * 3] = this.result.x;
+            newVertices[i * 3 + 1] = this.result.y;
+            newVertices[i * 3 + 2] = this.result.z;
 
-            newNormals[i * 3] = resultNormal.x;
-            newNormals[i * 3 + 1] = resultNormal.y;
-            newNormals[i * 3 + 2] = resultNormal.z;
+            newNormals[i * 3] = this.resultNormal.x;
+            newNormals[i * 3 + 1] = this.resultNormal.y;
+            newNormals[i * 3 + 2] = this.resultNormal.z;
 
-            result.set(0F, 0F, 0F, 0F);
-            resultNormal.set(0F, 0F, 0F);
+            this.result.set(0F, 0F, 0F, 0F);
+            this.resultNormal.set(0F, 0F, 0F);
 
             if (stencilMap != null)
             {
