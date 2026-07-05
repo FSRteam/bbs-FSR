@@ -22,6 +22,7 @@ public class UIModelForm extends UIForm<ModelForm>
     public UIModelForm()
     {
         this.modelPanel = new UIModelFormPanel(this);
+        this.modelPanel.poseEditor.transform.worldTransform(new FormBoneWorldProvider(this));
         this.defaultPanel = this.modelPanel;
 
         this.registerPanel(this.defaultPanel, UIKeys.FORMS_EDITORS_MODEL_POSE, Icons.POSE);

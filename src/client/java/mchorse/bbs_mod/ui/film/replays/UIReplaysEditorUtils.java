@@ -270,6 +270,13 @@ public class UIReplaysEditorUtils
             transform,
             panel.replayEditor.getContext() == null ? 0F : panel.replayEditor.getContext().getTransition()
         ));
+
+        /* World-space copy/paste only makes sense for an actor's bone in the scene, so the world
+         * matrix provider is wired solely for the pose editor's transform (other tracks leave it off
+         * and the world context actions stay hidden there). */
+        boolean pose = panel.replayEditor.keyframeEditor.editor instanceof UIPoseKeyframeFactory;
+
+        transform.worldTransform(pose ? new FilmBoneWorldProvider(panel) : null);
     }
 
     public static GizmoDrag buildFilmGizmoDrag(
