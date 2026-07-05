@@ -81,6 +81,8 @@ public class ServerNetwork
     public static final ResourceLocation CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c16");
     public static final ResourceLocation CLIENT_REFRESH_MODEL_BLOCKS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c17");
     public static final ResourceLocation CLIENT_ADDON_BROKER = NetworkCompat.ADDON_BROKER_S2C;
+    /* Upstream fs 2.3 allocates "c18" for this channel, but "c18" is already taken by the addon broker in this fork */
+    public static final ResourceLocation CLIENT_REQUEST_FILM_RESYNC = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c19");
 
     public static final ResourceLocation SERVER_MODEL_BLOCK_FORM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s1");
     public static final ResourceLocation SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s2");
@@ -734,6 +736,19 @@ public class ServerNetwork
         buf.writeUtf(filmId);
 
         NetworkCompat.sendToPlayer(player, CLIENT_STOP_FILM_PACKET, buf);
+    }
+
+    /**
+     * Ask the editing client to re-send the whole film, used when a per-property
+     * sync targets a path the server doesn't have (client/server desync).
+     */
+    public static void requestFilmResync(ServerPlayer player, String filmId)
+    {
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
+
+        buf.writeUtf(filmId);
+
+        NetworkCompat.sendToPlayer(player, CLIENT_REQUEST_FILM_RESYNC, buf);
     }
 
     public static void sendManagerData(ServerPlayer player, int callbackId, RepositoryOperation op, BaseType data)

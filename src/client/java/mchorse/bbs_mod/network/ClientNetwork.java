@@ -93,6 +93,7 @@ public class ClientNetwork
         NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_SELECTED_SLOT, (buf) -> handleSelectedSlotPacket(Minecraft.getInstance(), buf));
         NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, (buf) -> handleAnimationStateModelBlockPacket(Minecraft.getInstance(), buf));
         NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_REFRESH_MODEL_BLOCKS, (buf) -> handleRefreshModelBlocksPacket(Minecraft.getInstance(), buf));
+        NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_REQUEST_FILM_RESYNC, (buf) -> handleRequestFilmResync(Minecraft.getInstance(), buf));
         NetworkCompatClient.registerClientReceiver(ServerNetwork.CLIENT_ADDON_BROKER, AddonPayloadBroker::handleClientPayload);
     }
 
@@ -403,6 +404,24 @@ public class ClientNetwork
 
                     random -= 1;
                 }
+            }
+        });
+    }
+
+    private static void handleRequestFilmResync(Minecraft client, FriendlyByteBuf buf)
+    {
+        String filmId = buf.readUtf();
+
+        client.execute(() ->
+        {
+            UIFilmPanel panel = BBSModClient.getDashboard().getPanel(UIFilmPanel.class);
+            Film film = panel == null ? null : panel.getData();
+
+            /* Server lost track of a path we edited — re-send the whole film
+             * (root path) so it can rebuild its copy via film.fromData(...). */
+            if (film != null && film.getId().equals(filmId))
+            {
+                sendSyncData(filmId, film);
             }
         });
     }

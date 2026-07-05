@@ -18,6 +18,7 @@ public abstract class BaseType
     public static final byte TYPE_BYTE_ARRAY = 9;
     public static final byte TYPE_SHORT_ARRAY = 10;
     public static final byte TYPE_INT_ARRAY = 11;
+    public static final byte TYPE_LONG_ARRAY = 12;
 
     public static BaseType fromData(DataStorageContext context) throws IOException
     {
@@ -36,6 +37,7 @@ public abstract class BaseType
         else if (type == TYPE_BYTE_ARRAY) output = new ByteArrayType();
         else if (type == TYPE_SHORT_ARRAY) output = new ShortArrayType();
         else if (type == TYPE_INT_ARRAY) output = new IntArrayType();
+        else if (type == TYPE_LONG_ARRAY) output = new LongArrayType();
 
         if (output != null)
         {

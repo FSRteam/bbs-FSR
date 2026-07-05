@@ -9,6 +9,7 @@ import mchorse.bbs_mod.data.types.FloatType;
 import mchorse.bbs_mod.data.types.IntArrayType;
 import mchorse.bbs_mod.data.types.IntType;
 import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.data.types.LongArrayType;
 import mchorse.bbs_mod.data.types.LongType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.data.types.ShortArrayType;
@@ -22,6 +23,7 @@ import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.IntArrayTag;
 import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.LongArrayTag;
 import net.minecraft.nbt.LongTag;
 import net.minecraft.nbt.ShortTag;
 import net.minecraft.nbt.StringTag;
@@ -163,7 +165,12 @@ public class DataStorageUtils
 
             for (BaseType baseType : listType)
             {
-                list.add(toNbt(baseType));
+                Tag converted = toNbt(baseType);
+
+                if (converted != null)
+                {
+                    list.add(converted);
+                }
             }
 
             return list;
@@ -174,7 +181,12 @@ public class DataStorageUtils
 
             for (String key : mapType.keys())
             {
-                compound.put(key, toNbt(mapType.get(key)));
+                Tag converted = toNbt(mapType.get(key));
+
+                if (converted != null)
+                {
+                    compound.put(key, converted);
+                }
             }
 
             return compound;
@@ -186,6 +198,10 @@ public class DataStorageUtils
         else if (type instanceof IntArrayType intArrayType)
         {
             return new IntArrayTag(intArrayType.value);
+        }
+        else if (type instanceof LongArrayType longArrayType)
+        {
+            return new LongArrayTag(longArrayType.value);
         }
         else if (type instanceof ShortArrayType shortArrayType)
         {
@@ -237,7 +253,12 @@ public class DataStorageUtils
 
             for (Tag tag : listTag)
             {
-                list.add(fromNbt(tag));
+                BaseType converted = fromNbt(tag);
+
+                if (converted != null)
+                {
+                    list.add(converted);
+                }
             }
 
             return list;
@@ -255,7 +276,12 @@ public class DataStorageUtils
 
             for (String key : compoundTag.getAllKeys())
             {
-                map.put(key, fromNbt(compoundTag.get(key)));
+                BaseType converted = fromNbt(compoundTag.get(key));
+
+                if (converted != null)
+                {
+                    map.put(key, converted);
+                }
             }
 
             return map;
@@ -267,6 +293,10 @@ public class DataStorageUtils
         else if (element instanceof IntArrayTag intArrayTag)
         {
             return new IntArrayType(intArrayTag.getAsIntArray());
+        }
+        else if (element instanceof LongArrayTag longArrayTag)
+        {
+            return new LongArrayType(longArrayTag.getAsLongArray());
         }
 
         return null;

@@ -15,7 +15,7 @@ public abstract class BaseValueGroup extends BaseValue
 
     public abstract BaseValue get(String key);
 
-    public BaseValue getRecursively(DataPath path)
+    public BaseValue findRecursively(DataPath path)
     {
         BaseValue value = this.get(path.size() <= 0 ? "" : path.strings.get(0));
 
@@ -23,6 +23,13 @@ public abstract class BaseValueGroup extends BaseValue
         {
             value = this.searchRecursively(path);
         }
+
+        return value;
+    }
+
+    public BaseValue getRecursively(DataPath path)
+    {
+        BaseValue value = this.findRecursively(path);
 
         if (value == null)
         {

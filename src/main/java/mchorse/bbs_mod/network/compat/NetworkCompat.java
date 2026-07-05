@@ -51,7 +51,7 @@ public final class NetworkCompat
     );
     private static final LinkedHashMap<ResourceLocation, PayloadBinding> S2C_BINDINGS = createBindings(
         "c",
-        18,
+        19,
         MAX_CLIENTBOUND_RAW_PAYLOAD_BYTES,
         "play_to_client"
     );
@@ -85,7 +85,7 @@ public final class NetworkCompat
         logPayloadTypes("play_to_server", C2S_BINDINGS);
         logPayloadTypes("play_to_client", S2C_BINDINGS);
         verifyPayloadFreeze("s", 15, C2S_BINDINGS, "play_to_server");
-        verifyPayloadFreeze("c", 18, S2C_BINDINGS, "play_to_client");
+        verifyPayloadFreeze("c", 19, S2C_BINDINGS, "play_to_client");
     }
 
     /**

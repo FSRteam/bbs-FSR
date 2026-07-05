@@ -38,6 +38,7 @@ public class ActionPlayer
 
     public boolean syncing;
     public boolean stopDamage = true;
+    private boolean pendingResync;
 
     private ServerPlayer serverPlayer;
     private ServerLevel level;
@@ -286,16 +287,28 @@ public class ActionPlayer
 
     public void syncData(DataPath key, BaseType data)
     {
-        BaseValue baseValue = this.film.getRecursively(key);
+        /* findRecursively (not getRecursively) so an unresolvable path doesn't
+         * throw and abort the whole server task. */
+        BaseValue baseValue = this.film.findRecursively(key);
 
         if (baseValue != null)
         {
+            this.pendingResync = false;
             baseValue.fromData(data);
 
-            if (baseValue.getId().equals("actor") || baseValue.getId().equals("enabled") || baseValue.getId().equals("replays"))
+            if (baseValue == this.film || baseValue.getId().equals("actor") || baseValue.getId().equals("enabled") || baseValue.getId().equals("replays"))
             {
                 this.updateReplayEntities();
             }
+        }
+        else if (!this.pendingResync && this.serverPlayer != null)
+        {
+            /* The client edited a path we don't have (e.g. a keyframe it just
+             * inserted but hasn't structurally synced yet). Ask it to re-send the
+             * whole film so we catch up; debounced until that full data arrives. */
+            this.pendingResync = true;
+
+            ServerNetwork.requestFilmResync(this.serverPlayer, this.film.getId());
         }
     }
 
