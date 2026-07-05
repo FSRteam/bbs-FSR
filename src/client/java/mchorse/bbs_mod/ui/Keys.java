@@ -79,6 +79,7 @@ public class Keys
     public static final KeyCombo FORMS_EDIT_ALT = new KeyCombo("edit_alt", UIKeys.GENERAL_EDIT, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("forms");
     public static final KeyCombo FORMS_PICK_TEXTURE = new KeyCombo("pick_texture", UIKeys.FORMS_EDITOR_MODEL_PICK_TEXTURE, GLFW.GLFW_KEY_P, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("forms");
     public static final KeyCombo FORMS_OPEN_STATES_EDITOR = new KeyCombo("open_states_editor", UIKeys.FORMS_EDITOR_STATES_OPEN, GLFW.GLFW_KEY_BACKSLASH).categoryKey("forms");
+    public static final KeyCombo FORMS_TOGGLE_BODY_PART_GIZMO = new KeyCombo("toggle_body_part_gizmo", UIKeys.FORMS_EDITOR_BODY_PART_GIZMO, GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("forms");
 
     /* Pixel editor */
     public static final KeyCombo PIXEL_SWAP = new KeyCombo("swap", UIKeys.TEXTURES_KEYS_SWAP, GLFW.GLFW_KEY_X).categoryKey("pixels");
@@ -124,8 +125,11 @@ public class Keys
     public static final KeyCombo TRANSFORMATIONS_Y = new KeyCombo("y", UIKeys.GENERAL_Y, GLFW.GLFW_KEY_Y).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_Z = new KeyCombo("z", UIKeys.GENERAL_Z, GLFW.GLFW_KEY_Z).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_TOGGLE_AXES = new KeyCombo("toggle_axes", UIKeys.TRANSFORMS_KEYS_TOGGLE_AXES, GLFW.GLFW_KEY_F8).categoryKey("transformations");
+    public static final KeyCombo TRANSFORMATIONS_HIDE_GIZMO = new KeyCombo("hide_gizmo", UIKeys.TRANSFORMS_KEYS_HIDE_GIZMO, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_TOGGLE_LOCAL = new KeyCombo("toggle_local", UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL, GLFW.GLFW_KEY_Q).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_TOGGLE_FIX = new KeyCombo("toggle_fix", UIKeys.TRANSFORMS_KEYS_TOGGLE_FIX, GLFW.GLFW_KEY_Y).categoryKey("transformations");
+    public static final KeyCombo TRANSFORMATIONS_COPY_WORLD = new KeyCombo("copy_world", UIKeys.TRANSFORMS_CONTEXT_COPY_WORLD, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("transformations");
+    public static final KeyCombo TRANSFORMATIONS_PASTE_WORLD = new KeyCombo("paste_world", UIKeys.TRANSFORMS_CONTEXT_PASTE_WORLD, GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("transformations");
 
     /* Film controller */
     public static final KeyCombo FILM_CONTROLLER_START_RECORDING = new KeyCombo("start_recording", UIKeys.FILM_CONTROLLER_KEYS_START_RECORDING, GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("film_controller");

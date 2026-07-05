@@ -8,19 +8,14 @@ import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
-import mchorse.bbs_mod.ui.utils.TransformSpace;
-import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
-import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -64,7 +59,6 @@ public class UIPropTransform extends UITransform
 
     private boolean model;
     private boolean local;
-    private TransformSpace uiSpace;
 
     private UITransformHandler handler;
 
@@ -137,45 +131,25 @@ public class UIPropTransform extends UITransform
     private final StringBuilder numericInput = new StringBuilder();
     private boolean numericActive;
 
-    private UIElement spacesBar;
-    private UIIcon spaceParent;
-    private UIIcon spaceLocal;
-    private UIIcon spaceWorld;
-    private boolean spacesBarBackground;
-
-    private UIIcon mirror;
-    private UIIcon invert;
-
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.uiSpace = this.getSpace();
-        this.local = this.uiSpace == TransformSpace.LOCAL;
+        this.local = BBSSettings.defaultLocalTransform.get();
 
-        this.spaceParent = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.setSpace(TransformSpace.PARENT));
-        this.spaceParent.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL);
-        this.spaceLocal = new UIIcon(Icons.MINIMIZE, (b) -> this.setSpace(TransformSpace.LOCAL));
-        this.spaceLocal.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
-        this.spaceWorld = new UIIcon(Icons.GLOBE, (b) -> this.setSpace(TransformSpace.WORLD));
-        this.spaceWorld.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_WORLD);
-
-        this.spacesBar = new UIElement();
-        this.spacesBar.h(UIConstants.CONTROL_HEIGHT).row(0).resize();
-        this.spacesBar.add(this.spaceParent, this.spaceLocal, this.spaceWorld);
-
-        if (this.supportsMirror())
+        this.context((menu) ->
         {
-            this.mirror = new UIIcon(Icons.CONVERT, (b) -> this.toggleMirrorEdit());
-            this.mirror.tooltip(UIKeys.TRANSFORMS_MIRROR_EDIT);
-            this.invert = new UIIcon(Icons.REVERSE, (b) -> this.toggleAlternateInvert());
-            this.invert.tooltip(UIKeys.TRANSFORMS_ALTERNATE_INVERT);
+            menu.action(
+                this.local ? Icons.FULLSCREEN : Icons.MINIMIZE,
+                this.local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL,
+                this::toggleLocal
+            );
 
-            this.spacesBar.add(new UIElement(), this.mirror, this.invert);
-        }
+            menu.actions.add(0, menu.actions.remove(menu.actions.size() - 1));
+        });
 
-        this.prepend(this.spacesBar);
-        this.h(5 * UIConstants.CONTROL_HEIGHT);
-
+        this.iconT.callback = (b) -> this.toggleLocal();
+        this.iconT.hoverColor = Colors.LIGHTEST_GRAY;
+        this.iconT.setEnabled(true);
         this.updateLocalUI();
 
         this.noCulling();
@@ -246,7 +220,13 @@ public class UIPropTransform extends UITransform
 
     public boolean isLocal()
     {
-        return this.getSpace() == TransformSpace.LOCAL;
+        return this.local;
+    }
+
+    @Override
+    protected Transform getEditedTransform()
+    {
+        return this.transform;
     }
 
     public boolean isTrackball()
@@ -311,10 +291,9 @@ public class UIPropTransform extends UITransform
         return -1;
     }
 
+    /** Old-logic no-op: kept so hosts that gave the spaces bar a backdrop still compile. */
     public UIPropTransform barBackground()
     {
-        this.spacesBarBackground = true;
-
         return this;
     }
 
@@ -328,68 +307,32 @@ public class UIPropTransform extends UITransform
         return BBSSettings.poseMirrorEdit.get();
     }
 
-    private void toggleMirrorEdit()
-    {
-        BBSSettings.poseMirrorEdit.set(!BBSSettings.poseMirrorEdit.get());
-        UIUtils.playClick();
-    }
-
     public boolean isAlternateInvert()
     {
         return BBSSettings.poseAlternateInvert.get();
     }
 
-    private void toggleAlternateInvert()
+    private void toggleLocal()
     {
-        BBSSettings.poseAlternateInvert.set(!BBSSettings.poseAlternateInvert.get());
-        UIUtils.playClick();
-    }
+        this.local = !this.local;
 
-    public TransformSpace getSpace()
-    {
-        TransformSpace[] values = TransformSpace.values();
-
-        return values[MathUtils.clamp(BBSSettings.transformSpace.get(), 0, values.length - 1)];
-    }
-
-    private UIIcon activeSpaceIcon()
-    {
-        TransformSpace space = this.getSpace();
-
-        if (space == TransformSpace.LOCAL) return this.spaceLocal;
-        if (space == TransformSpace.WORLD) return this.spaceWorld;
-
-        return this.spaceParent;
-    }
-
-    private void setSpace(TransformSpace space)
-    {
-        BBSSettings.transformSpace.set(space.ordinal());
-
-        if (space == TransformSpace.PARENT && this.transform != null)
+        if (!this.local && this.transform != null)
         {
             this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
         }
 
-        this.uiSpace = space;
         this.updateLocalUI();
-        UIUtils.playClick();
-    }
-
-    private void toggleLocal()
-    {
-        this.setSpace(this.getSpace().next());
     }
 
     private void updateLocalUI()
     {
-        this.local = this.getSpace() == TransformSpace.LOCAL;
         this.tx.forcedLabel(this.local ? UIKeys.GENERAL_X : null);
         this.ty.forcedLabel(this.local ? UIKeys.GENERAL_Y : null);
         this.tz.forcedLabel(this.local ? UIKeys.GENERAL_Z : null);
         this.tx.relative(this.local);
         this.ty.relative(this.local);
         this.tz.relative(this.local);
+        this.iconT.tooltip(this.local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
     }
 
     private Vector3f calculateLocalVector(double factor, Axis axis)
@@ -416,13 +359,18 @@ public class UIPropTransform extends UITransform
 
     public UIPropTransform enableHotkeys()
     {
-        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
-        Supplier<Boolean> active = () -> this.editing;
+        return this.enableHotkeys(() -> true);
+    }
 
-        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().category(category);
+    public UIPropTransform enableHotkeys(Supplier<Boolean> enabled)
+    {
+        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
+        Supplier<Boolean> active = () -> enabled.get() && this.editing;
+
+        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().active(enabled).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.setEditingAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.setEditingAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.setEditingAxis(Axis.Z)).active(active).category(category);
@@ -430,7 +378,7 @@ public class UIPropTransform extends UITransform
         {
             this.toggleLocal();
             UIUtils.playClick();
-        }).category(category);
+        }).active(enabled).category(category);
 
         return this;
     }
@@ -1399,19 +1347,6 @@ public class UIPropTransform extends UITransform
     @Override
     public void render(UIContext context)
     {
-        TransformSpace currentSpace = this.getSpace();
-
-        if (currentSpace != this.uiSpace)
-        {
-            if (currentSpace == TransformSpace.PARENT && this.transform != null)
-            {
-                this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
-            }
-
-            this.uiSpace = currentSpace;
-            this.updateLocalUI();
-        }
-
         if (this.editing && !this.numericActive && this.checker.isTime())
         {
             /* UIContext.mouseX can't be used because when cursor is outside of window
@@ -1559,23 +1494,6 @@ public class UIPropTransform extends UITransform
                 this.lastX = context.mouseX;
                 this.lastY = context.mouseY;
             }
-        }
-
-        if (this.spacesBarBackground)
-        {
-            this.spacesBar.area.render(context.batcher, Colors.A50);
-        }
-
-        UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area, Direction.BOTTOM);
-
-        if (this.mirror != null && BBSSettings.poseMirrorEdit.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area, Direction.BOTTOM);
-        }
-
-        if (this.invert != null && BBSSettings.poseAlternateInvert.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area, Direction.BOTTOM);
         }
 
         super.render(context);

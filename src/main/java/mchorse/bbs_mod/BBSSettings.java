@@ -47,7 +47,6 @@ public class BBSSettings {
 	public static ValueBoolean axesKeepScreenSize;
 	public static ValueBoolean rotate3dSphere;
 	public static ValueInt rotate3dSphereMode;
-	public static ValueInt rotate3dSphereColor;
 	public static ValueBoolean rotateHideRings;
 	public static ValueBoolean hideInactiveHandles;
 	public static ValueFloat snapTranslate;
@@ -56,7 +55,7 @@ public class BBSSettings {
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
-	public static ValueInt transformSpace;
+	public static ValueBoolean defaultLocalTransform;
 	public static ValueBoolean transformHotkeys3dRay;
 	public static ValueBoolean poseMirrorEdit;
 	public static ValueBoolean poseAlternateInvert;
@@ -356,9 +355,9 @@ public class BBSSettings {
 		transformationMigrated |= migrateLegacyValue(appearance, transformation, "gizmos");
 		transformationMigrated |= migrateLegacyValue(appearance, transformation, "transform_local_default");
 
-		if (!transformation.has("space") && transformation.has("transform_local_default"))
+		if (!transformation.has("default_local") && transformation.has("transform_local_default"))
 		{
-			transformation.putInt("space", transformation.getBool("transform_local_default") ? 1 : 0);
+			transformation.putBool("default_local", transformation.getBool("transform_local_default"));
 			transformationMigrated = true;
 		}
 
@@ -468,15 +467,13 @@ public class BBSSettings {
 		axesThickness = builder.getFloat("axes_thickness", 0.5F, 0.25F, 3F);
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", true);
 		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
-		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 0);
-		rotate3dSphereColor = builder.getInt("rotate_3d_sphere_color", Colors.setA(Colors.WHITE, 0F)).colorAlpha();
+		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 1);
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
 		snapRotate = builder.getFloat("snap_rotate", 5F, 0.001F, 90F);
 		snapScale = builder.getFloat("snap_scale", 0.1F, 0.001F, 10F);
-		transformSpace = builder.getInt("space", 0, 0, 2);
-		transformSpace.invisible();
+		defaultLocalTransform = builder.getBoolean("default_local", false);
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
 		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
 		poseMirrorEdit.invisible();
