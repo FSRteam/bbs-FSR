@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.client.BBSFlickerDiagnostics;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
@@ -34,30 +33,11 @@ public class UIReplaysListPanel extends UIElement
     public final UIReplayList replays;
 
     private final Area rightClickAnchorArea = new Area();
-    private String lastSelectionSignature = "";
 
     public UIReplaysListPanel(UIFilmPanel panel, Consumer<List<Replay>> callback, Consumer<Form> formConsumer)
     {
         this.filmPanel = panel;
-        this.replays = new UIReplayList((selected) ->
-        {
-            if (BBSFlickerDiagnostics.ENABLED)
-            {
-                String signature = this.selectionSignature(selected);
-
-                if (!signature.equals(this.lastSelectionSignature))
-                {
-                    BBSFlickerDiagnostics.log("replaysListPanel.selectionCallback selected={} count={} film={} caller={}",
-                        BBSFlickerDiagnostics.replays(selected),
-                        selected == null ? 0 : selected.size(),
-                        BBSFlickerDiagnostics.film(this.filmPanel.getData()),
-                        BBSFlickerDiagnostics.callerOutside(UIReplaysListPanel.class));
-                    this.lastSelectionSignature = signature;
-                }
-            }
-
-            callback.accept(selected);
-        }, formConsumer, panel);
+        this.replays = new UIReplayList(callback, formConsumer, panel);
 
         this.addReplay = new UIIcon(Icons.ADD, (b) -> this.replays.addReplay());
         this.dupeReplay = new UIIcon(Icons.DUPE, (b) -> this.replays.dupeReplay());
@@ -109,25 +89,4 @@ public class UIReplaysListPanel extends UIElement
         super.render(context);
     }
 
-    private String selectionSignature(List<Replay> selected)
-    {
-        if (selected == null || selected.isEmpty())
-        {
-            return "empty";
-        }
-
-        StringBuilder builder = new StringBuilder();
-
-        for (Replay replay : selected)
-        {
-            if (builder.length() > 0)
-            {
-                builder.append('|');
-            }
-
-            builder.append(replay == null ? "null" : replay.getId() + "@" + System.identityHashCode(replay));
-        }
-
-        return builder.toString();
-    }
 }
