@@ -1272,6 +1272,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
             }
         }
 
+        /* The visual gizmo draws here, before the picking preview, so the bone /
+         * sphere hover highlights composite on top of it. It moved out of the
+         * world pass into the UI pipeline so its translucent parts blend
+         * correctly (see Gizmo#renderInterface). */
+        if (this.canShowGizmo())
+        {
+            this.gizmo.renderGizmo(context);
+        }
+
         this.renderPickingPreview(context, area);
 
         this.orbit.handleOrbiting(context);
@@ -1508,7 +1517,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     private boolean canShowGizmo()
     {
-        return UIBaseMenu.renderAxes && !this.isRecording() && this.getBone() != null;
+        return UIBaseMenu.shouldRenderAxes() && !this.isRecording() && this.getBone() != null;
     }
 
     private void renderStencil(IBbsWorldRenderContext renderContext, UIContext context, boolean altPressed)
@@ -1541,6 +1550,10 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
 
         this.ensureStencilFramebuffer();
+
+        /* Match the visual gizmo's on-screen size compensation (see
+         * Gizmo#setViewportScale) so the pick handles line up with what is drawn. */
+        Gizmo.INSTANCE.setViewportScale(context.menu.height / (float) viewport.h);
 
         boolean isPlaying = this.isPlaying();
         Texture mainTexture = this.stencil.getFramebuffer().getMainTexture();

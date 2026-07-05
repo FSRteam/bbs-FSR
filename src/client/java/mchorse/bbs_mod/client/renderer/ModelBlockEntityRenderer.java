@@ -153,7 +153,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
                 .camera(camera));
             RenderSystem.disableDepthTest();
 
-            if (this.canRenderAxes(entity) && UIBaseMenu.renderAxes)
+            if (this.canRenderAxes(entity) && UIBaseMenu.shouldRenderAxes())
             {
                 matrices.pushPose();
                 MatrixStackUtils.scaleBack(matrices);
@@ -162,12 +162,6 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
             }
 
             matrices.popPose();
-        }
-
-        if (UIScreen.getCurrentMenu() instanceof UIDashboard dashboard
-            && dashboard.getPanels().panel instanceof UIModelBlockPanel modelBlockPanel)
-        {
-            modelBlockPanel.renderWorldGizmo(matrices, entity);
         }
 
         RenderSystem.disableDepthTest();

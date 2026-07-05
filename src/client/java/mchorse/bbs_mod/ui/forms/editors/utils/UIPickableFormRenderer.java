@@ -179,6 +179,11 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
             }
         }
 
+        /* Keep the gizmo the same on-screen size as in the film preview (see
+         * Gizmo#setViewportScale); set before both the visual (renderAxes) and the
+         * stencil pass below so the drawn handles and their pick hitbox match. */
+        Gizmo.INSTANCE.setViewportScale(context.menu.height / (float) this.area.h);
+
         this.renderAxes(context);
 
         if (this.area.isInside(context))
@@ -210,7 +215,14 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
                     }
 
                     Gizmo.INSTANCE.setViewport(this.area);
-                    Gizmo.INSTANCE.renderStencil(context.batcher.getContext().pose(), this.stencilMap);
+
+                    /* Skip the gizmo's pick stencil while the hide-gizmo key is held, so its handles can't be
+                     * clicked when hidden. Form-part picking (the stencil rendered above) is left intact, and
+                     * the F8 axes toggle is untouched here on purpose. */
+                    if (!UIBaseMenu.isHideGizmoHeld())
+                    {
+                        Gizmo.INSTANCE.renderStencil(context.batcher.getContext().pose(), this.stencilMap);
+                    }
                 }
                 finally
                 {
@@ -250,7 +262,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         }
 
         /* Draw axes */
-        if (UIBaseMenu.renderAxes)
+        if (UIBaseMenu.shouldRenderAxes())
         {
             RenderSystem.disableDepthTest();
             Gizmo.INSTANCE.setViewport(this.area);

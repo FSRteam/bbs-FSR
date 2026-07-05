@@ -112,6 +112,20 @@ public class GizmoInteraction
         this.updateSphereHover(context);
     }
 
+    /**
+     * Draw the gizmo's visual over this viewport in the host's UI pass, straight
+     * through the UI pipeline, so its translucent parts (rotation sphere, sweep
+     * pie, view ring) blend correctly — the world shaders that used to draw it
+     * mangled their transparency. It pairs with the model-view captured in the
+     * viewport's world / 3D pass ({@link Gizmo#captureVisual} or
+     * {@link Gizmo#renderStencil}). Call before {@link #update} so the sphere's
+     * on-screen radius is current for the hover check.
+     */
+    public void renderGizmo(UIContext context)
+    {
+        Gizmo.INSTANCE.renderInterface(context, this.viewport.getGizmoProjection(), this.viewport.getGizmoArea());
+    }
+
     public void renderSphereHighlight(UIContext context)
     {
         Gizmo.INSTANCE.renderSphereHighlight(context, this.viewport.getGizmoProjection(), this.viewport.getGizmoArea());

@@ -23,6 +23,7 @@ import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanel;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.forms.UINestedEdit;
 import mchorse.bbs_mod.ui.forms.UIToggleEditorEvent;
+import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
@@ -253,10 +254,19 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         return this.gizmoProjection;
     }
 
+    /**
+     * The screen region the gizmo actually renders into: the full UI viewport, NOT this panel's own
+     * area. The dashboard shrinks a panel by the 20px taskbar ({@code h(1F, -20)}), but the block
+     * gizmo is drawn straight onto Minecraft's full-screen world — so its on-screen projection,
+     * trackball sphere highlight and sphere pick must map against the whole screen. Using the shorter
+     * panel area squishes/shifts them by that 20px (a constant, camera-independent offset).
+     */
     @Override
     public Area getGizmoArea()
     {
-        return this.area;
+        UIContext context = this.getContext();
+
+        return context != null ? context.menu.viewport : this.area;
     }
 
     @Override
@@ -285,7 +295,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         Transform transform = this.modelBlock.getProperties().getTransform();
         GizmoDrag drag = new GizmoDrag().setup(
             this.gizmoCamera,
-            this.area,
+            this.getGizmoArea(),
             pos.getX() + 0.5D + transform.translate.x,
             pos.getY() + transform.translate.y,
             pos.getZ() + 0.5D + transform.translate.z
@@ -324,51 +334,43 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         return this.modelBlock != null
             && BBSSettings.gizmos.get()
+            && !UIBaseMenu.isHideGizmoHeld()
             && this.getChildren(UIFormPalette.class).isEmpty();
-    }
-
-    public void renderWorldGizmo(PoseStack matrices, ModelBlockEntity entity)
-    {
-        if (!this.isShowingGizmo(entity))
-        {
-            return;
-        }
-
-        Transform transform = entity.getProperties().getTransform();
-
-        matrices.pushPose();
-        matrices.translate(transform.translate.x, transform.translate.y, transform.translate.z);
-
-        if (this.transform.isLocal())
-        {
-            MatrixStackUtils.multiply(matrices, new Matrix4f().set(transform.createRotationMatrix()));
-        }
-
-        RenderSystem.disableDepthTest();
-        Gizmo.INSTANCE.render(matrices);
-        RenderSystem.enableDepthTest();
-
-        matrices.popPose();
     }
 
     private void renderGizmo(IBbsWorldRenderContext context, Vec3 cameraPos)
     {
         if (!this.canShowGizmo())
         {
-            this.gizmoStencil.clearPicking();
-
             return;
         }
 
         PoseStack stack = context.matrixStack();
 
+        /* Capture the on-screen camera frame for the drag math and the deferred UI
+         * passes: the gizmo's visual and its pick stencil are both drawn later in
+         * the UI pass (GizmoInteraction.renderGizmo / renderGizmoStencilInterface)
+         * from this frame, so rendering, picking and dragging share one coordinate
+         * frame. */
         this.gizmoProjection.set(context.projectionMatrix());
         this.gizmoCamera.projection.set(this.gizmoProjection);
         this.gizmoCamera.view.set(context.modelViewMatrix());
         this.gizmoCamera.position.set(cameraPos.x, cameraPos.y, cameraPos.z);
 
-        this.renderGizmoStencil(stack, cameraPos, Minecraft.getInstance());
-        RenderSystem.enableDepthTest();
+        /* Record the model-view at the block's gizmo origin so the UI-pass visual
+         * and stencil (both read Gizmo#lastRenderMatrix) draw at the right place. */
+        stack.pushPose();
+
+        try
+        {
+            this.applyGizmoOrigin(stack, cameraPos);
+            Gizmo.INSTANCE.setViewport(this.getGizmoArea());
+            Gizmo.INSTANCE.captureVisual(stack);
+        }
+        finally
+        {
+            stack.popPose();
+        }
     }
 
     private void applyGizmoOrigin(PoseStack stack, Vec3 cameraPos)
@@ -388,8 +390,24 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         }
     }
 
-    private void renderGizmoStencil(PoseStack stack, Vec3 cameraPos, Minecraft mc)
+    /**
+     * Render the gizmo handles into the picking framebuffer in the UI pass (the
+     * new way) and read the handle under the cursor. Uses the same area /
+     * projection / captured matrix as the visual ({@link Gizmo#renderInterface}),
+     * so the picked pixel matches the drawn handle. The main framebuffer is handed
+     * back afterwards so the rest of the UI keeps rendering normally.
+     */
+    private void renderGizmoStencilInterface(UIContext context)
     {
+        if (!this.canShowGizmo())
+        {
+            this.gizmoStencil.clearPicking();
+
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+
         this.gizmoStencil.setup(Link.bbs("stencil_model_block"));
 
         int w = mc.getWindow().getScreenWidth();
@@ -406,21 +424,14 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         try
         {
             this.gizmoStencilMap.setup();
+
+            /* Flush queued UI before binding the pick buffer, so pending batches go to
+             * the screen and not into the stencil. */
+            context.batcher.flush();
             this.gizmoStencil.apply();
             applied = true;
 
-            stack.pushPose();
-
-            try
-            {
-                this.applyGizmoOrigin(stack, cameraPos);
-                Gizmo.INSTANCE.setViewport(this.area);
-                Gizmo.INSTANCE.renderStencil(stack, this.gizmoStencilMap);
-            }
-            finally
-            {
-                stack.popPose();
-            }
+            Gizmo.INSTANCE.renderStencilInterface(context, this.gizmoProjection, this.getGizmoArea(), this.gizmoStencilMap);
 
             this.gizmoStencil.pick((int) mc.mouseHandler.xpos(), h - (int) mc.mouseHandler.ypos());
         }
@@ -563,12 +574,18 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             return true;
         }
 
+        /* Gizmo handles first. The trackball sphere is otherwise deferred so its screen
+         * disc doesn't block a click on the model block under it - but while the sphere is hovered the
+         * block fill is skipped, so the rotate disc can actually be grabbed (the gizmo sits on the
+         * selected block, so this.hovered is almost always non-null and would steal the click). */
         if (this.canShowGizmo() && this.gizmo.mouseClicked(context))
         {
             return true;
         }
 
-        if (this.hovered != null && context.mouseButton == 0 && BBSSettings.clickModelBlocks.get())
+        boolean sphereHovered = this.canShowGizmo() && this.gizmo.isSphereHovered();
+
+        if (this.hovered != null && context.mouseButton == 0 && BBSSettings.clickModelBlocks.get() && !sphereHovered)
         {
             this.fill(this.hovered, true);
         }
@@ -595,8 +612,13 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     @Override
     public void render(UIContext context)
     {
+        /* Pick first (UI pass): the stencil must be read before the visual's hover
+         * (gizmo.update / renderGizmoHover both consume the picked index). */
+        this.renderGizmoStencilInterface(context);
+
         if (this.canShowGizmo())
         {
+            this.gizmo.renderGizmo(context);
             this.gizmo.update(context);
         }
 

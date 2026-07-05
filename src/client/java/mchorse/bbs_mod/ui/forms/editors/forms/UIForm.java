@@ -60,9 +60,29 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         return this.getOrigin(transition, FormUtils.getPath(this.form), this.generalPanel != null && this.generalPanel.transform.isLocal());
     }
 
+    /**
+     * Always returns the bone's full local matrix (including its own rotation),
+     * irrespective of the LOCAL/GLOBAL UI toggle. Required for sampling-based
+     * gizmo helpers that need the rotation to be visible in the matrix &mdash;
+     * the rotation-stripped &quot;origin&quot; variant doesn't move when
+     * {@code transform.rotate} is perturbed, so axis extraction would silently
+     * fall back to identity.
+     */
     public Matrix4f getOriginMatrix(float transition)
     {
-        return this.getOrigin(transition);
+        return this.getOrigin(transition, FormUtils.getPath(this.form), true);
+    }
+
+    /**
+     * Origin for the body part gizmo mode: always the edited form's OWN root frame (where the body
+     * part actually renders &mdash; attach bone &middot; part transform &middot; form transform),
+     * ignoring any type-specific override like the model's selected pose bone. The drag math stays
+     * correct for editing the body part transform because the attach bone is constant w.r.t. it and
+     * the form's own transform cancels in the Jacobian/rotate-axes derivatives.
+     */
+    public Matrix4f getBodyPartGizmoOrigin(float transition, boolean local)
+    {
+        return this.getOrigin(transition, FormUtils.getPath(this.form), local);
     }
 
     protected Matrix4f getOrigin(float transition, String path, boolean local)

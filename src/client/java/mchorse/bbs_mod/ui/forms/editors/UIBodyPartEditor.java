@@ -67,6 +67,8 @@ public class UIBodyPartEditor extends UIScrollView
         this.bone.background().h(UIConstants.LIST_ITEM_HEIGHT * 6);
 
         this.transform = new UIPropTransform().callbacks(() -> this.part.transform);
+        this.transform.enableHotkeys(this.editor::isBodyPartGizmoMode);
+        this.transform.hotkeyDrag(() -> this.editor.buildHotkeyDrag(this.transform));
 
         this.pick.keys().register(Keys.FORMS_EDIT, this.pick::clickItself);
 
