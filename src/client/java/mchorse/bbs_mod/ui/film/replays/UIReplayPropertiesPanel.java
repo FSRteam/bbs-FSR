@@ -7,12 +7,14 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.forms.UINestedEdit;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 
 import java.util.function.Consumer;
 
@@ -68,7 +70,7 @@ public class UIReplayPropertiesPanel extends UIElement
         this.label.textbox.setPlaceholder(UIKeys.FILM_REPLAY_LABEL);
         this.nameTag = new UITextbox(1000, (s) -> this.edit((replay) -> replay.nameTag.set(s)));
         this.nameTag.textbox.setPlaceholder(UIKeys.FILM_REPLAY_NAME_TAG);
-        this.shadow = new UIToggle(UIKeys.FILM_REPLAY_SHADOW, (b) -> this.edit((replay) -> replay.shadow.set(b.getValue())));
+        this.shadow = new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) -> this.edit((replay) -> replay.shadow.set(b.getValue())));
         this.shadowSize = new UITrackpad((v) -> this.edit((replay) -> replay.shadowSize.set(v.floatValue())));
         this.shadowSize.tooltip(UIKeys.FILM_REPLAY_SHADOW_SIZE);
         this.looping = new UITrackpad((v) -> this.edit((replay) -> replay.looping.set(v.intValue())));
@@ -114,15 +116,25 @@ public class UIReplayPropertiesPanel extends UIElement
             }
         });
 
-        this.properties = UI.scrollView(5, 6,
-            UI.label(UIKeys.FILM_REPLAY_REPLAY),
-            this.pickEdit, this.enabled,
-            this.label, this.nameTag,
-            this.shadow, this.shadowSize,
-            UI.label(UIKeys.FILM_REPLAY_LOOPING),
+        UISection shadowSection = new UISection(UIKeys.FILM_REPLAY_SHADOW);
+
+        shadowSection.fields.add(this.shadow, this.shadowSize);
+
+        UISection other = new UISection(UIKeys.FILM_REPLAY_SECTION_OTHER);
+
+        other.fields.add(
             this.looping, this.actor, this.fp,
             this.relative, UI.row(this.relativeOffsetX, this.relativeOffsetY, this.relativeOffsetZ),
             this.axesPreview, this.pickAxesPreviewBone
+        );
+
+        shadowSection.setExpanded(false);
+        other.setExpanded(false);
+
+        this.properties = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
+            this.pickEdit, this.enabled, this.label, this.nameTag,
+            shadowSection,
+            other
         );
         this.refreshEditPanelOffset();
 

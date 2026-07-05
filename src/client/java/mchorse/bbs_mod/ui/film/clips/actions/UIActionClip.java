@@ -7,8 +7,6 @@ import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.clips.UIClip;
 import mchorse.bbs_mod.ui.film.utils.UICameraUtils;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.utils.UIConstants;
-import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.Minecraft;
@@ -44,7 +42,7 @@ public abstract class UIActionClip <T extends ActionClip> extends UIClip<T>
     {
         super.registerPanels();
 
-        this.panels.add(UI.label(UIKeys.ACTIONS_FREQUENCY).marginTop(UIConstants.SECTION_GAP), this.frequency);
+        this.panels.add(this.section(UIKeys.ACTIONS_FREQUENCY, this.frequency));
     }
 
     @Override

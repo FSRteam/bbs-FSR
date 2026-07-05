@@ -1,34 +1,26 @@
 package mchorse.bbs_mod.ui.particles.sections;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.particles.UISectionStateManager;
 import mchorse.bbs_mod.ui.utils.UI;
-import mchorse.bbs_mod.ui.utils.icons.Icon;
-import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.function.Consumer;
 
-public abstract class UIParticleSchemeSection extends UIElement
+public abstract class UIParticleSchemeSection extends UISection
 {
     protected static final int FIELD_LABEL_WIDTH = 76;
 
-    public UILabel title;
-    public UIElement fields;
-
     protected ParticleScheme scheme;
     protected UIParticleSchemePanel editor;
-
-    protected boolean collapsed;
 
     /* Per-field expand: label click shows full text and moves field to next line */
     private String expandedField = null;
@@ -43,14 +35,10 @@ public abstract class UIParticleSchemeSection extends UIElement
         super();
 
         this.editor = editor;
-        this.title = UI.label(this.getTitle()).background(() -> BBSSettings.primaryColor.get() | Colors.A100);
-        this.fields = new UIElement();
-        this.fields.column().stretch().vertical().height(20);
-
-        this.column().stretch().vertical();
+        this.title(this.getTitle());
 
         UISectionStateManager.setDefaultState(this.getClassId(), false);
-        this.collapseState();
+        this.setExpanded(!UISectionStateManager.isCollapsed(this.getClassId()));
     }
 
     public String getClassId()
@@ -58,55 +46,23 @@ public abstract class UIParticleSchemeSection extends UIElement
         return this.getClass().getSimpleName();
     }
 
-    protected void collapseState()
-    {
-        this.collapsed = UISectionStateManager.isCollapsed(this.getClassId());
-
-        if (this.collapsed)
-        {
-            this.add(this.title);
-        }
-        else
-        {
-            this.add(this.title, this.fields);
-        }
-    }
-
     /**
      * Apply a collapsed state programmatically (used by layout presets).
      */
     public void applyCollapsedState(boolean collapsed)
     {
-        this.collapsed = collapsed;
-        UISectionStateManager.setCollapsed(this.getClassId(), collapsed);
-
-        if (collapsed)
-        {
-            this.fields.removeFromParent();
-        }
-        else
-        {
-            if (!this.fields.hasParent())
-            {
-                this.add(this.fields);
-            }
-        }
-
-        this.resizeParent();
+        this.setExpanded(!collapsed);
     }
 
+    /**
+     * Persist the collapsed state across section rebuilds within the session.
+     */
     @Override
-    public void render(UIContext context)
+    public void setExpanded(boolean expanded)
     {
-        super.render(context);
+        super.setExpanded(expanded);
 
-        Icon icon = this.collapsed ? Icons.ARROW_RIGHT : Icons.ARROW_DOWN;
-        context.batcher.icon(icon, this.title.area.ex() - 18, this.title.area.y + (this.title.area.h - 16) / 2);
-    }
-
-    protected void resizeParent()
-    {
-        this.getParent().resize();
+        UISectionStateManager.setCollapsed(this.getClassId(), !expanded);
     }
 
     public UIParticleSchemePanel getEditor()
@@ -251,33 +207,4 @@ public abstract class UIParticleSchemeSection extends UIElement
 
     public void beforeSave(ParticleScheme scheme)
     {}
-
-    /**
-     * Toggle visibility of the field section
-     */
-    @Override
-    public boolean subMouseClicked(UIContext context)
-    {
-        if (this.title.area.isInside(context))
-        {
-            if (this.fields.hasParent())
-            {
-                this.fields.removeFromParent();
-                this.collapsed = true;
-                UISectionStateManager.setCollapsed(this.getClassId(), true);
-            }
-            else
-            {
-                this.add(this.fields);
-                this.collapsed = false;
-                UISectionStateManager.setCollapsed(this.getClassId(), false);
-            }
-
-            this.resizeParent();
-
-            return true;
-        }
-
-        return super.subMouseClicked(context);
-    }
 }

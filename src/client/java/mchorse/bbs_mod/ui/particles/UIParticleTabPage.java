@@ -7,6 +7,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ public class UIParticleTabPage extends UIElement
     {
         super();
 
-        this.scrollView = UI.scrollView(20, 10);
+        this.scrollView = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
         this.scrollView.scroll.cancelScrolling().opposite().scrollSpeed *= 3;
         this.scrollView.column().stretch().vertical();
 

@@ -345,6 +345,7 @@ public class UIKeys
     public static final IKey FILM_REPLAY_RELATIVE_TOOLTIP = L10n.lang("bbs.ui.film.replay.relative-tooltip");
     public static final IKey FILM_REPLAY_REPLAY = L10n.lang("bbs.ui.film.replay.replay");
     public static final IKey FILM_REPLAY_SHADOW = L10n.lang("bbs.ui.film.replay.shadow");
+    public static final IKey FILM_REPLAY_SECTION_OTHER = L10n.lang("bbs.ui.film.replay.section_other");
     public static final IKey FILM_REPLAY_SHADOW_SIZE = L10n.lang("bbs.ui.film.replay.shadow_size");
     public static final IKey FILM_REPLAY_TAB_1 = L10n.lang("bbs.ui.film.replay.tab.1");
     public static final IKey FILM_REPLAY_TAB_2 = L10n.lang("bbs.ui.film.replay.tab.2");
