@@ -28,6 +28,26 @@ public class UIDashboardPanels extends UIElement
     public UIScrollView panelButtons;
 
     /**
+     * @deprecated Kept for backward compatibility. Use {@link #renderHighlight(Batcher2D, Area, Direction)}
+     * with {@link Direction#BOTTOM}.
+     */
+    @Deprecated
+    public static void renderHighlight(Batcher2D batcher, Area area)
+    {
+        renderHighlight(batcher, area, Direction.BOTTOM);
+    }
+
+    /**
+     * @deprecated Kept for backward compatibility. Use {@link #renderHighlight(Batcher2D, Area, Direction)}
+     * with {@link Direction#RIGHT}.
+     */
+    @Deprecated
+    public static void renderHighlightHorizontal(Batcher2D batcher, Area area)
+    {
+        renderHighlight(batcher, area, Direction.RIGHT);
+    }
+
+    /**
      * Render a selection highlight on one edge of the area: a solid color bar on the {@code direction}
      * side, fading into a gradient towards the opposite edge.
      */

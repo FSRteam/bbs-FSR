@@ -36,7 +36,6 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     private boolean openedBefore;
     private boolean tabsEnabled;
-    private int dataRequestVersion;
 
     private Timer savingTimer = new Timer(0);
 
@@ -587,26 +586,15 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     public void requestData(String id)
     {
-        int requestVersion = ++this.dataRequestVersion;
         DataTab requestTab = this.tabsEnabled ? this.getCurrentDataTab() : null;
 
         this.markDataLoading(requestTab, id);
         this.editor.setEnabled(false);
 
+        /* Keep the callback simple and always fill (like upstream FS2): stale-request
+         * guards here used to swallow fill() entirely, leaving the panel blank. */
         this.getType().getRepository().load(id, (data) ->
         {
-            if (requestVersion != this.dataRequestVersion)
-            {
-                return;
-            }
-
-            if (this.tabsEnabled && (requestTab != this.getCurrentDataTab() || requestTab == null || !id.equals(requestTab.dataId)))
-            {
-                this.editor.setEnabled(true);
-
-                return;
-            }
-
             this.editor.setEnabled(true);
 
             this.fill((T) data);

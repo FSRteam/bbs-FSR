@@ -96,6 +96,7 @@ public class BBSSettings {
 	public static ValueBoolean videoLimitFrameRate;
 	public static ValueString videoExportPath;
 	public static ValueBoolean videoExportAudio;
+	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
 	public static ValueInt videoHeldFrames;
 	public static ValueFloat videoDelay;
@@ -131,6 +132,7 @@ public class BBSSettings {
 	public static ValueBoolean editorRewind;
 	public static ValueBoolean editorHorizontalClipEditor;
 	public static ValueBoolean editorMinutesBackup;
+	public static ValueBoolean editorResizablePanels;
 	public static ValueInt editorTrackWidth;
 	public static ValueInt keyframeDefaultShape;
 	public static ValueInt editorPreviewSizeMode;
@@ -524,6 +526,7 @@ public class BBSSettings {
 		videoLimitFrameRate = builder.getBoolean("limit_frame_rate", false);
 		videoExportPath = builder.getString("export_path", "");
 		videoExportAudio = builder.getBoolean("audio", false);
+		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
 		videoHeldFrames = builder.getInt("held_frames", 1, 1, 1000);
 		videoDelay = builder.getFloat("delay", 0.5F, 0F, 30F);
@@ -576,6 +579,7 @@ public class BBSSettings {
 		editorRewind = builder.getBoolean("rewind", true);
 		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", true);
 		editorMinutesBackup = builder.getBoolean("minutes_backup", true);
+		editorResizablePanels = builder.getBoolean("resizable_panels", true);
 		editorPreviewSizeMode = builder.getInt("preview_size_mode", 0, 0, 2);
 		editorPreviewCustomWidth = builder.getInt("preview_custom_width", 1280, 2, 16384);
 		editorPreviewCustomHeight = builder.getInt("preview_custom_height", 720, 2, 16384);

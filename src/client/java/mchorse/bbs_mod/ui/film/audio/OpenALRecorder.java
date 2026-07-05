@@ -14,7 +14,12 @@ public class OpenALRecorder implements Runnable
 {
     private static final int SAMPLE_RATE = 44100;
     private static final int FORMAT = AL10.AL_FORMAT_MONO16;
-    private static final int BUFFER_SAMPLES = 1024;
+    /* Capture ring buffer size, in samples. It must comfortably exceed the samples produced
+     * between two polls (SAMPLE_RATE * sleep), otherwise the device drops the overflow and the
+     * take ends up with fewer samples than real time — which, tagged at the full sample rate,
+     * plays back too fast. One second of headroom survives even a stalled poll (e.g. while the
+     * scene is playing back during the recording). */
+    private static final int BUFFER_SAMPLES = SAMPLE_RATE;
 
     private long captureDevice;
     private ByteBuffer buffer;

@@ -1101,6 +1101,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             }
         };
 
+        /* Disable the handle entirely (no click, no resize cursor) when panel resizing is turned off. */
+        handle.enabled(() -> BBSSettings.editorResizablePanels.get());
+
         int cursor = this.splitterHandleInfos.get(index).horizontal ? GLFW.GLFW_VRESIZE_CURSOR : GLFW.GLFW_HRESIZE_CURSOR;
 
         handle.hoverOnly().cursors(cursor, cursor).dragEnd(() ->
@@ -1118,7 +1121,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private void beginSplitterDrag(int index, int mouseX, int mouseY)
     {
-        if (index < 0 || index >= this.splitterHandleInfos.size())
+        if (!BBSSettings.editorResizablePanels.get() || index < 0 || index >= this.splitterHandleInfos.size())
         {
             this.clearSplitterDragState();
             return;
@@ -1662,7 +1665,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
         UIDraggable splitter = this.splitterHandles.get(index);
         EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
-        context.requestCursor(this.getSplitterCursor(index, context.mouseX, context.mouseY));
+
+        if (BBSSettings.editorResizablePanels.get())
+        {
+            context.requestCursor(this.getSplitterCursor(index, context.mouseX, context.mouseY));
+        }
 
         int lineColor = BBSSettings.primaryColor(Colors.A100);
 
@@ -1777,7 +1784,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 });
             });
 
-            UIOverlay.addOverlay(this.getContext(), panel, 200, 0.9F);
+            panel.difference(this::getMoveToPlayerOffset);
+
+            UIOverlay.addOverlay(this.getContext(), panel, 240, 140);
         });
 
         menu.action(Icons.TIME, UIKeys.FILM_INSERT_SPACE_TITLE, () ->
@@ -1817,6 +1826,56 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             UIOverlay.addOverlay(this.getContext(), new UIFilmDetailsOverlayPanel(this.getData()), 300, 260);
         });
+    }
+
+    /**
+     * Relative move that snaps the scene's first position keyframe onto the
+     * player's current position ({@code round} optionally snaps the player's
+     * position to whole coordinates) — offered through the move overlay's menu.
+     */
+    private Vector3d getMoveToPlayerOffset(boolean round)
+    {
+        LocalPlayer player = Minecraft.getInstance().player;
+
+        if (player == null)
+        {
+            return new Vector3d();
+        }
+
+        Vector3d first = this.getFirstReplayPosition();
+        double px = round ? Math.round(player.getX()) : player.getX();
+        double py = round ? Math.round(player.getY()) : player.getY();
+        double pz = round ? Math.round(player.getZ()) : player.getZ();
+
+        return new Vector3d(px - first.x, py - first.y, pz - first.z);
+    }
+
+    private Vector3d getFirstReplayPosition()
+    {
+        Replay selected = this.replayEditor.getReplay();
+
+        if (selected != null && (!selected.keyframes.x.isEmpty() || !selected.keyframes.y.isEmpty() || !selected.keyframes.z.isEmpty()))
+        {
+            return new Vector3d(
+                selected.keyframes.x.isEmpty() ? 0 : selected.keyframes.x.get(0).getValue(),
+                selected.keyframes.y.isEmpty() ? 0 : selected.keyframes.y.get(0).getValue(),
+                selected.keyframes.z.isEmpty() ? 0 : selected.keyframes.z.get(0).getValue()
+            );
+        }
+
+        for (Replay replay : this.data.replays.getList())
+        {
+            if (!replay.keyframes.x.isEmpty() || !replay.keyframes.y.isEmpty() || !replay.keyframes.z.isEmpty())
+            {
+                return new Vector3d(
+                    replay.keyframes.x.isEmpty() ? 0 : replay.keyframes.x.get(0).getValue(),
+                    replay.keyframes.y.isEmpty() ? 0 : replay.keyframes.y.get(0).getValue(),
+                    replay.keyframes.z.isEmpty() ? 0 : replay.keyframes.z.get(0).getValue()
+                );
+            }
+        }
+
+        return new Vector3d();
     }
 
     private void openFilmListOverlay()
@@ -2370,6 +2429,19 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.appear();
 
+        /* appear() also fires while the dashboard is being lazily constructed (the
+         * teleport/record keybinds create it on first use), at which point there's no
+         * context and the editor isn't actually shown. Running the side effects below
+         * there leaks editor state into the plain world — most importantly it adds the
+         * film camera controller (runner) to the GLOBAL camera controller, which then
+         * hijacks the world view and is never removed (the screen is never closed),
+         * freezing the screen until another BBS screen resets the camera controller.
+         * So only do this once the panel is genuinely on screen. */
+        if (this.getContext() == null)
+        {
+            return;
+        }
+
         BBSRendering.setCustomSize(true);
         MorphRenderer.hidePlayer = true;
 
@@ -2380,10 +2452,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.setFlight(false);
         cameraController.add(this.runner);
 
-        if (this.getContext() != null)
-        {
-            this.getContext().menu.getRoot().add(this.secretPlay);
-        }
+        this.getContext().menu.getRoot().add(this.secretPlay);
     }
 
     @Override

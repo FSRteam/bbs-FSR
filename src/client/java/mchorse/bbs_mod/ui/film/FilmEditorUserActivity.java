@@ -84,9 +84,24 @@ public final class FilmEditorUserActivity
 
         for (int key = GLFW.GLFW_KEY_SPACE; key <= GLFW.GLFW_KEY_LAST; key++)
         {
-            if (key != GLFW.GLFW_KEY_UNKNOWN && InputConstants.isKeyDown(handle, key))
+            if (key == GLFW.GLFW_KEY_UNKNOWN)
             {
-                return true;
+                continue;
+            }
+
+            try
+            {
+                if (InputConstants.isKeyDown(handle, key))
+                {
+                    return true;
+                }
+            }
+            catch (IndexOutOfBoundsException ignored)
+            {
+                /* PojavLauncher (Android) uses a GLFW implementation with a smaller
+                   key-state buffer than GLFW_KEY_LAST; once an index is out of range,
+                   all higher key codes will fail too, so stop polling. */
+                break;
             }
         }
 
