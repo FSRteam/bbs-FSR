@@ -14,7 +14,6 @@ import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Quad;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -28,7 +27,6 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import java.util.function.Supplier;
@@ -179,18 +177,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         if (this.form.billboard.get())
         {
-            Matrix4f modelMatrix = matrices.last().pose();
-            Vector3f scale = Vectors.TEMP_3F;
-
-            modelMatrix.getScale(scale);
-
-            modelMatrix.m00(1).m01(0).m02(0);
-            modelMatrix.m10(0).m11(1).m12(0);
-            modelMatrix.m20(0).m21(0).m22(1);
-
-            modelMatrix.scale(scale);
-
-            matrices.last().normal().identity();
+            MatrixStackUtils.billboard(matrices);
         }
 
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;

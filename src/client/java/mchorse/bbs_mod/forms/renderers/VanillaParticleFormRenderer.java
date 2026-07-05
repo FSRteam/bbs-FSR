@@ -15,8 +15,14 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.commands.arguments.ParticleArgument;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Camera;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ItemParticleOption;
 import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
@@ -108,14 +114,31 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
 
                 try
                 {
-                    String particle = settings.particle.toString();
+                    /* Bare id convenience: since 1.21.1 block/item particle arguments use the
+                     * {...} compound syntax, so a plain "dirt" or "apple" wouldn't parse anymore */
+                    String args = settings.arguments.trim();
+                    ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.get(settings.particle);
+                    boolean bareId = !args.isEmpty() && args.charAt(0) != '{';
 
-                    if (!settings.arguments.isEmpty())
+                    if (bareId && type == ParticleTypes.BLOCK)
                     {
-                        particle += " " + settings.arguments;
+                        effect = new BlockParticleOption(ParticleTypes.BLOCK, BuiltInRegistries.BLOCK.get(ResourceLocation.parse(args)).defaultBlockState());
                     }
+                    else if (bareId && type == ParticleTypes.ITEM)
+                    {
+                        effect = new ItemParticleOption(ParticleTypes.ITEM, new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(args))));
+                    }
+                    else
+                    {
+                        String particle = settings.particle.toString();
 
-                    effect = ParticleArgument.readParticle(new StringReader(particle), world.registryAccess());
+                        if (!settings.arguments.isEmpty())
+                        {
+                            particle += " " + settings.arguments;
+                        }
+
+                        effect = ParticleArgument.readParticle(new StringReader(particle), world.registryAccess());
+                    }
                 }
                 catch (Exception e)
                 {}

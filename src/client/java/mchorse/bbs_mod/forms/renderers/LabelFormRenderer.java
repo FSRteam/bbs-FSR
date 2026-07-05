@@ -11,7 +11,6 @@ import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
-import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -22,7 +21,6 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 
 import java.util.List;
 
@@ -77,18 +75,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         if (this.form.billboard.get())
         {
-            Matrix4f modelMatrix = context.stack.last().pose();
-            Vector3f scale = Vectors.TEMP_3F;
-
-            modelMatrix.getScale(scale);
-
-            modelMatrix.m00(1).m01(0).m02(0);
-            modelMatrix.m10(0).m11(1).m12(0);
-            modelMatrix.m20(0).m21(0).m22(1);
-
-            modelMatrix.scale(scale);
-
-            context.stack.last().normal().identity();
+            MatrixStackUtils.billboard(context.stack);
         }
 
         Font renderer = Minecraft.getInstance().font;
