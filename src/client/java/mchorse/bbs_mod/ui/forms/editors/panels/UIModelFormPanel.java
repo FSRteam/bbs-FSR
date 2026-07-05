@@ -5,8 +5,10 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.forms.editors.panels.widgets.UIModelPoseEditor;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
@@ -18,7 +20,10 @@ import mchorse.bbs_mod.ui.utils.shapes.UIShapeKeys;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Color;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public class UIModelFormPanel extends UIFormPanel<ModelForm>
 {
@@ -64,18 +69,70 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         this.shapeKeys = new UIShapeKeys();
         this.pick = new UIButton(UIKeys.FORMS_EDITOR_MODEL_PICK_TEXTURE, (b) ->
         {
-            Link link = this.form.texture.get();
             ModelInstance model = ModelFormRenderer.getModel(this.form);
+            List<String> materials = model == null ? Collections.emptyList() : model.materials;
+
+            /* At most one material (a single global texture, e.g. cubic, or one unambiguous material):
+             * pick the form's default texture. Multiple: choose which material to pick - the form's
+             * "Default" texture is ambiguous then, so it isn't offered. */
+            if (materials.size() <= 1)
+            {
+                this.openTexturePicker(null);
+            }
+            else
+            {
+                this.getContext().replaceContextMenu((menu) ->
+                {
+                    for (String material : materials)
+                    {
+                        menu.action(Icons.MATERIAL, IKey.constant(material), () -> this.openTexturePicker(material));
+                    }
+                });
+            }
+        });
+
+        this.options.add(this.pickModel, this.pick, this.color, this.poseEditor);
+    }
+
+    /**
+     * Open the texture picker for either the form's default texture ({@code material == null}) or a
+     * specific material's static texture. The picker starts at the texture currently in effect, so it
+     * opens beside it rather than at the root.
+     */
+    private void openTexturePicker(String material)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(this.form);
+        Link link;
+        Consumer<Link> callback;
+
+        if (material == null)
+        {
+            link = this.form.texture.get();
 
             if (model != null && link == null)
             {
                 link = model.texture;
             }
 
-            UITexturePicker.open(this.getContext(), link, (l) -> this.form.texture.set(l));
-        });
+            callback = (l) -> this.form.texture.set(l);
+        }
+        else
+        {
+            link = this.form.materialTextures.getLink(material);
 
-        this.options.add(this.pickModel, this.pick, this.color, this.poseEditor);
+            if (link == null && model != null)
+            {
+                Link fallback = this.form.texture.get() != null ? this.form.texture.get() : model.texture;
+
+                link = model.getMaterialTexture(material, fallback);
+            }
+
+            callback = (l) -> this.form.materialTextures.setLink(material, l);
+        }
+
+        /* TODO(fs23-stage13): fs 2.3.1 additionally calls picker.withModelPreview(this.form.model.get())
+         * here (fs 579b3b34, texture editor subsystem); new/'s UITexturePicker has no model preview yet. */
+        UITexturePicker.open(this.getContext(), link, callback);
     }
 
     private void pickGroup(String group)

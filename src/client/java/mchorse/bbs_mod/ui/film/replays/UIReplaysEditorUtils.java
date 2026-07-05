@@ -31,8 +31,11 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -116,7 +119,7 @@ public class UIReplaysEditorUtils
 
         for (String bone : bones)
         {
-            if (model.disabledBones.contains(bone))
+            if (PoseBones.isHidden(model.disabledBones, bone))
             {
                 continue;
             }
@@ -157,6 +160,56 @@ public class UIReplaysEditorUtils
         }
 
         return Math.max(0, depth);
+    }
+
+    /**
+     * One texture track per model material (OBJ material name / BOBJ mesh name), enumerated from
+     * the loaded model. Each is a LINK channel layered over the material's static default at
+     * playback - mirrors the bone tracks. Lives in the Model category beside the main texture track.
+     */
+    public static void addMaterialTextureSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        /* A model with at most one material ignores the material system entirely (its single texture is
+         * driven by form.texture), so it exposes no per-material texture tracks - see the renderer. */
+        if (model.materials.size() <= 1)
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+
+        for (String material : model.materials)
+        {
+            if (material == null || material.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toMaterialTextureKey(path, material);
+            String title = path.isEmpty() ? "Texture/" + material : path + "/Texture/" + material;
+            KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.LINK);
+
+            /* Seed the sheet's value with the material's current default texture (editor pick, else
+             * folder/Kd, else the form/model default) so a new keyframe starts there instead of null -
+             * the texture picker then opens at that texture rather than the root. */
+            Link materialDefault = modelForm.materialTextures.getLink(material);
+
+            if (materialDefault == null)
+            {
+                materialDefault = model.getMaterialTexture(material, model.texture);
+            }
+
+            ValueLink property = new ValueLink(id, materialDefault);
+
+            out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.BLUE, false, channel, property).icon(Icons.MATERIAL));
+        }
     }
 
     public static UIPropTransform getEditableTransform(UIKeyframeEditor editor)
@@ -589,7 +642,7 @@ public class UIReplaysEditorUtils
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
 
-        bones.removeIf(model.disabledBones::contains);
+        bones.removeIf((bone) -> PoseBones.isHidden(model.disabledBones, bone));
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
@@ -693,7 +746,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getAdjacentGroups(bone))
                 {
-                    if (model.disabledBones.contains(modelGroup))
+                    if (PoseBones.isHidden(model.disabledBones, modelGroup))
                     {
                         continue;
                     }
@@ -726,7 +779,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getHierarchyGroups(bone))
                 {
-                    if (model.disabledBones.contains(modelGroup))
+                    if (PoseBones.isHidden(model.disabledBones, modelGroup))
                     {
                         continue;
                     }

@@ -773,6 +773,13 @@ public class UIReplaysEditor extends UIElement {
         List<UIKeyframeSheet> orderedFormSheets = new ArrayList<>(formSheets);
         formSheets.clear();
 
+        if ((!tabsEnabled || this.category == ReplayCategory.MODEL)
+                && form instanceof ModelForm modelForm) {
+            List<UIKeyframeSheet> materialSheets = new ArrayList<>();
+            UIReplaysEditorUtils.addMaterialTextureSheets(modelForm, this.replay.properties, materialSheets);
+            orderedFormSheets.addAll(materialSheets);
+        }
+
         if ((!tabsEnabled || this.category == ReplayCategory.POSE)
                 && form instanceof ModelForm modelForm) {
             List<UIKeyframeSheet> boneSheets = new ArrayList<>();

@@ -189,10 +189,8 @@ public class UIPoseEditor extends UIElement
         }
 
         List<String> bones = new ArrayList<>(model.getGroupKeysInHierarchyOrder());
-        if (disabledBones != null && !disabledBones.isEmpty())
-        {
-            bones.removeIf(disabledBones::contains);
-        }
+
+        bones.removeIf((bone) -> PoseBones.isHidden(disabledBones, bone));
         this.fillInGroups(bones, reset, false);
     }
 

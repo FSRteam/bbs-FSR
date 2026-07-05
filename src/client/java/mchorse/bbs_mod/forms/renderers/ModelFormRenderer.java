@@ -35,6 +35,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
+import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
@@ -63,11 +64,9 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Supplier;
 
 public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITickable
@@ -248,7 +247,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-        bones.removeIf(model.disabledBones::contains);
+        bones.removeIf((bone) -> PoseBones.isHidden(model.disabledBones, bone));
 
         return bones;
     }
@@ -346,7 +345,52 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.applyIKOnce(model, baseTransform);
         this.applyPhysicsOnce(target, model, transition, baseTransform);
         this.applyConstraintsOnce(model);
-        model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get());
+
+        /* Default texture for materials without their own: the form's texture override, else the
+         * model's default. Per-material textures (folder defaults now, animation tracks later)
+         * layer on top via the resolver. */
+        Link defaultTexture = this.form.texture.get();
+
+        if (defaultTexture == null)
+        {
+            defaultTexture = model.texture;
+        }
+
+        final Link resolvedDefault = defaultTexture;
+
+        /* A model with at most one material ignores the material system entirely: a single texture
+         * (form.texture, else the model's base texture) covers the whole model, regardless of any
+         * per-material folder/Kd default, editor pick, or animation track. Only with multiple materials
+         * is the Default ambiguous - it's hidden in the editor then and must not affect them here either,
+         * so they fall back to the model base texture. */
+        final boolean ignoreMaterials = model.materials.size() <= 1;
+        final Link materialFallback = ignoreMaterials ? resolvedDefault : model.texture;
+
+        model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
+        {
+            if (ignoreMaterials)
+            {
+                return resolvedDefault;
+            }
+
+            /* Resolution order: animated per-material track > editor-picked static per-material
+             * texture > the material's loaded default (folder/Kd) > the model base texture. */
+            Link override = this.form.materialTextureOverrides.get(material);
+
+            if (override != null)
+            {
+                return override;
+            }
+
+            Link picked = this.form.materialTextures.getLink(material);
+
+            if (picked != null)
+            {
+                return picked;
+            }
+
+            return model.getMaterialTexture(material, materialFallback);
+        });
 
         if (stencilMap == null && ModelIKDebug.enabled && this.form != null && this.form.ik.get() instanceof MapType ikMap)
         {
