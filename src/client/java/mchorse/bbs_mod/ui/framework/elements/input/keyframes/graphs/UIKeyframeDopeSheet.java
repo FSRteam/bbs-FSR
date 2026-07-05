@@ -27,6 +27,7 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.MeshData;
 import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -1169,21 +1170,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             context.batcher.box(area.x, by, area.ex(), by + bh, BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
         }
 
-        if (!sheet.separator && keyframes.size() <= 1)
+        if (keyframes.size() <= 1)
         {
             return;
         }
 
         /* Render track bars (horizontal lines) */
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-
-        if (sheet.separator)
-        {
-            int c = Colors.setA(sheet.color, 0F);
-
-            /* Render separator */
-            context.batcher.fillRect(builder, matrix, area.x, y, area.w, (int) this.trackHeight, c | Colors.A25, c | Colors.A25, c, c);
-        }
 
         /* Render bars indicating same values */
         for (int j = 1; j < keyframes.size(); j++)
@@ -1211,7 +1204,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        MeshData mesh = builder.build();
+
+        if (mesh != null)
+        {
+            BufferUploader.drawWithShader(mesh);
+        }
     }
 
     private void renderSheetKeyframeShapes(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int y)
@@ -1340,7 +1339,14 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.renderElementsTopmostKeyframes(context, builder, matrix, area, this.elements, this.getDopeSheetY());
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        MeshData topmostMesh = builder.build();
+
+        if (topmostMesh != null)
+        {
+            BufferUploader.drawWithShader(topmostMesh);
+        }
+
         context.batcher.unclip(context);
     }
 

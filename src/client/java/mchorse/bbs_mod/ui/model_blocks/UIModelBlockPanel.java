@@ -38,6 +38,7 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.GizmoInteraction;
 import mchorse.bbs_mod.ui.utils.GizmoViewport;
+
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -400,19 +401,38 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             this.gizmoStencil.resize(w, h);
         }
 
-        this.gizmoStencilMap.setup();
-        this.gizmoStencil.apply();
+        boolean applied = false;
 
-        stack.pushPose();
-        this.applyGizmoOrigin(stack, cameraPos);
-        Gizmo.INSTANCE.setViewport(this.area);
-        Gizmo.INSTANCE.renderStencil(stack, this.gizmoStencilMap);
-        stack.popPose();
+        try
+        {
+            this.gizmoStencilMap.setup();
+            this.gizmoStencil.apply();
+            applied = true;
 
-        this.gizmoStencil.pick((int) mc.mouseHandler.xpos(), h - (int) mc.mouseHandler.ypos());
-        this.gizmoStencil.unbind(this.gizmoStencilMap);
+            stack.pushPose();
 
-        mc.getMainRenderTarget().bindWrite(true);
+            try
+            {
+                this.applyGizmoOrigin(stack, cameraPos);
+                Gizmo.INSTANCE.setViewport(this.area);
+                Gizmo.INSTANCE.renderStencil(stack, this.gizmoStencilMap);
+            }
+            finally
+            {
+                stack.popPose();
+            }
+
+            this.gizmoStencil.pick((int) mc.mouseHandler.xpos(), h - (int) mc.mouseHandler.ypos());
+        }
+        finally
+        {
+            if (applied)
+            {
+                this.gizmoStencil.unbind(this.gizmoStencilMap);
+            }
+
+            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+        }
     }
 
     private void addCameraController(UIFormPalette palette)

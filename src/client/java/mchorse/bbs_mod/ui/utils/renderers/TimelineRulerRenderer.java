@@ -75,6 +75,12 @@ public class TimelineRulerRenderer
         if (rulerDecorator != null)
         {
             rulerDecorator.accept(context);
+
+            /* clip() pushes onto GuiGraphics' scissor stack rather than replacing the
+             * current rectangle. Re-clipping without popping first leaked one stack
+             * level every frame, leaving the GL scissor permanently pinned to this
+             * ruler area (flickering editor UI, leftovers on other screens). */
+            context.batcher.unclip(context);
             context.batcher.clip(area, context);
         }
 

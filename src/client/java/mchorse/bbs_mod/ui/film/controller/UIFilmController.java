@@ -18,6 +18,7 @@ import org.lwjgl.opengl.GL30;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 
@@ -72,6 +73,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoInteraction;
 import mchorse.bbs_mod.ui.utils.GizmoViewport;
+
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
@@ -1284,24 +1286,37 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         boolean altPressed = Window.isAltPressed();
 
+        context.batcher.flush();
         RenderSystem.depthFunc(GL11.GL_LESS);
 
         /* Cache the global stuff */
         MatrixStackUtils.cacheMatrices();
 
-        RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.ORTHOGRAPHIC_Z);
+        try
+        {
+            RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.DISTANCE_TO_ORIGIN);
 
-        /* Render the stencil */
-        PoseStack worldStack = this.worldRenderContext.matrixStack();
+            /* Render the stencil */
+            PoseStack worldStack = this.worldRenderContext.matrixStack();
 
-        worldStack.pushPose();
-        worldStack.setIdentity();
-        MatrixStackUtils.multiply(worldStack, this.panel.lastView);
-        this.renderStencil(this.worldRenderContext, this.getContext(), altPressed);
-        worldStack.popPose();
+            worldStack.pushPose();
 
-        /* Return back to orthographic projection */
-        MatrixStackUtils.restoreMatrices();
+            try
+            {
+                worldStack.setIdentity();
+                MatrixStackUtils.multiply(worldStack, this.panel.lastView);
+                this.renderStencil(this.worldRenderContext, this.getContext(), altPressed);
+            }
+            finally
+            {
+                worldStack.popPose();
+            }
+        }
+        finally
+        {
+            /* Return back to orthographic projection */
+            MatrixStackUtils.restoreMatrices();
+        }
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
@@ -1310,12 +1325,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
         if (this.canShowGizmo())
         {
             this.gizmo.update(context);
-            this.gizmo.renderSphereHighlight(context);
+            /* FS2 1.21.1 doesn't composite the master-only trackball highlight in film picking. */
         }
 
         if (!this.stencil.hasPicked())
         {
             RenderSystem.depthFunc(GL11.GL_LEQUAL);
+
             return;
         }
 
@@ -1510,6 +1526,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         if ((entity == null || (this.pov == CAMERA_MODE_FIRST_PERSON && entity == this.getCurrentEntity())) && !altPressed)
         {
+            this.stencil.clearPicking();
+
             return;
         }
 
@@ -1517,6 +1535,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         if (!altPressed && selectedReplay == null)
         {
+            this.stencil.clearPicking();
+
             return;
         }
 
@@ -1524,69 +1544,106 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         boolean isPlaying = this.isPlaying();
         Texture mainTexture = this.stencil.getFramebuffer().getMainTexture();
+        boolean applied = false;
 
-        this.stencilMap.setup();
-        this.stencil.apply();
-        Gizmo.INSTANCE.setViewport(viewport);
-
-        if (altPressed)
+        try
         {
-            List<Replay> replays = this.panel.getData().replays.getList();
-            int selectedReplayIndex = this.getCurrentReplayIndex();
-            Pair<String, Boolean> bone = this.getBone();
+            this.stencilMap.setup();
+            context.batcher.flush();
+            this.stencil.apply();
+            applied = true;
 
-            for (Map.Entry<Integer, IEntity> entry : this.getEntities().entrySet())
+            Gizmo.INSTANCE.setViewport(viewport);
+
+            if (altPressed)
             {
-                Replay replay = CollectionUtils.getSafe(replays, entry.getKey());
+                List<Replay> replays = this.panel.getData().replays.getList();
+                int selectedReplayIndex = this.getCurrentReplayIndex();
+                Pair<String, Boolean> bone = this.getBone();
 
-                if (replay == null)
+                for (Map.Entry<Integer, IEntity> entry : this.getEntities().entrySet())
                 {
-                    continue;
-                }
+                    Replay replay = CollectionUtils.getSafe(replays, entry.getKey());
 
-                FilmControllerContext filmContext = FilmControllerContext.instance
-                    .setup(this.getEntities(), entry.getValue(), replay, renderContext)
+                    if (replay == null)
+                    {
+                        continue;
+                    }
+
+                    FilmControllerContext filmContext = FilmControllerContext.instance
+                        .setup(this.getEntities(), entry.getValue(), replay, renderContext)
+                        .transition(isPlaying ? renderContext.tickDelta() : 0)
+                        .stencil(this.stencilMap)
+                        .relative(replay.relative.get());
+
+                    if (entry.getKey() == selectedReplayIndex)
+                    {
+                        this.stencilMap.objectIndex = replays.size() + REPLAY_STENCIL_OFFSET;
+                        this.stencilMap.setIncrement(true);
+
+                        filmContext.bone(bone == null ? null : bone.a, bone != null && bone.b);
+                    }
+                    else
+                    {
+                        this.stencilMap.objectIndex = entry.getKey() + REPLAY_STENCIL_OFFSET;
+                        this.stencilMap.setIncrement(false);
+                    }
+
+                    BaseFilmController.renderEntity(filmContext);
+                }
+            }
+            else
+            {
+                Pair<String, Boolean> bone = this.getBone();
+
+                this.stencilMap.setIncrement(true);
+
+                BaseFilmController.renderEntity(FilmControllerContext.instance
+                    .setup(this.getEntities(), entity, selectedReplay, renderContext)
                     .transition(isPlaying ? renderContext.tickDelta() : 0)
                     .stencil(this.stencilMap)
-                    .relative(replay.relative.get());
-
-                if (entry.getKey() == selectedReplayIndex)
-                {
-                    this.stencilMap.objectIndex = replays.size() + REPLAY_STENCIL_OFFSET;
-                    this.stencilMap.setIncrement(true);
-
-                    filmContext.bone(bone == null ? null : bone.a, bone != null && bone.b);
-                }
-                else
-                {
-                    this.stencilMap.objectIndex = entry.getKey() + REPLAY_STENCIL_OFFSET;
-                    this.stencilMap.setIncrement(false);
-                }
-
-                BaseFilmController.renderEntity(filmContext);
+                    .relative(selectedReplay.relative.get())
+                    .bone(bone == null ? null : bone.a, bone != null && bone.b));
             }
+
+            int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
+            int y = (int) ((1F - (context.mouseY - viewport.y) / (float) viewport.h) * mainTexture.height);
+
+            this.stencil.pick(x, y);
         }
-        else
+        finally
         {
-            Pair<String, Boolean> bone = this.getBone();
+            /* Drain any vertices the form renderers left in the shared buffer source
+             * while the stencil FBO is still bound, so they can't leak into a later
+             * flush on the main render target. */
+            try
+            {
+                renderContext.consumers().endBatch();
+            }
+            catch (Exception e)
+            {
+                LOGGER.warn("renderStencil: endBatch during cleanup failed", e);
+            }
 
-            this.stencilMap.setIncrement(true);
+            if (applied)
+            {
+                this.stencil.unbind(this.stencilMap);
+            }
 
-            BaseFilmController.renderEntity(FilmControllerContext.instance
-                .setup(this.getEntities(), entity, selectedReplay, renderContext)
-                .transition(isPlaying ? renderContext.tickDelta() : 0)
-                .stencil(this.stencilMap)
-                .relative(selectedReplay.relative.get())
-                .bone(bone == null ? null : bone.a, bone != null && bone.b));
+            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+
+            /* Defensive restore of every global write/test state a form renderer or
+             * vanilla RenderType could have left behind inside the picking pass.
+             * UI rendering below assumes all of these are at their defaults; a stale
+             * colorMask/scissor/shaderColor here blacks out whole UI batches and
+             * survives into other screens (observed: leftovers on the title screen). */
+            RenderSystem.colorMask(true, true, true, true);
+            RenderSystem.depthMask(true);
+            GlStateManager._disableScissorTest();
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+            RenderSystem.disableBlend();
+            RenderSystem.defaultBlendFunc();
         }
-
-        int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
-        int y = (int) ((1F - (context.mouseY - viewport.y) / (float) viewport.h) * mainTexture.height);
-
-        this.stencil.pick(x, y);
-        this.stencil.unbind(this.stencilMap);
-
-        Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
     }
 
     private void ensureStencilFramebuffer()

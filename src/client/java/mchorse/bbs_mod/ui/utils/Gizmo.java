@@ -308,18 +308,34 @@ public class Gizmo
             this.sphereHighlight.resize(w, h);
         }
 
-        this.sphereHighlight.apply();
+        context.batcher.flush();
 
-        RenderSystem.disableDepthTest();
-        RenderSystem.setShaderColor(STENCIL_TRACKBALL / 255F, 0F, 0F, 1F);
-        this.rotateSphereVbo.bind();
-        this.rotateSphereVbo.drawWithShader(this.lastSphereMatrix, projection, GameRenderer.getPositionColorShader());
-        VertexBuffer.unbind();
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-        RenderSystem.enableDepthTest();
+        boolean applied = false;
 
-        this.sphereHighlight.unbind();
-        mc.getMainRenderTarget().bindWrite(true);
+        try
+        {
+            this.sphereHighlight.apply();
+            applied = true;
+
+            RenderSystem.disableDepthTest();
+            RenderSystem.setShaderColor(STENCIL_TRACKBALL / 255F, 0F, 0F, 1F);
+            this.rotateSphereVbo.bind();
+            this.rotateSphereVbo.drawWithShader(this.lastSphereMatrix, projection, GameRenderer.getPositionColorShader());
+            VertexBuffer.unbind();
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+            RenderSystem.enableDepthTest();
+        }
+        finally
+        {
+            if (applied)
+            {
+                RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+                RenderSystem.enableDepthTest();
+                this.sphereHighlight.unbind();
+            }
+
+            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+        }
 
         ShaderInstance previewProgram = BBSShaders.getPickerPreviewProgram();
         Uniform target = previewProgram.getUniform("Target");

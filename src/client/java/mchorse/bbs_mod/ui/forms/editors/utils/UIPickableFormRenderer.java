@@ -21,12 +21,13 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.GizmoInteraction;
 import mchorse.bbs_mod.ui.utils.GizmoViewport;
+
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.shaders.Uniform;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -182,34 +183,53 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
         if (this.area.isInside(context))
         {
+            context.batcher.flush();
+
             GlStateManager._disableScissorTest();
 
-            this.stencilMap.setup();
-            this.stencil.apply();
+            boolean applied = false;
 
-            FormUtilsClient.render(this.form, formContext.stencilMap(this.stencilMap));
-
-            Matrix4f matrix = this.formEditor.getOrigin(context.getTransition());
-            PoseStack stack = context.render.batcher.getContext().pose();
-
-            stack.pushPose();
-
-            if (matrix != null)
+            try
             {
-                MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
+                this.stencilMap.setup();
+                this.stencil.apply();
+                applied = true;
+
+                FormUtilsClient.render(this.form, formContext.stencilMap(this.stencilMap));
+
+                Matrix4f matrix = this.formEditor.getOrigin(context.getTransition());
+                PoseStack stack = context.render.batcher.getContext().pose();
+
+                stack.pushPose();
+
+                try
+                {
+                    if (matrix != null)
+                    {
+                        MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
+                    }
+
+                    Gizmo.INSTANCE.setViewport(this.area);
+                    Gizmo.INSTANCE.renderStencil(context.batcher.getContext().pose(), this.stencilMap);
+                }
+                finally
+                {
+                    stack.popPose();
+                }
+
+                this.stencil.pickGUI(context, this.area);
             }
+            finally
+            {
+                if (applied)
+                {
+                    this.stencil.unbind(this.stencilMap);
+                }
 
-            Gizmo.INSTANCE.setViewport(this.area);
-            Gizmo.INSTANCE.renderStencil(context.batcher.getContext().pose(), this.stencilMap);
+                Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
 
-            stack.popPose();
-
-            this.stencil.pickGUI(context, this.area);
-            this.stencil.unbind(this.stencilMap);
-
-            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
-
-            GlStateManager._enableScissorTest();
+                GlStateManager._enableScissorTest();
+            }
         }
         else
         {
