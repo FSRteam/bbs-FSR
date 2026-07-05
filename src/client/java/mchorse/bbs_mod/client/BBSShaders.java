@@ -17,6 +17,7 @@ public class BBSShaders
     private static ShaderInstance model;
     private static ShaderInstance multiLink;
     private static ShaderInstance subtitles;
+    private static ShaderInstance selection;
 
     private static ShaderInstance pickerPreview;
     private static ShaderInstance pickerBillboard;
@@ -34,6 +35,7 @@ public class BBSShaders
         if (model != null) model.close();
         if (multiLink != null) multiLink.close();
         if (subtitles != null) subtitles.close();
+        if (selection != null) selection.close();
 
         if (pickerPreview != null) pickerPreview.close();
         if (pickerBillboard != null) pickerBillboard.close();
@@ -48,6 +50,7 @@ public class BBSShaders
             model = new ShaderInstance(factory, "model", DefaultVertexFormat.NEW_ENTITY);
             multiLink = new ShaderInstance(factory, "multilink", DefaultVertexFormat.POSITION_TEX_COLOR);
             subtitles = new ShaderInstance(factory, "subtitles", DefaultVertexFormat.POSITION_TEX_COLOR);
+            selection = new ShaderInstance(factory, "selection", DefaultVertexFormat.POSITION_TEX_COLOR);
 
             pickerPreview = new ShaderInstance(factory, "picker_preview", DefaultVertexFormat.POSITION_TEX_COLOR);
             pickerBillboard = new ShaderInstance(factory, "picker_billboard", DefaultVertexFormat.NEW_ENTITY);
@@ -74,6 +77,11 @@ public class BBSShaders
     public static ShaderInstance getSubtitlesProgram()
     {
         return subtitles;
+    }
+
+    public static ShaderInstance getSelectionProgram()
+    {
+        return selection;
     }
 
     public static ShaderInstance getPickerPreviewProgram()
