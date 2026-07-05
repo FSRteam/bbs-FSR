@@ -1,5 +1,9 @@
 package mchorse.bbs_mod.ui.film;
 
+import com.mojang.logging.LogUtils;
+import org.slf4j.Logger;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -10,7 +14,6 @@ import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.camera.data.Position;
-import mchorse.bbs_mod.client.BBSFlickerDiagnostics;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.MorphRenderer;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -82,8 +85,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
 import org.lwjgl.glfw.GLFW;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -97,8 +98,7 @@ import java.util.function.Supplier;
 
 public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSupported, IUIOrbitKeysHandler, ICursor
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(UIFilmPanel.class);
-
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final int PREVIEW_MODE_EXPORT = 0;
     private static final int PREVIEW_MODE_CUSTOM = 1;
     private static final int PREVIEW_MODE_AUTO = 2;
@@ -128,6 +128,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIIcon openFilmMenu;
     public UIIcon openCameraEditor;
     public UIIcon openReplayEditor;
+    public UIIcon openActionEditor;
 
     /** When true, docking and resizing are disabled; drag handles and their top offset are hidden. */
     private boolean layoutLocked = true;
@@ -181,14 +182,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public static final int EDIT_PANEL_TOP_OFFSET_PX = 20;
     private static final int FILM_TOP_BAR_BUTTON_SIZE = UIDataTabs.TABS_HEIGHT_PX;
     private static final int FILM_TOP_BAR_SEPARATOR_WIDTH = 8;
-    private static final int FILM_TOP_BAR_ACTIONS_WIDTH = FILM_TOP_BAR_BUTTON_SIZE * 3 + FILM_TOP_BAR_SEPARATOR_WIDTH;
+    private static final int FILM_TOP_BAR_ACTIONS_WIDTH = FILM_TOP_BAR_BUTTON_SIZE * 4 + FILM_TOP_BAR_SEPARATOR_WIDTH;
     private final List<UIDockStackTabs> dockStackTabs = new ArrayList<>();
     private final Map<String, DockStackInfo> dockStackByPanelId = new HashMap<>();
     private UIElement selectedMainEditorPanel;
     private UIElement topBarActions;
     private UIElement topBarSeparator;
-    private String lastFlickerVisibilitySignature = "";
-    private String lastFlickerPreviewSignature = "";
 
     private String draggingPanelId;
     private String dropTargetPanelId;
@@ -385,8 +384,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.replayEditor = new UIReplaysEditor(this);
         this.replayEditor.full(this.main).setVisible(false);
         this.actionEditor = new UIClipsPanel(this, BBSMod.getFactoryActionClips()).target(this.editArea);
-        this.actionEditor.setVisible(false);
-        this.replayEditor.attachActionTimeline(this.actionEditor);
+        this.actionEditor.full(this.main).setVisible(false);
 
         this.panelById.put(PANEL_REPLAYS_LIST_ID, this.replayEditor.replaysList);
         this.panelById.put(PANEL_REPLAY_PROPS_ID, this.replayEditor.replayProperties);
@@ -403,6 +401,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         });
         this.openCameraEditor = new UIIcon(Icons.FRUSTUM, (b) -> this.showPanel(this.cameraEditor));
         this.openReplayEditor = new UIIcon(Icons.SCENE, (b) -> this.showPanel(this.replayEditor));
+        this.openActionEditor = new UIIcon(Icons.ACTION, (b) -> this.showPanel(this.actionEditor));
 
         this.layoutPresetsController = new UICopyPasteController(PresetManager.LAYOUTS, "_CopyFilmLayout")
             .supplier(this::getFilmLayoutPresetData)
@@ -411,12 +410,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.openFilmMenu.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPTIONS, Direction.BOTTOM);
         this.openCameraEditor.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPEN_CAMERA_EDITOR, Direction.BOTTOM);
         this.openReplayEditor.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPEN_REPLAY_EDITOR, Direction.BOTTOM);
+        this.openActionEditor.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPEN_ACTION_EDITOR, Direction.BOTTOM);
 
         this.topBarActions = new UIElement();
         this.topBarActions.relative(this.tabBar).x(1F, -FILM_TOP_BAR_ACTIONS_WIDTH).w(FILM_TOP_BAR_ACTIONS_WIDTH).h(UIDataTabs.TABS_HEIGHT_PX).row(0).resize();
         this.topBarSeparator = new UIElement();
         this.topBarSeparator.wh(FILM_TOP_BAR_SEPARATOR_WIDTH, UIDataTabs.TABS_HEIGHT_PX);
-        this.topBarActions.add(new UIRenderable(this::renderTopBarActions), this.openCameraEditor, this.openReplayEditor, this.topBarSeparator, this.openFilmMenu);
+        this.topBarActions.add(new UIRenderable(this::renderTopBarActions), this.openCameraEditor, this.openReplayEditor, this.openActionEditor, this.topBarSeparator, this.openFilmMenu);
         this.tabBar.add(this.topBarActions);
 
         /* Setup elements */
@@ -427,7 +427,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.dragHandlesById.put(id, handle);
             this.editor.add(handle);
         }
-        this.main.add(this.editArea, this.cameraEditor, this.replayEditor, this.preview, this.replayEditor.replaysList, this.replayEditor.replayProperties);
+        this.main.add(this.editArea, this.cameraEditor, this.replayEditor, this.actionEditor, this.preview, this.replayEditor.replaysList, this.replayEditor.replayProperties);
         this.add(this.controller);
         this.overlay.namesList.setFileIcon(Icons.FILM);
 
@@ -484,6 +484,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.panels.add(this.cameraEditor);
         this.panels.add(this.replayEditor);
+        this.panels.add(this.actionEditor);
 
         this.secretPlay = new UIElement();
         this.secretPlay.keys().register(Keys.PLAUSE, () -> this.preview.plause.clickItself()).active(() -> !this.isFlying() && !this.canBeSeen() && this.data != null).category(editor);
@@ -634,12 +635,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         boolean hasFilm = this.hasFilmInCurrentTab();
 
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] film.updateTabVisibility.begin film={} tab={} tabData={} hasFilm={} selected={} dataPresent={}",
-                this.getFilmDebugId(), this.currentTab, this.getCurrentTabDataId(), hasFilm, this.editorName(this.selectedMainEditorPanel), this.data != null);
-        }
-
         if (!hasFilm)
         {
             for (UIElement panel : this.panelById.values())
@@ -678,7 +673,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.selectionPanel.setVisible(!hasFilm);
-        this.logVisibilityState("updateTabVisibility");
     }
 
     private boolean hasFilmInCurrentTab()
@@ -717,9 +711,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         boolean visible = hasFilm && (mainActive || editAreaActive);
         boolean cameraVisible = visible && selected == this.cameraEditor;
         boolean replayVisible = visible && selected == this.replayEditor;
+        boolean actionVisible = visible && selected == this.actionEditor;
 
         this.cameraEditor.setVisible(cameraVisible);
         this.replayEditor.setVisible(replayVisible);
+        this.actionEditor.setVisible(actionVisible);
 
         this.cameraEditor.setTimelineVisible(mainActive && cameraVisible);
         this.cameraEditor.setPropertiesVisible(editAreaActive && cameraVisible);
@@ -727,7 +723,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.replayEditor.setTimelineVisible(mainActive && replayVisible);
         this.replayEditor.setPropertiesVisible(editAreaActive && replayVisible);
 
-        this.logVisibilityState("updateMainEditorVisibility");
+        this.actionEditor.setTimelineVisible(mainActive && actionVisible);
+        this.actionEditor.setPropertiesVisible(editAreaActive && actionVisible);
     }
 
     private void toggleLayoutLock()
@@ -763,6 +760,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (this.selectedMainEditorPanel == this.replayEditor)
         {
             return ValueEditorLayout.FilmEditor.REPLAY;
+        }
+
+        if (this.selectedMainEditorPanel == this.actionEditor)
+        {
+            return ValueEditorLayout.FilmEditor.ACTION;
         }
 
         return ValueEditorLayout.FilmEditor.CAMERA;
@@ -1940,11 +1942,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         if (!this.hasFilmInCurrentTab() || this.data == null)
         {
-            if (BBSRendering.isCustomSize())
-            {
-                BBSRendering.setCustomSize(false);
-            }
-
             return;
         }
 
@@ -2034,13 +2031,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void showPanel(UIElement element)
     {
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] film.showPanel.request film={} requested={} selected={} requestedVisible={} flying={} hasFilm={} currentIndex={}",
-                this.getFilmDebugId(), this.editorName(element), this.editorName(this.selectedMainEditorPanel), element != null && element.isVisible(),
-                this.isFlying(), this.hasFilmInCurrentTab(), this.getPanelIndex());
-        }
-
         if (element == this.selectedMainEditorPanel && element.isVisible())
         {
             if (this.isFlying())
@@ -2063,12 +2053,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.clearSplitterDragState();
         this.selectedMainEditorPanel = element;
 
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] film.showPanel.layout film={} requested={} previousRootChanged={} previousIndex={} previousRoot={} currentRoot={}",
-                this.getFilmDebugId(), this.editorName(element), previousRoot != this.getCurrentFilmLayoutRoot(), index, previousRoot, this.getCurrentFilmLayoutRoot());
-        }
-
         if (previousRoot != this.getCurrentFilmLayoutRoot())
         {
             this.setupEditorFlex(true);
@@ -2086,8 +2070,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.toggleFlight();
         }
-
-        this.logVisibilityState("showPanel");
     }
 
     private void captureTimelineViewport(UIElement panel)
@@ -2096,6 +2078,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.timelineXMin = this.cameraEditor.clips.scale.getMinValue();
             this.timelineXMax = this.cameraEditor.clips.scale.getMaxValue();
+        }
+        else if (panel == this.actionEditor)
+        {
+            this.timelineXMin = this.actionEditor.clips.scale.getMinValue();
+            this.timelineXMax = this.actionEditor.clips.scale.getMaxValue();
         }
         else if (panel == this.replayEditor && this.replayEditor.keyframeEditor != null)
         {
@@ -2114,6 +2101,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (panel == this.cameraEditor)
         {
             this.cameraEditor.clips.scale.view(this.timelineXMin, this.timelineXMax);
+        }
+        else if (panel == this.actionEditor)
+        {
+            this.actionEditor.clips.scale.view(this.timelineXMin, this.timelineXMax);
         }
         else if (panel == this.replayEditor && this.replayEditor.keyframeEditor != null)
         {
@@ -2379,6 +2370,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.appear();
 
+        BBSRendering.setCustomSize(true);
         MorphRenderer.hidePlayer = true;
 
         CameraController cameraController = this.getCameraController();
@@ -2438,116 +2430,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.runner.getContext().shutdown();
     }
 
-    private void logVisibilityState(String source)
-    {
-        if (!BBSFlickerDiagnostics.ENABLED)
-        {
-            return;
-        }
-
-        String signature = this.getFilmDebugId()
-            + "|" + this.currentTab
-            + "|" + this.getCurrentTabDataId()
-            + "|" + this.editorName(this.selectedMainEditorPanel)
-            + "|" + this.visibleFlag(this.main)
-            + "|" + this.visibleFlag(this.editArea)
-            + "|" + this.visibleFlag(this.preview)
-            + "|" + this.visibleFlag(this.cameraEditor)
-            + "|" + this.visibleFlag(this.replayEditor)
-            + "|" + this.visibleFlag(this.actionEditor)
-            + "|" + this.visibleFlag(this.replayEditor == null ? null : this.replayEditor.replaysList)
-            + "|" + this.visibleFlag(this.replayEditor == null ? null : this.replayEditor.replayProperties)
-            + "|" + (this.preview == null ? "0x0" : this.preview.area.w + "x" + this.preview.area.h)
-            + "|" + BBSRendering.isCustomSize()
-            + "|" + BBSRendering.getVideoWidth()
-            + "x"
-            + BBSRendering.getVideoHeight();
-
-        if (signature.equals(this.lastFlickerVisibilitySignature))
-        {
-            return;
-        }
-
-        this.lastFlickerVisibilitySignature = signature;
-
-        LOGGER.info("[BBS-FLICKER] film.visibility source={} film={} tab={} tabData={} selected={} main={} editArea={} preview={} camera={} replay={} action={} list={} props={} previewArea={}x{} customSize={} bbsSize={}x{}",
-            source,
-            this.getFilmDebugId(),
-            this.currentTab,
-            this.getCurrentTabDataId(),
-            this.editorName(this.selectedMainEditorPanel),
-            this.visibleFlag(this.main),
-            this.visibleFlag(this.editArea),
-            this.visibleFlag(this.preview),
-            this.visibleFlag(this.cameraEditor),
-            this.visibleFlag(this.replayEditor),
-            this.visibleFlag(this.actionEditor),
-            this.visibleFlag(this.replayEditor == null ? null : this.replayEditor.replaysList),
-            this.visibleFlag(this.replayEditor == null ? null : this.replayEditor.replayProperties),
-            this.preview == null ? 0 : this.preview.area.w,
-            this.preview == null ? 0 : this.preview.area.h,
-            BBSRendering.isCustomSize(),
-            BBSRendering.getVideoWidth(),
-            BBSRendering.getVideoHeight());
-    }
-
-    private String visibleFlag(UIElement element)
-    {
-        if (element == null)
-        {
-            return "null";
-        }
-
-        return element.isVisible() ? "1" : "0";
-    }
-
-    private String editorName(UIElement element)
-    {
-        if (element == this.cameraEditor)
-        {
-            return "camera";
-        }
-
-        if (element == this.replayEditor)
-        {
-            return "replay";
-        }
-
-        if (element == this.actionEditor)
-        {
-            return "action";
-        }
-
-        if (element == this.preview)
-        {
-            return "preview";
-        }
-
-        if (element == this.editArea)
-        {
-            return "editArea";
-        }
-
-        if (element == this.main)
-        {
-            return "main";
-        }
-
-        return element == null ? "null" : element.getClass().getSimpleName();
-    }
-
-    private String getFilmDebugId()
-    {
-        return this.data == null ? "null" : this.data.getId();
-    }
-
-    private String getCurrentTabDataId()
-    {
-        DataTab tab = this.getCurrentDataTab();
-
-        return tab == null ? "null" : String.valueOf(tab.dataId);
-    }
-
     @Override
     public boolean needsBackground()
     {
@@ -2604,12 +2486,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         boolean wasNewFilm = this.newFilm && data != null;
 
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] film.fill requested={} current={} wasNewFilm={} entered={} selected={} visible={}",
-                data == null ? "null" : data.getId(), this.getFilmDebugId(), wasNewFilm, this.entered, this.editorName(this.selectedMainEditorPanel), this.isVisible());
-        }
-
         this.notifyServer(ActionState.STOP);
         super.fill(data);
 
@@ -2624,13 +2500,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     protected void fillData(Film data)
     {
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] film.fillData.begin incoming={} current={} disableContext={} selected={} cameraVisible={} replayVisible={} actionVisible={}",
-                data == null ? "null" : data.getId(), this.getFilmDebugId(), this.data != null, this.editorName(this.selectedMainEditorPanel),
-                this.cameraEditor != null && this.cameraEditor.isVisible(), this.replayEditor != null && this.replayEditor.isVisible(), this.actionEditor != null && this.actionEditor.isVisible());
-        }
-
         if (this.data != null)
         {
             this.disableContext();
@@ -2650,6 +2519,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.openFilmMenu.setEnabled(true);
         this.openCameraEditor.setEnabled(data != null);
         this.openReplayEditor.setEnabled(data != null);
+        this.openActionEditor.setEnabled(data != null);
         this.duplicateFilm.setEnabled(data != null);
 
         this.actionEditor.setClips(null);
@@ -2682,12 +2552,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.updateTabVisibility();
-
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] film.fillData.end film={} replays={} entered={} selected={}",
-                this.getFilmDebugId(), data == null ? 0 : data.replays.getList().size(), this.entered, this.editorName(this.selectedMainEditorPanel));
-        }
     }
 
     @Override
@@ -2726,6 +2590,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
      */
     public void setFlight(boolean flight)
     {
+        if (flight)
+        {
+            this.controller.stopGizmoInteraction();
+        }
+
         if (!this.isRunning() || !flight)
         {
             if (!flight)
@@ -2752,7 +2621,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private void persistFlightFov()
     {
-        BBSSettings.fov.set(this.position.angle.fov);
+        if (BBSSettings.fov != null)
+        {
+            BBSSettings.fov.set(this.position.angle.fov);
+        }
     }
 
     public Vector2i getLoopingRange()
@@ -2809,7 +2681,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         Texture texture = BBSRendering.getTexture();
 
-        if (texture != null)
+        if (texture != null && BBSRendering.isCustomSize())
         {
             context.batcher.box(0, 0, context.menu.width, context.menu.height, Colors.A100);
 
@@ -2842,6 +2714,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.renderTopBarButton(context, this.openCameraEditor, this.cameraEditor.isVisible());
         this.renderTopBarButton(context, this.openReplayEditor, this.replayEditor.isVisible());
+        this.renderTopBarButton(context, this.openActionEditor, this.actionEditor.isVisible());
         this.renderTopBarSeparator(context);
         this.renderTopBarButton(context, this.openFilmMenu, false);
     }

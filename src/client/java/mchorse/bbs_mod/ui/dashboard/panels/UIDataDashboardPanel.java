@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard.panels;
 
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.client.BBSFlickerDiagnostics;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.ui.ContentType;
@@ -20,8 +19,6 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.interps.Interpolations;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,8 +26,6 @@ import java.util.List;
 
 public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUDDashboardPanel
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(UIDataDashboardPanel.class);
-
     public UIIcon saveIcon;
 
     public final List<DataTab> tabs = new ArrayList<>();
@@ -595,12 +590,6 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         int requestVersion = ++this.dataRequestVersion;
         DataTab requestTab = this.tabsEnabled ? this.getCurrentDataTab() : null;
 
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] data.requestData panel={} id={} version={} currentData={} tab={} tabData={}",
-                this.getClass().getSimpleName(), id, requestVersion, this.data == null ? "null" : this.data.getId(), this.currentTab, requestTab == null ? "null" : requestTab.dataId);
-        }
-
         this.markDataLoading(requestTab, id);
         this.editor.setEnabled(false);
 
@@ -608,12 +597,6 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         {
             if (requestVersion != this.dataRequestVersion)
             {
-                if (BBSFlickerDiagnostics.ENABLED)
-                {
-                    LOGGER.info("[BBS-FLICKER] data.requestData.stale panel={} id={} version={} latest={}",
-                        this.getClass().getSimpleName(), id, requestVersion, this.dataRequestVersion);
-                }
-
                 return;
             }
 
@@ -621,22 +604,10 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
             {
                 this.editor.setEnabled(true);
 
-                if (BBSFlickerDiagnostics.ENABLED)
-                {
-                    LOGGER.info("[BBS-FLICKER] data.requestData.tabMismatch panel={} id={} version={} currentTab={} requestTabData={} currentTabData={}",
-                        this.getClass().getSimpleName(), id, requestVersion, this.currentTab, requestTab == null ? "null" : requestTab.dataId, this.getCurrentDataTab() == null ? "null" : this.getCurrentDataTab().dataId);
-                }
-
                 return;
             }
 
             this.editor.setEnabled(true);
-
-            if (BBSFlickerDiagnostics.ENABLED)
-            {
-                LOGGER.info("[BBS-FLICKER] data.requestData.loaded panel={} id={} version={} loaded={}",
-                    this.getClass().getSimpleName(), id, requestVersion, data == null ? "null" : data.getId());
-            }
 
             this.fill((T) data);
         });
@@ -659,13 +630,6 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     public void fill(T data)
     {
-        if (BBSFlickerDiagnostics.ENABLED)
-        {
-            LOGGER.info("[BBS-FLICKER] data.fill panel={} from={} to={} tab={} tabsEnabled={} editorVisibleBefore={}",
-                this.getClass().getSimpleName(), this.data == null ? "null" : this.data.getId(), data == null ? "null" : data.getId(),
-                this.currentTab, this.tabsEnabled, this.editor.isVisible());
-        }
-
         this.data = data;
 
         if (this.tabsEnabled && this.currentTab >= 0 && this.currentTab < this.tabs.size())

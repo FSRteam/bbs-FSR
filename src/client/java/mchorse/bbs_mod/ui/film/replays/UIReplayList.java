@@ -7,7 +7,6 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.clips.modifiers.EntityClip;
 import mchorse.bbs_mod.camera.data.Position;
-import mchorse.bbs_mod.client.BBSFlickerDiagnostics;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
@@ -77,8 +76,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -97,8 +94,6 @@ import java.util.function.Consumer;
  */
 public class UIReplayList extends UIList<ReplayListEntry>
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(UIReplayList.class);
-
     private static String LAST_OFFSET = "0";
     private static final ProcessReplaysState PROCESS_STATE = new ProcessReplaysState();
 
@@ -1884,8 +1879,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     public void pasteReplay(MapType data)
     {
-        this.logReplayMutation("pasteReplay.before");
-
         Film film = this.panel.getData();
         ListType replays = data.getList("replays");
         Replay last = null;
@@ -1909,8 +1902,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
             this.updateFilmEditor();
             this.saveFilm();
         }
-
-        this.logReplayMutation("pasteReplay.after");
     }
 
     public void openFormEditor(ValueForm form, boolean editing, Consumer<Form> consumer)
@@ -1963,8 +1954,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     private void fromCamera(int duration)
     {
-        this.logReplayMutation("fromCamera.before");
-
         Position position = new Position();
         Clips camera = this.panel.getData().camera;
         CameraClipContext context = new CameraClipContext();
@@ -2007,7 +1996,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
         this.saveFilm();
 
         this.openFormEditor(replay.form, false, null);
-        this.logReplayMutation("fromCamera.after");
     }
 
     private void fromModelBlock()
@@ -2047,8 +2035,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     private void fromModelBlock(ModelBlockEntity modelBlock)
     {
-        this.logReplayMutation("fromModelBlock.before");
-
         Film film = this.panel.getData();
         Replay replay = film.replays.addReplay();
 
@@ -2101,13 +2087,10 @@ public class UIReplayList extends UIList<ReplayListEntry>
         this.scrollToReplay(replay);
         this.updateFilmEditor();
         this.saveFilm();
-        this.logReplayMutation("fromModelBlock.after");
     }
 
     public void addReplay(Vector3d position, float pitch, float yaw)
     {
-        this.logReplayMutation("addReplay.before");
-
         Film film = this.panel.getData();
 
         if (film == null)
@@ -2136,48 +2119,20 @@ public class UIReplayList extends UIList<ReplayListEntry>
         this.saveFilm();
 
         this.openFormEditor(replay.form, false, null);
-        this.logReplayMutation("addReplay.after");
     }
 
     private void updateFilmEditor()
     {
-        this.logReplayMutation("updateFilmEditor.before");
         this.panel.getController().createEntities();
         this.panel.replayEditor.updateChannelsList();
-        this.logReplayMutation("updateFilmEditor.after");
     }
 
     private void saveFilm()
     {
         if (this.panel.getData() != null)
         {
-            this.logReplayMutation("saveFilm.forceSave");
             this.panel.forceSave();
         }
-    }
-
-    private void logReplayMutation(String source)
-    {
-        if (!BBSFlickerDiagnostics.ENABLED)
-        {
-            return;
-        }
-
-        Film film = this.panel.getData();
-        Replay selected = this.panel.replayEditor.getReplay();
-        int replayCount = film == null ? 0 : film.replays.getList().size();
-
-        LOGGER.info("[BBS-FLICKER] replayList.{} film={} replayCount={} selectionCount={} selected={} editorVisible={} customSize={} bbsSize={}x{} caller={}",
-            source,
-            BBSFlickerDiagnostics.film(film),
-            replayCount,
-            this.getSelectedReplays().size(),
-            BBSFlickerDiagnostics.replay(selected),
-            this.panel.replayEditor.isVisible(),
-            BBSRendering.isCustomSize(),
-            BBSRendering.getVideoWidth(),
-            BBSRendering.getVideoHeight(),
-            BBSFlickerDiagnostics.callerOutside(UIReplayList.class));
     }
 
     public void dupeReplay()
@@ -2187,7 +2142,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
             return;
         }
 
-        this.logReplayMutation("dupeReplay.before");
         Replay last = null;
 
         for (Replay replay : this.getSelectedReplays())
@@ -2210,7 +2164,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
             this.saveFilm();
         }
 
-        this.logReplayMutation("dupeReplay.after");
     }
 
     public void removeReplay()
@@ -2220,7 +2173,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
             return;
         }
 
-        this.logReplayMutation("removeReplay.before");
         Film film = this.panel.getData();
         List<Replay> removing = new ArrayList<>(this.getSelectedReplays());
         Replay focus = removing.get(0);
@@ -2251,7 +2203,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         this.updateFilmEditor();
         this.saveFilm();
-        this.logReplayMutation("removeReplay.after");
     }
 
     @Override

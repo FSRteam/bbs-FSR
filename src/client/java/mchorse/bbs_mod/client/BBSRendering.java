@@ -82,7 +82,6 @@ public class BBSRendering
     private static RenderTarget framebuffer;
     private static RenderTarget clientFramebuffer;
     private static Texture texture;
-    private static mchorse.bbs_mod.graphics.Framebuffer exportFramebuffer;
 
     private static Runnable pendingExportResolutionAction;
 
@@ -157,6 +156,11 @@ public class BBSRendering
         return customSize;
     }
 
+    public static boolean isToggleFramebuffer()
+    {
+        return toggleFramebuffer;
+    }
+
     public static void setCustomSize(boolean customSize)
     {
         setCustomSize(customSize, 0, 0);
@@ -170,15 +174,12 @@ public class BBSRendering
 
         if (!customSize)
         {
-            resizeExtraFramebuffers();
-        }
-    }
+            if (toggleFramebuffer)
+            {
+                toggleFramebuffer(false);
+            }
 
-    public static void flushCustomFramebuffer()
-    {
-        if (toggleFramebuffer)
-        {
-            onRenderBeforeScreen();
+            resizeExtraFramebuffers();
         }
     }
 
@@ -280,7 +281,6 @@ public class BBSRendering
         }
 
         Minecraft mc = Minecraft.getInstance();
-        Window window = mc.getWindow();
 
         BBSRendering.toggleFramebuffer = toggleFramebuffer;
 
@@ -304,24 +304,14 @@ public class BBSRendering
         }
         else
         {
-            int drawW = window.getWidth();
-            int drawH = window.getHeight();
             reassignFramebuffer(clientFramebuffer);
 
             mc.getMainRenderTarget().bindWrite(true);
 
-            if (width != 0)
-            {
-                /* When the film panel is open, the UI draws the preview texture in its block; do not
-                 * blit our framebuffer to the full window or the preview would stretch to full screen. */
-                UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
-                boolean filmPanelShowing = currentMenu instanceof UIDashboard dashboard
-                    && dashboard.getPanels().panel instanceof UIFilmPanel;
-                if (!filmPanelShowing)
-                {
-                    framebuffer.blitToScreen(drawW, drawH);
-                }
-            }
+            /* Film preview and export consumers read from BBSRendering.getTexture().
+             * Do not blit the off-screen framebuffer directly to the screen here:
+             * Screen/overlay rendering uses GuiGraphics batching, while blitToScreen()
+             * bypasses the UI tree and can cover panels that were drawn after it. */
         }
     }
 
@@ -388,55 +378,35 @@ public class BBSRendering
 
     public static void onRenderBeforeScreen()
     {
-        boolean wasFramebufferActive = toggleFramebuffer;
-
-        if (!customSize || !toggleFramebuffer)
+        if (!toggleFramebuffer)
         {
             return;
         }
 
-        if (framebuffer == null)
+        if (customSize && framebuffer != null)
         {
-            return;
+            Texture texture = getTexture();
+            int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+            int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+
+            try
+            {
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer.frameBufferId);
+                GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+
+                texture.bind();
+                texture.setSize(framebuffer.width, framebuffer.height);
+                GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer.width, framebuffer.height);
+                texture.unbind();
+            }
+            finally
+            {
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+                GL11.glReadBuffer(previousReadBuffer);
+            }
         }
 
-        Texture texture = getTexture();
-        int targetWidth = getVideoWidth();
-        int targetHeight = getVideoHeight();
-        boolean resizedTexture = texture.width != targetWidth || texture.height != targetHeight;
-
-        if (resizedTexture)
-        {
-            texture.bind();
-            texture.setSize(targetWidth, targetHeight);
-            texture.unbind();
-        }
-
-        if (exportFramebuffer == null)
-        {
-            exportFramebuffer = new mchorse.bbs_mod.graphics.Framebuffer();
-            exportFramebuffer.attach(texture, GL30.GL_COLOR_ATTACHMENT0);
-            exportFramebuffer.unbind();
-        }
-
-        int previousReadFramebuffer = GL30.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
-        int previousDrawFramebuffer = GL30.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer.frameBufferId);
-        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, exportFramebuffer.id);
-        GL30.glBlitFramebuffer(
-            0, 0, framebuffer.width, framebuffer.height,
-            0, 0, targetWidth, targetHeight,
-            GL11.GL_COLOR_BUFFER_BIT, GL11.GL_LINEAR
-        );
-
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
-        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
-
-        if (wasFramebufferActive)
-        {
-            toggleFramebuffer(false);
-        }
+        toggleFramebuffer(false);
 
         if (pendingExportResolutionAction != null)
         {
