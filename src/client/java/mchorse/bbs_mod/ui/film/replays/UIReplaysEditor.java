@@ -1127,7 +1127,23 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void pickForm(Form form, String bone) {
-        UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone);
+        this.pickFormBone(form, bone, false);
+    }
+
+    /**
+     * Picking a model bone in the viewport is a pose edit, but the pose/bone tracks
+     * only exist in the {@link ReplayCategory#POSE} category. So when another category
+     * is open, jump to Pose first before delegating to the shared pick logic — otherwise
+     * the click finds no pose sheet in the current graph and silently does nothing,
+     * forcing a manual tab switch. With all tracks shown the pose sheets are already
+     * in the graph, so no switch is forced.
+     */
+    private void pickFormBone(Form form, String bone, boolean insert) {
+        if (form instanceof ModelForm && bone != null && !bone.isEmpty() && !this.showAllTracks() && this.category != ReplayCategory.POSE) {
+            this.setCategory(ReplayCategory.POSE);
+        }
+
+        UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert);
     }
 
     public void releaseViewport(UIContext context, boolean dragged)
@@ -1146,8 +1162,7 @@ public class UIReplaysEditor extends UIElement {
             this.filmPanel.showPanel(this);
         }
 
-        UIReplaysEditorUtils.pickFormWithOffers(context, pending, (form, bone, insert) ->
-                UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert));
+        UIReplaysEditorUtils.pickFormWithOffers(context, pending, this::pickFormBone);
     }
 
     public boolean clickViewport(UIContext context, Area area) {
@@ -1205,8 +1220,7 @@ public class UIReplaysEditor extends UIElement {
                     return true;
                 }
 
-                if (UIReplaysEditorUtils.pickFormWithOffers(context, pair, (form, bone, insert) ->
-                        UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert))) {
+                if (UIReplaysEditorUtils.pickFormWithOffers(context, pair, this::pickFormBone)) {
                     return true;
                 }
             }
