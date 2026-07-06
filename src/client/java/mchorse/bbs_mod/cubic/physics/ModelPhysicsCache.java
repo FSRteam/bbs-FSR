@@ -7,6 +7,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.WeakHashMap;
 
@@ -21,6 +22,7 @@ final class ModelPhysicsCache
         private final float[] restLengths;
         private final float gravity;
         private final float damping;
+        private final float stiffness;
         private final int iterations;
         private final boolean relativeGravity;
         private final boolean hasGravityRotation;
@@ -38,6 +40,7 @@ final class ModelPhysicsCache
             this.restLengths = restLengths;
             this.gravity = bone.gravity();
             this.damping = bone.damping();
+            this.stiffness = bone.stiffness();
             this.iterations = bone.iterations();
             this.relativeGravity = bone.relativeGravity();
             this.hasGravityRotation = bone.hasRelativeGravityRotation();
@@ -46,7 +49,7 @@ final class ModelPhysicsCache
                 : new Quaternionf();
             this.collisions = bone.collisions();
             this.radius = bone.radius();
-            this.weight = ModelPhysicsConfig.DEFAULT_WEIGHT;
+            this.weight = bone.weight();
         }
 
         public String id()
@@ -82,6 +85,11 @@ final class ModelPhysicsCache
         public float damping()
         {
             return this.damping;
+        }
+
+        public float stiffness()
+        {
+            return this.stiffness;
         }
 
         public int iterations()
@@ -123,13 +131,13 @@ final class ModelPhysicsCache
         }
     }
 
-    public record Compiled(List<CompiledChain> chains)
+    public record Compiled(List<CompiledChain> chains, ModelPhysicsConfig.Wind wind)
     {
     }
 
     private static final WeakHashMap<MapType, EmbeddedCompiled> EMBEDDED = new WeakHashMap<>();
 
-    private record EmbeddedCompiled(IModel model, List<CompiledChain> chains)
+    private record EmbeddedCompiled(IModel model, List<CompiledChain> chains, ModelPhysicsConfig.Wind wind)
     {
     }
 
@@ -153,29 +161,30 @@ final class ModelPhysicsCache
 
         if (cached != null && cached.model == model)
         {
-            return new Compiled(cached.chains);
+            return new Compiled(cached.chains, cached.wind);
         }
 
         ModelPhysicsConfig config = ModelPhysicsIO.fromData(data);
         List<CompiledChain> compiled = compile(model, config);
+        ModelPhysicsConfig.Wind wind = config != null ? config.wind() : ModelPhysicsConfig.Wind.NONE;
 
-        EmbeddedCompiled next = new EmbeddedCompiled(model, compiled);
+        EmbeddedCompiled next = new EmbeddedCompiled(model, compiled, wind);
         EMBEDDED.put(data, next);
 
-        return new Compiled(compiled);
+        return new Compiled(compiled, wind);
     }
 
     private static List<CompiledChain> compile(IModel model, ModelPhysicsConfig config)
     {
         if (config == null || config.bones() == null || config.bones().isEmpty())
         {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
 
         List<CompiledChain> out = new ArrayList<>();
 
         List<String> roots = new ArrayList<>(config.bones().keySet());
-        java.util.Collections.sort(roots);
+        Collections.sort(roots);
 
         for (String rootId : roots)
         {
@@ -227,7 +236,7 @@ final class ModelPhysicsCache
 
             if (group.equals(rootId))
             {
-                java.util.Collections.reverse(list);
+                Collections.reverse(list);
                 return list;
             }
 
@@ -241,7 +250,7 @@ final class ModelPhysicsCache
             group = parent;
         }
 
-        return java.util.Collections.emptyList();
+        return Collections.emptyList();
     }
 
     private static float[] computeRestLengths(IModel model, List<String> ids)

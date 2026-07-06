@@ -13,6 +13,7 @@ public final class ModelPhysicsIO
     private static final String KEY_TARGET_BONE = "target_bone";
     private static final String KEY_GRAVITY = "gravity";
     private static final String KEY_DAMPING = "damping";
+    private static final String KEY_STIFFNESS = "stiffness";
     private static final String KEY_ITERATIONS = "iterations";
     private static final String KEY_RELATIVE_GRAVITY = "relative_gravity";
     private static final String KEY_RELATIVE_GRAVITY_ROTATE_X = "relative_gravity_rotate_x";
@@ -21,9 +22,18 @@ public final class ModelPhysicsIO
     private static final String KEY_COLLISIONS = "collisions";
     private static final String KEY_RADIUS = "radius";
     private static final String KEY_WEIGHT = "weight";
+    private static final String KEY_WIND = "wind";
+    private static final String KEY_WIND_STRENGTH = "strength";
+    private static final String KEY_WIND_X = "x";
+    private static final String KEY_WIND_Y = "y";
+    private static final String KEY_WIND_Z = "z";
+    private static final String KEY_WIND_TURBULENCE = "turbulence";
+    private static final String KEY_WIND_TURBULENCE_SPEED = "turbulence_speed";
+    private static final String KEY_WIND_TURBULENCE_SCALE = "turbulence_scale";
 
     private static final float DEFAULT_GRAVITY = 1F;
     private static final float DEFAULT_DAMPING = 0.15F;
+    private static final float DEFAULT_STIFFNESS = ModelPhysicsConfig.DEFAULT_STIFFNESS;
     private static final int DEFAULT_ITERATIONS = 4;
     private static final boolean DEFAULT_RELATIVE_GRAVITY = false;
     private static final float DEFAULT_RELATIVE_GRAVITY_ROTATE_X = 0F;
@@ -32,6 +42,13 @@ public final class ModelPhysicsIO
     private static final boolean DEFAULT_COLLISIONS = false;
     private static final float DEFAULT_RADIUS = 0.1F;
     private static final float DEFAULT_WEIGHT = ModelPhysicsConfig.DEFAULT_WEIGHT;
+    private static final float DEFAULT_WIND_STRENGTH = ModelPhysicsConfig.Wind.NONE.strength();
+    private static final float DEFAULT_WIND_X = ModelPhysicsConfig.Wind.NONE.x();
+    private static final float DEFAULT_WIND_Y = ModelPhysicsConfig.Wind.NONE.y();
+    private static final float DEFAULT_WIND_Z = ModelPhysicsConfig.Wind.NONE.z();
+    private static final float DEFAULT_WIND_TURBULENCE = ModelPhysicsConfig.Wind.NONE.turbulence();
+    private static final float DEFAULT_WIND_TURBULENCE_SPEED = ModelPhysicsConfig.Wind.NONE.turbulenceSpeed();
+    private static final float DEFAULT_WIND_TURBULENCE_SCALE = ModelPhysicsConfig.Wind.NONE.turbulenceScale();
 
     private ModelPhysicsIO()
     {
@@ -65,6 +82,7 @@ public final class ModelPhysicsIO
 
             float gravity = entry.getFloat(KEY_GRAVITY, DEFAULT_GRAVITY);
             float damping = entry.getFloat(KEY_DAMPING, DEFAULT_DAMPING);
+            float stiffness = entry.getFloat(KEY_STIFFNESS, DEFAULT_STIFFNESS);
             int iterations = entry.getInt(KEY_ITERATIONS, DEFAULT_ITERATIONS);
             boolean relativeGravity = entry.getBool(KEY_RELATIVE_GRAVITY, DEFAULT_RELATIVE_GRAVITY);
             float relativeGravityRotateX = entry.getFloat(KEY_RELATIVE_GRAVITY_ROTATE_X, DEFAULT_RELATIVE_GRAVITY_ROTATE_X);
@@ -74,10 +92,36 @@ public final class ModelPhysicsIO
             float radius = entry.getFloat(KEY_RADIUS, DEFAULT_RADIUS);
             float weight = entry.getFloat(KEY_WEIGHT, DEFAULT_WEIGHT);
 
-            out.put(root, new ModelPhysicsConfig.Bone(end, targetBone, gravity, damping, iterations, relativeGravity, relativeGravityRotateX, relativeGravityRotateY, relativeGravityRotateZ, collisions, radius, weight));
+            out.put(root, new ModelPhysicsConfig.Bone(end, targetBone, gravity, damping, stiffness, iterations, relativeGravity, relativeGravityRotateX, relativeGravityRotateY, relativeGravityRotateZ, collisions, radius, weight));
         }
 
-        return out.isEmpty() ? null : new ModelPhysicsConfig(out);
+        ModelPhysicsConfig.Wind wind = readWind(map);
+
+        if (out.isEmpty() && wind.isDefault())
+        {
+            return null;
+        }
+
+        return new ModelPhysicsConfig(out, wind);
+    }
+
+    private static ModelPhysicsConfig.Wind readWind(MapType map)
+    {
+        if (!map.has(KEY_WIND, BaseType.TYPE_MAP))
+        {
+            return ModelPhysicsConfig.Wind.NONE;
+        }
+
+        MapType wind = map.getMap(KEY_WIND);
+        float strength = wind.getFloat(KEY_WIND_STRENGTH, DEFAULT_WIND_STRENGTH);
+        float x = wind.getFloat(KEY_WIND_X, DEFAULT_WIND_X);
+        float y = wind.getFloat(KEY_WIND_Y, DEFAULT_WIND_Y);
+        float z = wind.getFloat(KEY_WIND_Z, DEFAULT_WIND_Z);
+        float turbulence = wind.getFloat(KEY_WIND_TURBULENCE, DEFAULT_WIND_TURBULENCE);
+        float turbulenceSpeed = wind.getFloat(KEY_WIND_TURBULENCE_SPEED, DEFAULT_WIND_TURBULENCE_SPEED);
+        float turbulenceScale = wind.getFloat(KEY_WIND_TURBULENCE_SCALE, DEFAULT_WIND_TURBULENCE_SCALE);
+
+        return new ModelPhysicsConfig.Wind(strength, x, y, z, turbulence, turbulenceSpeed, turbulenceScale);
     }
 
     public static MapType toData(ModelPhysicsConfig config)
@@ -107,6 +151,12 @@ public final class ModelPhysicsIO
 
                 map.putFloat(KEY_GRAVITY, bone.gravity());
                 map.putFloat(KEY_DAMPING, bone.damping());
+
+                if (bone.stiffness() != DEFAULT_STIFFNESS)
+                {
+                    map.putFloat(KEY_STIFFNESS, bone.stiffness());
+                }
+
                 map.putInt(KEY_ITERATIONS, bone.iterations());
 
                 if (bone.relativeGravity())
@@ -149,6 +199,58 @@ public final class ModelPhysicsIO
         }
 
         root.put(KEY_BONES, bones);
+        writeWind(root, config == null ? null : config.wind());
+
         return root;
+    }
+
+    private static void writeWind(MapType root, ModelPhysicsConfig.Wind wind)
+    {
+        if (wind == null || wind.isDefault())
+        {
+            return;
+        }
+
+        MapType windMap = new MapType();
+
+        if (wind.strength() != DEFAULT_WIND_STRENGTH)
+        {
+            windMap.putFloat(KEY_WIND_STRENGTH, wind.strength());
+        }
+
+        if (wind.x() != DEFAULT_WIND_X)
+        {
+            windMap.putFloat(KEY_WIND_X, wind.x());
+        }
+
+        if (wind.y() != DEFAULT_WIND_Y)
+        {
+            windMap.putFloat(KEY_WIND_Y, wind.y());
+        }
+
+        if (wind.z() != DEFAULT_WIND_Z)
+        {
+            windMap.putFloat(KEY_WIND_Z, wind.z());
+        }
+
+        if (wind.turbulence() != DEFAULT_WIND_TURBULENCE)
+        {
+            windMap.putFloat(KEY_WIND_TURBULENCE, wind.turbulence());
+        }
+
+        if (wind.turbulenceSpeed() != DEFAULT_WIND_TURBULENCE_SPEED)
+        {
+            windMap.putFloat(KEY_WIND_TURBULENCE_SPEED, wind.turbulenceSpeed());
+        }
+
+        if (wind.turbulenceScale() != DEFAULT_WIND_TURBULENCE_SCALE)
+        {
+            windMap.putFloat(KEY_WIND_TURBULENCE_SCALE, wind.turbulenceScale());
+        }
+
+        if (!windMap.isEmpty())
+        {
+            root.put(KEY_WIND, windMap);
+        }
     }
 }
