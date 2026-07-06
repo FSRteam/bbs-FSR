@@ -870,6 +870,106 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.bones.clear();
     }
 
+    /**
+     * Form-local displacement that drags the shadow under the model's perceived position: how far the
+     * model has moved from its bind pose, counting BOTH the form's own transform (its keyframes) and
+     * the anchor bone's root motion. Falls back to the base form-transform displacement when there's
+     * no model or no anchor bone, so every form still shifts its shadow by its transform.
+     */
+    @Override
+    public Vector3f getShadowDisplacement(IEntity entity, float transition)
+    {
+        ModelInstance model = this.getModel();
+
+        if (model == null)
+        {
+            return super.getShadowDisplacement(entity, transition);
+        }
+
+        String anchor = model.getAnchor();
+
+        if (anchor == null || anchor.isEmpty())
+        {
+            return super.getShadowDisplacement(entity, transition);
+        }
+
+        Vector3f current = this.sampleBoneOrigin(entity, transition, anchor, false);
+        Vector3f rest = this.sampleBoneOrigin(entity, transition, anchor, true);
+
+        if (current == null || rest == null)
+        {
+            return super.getShadowDisplacement(entity, transition);
+        }
+
+        return current.sub(rest);
+    }
+
+    /**
+     * Capture a bone's origin translation in form-local space, either in the current animated pose
+     * ({@code rest = false}) or the model's rest/bind pose ({@code rest = true}). Mirrors the root-form
+     * portion of {@link #collectMatrices} so both samples share the same frame and the form's own
+     * transform cancels out when they are subtracted.
+     */
+    private Vector3f sampleBoneOrigin(IEntity entity, float transition, String bone, boolean rest)
+    {
+        ModelInstance model = this.getModel();
+
+        if (model == null)
+        {
+            return null;
+        }
+
+        PoseStack stack = new PoseStack();
+
+        stack.pushPose();
+
+        /* The current sample includes the form's own transform (so its keyframes move the shadow); the
+         * rest sample omits it and stays in the bind pose, so subtracting the two yields the full
+         * displacement of the model from rest — form transform plus anchor-bone root motion. The
+         * model's default scale is static, though, so it must be applied to BOTH samples or it won't
+         * cancel and the bind pose ends up at a different height (a constant ~1/16 shadow sink). */
+        if (rest)
+        {
+            stack.scale(model.scale.x, model.scale.y, model.scale.z);
+        }
+        else
+        {
+            this.applyTransforms(stack, false, transition);
+        }
+
+        model.model.resetPose();
+
+        if (!rest && this.animator != null)
+        {
+            this.animator.applyActions(entity, model, transition);
+            model.model.applyPose(this.getPose(this.renderPose));
+
+            /* Same as collectMatrices: solve IK so an IK-driven anchor bone's root motion is sampled
+             * from the solved pose the anchor system and gizmo see. */
+            model.form = this.form;
+            ModelIKRuntime.apply(model, null, null);
+        }
+
+        stack.mulPose(ROTATE_Y_180);
+        this.captureMatrices(model);
+
+        Vector3f result = null;
+        MatrixCacheEntry entry = this.bones.get(bone);
+
+        if (entry != null)
+        {
+            stack.pushPose();
+            MatrixStackUtils.multiply(stack, entry.origin());
+            result = stack.last().pose().getTranslation(new Vector3f());
+            stack.popPose();
+        }
+
+        this.bones.clear();
+        stack.popPose();
+
+        return result;
+    }
+
     @Override
     public void tick(IEntity entity)
     {

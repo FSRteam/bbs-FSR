@@ -23,6 +23,7 @@ import net.minecraft.client.renderer.LightTexture;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.InteractionHand;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.Collections;
 import java.util.List;
@@ -173,6 +174,27 @@ public abstract class FormRenderer <T extends Form>
         transform.scale.add(overlay.scale).sub(1, 1, 1);
         transform.rotate.add(overlay.rotate);
         transform.rotate2.add(overlay.rotate2);
+    }
+
+    /**
+     * Form-local displacement of the form's origin from its rest pose this frame, used to drag the
+     * entity's shadow under the form's perceived position. The base form simply reports its own
+     * transform's translation (so transform keyframes shift the shadow); subclasses can override to
+     * add their own motion (e.g. {@link ModelFormRenderer} folds in anchor-bone root motion). The
+     * caller maps the result to world axes with the render target.
+     */
+    public Vector3f getShadowDisplacement(IEntity entity, float transition)
+    {
+        PoseStack stack = new PoseStack();
+
+        stack.pushPose();
+        this.applyTransforms(stack, false, transition);
+
+        Vector3f displacement = stack.last().pose().getTranslation(new Vector3f());
+
+        stack.popPose();
+
+        return displacement;
     }
 
     protected Supplier<ShaderInstance> getShader(FormRenderingContext context, Supplier<ShaderInstance> normal, Supplier<ShaderInstance> picking)
