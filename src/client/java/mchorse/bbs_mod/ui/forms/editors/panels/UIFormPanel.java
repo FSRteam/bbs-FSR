@@ -15,7 +15,7 @@ import java.util.Map;
 
 public abstract class UIFormPanel <T extends Form> extends UIElement
 {
-    private static final float DEFAULT_OPTIONS_WIDTH = 0.2F;
+    private static final float DEFAULT_OPTIONS_WIDTH = 0.1F;
 
     private static Map<Class, Float> widths = new HashMap<>();
 

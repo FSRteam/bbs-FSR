@@ -10,6 +10,7 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -25,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
 {
@@ -97,10 +99,9 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         this.maxZ = axisTrackpad((v) -> this.onFieldChanged(), Colors.BLUE, axis.format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX, UIKeys.GENERAL_Z));
         this.applyToChildren = new UIButton(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_APPLY_TO_CHILDREN, (b) -> this.applySelectedToChildren());
 
-        this.options.add(
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_BONES),
-            this.bones,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
+        UISection params = new UISection(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_SETTINGS);
+
+        params.fields.add(
             this.enabled,
             UI.label(IKey.constant("%s / %s").format(UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MIN, UIKeys.FORMS_EDITORS_MODEL_CONSTRAINTS_MAX)).marginTop(UIConstants.SECTION_GAP),
             UI.label(UIKeys.GENERAL_X),
@@ -111,9 +112,14 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
             UI.row(this.minZ, this.maxZ),
             this.applyToChildren.marginTop(UIConstants.SECTION_GAP)
         );
+
+        this.options.add(
+            this.bones,
+            params
+        );
     }
 
-    private static UITrackpad axisTrackpad(java.util.function.Consumer<Double> c, int color, IKey tooltip)
+    private static UITrackpad axisTrackpad(Consumer<Double> c, int color, IKey tooltip)
     {
         UITrackpad t = new UITrackpad(c).degrees().onlyNumbers().limit(-180D, 180D);
         t.textbox.setColor(color);

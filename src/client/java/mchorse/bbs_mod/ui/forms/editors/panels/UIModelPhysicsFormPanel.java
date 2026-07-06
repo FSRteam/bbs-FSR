@@ -11,6 +11,7 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -27,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 {
@@ -457,11 +459,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             });
         });
 
-        this.options.add(
-            this.debug,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CHAINS),
-            this.bones,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
+        UISection settings = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS);
+
+        settings.fields.add(
             this.enabled,
             this.end,
             this.targetBone,
@@ -475,11 +475,22 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DAMPING),
             this.damping,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ITERATIONS),
-            this.iterations,
-            this.collisions.marginTop(UIConstants.SECTION_GAP),
+            this.iterations
+        );
+
+        UISection collisionsSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_COLLISIONS);
+
+        collisionsSection.fields.add(
+            this.collisions,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS),
-            this.radius,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND).background().marginTop(UIConstants.SECTION_GAP),
+            this.radius
+        );
+
+        /* Wind is one field for the whole model's physics, not bound to any bone, so the section is always
+         * editable and does not depend on which bone is selected in the list. */
+        UISection windSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND);
+
+        windSection.fields.add(
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH),
             this.windStrength,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION),
@@ -490,6 +501,14 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.windTurbulenceSpeed,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE),
             this.windTurbulenceScale
+        );
+
+        this.options.add(
+            this.debug,
+            this.bones,
+            settings,
+            collisionsSection,
+            windSection
         );
     }
 
@@ -666,7 +685,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         }
     }
 
-    private void openEndMenu(String current, java.util.function.Consumer<String> callback)
+    private void openEndMenu(String current, Consumer<String> callback)
     {
         if (this.availableBones.isEmpty() || this.selectedBone.isEmpty())
         {
@@ -932,7 +951,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         return out;
     }
 
-    private static UITrackpad axisTrackpad(java.util.function.Consumer<Double> callback, int color, IKey tooltip)
+    private static UITrackpad axisTrackpad(Consumer<Double> callback, int color, IKey tooltip)
     {
         UITrackpad t = new UITrackpad(callback).degrees().onlyNumbers().limit(-180D, 180D);
         t.textbox.setColor(color);
@@ -940,7 +959,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         return t;
     }
 
-    private static UITrackpad windAxisTrackpad(java.util.function.Consumer<Double> callback, int color)
+    private static UITrackpad windAxisTrackpad(Consumer<Double> callback, int color)
     {
         UITrackpad t = new UITrackpad(callback).onlyNumbers().values(0.1D, 0.5D, 1D).increment(0.1D);
         t.textbox.setColor(color);

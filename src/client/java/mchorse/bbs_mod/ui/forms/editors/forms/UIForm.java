@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors.forms;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -18,7 +19,6 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Matrix4f;
 
@@ -188,9 +188,20 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     }
 
     @Override
+    public void render(UIContext context)
+    {
+        if (this.view != null)
+        {
+            this.view.options.area.render(context.batcher, BBSSettings.deepSurface());
+        }
+
+        super.render(context);
+    }
+
+    @Override
     protected void renderBackground(UIContext context, int x, int y, int w, int h)
     {
-        context.batcher.box(x, y, x + w, y + h, Colors.A100);
+        context.batcher.box(x, y, x + w, y + h, BBSSettings.deepSurface());
     }
 
     @Override

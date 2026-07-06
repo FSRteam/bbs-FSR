@@ -40,6 +40,7 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
@@ -90,9 +91,15 @@ public class UIReplaysEditor extends UIElement {
     public UIReplaysListPanel replaysList;
     public UIReplayPropertiesPanel replayProperties;
 
+    private static final int CATEGORY_BAR_WIDTH = 20;
+
     public UIElement iconBar;
     public Map<ReplayCategory, UIIcon> tabButtons = new HashMap<>();
     private ReplayCategory category = ReplayCategory.PLAYER;
+
+    /* «All tracks» view: shows every category's tracks at once, bypassing the category filter. */
+    private UIIcon allToggle;
+    private boolean allMode;
 
     /* Keyframes */
     public UIKeyframeEditor keyframeEditor;
@@ -255,6 +262,20 @@ public class UIReplaysEditor extends UIElement {
         return Colors.BLUE;
     }
 
+    /** The key a sheet is identified by in track filters (global and per-form). */
+    public static String getSheetFilterKey(UIKeyframeSheet sheet) {
+        return sheet.isBoneTrack ? sheet.title.get() : StringUtils.fileName(sheet.id);
+    }
+
+    /** The form a sheet belongs to, whether it backs a form property or carries its owner directly (bones, materials, IK). */
+    public static Form getSheetForm(UIKeyframeSheet sheet) {
+        if (sheet.form != null) {
+            return sheet.form;
+        }
+
+        return sheet.property == null ? null : FormUtils.getForm(sheet.property);
+    }
+
     public static void renderRuler(
             UIContext context,
             UIKeyframes keyframes,
@@ -387,38 +408,19 @@ public class UIReplaysEditor extends UIElement {
         this.replayProperties.attachReplayList(this.replaysList.replays);
 
         this.iconBar = new UIElement();
-        this.iconBar.relative(this).x(0).y(0).h(20).row(0).resize();
+        this.iconBar.relative(this).x(0).y(0).w(CATEGORY_BAR_WIDTH).h(1F).column(0).stretch();
 
         this.iconBar.add(
                 new UIRenderable(context -> {
-                    /* Render background matching track names container */
-                    int labelWidth = this.getLabelWidth();
                     Area area = this.iconBar.area;
 
-                    context.batcher.box(area.x, area.y, area.x + labelWidth, area.ey(), BBSSettings.chromeSurface());
+                    context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
 
-                    /* Render active tab indicator */
-                    UIIcon activeIcon = this.tabButtons.get(this.category);
+                    /* Highlight the active category on the left edge. */
+                    UIIcon activeIcon = this.showAllTracks() ? this.allToggle : this.tabButtons.get(this.category);
 
-                    if (activeIcon != null) {
-                        int color = BBSSettings.primaryColor.get();
-                        Area iconArea = activeIcon.area;
-
-                        context.batcher.box(
-                                iconArea.x,
-                                iconArea.ey() - 2,
-                                iconArea.ex(),
-                                iconArea.ey(),
-                                Colors.A100 | color
-                        );
-                        context.batcher.gradientVBox(
-                                iconArea.x,
-                                iconArea.y,
-                                iconArea.ex(),
-                                iconArea.ey() - 2,
-                                color,
-                                Colors.A75 | color
-                        );
+                    if (activeIcon != null && activeIcon.getParent() != null) {
+                        UIDashboardPanels.renderHighlight(context.batcher, activeIcon.area, Direction.LEFT);
                     }
                 })
         );
@@ -430,6 +432,11 @@ public class UIReplaysEditor extends UIElement {
             this.iconBar.add(button);
             this.tabButtons.put(category, button);
         }
+
+        /* «All tracks» toggle, pinned to the bottom of the category bar. */
+        this.allToggle = new UIIcon(Icons.LIST, b -> this.setAllTracks());
+        this.allToggle.tooltip(UIKeys.FILM_REPLAY_ALL_TRACKS, Direction.RIGHT);
+        this.layoutBottomToggles();
 
         this.setCategory(ReplayCategory.PLAYER);
 
@@ -449,13 +456,25 @@ public class UIReplaysEditor extends UIElement {
                 .register(Keys.REPLAYS_TAB_5, () -> this.setCategoryByPosition(4))
                 .category(UIKeys.FILM_REPLAY_TITLE);
 
-        this.add(this.iconBar);
+        this.add(this.iconBar, this.allToggle);
         this.markContainer();
     }
 
     private void setCategory(ReplayCategory c) {
         this.category = c;
+        this.allMode = false;
         this.updateChannelsList();
+    }
+
+    /** Show every category's tracks at once, bypassing the category filter. */
+    private void setAllTracks() {
+        this.allMode = true;
+        this.updateChannelsList();
+    }
+
+    /** Pin the «all tracks» toggle to the bottom of the category bar. */
+    private void layoutBottomToggles() {
+        this.allToggle.relative(this).x(0).y(1F, -20).wh(CATEGORY_BAR_WIDTH, 20);
     }
 
     /**
@@ -477,7 +496,7 @@ public class UIReplaysEditor extends UIElement {
             }
         }
 
-        present.sort(Comparator.comparingInt((c) -> this.tabButtons.get(c).area.x));
+        present.sort(Comparator.comparingInt((c) -> this.tabButtons.get(c).area.y));
 
         if (index >= 0 && index < present.size())
         {
@@ -495,10 +514,6 @@ public class UIReplaysEditor extends UIElement {
         {
             this.setCategory(ReplayCategory.PLAYER);
         }
-    }
-
-    private int getLabelWidth() {
-        return this.keyframeEditor != null ? this.keyframeEditor.view.getLabelWidth() : UIKeyframes.LABEL_WIDTH_DEFAULT;
     }
 
     public void setFilm(Film film) {
@@ -600,17 +615,25 @@ public class UIReplaysEditor extends UIElement {
         this.keys.clear();
 
         for (UIKeyframeSheet sheet : sheets) {
-            this.keys.add(sheet.isBoneTrack ? sheet.title.get() : StringUtils.fileName(sheet.id));
+            this.keys.add(getSheetFilterKey(sheet));
         }
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
 
         sheets.removeIf(v -> {
-            String filterKey = v.isBoneTrack ? v.title.get() : StringUtils.fileName(v.id);
+            String filterKey = getSheetFilterKey(v);
             for (String s : disabled) {
                 if (filterKey.equals(s) || v.id.equals(s) || v.id.endsWith("/" + s)) {
                     return true;
                 }
+            }
+
+            Form owner = getSheetForm(v);
+
+            if (owner != null) {
+                Set<String> ownerDisabled = owner.disabledTracks.get();
+
+                return ownerDisabled.contains(Form.DISABLED_ALL) || ownerDisabled.contains(filterKey);
             }
 
             return false;
@@ -634,14 +657,10 @@ public class UIReplaysEditor extends UIElement {
             )
                     .target(this.filmPanel.editArea)
                     .editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
-            this.keyframeEditor.relative(this).x(0).y(0).w(1F).h(1F);
+            this.keyframeEditor.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
             this.keyframeEditor.setUndoId("replay_keyframe_editor");
             this.keyframeEditor.setTimelineVisible(this.timelineVisible);
             this.keyframeEditor.setPropertiesVisible(this.propertiesVisible);
-
-            /* Update iconBar width to match label width */
-            int labelWidth = this.keyframeEditor.view.getLabelWidth();
-            this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
 
             /* Reset */
             if (lastEditor != null) {
@@ -728,10 +747,7 @@ public class UIReplaysEditor extends UIElement {
                         Set<String> disabledSet = BBSSettings.disabledSheets.get();
                         Map<String, Integer> keyToColor = new HashMap<>();
                         for (UIKeyframeSheet sheet : this.keyframeEditor.view.getGraph().getSheets()) {
-                            String k = sheet.isBoneTrack
-                                    ? sheet.title.get()
-                                    : StringUtils.fileName(sheet.id);
-                            keyToColor.put(k, sheet.color);
+                            keyToColor.put(getSheetFilterKey(sheet), sheet.color);
                         }
                         UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(
                                 disabledSet,
@@ -760,11 +776,14 @@ public class UIReplaysEditor extends UIElement {
             this.keyframeEditor.view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
 
             this.add(this.keyframeEditor);
-            /* Icon bar on top so it overlays the track names column (left labelWidth pixels) */
+            /* Category bar and its bottom toggle stay on top of the timeline. */
             if (this.iconBar.getParent() != null) {
                 this.iconBar.removeFromParent();
             }
-            this.add(this.iconBar);
+            if (this.allToggle.getParent() != null) {
+                this.allToggle.removeFromParent();
+            }
+            this.add(this.iconBar, this.allToggle);
         }
 
         this.resize();
@@ -774,9 +793,9 @@ public class UIReplaysEditor extends UIElement {
         }
     }
 
-    /** The local "replay tabs" toggle: when tabs are disabled every category's tracks are shown at once, bypassing the category filter. */
+    /** All-tracks view: transient toggle, or forced on when the replay tabs setting is disabled. */
     private boolean showAllTracks() {
-        return !BBSSettings.editorReplayTabs.get();
+        return this.allMode || !BBSSettings.editorReplayTabs.get();
     }
 
     private void collectCuratedSheets(List<UIKeyframeSheet> sheets) {
@@ -1286,12 +1305,12 @@ public class UIReplaysEditor extends UIElement {
 
     @Override
     public void render(UIContext context) {
-        /* Hide category bar when tabs are disabled or "edit track" overlay is open */
-        this.iconBar.setVisible(
-            this.timelineVisible
-                && BBSSettings.editorReplayTabs.get()
-                && (this.keyframeEditor == null || !this.keyframeEditor.view.isEditing())
-        );
+        /* Hide category bar while the "edit track" overlay is open */
+        boolean barVisible = this.timelineVisible
+                && (this.keyframeEditor == null || !this.keyframeEditor.view.isEditing());
+
+        this.iconBar.setVisible(barVisible);
+        this.allToggle.setVisible(barVisible);
 
         UIReplaysEditorUtils.configureFilmHotkeyDrag(this.filmPanel, context);
 
@@ -1302,11 +1321,7 @@ public class UIReplaysEditor extends UIElement {
     public void resize() {
         super.resize();
 
-        /* Update iconBar width when resizing */
-        if (this.keyframeEditor != null) {
-            int labelWidth = this.keyframeEditor.view.getLabelWidth();
-            this.iconBar.relative(this).x(0).y(0).w(labelWidth).h(20);
-        }
+        this.layoutBottomToggles();
     }
 
     @Override

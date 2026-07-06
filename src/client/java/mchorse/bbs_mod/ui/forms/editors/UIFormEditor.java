@@ -66,7 +66,6 @@ import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
-import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -82,7 +81,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 {
     private static Map<Class, Supplier<UIForm>> panels = new HashMap<>();
 
-    private static float treeWidth = 0.2F;
+    private static float treeWidth = 0.1F;
     private static boolean TOGGLED = true;
 
     /* Palette for picking a form for body parts */
@@ -216,7 +215,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             @Override
             public void render(UIContext context)
             {
-                this.area.render(context.batcher, Colors.A100);
+                this.area.render(context.batcher, BBSSettings.chromeSurface());
             }
         };
         listToolbarBg.relative(listSection).xy(0, 0).w(1F).h(20);
@@ -311,7 +310,19 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             TOGGLED = !TOGGLED;
         });
         this.toggleSidebar.tooltip(UIKeys.FORMS_EDITOR_TOGGLE_TREE, Direction.RIGHT);
-        this.openStateEditor = new UIIcon(Icons.GALLERY, (b) -> this.toggleStateEditor());
+        this.openStateEditor = new UIIcon(Icons.GALLERY, (b) -> this.toggleStateEditor())
+        {
+            @Override
+            protected void renderSkin(UIContext context)
+            {
+                if (UIFormEditor.this.statesEditor.isVisible())
+                {
+                    UIDashboardPanels.renderHighlight(context.batcher, this.area, Direction.LEFT);
+                }
+
+                super.renderSkin(context);
+            }
+        };
         this.openStateEditor.tooltip(UIKeys.FORMS_EDITOR_STATES_TOGGLE, Direction.RIGHT);
         this.icons = UI.column(this.openStateEditor, this.toggleSidebar, this.finish);
         this.icons.relative(this).y(1F).w(20).anchorY(1F);
@@ -320,13 +331,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         {
             if (this.forms.isVisible())
             {
-                this.forms.area.render(context.batcher, Colors.A50);
+                this.forms.area.render(context.batcher, BBSSettings.deepSurface());
             }
         });
 
         UIRenderable backgroundStates = new UIRenderable((context) ->
         {
-            context.batcher.box(this.area.x, this.area.y, this.area.x + 20, this.area.ey(), Colors.A100);
+            context.batcher.box(this.area.x, this.area.y, this.area.x + 20, this.area.ey(), BBSSettings.chromeSurface());
         });
 
         UIDraggable draggable = new UIDraggable((context) ->

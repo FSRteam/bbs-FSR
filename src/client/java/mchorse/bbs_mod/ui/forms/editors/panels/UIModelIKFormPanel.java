@@ -10,6 +10,7 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -25,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 {
@@ -214,11 +216,9 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.commitChanges();
         });
 
-        this.options.add(
-            this.debug,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_BONES),
-            this.bones,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
+        UISection settings = new UISection(UIKeys.FORMS_EDITORS_MODEL_IK_SETTINGS);
+
+        settings.fields.add(
             this.enabled,
             this.target,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH).marginTop(UIConstants.SECTION_GAP),
@@ -233,6 +233,12 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.weight,
             this.tipRotation,
             this.stretch
+        );
+
+        this.options.add(
+            this.debug,
+            this.bones,
+            settings
         );
     }
 
@@ -297,7 +303,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         return true;
     }
 
-    private void openBoneMenu(String current, java.util.function.Consumer<String> callback)
+    private void openBoneMenu(String current, Consumer<String> callback)
     {
         if (this.bones.getList().isEmpty())
         {

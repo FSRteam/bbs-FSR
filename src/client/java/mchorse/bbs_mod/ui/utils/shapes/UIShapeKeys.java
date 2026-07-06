@@ -5,6 +5,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
 import mchorse.bbs_mod.utils.pose.ShapeKeysManager;
@@ -13,6 +14,7 @@ import java.util.Set;
 
 public class UIShapeKeys extends UIElement
 {
+    public UILabel title;
     public UIStringList list;
     public UITrackpad value;
 
@@ -38,10 +40,11 @@ public class UIShapeKeys extends UIElement
             UIKeys.SHAPE_KEYS_CONTEXT_NAME
         ));
         this.value = new UITrackpad((v) -> this.setValue(v.floatValue()));
+        this.title = UI.label(UIKeys.SHAPE_KEYS_TITLE);
 
         this.column().vertical().stretch();
 
-        this.add(UI.label(UIKeys.SHAPE_KEYS_TITLE), this.list, this.value);
+        this.add(this.title, this.list, this.value);
     }
 
     public void setShapeKeys(String group, Set<String> keys, ShapeKeys shapeKeys)
@@ -49,9 +52,18 @@ public class UIShapeKeys extends UIElement
         this.group = group;
         this.shapeKeys = shapeKeys;
 
+        this.list.clear();
         this.list.add(keys);
         this.list.sort();
-        this.pick(this.list.getList().get(0), true);
+
+        boolean hasKeys = !this.list.getList().isEmpty();
+
+        this.value.setVisible(hasKeys);
+
+        if (hasKeys)
+        {
+            this.pick(this.list.getList().get(0), true);
+        }
     }
 
     protected void changedShapeKeys(Runnable runnable)
