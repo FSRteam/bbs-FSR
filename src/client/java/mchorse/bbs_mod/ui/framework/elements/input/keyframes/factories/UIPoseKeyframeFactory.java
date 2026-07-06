@@ -150,6 +150,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
+        protected boolean stretchesBoneList()
+        {
+            return true;
+        }
+
+        @Override
         protected UIPropTransform createTransformEditor()
         {
             return new UIPoseTransforms().enableHotkeys();
@@ -158,21 +164,21 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         @Override
         protected void pastePose(MapType data)
         {
-            List<String> current = new ArrayList<>(this.groups.getCurrent());
+            List<String> current = new ArrayList<>(this.groups.list.getCurrent());
 
             apply(this.editor, this.keyframe, (pose) -> pose.fromData(data));
-            this.groups.setCurrent(current);
-            this.pickBones(this.groups.getCurrent());
+            this.groups.list.setCurrent(current);
+            this.pickBones(this.groups.list.getCurrent());
         }
 
         @Override
         protected void flipPose()
         {
-            List<String> current = new ArrayList<>(this.groups.getCurrent());
+            List<String> current = new ArrayList<>(this.groups.list.getCurrent());
 
             apply(this.editor, this.keyframe, (pose) -> pose.flip(this.flippedParts));
-            this.groups.setCurrent(current);
-            this.pickBones(this.groups.getCurrent());
+            this.groups.list.setCurrent(current);
+            this.pickBones(this.groups.list.getCurrent());
         }
 
         @Override
@@ -206,7 +212,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         @Override
         protected void reset()
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
             {
                 poseT.translate.set(0F, 0F, 0F);
                 poseT.scale.set(1F, 1F, 1F);
@@ -219,28 +225,28 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         @Override
         public void pasteTranslation(Vector3d translation)
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.translate.set(translation));
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.translate.set(translation));
             this.refillTransform();
         }
 
         @Override
         public void pasteScale(Vector3d scale)
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.scale.set(scale));
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.scale.set(scale));
             this.refillTransform();
         }
 
         @Override
         public void pasteRotation(Vector3d rotation)
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.rotate.set(Vectors.toRad(rotation)));
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.rotate.set(Vectors.toRad(rotation)));
             this.refillTransform();
         }
 
         @Override
         public void pasteRotation2(Vector3d rotation)
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) -> poseT.rotate2.set(Vectors.toRad(rotation)));
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.rotate2.set(Vectors.toRad(rotation)));
             this.refillTransform();
         }
 
@@ -252,7 +258,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dy = (float) (y - transform.translate.y);
             float dz = (float) (z - transform.translate.z);
 
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
             {
                 poseT.translate.x += dx;
                 poseT.translate.y += dy;
@@ -268,7 +274,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dy = (float) (y - transform.scale.y);
             float dz = (float) (z - transform.scale.z);
 
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
             {
                 poseT.scale.x += dx;
                 poseT.scale.y += dy;
@@ -284,7 +290,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dy = MathUtils.toRad((float) y) - transform.rotate.y;
             float dz = MathUtils.toRad((float) z) - transform.rotate.z;
 
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
             {
                 poseT.rotate.x += dx;
                 poseT.rotate.y += dy;
@@ -300,7 +306,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             float dy = MathUtils.toRad((float) y) - transform.rotate2.y;
             float dz = MathUtils.toRad((float) z) - transform.rotate2.z;
 
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.getCurrent(), (poseT) ->
+            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
             {
                 poseT.rotate2.x += dx;
                 poseT.rotate2.y += dy;

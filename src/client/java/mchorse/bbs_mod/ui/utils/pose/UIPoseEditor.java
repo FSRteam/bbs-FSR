@@ -5,6 +5,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
@@ -15,6 +16,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
+import mchorse.bbs_mod.ui.utils.resizers.AutomaticResizer;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -33,7 +35,10 @@ public class UIPoseEditor extends UIElement
 {
     private static String lastLimb = "";
 
-    public UIPoseBoneStringList groups;
+    /** The bone list never shrinks below this height when it gets stretched to fill the panel. */
+    private static final int MIN_LIST_HEIGHT = UIStringList.DEFAULT_HEIGHT * 4;
+
+    public UIBoneList groups;
     public UITrackpad fix;
     public UIColor color;
     public UIToggle lighting;
@@ -48,10 +53,10 @@ public class UIPoseEditor extends UIElement
 
     public UIPoseEditor()
     {
-        this.groups = new UIPoseBoneStringList(this::pickBones);
-        this.groups.background().h(UIStringList.DEFAULT_HEIGHT * 8 - 8);
-        this.groups.scroll.cancelScrolling();
-        this.groups.context(() ->
+        this.groups = new UIBoneList(this::pickBones);
+        this.groups.onFiltered = this::afterFilter;
+        this.groups.list.h(UIStringList.DEFAULT_HEIGHT * 8 - 8);
+        this.groups.list.context(() ->
         {
             UIDataContextMenu menu = new UIDataContextMenu(PoseManager.INSTANCE, this.group, () -> this.pose.toData(), this::pastePose);
             UIIcon flip = new UIIcon(Icons.CONVERT, (b) -> this.flipPose());
@@ -98,6 +103,71 @@ public class UIPoseEditor extends UIElement
         this.add(this.groups, UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
     }
 
+    @Override
+    public void resize()
+    {
+        if (this.stretchesBoneList())
+        {
+            this.stretchBoneList();
+        }
+
+        super.resize();
+    }
+
+    /**
+     * Whether the bone list grows to fill the viewport. Only the film editor's pose keyframe editor
+     * opts in; the form pose editor keeps the list at its fixed height, so the collapsible sections
+     * below it (transform, shape keys) lay out predictably instead of fighting the stretch.
+     */
+    protected boolean stretchesBoneList()
+    {
+        return false;
+    }
+
+    private void stretchBoneList()
+    {
+        UIScrollView viewport = this.getViewport();
+
+        if (viewport == null || this.area.h <= 0 || this.groups.getParent() == null)
+        {
+            return;
+        }
+
+        int target = viewport.area.ey() - this.getViewportPadding(viewport);
+        int height = this.groups.list.getFlex().getH() + (target - this.area.ey());
+
+        this.groups.list.h(Math.max(height, MIN_LIST_HEIGHT));
+    }
+
+    private UIScrollView getViewport()
+    {
+        UIElement element = this.getParent();
+
+        while (element != null)
+        {
+            if (element instanceof UIScrollView)
+            {
+                return (UIScrollView) element;
+            }
+
+            element = element.getParent();
+        }
+
+        return null;
+    }
+
+    /** The scroll content lays itself out with this much padding at the bottom; leaving exactly
+     *  that gap below the list is what keeps the panel from overflowing into a stray scrollbar. */
+    private int getViewportPadding(UIScrollView viewport)
+    {
+        if (viewport.getFlex().post instanceof AutomaticResizer resizer)
+        {
+            return resizer.padding;
+        }
+
+        return UIConstants.SCROLL_PADDING;
+    }
+
     private void applyChildren(Consumer<PoseTransform> consumer)
     {
         if (this.model == null)
@@ -105,7 +175,7 @@ public class UIPoseEditor extends UIElement
             return;
         }
 
-        for (String bone : this.groups.getCurrent())
+        for (String bone : this.groups.list.getCurrent())
         {
             Collection<String> keys = this.model.getAllChildrenKeys(bone);
 
@@ -126,7 +196,7 @@ public class UIPoseEditor extends UIElement
      */
     public String getGroup()
     {
-        return this.groups.getCurrentFirst();
+        return this.groups.list.getCurrentFirst();
     }
 
     private void beginSuppressPoseSync()
@@ -151,11 +221,11 @@ public class UIPoseEditor extends UIElement
 
     private void restoreSelectionAfter(Runnable action)
     {
-        List<String> current = new ArrayList<>(this.groups.getCurrent());
+        List<String> current = new ArrayList<>(this.groups.list.getCurrent());
 
         action.run();
-        this.groups.setCurrent(current);
-        this.pickBones(this.groups.getCurrent());
+        this.groups.list.setCurrent(current);
+        this.pickBones(this.groups.list.getCurrent());
     }
 
     public void setPose(Pose pose, String group)
@@ -196,30 +266,36 @@ public class UIPoseEditor extends UIElement
 
     private void fillInGroups(Collection<String> groups, boolean reset, boolean sort)
     {
-        this.groups.clear();
-        this.groups.add(groups);
-        if (sort)
-        {
-            this.groups.sort();
-        }
+        this.groups.setSource(groups, sort);
+        this.groups.filter(reset);
+    }
 
-        this.fix.setVisible(!groups.isEmpty());
-        this.color.setVisible(!groups.isEmpty());
-        this.transform.setVisible(!groups.isEmpty());
+    /**
+     * Runs after each filter pass (see {@link UIBoneList#filter}): toggle the dependent editors by
+     * whether any bones exist, then re-select a bone &mdash; the first on a reset, otherwise the
+     * last edited one if it survived the filter.
+     */
+    private void afterFilter(boolean reset)
+    {
+        boolean hasBones = this.groups.hasBones();
 
-        List<String> list = this.groups.getList();
+        this.fix.setVisible(hasBones);
+        this.color.setVisible(hasBones);
+        this.transform.setVisible(hasBones);
+
+        List<String> list = this.groups.list.getList();
         int i = Math.max(reset ? 0 : list.indexOf(lastLimb), 0);
 
-        this.groups.setCurrentScroll(CollectionUtils.getSafe(list, i));
-        this.pickBones(this.groups.getCurrent());
+        this.groups.list.setCurrentScroll(CollectionUtils.getSafe(list, i));
+        this.pickBones(this.groups.list.getCurrent());
     }
 
     public void selectBone(String bone)
     {
         lastLimb = bone;
 
-        this.groups.setCurrentScroll(bone);
-        this.pickBones(this.groups.getCurrent());
+        this.groups.list.setCurrentScroll(bone);
+        this.pickBones(this.groups.list.getCurrent());
     }
 
     /* Subclass overridable methods */
@@ -328,7 +404,7 @@ public class UIPoseEditor extends UIElement
             return;
         }
 
-        List<String> bones = this.groups.getCurrent();
+        List<String> bones = this.groups.list.getCurrent();
 
         if (bones.size() <= 1)
         {
@@ -353,7 +429,7 @@ public class UIPoseEditor extends UIElement
 
     private void forEachSelectedPose(Consumer<PoseTransform> consumer)
     {
-        for (String bone : this.groups.getCurrent())
+        for (String bone : this.groups.list.getCurrent())
         {
             consumer.accept(this.pose.get(bone));
         }
@@ -379,7 +455,7 @@ public class UIPoseEditor extends UIElement
 
     private void toggleFix()
     {
-        if (this.groups.getCurrent().isEmpty())
+        if (this.groups.list.getCurrent().isEmpty())
         {
             return;
         }

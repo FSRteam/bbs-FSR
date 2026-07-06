@@ -4,12 +4,18 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 
 public class UIModelPoseEditor extends UIPoseEditor
 {
     private ValuePose valuePose;
+
+    public UIModelPoseEditor()
+    {
+        this.groups.list.h(UIStringList.DEFAULT_HEIGHT * 17);
+    }
 
     public void setValuePose(ValuePose valuePose)
     {

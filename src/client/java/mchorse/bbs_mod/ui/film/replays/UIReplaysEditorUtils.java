@@ -57,6 +57,7 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import org.joml.Matrix4f;
@@ -149,7 +150,7 @@ public class UIReplaysEditorUtils
             KeyframeChannel channel = properties.registerChannel(boneKey, KeyframeFactories.POSE_TRANSFORM);
             ValueTransform transform = new ValueTransform(boneKey, new PoseTransform());
 
-            out.add(new UIKeyframeSheet(boneKey, IKey.constant(title), color, false, channel, transform, true));
+            out.add(new UIKeyframeSheet(boneKey, IKey.constant(title), color, false, channel, transform, true).form(modelForm));
 
             if (depthBySheetId != null)
             {
@@ -516,6 +517,53 @@ public class UIReplaysEditorUtils
 
             addTargetSheet(out, properties, modelForm, id, title, Colors.MAGENTA, Icons.TIME);
         }
+    }
+
+    /** Collect every track a single form contributes to the timeline (its own properties plus model sub-tracks), used to populate the per-form track filter. */
+    public static List<UIKeyframeSheet> collectFormTrackSheets(Form form)
+    {
+        List<UIKeyframeSheet> sheets = new ArrayList<>();
+
+        if (form == null)
+        {
+            return sheets;
+        }
+
+        FormProperties properties = new FormProperties("");
+
+        for (BaseValue property : form.getAll())
+        {
+            if (!property.isVisible() || property.getId().equals("anchor"))
+            {
+                continue;
+            }
+
+            String key = property.getId();
+            KeyframeChannel channel = properties.getOrCreate(form, key);
+
+            if (channel == null)
+            {
+                continue;
+            }
+
+            BaseValueBasic formProperty = FormUtils.getProperty(form, key);
+
+            sheets.add(new UIKeyframeSheet(UIReplaysEditor.getColor(key), false, channel, formProperty).icon(UIReplaysEditor.getIcon(key)));
+        }
+
+        if (form instanceof ModelForm modelForm)
+        {
+            addMaterialTextureSheets(modelForm, properties, sheets);
+            addPhysicsControlSheet(modelForm, properties, sheets);
+            addWindControlSheet(modelForm, properties, sheets);
+            addPhysicsTargetSheets(modelForm, properties, sheets);
+            addBoneTrackSheets(modelForm, properties, sheets);
+            addIKControlSheet(modelForm, properties, sheets);
+            addIKTargetSheets(modelForm, properties, sheets);
+            addPoleTargetSheets(modelForm, properties, sheets);
+        }
+
+        return sheets;
     }
 
     private static void addTargetSheet(List<UIKeyframeSheet> out, FormProperties properties, ModelForm modelForm, String id, String title, int color, Icon icon)

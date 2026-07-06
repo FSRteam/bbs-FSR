@@ -55,7 +55,7 @@ public class UIModelForm extends UIForm<ModelForm>
         String path = FormUtils.getPath(this.form);
         UIPoseEditor poseEditor = this.modelPanel.poseEditor;
 
-        return this.getOrigin(transition, StringUtils.combinePaths(path, poseEditor.groups.getCurrentFirst()), poseEditor.transform.isLocal());
+        return this.getOrigin(transition, StringUtils.combinePaths(path, poseEditor.groups.list.getCurrentFirst()), poseEditor.transform.isLocal());
     }
 
     @Override
@@ -64,6 +64,6 @@ public class UIModelForm extends UIForm<ModelForm>
         String path = FormUtils.getPath(this.form);
         UIPoseEditor poseEditor = this.modelPanel.poseEditor;
 
-        return this.getOrigin(transition, StringUtils.combinePaths(path, poseEditor.groups.getCurrentFirst()), true);
+        return this.getOrigin(transition, StringUtils.combinePaths(path, poseEditor.groups.list.getCurrentFirst()), true);
     }
 }
