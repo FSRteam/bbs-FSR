@@ -11,8 +11,10 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import org.joml.Quaternionf;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -143,6 +145,10 @@ public class Model implements IMapSerializable, IModel
             if (transform.fix > 0F)
             {
                 group.current.lerp(group.initial, transform.fix);
+
+                /* fix blends toward the bind pose, so any composed orientation from earlier layers no longer
+                 * applies — drop it and let composeOrient below re-seed from the fix-lerped euler. */
+                group.orient = null;
             }
 
             group.lighting = transform.lighting;
@@ -159,6 +165,25 @@ public class Model implements IMapSerializable, IModel
                 (float) Math.toDegrees(transform.rotate2.y),
                 (float) Math.toDegrees(transform.rotate2.z)
             );
+
+            /* Compose the pose rotation into the orientation quaternion (rotate then rotate2, render order).
+             * The euler readback above is kept for gizmo/IK; orient is the render truth past the first layer. */
+            Quaternionf delta = Matrices.toQuaternionZYXDegrees(
+                (float) Math.toDegrees(transform.rotate.x),
+                (float) Math.toDegrees(transform.rotate.y),
+                (float) Math.toDegrees(transform.rotate.z)
+            );
+
+            if (transform.rotate2.x != 0F || transform.rotate2.y != 0F || transform.rotate2.z != 0F)
+            {
+                delta.mul(Matrices.toQuaternionZYXDegrees(
+                    (float) Math.toDegrees(transform.rotate2.x),
+                    (float) Math.toDegrees(transform.rotate2.y),
+                    (float) Math.toDegrees(transform.rotate2.z)
+                ));
+            }
+
+            group.composeOrient(delta);
         }
     }
 

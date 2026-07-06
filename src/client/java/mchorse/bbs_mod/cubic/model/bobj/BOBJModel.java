@@ -10,13 +10,16 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelSimpleVAO;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelVAO;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Quaternionf;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,6 +32,10 @@ public class BOBJModel implements IModel
     /* One VAO per mesh; each mesh's name is its material for per-mesh texture selection. */
     private List<BOBJModelVAO> vaos = new ArrayList<>();
     private boolean simple;
+
+    /* Bone indices at least one mesh vertex is weighted to — the rest are bare markers (reach
+     * points carrying no skin). Built once on first query (IK stretch needs it). */
+    private Set<Integer> deformingBones;
 
     public BOBJModel(BOBJArmature armature, List<BOBJLoader.CompiledData> meshes, boolean simple)
     {
@@ -45,6 +52,35 @@ public class BOBJModel implements IModel
     public List<BOBJModelVAO> getVaos()
     {
         return this.vaos;
+    }
+
+    /**
+     * Whether any mesh vertex is weighted to this bone. A bone with no skin is a bare reach marker
+     * (an end bone), so IK stretch ends the chain at the last deforming bone instead — the marker
+     * would otherwise pull the visible mesh short of the controller. Scans the weights once and caches.
+     */
+    public boolean boneDeformsMesh(int boneIndex)
+    {
+        if (this.deformingBones == null)
+        {
+            this.deformingBones = new HashSet<>();
+
+            for (BOBJLoader.CompiledData mesh : this.meshes)
+            {
+                int[] indices = mesh.boneIndexData;
+                float[] weights = mesh.weightData;
+
+                for (int i = 0; i < indices.length; i++)
+                {
+                    if (indices[i] >= 0 && weights[i] > 0F)
+                    {
+                        this.deformingBones.add(indices[i]);
+                    }
+                }
+            }
+        }
+
+        return this.deformingBones.contains(boneIndex);
     }
 
     public void delete()
@@ -115,6 +151,10 @@ public class BOBJModel implements IModel
             if (transform.fix > 0F)
             {
                 bone.transform.lerp(Transform.DEFAULT, transform.fix);
+
+                /* fix blends toward rest, so a composed orientation from earlier layers no longer applies —
+                 * drop it and let composeOrient below re-seed from the fix-lerped euler. */
+                bone.orient = null;
             }
 
             // lighting/color transform attributes are not supported in this branch
@@ -122,6 +162,16 @@ public class BOBJModel implements IModel
             bone.transform.scale.add(transform.scale).sub(1, 1, 1);
             bone.transform.rotate.add(transform.rotate);
             bone.transform.rotate2.add(transform.rotate2);
+
+            /* Compose the pose rotation into the orientation quaternion (radians, rotate then rotate2). */
+            Quaternionf delta = Matrices.toQuaternionZYXRadians(transform.rotate.x, transform.rotate.y, transform.rotate.z);
+
+            if (transform.rotate2.x != 0F || transform.rotate2.y != 0F || transform.rotate2.z != 0F)
+            {
+                delta.mul(Matrices.toQuaternionZYXRadians(transform.rotate2.x, transform.rotate2.y, transform.rotate2.z));
+            }
+
+            bone.composeOrient(delta);
         }
     }
 

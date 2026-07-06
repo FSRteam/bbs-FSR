@@ -167,6 +167,7 @@ public final class ModelRotationBlender
 
             bone.transform.rotate.set(euler);
             bone.transform.rotate2.set(0F, 0F, 0F);
+            bone.orient = null;
         }
     }
 
@@ -224,12 +225,13 @@ public final class ModelRotationBlender
 
             bone.transform.rotate.set(eulerRad);
             bone.transform.rotate2.set(0F, 0F, 0F);
+            bone.orient = null;
 
             parentWorld.mul(new Quaternionf().rotationZYX(eulerRad.z, eulerRad.y, eulerRad.x));
         }
     }
 
-    private static Vector3f getBobjRestDirection(BOBJModel model, BOBJBone bone, BOBJBone child, List<String> ids, int index)
+    public static Vector3f getBobjRestDirection(BOBJModel model, BOBJBone bone, BOBJBone child, List<String> ids, int index)
     {
         if (child != null)
         {

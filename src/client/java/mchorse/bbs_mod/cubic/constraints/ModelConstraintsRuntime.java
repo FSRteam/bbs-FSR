@@ -105,6 +105,9 @@ public final class ModelConstraintsRuntime
             group.current.rotate.x = MathUtils.clamp(group.current.rotate.x, minX, maxX);
             group.current.rotate.y = MathUtils.clamp(group.current.rotate.y, minY, maxY);
             group.current.rotate.z = MathUtils.clamp(group.current.rotate.z, minZ, maxZ);
+
+            /* Constraint finalizes in clamped euler — drop any composed orientation so the renderer uses it. */
+            group.orient = null;
         }
     }
 
@@ -133,6 +136,7 @@ public final class ModelConstraintsRuntime
             bone.transform.rotate.x = MathUtils.clamp(bone.transform.rotate.x, minX, maxX);
             bone.transform.rotate.y = MathUtils.clamp(bone.transform.rotate.y, minY, maxY);
             bone.transform.rotate.z = MathUtils.clamp(bone.transform.rotate.z, minZ, maxZ);
+            bone.orient = null;
         }
     }
 }

@@ -138,6 +138,11 @@ public class Matrices
         return new Quaternionf().rotationZYX(z, y, x);
     }
 
+    public static Quaternionf toQuaternionZYXRadians(float x, float y, float z)
+    {
+        return new Quaternionf().rotationZYX(z, y, x);
+    }
+
     public static Vector3f toEulerZYXDegrees(Quaternionf q)
     {
         Vector3f radZYX = new Vector3f();
@@ -164,6 +169,61 @@ public class Matrices
         Matrix3f matrix = new Matrix3f(mirror).mul(mirroredMatrix).mul(mirror);
 
         return new Quaternionf().setFromNormalized(matrix);
+    }
+
+    /**
+     * The local rotation taking the rest frame {@code (restDir, restNormal)} to the
+     * target frame {@code (toDir, toNormal)}, where each frame is an orthonormal
+     * basis with its first axis along the direction and its roll fixed by the normal.
+     * Unlike {@link #fromToMirroredX} — which only aligns the directions and picks the
+     * shortest arc for the roll (so it flips at a 180° swing) — the normal pins the
+     * roll, so the result never flips and carries a defined twist (the IK bend plane).
+     *
+     * <p>Both frames are built in the cubic model's X-mirrored space and the result is
+     * conjugated back, exactly as {@link #fromToMirroredX} does, so the cubic geometry
+     * bends the correct way. With {@code toDir == restDir} and {@code toNormal} sharing
+     * {@code restNormal}'s plane the result is identity (no baseline twist at rest).
+     */
+    public static Quaternionf orientMirroredX(Vector3f restDir, Vector3f restNormal, Vector3f toDir, Vector3f toNormal)
+    {
+        Matrix3f rest = mirroredFrame(restDir, restNormal);
+        Matrix3f to = mirroredFrame(toDir, toNormal);
+        Matrix3f rotMir = to.mul(rest.transpose());
+
+        Matrix3f mirror = new Matrix3f().scaling(-1F, 1F, 1F);
+        Matrix3f rot = new Matrix3f(mirror).mul(rotMir).mul(mirror);
+
+        return new Quaternionf().setFromNormalized(rot);
+    }
+
+    /**
+     * Orthonormal right-handed basis in X-mirrored space: first column along the
+     * mirrored direction, the mirrored normal fixing the roll (its perpendicular
+     * component). Falls back to an arbitrary perpendicular when the normal is parallel
+     * to the direction (degenerate roll).
+     */
+    private static Matrix3f mirroredFrame(Vector3f dir, Vector3f normal)
+    {
+        Vector3f u = new Vector3f(-dir.x, dir.y, dir.z).normalize();
+        Vector3f w = new Vector3f(u).cross(-normal.x, normal.y, normal.z);
+
+        if (w.lengthSquared() < 1.0e-12f)
+        {
+            Vector3f ref = Math.abs(u.x) < 0.9F ? new Vector3f(1F, 0F, 0F) : new Vector3f(0F, 1F, 0F);
+
+            w.set(u).cross(ref);
+        }
+
+        w.normalize();
+
+        Vector3f v = new Vector3f(w).cross(u);
+        Matrix3f m = new Matrix3f();
+
+        m.m00 = u.x; m.m01 = u.y; m.m02 = u.z;
+        m.m10 = v.x; m.m11 = v.y; m.m12 = v.z;
+        m.m20 = w.x; m.m21 = w.y; m.m22 = w.z;
+
+        return m;
     }
 
     public static Quaternionf twistAbout(Quaternionf q, Vector3f axis)

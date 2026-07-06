@@ -4,6 +4,7 @@ import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.data.types.MapType;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.WeakHashMap;
 
@@ -13,7 +14,7 @@ final class ModelIKCache
     {
     }
 
-    public record CompiledChain(String tip, String target, boolean pole, float poleAngle, float softness, float weight, List<String> chainRootToEffector)
+    public record CompiledChain(String tip, String target, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean tipRotation, boolean stretch, List<String> chainRootToEffector)
     {
     }
 
@@ -59,7 +60,7 @@ final class ModelIKCache
     {
         if (config == null || config.chains() == null || config.chains().isEmpty())
         {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
 
         List<CompiledChain> out = new ArrayList<>(config.chains().size());
@@ -88,7 +89,17 @@ final class ModelIKCache
                 continue;
             }
 
-            out.add(new CompiledChain(chain.tip(), chain.target(), chain.pole(), chain.poleAngle(), chain.softness(), chain.weight(), chainIds));
+            /* A pole target that does not resolve to a real bone falls back to
+             * the automatic hinge (an empty pole target), so a stale reference
+             * never breaks the chain. */
+            String poleTarget = chain.poleTarget();
+
+            if (poleTarget != null && !poleTarget.isEmpty() && !model.getAllGroupKeys().contains(poleTarget))
+            {
+                poleTarget = "";
+            }
+
+            out.add(new CompiledChain(chain.tip(), chain.target(), chain.pole(), poleTarget, chain.poleAngle(), chain.softness(), chain.weight(), chain.tipRotation(), chain.stretch(), chainIds));
         }
 
         return out;
@@ -123,7 +134,7 @@ final class ModelIKCache
             group = parent;
         }
 
-        java.util.Collections.reverse(list);
+        Collections.reverse(list);
 
         return list;
     }

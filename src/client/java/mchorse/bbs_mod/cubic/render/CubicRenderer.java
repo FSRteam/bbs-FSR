@@ -233,6 +233,10 @@ public class CubicRenderer
             bone.current.rotate.set(eulerDeg);
             bone.current.rotate2.set(0F, 0F, 0F);
 
+            /* This solve finalizes the bone in euler — drop any composed orientation so the renderer
+             * falls back to this euler (IK/physics own these bones, byte-identical to before). */
+            bone.orient = null;
+
             parentWorld.mul(Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z));
         }
     }

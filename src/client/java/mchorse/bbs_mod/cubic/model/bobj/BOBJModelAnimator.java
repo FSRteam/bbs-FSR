@@ -5,6 +5,7 @@ import mchorse.bbs_mod.cubic.CubicModelAnimator;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
 import mchorse.bbs_mod.utils.interps.Lerps;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Vector3d;
 
@@ -52,6 +53,10 @@ public class BOBJModelAnimator
             current.rotate.x += (float) rotation.x;
             current.rotate.y += (float) rotation.y;
             current.rotate.z += (float) rotation.z;
+
+            /* Compose this action's rotation into the bone's orientation quaternion (radians), so stacked
+             * layers don't euler-add through the pole. The euler readback above is kept for gizmo/IK. */
+            orderedBone.composeOrient(Matrices.toQuaternionZYXRadians((float) rotation.x, (float) rotation.y, (float) rotation.z));
         }
     }
 
