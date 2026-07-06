@@ -69,7 +69,7 @@ public class Keys
     public static final KeyCombo OPEN_DATA_MANAGER = new KeyCombo("data_manager", UIKeys.PANELS_KEYS_OPEN_DATA_MANAGER, GLFW.GLFW_KEY_N).categoryKey("dashboard");
     public static final KeyCombo OPEN_NEW_TAB = new KeyCombo("new_tab", UIKeys.PANELS_KEYS_OPEN_NEW_TAB, GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("dashboard");
     public static final KeyCombo TOGGLE_VISIBILITY = new KeyCombo("toggle", UIKeys.DASHBOARD_CONTEXT_TOGGLE_VISIBILITY, GLFW.GLFW_KEY_F1).categoryKey("dashboard");
-    public static final KeyCombo TOGGLE_IK_DEBUG = new KeyCombo("toggle_ik_debug", UIKeys.DASHBOARD_KEYS_TOGGLE_IK_DEBUG, GLFW.GLFW_KEY_F5).categoryKey("dashboard");
+    public static final KeyCombo TOGGLE_DEBUG = new KeyCombo("toggle_debug", UIKeys.DASHBOARD_KEYS_TOGGLE_DEBUG, GLFW.GLFW_KEY_F5).categoryKey("dashboard");
 
     /* Forms */
     public static final KeyCombo FORMS_FOCUS = new KeyCombo("focus", UIKeys.FORMS_LIST_CONTEXT_FOCUS, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("forms");
@@ -153,6 +153,8 @@ public class Keys
     public static final KeyCombo REPLAYS_TAB_1 = new KeyCombo("tab_1", UIKeys.FILM_REPLAY_TAB_1, GLFW.GLFW_KEY_1).categoryKey("replays_editor");
     public static final KeyCombo REPLAYS_TAB_2 = new KeyCombo("tab_2", UIKeys.FILM_REPLAY_TAB_2, GLFW.GLFW_KEY_2).categoryKey("replays_editor");
     public static final KeyCombo REPLAYS_TAB_3 = new KeyCombo("tab_3", UIKeys.FILM_REPLAY_TAB_3, GLFW.GLFW_KEY_3).categoryKey("replays_editor");
+    public static final KeyCombo REPLAYS_TAB_4 = new KeyCombo("tab_4", UIKeys.FILM_REPLAY_TAB_4, GLFW.GLFW_KEY_4).categoryKey("replays_editor");
+    public static final KeyCombo REPLAYS_TAB_5 = new KeyCombo("tab_5", UIKeys.FILM_REPLAY_TAB_5, GLFW.GLFW_KEY_5).categoryKey("replays_editor");
     public static final KeyCombo REPLAYS_DUPE = new KeyCombo("replays_dupe", UIKeys.SCENE_REPLAYS_CONTEXT_DUPE, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("replays_editor");
     public static final KeyCombo REPLAYS_SELECT_ALL = new KeyCombo("replays_select_all", UIKeys.KEYFRAMES_CONTEXT_SELECT_ALL, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("replays_editor");
 

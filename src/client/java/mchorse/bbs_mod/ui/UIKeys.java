@@ -215,7 +215,7 @@ public class UIKeys
     public static final IKey CONTEXT_MENU_KEY_CATEGORY = L10n.lang("bbs.ui.context.key_category");
     public static final IKey DASHBOARD_CATEGORY = L10n.lang("bbs.ui.dashboard.category");
     public static final IKey DASHBOARD_CONTEXT_TOGGLE_VISIBILITY = L10n.lang("bbs.ui.dashboard.context.toggle_visibility");
-    public static final IKey DASHBOARD_KEYS_TOGGLE_IK_DEBUG = L10n.lang("bbs.ui.dashboard.keys.toggle_ik_debug");
+    public static final IKey DASHBOARD_KEYS_TOGGLE_DEBUG = L10n.lang("bbs.ui.dashboard.keys.toggle_debug");
     public static final IKey DASHBOARD_OPTIFINE_EW_DESCRIPTION = L10n.lang("bbs.ui.dashboard.optifine_ew-description");
     public static final IKey DASHBOARD_OPTIFINE_EW_TITLE = L10n.lang("bbs.ui.dashboard.optifine_ew-title");
     public static final IKey ENGINE_KEYSTROKES_POSITION_AUTO = L10n.lang("bbs.keystrokes_position.auto");
@@ -324,6 +324,7 @@ public class UIKeys
     public static final IKey FILM_REPLAY_AXES_PREVIEW = L10n.lang("bbs.ui.film.replay.axes_preview");
     public static final IKey FILM_REPLAY_CONTEXT_ADD = L10n.lang("bbs.ui.film.replay.context.add");
     public static final IKey FILM_REPLAY_CONTEXT_ANIMATION_TO_KEYFRAMES = L10n.lang("bbs.ui.film.replay.context.animation_to_keyframes");
+    public static final IKey FILM_REPLAY_CONTEXT_CLEAR_IK = L10n.lang("bbs.ui.film.replay.context.clear_ik");
     public static final IKey FILM_REPLAY_CONTEXT_POSES_TO_LIMBS = L10n.lang("bbs.ui.film.replay.context.poses_to_limbs");
     public static final IKey FILM_REPLAY_CONTEXT_MOVE_HERE = L10n.lang("bbs.ui.film.replay.context.move_here");
     public static final IKey FILM_REPLAY_FILTER_SHEETS = L10n.lang("bbs.ui.film.replay.filter_sheets");
@@ -350,6 +351,8 @@ public class UIKeys
     public static final IKey FILM_REPLAY_TAB_1 = L10n.lang("bbs.ui.film.replay.tab.1");
     public static final IKey FILM_REPLAY_TAB_2 = L10n.lang("bbs.ui.film.replay.tab.2");
     public static final IKey FILM_REPLAY_TAB_3 = L10n.lang("bbs.ui.film.replay.tab.3");
+    public static final IKey FILM_REPLAY_TAB_4 = L10n.lang("bbs.ui.film.replay.tab.4");
+    public static final IKey FILM_REPLAY_TAB_5 = L10n.lang("bbs.ui.film.replay.tab.5");
     public static final IKey FILM_REPLAY_ACTIONS_TIMELINE = L10n.lang("bbs.ui.film.replays.actions_timeline");
     public static final IKey FILM_REPLAY_TITLE = L10n.lang("bbs.ui.film.replay.title");
     public static final IKey FILM_RESET_REPLAYS = L10n.lang("bbs.ui.film.reset_replays");
@@ -468,6 +471,9 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_IK_CHAIN_LENGTH = L10n.lang("bbs.ui.forms.editors.model.ik.chain_length");
     public static final IKey FORMS_EDITORS_MODEL_IK_POLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole");
     public static final IKey FORMS_EDITORS_MODEL_IK_POLE_ANGLE = L10n.lang("bbs.ui.forms.editors.model.ik.pole_angle");
+    public static final IKey FORMS_EDITORS_MODEL_IK_POLE_TARGET = L10n.lang("bbs.ui.forms.editors.model.ik.pole_target");
+    public static final IKey FORMS_EDITORS_MODEL_IK_TIP_ROTATION = L10n.lang("bbs.ui.forms.editors.model.ik.tip_rotation");
+    public static final IKey FORMS_EDITORS_MODEL_IK_STRETCH = L10n.lang("bbs.ui.forms.editors.model.ik.stretch");
     public static final IKey FORMS_EDITORS_MODEL_IK_SOFTNESS = L10n.lang("bbs.ui.forms.editors.model.ik.softness");
     public static final IKey FORMS_EDITORS_MODEL_IK_WEIGHT = L10n.lang("bbs.ui.forms.editors.model.ik.weight");
     public static final IKey FORMS_EDITORS_MODEL_IK_CONTEXT_COPY = L10n.lang("bbs.ui.forms.editors.model.ik.context.copy");
@@ -485,6 +491,14 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY = L10n.lang("bbs.ui.forms.editors.model.physics.relative_gravity");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION = L10n.lang("bbs.ui.forms.editors.model.physics.relative_gravity_rotation");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_DAMPING = L10n.lang("bbs.ui.forms.editors.model.physics.damping");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_STIFFNESS = L10n.lang("bbs.ui.forms.editors.model.physics.stiffness");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND = L10n.lang("bbs.ui.forms.editors.model.physics.wind");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH = L10n.lang("bbs.ui.forms.editors.model.physics.wind_strength");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION = L10n.lang("bbs.ui.forms.editors.model.physics.wind_direction");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_speed");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_scale");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_DEBUG = L10n.lang("bbs.ui.forms.editors.model.physics.debug");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_ITERATIONS = L10n.lang("bbs.ui.forms.editors.model.physics.iterations");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_COLLISIONS = L10n.lang("bbs.ui.forms.editors.model.physics.collisions");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_RADIUS = L10n.lang("bbs.ui.forms.editors.model.physics.radius");

@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.forms.editors.panels;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsDebug;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.ModelForm;
@@ -30,6 +31,7 @@ import java.util.Map;
 public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 {
     private static final float DEFAULT_GRAVITY = 1F;
+    private static final float DEFAULT_STIFFNESS = ModelPhysicsConfig.DEFAULT_STIFFNESS;
     private static final float DEFAULT_DAMPING = 0.15F;
     private static final int DEFAULT_ITERATIONS = 4;
     private static final float DEFAULT_RADIUS = 0.1F;
@@ -37,20 +39,30 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     public UIButton end;
     public UIButton targetBone;
     public UIStringList bones;
+    public UIToggle debug;
     public UIToggle enabled;
     public UITrackpad gravity;
     public UIToggle relativeGravity;
     public UITrackpad relativeGravityRotateX;
     public UITrackpad relativeGravityRotateY;
     public UITrackpad relativeGravityRotateZ;
+    public UITrackpad stiffness;
     public UITrackpad damping;
     public UITrackpad iterations;
     public UIToggle collisions;
     public UITrackpad radius;
+    public UITrackpad windStrength;
+    public UITrackpad windX;
+    public UITrackpad windY;
+    public UITrackpad windZ;
+    public UITrackpad windTurbulence;
+    public UITrackpad windTurbulenceSpeed;
+    public UITrackpad windTurbulenceScale;
 
     private List<String> availableBones = Collections.emptyList();
     private String selectedBone = "";
     private final Map<String, BoneData> data = new HashMap<>();
+    private final WindData wind = new WindData();
     private ModelInstance modelInstance;
     private String presetGroup = "";
     private boolean syncingUI;
@@ -64,10 +76,38 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         public float relativeGravityRotateX;
         public float relativeGravityRotateY;
         public float relativeGravityRotateZ;
+        public float stiffness = DEFAULT_STIFFNESS;
         public float damping = DEFAULT_DAMPING;
         public int iterations = DEFAULT_ITERATIONS;
         public boolean collisions;
         public float radius = DEFAULT_RADIUS;
+    }
+
+    private static class WindData
+    {
+        public float strength = ModelPhysicsConfig.Wind.NONE.strength();
+        public float x = ModelPhysicsConfig.Wind.NONE.x();
+        public float y = ModelPhysicsConfig.Wind.NONE.y();
+        public float z = ModelPhysicsConfig.Wind.NONE.z();
+        public float turbulence = ModelPhysicsConfig.Wind.NONE.turbulence();
+        public float turbulenceSpeed = ModelPhysicsConfig.Wind.NONE.turbulenceSpeed();
+        public float turbulenceScale = ModelPhysicsConfig.Wind.NONE.turbulenceScale();
+
+        public ModelPhysicsConfig.Wind toWind()
+        {
+            return new ModelPhysicsConfig.Wind(this.strength, this.x, this.y, this.z, this.turbulence, this.turbulenceSpeed, this.turbulenceScale);
+        }
+
+        public void set(ModelPhysicsConfig.Wind wind)
+        {
+            this.strength = wind.strength();
+            this.x = wind.x();
+            this.y = wind.y();
+            this.z = wind.z();
+            this.turbulence = wind.turbulence();
+            this.turbulenceSpeed = wind.turbulenceSpeed();
+            this.turbulenceScale = wind.turbulenceScale();
+        }
     }
 
     public UIModelPhysicsFormPanel(UIForm editor)
@@ -89,6 +129,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_SAVE,
             UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_NAME
         ));
+
+        this.debug = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DEBUG, (b) -> ModelPhysicsDebug.enabled = b.getValue());
+        this.debug.setValue(ModelPhysicsDebug.enabled);
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ENABLED, (b) ->
         {
@@ -195,6 +238,24 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             }
         }, Colors.BLUE, axis.format(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION, UIKeys.GENERAL_Z));
 
+        this.stiffness = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            BoneData d = this.getSelectedData();
+
+            if (d != null)
+            {
+                d.stiffness = v.floatValue();
+                this.commitChanges();
+            }
+        });
+        this.stiffness.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
+        this.stiffness.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_STIFFNESS);
+
         this.damping = new UITrackpad((v) ->
         {
             if (this.syncingUI)
@@ -265,6 +326,89 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.radius.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
         this.radius.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS);
 
+        this.windStrength = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.strength = v.floatValue();
+            this.commitChanges();
+        });
+        this.windStrength.onlyNumbers().values(0.1D, 0.01D, 0.5D).increment(0.25D).limit(0D, 10D);
+        this.windStrength.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH);
+
+        this.windX = windAxisTrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.x = v.floatValue();
+            this.commitChanges();
+        }, Colors.RED);
+        this.windY = windAxisTrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.y = v.floatValue();
+            this.commitChanges();
+        }, Colors.GREEN);
+        this.windZ = windAxisTrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.z = v.floatValue();
+            this.commitChanges();
+        }, Colors.BLUE);
+
+        this.windTurbulence = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulence = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulence.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.05D).limit(0D, 1D);
+        this.windTurbulence.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE);
+
+        this.windTurbulenceSpeed = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulenceSpeed = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulenceSpeed.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
+        this.windTurbulenceSpeed.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED);
+
+        this.windTurbulenceScale = new UITrackpad((v) ->
+        {
+            if (this.syncingUI)
+            {
+                return;
+            }
+
+            this.wind.turbulenceScale = v.floatValue();
+            this.commitChanges();
+        });
+        this.windTurbulenceScale.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
+        this.windTurbulenceScale.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE);
+
         this.end = new UIButton(IKey.EMPTY, (b) ->
         {
             BoneData d = this.getSelectedData();
@@ -314,6 +458,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         });
 
         this.options.add(
+            this.debug,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CHAINS),
             this.bones,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS).background().marginTop(UIConstants.SECTION_GAP),
@@ -325,13 +470,26 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.relativeGravity,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION),
             UI.row(this.relativeGravityRotateX, this.relativeGravityRotateY, this.relativeGravityRotateZ),
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_STIFFNESS),
+            this.stiffness,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_DAMPING),
             this.damping,
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ITERATIONS),
             this.iterations,
             this.collisions.marginTop(UIConstants.SECTION_GAP),
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS),
-            this.radius
+            this.radius,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND).background().marginTop(UIConstants.SECTION_GAP),
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH),
+            this.windStrength,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION),
+            UI.row(this.windX, this.windY, this.windZ),
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE),
+            this.windTurbulence,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED),
+            this.windTurbulenceSpeed,
+            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE),
+            this.windTurbulenceScale
         );
     }
 
@@ -348,10 +506,12 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         {
             this.availableBones = Collections.emptyList();
             this.data.clear();
+            this.wind.set(ModelPhysicsConfig.Wind.NONE);
             this.bones.setList(Collections.emptyList());
             this.bones.deselect();
             this.selectedBone = "";
             this.setElementsEnabled(false);
+            this.updateWindFields();
         }
         else
         {
@@ -362,6 +522,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.setElementsEnabled(true);
             this.load();
             this.bones.setList(this.availableBones);
+            this.updateWindFields();
 
             if (!this.availableBones.isEmpty())
             {
@@ -383,10 +544,18 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.relativeGravityRotateX.setEnabled(enabled);
         this.relativeGravityRotateY.setEnabled(enabled);
         this.relativeGravityRotateZ.setEnabled(enabled);
+        this.stiffness.setEnabled(enabled);
         this.damping.setEnabled(enabled);
         this.iterations.setEnabled(enabled);
         this.collisions.setEnabled(enabled);
         this.radius.setEnabled(enabled);
+        this.windStrength.setEnabled(enabled);
+        this.windX.setEnabled(enabled);
+        this.windY.setEnabled(enabled);
+        this.windZ.setEnabled(enabled);
+        this.windTurbulence.setEnabled(enabled);
+        this.windTurbulenceSpeed.setEnabled(enabled);
+        this.windTurbulenceScale.setEnabled(enabled);
     }
 
     private BoneData getSelectedData()
@@ -430,6 +599,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.relativeGravityRotateX.setEnabled(active);
         this.relativeGravityRotateY.setEnabled(active);
         this.relativeGravityRotateZ.setEnabled(active);
+        this.stiffness.setEnabled(active);
         this.damping.setEnabled(active);
         this.iterations.setEnabled(active);
         this.collisions.setEnabled(active);
@@ -448,6 +618,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                 this.relativeGravityRotateX.setValue(0);
                 this.relativeGravityRotateY.setValue(0);
                 this.relativeGravityRotateZ.setValue(0);
+                this.stiffness.setValue(DEFAULT_STIFFNESS);
                 this.damping.setValue(DEFAULT_DAMPING);
                 this.iterations.setValue(DEFAULT_ITERATIONS);
                 this.collisions.setValue(false);
@@ -462,11 +633,32 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                 this.relativeGravityRotateX.setValue(d.relativeGravityRotateX);
                 this.relativeGravityRotateY.setValue(d.relativeGravityRotateY);
                 this.relativeGravityRotateZ.setValue(d.relativeGravityRotateZ);
+                this.stiffness.setValue(d.stiffness);
                 this.damping.setValue(d.damping);
                 this.iterations.setValue(d.iterations);
                 this.collisions.setValue(d.collisions);
                 this.radius.setValue(d.radius);
             }
+        }
+        finally
+        {
+            this.syncingUI = false;
+        }
+    }
+
+    private void updateWindFields()
+    {
+        this.syncingUI = true;
+
+        try
+        {
+            this.windStrength.setValue(this.wind.strength);
+            this.windX.setValue(this.wind.x);
+            this.windY.setValue(this.wind.y);
+            this.windZ.setValue(this.wind.z);
+            this.windTurbulence.setValue(this.wind.turbulence);
+            this.windTurbulenceSpeed.setValue(this.wind.turbulenceSpeed);
+            this.windTurbulenceScale.setValue(this.wind.turbulenceScale);
         }
         finally
         {
@@ -512,6 +704,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     private void load(ModelPhysicsConfig config)
     {
         this.data.clear();
+        this.wind.set(config == null ? ModelPhysicsConfig.Wind.NONE : config.wind());
 
         if (config == null || config.bones() == null)
         {
@@ -546,6 +739,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             d.relativeGravityRotateX = bone.relativeGravityRotateX();
             d.relativeGravityRotateY = bone.relativeGravityRotateY();
             d.relativeGravityRotateZ = bone.relativeGravityRotateZ();
+            d.stiffness = bone.stiffness();
             d.damping = bone.damping();
             d.iterations = bone.iterations();
             d.collisions = bone.collisions();
@@ -591,15 +785,17 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                 target = "";
             }
 
-            bones.put(root, new ModelPhysicsConfig.Bone(d.end, target, d.gravity, d.damping, d.iterations, d.relativeGravity, d.relativeGravityRotateX, d.relativeGravityRotateY, d.relativeGravityRotateZ, d.collisions, d.radius, ModelPhysicsConfig.DEFAULT_WEIGHT));
+            bones.put(root, new ModelPhysicsConfig.Bone(d.end, target, d.gravity, d.damping, d.stiffness, d.iterations, d.relativeGravity, d.relativeGravityRotateX, d.relativeGravityRotateY, d.relativeGravityRotateZ, d.collisions, d.radius, ModelPhysicsConfig.DEFAULT_WEIGHT));
         }
 
-        if (bones.isEmpty())
+        ModelPhysicsConfig.Wind wind = this.wind.toWind();
+
+        if (bones.isEmpty() && wind.isDefault())
         {
             return new MapType();
         }
 
-        return ModelPhysicsIO.toData(new ModelPhysicsConfig(bones));
+        return ModelPhysicsIO.toData(new ModelPhysicsConfig(bones, wind));
     }
 
     private void applyPresetData(MapType map)
@@ -607,6 +803,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         String current = this.selectedBone;
 
         this.load(ModelPhysicsIO.fromData(map));
+        this.updateWindFields();
 
         if (current == null || current.isEmpty() || !this.availableBones.contains(current))
         {
@@ -740,6 +937,13 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         UITrackpad t = new UITrackpad(callback).degrees().onlyNumbers().limit(-180D, 180D);
         t.textbox.setColor(color);
         t.tooltip(tooltip);
+        return t;
+    }
+
+    private static UITrackpad windAxisTrackpad(java.util.function.Consumer<Double> callback, int color)
+    {
+        UITrackpad t = new UITrackpad(callback).onlyNumbers().values(0.1D, 0.5D, 1D).increment(0.1D);
+        t.textbox.setColor(color);
         return t;
     }
 

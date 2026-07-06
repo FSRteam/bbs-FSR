@@ -7,6 +7,7 @@ public class PerLimbService
     public static final String POSE_BONES = "pose.bones.";
     public static final String MATERIAL_TEXTURES = "texture.materials.";
     public static final String IK_TARGETS = "ik_targets";
+    public static final String POLE_TARGETS = "pole_targets";
     public static final String PHYSICS_TARGETS = "physics_targets";
 
     public static record PoseBonePath(String formPath, String bone)
@@ -16,6 +17,9 @@ public class PerLimbService
     {}
 
     public static record IKTargetPath(String formPath, String controller)
+    {}
+
+    public static record PoleTargetPath(String formPath, String controller)
     {}
 
     public static record PhysicsTargetPath(String formPath, String rootBone)
@@ -69,6 +73,11 @@ public class PerLimbService
     public static boolean isIKTargetChannel(String id)
     {
         return id != null && id.contains(IK_TARGETS);
+    }
+
+    public static boolean isPoleTargetChannel(String id)
+    {
+        return id != null && id.contains(POLE_TARGETS);
     }
 
     public static boolean isPhysicsTargetChannel(String id)
@@ -149,6 +158,46 @@ public class PerLimbService
         }
 
         return formPath + FormUtils.PATH_SEPARATOR + IK_TARGETS + FormUtils.PATH_SEPARATOR + controller;
+    }
+
+    public static PoleTargetPath parsePoleTargetPath(String id)
+    {
+        if (id == null)
+        {
+            return null;
+        }
+
+        int index = id.indexOf(POLE_TARGETS);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        String controller = id.substring(index + POLE_TARGETS.length());
+        if (controller.startsWith(FormUtils.PATH_SEPARATOR))
+        {
+            controller = controller.substring(FormUtils.PATH_SEPARATOR.length());
+        }
+
+        String formPath = id.substring(0, index);
+
+        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
+        {
+            formPath = formPath.substring(0, formPath.length() - 1);
+        }
+
+        return new PoleTargetPath(formPath, controller);
+    }
+
+    public static String toPoleTargetKey(String formPath, String controller)
+    {
+        if (formPath == null || formPath.isEmpty())
+        {
+            return POLE_TARGETS + FormUtils.PATH_SEPARATOR + controller;
+        }
+
+        return formPath + FormUtils.PATH_SEPARATOR + POLE_TARGETS + FormUtils.PATH_SEPARATOR + controller;
     }
 
     public static PhysicsTargetPath parsePhysicsTargetPath(String id)

@@ -55,6 +55,9 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         register(KeyframeFactories.INTEGER, UIIntegerKeyframeFactory::new);
         register(KeyframeFactories.LINK, UILinkKeyframeFactory::new);
         register(KeyframeFactories.POSE, UIPoseKeyframeFactory::new);
+        register(KeyframeFactories.IK, UIIKKeyframeFactory::new);
+        register(KeyframeFactories.PHYSICS, UIPhysicsKeyframeFactory::new);
+        register(KeyframeFactories.WIND, UIWindKeyframeFactory::new);
         register(KeyframeFactories.POSE_TRANSFORM, UIPoseTransformKeyframeFactory::new);
         register(KeyframeFactories.STRING, UIStringKeyframeFactory::new);
         register(KeyframeFactories.TRANSFORM, UITransformKeyframeFactory::new);

@@ -5,7 +5,19 @@ import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
+import mchorse.bbs_mod.cubic.ik.IKControl;
+import mchorse.bbs_mod.cubic.ik.IKControls;
+import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
+import mchorse.bbs_mod.cubic.ik.ModelIKIO;
+import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
+import mchorse.bbs_mod.cubic.physics.PhysicsControls;
+import mchorse.bbs_mod.cubic.physics.WindControl;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -23,6 +35,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransformKeyframeFactory;
@@ -30,6 +43,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeG
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.utils.Pair;
@@ -193,7 +207,7 @@ public class UIReplaysEditorUtils
             }
 
             String id = PerLimbService.toMaterialTextureKey(path, material);
-            String title = path.isEmpty() ? "Texture/" + material : path + "/Texture/" + material;
+            String title = path.isEmpty() ? "texture/" + material : path + "/texture/" + material;
             KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.LINK);
 
             /* Seed the sheet's value with the material's current default texture (editor pick, else
@@ -208,7 +222,348 @@ public class UIReplaysEditorUtils
 
             ValueLink property = new ValueLink(id, materialDefault);
 
-            out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.BLUE, false, channel, property).icon(Icons.MATERIAL));
+            out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.BLUE, false, channel, property).icon(Icons.MATERIAL).form(modelForm));
+        }
+    }
+
+    public static <T> void forEachSelectedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, Consumer<Keyframe<T>> consumer)
+    {
+        if (editor == null || keyframe == null)
+        {
+            return;
+        }
+
+        for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
+        {
+            if (sheet.channel.getFactory() != keyframe.getFactory())
+            {
+                continue;
+            }
+
+            for (Keyframe selected : sheet.selection.getSelected())
+            {
+                consumer.accept((Keyframe<T>) selected);
+            }
+        }
+    }
+
+    public static void addIKTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        model.form = modelForm;
+        List<String> controllers = ModelIKRuntime.getControllers(model);
+        String path = FormUtils.getPath(modelForm);
+
+        for (String controller : controllers)
+        {
+            if (controller == null || controller.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toIKTargetKey(path, controller);
+            String title = path.isEmpty() ? "ik/" + controller : path + "/ik/" + controller;
+
+            addTargetSheet(out, properties, modelForm, id, title, Colors.CYAN, null);
+        }
+    }
+
+    /**
+     * One IK-controls track per form (only if it has enabled chains): a single
+     * keyframe sheet whose value holds the per-chain scalars (weight, softness,
+     * pole, enabled), layered over the form's IK config at playback — mirrors the
+     * single pose track. It is not a form property, so it carries its owning form
+     * for the editor to list chains.
+     */
+    public static void addIKControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        model.form = modelForm;
+
+        if (ModelIKRuntime.getControllers(model).isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = FormControlKeys.toIKControlKey(path);
+        String title = path.isEmpty() ? "ik" : path + "/ik";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.YELLOW, false, channel, null)
+            .icon(Icons.LIMB).form(modelForm).seed(() -> buildIKControls(modelForm)));
+    }
+
+    /** A fully populated IK-controls value seeded from the form's IK config (one entry per enabled chain), so a fresh keyframe matches what the editor shows instead of an empty container that drifts to defaults. */
+    private static IKControls buildIKControls(ModelForm modelForm)
+    {
+        IKControls controls = new IKControls();
+
+        if (modelForm.ik.get() instanceof MapType map)
+        {
+            ModelIKConfig config = ModelIKIO.fromData(map);
+
+            if (config != null && config.chains() != null)
+            {
+                for (ModelIKConfig.Chain chain : config.chains())
+                {
+                    if (chain == null || !chain.enabled() || chain.tip() == null || chain.tip().isEmpty())
+                    {
+                        continue;
+                    }
+
+                    IKControl control = controls.get(chain.tip());
+
+                    control.weight = chain.weight();
+                    control.softness = chain.softness();
+                    control.poleAngle = chain.poleAngle();
+                    control.pole = chain.pole();
+                    control.enabled = chain.enabled();
+                }
+            }
+        }
+
+        return controls;
+    }
+
+    public static void addPoleTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        model.form = modelForm;
+        List<String> controllers = ModelIKRuntime.getPoleControllers(model);
+        String path = FormUtils.getPath(modelForm);
+
+        for (String controller : controllers)
+        {
+            if (controller == null || controller.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toPoleTargetKey(path, controller);
+            String title = path.isEmpty() ? "pole/" + controller : path + "/pole/" + controller;
+
+            addTargetSheet(out, properties, modelForm, id, title, Colors.ORANGE, null);
+        }
+    }
+
+    /**
+     * One physics-controls track per form (only if it has physics chains): a single
+     * keyframe sheet whose value holds the per-chain scalars (weight, gravity,
+     * damping, stiffness, enabled), keyed by root bone and layered over the form's
+     * physics config at playback — mirrors {@link #addIKControlSheet}. It is not a
+     * form property, so it carries its owning form for the editor to list chains.
+     */
+    public static void addPhysicsControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelPhysicsConfig physics = null;
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            physics = ModelPhysicsIO.fromData(map);
+        }
+
+        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = FormControlKeys.toPhysicsControlKey(path);
+        String title = path.isEmpty() ? "physics" : path + "/physics";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.PHYSICS);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.GREEN, false, channel, null)
+            .icon(Icons.DROP).form(modelForm).seed(() -> buildPhysicsControls(modelForm)));
+    }
+
+    /** A fully populated physics-controls value seeded from the form's physics config (one entry per chain root), mirroring {@link #buildIKControls}. */
+    private static PhysicsControls buildPhysicsControls(ModelForm modelForm)
+    {
+        PhysicsControls controls = new PhysicsControls();
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            ModelPhysicsConfig config = ModelPhysicsIO.fromData(map);
+
+            if (config != null && config.bones() != null)
+            {
+                for (Map.Entry<String, ModelPhysicsConfig.Bone> entry : config.bones().entrySet())
+                {
+                    ModelPhysicsConfig.Bone bone = entry.getValue();
+
+                    if (bone == null)
+                    {
+                        continue;
+                    }
+
+                    PhysicsControl control = controls.get(entry.getKey());
+
+                    control.weight = bone.weight();
+                    control.gravity = bone.gravity();
+                    control.damping = bone.damping();
+                    control.stiffness = bone.stiffness();
+                }
+            }
+        }
+
+        return controls;
+    }
+
+    /**
+     * One wind track per form that has physics chains: a single keyframe sheet whose value holds the
+     * global wind scalars (strength, direction, turbulence), layered over the form's physics wind config
+     * at playback. The wind is global, so — unlike the physics-controls track — it is not keyed by a chain.
+     */
+    public static void addWindControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelPhysicsConfig physics = null;
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            physics = ModelPhysicsIO.fromData(map);
+        }
+
+        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = FormControlKeys.toWindControlKey(path);
+        String title = path.isEmpty() ? "wind" : path + "/wind";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.WIND);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.CYAN, false, channel, null)
+            .icon(Icons.ARROW_RIGHT).form(modelForm).seed(() -> buildWindControl(modelForm)));
+    }
+
+    /** A wind-control value seeded from the form's physics wind config, so a fresh keyframe matches the configured wind instead of drifting to defaults. */
+    private static WindControl buildWindControl(ModelForm modelForm)
+    {
+        WindControl control = new WindControl();
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            ModelPhysicsConfig config = ModelPhysicsIO.fromData(map);
+
+            if (config != null)
+            {
+                ModelPhysicsConfig.Wind wind = config.wind();
+
+                control.strength = wind.strength();
+                control.x = wind.x();
+                control.y = wind.y();
+                control.z = wind.z();
+                control.turbulence = wind.turbulence();
+                control.turbulenceSpeed = wind.turbulenceSpeed();
+                control.turbulenceScale = wind.turbulenceScale();
+            }
+        }
+
+        return control;
+    }
+
+    public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        ModelPhysicsConfig physics = null;
+
+        if (modelForm.physics.get() instanceof MapType map)
+        {
+            physics = ModelPhysicsIO.fromData(map);
+        }
+
+        if (physics == null || physics.bones() == null)
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+
+        for (Map.Entry<String, ModelPhysicsConfig.Bone> entry : physics.bones().entrySet())
+        {
+            String rootBone = entry.getKey();
+            String id = PerLimbService.toPhysicsTargetKey(path, rootBone);
+            String title = path.isEmpty() ? "physics/" + rootBone : path + "/physics/" + rootBone;
+
+            addTargetSheet(out, properties, modelForm, id, title, Colors.MAGENTA, Icons.TIME);
+        }
+    }
+
+    private static void addTargetSheet(List<UIKeyframeSheet> out, FormProperties properties, ModelForm modelForm, String id, String title, int color, Icon icon)
+    {
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.ANCHOR);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), color, false, channel, null).icon(icon).form(modelForm));
+    }
+
+    public static void clearIKTracks(Replay replay, ModelForm modelForm)
+    {
+        if (replay == null || modelForm == null)
+        {
+            return;
+        }
+
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        List<String> controllers = ModelIKRuntime.getControllers(model);
+        List<String> poleControllers = ModelIKRuntime.getPoleControllers(model);
+        String path = FormUtils.getPath(modelForm);
+
+        BaseValue.edit(replay.properties, (props) ->
+        {
+            for (String controller : controllers)
+            {
+                removeChannel(props, PerLimbService.toIKTargetKey(path, controller));
+            }
+
+            for (String controller : poleControllers)
+            {
+                removeChannel(props, PerLimbService.toPoleTargetKey(path, controller));
+            }
+        });
+    }
+
+    private static void removeChannel(FormProperties props, String id)
+    {
+        KeyframeChannel channel = props.properties.get(id);
+
+        if (channel != null)
+        {
+            channel.removeAll();
         }
     }
 
