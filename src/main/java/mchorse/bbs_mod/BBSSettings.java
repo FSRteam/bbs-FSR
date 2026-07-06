@@ -11,6 +11,7 @@ import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
+import mchorse.bbs_mod.settings.values.ui.ValueMotionPath;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
@@ -127,6 +128,7 @@ public class BBSSettings {
 	public static ValueBoolean editorPlayerFollowsCamera;
 	public static ValueEditorLayout editorLayoutSettings;
 	public static ValueOnionSkin editorOnionSkin;
+	public static ValueMotionPath editorMotionPath;
 	public static ValueBoolean editorSnapToMarkers;
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
@@ -573,6 +575,7 @@ public class BBSSettings {
 		editorPlayerFollowsCamera = builder.getBoolean("player_follows_camera", false);
 		builder.register(editorLayoutSettings = new ValueEditorLayout("layout"));
 		builder.register(editorOnionSkin = new ValueOnionSkin("onion_skin"));
+		builder.register(editorMotionPath = new ValueMotionPath("motion_path"));
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
 		editorClipPreview = builder.getBoolean("clip_preview", true);
 		editorRewind = builder.getBoolean("rewind", true);

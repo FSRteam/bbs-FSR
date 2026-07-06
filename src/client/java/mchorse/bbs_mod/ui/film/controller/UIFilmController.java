@@ -52,6 +52,7 @@ import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.ui.ValueMotionPath;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -269,6 +270,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
     public ValueOnionSkin getOnionSkin()
     {
         return BBSSettings.editorOnionSkin;
+    }
+
+    public ValueMotionPath getMotionPath()
+    {
+        return BBSSettings.editorMotionPath;
     }
 
     private int getTick()
@@ -1438,6 +1444,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
 
         this.renderOrbitCenterMarker(context);
+
+        ValueMotionPath motionPath = this.getMotionPath();
+
+        if (motionPath.enabled.get() && !this.isRecording())
+        {
+            Replay replay = this.panel.replayEditor.getReplay();
+
+            MotionPath.render(context, motionPath, this, replay, replay == null ? 0F : replay.getTick(this.getTick()));
+        }
 
         MouseHandler mouse = Minecraft.getInstance().mouseHandler;
         int x = (int) mouse.xpos();
