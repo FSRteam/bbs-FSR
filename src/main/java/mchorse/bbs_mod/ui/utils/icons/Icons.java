@@ -245,6 +245,11 @@ public class Icons
     public static final Icon EYEDROPPER = new Icon(ATLAS, "eyedropper", 48, 160, 16, 16);
     public static final Icon BRUSH = new Icon(ATLAS, "brush", 64, 160, 16, 16);
 
+    public static final Icon ARMOR_HELMET = new Icon(ATLAS, "armor_helmet", 96, 160, 16, 16);
+    public static final Icon ARMOR_CHESTPLATE = new Icon(ATLAS, "armor_chestplate", 112, 160, 16, 16);
+    public static final Icon ARMOR_LEGGINGS = new Icon(ATLAS, "armor_leggings", 128, 160, 16, 16);
+    public static final Icon ARMOR_BOOTS = new Icon(ATLAS, "armor_boots", 144, 160, 16, 16);
+
     public static final Icon MOUSE_BODY = new Icon(ATLAS, "mouse_body", 241, 237, 14, 18);
     public static final Icon MOUSE_LMB = new Icon(ATLAS, "mouse_lmb", 242, 229, 6, 7);
     public static final Icon MOUSE_RMB = new Icon(ATLAS, "mouse_rmb", 248, 229, 6, 7);

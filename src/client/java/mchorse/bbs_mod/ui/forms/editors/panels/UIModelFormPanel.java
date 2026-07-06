@@ -50,7 +50,7 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
 
                     if (model != null)
                     {
-                        this.form.texture.set(model.texture);
+                        this.form.texture.set(model.getTexture());
                     }
                 }
 
@@ -111,7 +111,7 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
 
             if (model != null && link == null)
             {
-                link = model.texture;
+                link = model.getTexture();
             }
 
             callback = (l) -> this.form.texture.set(l);
@@ -122,7 +122,7 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
 
             if (link == null && model != null)
             {
-                Link fallback = this.form.texture.get() != null ? this.form.texture.get() : model.texture;
+                Link fallback = this.form.texture.get() != null ? this.form.texture.get() : model.getTexture();
 
                 link = model.getMaterialTexture(material, fallback);
             }
@@ -148,8 +148,8 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
         ModelInstance model = ModelFormRenderer.getModel(this.form);
 
         this.poseEditor.setValuePose(form.pose);
-        this.poseEditor.setPose(form.pose.get(), model == null ? this.form.model.get() : model.poseGroup);
-        this.poseEditor.fillGroups(model == null ? null : model.model, model == null ? null : model.flippedParts, true, model == null ? null : model.disabledBones);
+        this.poseEditor.setPose(form.pose.get(), model == null ? this.form.model.get() : model.getPoseGroup());
+        this.poseEditor.fillGroups(model == null ? null : model.model, model == null ? null : model.getFlippedParts(), true, model == null ? null : model.getDisabledBones());
         this.color.setColor(form.color.get().getARGBColor());
 
         this.shapeKeys.removeFromParent();
@@ -161,7 +161,7 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
             if (!modelShapeKeys.isEmpty())
             {
                 this.options.add(this.shapeKeys);
-                this.shapeKeys.setShapeKeys(model.poseGroup, modelShapeKeys, this.form.shapeKeys.get());
+                this.shapeKeys.setShapeKeys(model.getPoseGroup(), modelShapeKeys, this.form.shapeKeys.get());
             }
         }
 

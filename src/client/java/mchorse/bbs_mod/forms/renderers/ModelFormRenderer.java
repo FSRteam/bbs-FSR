@@ -102,7 +102,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (model != null)
         {
-            stack.scale(model.scale.x, model.scale.y, model.scale.z);
+            stack.scale(model.getScale().x, model.getScale().y, model.getScale().z);
         }
     }
 
@@ -115,7 +115,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (model != null)
         {
-            matrix.scale(model.scale.x, model.scale.y, model.scale.z);
+            matrix.scale(model.getScale().x, model.getScale().y, model.getScale().z);
         }
     }
 
@@ -229,7 +229,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return;
         }
 
-        this.animator = model.procedural ? new ProceduralAnimator() : new Animator();
+        this.animator = model.isProcedural() ? new ProceduralAnimator() : new Animator();
         this.animator.setup(model, actionsConfig, false);
 
         this.lastConfigs = new ActionsConfig();
@@ -248,7 +248,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-        bones.removeIf((bone) -> PoseBones.isHidden(model.disabledBones, bone));
+        bones.removeIf((bone) -> PoseBones.isHidden(model.getDisabledBones(), bone));
 
         return bones;
     }
@@ -273,9 +273,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             this.applyTransforms(uiMatrix, context.getTransition());
 
             Link link = this.form.texture.get();
-            Link texture = link == null ? model.texture : link;
+            Link texture = link == null ? model.getTexture() : link;
             Color color = this.renderColor.set(1F, 1F, 1F, 1F);
-            float scale = this.form.uiScale.get() * model.uiScale;
+            float scale = this.form.uiScale.get() * model.getUiScale();
 
             FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
             model.model.resetPose();
@@ -317,7 +317,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.physicsAppliedThisRender = false;
         this.constraintsAppliedThisRender = false;
 
-        if (!model.culling)
+        if (!model.isCulling())
         {
             RenderSystem.disableCull();
         }
@@ -353,7 +353,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (defaultTexture == null)
         {
-            defaultTexture = model.texture;
+            defaultTexture = model.getTexture();
         }
 
         final Link resolvedDefault = defaultTexture;
@@ -364,7 +364,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
          * is the Default ambiguous - it's hidden in the editor then and must not affect them here either,
          * so they fall back to the model base texture. */
         final boolean ignoreMaterials = model.materials.size() <= 1;
-        final Link materialFallback = ignoreMaterials ? resolvedDefault : model.texture;
+        final Link materialFallback = ignoreMaterials ? resolvedDefault : model.getTexture();
 
         model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
         {
@@ -406,7 +406,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         gameRenderer.overlayTexture().teardownOverlayColor();
         RenderSystem.disableBlend();
 
-        if (!model.culling)
+        if (!model.isCulling())
         {
             RenderSystem.enableCull();
         }
@@ -416,10 +416,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (stencilMap == null)
         {
-            this.renderItems(target, model, stack, EquipmentSlot.MAINHAND, ItemDisplayContext.THIRD_PERSON_RIGHT_HAND, model.itemsMain, color, overlay, light);
-            this.renderItems(target, model, stack, EquipmentSlot.OFFHAND, ItemDisplayContext.THIRD_PERSON_LEFT_HAND, model.itemsOff, color, overlay, light);
+            this.renderItems(target, model, stack, EquipmentSlot.MAINHAND, ItemDisplayContext.THIRD_PERSON_RIGHT_HAND, model.getItemsMain(), color, overlay, light);
+            this.renderItems(target, model, stack, EquipmentSlot.OFFHAND, ItemDisplayContext.THIRD_PERSON_LEFT_HAND, model.getItemsOff(), color, overlay, light);
 
-            for (Map.Entry<ArmorType, ArmorSlot> entry : model.armorSlots.entrySet())
+            for (Map.Entry<ArmorType, ArmorSlot> entry : model.getArmorSlots().entrySet())
             {
                 this.renderArmor(target, stack, entry.getKey(), entry.getValue(), color, overlay, light);
             }
@@ -606,7 +606,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.animator != null && model != null)
         {
-            ArmorSlot slot = hand == InteractionHand.MAIN_HAND ? model.fpMain : model.fpOffhand;
+            ArmorSlot slot = hand == InteractionHand.MAIN_HAND ? model.getFpMain() : model.getFpOffhand();
 
             if (slot == null)
             {
@@ -614,7 +614,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             }
 
             Link link = this.form.texture.get();
-            Link texture = link == null ? model.texture : link;
+            Link texture = link == null ? model.getTexture() : link;
             Color color = this.renderColor.set(1F, 1F, 1F, 1F);
 
             FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
@@ -688,7 +688,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         if (this.animator != null && model != null)
         {
             Link link = this.form.texture.get();
-            Link texture = link == null ? model.texture : link;
+            Link texture = link == null ? model.getTexture() : link;
             Color color = this.renderColor.set(context.color, true);
 
             if (context.isPicking())
@@ -930,7 +930,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
          * cancel and the bind pose ends up at a different height (a constant ~1/16 shadow sink). */
         if (rest)
         {
-            stack.scale(model.scale.x, model.scale.y, model.scale.z);
+            stack.scale(model.getScale().x, model.getScale().y, model.getScale().z);
         }
         else
         {

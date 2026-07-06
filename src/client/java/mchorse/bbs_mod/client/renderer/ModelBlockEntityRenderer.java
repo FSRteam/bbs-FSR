@@ -222,13 +222,13 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         {
             ModelInstance model = ModelFormRenderer.getModel(modelForm);
 
-            if (model != null && model.view != null)
+            if (model != null && model.getView() != null)
             {
-                String headKey = model.view.headBone;
+                String headKey = model.getView().headBone;
 
                 lookAt = true;
-                constraint = model.view.constraint;
-                isPitching = model.view.pitch;
+                constraint = model.getView().constraint;
+                isPitching = model.getView().pitch;
 
                 if (FormUtilsClient.getBones(modelForm).contains(headKey))
                 {
