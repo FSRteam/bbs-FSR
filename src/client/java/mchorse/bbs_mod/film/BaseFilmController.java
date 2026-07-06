@@ -3,6 +3,8 @@ package mchorse.bbs_mod.film;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.camera.data.Point;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.ik.IKControls;
@@ -24,6 +26,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
+import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
@@ -173,12 +176,48 @@ public abstract class BaseFilmController
 
         stack.popPose();
 
-        if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F)
+        if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
         {
-            stack.pushPose();
-            stack.translate(position.x - cx, position.y - cy, position.z - cz);
+            /* Skip the shadow when the form is hidden (form.visible, animatable via keyframes): the form
+             * itself renders nothing then - see FormRenderer.render - so its shadow must vanish too.
+             * The animated value is live here, applied to form.visible in startRenderFrame this frame.
+             *
+             * Place the shadow under the replay's perceived position: shift the actual shadow position
+             * by how far the model (form transform + anchor-bone root motion) has moved from rest,
+             * mapped from form-local into world axes via the render target. Moving the position itself
+             * (not just translating the quad) makes the shadow's ground projection and shading match. */
+            double shadowX = position.x;
+            double shadowY = position.y;
+            double shadowZ = position.z;
 
-            ModelBlockEntityRenderer.renderShadow(context.consumers, stack, transition, position.x, position.y, position.z, 0F, 0F, 0F, context.shadowRadius, opacity);
+            FormRenderer renderer = FormUtilsClient.getRenderer(FormUtils.getRoot(form));
+
+            if (renderer != null && !BBSRendering.isIrisShadowPass() && context.replay != null && context.replay.shadowFollow.get())
+            {
+                Vector3f displacement = renderer.getShadowDisplacement(entity, transition);
+
+                if (displacement != null)
+                {
+                    target.transformDirection(displacement);
+
+                    shadowX += displacement.x;
+                    shadowY += displacement.y;
+                    shadowZ += displacement.z;
+                }
+
+                /* Extra world-space nudge to seat the shadow on the model's real floor (added after the
+                 * form-local displacement is mapped to world, so it stays vertical regardless of facing). */
+                Point offset = context.replay.shadowOffset.get();
+
+                shadowX += offset.x;
+                shadowY += offset.y;
+                shadowZ += offset.z;
+            }
+
+            stack.pushPose();
+            stack.translate(shadowX - cx, shadowY - cy, shadowZ - cz);
+
+            ModelBlockEntityRenderer.renderShadow(context.consumers, stack, transition, shadowX, shadowY, shadowZ, 0F, 0F, 0F, context.shadowRadius, opacity);
 
             stack.popPose();
         }
@@ -508,9 +547,10 @@ public abstract class BaseFilmController
             {
                 Level world = Minecraft.getInstance().level;
                 IEntity entity = new StubEntity(world);
+                int ticks = replay.getTick(this.getTick());
 
                 entity.setForm(FormUtils.copy(replay.form.get()));
-                replay.keyframes.apply(0, entity);
+                replay.keyframes.apply(ticks, entity);
                 entity.setPrevX(entity.getX());
                 entity.setPrevY(entity.getY());
                 entity.setPrevZ(entity.getZ());
@@ -634,6 +674,7 @@ public abstract class BaseFilmController
                         double y = replay.keyframes.y.interpolate(ticks);
                         double z = replay.keyframes.z.interpolate(ticks);
                         boolean sneaking = replay.keyframes.sneaking.interpolate(ticks) > 0;
+                        boolean grounded = replay.keyframes.grounded.interpolate(ticks) > 0;
 
                         Vec3 pos = player.position();
 
@@ -641,7 +682,19 @@ public abstract class BaseFilmController
                         player.setPos(x, y, z);
 
                         player.setShiftKeyDown(sneaking);
-                        player.setOnGround(replay.keyframes.grounded.interpolate(ticks) > 0);
+                        player.setOnGround(grounded);
+
+                        /* First person teleports the player from keyframes instead of walking it, so vanilla's
+                         * bob amplitude (the view-bobbing stride) is computed from a zero velocity and stays
+                         * flat. Re-derive it from the actual per-tick displacement (the same source as the limb
+                         * animation) with vanilla's own easing. oBob already holds last tick's value
+                         * (snapshotted by the player tick), so only the current one is advanced — keeping the bob
+                         * smooth between frames. */
+                        float dx = (float) (player.getX() - player.xo);
+                        float dz = (float) (player.getZ() - player.zo);
+                        float stride = grounded ? Math.min(0.1F, (float) Math.sqrt(dx * dx + dz * dz)) : 0F;
+
+                        player.bob = player.oBob + (stride - player.oBob) * 0.4F;
 
                         if (player instanceof ClientPlayerEntityAccessor accessor)
                         {

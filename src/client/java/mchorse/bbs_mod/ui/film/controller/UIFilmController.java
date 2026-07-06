@@ -638,7 +638,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 if (this.panel.replayEditor.getReplay() == replay)
                 {
-                    this.panel.replayEditor.setReplay(replay, false, false);
+                    this.panel.replayEditor.setReplay(replay, false, UIReplaysEditor.OrbitReaction.SWITCH);
                 }
             }
             else
@@ -932,7 +932,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 manager.action(new ReplayContextAction(replay, IKey.raw(replay.getName()), () ->
                 {
-                    this.panel.replayEditor.setReplay(replay, false, false);
+                    this.panel.replayEditor.setReplay(replay, false, UIReplaysEditor.OrbitReaction.SWITCH);
 
                     UIReplayList list = this.panel.replayEditor.replaysList.replays;
 

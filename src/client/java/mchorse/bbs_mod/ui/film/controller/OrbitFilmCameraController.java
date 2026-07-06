@@ -34,9 +34,6 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class OrbitFilmCameraController implements ICameraController
 {
     private static final float PITCH_LIMIT = MathUtils.PI * 0.5F - 0.01F;
@@ -70,7 +67,6 @@ public class OrbitFilmCameraController implements ICameraController
 
     private final PanState panState = new PanState();
     protected final Vector3i velocityPosition = new Vector3i();
-    private final Map<String, OrbitState> replayStates = new HashMap<>();
 
     public OrbitFilmCameraController(UIFilmController controller)
     {
@@ -367,56 +363,6 @@ public class OrbitFilmCameraController implements ICameraController
         this.updateAnchor(this.getCurrentTransition());
     }
 
-    public void saveReplayState(Replay replay)
-    {
-        if (replay == null)
-        {
-            return;
-        }
-
-        this.replayStates.put(replay.getId(), new OrbitState(this.pivot, this.targetPivot, this.rotation, this.targetRotation, this.distance, this.targetDistance, this.positioned, this.attached));
-    }
-
-    public void restoreReplayState(Replay replay, boolean resetIfMissing)
-    {
-        if (replay == null)
-        {
-            if (resetIfMissing)
-            {
-                this.reset();
-            }
-
-            return;
-        }
-
-        OrbitState state = this.replayStates.get(replay.getId());
-
-        if (state == null)
-        {
-            if (resetIfMissing)
-            {
-                this.reset();
-            }
-
-            return;
-        }
-
-        this.pivot.set(state.pivot);
-        this.targetPivot.set(state.targetPivot);
-        this.rotation.set(state.rotation);
-        this.targetRotation.set(state.targetRotation);
-        this.distance = state.distance;
-        this.targetDistance = state.targetDistance;
-        this.positioned = state.positioned;
-        this.attached = state.attached;
-        this.updateAnchor(this.getCurrentTransition());
-    }
-
-    public void clearReplayStates()
-    {
-        this.replayStates.clear();
-    }
-
     private void updateAnchor(float transition)
     {
         Replay target = null;
@@ -663,21 +609,6 @@ public class OrbitFilmCameraController implements ICameraController
 
     private record OrbitTarget(Vector3d position, float renderYaw)
     {}
-
-    private record OrbitState(Vector3f pivot, Vector3f targetPivot, Vector2f rotation, Vector2f targetRotation, float distance, float targetDistance, boolean positioned, boolean attached)
-    {
-        public OrbitState(Vector3f pivot, Vector3f targetPivot, Vector2f rotation, Vector2f targetRotation, float distance, float targetDistance, boolean positioned, boolean attached)
-        {
-            this.pivot = new Vector3f(pivot);
-            this.targetPivot = new Vector3f(targetPivot);
-            this.rotation = new Vector2f(rotation);
-            this.targetRotation = new Vector2f(targetRotation);
-            this.distance = distance;
-            this.targetDistance = targetDistance;
-            this.positioned = positioned;
-            this.attached = attached;
-        }
-    }
 
     private static class PanState
     {

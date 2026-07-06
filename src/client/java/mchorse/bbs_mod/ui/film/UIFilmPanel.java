@@ -2090,6 +2090,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void showPanel(UIElement element)
     {
+        this.cameraEditor.embedView(null);
+
         if (element == this.selectedMainEditorPanel && element.isVisible())
         {
             if (this.isFlying())
