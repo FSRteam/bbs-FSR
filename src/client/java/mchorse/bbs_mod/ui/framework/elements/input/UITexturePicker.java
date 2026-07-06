@@ -89,6 +89,8 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
     public FilteredLink currentFiltered;
     public Link current;
 
+    private String initialModelPreview;
+
     private Timer lastTyped = new Timer(1000);
     private Timer lastChecked = new Timer(1000);
     private String typed = "";
@@ -299,6 +301,12 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
         this.markContainer().eventPropagataion(EventPropagation.BLOCK);
     }
 
+    public UITexturePicker withModelPreview(String model)
+    {
+        this.initialModelPreview = model;
+        return this;
+    }
+
     public UITexturePicker cantBeClosed()
     {
         this.close.removeFromParent();
@@ -466,6 +474,11 @@ public class UITexturePicker extends UIElement implements IImportPathProvider
             this.pixelEditor.resize();
 
             this.add(this.pixelEditor);
+
+            if (this.initialModelPreview != null && !this.initialModelPreview.isEmpty())
+            {
+                this.pixelEditor.openModelPreview(this.initialModelPreview);
+            }
         }
         else
         {

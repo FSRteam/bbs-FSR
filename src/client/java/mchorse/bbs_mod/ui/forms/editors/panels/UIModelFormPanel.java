@@ -136,9 +136,12 @@ public class UIModelFormPanel extends UIFormPanel<ModelForm>
             callback = (l) -> this.form.materialTextures.setLink(material, l);
         }
 
-        /* TODO(fs23-stage13): fs 2.3.1 additionally calls picker.withModelPreview(this.form.model.get())
-         * here (fs 579b3b34, texture editor subsystem); new/'s UITexturePicker has no model preview yet. */
-        UITexturePicker.open(this.getContext(), link, callback);
+        UITexturePicker picker = UITexturePicker.open(this.getContext(), link, callback);
+
+        if (picker != null && this.form.model.get() != null && !this.form.model.get().isEmpty())
+        {
+            picker.withModelPreview(this.form.model.get());
+        }
     }
 
     private void pickGroup(String group)
