@@ -548,6 +548,18 @@ public class BBSModClient
     {
         ClientApiCompat.emitDisconnect(Minecraft.getInstance());
 
+        if (dashboard != null)
+        {
+            UIFilmPanel panel = dashboard.getPanel(UIFilmPanel.class);
+
+            if (panel != null)
+            {
+                /* Cancel through the session while its UI is still reachable so warm-up and
+                 * recording exports both run teardown and delete their temporary audio. */
+                panel.recorder.cancel();
+            }
+        }
+
         dashboard = null;
         worldExportSession.stop();
 
@@ -708,7 +720,7 @@ public class BBSModClient
             return;
         }
 
-        worldExportSession.start(null);
+        worldExportSession.start(null, null);
     }
 
     private static KeyMapping createKey(String id, int key)
@@ -791,7 +803,7 @@ public class BBSModClient
             return;
         }
 
-        worldExportSession.start(filmId);
+        worldExportSession.start(filmId, panel.getData());
     }
 
     private static void keyPauseFilm()

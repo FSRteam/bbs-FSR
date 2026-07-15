@@ -63,12 +63,20 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
+    videoExportTest {
+        java.srcDirs = ['src/videoExportTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
 }
 
 configurations {
     clientImplementation.extendsFrom implementation
     clientCompileOnly.extendsFrom compileOnly
     clientRuntimeOnly.extendsFrom runtimeOnly
+    videoExportTestImplementation.extendsFrom implementation
+    videoExportTestRuntimeOnly.extendsFrom runtimeOnly
 }
 
 java {
@@ -136,6 +144,16 @@ tasks.named('clientClasses') {
 
 tasks.named('build') {
     dependsOn tasks.named('clientClasses')
+}
+
+tasks.register('testVideoExportUtils', JavaExec) {
+    dependsOn tasks.named('videoExportTestClasses')
+    classpath = sourceSets.videoExportTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.utils.VideoExportUtilsTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('testVideoExportUtils')
 }
 
 tasks.named("cacheVersionExtractedServer${minecraft_version}") {

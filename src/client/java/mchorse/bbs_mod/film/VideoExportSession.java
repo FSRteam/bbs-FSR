@@ -2,6 +2,8 @@ package mchorse.bbs_mod.film;
 
 import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.utils.VideoExportUtils;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import org.slf4j.Logger;
 
@@ -26,6 +28,7 @@ public abstract class VideoExportSession
     protected long warmupEndsAtMs;
 
     protected File audioFile;
+    private File temporaryAudioFile;
     protected int textureId;
     protected int width;
     protected int height;
@@ -137,7 +140,7 @@ public abstract class VideoExportSession
 
         try
         {
-            recorder.startRecording(this.audioFile, this.textureId, this.width, this.height);
+            recorder.startRecording(this.getMovieName(), this.audioFile, this.textureId, this.width, this.height);
         }
         catch (Exception e)
         {
@@ -210,12 +213,53 @@ public abstract class VideoExportSession
 
     private void reset()
     {
+        this.deleteTemporaryAudio();
         this.state = State.IDLE;
         this.warmupEndsAtMs = 0L;
         this.audioFile = null;
         this.textureId = 0;
         this.width = 0;
         this.height = 0;
+    }
+
+    /** Create and track a uniquely owned WAV path for this session. */
+    protected final File createTemporaryAudio() throws java.io.IOException
+    {
+        this.deleteTemporaryAudio();
+        this.temporaryAudioFile = VideoExportUtils.createTemporaryAudioFile(
+            mchorse.bbs_mod.client.BBSRendering.getVideoFolder()
+        );
+
+        return this.temporaryAudioFile;
+    }
+
+    /** Use the tracked temporary WAV as ffmpeg's audio input. */
+    protected final void attachTemporaryAudio(File file)
+    {
+        if (file != this.temporaryAudioFile)
+        {
+            throw new IllegalArgumentException("Audio file is not owned by this export session");
+        }
+
+        this.audioFile = file;
+    }
+
+    /** Delete only the uniquely created file owned by this session. */
+    protected final void deleteTemporaryAudio()
+    {
+        VideoExportUtils.deleteTemporaryFile(this.temporaryAudioFile);
+        this.temporaryAudioFile = null;
+
+        if (this.audioFile != null)
+        {
+            this.audioFile = null;
+        }
+    }
+
+    /** Base filename without an extension. Film-panel exports override this for templates. */
+    protected String getMovieName()
+    {
+        return StringUtils.createTimestampFilename();
     }
 
     protected abstract boolean prepare();

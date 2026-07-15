@@ -6,6 +6,7 @@ import mchorse.bbs_mod.audio.AudioRenderer;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.VideoExportSession;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -53,18 +54,22 @@ public class PanelVideoExportSession extends VideoExportSession
                 Clips camera = this.editor.getData().camera;
                 List<AudioClip> audioClips = camera.getClips(AudioClip.class);
 
-                String name = StringUtils.createTimestampFilename() + ".wav";
-                File file = new File(BBSRendering.getVideoFolder(), name);
+                File file = this.createTemporaryAudio();
                 Vector2i range = BBSSettings.editorLoop.get() ? this.editor.getLoopingRange() : new Vector2i();
 
                 if (AudioRenderer.renderAudio(file, audioClips, camera.calculateDuration(), 48000, TimeUtils.toSeconds(range.x), TimeUtils.toSeconds(range.y)))
                 {
-                    this.audioFile = file;
+                    this.attachTemporaryAudio(file);
+                }
+                else
+                {
+                    this.deleteTemporaryAudio();
                 }
             }
         }
         catch (Exception e)
         {
+            this.deleteTemporaryAudio();
             UIOverlay.addOverlay(this.editor.getContext(), new UIMessageOverlayPanel(UIKeys.GENERAL_ERROR, IKey.constant(e.getMessage())));
 
             return false;
@@ -89,6 +94,56 @@ public class PanelVideoExportSession extends VideoExportSession
         this.ui.attachOverlay();
 
         return true;
+    }
+
+    @Override
+    protected String getMovieName()
+    {
+        Film film = this.editor.getData();
+        String base = StringUtils.resolveExportFilename(
+            BBSSettings.videoExportFilenameFormat.get(),
+            film == null ? "" : film.getId(),
+            this.width,
+            this.height,
+            BBSRendering.getVideoFrameRate(),
+            film == null ? 0 : film.camera.calculateDuration()
+        );
+
+        return uniqueName(BBSRendering.getVideoFolder(), base);
+    }
+
+    private static String uniqueName(File folder, String base)
+    {
+        String candidate = base;
+
+        for (int i = 1; nameTaken(folder, candidate); i++)
+        {
+            candidate = base + " (" + i + ")";
+        }
+
+        return candidate;
+    }
+
+    private static boolean nameTaken(File folder, String base)
+    {
+        File[] files = folder.listFiles();
+
+        if (files == null)
+        {
+            return false;
+        }
+
+        String prefix = (base + ".").toLowerCase(java.util.Locale.ROOT);
+
+        for (File file : files)
+        {
+            if (file.getName().toLowerCase(java.util.Locale.ROOT).startsWith(prefix))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     @Override

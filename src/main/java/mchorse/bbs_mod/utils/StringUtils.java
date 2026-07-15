@@ -48,6 +48,43 @@ public class StringUtils
         return new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
     }
 
+    /** Resolve an export filename template to a safe base filename without an extension. */
+    public static String resolveExportFilename(String format, String filmName, int width, int height, int fps, int durationTicks)
+    {
+        if (format == null || format.trim().isEmpty())
+        {
+            return createTimestampFilename();
+        }
+
+        Date now = new Date();
+        String resolved = format
+            .replace("{name}", filmName == null ? "" : filmName)
+            .replace("{date}", new SimpleDateFormat("yyyy-MM-dd").format(now))
+            .replace("{time}", new SimpleDateFormat("HH-mm-ss").format(now))
+            .replace("{datetime}", new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(now))
+            .replace("{width}", String.valueOf(width))
+            .replace("{height}", String.valueOf(height))
+            .replace("{fps}", String.valueOf(fps))
+            .replace("{duration}", String.valueOf(Math.round(durationTicks / 20D)));
+
+        resolved = sanitizeFilename(resolved);
+
+        return resolved.isEmpty() ? createTimestampFilename() : resolved;
+    }
+
+    /** Replace cross-platform illegal filename characters and trim Windows-invalid suffixes. */
+    public static String sanitizeFilename(String name)
+    {
+        if (name == null)
+        {
+            return "";
+        }
+
+        String cleaned = name.replaceAll("[\\\\/:*?\"<>|\\r\\n\\t\\x00-\\x1F]", "_");
+
+        return cleaned.replaceAll("[. ]+$", "").trim();
+    }
+
     public static String combinePaths(String a, String b)
     {
         return combinePaths(a, b, "/");

@@ -1,13 +1,21 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.platform.Window;
+import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
+import mchorse.bbs_mod.audio.AudioRenderer;
+import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.utils.WorldExportWindowSession;
+import mchorse.bbs_mod.utils.clips.Clips;
 import net.minecraft.client.Minecraft;
+import org.slf4j.Logger;
+
+import java.io.File;
+import java.util.List;
 
 /**
  * Live-world video export used by F4 and by F6 when a film is played at the
@@ -15,11 +23,13 @@ import net.minecraft.client.Minecraft;
  */
 public class WorldVideoExportSession extends VideoExportSession
 {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final long FILM_CONTROLLER_TIMEOUT_MS = 10000L;
 
     private final WorldExportWindowSession windowSession = new WorldExportWindowSession();
 
     private String filmId;
+    private Film film;
     private boolean firstTickPaused;
     private boolean filmControllerSeen;
     private long filmControllerDeadlineMs;
@@ -29,8 +39,8 @@ public class WorldVideoExportSession extends VideoExportSession
         return this.filmId;
     }
 
-    /** Pass {@code null} for plain F4 world recording, or a film id for F6. */
-    public boolean start(String filmId)
+    /** Pass {@code null}/{@code null} for F4, or a film id and its data for F6. */
+    public boolean start(String filmId, Film film)
     {
         if (this.isExporting() || this.getRecorder() == null || this.getRecorder().isRecording())
         {
@@ -43,6 +53,7 @@ public class WorldVideoExportSession extends VideoExportSession
         this.applyWindowSize(size);
 
         this.filmId = filmId;
+        this.film = film;
         this.firstTickPaused = false;
         this.filmControllerSeen = false;
         this.filmControllerDeadlineMs = filmId == null ? 0L : System.currentTimeMillis() + FILM_CONTROLLER_TIMEOUT_MS;
@@ -69,6 +80,32 @@ public class WorldVideoExportSession extends VideoExportSession
     @Override
     protected boolean prepare()
     {
+        /* F6 can mux the film's audio track; F4 deliberately has no Film and remains silent. */
+        if (this.film != null && BBSSettings.videoSettings.audio.get())
+        {
+            try
+            {
+                Clips camera = this.film.camera;
+                List<AudioClip> audioClips = camera.getClips(AudioClip.class);
+                File file = this.createTemporaryAudio();
+
+                if (AudioRenderer.renderAudio(file, audioClips, camera.calculateDuration(), 48000, 0, 0))
+                {
+                    this.attachTemporaryAudio(file);
+                }
+                else
+                {
+                    this.deleteTemporaryAudio();
+                }
+            }
+            catch (Exception e)
+            {
+                /* Audio is best-effort: keep the world export running without a track. */
+                this.deleteTemporaryAudio();
+                LOGGER.warn("Failed to render F6 film audio; continuing video export without audio", e);
+            }
+        }
+
         return true;
     }
 
@@ -178,6 +215,7 @@ public class WorldVideoExportSession extends VideoExportSession
     private void clearFilmState()
     {
         this.filmId = null;
+        this.film = null;
         this.firstTickPaused = false;
         this.filmControllerSeen = false;
         this.filmControllerDeadlineMs = 0L;

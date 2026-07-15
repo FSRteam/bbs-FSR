@@ -22,8 +22,9 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class VideoRecorder
@@ -64,7 +65,7 @@ public class VideoRecorder
     /**
      * Start recording the video using ffmpeg
      */
-    public void startRecording(File audioFile, int textureId, int width, int height)
+    public void startRecording(String movieName, File audioFile, int textureId, int width, int height)
     {
         if (this.recording)
         {
@@ -90,7 +91,12 @@ public class VideoRecorder
             movies.mkdirs();
 
             Path path = Paths.get(movies.toString());
-            String movieName = StringUtils.createTimestampFilename();
+
+            if (movieName == null || movieName.isEmpty())
+            {
+                movieName = StringUtils.createTimestampFilename();
+            }
+
             String params = audioFile == null
                 ? BBSSettings.videoSettings.arguments.get()
                 : BBSSettings.videoSettings.argumentsAudio.get();
@@ -104,22 +110,24 @@ public class VideoRecorder
                 filters.append(",tblend=all_mode=average,framestep=2");
             }
 
-            params = params.replace("%WIDTH%", String.valueOf(width));
-            params = params.replace("%HEIGHT%", String.valueOf(height));
-            params = params.replace("%FPS%", String.valueOf(frameRate));
-            params = params.replace("%NAME%", movieName);
-            params = params.replace("%FILTERS%", filters.toString());
+            Map<String, String> replacements = new LinkedHashMap<>();
+
+            replacements.put("%WIDTH%", String.valueOf(width));
+            replacements.put("%HEIGHT%", String.valueOf(height));
+            replacements.put("%FPS%", String.valueOf(frameRate));
+            replacements.put("%NAME%", movieName);
+            replacements.put("%FILTERS%", filters.toString());
 
             if (audioFile != null)
             {
-                params = params.replace("%AUDIO_TRACK%", "\"" + audioFile.getAbsolutePath() + "\"");
+                replacements.put("%AUDIO_TRACK%", audioFile.getAbsolutePath());
             }
 
             List<String> args = new ArrayList<>();
             String encoder = FFMpegUtils.getFFMPEG();
 
             args.add(encoder);
-            args.addAll(Arrays.asList(params.split(" ")));
+            args.addAll(VideoExportUtils.resolveArguments(params, replacements));
 
             System.out.println("Recording video with following arguments: " + args);
 
@@ -360,7 +368,7 @@ public class VideoRecorder
         }
         else
         {
-            this.startRecording(null, textureId, textureWidth, textureHeight);
+            this.startRecording(StringUtils.createTimestampFilename(), null, textureId, textureWidth, textureHeight);
         }
 
         UIUtils.playClick();
