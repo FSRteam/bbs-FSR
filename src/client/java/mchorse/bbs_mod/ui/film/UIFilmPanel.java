@@ -104,6 +104,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private static final int PREVIEW_MODE_AUTO = 2;
 
     private RunnerCameraController runner;
+    private boolean lifecycleActive;
     private boolean lastRunning;
     private final Position position = new Position(0, 0, 0, 0, 0);
     private final Position lastPosition = new Position(0, 0, 0, 0, 0);
@@ -2436,19 +2437,22 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.appear();
 
+        this.activateLifecycle();
+    }
+
+    private void activateLifecycle()
+    {
         /* appear() also fires while the dashboard is being lazily constructed (the
          * teleport/record keybinds create it on first use), at which point there's no
-         * context and the editor isn't actually shown. Running the side effects below
-         * there leaks editor state into the plain world — most importantly it adds the
-         * film camera controller (runner) to the GLOBAL camera controller, which then
-         * hijacks the world view and is never removed (the screen is never closed),
-         * freezing the screen until another BBS screen resets the camera controller.
-         * So only do this once the panel is genuinely on screen. */
-        if (this.getContext() == null)
+         * context and the editor isn't actually shown. Defer activation until update()
+         * runs for the genuinely visible panel, and keep it idempotent so the runner
+         * can never be registered twice. */
+        if (this.lifecycleActive || this.getContext() == null)
         {
             return;
         }
 
+        this.lifecycleActive = true;
         BBSRendering.setCustomSize(true);
         MorphRenderer.hidePlayer = true;
 
@@ -2479,6 +2483,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.cameraEditor.embedView(null);
         this.setFlight(false);
         cameraController.remove(this.runner);
+        this.lifecycleActive = false;
 
         this.disableContext();
         this.replayEditor.close();
@@ -2496,6 +2501,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.setFlight(false);
         this.getCameraController().remove(this.runner);
+        this.lifecycleActive = false;
 
         this.disableContext();
         this.secretPlay.removeFromParent();
@@ -2732,6 +2738,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void update()
     {
+        this.activateLifecycle();
+
         if (this.getContext() != null && this.secretPlay.getParent() == null)
         {
             this.getContext().menu.getRoot().add(this.secretPlay);

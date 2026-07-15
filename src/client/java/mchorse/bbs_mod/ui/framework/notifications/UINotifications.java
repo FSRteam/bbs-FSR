@@ -64,7 +64,7 @@ public class UINotifications
             context.batcher.dropShadow(x + 3, y + 3, x + w - 3, y + h - 3, 10, Colors.A25 | color, color);
             context.batcher.box(x + 1, y, x + w - 1, y + h, Colors.mulRGB(color | Colors.A100, 0.1F));
             context.batcher.box(x, y + 1, x + w, y + h - 1, Colors.mulRGB(color | Colors.A100, 0.1F));
-            context.batcher.outline(x + outlineMargin, y + outlineMargin, x + w - outlineMargin, y + h - outlineMargin, notification.background);
+            context.batcher.outline(x + outlineMargin, y + outlineMargin, x + w - outlineMargin, y + h - outlineMargin, BBSSettings.primaryColor(Colors.A100));
 
             for (String line : splits)
             {

@@ -74,8 +74,6 @@ public class Gizmo
     public final static int STENCIL_MAX = STENCIL_SCALE_ALL;
     private final static float VIEW_RING_SCALE = 1.2F;
     private final static float COMBINED_INNER_SCALE = 0.6F;
-    private final static float RING_FACE_ON_BIAS = 0.18F;
-    private final static int RING_OCCLUSION_SAMPLES = 180;
     private final static float SCALE_CUBE_HALF = 0.032F;
     private final static float SCREEN_CUBE_HALF = 0.03F;
 
@@ -96,6 +94,7 @@ public class Gizmo
     private final Matrix4f lastRenderMatrix = new Matrix4f();
     private boolean hasLastRenderMatrix;
     private VertexBuffer rotateRingVbo;
+    private VertexBuffer rotateStencilRingVbo;
     private VertexBuffer rotateSphereVbo;
     private float lastScale = -1F;
     private float lastThickness = -1F;
@@ -745,14 +744,18 @@ public class Gizmo
             if (this.rotateRingVbo != null)
             {
                 this.rotateRingVbo.close();
+                this.rotateStencilRingVbo.close();
                 this.rotateSphereVbo.close();
             }
 
             this.rotateRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
+            this.rotateStencilRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
             this.rotateSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
 
             float radius = 0.22F * scale;
             float thicknessRing = 0.02F * scale * thickness;
+            float outlinePad = 0.015F * scale * thickness;
+            float thicknessStencil = 0.05F * scale * thickness + outlinePad;
 
             PoseStack identity = new PoseStack();
             BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
@@ -760,6 +763,11 @@ public class Gizmo
             Draw.arc3D(builder, identity, Axis.Y, radius, thicknessRing, 1F, 1F, 1F, 0F, 360F);
             this.rotateRingVbo.bind();
             this.rotateRingVbo.upload(builder.buildOrThrow());
+
+            builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+            Draw.arc3D(builder, identity, Axis.Y, radius, thicknessStencil, 1F, 1F, 1F, 0F, 360F);
+            this.rotateStencilRingVbo.bind();
+            this.rotateStencilRingVbo.upload(builder.buildOrThrow());
 
             builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
             Draw.sphere(builder, identity, radius, 24, 24, 1F, 1F, 1F, 1F);
@@ -804,86 +812,6 @@ public class Gizmo
         RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
 
         stack.popPose();
-    }
-
-    /** Compute the camera-facing arc of an axis ring in its local drawing plane. */
-    private boolean visibleRingArc(PoseStack stack, Axis axis, Vector2f out)
-    {
-        Matrix4f matrix = stack.last().pose();
-        Vector3f camera = matrix.getTranslation(new Vector3f()).negate();
-        Matrix3f basis = matrix.get3x3(new Matrix3f());
-
-        if (Math.abs(basis.determinant()) > 1.0E-8F)
-        {
-            basis.invert().transform(camera);
-        }
-
-        Quaternionf rotation = new Quaternionf();
-
-        if (axis == Axis.X) rotation.rotationZ(MathUtils.PI / 2F);
-        else if (axis == Axis.Z) rotation.rotationX(MathUtils.PI / 2F);
-
-        rotation.conjugate().transform(camera);
-
-        float length = camera.length();
-        float bias = length > 1.0E-6F ? RING_FACE_ON_BIAS * camera.y * camera.y / length : 0F;
-        boolean[] visible = new boolean[RING_OCCLUSION_SAMPLES];
-        int count = 0;
-
-        for (int i = 0; i < visible.length; i++)
-        {
-            float angle = (float) (i * 2D * Math.PI / visible.length);
-
-            visible[i] = camera.x * (float) Math.cos(angle) + camera.z * (float) Math.sin(angle) + bias > 0F;
-
-            if (visible[i]) count++;
-        }
-
-        if (count == 0)
-        {
-            return false;
-        }
-
-        if (count == visible.length)
-        {
-            out.set(0F, 360F);
-
-            return true;
-        }
-
-        int hidden = 0;
-
-        while (visible[hidden]) hidden++;
-
-        int start = hidden;
-
-        while (!visible[start % visible.length]) start++;
-
-        int run = 0;
-
-        while (visible[(start + run) % visible.length]) run++;
-
-        float step = 360F / visible.length;
-
-        out.set(start * step, run * step);
-
-        return true;
-    }
-
-    private void drawOccludedRing(PoseStack stack, Axis axis, float radius, float thickness, float r, float g, float b)
-    {
-        Vector2f arc = new Vector2f();
-
-        if (!this.visibleRingArc(stack, axis, arc))
-        {
-            return;
-        }
-
-        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-
-        Draw.arc3D(builder, stack, axis, radius, thickness, r, g, b, arc.x, arc.y);
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
     private void drawCachedRingBillboard(PoseStack stack, VertexBuffer vbo, float r, float g, float b, float a)
@@ -1138,13 +1066,11 @@ public class Gizmo
 
         if (!BBSSettings.rotateHideRings.get())
         {
-            float scale = BBSSettings.axesScale.get();
-            float radius = 0.22F * scale;
-            float ringThickness = 0.02F * scale * BBSSettings.axesThickness.get();
+            float opacity = BBSSettings.gizmoOpacity.get();
 
-            if (active == null || active == Handle.ROTATE_Z) this.drawOccludedRing(stack, Axis.Z, radius, ringThickness, Colors.getR(Colors.BLUE), Colors.getG(Colors.BLUE), Colors.getB(Colors.BLUE));
-            if (active == null || active == Handle.ROTATE_X) this.drawOccludedRing(stack, Axis.X, radius, ringThickness, Colors.getR(Colors.RED), Colors.getG(Colors.RED), Colors.getB(Colors.RED));
-            if (active == null || active == Handle.ROTATE_Y) this.drawOccludedRing(stack, Axis.Y, radius, ringThickness, Colors.getR(Colors.GREEN), Colors.getG(Colors.GREEN), Colors.getB(Colors.GREEN));
+            if (active == null || active == Handle.ROTATE_Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.getR(Colors.BLUE), Colors.getG(Colors.BLUE), Colors.getB(Colors.BLUE), opacity);
+            if (active == null || active == Handle.ROTATE_X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.getR(Colors.RED), Colors.getG(Colors.RED), Colors.getB(Colors.RED), opacity);
+            if (active == null || active == Handle.ROTATE_Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.getR(Colors.GREEN), Colors.getG(Colors.GREEN), Colors.getB(Colors.GREEN), opacity);
         }
 
         if (active == null || active == Handle.VIEW)
@@ -1346,17 +1272,14 @@ public class Gizmo
 
                 if (!BBSSettings.rotateHideRings.get())
                 {
-                    float radius = 0.22F * scale;
-                    float ringThickness = 0.02F * scale * thickness;
-
-                    if (active == null || active == Handle.ROTATE_Z) this.drawOccludedRing(stack, Axis.Z, radius, ringThickness, STENCIL_ROTATE_Z / 255F, 0F, 0F);
-                    if (active == null || active == Handle.ROTATE_X) this.drawOccludedRing(stack, Axis.X, radius, ringThickness, STENCIL_ROTATE_X / 255F, 0F, 0F);
-                    if (active == null || active == Handle.ROTATE_Y) this.drawOccludedRing(stack, Axis.Y, radius, ringThickness, STENCIL_ROTATE_Y / 255F, 0F, 0F);
+                    if (active == null || active == Handle.ROTATE_Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_ROTATE_Z / 255F, 0F, 0F, 1F);
+                    if (active == null || active == Handle.ROTATE_X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_ROTATE_X / 255F, 0F, 0F, 1F);
+                    if (active == null || active == Handle.ROTATE_Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_ROTATE_Y / 255F, 0F, 0F, 1F);
                 }
 
                 if (active == null || active == Handle.VIEW)
                 {
-                    this.drawCachedRingBillboard(stack, this.rotateRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
+                    this.drawCachedRingBillboard(stack, this.rotateStencilRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
                 }
             }
 
