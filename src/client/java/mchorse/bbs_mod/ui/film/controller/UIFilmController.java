@@ -1134,6 +1134,40 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
     }
 
+    /** Insert the live player's position and rotation at the current tick. */
+    public void insertPlayerFrame()
+    {
+        Replay replay = this.getReplay();
+
+        if (replay == null || Minecraft.getInstance().player == null)
+        {
+            return;
+        }
+
+        Morph morph = Morph.getMorph(Minecraft.getInstance().player);
+
+        if (morph == null || morph.entity == null)
+        {
+            return;
+        }
+
+        IEntity player = morph.entity;
+        int tick = this.getTick();
+
+        BaseValue.edit(replay.keyframes, (keyframes) ->
+        {
+            keyframes.x.insert(tick, player.getX());
+            keyframes.y.insert(tick, player.getY());
+            keyframes.z.insert(tick, player.getZ());
+            keyframes.yaw.insert(tick, (double) player.getYaw());
+            keyframes.pitch.insert(tick, (double) player.getPitch());
+            keyframes.headYaw.insert(tick, (double) player.getHeadYaw());
+            keyframes.bodyYaw.insert(tick, (double) player.getBodyYaw());
+        });
+
+        UIUtils.playClick();
+    }
+
     /* Update */
 
     public void update()

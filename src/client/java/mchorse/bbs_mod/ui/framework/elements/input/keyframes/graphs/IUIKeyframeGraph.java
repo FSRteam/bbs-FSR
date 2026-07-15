@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -157,6 +158,24 @@ public interface IUIKeyframeGraph
         this.clearSelection();
         this.pickKeyframe(keyframe);
         sheet.selection.add(index);
+
+        return keyframe;
+    }
+
+    /**
+     * Add a keyframe created explicitly by the user. When there is no neighbouring keyframe to
+     * inherit from, the configured default interpolation replaces the channel's linear default.
+     * Recording and baking continue to use {@link #addKeyframe(UIKeyframeSheet, float, Object)}.
+     */
+    public default Keyframe addKeyframeManually(UIKeyframeSheet sheet, float tick, Object value)
+    {
+        boolean inherits = value == null && !sheet.channel.isEmpty();
+        Keyframe keyframe = this.addKeyframe(sheet, tick, value);
+
+        if (keyframe != null && !inherits)
+        {
+            keyframe.getInterpolation().setInterp(BBSSettings.getDefaultKeyframeInterpolation());
+        }
 
         return keyframe;
     }

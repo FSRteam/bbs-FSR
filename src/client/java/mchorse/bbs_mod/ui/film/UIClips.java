@@ -999,6 +999,12 @@ public class UIClips extends UIElement
         }
     }
 
+    /** Whether the mouse is over the opaque timeline ruler band. */
+    private boolean isInRuler(int mouseY)
+    {
+        return mouseY >= this.area.y && mouseY < TimelineRulerRenderer.getRulerBottom(this.area);
+    }
+
     public int fromLayerY(int mouseY)
     {
         int bottom = this.area.ey() - MARGIN;
@@ -1163,7 +1169,7 @@ public class UIClips extends UIElement
 
     private boolean handleLeftClick(UIContext context, int mouseX, int mouseY, boolean ctrl, boolean shift, boolean alt)
     {
-        if (!this.hasEmbeddedView())
+        if (!this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
             int tick = (int) Math.floor(this.scale.from(mouseX));
             int layerIndex = this.fromLayerY(mouseY);
