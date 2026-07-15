@@ -106,7 +106,18 @@ public abstract class FormRenderer <T extends Form>
         boolean isPicking = context.stencilMap != null;
 
         context.stack.pushPose();
+
+        if (context.world != null)
+        {
+            context.world.pushPose();
+        }
+
         this.applyTransforms(context.stack, false, context.getTransition());
+
+        if (context.world != null)
+        {
+            this.applyTransforms(context.world, false, context.getTransition());
+        }
 
         float lf = 1F - MathUtils.clamp(this.form.lighting.get(), 0F, 1F);
         int u = context.light & '\uffff';
@@ -125,6 +136,11 @@ public abstract class FormRenderer <T extends Form>
         this.renderBodyParts(context);
 
         context.stack.popPose();
+
+        if (context.world != null)
+        {
+            context.world.popPose();
+        }
 
         context.light = light;
 
@@ -240,20 +256,43 @@ public abstract class FormRenderer <T extends Form>
     protected void renderBodyPart(BodyPart part, FormRenderingContext context)
     {
         IEntity oldEntity = context.entity;
+        Object oldSimulationOwner = context.simulationOwner;
 
         context.entity = part.useTarget.get() ? oldEntity : part.getEntity();
+
+        if (!part.useTarget.get())
+        {
+            context.simulationOwner = context.entity;
+        }
 
         if (part.getForm() != null)
         {
             context.stack.pushPose();
+
+            if (context.world != null)
+            {
+                context.world.pushPose();
+            }
+
             MatrixStackUtils.applyTransform(context.stack, part.transform.get());
+
+            if (context.world != null)
+            {
+                MatrixStackUtils.applyTransform(context.world, part.transform.get());
+            }
 
             FormUtilsClient.render(part.getForm(), context);
 
             context.stack.popPose();
+
+            if (context.world != null)
+            {
+                context.world.popPose();
+            }
         }
 
         context.entity = oldEntity;
+        context.simulationOwner = oldSimulationOwner;
     }
 
     public MatrixCache collectMatrices(IEntity entity, float transition)

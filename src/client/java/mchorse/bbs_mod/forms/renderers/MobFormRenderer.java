@@ -303,9 +303,19 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             context.stack.pushPose();
 
+            if (context.world != null)
+            {
+                context.world.pushPose();
+            }
+
             if (this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
                 context.stack.mulPose(ROTATE_Y_180);
+
+                if (context.world != null)
+                {
+                    context.world.mulPose(ROTATE_Y_180);
+                }
             }
 
             if (this.entity instanceof LivingEntity entity)
@@ -327,6 +337,11 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             CustomVertexConsumerProvider.clearRunnables();
 
             context.stack.popPose();
+
+            if (context.world != null)
+            {
+                context.world.popPose();
+            }
 
             RenderSystem.enableDepthTest();
         }

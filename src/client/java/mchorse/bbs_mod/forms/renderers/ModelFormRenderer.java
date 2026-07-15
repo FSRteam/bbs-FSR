@@ -86,6 +86,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private ActionsConfig lastConfigs;
     private IAnimator animator;
     private ModelInstance lastModel;
+    private final ModelPhysicsRuntime physicsRuntime = new ModelPhysicsRuntime();
+    private final Object uiSimulationOwner = new Object();
+    private final Object armSimulationOwner = new Object();
     private boolean ikAppliedThisRender;
     private boolean physicsAppliedThisRender;
     private boolean constraintsAppliedThisRender;
@@ -293,7 +296,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 ? GameRenderer::getRendertypeEntityTranslucentCullShader
                 : BBSShaders::getModel;
 
-            this.renderModel(this.entity, mainShader, stack, model, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, color, true, null, context.getTransition());
+            this.renderModel(this.entity, this.uiSimulationOwner, mainShader, stack, model, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, color, true, null, context.getTransition(), null);
 
             /* Render body parts */
             stack.pushPose();
@@ -311,7 +314,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void renderModel(IEntity target, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition)
+    private void renderModel(IEntity target, Object simulationOwner, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition, PoseStack world)
     {
         this.ikAppliedThisRender = false;
         this.physicsAppliedThisRender = false;
@@ -340,11 +343,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             newStack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
         }
 
-        Matrix4f baseTransform = ui ? null : new Matrix4f(stack.last().pose());
+        /* Rendering may be camera-relative or already contain an editor view matrix. Physics and
+         * world-space IK targets must only see the separately propagated semantic world transform. */
+        Matrix4f baseTransform = ui ? null : new Matrix4f((world == null ? stack : world).last().pose());
 
-        this.applyIKOnce(model, baseTransform);
-        this.applyPhysicsOnce(target, model, transition, baseTransform);
+        /* Clamp the FK input first. IK and physics each enforce the same limits internally; applying
+         * the generic Euler clamp afterward would clear their composed quaternion orientation. */
         this.applyConstraintsOnce(model);
+        this.applyIKOnce(model, baseTransform);
+        this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform);
 
         /* Default texture for materials without their own: the form's texture override, else the
          * model's default. Per-material textures (folder defaults now, animation tracks later)
@@ -481,7 +488,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         return local;
     }
 
-    private void applyPhysicsOnce(IEntity target, ModelInstance model, float transition, Matrix4f baseTransform)
+    private void applyPhysicsOnce(IEntity target, Object simulationOwner, ModelInstance model, float transition, Matrix4f baseTransform)
     {
         if (this.physicsAppliedThisRender)
         {
@@ -489,9 +496,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.physicsAppliedThisRender = true;
-        model.lastBaseTransform = baseTransform;
         model.form = this.form;
-        ModelPhysicsRuntime.apply(target, model, transition, baseTransform);
+        this.physicsRuntime.apply(target, simulationOwner, model, transition, baseTransform);
     }
 
     private void applyConstraintsOnce(ModelInstance model)
@@ -658,7 +664,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             try
             {
-                this.renderModel(this.entity, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F);
+                this.renderModel(this.entity, this.armSimulationOwner, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F, null);
             }
             finally
             {
@@ -707,6 +713,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             context.stack.mulPose(ROTATE_Y_180);
 
+            if (context.world != null)
+            {
+                context.world.mulPose(ROTATE_Y_180);
+            }
+
             BBSModClient.getTextures().bindTexture(texture);
 
             Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
@@ -714,7 +725,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 : BBSShaders::getModel;
             Supplier<ShaderInstance> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);
 
-            this.renderModel(context.entity, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition());
+            this.renderModel(context.entity, context.simulationOwner, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world);
         }
     }
 
@@ -752,28 +763,58 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     {
         context.stack.pushPose();
 
+        if (context.world != null)
+        {
+            context.world.pushPose();
+        }
+
         for (BodyPart part : this.form.parts.getAllTyped())
         {
             Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
 
             context.stack.pushPose();
 
+            if (context.world != null)
+            {
+                context.world.pushPose();
+            }
+
             if (matrix != null)
             {
                 MatrixStackUtils.multiply(context.stack, matrix);
+
+                if (context.world != null)
+                {
+                    MatrixStackUtils.multiply(context.world, matrix);
+                }
             }
             else
             {
                 context.stack.mulPose(ROTATE_Y_180);
+
+                if (context.world != null)
+                {
+                    context.world.mulPose(ROTATE_Y_180);
+                }
             }
 
             this.renderBodyPart(part, context);
 
             context.stack.popPose();
+
+            if (context.world != null)
+            {
+                context.world.popPose();
+            }
         }
 
         this.bones.clear();
         context.stack.popPose();
+
+        if (context.world != null)
+        {
+            context.world.popPose();
+        }
     }
 
     @Override
@@ -809,6 +850,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
              * local pass doesn't carry, so the config/`ik`-track solve runs (controllers
              * keyed into the pose are already baked in and reached). */
             model.form = this.form;
+            ModelConstraintsRuntime.apply(model);
             ModelIKRuntime.apply(model, null, null);
 
             stack.mulPose(ROTATE_Y_180);

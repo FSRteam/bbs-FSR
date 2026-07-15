@@ -62,7 +62,18 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         int light = context.light;
 
         context.stack.pushPose();
+
+        if (context.world != null)
+        {
+            context.world.pushPose();
+        }
+
         context.stack.translate(-0.5F, 0F, -0.5F);
+
+        if (context.world != null)
+        {
+            context.world.translate(-0.5F, 0F, -0.5F);
+        }
 
         if (context.isPicking())
         {
@@ -92,6 +103,11 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         CustomVertexConsumerProvider.clearRunnables();
 
         context.stack.popPose();
+
+        if (context.world != null)
+        {
+            context.world.popPose();
+        }
 
         RenderSystem.enableDepthTest();
     }

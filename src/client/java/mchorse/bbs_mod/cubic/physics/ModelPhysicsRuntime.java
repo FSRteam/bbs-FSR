@@ -16,6 +16,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -25,9 +26,9 @@ import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
- * Orchestrates bone physics: owns the per-entity simulation state and feeds each chain to the
- * {@link ChainSolver}. The solver itself ({@link ChainSolver}, {@link ChainState}, {@link PhysicsForces})
- * holds the maths.
+ * Orchestrates bone physics: each runtime belongs to one form renderer and owns the mutable history
+ * of its explicit simulation owners. The solver itself ({@link ChainSolver}, {@link ChainState},
+ * {@link PhysicsForces}) holds the maths; only immutable compiled config is shared globally.
  */
 public final class ModelPhysicsRuntime
 {
@@ -36,30 +37,50 @@ public final class ModelPhysicsRuntime
         public final Map<String, ChainState> chains = new HashMap<>();
     }
 
-    private static final WeakHashMap<IEntity, Map<String, InstanceState>> STATES = new WeakHashMap<>();
+    /** Weak registry preserves the existing global cache-invalidation API without making histories global. */
+    private static final Set<ModelPhysicsRuntime> RUNTIMES = Collections.newSetFromMap(new WeakHashMap<>());
 
-    private ModelPhysicsRuntime()
+    private final WeakHashMap<Object, Map<String, InstanceState>> states = new WeakHashMap<>();
+
+    public ModelPhysicsRuntime()
     {
+        synchronized (RUNTIMES)
+        {
+            RUNTIMES.add(this);
+        }
     }
 
     public static void clearCache()
     {
         ModelPhysicsCache.clear();
-        STATES.clear();
-    }
 
-    public static void invalidate(String modelId)
-    {
-        for (Map<String, InstanceState> byModel : STATES.values())
+        synchronized (RUNTIMES)
         {
-            if (byModel != null)
+            for (ModelPhysicsRuntime runtime : RUNTIMES)
             {
-                byModel.remove(modelId);
+                runtime.states.clear();
             }
         }
     }
 
-    public static void apply(IEntity entity, ModelInstance instance, float transition, Matrix4f baseTransform)
+    public static void invalidate(String modelId)
+    {
+        synchronized (RUNTIMES)
+        {
+            for (ModelPhysicsRuntime runtime : RUNTIMES)
+            {
+                for (Map<String, InstanceState> byModel : runtime.states.values())
+                {
+                    if (byModel != null)
+                    {
+                        byModel.remove(modelId);
+                    }
+                }
+            }
+        }
+    }
+
+    public void apply(IEntity entity, Object simulationOwner, ModelInstance instance, float transition, Matrix4f baseTransform)
     {
         if (entity == null || instance == null || instance.model == null)
         {
@@ -81,7 +102,8 @@ public final class ModelPhysicsRuntime
 
         Map<String, ModelConstraintsConfig.BoneConstraint> constraints = ModelConstraintsRuntime.getBones(instance);
 
-        Map<String, InstanceState> byModel = STATES.computeIfAbsent(entity, (e) -> new HashMap<>());
+        Object owner = simulationOwner == null ? entity : simulationOwner;
+        Map<String, InstanceState> byModel = this.states.computeIfAbsent(owner, (e) -> new HashMap<>());
         InstanceState state = byModel.computeIfAbsent(instance.id, (k) -> new InstanceState());
 
         /* The wind track (if keyframed) replaces the configured wind wholesale at playback, mirroring how the

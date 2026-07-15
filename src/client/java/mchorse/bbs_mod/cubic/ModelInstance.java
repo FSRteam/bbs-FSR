@@ -98,7 +98,6 @@ public class ModelInstance implements IModelInstance
     private boolean partialVaos;
 
     public transient ModelForm form;
-    public transient Matrix4f lastBaseTransform;
 
     /** Per group, the geometry split into one VAO per material name (empty key = default texture). */
     private Map<ModelGroup, Map<String, ModelVAO>> vaos = new HashMap<>();
