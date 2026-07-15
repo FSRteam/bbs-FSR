@@ -6,7 +6,6 @@ import mchorse.bbs_mod.math.molang.MolangParser;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.math.molang.expressions.MolangValue;
 import mchorse.bbs_mod.particles.ParticleScheme;
-import mchorse.bbs_mod.particles.components.appearance.BillboardDirection;
 import mchorse.bbs_mod.particles.components.appearance.CameraFacing;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceLighting;
@@ -111,9 +110,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         /* Direction sub-controls */
         this.directionMode = new UICirculate((b) ->
         {
-            this.component.directionMode = this.directionMode.getValue() == 0
-                ? BillboardDirection.DERIVE_FROM_VELOCITY
-                : BillboardDirection.CUSTOM_DIRECTION;
+            this.component.directionMode = this.directionMode.getValue() == 0 ? "derive_from_velocity" : "custom";
             this.updateDirectionVisibility();
             this.editor.dirty();
         });
@@ -489,10 +486,10 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.fields.add(this.directionFields);
         }
 
-        this.speedThreshold.setVisible(this.component.directionMode == BillboardDirection.DERIVE_FROM_VELOCITY);
-        this.customDirX.setVisible(this.component.directionMode == BillboardDirection.CUSTOM_DIRECTION);
-        this.customDirY.setVisible(this.component.directionMode == BillboardDirection.CUSTOM_DIRECTION);
-        this.customDirZ.setVisible(this.component.directionMode == BillboardDirection.CUSTOM_DIRECTION);
+        this.speedThreshold.setVisible("derive_from_velocity".equals(this.component.directionMode));
+        this.customDirX.setVisible("custom".equals(this.component.directionMode));
+        this.customDirY.setVisible("custom".equals(this.component.directionMode));
+        this.customDirZ.setVisible("custom".equals(this.component.directionMode));
 
         this.resizeParent();
     }
@@ -555,7 +552,14 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
         this.mode.setValue(modeVal);
         this.facingMode.setValue(this.component.facing.ordinal());
 
-        this.directionMode.setValue(this.component.directionMode == BillboardDirection.CUSTOM_DIRECTION ? 1 : 0);
+        if (this.component.directionMode != null)
+        {
+            this.directionMode.setValue("derive_from_velocity".equals(this.component.directionMode) ? 0 : 1);
+        }
+        else
+        {
+            this.directionMode.setValue(0);
+        }
 
         this.speedThreshold.setValue(this.component.speedThreshold);
 
