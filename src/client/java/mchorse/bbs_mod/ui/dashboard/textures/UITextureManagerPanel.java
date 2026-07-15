@@ -59,7 +59,7 @@ public class UITextureManagerPanel extends UIDashboardPanel
                 }
                 catch (IOException e)
                 {
-                    e.printStackTrace();
+                    LOGGER.error("Failed to extract texture frame {} to {}", i + 1, file, e);
                 }
 
                 newPixels.delete();
@@ -81,5 +81,11 @@ public class UITextureManagerPanel extends UIDashboardPanel
     public Link getLink()
     {
         return this.picker.current;
+    }
+
+    @Override
+    public void appear()
+    {
+        this.picker.syncToSharedTabs();
     }
 }

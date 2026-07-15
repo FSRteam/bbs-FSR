@@ -18,7 +18,6 @@ public class UIModelPreviewPanel extends UIElement
     public UITexturePainter painter;
     public UIFormRenderer renderer;
     public UIIcon close;
-    
     private ModelForm form;
     private Link fakeLink;
 
@@ -28,7 +27,6 @@ public class UIModelPreviewPanel extends UIElement
 
         this.painter = painter;
         this.fakeLink = Link.create("bbs_mod:temp_model_preview_" + UUID.randomUUID().toString());
-        
         this.form = new ModelForm();
         this.form.texture.set(this.fakeLink);
 

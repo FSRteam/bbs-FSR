@@ -78,6 +78,28 @@ public class UI
         return element;
     }
 
+    /**
+     * Build a compact single-line label/control row. The label stretches while
+     * the control keeps a fixed width, aligning controls across adjacent rows.
+     */
+    public static UIElement labelRow(IKey label, UIElement element)
+    {
+        return labelRow(label, UIConstants.VALUE_WIDTH, element);
+    }
+
+    public static UIElement labelRow(IKey label, int controlWidth, UIElement element)
+    {
+        UIElement row = new UIElement();
+
+        row.row(UIConstants.MARGIN).preferred(0).height(UIConstants.CONTROL_HEIGHT);
+        row.add(
+            label(label, UIConstants.CONTROL_HEIGHT).labelAnchor(0, 0.5F),
+            element.w(controlWidth)
+        );
+
+        return row;
+    }
+
     public static UIScrollView scrollView(UIElement... elements)
     {
         return scrollView(UIConstants.MARGIN, elements);

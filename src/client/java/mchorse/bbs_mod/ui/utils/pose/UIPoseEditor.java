@@ -100,7 +100,7 @@ public class UIPoseEditor extends UIElement
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        this.add(this.groups, UI.label(UIKeys.POSE_CONTEXT_FIX), this.fix, UI.row(this.color, this.lighting), this.transform.marginTop(4));
+        this.add(this.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting), this.transform.marginTop(4));
     }
 
     @Override
@@ -292,9 +292,58 @@ public class UIPoseEditor extends UIElement
 
     public void selectBone(String bone)
     {
+        this.selectBone(bone, false);
+    }
+
+    /** Whether this pose editor lists the given bone. */
+    public boolean hasBone(String bone)
+    {
+        return bone != null && !bone.isEmpty() && this.groups.list.getList().contains(bone);
+    }
+
+    /**
+     * Select a bone, or toggle it in the multi-selection when additive. Keep at
+     * least one selected bone so the pose controls always have a target.
+     */
+    public void selectBone(String bone, boolean additive)
+    {
         lastLimb = bone;
 
-        this.groups.list.setCurrentScroll(bone);
+        if (additive)
+        {
+            int index = this.groups.list.getList().indexOf(bone);
+
+            if (index != -1)
+            {
+                this.groups.list.toggleIndex(index);
+
+                if (this.groups.list.getCurrent().isEmpty())
+                {
+                    this.groups.list.toggleIndex(index);
+                }
+            }
+        }
+        else
+        {
+            this.groups.list.setCurrentScroll(bone);
+        }
+
+        this.pickBones(this.groups.list.getCurrent());
+    }
+
+    /**
+     * Restore a previous multi-bone selection. Undo/redo rebuilds the form panel from
+     * scratch (which resets the selection to the first bone), so the host re-applies the
+     * remembered selection afterwards.
+     */
+    public void restoreSelection(List<String> bones)
+    {
+        if (bones == null || bones.isEmpty())
+        {
+            return;
+        }
+
+        this.groups.list.setCurrent(bones);
         this.pickBones(this.groups.list.getCurrent());
     }
 

@@ -26,7 +26,6 @@ public class UILayersPanel extends UIElement
     private UIScrollView list;
     private UIIcon addLayer;
     private UITrackpad opacity;
-    
     public UITextureEditor currentEditor;
 
     public UILayersPanel(UITexturePainter painter)
@@ -136,7 +135,6 @@ public class UILayersPanel extends UIElement
     private void addImageLayer()
     {
         if (this.currentEditor == null) return;
-        
         UITexturePicker.findAllTextures(this.getContext(), null, (path) ->
         {
             Link link = Link.create(path);

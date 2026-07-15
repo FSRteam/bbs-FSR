@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.overlay.UICRUDOverlayPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.overlay.UIDataOverlayPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
+import mchorse.bbs_mod.ui.dashboard.panels.tabs.IUITabs;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -23,8 +24,9 @@ import mchorse.bbs_mod.utils.interps.Interpolations;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
-public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUDDashboardPanel
+public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUDDashboardPanel implements IUITabs
 {
     public UIIcon saveIcon;
 
@@ -38,6 +40,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     private boolean tabsEnabled;
 
     private Timer savingTimer = new Timer(0);
+    private long dataRequestVersion;
 
     public UIDataDashboardPanel(UIDashboard dashboard)
     {
@@ -132,6 +135,79 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     public boolean isNewTab(DataTab tab)
     {
         return tab != null && tab.dataId == null;
+    }
+
+    /* IUITabs — index-based adapters over the DataTab list */
+
+    @Override
+    public int getTabCount()
+    {
+        return this.tabs.size();
+    }
+
+    @Override
+    public int getCurrentTab()
+    {
+        return this.currentTab;
+    }
+
+    @Override
+    public IKey getTabLabel(int index)
+    {
+        DataTab tab = this.tabs.get(index);
+
+        return tab.dataId == null ? this.getNewTabLabel() : IKey.raw(tab.dataId);
+    }
+
+    @Override
+    public IKey getTabTooltip(int index)
+    {
+        return null;
+    }
+
+    @Override
+    public Icon getTabIcon(int index)
+    {
+        return this.getTabIcon(this.tabs.get(index));
+    }
+
+    @Override
+    public boolean isNewTab(int index)
+    {
+        return this.isNewTab(this.tabs.get(index));
+    }
+
+    @Override
+    public boolean canCloseTab(int index)
+    {
+        return index >= 0 && index < this.tabs.size();
+    }
+
+    @Override
+    public void closeOtherTabs(int index)
+    {
+        if (index >= 0 && index < this.tabs.size())
+        {
+            this.closeOtherTabs(this.tabs.get(index));
+        }
+    }
+
+    @Override
+    public void closeTabsLeft(int index)
+    {
+        if (index >= 0 && index < this.tabs.size())
+        {
+            this.closeTabsLeft(this.tabs.get(index));
+        }
+    }
+
+    @Override
+    public void closeTabsRight(int index)
+    {
+        if (index >= 0 && index < this.tabs.size())
+        {
+            this.closeTabsRight(this.tabs.get(index));
+        }
     }
 
     public int findNewTabIndex()
@@ -587,15 +663,22 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     public void requestData(String id)
     {
         DataTab requestTab = this.tabsEnabled ? this.getCurrentDataTab() : null;
+        long requestVersion = ++this.dataRequestVersion;
 
         this.markDataLoading(requestTab, id);
         this.editor.setEnabled(false);
 
-        /* Keep the callback simple and always fill (like upstream FS2): stale-request
-         * guards here used to swallow fill() entirely, leaving the panel blank. */
         this.getType().getRepository().load(id, (data) ->
         {
-            this.editor.setEnabled(true);
+            if (requestVersion != this.dataRequestVersion)
+            {
+                return;
+            }
+
+            if (this.tabsEnabled && (requestTab == null || this.getCurrentDataTab() != requestTab || !Objects.equals(requestTab.dataId, id)))
+            {
+                return;
+            }
 
             this.fill((T) data);
         });
@@ -618,6 +701,9 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     public void fill(T data)
     {
+        /* Any explicit population supersedes an in-flight repository response. */
+        this.dataRequestVersion += 1;
+        this.editor.setEnabled(true);
         this.data = data;
 
         if (this.tabsEnabled && this.currentTab >= 0 && this.currentTab < this.tabs.size())

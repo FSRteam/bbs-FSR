@@ -103,13 +103,18 @@ public class UIBodyPartEditor extends UIScrollView
         this.resize();
     }
 
-    public void pickBone(Pair<Form, String> pair)
+    /** Attach the active body part to the clicked parent bone; returns whether it did. */
+    public boolean pickBone(Pair<Form, String> pair)
     {
         /* Ctrl + clicking to pick the parent bone to attach to */
         if (this.part != null && this.bone.getList().contains(pair.b) && this.part.getManager().getOwner() == pair.a)
         {
             this.part.bone.set(pair.b);
             this.bone.setCurrentScroll(pair.b);
+
+            return true;
         }
+
+        return false;
     }
 }

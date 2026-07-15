@@ -10,9 +10,11 @@ import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
+import mchorse.bbs_mod.settings.values.ui.ValueIKDebug;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
 import mchorse.bbs_mod.settings.values.ui.ValueMotionPath;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
+import mchorse.bbs_mod.settings.values.ui.ValuePhysicsDebug;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
@@ -53,6 +55,8 @@ public class BBSSettings {
 	public static ValueFloat snapTranslate;
 	public static ValueFloat snapRotate;
 	public static ValueFloat snapScale;
+	public static ValueInt gizmoHoverTolerance;
+	public static ValueFloat gizmoOpacity;
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
@@ -129,6 +133,8 @@ public class BBSSettings {
 	public static ValueEditorLayout editorLayoutSettings;
 	public static ValueOnionSkin editorOnionSkin;
 	public static ValueMotionPath editorMotionPath;
+	public static ValueIKDebug ikDebug;
+	public static ValuePhysicsDebug physicsDebug;
 	public static ValueBoolean editorSnapToMarkers;
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
@@ -475,6 +481,8 @@ public class BBSSettings {
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
 		snapRotate = builder.getFloat("snap_rotate", 5F, 0.001F, 90F);
 		snapScale = builder.getFloat("snap_scale", 0.1F, 0.001F, 10F);
+		gizmoHoverTolerance = builder.getInt("gizmo_hover_tolerance", 8, 0, 40);
+		gizmoOpacity = builder.getFloat("gizmo_opacity", 1F, 0.05F, 1F);
 		defaultLocalTransform = builder.getBoolean("default_local", false);
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
 		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
@@ -576,6 +584,8 @@ public class BBSSettings {
 		builder.register(editorLayoutSettings = new ValueEditorLayout("layout"));
 		builder.register(editorOnionSkin = new ValueOnionSkin("onion_skin"));
 		builder.register(editorMotionPath = new ValueMotionPath("motion_path"));
+		builder.register(ikDebug = new ValueIKDebug("ik_debug"));
+		builder.register(physicsDebug = new ValuePhysicsDebug("physics_debug"));
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
 		editorClipPreview = builder.getBoolean("clip_preview", true);
 		editorRewind = builder.getBoolean("rewind", true);

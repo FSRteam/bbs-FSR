@@ -35,7 +35,6 @@ public class UILayerElement extends UIElement
         this.index = index;
 
         this.h(20);
-        
         this.visible = new UIIcon(layer.visible ? Icons.VISIBLE : Icons.INVISIBLE, (b) ->
         {
             this.panel.currentEditor.recordLayerChange(null, () ->
@@ -54,7 +53,6 @@ public class UILayerElement extends UIElement
         UIElement row = UI.row(0, 0, 20, this.visible, this.name);
         row.relative(this).w(1F).h(1F);
         this.add(row);
-        
         this.context(this::createContextMenu);
     }
 
@@ -252,7 +250,6 @@ public class UILayerElement extends UIElement
     {
         boolean active = this.panel.currentEditor.getDocument().activeLayerIndex == this.index;
         int color = active ? BBSSettings.primaryColor(Colors.A50) : Colors.A25;
-        
         if (this.area.isInside(context))
         {
             color = active ? BBSSettings.primaryColor(Colors.A75): Colors.A50;

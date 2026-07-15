@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input;
 
+import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
@@ -11,6 +13,7 @@ import mchorse.bbs_mod.utils.pose.Transform;
  */
 public class UISimpleTransform extends UITransform
 {
+    private ValueTransform value;
     private Transform transform;
     private Runnable onChange;
 
@@ -19,6 +22,12 @@ public class UISimpleTransform extends UITransform
         super();
 
         this.onChange = onChange;
+    }
+
+    public void setValue(ValueTransform value)
+    {
+        this.value = value;
+        this.setTransform(value == null ? null : value.get());
     }
 
     public void setTransform(Transform transform)
@@ -49,6 +58,20 @@ public class UISimpleTransform extends UITransform
         }
     }
 
+    private void edit(Runnable mutation)
+    {
+        if (this.value != null)
+        {
+            BaseValue.edit(this.value, (v) -> mutation.run());
+        }
+        else
+        {
+            mutation.run();
+        }
+
+        this.changed();
+    }
+
     @Override
     public void setT(Axis axis, double x, double y, double z)
     {
@@ -57,8 +80,7 @@ public class UISimpleTransform extends UITransform
             return;
         }
 
-        this.transform.translate.set((float) x, (float) y, (float) z);
-        this.changed();
+        this.edit(() -> this.transform.translate.set((float) x, (float) y, (float) z));
     }
 
     @Override
@@ -69,8 +91,7 @@ public class UISimpleTransform extends UITransform
             return;
         }
 
-        this.transform.scale.set((float) x, (float) y, (float) z);
-        this.changed();
+        this.edit(() -> this.transform.scale.set((float) x, (float) y, (float) z));
     }
 
     @Override
@@ -81,8 +102,7 @@ public class UISimpleTransform extends UITransform
             return;
         }
 
-        this.transform.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
-        this.changed();
+        this.edit(() -> this.transform.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z)));
     }
 
     @Override
@@ -93,7 +113,6 @@ public class UISimpleTransform extends UITransform
             return;
         }
 
-        this.transform.rotate2.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
-        this.changed();
+        this.edit(() -> this.transform.rotate2.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z)));
     }
 }

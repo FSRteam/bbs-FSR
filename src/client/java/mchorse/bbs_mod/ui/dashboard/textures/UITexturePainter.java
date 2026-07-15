@@ -19,23 +19,19 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
-import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
-import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
-import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.Pixels;
@@ -43,12 +39,11 @@ import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.IntPredicate;
 
 /**
  * Root texture editor panel.
@@ -71,15 +66,15 @@ import java.util.function.IntPredicate;
  */
 public class UITexturePainter extends UIElement
 {
-    private List<UITextureEditor> editors = new ArrayList<>();
-    private int currentIndex = -1;
+    /** Editor currently hosted in the canvas, or null when nothing is shown. */
+    private UITextureEditor editor;
 
     /** Persisted fractional width of the tool options column, keyed by panel class. */
     private static final Map<Class, Float> widths = new HashMap<>();
 
     private static final int ICON_BAR_W = 20;
     private static final int TOOL_SEPARATOR_GAP = 9;
-    private static final float DEFAULT_OPTIONS_WIDTH = 0F;
+    private static final float DEFAULT_OPTIONS_WIDTH = 0.2F;
     private static final int MIN_OPTIONS_WIDTH = 140;
     private static final int MAX_BRUSH_SIZE = 1024;
 
@@ -132,27 +127,26 @@ public class UITexturePainter extends UIElement
     private UIDraggable modelPreviewDraggable;
     private UIModelPreviewPanel modelPreviewPanel;
 
-    private UILabel brushSizeLabel;
-    private UILabel brushSoftnessLabel;
+    private UIElement brushSizeRow;
+    private UIElement brushSoftnessRow;
     private UIToggle roundBrushToggle;
     private UIToggle brushBuildUpToggle;
     private UIToggle alphaLockToggle;
-    private UILabel eraserOpacityLabel;
+    private UIElement eraserOpacityRow;
     private UITrackpad eraserOpacity;
 
-    private UITextureTabs tabs;
     private UIElement content;
     private final Consumer<Link> saveCallback;
+
+    /** Owner hook fired when a Save As changes an editor's link, so tabs can be relabelled/deduplicated. */
+    private BiConsumer<UITextureEditor, Link> renameHandler;
 
     public UITexturePainter(Consumer<Link> saveCallback)
     {
         this.saveCallback = saveCallback;
 
-        this.tabs = new UITextureTabs(this);
-        this.tabs.relative(this).w(1F).h(UITextureTabs.TABS_HEIGHT_PX);
-
         this.content = new UIElement();
-        this.content.relative(this.tabs).y(1F).w(1F).hTo(this.area, 1F);
+        this.content.relative(this).w(1F).h(1F);
 
         this.buildIconBar();
         this.buildOptions();
@@ -164,12 +158,18 @@ public class UITexturePainter extends UIElement
          * preview's area, which has to be up to date by the time editorHost resizes. */
         this.content.add(new UIRenderable(this::renderPanelBackground),
             this.iconBar, this.optionsHost, this.modelPreviewHost, this.editorHost, this.optionsDraggable, this.modelPreviewDraggable);
-        this.add(this.tabs, this.content);
+        this.add(this.content);
 
-        this.syncTabs();
-        this.showCurrentEditor();
         this.refreshToolUi();
         this.registerShortcuts();
+    }
+
+    /** Owner hook fired when a Save As changes an editor's link. */
+    public UITexturePainter onRename(BiConsumer<UITextureEditor, Link> renameHandler)
+    {
+        this.renameHandler = renameHandler;
+
+        return this;
     }
 
     private void buildIconBar()
@@ -276,26 +276,26 @@ public class UITexturePainter extends UIElement
         this.brushSoftness = new UITrackpad((v) -> {});
         this.brushSoftness.integer().limit(0, 100, true).setValue(0);
 
-        this.brushSizeLabel = UI.label(UIKeys.TEXTURES_BRUSH_SIZE);
-        this.brushSoftnessLabel = UI.label(UIKeys.TEXTURES_BRUSH_SOFTNESS);
+        this.brushSizeRow = UI.labelRow(UIKeys.TEXTURES_BRUSH_SIZE, this.brushSize);
+        this.brushSoftnessRow = UI.labelRow(UIKeys.TEXTURES_BRUSH_SOFTNESS, this.brushSoftness);
         this.roundBrushToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_SHAPE_CIRCLE, this.activeStrokeShape == TextureStrokeShape.CIRCLE, (b) -> this.setRoundBrushEnabled(b.getValue()));
         this.roundBrushToggle.h(UIConstants.CONTROL_HEIGHT);
         this.brushBuildUpToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_ACCUMULATIVE, this.brushBuildUp, (b) -> this.brushBuildUp = b.getValue());
         this.brushBuildUpToggle.h(UIConstants.CONTROL_HEIGHT);
 
-        this.eraserOpacityLabel = UI.label(UIKeys.TEXTURES_ERASER_OPACITY);
         this.eraserOpacity = new UITrackpad((v) -> {});
         this.eraserOpacity.limit(0, 100).setValue(100);
+        this.eraserOpacityRow = UI.labelRow(UIKeys.TEXTURES_ERASER_OPACITY, this.eraserOpacity);
 
         this.options.add(
             this.colorPickersRow,
             this.alphaLockToggle,
-            this.brightness,
-            this.brushSizeLabel, this.brushSize,
-            this.brushSoftnessLabel, this.brushSoftness,
+            UI.labelRow(UIKeys.TEXTURES_VIEWER_BRIGHTNESS, this.brightness),
+            this.brushSizeRow,
+            this.brushSoftnessRow,
             this.roundBrushToggle,
             this.brushBuildUpToggle,
-            this.eraserOpacityLabel, this.eraserOpacity
+            this.eraserOpacityRow
         );
     }
 
@@ -341,7 +341,6 @@ public class UITexturePainter extends UIElement
         this.keys().register(Keys.PIXEL_TOOL_SELECTION, () -> this.userSelectTool(TexturePaintTool.SELECTION)).inside().category(category);
         this.keys().register(Keys.PIXEL_BRUSH_DEC, () -> this.adjustBrushSize(-1)).inside().category(category);
         this.keys().register(Keys.PIXEL_BRUSH_INC, () -> this.adjustBrushSize(1)).inside().category(category);
-        this.keys().register(Keys.CYCLE_PANELS, this::cycleTabs).inside().category(category);
     }
 
     private void renderPanelBackground(UIContext context)
@@ -530,81 +529,50 @@ public class UITexturePainter extends UIElement
         boolean strokeTool = this.activeTool == TexturePaintTool.BRUSH || this.activeTool == TexturePaintTool.ERASER;
         boolean eraserTool = this.activeTool == TexturePaintTool.ERASER;
 
-        this.brushSizeLabel.setVisible(strokeTool);
-        this.brushSize.setVisible(strokeTool);
-        this.brushSoftnessLabel.setVisible(strokeTool);
-        this.brushSoftness.setVisible(strokeTool);
+        this.brushSizeRow.setVisible(strokeTool);
+        this.brushSoftnessRow.setVisible(strokeTool);
         this.roundBrushToggle.setVisible(strokeTool);
         this.brushBuildUpToggle.setVisible(strokeTool);
-        this.eraserOpacityLabel.setVisible(eraserTool);
-        this.eraserOpacity.setVisible(eraserTool);
+        this.eraserOpacityRow.setVisible(eraserTool);
 
         this.optionsHost.resize();
     }
 
-    private void cycleTabs()
+    /**
+     * Loads the texture behind {@code link} into a fresh, fully-wired editor without showing it. The
+     * caller owns the returned editor (it must be shown via {@link #setEditor(UITextureEditor)} and
+     * freed via {@link UITextureEditor#deleteTexture()}). Returns null when the texture cannot be read.
+     */
+    public UITextureEditor openEditor(Link link)
     {
-        if (editors.size() <= 1)
-        {
-            return;
-        }
+        Document document = this.loadDocument(link);
 
-        this.switchTab(MathUtils.cycler(currentIndex + (Window.isShiftPressed() ? -1 : 1), editors));
-
-        UIUtils.playClick();
-    }
-
-    public int getTabCount()
-    {
-        return editors.size();
-    }
-
-    public int getCurrentTabIndex()
-    {
-        return currentIndex;
-    }
-
-    public IKey getTabLabel(int index)
-    {
-        return IKey.raw(StringUtils.fileName(editors.get(index).getTexture().path));
-    }
-
-    public IKey getTabTooltip(int index)
-    {
-        return IKey.raw(editors.get(index).getTexture().path);
-    }
-
-    public Icon getTabIcon(int index)
-    {
-        return Icons.MATERIAL;
-    }
-
-    public boolean canCloseTab(int index)
-    {
-        return editors.size() > 1 && index >= 0 && index < editors.size();
-    }
-
-    public void switchTab(int index)
-    {
-        if (index < 0 || index >= editors.size() || currentIndex == index)
-        {
-            return;
-        }
-
-        currentIndex = index;
-        this.showCurrentEditor();
-        this.syncTabs();
-
-        if (this.layersPanel != null)
-        {
-            this.layersPanel.setEditor(this.getCurrentEditor());
-        }
+        return document == null ? null : this.createEditor(document);
     }
 
     private UITextureEditor createEditor(Document document)
     {
-        UITextureEditor editor = new UITextureEditor().saveCallback(this.saveCallback);
-        editor.renameCallback((newLink) -> this.renameDocument(editor, newLink));
+        UITextureEditor editor = new UITextureEditor();
+
+        editor.setDocument(document);
+
+        return editor;
+    }
+
+    /**
+     * (Re)binds {@code editor}'s tools, colours and save/rename callbacks to this painter. Called on every
+     * {@link #setEditor} so a shared editor works in whichever picker's painter currently hosts it.
+     */
+    private void bind(UITextureEditor editor)
+    {
+        editor.saveCallback(this.saveCallback);
+        editor.renameCallback((newLink) ->
+        {
+            if (this.renameHandler != null)
+            {
+                this.renameHandler.accept(editor, newLink);
+            }
+        });
         editor.colorSupplier(() -> this.primary.picker.color);
         editor.pickColorConsumer((color) -> this.primary.setColor(color.getARGBColor()));
         editor.backgroundSupplier(() -> (float) this.brightness.getValue());
@@ -623,62 +591,15 @@ public class UITexturePainter extends UIElement
             }
         });
         editor.setBrushSize((int) this.brushSize.getValue());
-        editor.setDocument(document);
-        editor.full(this.editorHost);
-        return editor;
     }
 
     /**
-     * After a Save As changed {@code editor}'s document link, close any pre-existing tab that
-     * already referenced the new link (its contents are discarded since the file on disk was just
-     * overwritten) and refresh the tab strip.
+     * Shows {@code editor} in the canvas (or clears the canvas when null), replacing whatever editor
+     * was previously hosted. The previous editor is detached but not freed — its owner keeps it alive
+     * for its tab.
      */
-    private void renameDocument(UITextureEditor editor, Link newLink)
+    public void setEditor(UITextureEditor editor)
     {
-        int editorIndex = -1;
-        int duplicateIndex = -1;
-
-        for (int i = 0; i < editors.size(); i++)
-        {
-            UITextureEditor other = editors.get(i);
-
-            if (other == editor)
-            {
-                editorIndex = i;
-            }
-            else if (newLink.equals(other.getTexture()))
-            {
-                duplicateIndex = i;
-            }
-        }
-
-        if (editorIndex < 0)
-        {
-            return;
-        }
-
-        if (duplicateIndex >= 0)
-        {
-            if (!this.prepareTabRemoval(duplicateIndex))
-            {
-                this.finishTabMutation();
-
-                return;
-            }
-
-            this.removeTab(duplicateIndex);
-        }
-
-        this.finishTabMutation();
-    }
-
-    private void showCurrentEditor()
-    {
-        if (editors.isEmpty())
-        {
-            return;
-        }
-
         List<IUIElement> hostChildren = this.editorHost.getChildren();
 
         if (!hostChildren.isEmpty() && hostChildren.get(0) instanceof UITextureEditor currentInHost)
@@ -686,261 +607,27 @@ public class UITexturePainter extends UIElement
             this.editorHost.remove(currentInHost);
         }
 
-        UITextureEditor toShow = editors.get(currentIndex);
+        this.editor = editor;
 
-        toShow.removeFromParent();
-        this.editorHost.prepend(toShow);
-        toShow.full(this.editorHost);
-        toShow.setBrushSize((int) this.brushSize.getValue());
+        if (editor != null)
+        {
+            this.bind(editor);
+            editor.removeFromParent();
+            this.editorHost.prepend(editor);
+            editor.full(this.editorHost);
+        }
+
+        if (this.layersPanel != null)
+        {
+            this.layersPanel.setEditor(editor);
+        }
 
         this.resize();
     }
 
     public UITextureEditor getCurrentEditor()
     {
-        return editors.isEmpty() || currentIndex < 0 || currentIndex >= editors.size()
-            ? null
-            : editors.get(currentIndex);
-    }
-
-    private void addTabFromPath(String path)
-    {
-        this.openOrAddDocument(Link.create(path), false);
-    }
-
-    public void closeTab(int index)
-    {
-        if (!this.canCloseTab(index))
-        {
-            return;
-        }
-
-        if (!this.prepareTabRemoval(index))
-        {
-            return;
-        }
-
-        this.removeTab(index);
-        this.finishTabMutation();
-    }
-
-    public void closeOtherTabs(int index)
-    {
-        if (index < 0 || index >= editors.size() || editors.size() <= 1)
-        {
-            return;
-        }
-
-        if (!this.prepareTabsRemoval((i) -> i != index))
-        {
-            return;
-        }
-
-        for (int i = editors.size() - 1; i >= 0; i--)
-        {
-            if (i != index)
-            {
-                this.removeTab(i);
-            }
-        }
-
-        this.finishTabMutation();
-    }
-
-    public void closeTabsLeft(int index)
-    {
-        if (index <= 0 || index >= editors.size())
-        {
-            return;
-        }
-
-        if (!this.prepareTabsRemoval((i) -> i < index))
-        {
-            return;
-        }
-
-        for (int i = index - 1; i >= 0; i--)
-        {
-            this.removeTab(i);
-        }
-
-        this.finishTabMutation();
-    }
-
-    public void closeTabsRight(int index)
-    {
-        if (index < 0 || index >= editors.size() - 1)
-        {
-            return;
-        }
-
-        if (!this.prepareTabsRemoval((i) -> i > index))
-        {
-            return;
-        }
-
-        for (int i = editors.size() - 1; i > index; i--)
-        {
-            this.removeTab(i);
-        }
-
-        this.finishTabMutation();
-    }
-
-    public void openNewTab()
-    {
-        UITextureEditor current = this.getCurrentEditor();
-        Link currentLink = current != null ? current.getTexture() : null;
-
-        UITexturePicker.findAllTextures(this.getContext(), currentLink, this::addTabFromPath);
-    }
-
-    private boolean prepareTabRemoval(int index)
-    {
-        if (index < 0 || index >= editors.size())
-        {
-            return false;
-        }
-
-        UITextureEditor editor = editors.get(index);
-
-        if (editor.isDirty())
-        {
-            this.switchTab(index);
-            editor.openSaveOverlay();
-
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean prepareTabsRemoval(IntPredicate remove)
-    {
-        for (int i = 0; i < editors.size(); i++)
-        {
-            if (remove.test(i) && !this.prepareTabRemoval(i))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private void removeTab(int index)
-    {
-        if (index < 0 || index >= editors.size())
-        {
-            return;
-        }
-
-        UITextureEditor editor = editors.remove(index);
-
-        editor.removeFromParent();
-        editor.deleteTexture();
-
-        if (editors.isEmpty())
-        {
-            currentIndex = -1;
-        }
-        else if (index < currentIndex)
-        {
-            currentIndex -= 1;
-        }
-        else if (currentIndex >= editors.size())
-        {
-            currentIndex = editors.size() - 1;
-        }
-    }
-
-    private void finishTabMutation()
-    {
-        if (currentIndex >= 0 && currentIndex < editors.size())
-        {
-            this.showCurrentEditor();
-        }
-
-        this.syncTabs();
-
-        if (this.layersPanel != null)
-        {
-            this.layersPanel.setEditor(this.getCurrentEditor());
-        }
-    }
-
-    private void syncTabs()
-    {
-        if (this.tabs != null)
-        {
-            this.tabs.sync();
-        }
-    }
-
-    private void swapColors()
-    {
-        int swap = this.primary.picker.color.getARGBColor();
-
-        this.primary.setColor(this.secondary.picker.color.getARGBColor());
-        this.secondary.setColor(swap);
-    }
-
-    private void setBrushSize(int size)
-    {
-        UITextureEditor editor = this.getCurrentEditor();
-        if (editor != null)
-        {
-            editor.setBrushSize(size);
-        }
-    }
-
-    public void fillTexture(Link current)
-    {
-        if (current != null)
-        {
-            this.openOrAddDocument(current, true);
-        }
-    }
-
-    /**
-     * Switches to an existing tab for {@code link} if one is open, otherwise loads the texture and
-     * adds a new tab. When {@code setEditing} is {@code true} the resulting editor is marked as editing.
-     */
-    private void openOrAddDocument(Link link, boolean setEditing)
-    {
-        String path = link.toString();
-
-        for (int i = 0; i < editors.size(); i++)
-        {
-            if (editors.get(i).getTexture().toString().equals(path))
-            {
-                this.switchTab(i);
-
-                if (setEditing)
-                {
-                    this.getCurrentEditor().setEditing(true);
-                }
-
-                return;
-            }
-        }
-
-        Document document = this.loadDocument(link);
-
-        if (document == null)
-        {
-            return;
-        }
-
-        UITextureEditor editor = this.createEditor(document);
-
-        editors.add(editor);
-        this.switchTab(editors.size() - 1);
-
-        if (setEditing)
-        {
-            editor.setEditing(true);
-        }
+        return this.editor;
     }
 
     /**
@@ -966,6 +653,23 @@ public class UITexturePainter extends UIElement
         Pixels pixels = Texture.pixelsFromTexture(texture);
 
         return pixels == null ? null : Document.fromPixels(link, pixels);
+    }
+
+    private void swapColors()
+    {
+        int swap = this.primary.picker.color.getARGBColor();
+
+        this.primary.setColor(this.secondary.picker.color.getARGBColor());
+        this.secondary.setColor(swap);
+    }
+
+    private void setBrushSize(int size)
+    {
+        UITextureEditor editor = this.getCurrentEditor();
+        if (editor != null)
+        {
+            editor.setBrushSize(size);
+        }
     }
 
     @Override

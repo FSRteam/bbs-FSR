@@ -70,11 +70,14 @@ public class Gizmo
     public final static int STENCIL_TRACKBALL = 16;
     public final static int STENCIL_VIEW = 17;
     public final static int STENCIL_SCREEN = 18;
-    public final static int STENCIL_MAX = STENCIL_SCREEN;
+    public final static int STENCIL_SCALE_ALL = 19;
+    public final static int STENCIL_MAX = STENCIL_SCALE_ALL;
     private final static float VIEW_RING_SCALE = 1.2F;
     private final static float COMBINED_INNER_SCALE = 0.6F;
+    private final static float RING_FACE_ON_BIAS = 0.18F;
+    private final static int RING_OCCLUSION_SAMPLES = 180;
     private final static float SCALE_CUBE_HALF = 0.032F;
-    private final static float SCREEN_CUBE_HALF = 0.016F;
+    private final static float SCREEN_CUBE_HALF = 0.03F;
 
     public final static Gizmo INSTANCE = new Gizmo();
 
@@ -93,7 +96,6 @@ public class Gizmo
     private final Matrix4f lastRenderMatrix = new Matrix4f();
     private boolean hasLastRenderMatrix;
     private VertexBuffer rotateRingVbo;
-    private VertexBuffer rotateStencilRingVbo;
     private VertexBuffer rotateSphereVbo;
     private float lastScale = -1F;
     private float lastThickness = -1F;
@@ -132,6 +134,11 @@ public class Gizmo
         this.mode = mode;
 
         return !same;
+    }
+
+    public String getDragReadout()
+    {
+        return this.currentTransform == null ? null : this.currentTransform.getDragReadout();
     }
 
     public void setSphereHovered(boolean hovered)
@@ -438,6 +445,10 @@ public class Gizmo
                 {
                     transform.enableScreenTranslate(drag);
                 }
+                else if (handle.op == Operation.SCALE_ALL)
+                {
+                    transform.enableUniformScale(drag);
+                }
             }
 
             return true;
@@ -547,34 +558,30 @@ public class Gizmo
         context.batcher.flush();
 
         MatrixStackUtils.cacheMatrices();
-        RenderSystem.setProjectionMatrix(projection, VertexSorting.ORTHOGRAPHIC_Z);
+        try
+        {
+            RenderSystem.setProjectionMatrix(projection, VertexSorting.ORTHOGRAPHIC_Z);
 
-        /* Map the UI area to a framebuffer-pixel viewport, exactly as the form
-         * editor's model pass does, so the gizmo renders into the preview and is
-         * clipped to it by the view frustum. */
-        float rx = (float) Math.round(mc.getWindow().getScreenWidth() / (double) context.menu.width);
-        float ry = (float) Math.round(mc.getWindow().getScreenHeight() / (double) context.menu.height);
-        float size = BBSModClient.getOriginalFramebufferScale();
-        int vx = (int) (area.x * rx);
-        int vy = (int) (mc.getWindow().getScreenHeight() - (area.y + area.h) * ry);
-        int vw = (int) (area.w * rx);
-        int vh = (int) (area.h * ry);
+            float rx = (float) Math.round(mc.getWindow().getScreenWidth() / (double) context.menu.width);
+            float ry = (float) Math.round(mc.getWindow().getScreenHeight() / (double) context.menu.height);
+            float size = BBSModClient.getOriginalFramebufferScale();
+            int vx = (int) (area.x * rx);
+            int vy = (int) (mc.getWindow().getScreenHeight() - (area.y + area.h) * ry);
+            int vw = (int) (area.w * rx);
+            int vh = (int) (area.h * ry);
 
-        RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
+            RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
 
-        PoseStack stack = new PoseStack();
-        MatrixStackUtils.multiply(stack, this.lastRenderMatrix);
-
-        RenderSystem.disableDepthTest();
-        this.drawGizmo(stack);
-        RenderSystem.enableDepthTest();
-
-        RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
-        MatrixStackUtils.restoreMatrices();
-
-        /* Leave the depth state the UI expects after a 3D interlude (always-pass),
-         * the same exit state as the form editor's model pass. */
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            PoseStack stack = new PoseStack();
+            MatrixStackUtils.multiply(stack, this.lastRenderMatrix);
+            this.drawGizmo(stack);
+        }
+        finally
+        {
+            RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
+            MatrixStackUtils.restoreMatrices();
+            RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        }
     }
 
     private void drawGizmo(PoseStack stack)
@@ -593,7 +600,7 @@ public class Gizmo
             stack.scale(distanceScale, distanceScale, distanceScale);
             this.lastSphereMatrix.set(modelView(stack));
             this.hasLastSphereMatrix = true;
-            this.drawAxes(stack, 0.25F, 0.008F);
+            this.drawOccludedGizmo(stack);
             stack.popPose();
         }
         else
@@ -607,6 +614,70 @@ public class Gizmo
         }
 
         this.drawInfiniteLine(stack);
+    }
+
+    /**
+     * Clear scene depth under the gizmo, then depth-sort its own handles. Every
+     * global state touched here is restored even if a draw fails.
+     */
+    private void drawOccludedGizmo(PoseStack stack)
+    {
+        float opacity = BBSSettings.gizmoOpacity.get();
+
+        try
+        {
+            RenderSystem.enableDepthTest();
+            RenderSystem.depthMask(true);
+            GL11.glDepthRange(1D, 1D);
+            RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            RenderSystem.colorMask(false, false, false, false);
+            this.drawAxes(stack, 0.25F, 0.008F);
+
+            GL11.glDepthRange(0D, 1D);
+            RenderSystem.colorMask(true, true, true, true);
+            RenderSystem.depthFunc(GL11.GL_LEQUAL);
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.setShaderColor(1F, 1F, 1F, opacity);
+            this.drawAxes(stack, 0.25F, 0.008F);
+
+            RenderSystem.depthMask(false);
+            RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            RenderSystem.setShaderColor(1F, 1F, 1F, opacity);
+            this.drawRotatePieIfActive(stack);
+        }
+        finally
+        {
+            GL11.glDepthRange(0D, 1D);
+            RenderSystem.colorMask(true, true, true, true);
+            RenderSystem.depthMask(true);
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+            RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        }
+    }
+
+    private void drawRotatePieIfActive(PoseStack stack)
+    {
+        UIPropTransform transform = this.currentTransform;
+
+        if (transform == null || !transform.isEditing() || transform.getMode() != Operation.ROTATE.modeOrdinal || transform.isSphereRotate())
+        {
+            return;
+        }
+
+        if (transform.isViewRotate())
+        {
+            this.drawViewPie(stack);
+
+            return;
+        }
+
+        Axis axis = transform.getAxis();
+
+        if (axis != null)
+        {
+            this.drawRotatePie(stack, axis);
+        }
     }
 
     private float getAxesDistanceScale(PoseStack stack)
@@ -674,18 +745,14 @@ public class Gizmo
             if (this.rotateRingVbo != null)
             {
                 this.rotateRingVbo.close();
-                this.rotateStencilRingVbo.close();
                 this.rotateSphereVbo.close();
             }
 
             this.rotateRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
-            this.rotateStencilRingVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
             this.rotateSphereVbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
 
             float radius = 0.22F * scale;
             float thicknessRing = 0.02F * scale * thickness;
-            float outlinePad = 0.015F * scale * thickness;
-            float thicknessStencil = 0.05F * scale * thickness + outlinePad;
 
             PoseStack identity = new PoseStack();
             BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
@@ -693,11 +760,6 @@ public class Gizmo
             Draw.arc3D(builder, identity, Axis.Y, radius, thicknessRing, 1F, 1F, 1F, 0F, 360F);
             this.rotateRingVbo.bind();
             this.rotateRingVbo.upload(builder.buildOrThrow());
-
-            builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-            Draw.arc3D(builder, identity, Axis.Y, radius, thicknessStencil, 1F, 1F, 1F, 0F, 360F);
-            this.rotateStencilRingVbo.bind();
-            this.rotateStencilRingVbo.upload(builder.buildOrThrow());
 
             builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
             Draw.sphere(builder, identity, radius, 24, 24, 1F, 1F, 1F, 1F);
@@ -742,6 +804,86 @@ public class Gizmo
         RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
 
         stack.popPose();
+    }
+
+    /** Compute the camera-facing arc of an axis ring in its local drawing plane. */
+    private boolean visibleRingArc(PoseStack stack, Axis axis, Vector2f out)
+    {
+        Matrix4f matrix = stack.last().pose();
+        Vector3f camera = matrix.getTranslation(new Vector3f()).negate();
+        Matrix3f basis = matrix.get3x3(new Matrix3f());
+
+        if (Math.abs(basis.determinant()) > 1.0E-8F)
+        {
+            basis.invert().transform(camera);
+        }
+
+        Quaternionf rotation = new Quaternionf();
+
+        if (axis == Axis.X) rotation.rotationZ(MathUtils.PI / 2F);
+        else if (axis == Axis.Z) rotation.rotationX(MathUtils.PI / 2F);
+
+        rotation.conjugate().transform(camera);
+
+        float length = camera.length();
+        float bias = length > 1.0E-6F ? RING_FACE_ON_BIAS * camera.y * camera.y / length : 0F;
+        boolean[] visible = new boolean[RING_OCCLUSION_SAMPLES];
+        int count = 0;
+
+        for (int i = 0; i < visible.length; i++)
+        {
+            float angle = (float) (i * 2D * Math.PI / visible.length);
+
+            visible[i] = camera.x * (float) Math.cos(angle) + camera.z * (float) Math.sin(angle) + bias > 0F;
+
+            if (visible[i]) count++;
+        }
+
+        if (count == 0)
+        {
+            return false;
+        }
+
+        if (count == visible.length)
+        {
+            out.set(0F, 360F);
+
+            return true;
+        }
+
+        int hidden = 0;
+
+        while (visible[hidden]) hidden++;
+
+        int start = hidden;
+
+        while (!visible[start % visible.length]) start++;
+
+        int run = 0;
+
+        while (visible[(start + run) % visible.length]) run++;
+
+        float step = 360F / visible.length;
+
+        out.set(start * step, run * step);
+
+        return true;
+    }
+
+    private void drawOccludedRing(PoseStack stack, Axis axis, float radius, float thickness, float r, float g, float b)
+    {
+        Vector2f arc = new Vector2f();
+
+        if (!this.visibleRingArc(stack, axis, arc))
+        {
+            return;
+        }
+
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+
+        Draw.arc3D(builder, stack, axis, radius, thickness, r, g, b, arc.x, arc.y);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
     private void drawCachedRingBillboard(PoseStack stack, VertexBuffer vbo, float r, float g, float b, float a)
@@ -904,51 +1046,123 @@ public class Gizmo
         stack.popPose();
     }
 
-    private void drawRotateHandles(PoseStack stack, boolean editing, int activeOp)
+    /** Draw the view-ring sweep in the gizmo frame using screen right/down vectors. */
+    private void drawViewPie(PoseStack stack)
+    {
+        float sweepRad = this.currentTransform.getViewScreenSweepRad();
+
+        if (Math.abs(sweepRad) < 1.0E-4F)
+        {
+            return;
+        }
+
+        Matrix4f matrix = stack.last().pose();
+        Matrix3f basis = matrix.get3x3(new Matrix3f());
+
+        if (Math.abs(basis.determinant()) < 1.0E-8F)
+        {
+            return;
+        }
+
+        Matrix3f inverse = basis.invert();
+        Vector3f right = inverse.transform(new Vector3f(1F, 0F, 0F)).normalize();
+        Vector3f down = inverse.transform(new Vector3f(0F, -1F, 0F)).normalize();
+        float startRad = this.currentTransform.getViewGrabScreenAngle();
+        float scale = BBSSettings.axesScale.get();
+        float radius = 0.22F * scale * VIEW_RING_SCALE;
+        int color = Colors.LIGHTEST_GRAY;
+        float r = Colors.getR(color);
+        float g = Colors.getG(color);
+        float b = Colors.getB(color);
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.disableCull();
+
+        int segments = Math.max(2, (int) (Math.abs(sweepRad) / (float) (2D * Math.PI) * 64F));
+        float step = sweepRad / segments;
+        Vector3f p1 = new Vector3f();
+        Vector3f p2 = new Vector3f();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+
+        for (int i = 0; i < segments; i++)
+        {
+            this.pieRim(p1, right, down, startRad + step * i, radius);
+            this.pieRim(p2, right, down, startRad + step * (i + 1), radius);
+
+            builder.addVertex(matrix, 0, 0, 0).setColor(r, g, b, 0.25F);
+            builder.addVertex(matrix, p1.x, p1.y, p1.z).setColor(r, g, b, 0.25F);
+            builder.addVertex(matrix, p2.x, p2.y, p2.z).setColor(r, g, b, 0.25F);
+        }
+
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        float thickness = 0.005F * scale;
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+        this.pieEdge(builder, matrix, right, down, startRad, radius, thickness, r, g, b);
+        this.pieEdge(builder, matrix, right, down, startRad + sweepRad, radius, thickness, r, g, b);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
+    }
+
+    private void pieRim(Vector3f out, Vector3f right, Vector3f down, float angle, float radius)
+    {
+        float c = (float) Math.cos(angle) * radius;
+        float s = (float) Math.sin(angle) * radius;
+
+        out.set(right.x * c + down.x * s, right.y * c + down.y * s, right.z * c + down.z * s);
+    }
+
+    private void pieEdge(BufferBuilder builder, Matrix4f matrix, Vector3f right, Vector3f down, float angle, float radius, float thickness, float r, float g, float b)
+    {
+        Vector3f rim = new Vector3f();
+        Vector3f perpendicular = new Vector3f();
+
+        this.pieRim(rim, right, down, angle, radius);
+        this.pieRim(perpendicular, right, down, angle + MathUtils.PI / 2F, thickness);
+
+        builder.addVertex(matrix, perpendicular.x, perpendicular.y, perpendicular.z).setColor(r, g, b, 1F);
+        builder.addVertex(matrix, -perpendicular.x, -perpendicular.y, -perpendicular.z).setColor(r, g, b, 1F);
+        builder.addVertex(matrix, rim.x - perpendicular.x, rim.y - perpendicular.y, rim.z - perpendicular.z).setColor(r, g, b, 1F);
+        builder.addVertex(matrix, perpendicular.x, perpendicular.y, perpendicular.z).setColor(r, g, b, 1F);
+        builder.addVertex(matrix, rim.x - perpendicular.x, rim.y - perpendicular.y, rim.z - perpendicular.z).setColor(r, g, b, 1F);
+        builder.addVertex(matrix, rim.x + perpendicular.x, rim.y + perpendicular.y, rim.z + perpendicular.z).setColor(r, g, b, 1F);
+    }
+
+    private void drawRotateHandles(PoseStack stack, Handle active)
     {
         this.updateVbos();
 
-        boolean rotating = editing && activeOp == Operation.ROTATE.modeOrdinal;
-        Axis activeAxis = rotating ? this.currentTransform.getAxis() : null;
-        boolean viewActive = rotating && this.currentTransform.isViewRotate();
-
-        /* The 3D sphere itself is invisible — it only acts as the trackball grab
-         * area. Hover feedback is a screen-space glow composited in
-         * {@link #renderSphereHighlight}. */
-
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
-
         if (!BBSSettings.rotateHideRings.get())
         {
-            if (!rotating || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Z, Colors.BLUE);
-            if (!rotating || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateRingVbo, Axis.X, Colors.RED);
-            if (!rotating || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateRingVbo, Axis.Y, Colors.GREEN);
+            float scale = BBSSettings.axesScale.get();
+            float radius = 0.22F * scale;
+            float ringThickness = 0.02F * scale * BBSSettings.axesThickness.get();
+
+            if (active == null || active == Handle.ROTATE_Z) this.drawOccludedRing(stack, Axis.Z, radius, ringThickness, Colors.getR(Colors.BLUE), Colors.getG(Colors.BLUE), Colors.getB(Colors.BLUE));
+            if (active == null || active == Handle.ROTATE_X) this.drawOccludedRing(stack, Axis.X, radius, ringThickness, Colors.getR(Colors.RED), Colors.getG(Colors.RED), Colors.getB(Colors.RED));
+            if (active == null || active == Handle.ROTATE_Y) this.drawOccludedRing(stack, Axis.Y, radius, ringThickness, Colors.getR(Colors.GREEN), Colors.getG(Colors.GREEN), Colors.getB(Colors.GREEN));
         }
 
-        if (!rotating || viewActive)
+        if (active == null || active == Handle.VIEW)
         {
             int color = Colors.LIGHTEST_GRAY;
 
-            this.drawCachedRingBillboard(stack, this.rotateRingVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+            this.drawCachedRingBillboard(stack, this.rotateRingVbo, Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color) * BBSSettings.gizmoOpacity.get());
         }
-
-        if (rotating && activeAxis != null)
-        {
-            this.drawRotatePie(stack, activeAxis);
-        }
-
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
 
     private void drawAxes(PoseStack stack, float axisSize, float axisOffset)
     {
         float scale = BBSSettings.axesScale.get();
         float thickness = BBSSettings.axesThickness.get();
-        boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
-        int activeMode = editing ? this.currentTransform.getMode() : -1;
-        boolean showMove = this.mode.shows(Operation.MOVE) && (!editing || activeMode == Operation.MOVE.modeOrdinal);
-        boolean showScale = this.mode.shows(Operation.SCALE) && (!editing || activeMode == Operation.SCALE.modeOrdinal);
-        boolean showRotate = this.mode.shows(Operation.ROTATE) && (!editing || activeMode == Operation.ROTATE.modeOrdinal);
+        Handle active = this.activeDragHandle();
+        boolean showMove = this.mode.shows(Operation.MOVE) && (active == null || active.op == Operation.MOVE || active.op == Operation.SCREEN);
+        boolean showScale = this.mode.shows(Operation.SCALE) && (active == null || active.op == Operation.SCALE || active.op == Operation.SCALE_ALL);
+        boolean showRotate = this.mode.shows(Operation.ROTATE) && (active == null || active.op == Operation.ROTATE || active.op == Operation.VIEW || active.op == Operation.TRACKBALL);
 
         axisSize *= scale * this.combinedInnerScale();
         axisOffset *= scale * thickness;
@@ -958,7 +1172,7 @@ public class Gizmo
 
         if (showRotate)
         {
-            this.drawRotateHandles(stack, editing, activeMode);
+            this.drawRotateHandles(stack, active);
         }
 
         if (showMove || showScale)
@@ -966,36 +1180,50 @@ public class Gizmo
             builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
             building = true;
 
-            fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, Colors.RED);
-            fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, Colors.GREEN);
-            fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
+            Handle barX = showMove ? Handle.MOVE_X : Handle.SCALE_X;
+            Handle barY = showMove ? Handle.MOVE_Y : Handle.SCALE_Y;
+            Handle barZ = showMove ? Handle.MOVE_Z : Handle.SCALE_Z;
+            Handle planeXZ = showMove ? Handle.MOVE_XZ : Handle.SCALE_XZ;
+            Handle planeXY = showMove ? Handle.MOVE_XY : Handle.SCALE_XY;
+            Handle planeZY = showMove ? Handle.MOVE_ZY : Handle.SCALE_ZY;
 
-            if (showMove)
+            if (active == null || active == barX) fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, Colors.RED);
+            if (active == null || active == barY) fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, Colors.GREEN);
+            if (active == null || active == barZ) fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, Colors.BLUE);
+
+            if (showMove && (active == null || active == Handle.SCREEN))
             {
                 float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
 
                 fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, Colors.WHITE);
             }
 
+            if (showScale && !showMove && (active == null || active == Handle.SCALE_ALL))
+            {
+                float scaleAllHalf = SCREEN_CUBE_HALF * scale * thickness;
+
+                fillBox(builder, stack, -scaleAllHalf, -scaleAllHalf, -scaleAllHalf, scaleAllHalf, scaleAllHalf, scaleAllHalf, Colors.WHITE);
+            }
+
             float planeStart = axisSize * 0.2F;
-            float planeEnd = planeStart + axisSize * 0.4F * thickness;
+            float planeEnd = planeStart + axisSize * 0.2F;
             float planeHalf = axisOffset * 0.5F;
 
-            fillBox(builder, stack, planeStart, -planeHalf, planeStart, planeEnd, planeHalf, planeEnd, Colors.PLANE_XZ);
-            fillBox(builder, stack, planeStart, planeStart, -planeHalf, planeEnd, planeEnd, planeHalf, Colors.PLANE_XY);
-            fillBox(builder, stack, -planeHalf, planeStart, planeStart, planeHalf, planeEnd, planeEnd, Colors.PLANE_ZY);
+            if (active == null || active == planeXZ) fillBox(builder, stack, planeStart, -planeHalf, planeStart, planeEnd, planeHalf, planeEnd, Colors.PLANE_XZ);
+            if (active == null || active == planeXY) fillBox(builder, stack, planeStart, planeStart, -planeHalf, planeEnd, planeEnd, planeHalf, Colors.PLANE_XY);
+            if (active == null || active == planeZY) fillBox(builder, stack, -planeHalf, planeStart, planeStart, planeHalf, planeEnd, planeEnd, Colors.PLANE_ZY);
 
             if (showScale)
             {
                 float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
 
-                fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, Colors.RED);
-                fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, Colors.GREEN);
-                fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, Colors.BLUE);
+                if (active == null || active == Handle.SCALE_X) fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, Colors.RED);
+                if (active == null || active == Handle.SCALE_Y) fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, Colors.GREEN);
+                if (active == null || active == Handle.SCALE_Z) fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, Colors.BLUE);
             }
         }
 
-        if ((showMove || showScale) || (showRotate && !editing))
+        if (active == null && (showMove || showScale || showRotate))
         {
             if (!building)
             {
@@ -1008,12 +1236,9 @@ public class Gizmo
 
         if (building)
         {
+            RenderSystem.setShaderColor(1F, 1F, 1F, BBSSettings.gizmoOpacity.get());
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
-            RenderSystem.depthFunc(GL11.GL_ALWAYS);
-
             BufferUploader.drawWithShader(builder.buildOrThrow());
-
-            RenderSystem.depthFunc(GL11.GL_LEQUAL);
         }
     }
 
@@ -1046,7 +1271,7 @@ public class Gizmo
 
         stack.pushPose();
         stack.scale(distanceScale, distanceScale, distanceScale);
-        this.drawAxes(stack, map, 0.25F, 0.025F);
+        this.drawAxes(stack, map, 0.25F, 0.008F);
         stack.popPose();
     }
 
@@ -1076,110 +1301,119 @@ public class Gizmo
         this.setViewportScale(context.menu.height / (float) area.h);
 
         MatrixStackUtils.cacheMatrices();
-        RenderSystem.setProjectionMatrix(projection, VertexSorting.ORTHOGRAPHIC_Z);
+        try
+        {
+            RenderSystem.setProjectionMatrix(projection, VertexSorting.ORTHOGRAPHIC_Z);
 
-        /* Map the UI area to a framebuffer-pixel viewport, exactly as
-         * renderInterface does, so the stencil matches the drawn visual pixel for
-         * pixel. The pick framebuffer is sized to the window, so the same mapping
-         * applies. */
-        float rx = (float) Math.round(mc.getWindow().getScreenWidth() / (double) context.menu.width);
-        float ry = (float) Math.round(mc.getWindow().getScreenHeight() / (double) context.menu.height);
-        float size = BBSModClient.getOriginalFramebufferScale();
-        int vx = (int) (area.x * rx);
-        int vy = (int) (mc.getWindow().getScreenHeight() - (area.y + area.h) * ry);
-        int vw = (int) (area.w * rx);
-        int vh = (int) (area.h * ry);
+            float rx = (float) Math.round(mc.getWindow().getScreenWidth() / (double) context.menu.width);
+            float ry = (float) Math.round(mc.getWindow().getScreenHeight() / (double) context.menu.height);
+            float size = BBSModClient.getOriginalFramebufferScale();
+            int vx = (int) (area.x * rx);
+            int vy = (int) (mc.getWindow().getScreenHeight() - (area.y + area.h) * ry);
+            int vw = (int) (area.w * rx);
+            int vh = (int) (area.h * ry);
 
-        RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
+            RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
 
-        PoseStack stack = new PoseStack();
-        MatrixStackUtils.multiply(stack, this.lastRenderMatrix);
-
-        this.drawStencilAxes(stack, map);
-
-        RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
-        MatrixStackUtils.restoreMatrices();
+            PoseStack stack = new PoseStack();
+            MatrixStackUtils.multiply(stack, this.lastRenderMatrix);
+            this.drawStencilAxes(stack, map);
+        }
+        finally
+        {
+            RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
+            MatrixStackUtils.restoreMatrices();
+        }
     }
 
     private void drawAxes(PoseStack stack, StencilMap map, float axisSize, float axisOffset)
     {
         float scale = BBSSettings.axesScale.get();
         float thickness = BBSSettings.axesThickness.get();
-        boolean editing = this.currentTransform != null && this.currentTransform.isEditing();
-        int activeMode = editing ? this.currentTransform.getMode() : -1;
-        boolean showMove = this.mode.shows(Operation.MOVE) && (!editing || activeMode == Operation.MOVE.modeOrdinal);
-        boolean showScale = this.mode.shows(Operation.SCALE) && (!editing || activeMode == Operation.SCALE.modeOrdinal);
-        boolean showRotate = this.mode.shows(Operation.ROTATE) && (!editing || activeMode == Operation.ROTATE.modeOrdinal);
+        Handle active = this.activeDragHandle();
+        boolean showMove = this.mode.shows(Operation.MOVE) && (active == null || active.op == Operation.MOVE || active.op == Operation.SCREEN);
+        boolean showScale = this.mode.shows(Operation.SCALE) && (active == null || active.op == Operation.SCALE || active.op == Operation.SCALE_ALL);
+        boolean showRotate = this.mode.shows(Operation.ROTATE) && (active == null || active.op == Operation.ROTATE || active.op == Operation.VIEW || active.op == Operation.TRACKBALL);
         axisSize *= scale * this.combinedInnerScale();
         axisOffset *= scale * thickness;
 
         RenderSystem.disableDepthTest();
-
-        if (showRotate)
+        try
         {
-            this.updateVbos();
-
-            boolean rotating = editing && activeMode == Operation.ROTATE.modeOrdinal;
-            Axis activeAxis = rotating ? this.currentTransform.getAxis() : null;
-            boolean viewActive = rotating && this.currentTransform.isViewRotate();
-
-            if (!BBSSettings.rotateHideRings.get())
+            if (showRotate)
             {
-                if (!rotating || activeAxis == Axis.Z) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Z, STENCIL_ROTATE_Z / 255F, 0F, 0F, 1F);
-                if (!rotating || activeAxis == Axis.X) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.X, STENCIL_ROTATE_X / 255F, 0F, 0F, 1F);
-                if (!rotating || activeAxis == Axis.Y) this.drawCachedRing(stack, this.rotateStencilRingVbo, Axis.Y, STENCIL_ROTATE_Y / 255F, 0F, 0F, 1F);
+                this.updateVbos();
+
+                if (!BBSSettings.rotateHideRings.get())
+                {
+                    float radius = 0.22F * scale;
+                    float ringThickness = 0.02F * scale * thickness;
+
+                    if (active == null || active == Handle.ROTATE_Z) this.drawOccludedRing(stack, Axis.Z, radius, ringThickness, STENCIL_ROTATE_Z / 255F, 0F, 0F);
+                    if (active == null || active == Handle.ROTATE_X) this.drawOccludedRing(stack, Axis.X, radius, ringThickness, STENCIL_ROTATE_X / 255F, 0F, 0F);
+                    if (active == null || active == Handle.ROTATE_Y) this.drawOccludedRing(stack, Axis.Y, radius, ringThickness, STENCIL_ROTATE_Y / 255F, 0F, 0F);
+                }
+
+                if (active == null || active == Handle.VIEW)
+                {
+                    this.drawCachedRingBillboard(stack, this.rotateRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
+                }
             }
 
-            if (!rotating || viewActive)
+            if (showMove || showScale)
             {
-                this.drawCachedRingBillboard(stack, this.rotateStencilRingVbo, STENCIL_VIEW / 255F, 0F, 0F, 1F);
+                Handle barX = showMove ? Handle.MOVE_X : Handle.SCALE_X;
+                Handle barY = showMove ? Handle.MOVE_Y : Handle.SCALE_Y;
+                Handle barZ = showMove ? Handle.MOVE_Z : Handle.SCALE_Z;
+                Handle planeXZ = showMove ? Handle.MOVE_XZ : Handle.SCALE_XZ;
+                Handle planeXY = showMove ? Handle.MOVE_XY : Handle.SCALE_XY;
+                Handle planeZY = showMove ? Handle.MOVE_ZY : Handle.SCALE_ZY;
+                BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+
+                if (active == null || active == barX) Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, barX.index / 255F, 0F, 0F);
+                if (active == null || active == barY) Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, barY.index / 255F, 0F, 0F);
+                if (active == null || active == barZ) Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, barZ.index / 255F, 0F, 0F);
+                Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, 0F, 0F, 0F);
+
+                if (showMove && (active == null || active == Handle.SCREEN))
+                {
+                    float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
+
+                    Draw.fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, STENCIL_SCREEN / 255F, 0F, 0F);
+                }
+
+                if (showScale && !showMove && (active == null || active == Handle.SCALE_ALL))
+                {
+                    float scaleAllHalf = SCREEN_CUBE_HALF * scale * thickness;
+
+                    Draw.fillBox(builder, stack, -scaleAllHalf, -scaleAllHalf, -scaleAllHalf, scaleAllHalf, scaleAllHalf, scaleAllHalf, STENCIL_SCALE_ALL / 255F, 0F, 0F);
+                }
+
+                float planeStart = axisSize * 0.2F;
+                float planeEnd = planeStart + axisSize * 0.2F;
+                float planeHalf = axisOffset * 0.5F;
+
+                if (active == null || active == planeXZ) Draw.fillBox(builder, stack, planeStart, -planeHalf, planeStart, planeEnd, planeHalf, planeEnd, planeXZ.index / 255F, 0F, 0F);
+                if (active == null || active == planeXY) Draw.fillBox(builder, stack, planeStart, planeStart, -planeHalf, planeEnd, planeEnd, planeHalf, planeXY.index / 255F, 0F, 0F);
+                if (active == null || active == planeZY) Draw.fillBox(builder, stack, -planeHalf, planeStart, planeStart, planeHalf, planeEnd, planeEnd, planeZY.index / 255F, 0F, 0F);
+
+                if (showScale)
+                {
+                    float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
+
+                    if (active == null || active == Handle.SCALE_X) Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, STENCIL_SCALE_X / 255F, 0F, 0F);
+                    if (active == null || active == Handle.SCALE_Y) Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, STENCIL_SCALE_Y / 255F, 0F, 0F);
+                    if (active == null || active == Handle.SCALE_Z) Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, STENCIL_SCALE_Z / 255F, 0F, 0F);
+                }
+
+                RenderSystem.setShader(GameRenderer::getPositionColorShader);
+                BufferUploader.drawWithShader(builder.buildOrThrow());
             }
         }
-
-        if (showMove || showScale)
+        finally
         {
-            int barX = showMove ? STENCIL_X : STENCIL_SCALE_X;
-            int barY = showMove ? STENCIL_Y : STENCIL_SCALE_Y;
-            int barZ = showMove ? STENCIL_Z : STENCIL_SCALE_Z;
-            int planeXZ = showMove ? STENCIL_XZ : STENCIL_SCALE_XZ;
-            int planeXY = showMove ? STENCIL_XY : STENCIL_SCALE_XY;
-            int planeZY = showMove ? STENCIL_ZY : STENCIL_SCALE_ZY;
-            BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-
-            Draw.fillBox(builder, stack, 0, -axisOffset, -axisOffset, axisSize, axisOffset, axisOffset, barX / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -axisOffset, 0, -axisOffset, axisOffset, axisSize, axisOffset, barY / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, 0, axisOffset, axisOffset, axisSize, barZ / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, 0F, 0F, 0F);
-
-            if (showMove)
-            {
-                float screenHalf = SCREEN_CUBE_HALF * scale * thickness;
-
-                Draw.fillBox(builder, stack, -screenHalf, -screenHalf, -screenHalf, screenHalf, screenHalf, screenHalf, STENCIL_SCREEN / 255F, 0F, 0F);
-            }
-
-            float planeStart = axisSize * 0.2F;
-            float planeEnd = planeStart + axisSize * 0.4F * thickness;
-            float planeHalf = axisOffset * 0.5F;
-
-            Draw.fillBox(builder, stack, planeStart, -planeHalf, planeStart, planeEnd, planeHalf, planeEnd, planeXZ / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, planeStart, planeStart, -planeHalf, planeEnd, planeEnd, planeHalf, planeXY / 255F, 0F, 0F);
-            Draw.fillBox(builder, stack, -planeHalf, planeStart, planeStart, planeHalf, planeEnd, planeEnd, planeZY / 255F, 0F, 0F);
-
-            if (showScale)
-            {
-                float cubeHalf = SCALE_CUBE_HALF * scale * thickness;
-
-                Draw.fillBox(builder, stack, axisSize - cubeHalf, -cubeHalf, -cubeHalf, axisSize + cubeHalf, cubeHalf, cubeHalf, STENCIL_SCALE_X / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -cubeHalf, axisSize - cubeHalf, -cubeHalf, cubeHalf, axisSize + cubeHalf, cubeHalf, STENCIL_SCALE_Y / 255F, 0F, 0F);
-                Draw.fillBox(builder, stack, -cubeHalf, -cubeHalf, axisSize - cubeHalf, cubeHalf, cubeHalf, axisSize + cubeHalf, STENCIL_SCALE_Z / 255F, 0F, 0F);
-            }
-
-            RenderSystem.setShader(GameRenderer::getPositionColorShader);
-            BufferUploader.drawWithShader(builder.buildOrThrow());
+            RenderSystem.enableDepthTest();
         }
-
-        RenderSystem.enableDepthTest();
     }
 
     public static enum Mode
@@ -1200,7 +1434,7 @@ public class Gizmo
 
     public static enum Operation
     {
-        MOVE(0), SCALE(1), ROTATE(2), VIEW(2), TRACKBALL(2), SCREEN(0);
+        MOVE(0), SCALE(1), SCALE_ALL(1), ROTATE(2), VIEW(2), TRACKBALL(2), SCREEN(0);
 
         public final int modeOrdinal;
 
@@ -1229,7 +1463,8 @@ public class Gizmo
         ROTATE_Z(STENCIL_ROTATE_Z, Operation.ROTATE, Axis.Z, null),
         TRACKBALL(STENCIL_TRACKBALL, Operation.TRACKBALL, null, null),
         VIEW(STENCIL_VIEW, Operation.VIEW, null, null),
-        SCREEN(STENCIL_SCREEN, Operation.SCREEN, null, null);
+        SCREEN(STENCIL_SCREEN, Operation.SCREEN, null, null),
+        SCALE_ALL(STENCIL_SCALE_ALL, Operation.SCALE_ALL, null, null);
 
         public final int index;
         public final Operation op;
@@ -1279,5 +1514,61 @@ public class Gizmo
     private float combinedInnerScale()
     {
         return this.mode == Mode.COMBINED && !BBSSettings.rotateHideRings.get() ? COMBINED_INNER_SCALE : 1F;
+    }
+
+    private Handle activeDragHandle()
+    {
+        UIPropTransform transform = this.currentTransform;
+
+        if (!BBSSettings.hideInactiveHandles.get() || transform == null || !transform.isEditing())
+        {
+            return null;
+        }
+
+        int operation = transform.getMode();
+        Axis axis = transform.getAxis();
+
+        if (operation == Operation.ROTATE.modeOrdinal)
+        {
+            if (transform.isSphereRotate()) return Handle.TRACKBALL;
+            if (transform.isViewRotate()) return Handle.VIEW;
+            if (axis == Axis.X) return Handle.ROTATE_X;
+            if (axis == Axis.Y) return Handle.ROTATE_Y;
+            if (axis == Axis.Z) return Handle.ROTATE_Z;
+
+            return null;
+        }
+
+        if (operation == Operation.MOVE.modeOrdinal && transform.isScreenTranslate())
+        {
+            return Handle.SCREEN;
+        }
+
+        if (operation == Operation.SCALE.modeOrdinal && transform.isScaleAll())
+        {
+            return Handle.SCALE_ALL;
+        }
+
+        Operation handleOperation = operation == Operation.SCALE.modeOrdinal ? Operation.SCALE : Operation.MOVE;
+        Axis axis2 = transform.getAxis2();
+
+        for (Handle handle : Handle.values())
+        {
+            if (handle.op != handleOperation)
+            {
+                continue;
+            }
+
+            boolean matches = axis2 == null
+                ? handle.axis == axis && handle.axis2 == null
+                : (handle.axis == axis && handle.axis2 == axis2) || (handle.axis == axis2 && handle.axis2 == axis);
+
+            if (matches)
+            {
+                return handle;
+            }
+        }
+
+        return null;
     }
 }

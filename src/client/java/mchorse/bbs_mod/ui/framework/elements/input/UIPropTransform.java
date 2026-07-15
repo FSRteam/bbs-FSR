@@ -4,12 +4,14 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.MathBuilder;
+import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
@@ -42,16 +44,19 @@ public class UIPropTransform extends UITransform
     private static final float STEP_MODIFIER = 5F;
     private static final float DEPTH_WHEEL_FACTOR = 0.05F;
     private static final float TRACKBALL_WHEEL_DEG = 5F;
+    private static final float FINE_DRAG_FACTOR = 0.1F;
 
     private Transform transform;
     private Runnable preCallback;
     private Runnable postCallback;
+    private Runnable endCallback;
 
     private boolean editing;
     private int mode;
     private Axis axis = Axis.X;
     private Axis axis2;
     private boolean hotkeyMode;
+    private boolean scaleAll;
     private int lastX;
     private int lastY;
     private Transform cache = new Transform();
@@ -80,6 +85,7 @@ public class UIPropTransform extends UITransform
     private final Vector2f dragScreenCenter = new Vector2f();
     private float dragLastScreenAngle;
     private float dragRotateSign = 1F;
+    private float viewGrabScreenAngle;
     private boolean dragRotateGizmoSpace;
     private boolean dragHasStart;
     private final Vector3f viewLocalAxis = new Vector3f();
@@ -130,6 +136,11 @@ public class UIPropTransform extends UITransform
     private DragKind dragKind = DragKind.AXIS;
     private final StringBuilder numericInput = new StringBuilder();
     private boolean numericActive;
+    private float fineOffsetX;
+    private float fineOffsetY;
+    private int fineLastX;
+    private int fineLastY;
+    private boolean fineHasLast;
 
     public UIPropTransform()
     {
@@ -152,6 +163,13 @@ public class UIPropTransform extends UITransform
         this.iconT.setEnabled(true);
         this.updateLocalUI();
 
+        /* Each finished value-field drag closes the current undo block, so dragging a
+         * field several times in a row undoes one drag at a time (see endGesture). */
+        for (UITrackpad field : new UITrackpad[]{this.tx, this.ty, this.tz, this.sx, this.sy, this.sz, this.rx, this.ry, this.rz, this.r2x, this.r2y, this.r2z})
+        {
+            field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.endGesture());
+        }
+
         this.noCulling();
     }
 
@@ -159,14 +177,21 @@ public class UIPropTransform extends UITransform
     {
         return this.callbacks(
             () -> notifier.get().preNotify(),
-            () -> notifier.get().postNotify()
+            () -> notifier.get().postNotify(),
+            () -> notifier.get().preNotify(IValueListener.FLAG_UNMERGEABLE)
         );
     }
 
     public UIPropTransform callbacks(Runnable pre, Runnable post)
     {
+        return this.callbacks(pre, post, null);
+    }
+
+    public UIPropTransform callbacks(Runnable pre, Runnable post, Runnable end)
+    {
         this.preCallback = pre;
         this.postCallback = post;
+        this.endCallback = end;
 
         return this;
     }
@@ -179,6 +204,17 @@ public class UIPropTransform extends UITransform
     public void postCallback()
     {
         if (this.postCallback != null) this.postCallback.run();
+    }
+
+    /**
+     * Close the current undo block so the next transform gesture starts a fresh,
+     * separately-undoable entry. Fired at each gesture boundary — a value-field drag
+     * end and the gizmo commit — rather than per value change, so one continuous drag
+     * still merges into a single undo while consecutive drags stay distinct.
+     */
+    public void endGesture()
+    {
+        if (this.endCallback != null) this.endCallback.run();
     }
 
     public void setModel()
@@ -252,6 +288,77 @@ public class UIPropTransform extends UITransform
     public float getAccumulatedRotateDeg()
     {
         return this.accumulatedRotateDeg;
+    }
+
+    public float getViewGrabScreenAngle()
+    {
+        return this.viewGrabScreenAngle;
+    }
+
+    public float getViewScreenSweepRad()
+    {
+        return MathUtils.toRad(this.accumulatedRotateDeg) * this.dragRotateSign;
+    }
+
+    /** Short on-screen summary of the currently accumulated transform drag. */
+    public String getDragReadout()
+    {
+        if (!this.editing || this.transform == null)
+        {
+            return null;
+        }
+
+        if (this.mode == 2)
+        {
+            if (this.dragKind == DragKind.AXIS)
+            {
+                return String.format("%.1f°", this.accumulatedRotateDeg);
+            }
+
+            Vector3f start = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
+            Vector3f now = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
+
+            return String.format("X %+.1f°  Y %+.1f°  Z %+.1f°",
+                MathUtils.toDeg(now.x - start.x),
+                MathUtils.toDeg(now.y - start.y),
+                MathUtils.toDeg(now.z - start.z));
+        }
+
+        Vector3f delta;
+        boolean allAxes;
+
+        if (this.mode == 0)
+        {
+            delta = new Vector3f(this.transform.translate).sub(this.cache.translate);
+            allAxes = this.dragKind == DragKind.SCREEN;
+        }
+        else if (this.mode == 1)
+        {
+            delta = new Vector3f(this.transform.scale).sub(this.cache.scale);
+            allAxes = this.scaleAll;
+        }
+        else
+        {
+            return null;
+        }
+
+        StringBuilder builder = new StringBuilder();
+
+        if (allAxes || this.axis == Axis.X || this.axis2 == Axis.X) this.appendReadoutAxis(builder, "X", delta.x);
+        if (allAxes || this.axis == Axis.Y || this.axis2 == Axis.Y) this.appendReadoutAxis(builder, "Y", delta.y);
+        if (allAxes || this.axis == Axis.Z || this.axis2 == Axis.Z) this.appendReadoutAxis(builder, "Z", delta.z);
+
+        return builder.isEmpty() ? null : builder.toString();
+    }
+
+    private void appendReadoutAxis(StringBuilder builder, String label, float value)
+    {
+        if (!builder.isEmpty())
+        {
+            builder.append("  ");
+        }
+
+        builder.append(label).append(' ').append(String.format("%+.3f", value));
     }
 
     public GizmoDrag getDrag()
@@ -431,6 +538,14 @@ public class UIPropTransform extends UITransform
     {
         GizmoDrag drag = this.getHotkeyDrag();
         boolean ray = BBSSettings.transformHotkeys3dRay.get() && drag != null;
+
+        if (mode == 1)
+        {
+            this.enableUniformScale(drag, true);
+
+            return;
+        }
+
         HotkeyTarget target = this.nextHotkeyTarget(mode, ray);
 
         if (target == HotkeyTarget.VIEW)
@@ -792,6 +907,58 @@ public class UIPropTransform extends UITransform
         }
     }
 
+    public void enableUniformScale(GizmoDrag drag)
+    {
+        this.enableUniformScale(drag, false);
+    }
+
+    /** Start a uniform three-axis scale from the center handle or the S hotkey. */
+    public void enableUniformScale(GizmoDrag drag, boolean hotkeyMode)
+    {
+        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.SCALE))
+        {
+            return;
+        }
+
+        UIContext context = this.getContext();
+
+        if (context == null || this.transform == null)
+        {
+            return;
+        }
+
+        this.clearNumericInput();
+
+        if (this.editing)
+        {
+            this.restore(true);
+        }
+
+        this.clearGizmoDrag();
+        this.editing = true;
+        this.mode = 1;
+        this.dragKind = DragKind.AXIS;
+        this.scaleAll = true;
+        this.axis = Axis.X;
+        this.axis2 = null;
+        this.hotkeyMode = hotkeyMode;
+        this.drag = drag;
+        this.lastX = context.mouseX;
+        this.lastY = context.mouseY;
+        this.cache.copy(this.transform);
+        Gizmo.INSTANCE.trackTransform(this);
+
+        if (!this.handler.hasParent())
+        {
+            context.menu.overlay.add(this.handler);
+        }
+    }
+
+    public boolean isScaleAll()
+    {
+        return this.scaleAll;
+    }
+
     public void enableScreenTranslate(GizmoDrag drag)
     {
         this.enableScreenTranslate(drag, false);
@@ -846,6 +1013,7 @@ public class UIPropTransform extends UITransform
         this.axis = axis;
         this.axis2 = null;
         this.dragKind = DragKind.AXIS;
+        this.scaleAll = false;
 
         if (!this.editing)
         {
@@ -929,6 +1097,7 @@ public class UIPropTransform extends UITransform
     {
         this.disable();
         this.setTransform(this.transform);
+        this.endGesture();
     }
 
     public void rejectChanges()
@@ -957,6 +1126,7 @@ public class UIPropTransform extends UITransform
 
         this.lastX = context.mouseX;
         this.lastY = context.mouseY;
+        this.resetFineCursor(context.mouseX, context.mouseY);
         this.setTransform(this.transform);
     }
 
@@ -1146,7 +1316,7 @@ public class UIPropTransform extends UITransform
 
     private void applyNumericScale(double value)
     {
-        boolean all = Window.isCtrlPressed();
+        boolean all = this.scaleAll || Window.isCtrlPressed();
         Vector3f scale = new Vector3f(this.cache.scale);
 
         if (all || this.axis == Axis.X || this.axis2 == Axis.X) scale.x = (float) (this.cache.scale.x * value);
@@ -1344,6 +1514,46 @@ public class UIPropTransform extends UITransform
         return true;
     }
 
+    private void updateFineCursor(int mouseX, int mouseY)
+    {
+        if (!this.fineHasLast)
+        {
+            this.resetFineCursor(mouseX, mouseY);
+
+            return;
+        }
+
+        if (Window.isShiftPressed())
+        {
+            float keep = 1F - FINE_DRAG_FACTOR;
+
+            this.fineOffsetX += (mouseX - this.fineLastX) * keep;
+            this.fineOffsetY += (mouseY - this.fineLastY) * keep;
+        }
+
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+    }
+
+    private void resetFineCursor(int mouseX, int mouseY)
+    {
+        this.fineOffsetX = 0F;
+        this.fineOffsetY = 0F;
+        this.fineLastX = mouseX;
+        this.fineLastY = mouseY;
+        this.fineHasLast = true;
+    }
+
+    private int fineX(int mouseX)
+    {
+        return Math.round(mouseX - this.fineOffsetX);
+    }
+
+    private int fineY(int mouseY)
+    {
+        return Math.round(mouseY - this.fineOffsetY);
+    }
+
     @Override
     public void render(UIContext context)
     {
@@ -1368,12 +1578,15 @@ public class UIPropTransform extends UITransform
             int border = 5;
             int borderPadding = border + 1;
 
+            this.updateFineCursor(context.mouseX, context.mouseY);
+
             if (rawX <= border)
             {
                 Window.moveCursor(w - borderPadding, (int) mc.mouseHandler.ypos());
 
                 this.lastX = context.menu.width - (int) (borderPadding / fx);
                 this.checker.mark();
+                this.resetFineCursor(this.lastX, context.mouseY);
 
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
@@ -1383,6 +1596,7 @@ public class UIPropTransform extends UITransform
 
                 this.lastX = (int) (borderPadding / fx);
                 this.checker.mark();
+                this.resetFineCursor(this.lastX, context.mouseY);
 
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
@@ -1392,6 +1606,7 @@ public class UIPropTransform extends UITransform
 
                 this.lastY = context.menu.height - (int) (borderPadding / fy);
                 this.checker.mark();
+                this.resetFineCursor(context.mouseX, this.lastY);
 
                 if (this.useRayDrag()) this.beginRayDrag(context.mouseX, this.lastY);
             }
@@ -1401,6 +1616,7 @@ public class UIPropTransform extends UITransform
 
                 this.lastY = (int) (borderPadding / fy);
                 this.checker.mark();
+                this.resetFineCursor(context.mouseX, this.lastY);
 
                 if (this.useRayDrag()) this.beginRayDrag(context.mouseX, this.lastY);
             }
@@ -1409,13 +1625,13 @@ public class UIPropTransform extends UITransform
                 int dx = context.mouseX - this.lastX;
                 int dy = context.mouseY - this.lastY;
                 Vector3f vector = this.getValue();
-                boolean all = this.mode == 1 && Window.isCtrlPressed();
+                boolean all = this.mode == 1 && (this.scaleAll || Window.isCtrlPressed());
                 UITrackpad reference = this.mode == 0 ? this.tx : (this.mode == 1 ? this.sx : this.rx);
-                float factor = (float) reference.getValueModifier();
+                float factor = (float) reference.getValueModifier() * (Window.isShiftPressed() ? FINE_DRAG_FACTOR : 1F);
 
                 if (this.useRayDrag())
                 {
-                    this.applyRayDrag(context.mouseX, context.mouseY);
+                    this.applyRayDrag(this.fineX(context.mouseX), this.fineY(context.mouseY));
                     this.setTransform(this.transform);
                 }
                 else if (this.mode == 0 && this.applyGizmoTranslate(dx, dy, factor))
@@ -1602,6 +1818,8 @@ public class UIPropTransform extends UITransform
         this.drag = null;
         this.dragHasStart = false;
         this.arcballAnchored = false;
+        this.fineHasLast = false;
+        this.scaleAll = false;
         this.axis2 = null;
         this.dragKind = DragKind.AXIS;
     }
@@ -1613,13 +1831,18 @@ public class UIPropTransform extends UITransform
             return false;
         }
 
+        if (this.scaleAll)
+        {
+            return false;
+        }
+
         return this.editing
             && this.transform != null
             && this.drag != null
             && (this.mode != 2 || this.axis2 == null || this.isSphereRotate());
     }
 
-    private boolean isScreenTranslate()
+    public boolean isScreenTranslate()
     {
         return this.mode == 0 && this.dragKind == DragKind.SCREEN;
     }
@@ -1840,7 +2063,7 @@ public class UIPropTransform extends UITransform
 
     private void applyRayScale(Vector3d hit)
     {
-        boolean all = Window.isCtrlPressed();
+        boolean all = this.scaleAll || Window.isCtrlPressed();
         Vector3f scale = new Vector3f(this.dragStartScale);
 
         this.applyRayScaleAxis(hit, this.axis, all, scale);
@@ -2003,6 +2226,7 @@ public class UIPropTransform extends UITransform
 
         this.dragAxisDir.set(viewAxis.normalize());
         this.dragLastScreenAngle = this.screenAngle(mouseX, mouseY);
+        this.viewGrabScreenAngle = this.dragLastScreenAngle;
         this.dragRotateSign = -1F;
         this.accumulatedRotateDeg = 0F;
         this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();

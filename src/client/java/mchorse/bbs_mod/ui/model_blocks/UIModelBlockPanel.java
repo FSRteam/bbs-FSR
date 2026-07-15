@@ -433,7 +433,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
             Gizmo.INSTANCE.renderStencilInterface(context, this.gizmoProjection, this.getGizmoArea(), this.gizmoStencilMap);
 
-            this.gizmoStencil.pick((int) mc.mouseHandler.xpos(), h - (int) mc.mouseHandler.ypos());
+            this.gizmoStencil.pick((int) mc.mouseHandler.xpos(), h - (int) mc.mouseHandler.ypos(), BBSSettings.gizmoHoverTolerance.get() * BBSModClient.getGUIScale(), Gizmo.STENCIL_MAX);
         }
         finally
         {
@@ -633,6 +633,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         this.renderGizmoHover(context);
         this.gizmo.renderSphereHighlight(context);
+        this.gizmo.renderReadout(context);
     }
 
     private void renderGizmoHover(UIContext context)

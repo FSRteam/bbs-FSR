@@ -158,6 +158,15 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         }
     }
 
+    /**
+     * Toggle a bone in the pose editor's multi-selection without rebuilding the panel.
+     * Only model forms with a live pose editor handle this operation.
+     */
+    public boolean toggleBoneSelection(String bone)
+    {
+        return false;
+    }
+
     public Class<?> getActivePanelClass()
     {
         return this.view == null ? null : this.view.getClass();

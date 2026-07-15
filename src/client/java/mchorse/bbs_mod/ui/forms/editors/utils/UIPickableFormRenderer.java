@@ -229,7 +229,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
                     stack.popPose();
                 }
 
-                this.stencil.pickGUI(context, this.area);
+                this.stencil.pickGUI(context, this.area, BBSSettings.gizmoHoverTolerance.get(), Gizmo.STENCIL_MAX);
             }
             finally
             {
@@ -303,6 +303,8 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     {
         super.render(context);
         this.gizmoInteraction.update(context);
+        this.gizmoInteraction.renderSphereHighlight(context);
+        this.gizmoInteraction.renderReadout(context);
 
         if (!this.stencil.hasPicked())
         {

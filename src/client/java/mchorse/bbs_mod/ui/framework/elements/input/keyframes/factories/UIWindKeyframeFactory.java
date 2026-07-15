@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -26,6 +27,7 @@ public class UIWindKeyframeFactory extends UIKeyframeFactory<WindControl>
     public UITrackpad turbulence;
     public UITrackpad turbulenceSpeed;
     public UITrackpad turbulenceScale;
+    public UIToggle local;
 
     private boolean syncing;
 
@@ -49,17 +51,17 @@ public class UIWindKeyframeFactory extends UIKeyframeFactory<WindControl>
         this.turbulenceScale = new UITrackpad((v) -> this.edit((control) -> control.turbulenceScale = v.floatValue()));
         this.turbulenceScale.limit(0D, 10D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
 
+        this.local = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL, (b) -> this.edit((control) -> control.local = b.getValue()));
+        this.local.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL_TOOLTIP);
+
         this.scroll.add(UI.column(
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH).marginTop(UIConstants.SECTION_GAP),
-            this.strength,
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH, this.strength).marginTop(UIConstants.SECTION_GAP),
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION).marginTop(UIConstants.SECTION_GAP),
             UI.row(this.x, this.y, this.z),
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE).marginTop(UIConstants.SECTION_GAP),
-            this.turbulence,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED).marginTop(UIConstants.SECTION_GAP),
-            this.turbulenceSpeed,
-            UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE).marginTop(UIConstants.SECTION_GAP),
-            this.turbulenceScale
+            this.local.marginTop(UIConstants.SECTION_GAP),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE, this.turbulence).marginTop(UIConstants.SECTION_GAP),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED, this.turbulenceSpeed).marginTop(UIConstants.SECTION_GAP),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE, this.turbulenceScale).marginTop(UIConstants.SECTION_GAP)
         ));
 
         this.display();
@@ -85,6 +87,7 @@ public class UIWindKeyframeFactory extends UIKeyframeFactory<WindControl>
             this.turbulence.setValue(control.turbulence);
             this.turbulenceSpeed.setValue(control.turbulenceSpeed);
             this.turbulenceScale.setValue(control.turbulenceScale);
+            this.local.setValue(control.local);
         }
         finally
         {
