@@ -6,10 +6,12 @@ import mchorse.bbs_mod.client.compat.ClientApiCompat;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
+import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.graphics.window.Window;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -28,6 +30,8 @@ import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
+import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.GameShuttingDownEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
@@ -48,6 +52,7 @@ public final class BBSClientNeoEvents
         modBus.addListener(BBSClientNeoEvents::onClientSetup);
         modBus.addListener(BBSClientNeoEvents::onRegisterKeyMappings);
         modBus.addListener(BBSClientNeoEvents::onRegisterRenderers);
+        modBus.addListener(BBSClientNeoEvents::onRegisterClientExtensions);
     }
 
     private static void onClientSetup(FMLClientSetupEvent event)
@@ -80,6 +85,27 @@ public final class BBSClientNeoEvents
     {
         BBSModClient.registerKeyMappings(event::register);
         ClientApiCompat.registerQueuedKeyMappings(event::register);
+    }
+
+    private static void onRegisterClientExtensions(RegisterClientExtensionsEvent event)
+    {
+        event.registerItem(new IClientItemExtensions()
+        {
+            @Override
+            public BlockEntityWithoutLevelRenderer getCustomRenderer()
+            {
+                return BBSItemRenderers.getModelBlockCustomRenderer();
+            }
+        }, BBSMod.MODEL_BLOCK_ITEM.get());
+
+        event.registerItem(new IClientItemExtensions()
+        {
+            @Override
+            public BlockEntityWithoutLevelRenderer getCustomRenderer()
+            {
+                return BBSItemRenderers.getGunCustomRenderer();
+            }
+        }, BBSMod.GUN_ITEM.get());
     }
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event)

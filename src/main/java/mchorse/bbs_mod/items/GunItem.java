@@ -3,7 +3,6 @@ package mchorse.bbs_mod.items;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.forms.FormUtils;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.Entity;
@@ -12,9 +11,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
-
-import java.util.function.Consumer;
 
 public class GunItem extends Item
 {
@@ -87,36 +83,5 @@ public class GunItem extends Item
     private GunProperties getProperties(ItemStack stack)
     {
         return GunProperties.get(stack);
-    }
-
-    @Override
-    public void initializeClient(Consumer<IClientItemExtensions> consumer)
-    {
-        consumer.accept(new IClientItemExtensions()
-        {
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer()
-            {
-                return resolveRenderer("getGunCustomRenderer");
-            }
-        });
-    }
-
-    private BlockEntityWithoutLevelRenderer resolveRenderer(String methodName)
-    {
-        try
-        {
-            Class<?> renderersClass = Class.forName("mchorse.bbs_mod.client.renderer.item.BBSItemRenderers");
-            Object renderer = renderersClass.getMethod(methodName).invoke(null);
-
-            if (renderer instanceof BlockEntityWithoutLevelRenderer typedRenderer)
-            {
-                return typedRenderer;
-            }
-        }
-        catch (Exception e)
-        {}
-
-        return null;
     }
 }
