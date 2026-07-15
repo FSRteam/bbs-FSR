@@ -57,6 +57,8 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
+import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -69,6 +71,7 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.utils.pose.Transform;
+import mchorse.bbs_mod.utils.presets.PresetManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.BlockHitResult;
@@ -100,6 +103,8 @@ public class UIReplayList extends UIList<ReplayListEntry>
     public UIFilmPanel panel;
     private final Consumer<Form> formConsumer;
 
+    private final UICopyPasteController presetController;
+
     /** Category names whose replay rows are hidden (headers stay visible). */
     private final Set<String> collapsedCategories = new HashSet<>();
 
@@ -129,10 +134,20 @@ public class UIReplayList extends UIList<ReplayListEntry>
         this.formConsumer = formConsumer;
         this.panel = panel;
 
+        this.presetController = new UICopyPasteController(PresetManager.REPLAYS, "_CopyReplay")
+            .supplier(() -> this.hasReplaySelection() ? this.replaysToData() : null)
+            .consumer((data, mouseX, mouseY) -> this.pasteReplay(data))
+            .canCopy(this::hasReplaySelection)
+            .canPaste(() -> this.panel != null && this.panel.getData() != null);
+
         this.multi().sorting();
         this.context((menu) ->
         {
             Film film = this.panel.getData();
+            UIContext context = this.getContext();
+
+            menu.custom(new UIPresetContextMenu(this.presetController, context.mouseX, context.mouseY)
+                .labels(UIKeys.SCENE_REPLAYS_CONTEXT_COPY, UIKeys.SCENE_REPLAYS_CONTEXT_PASTE));
 
             menu.action(Icons.ADD, UIKeys.SCENE_REPLAYS_CONTEXT_ADD, this::addReplay);
 
@@ -146,18 +161,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
                 String cat = this.contextFolderCategoryName;
 
                 menu.action(Icons.TRASH, UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE_CATEGORY, () -> this.removeReplayCategory(cat));
-            }
-
-            if (this.hasReplaySelection())
-            {
-                menu.action(Icons.COPY, UIKeys.SCENE_REPLAYS_CONTEXT_COPY, this::copyReplay);
-            }
-
-            MapType copyReplay = Window.getClipboardMap("_CopyReplay");
-
-            if (copyReplay != null)
-            {
-                menu.action(Icons.PASTE, UIKeys.SCENE_REPLAYS_CONTEXT_PASTE, () -> this.pasteReplay(copyReplay));
             }
 
             if (film != null)
@@ -1864,6 +1867,15 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     public void copyReplay()
     {
+        Window.setClipboard(this.replaysToData(), "_CopyReplay");
+    }
+
+    /**
+     * Serialize the selected replays into the shared {@code {"replays": [...]}} format
+     * used by both clipboard copy/paste and presets.
+     */
+    private MapType replaysToData()
+    {
         MapType replays = new MapType();
         ListType replayList = new ListType();
 
@@ -1874,7 +1886,20 @@ public class UIReplayList extends UIList<ReplayListEntry>
             replayList.add(replay.toData());
         }
 
-        Window.setClipboard(replays, "_CopyReplay");
+        return replays;
+    }
+
+    /**
+     * Open the presets overlay for replays (save the current selection, or load a preset into the film).
+     */
+    public void openReplayPresets()
+    {
+        UIContext context = this.getContext();
+
+        if (context != null)
+        {
+            this.presetController.openPresets(context, context.mouseX, context.mouseY);
+        }
     }
 
     public void pasteReplay(MapType data)

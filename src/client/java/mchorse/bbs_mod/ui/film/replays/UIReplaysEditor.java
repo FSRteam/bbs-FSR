@@ -1130,6 +1130,11 @@ public class UIReplaysEditor extends UIElement {
         this.pickFormBone(form, bone, false);
     }
 
+    /** Route deferred gizmo-sphere picks through the same modifier gestures as direct bone picks. */
+    public void pickFormWithOffers(UIContext context, Form form, String bone) {
+        UIReplaysEditorUtils.pickFormWithOffers(context, new Pair<>(form, bone), this::pickFormBone);
+    }
+
     /**
      * Picking a model bone in the viewport is a pose edit, but the pose/bone tracks
      * only exist in the {@link ReplayCategory#POSE} category. So when another category

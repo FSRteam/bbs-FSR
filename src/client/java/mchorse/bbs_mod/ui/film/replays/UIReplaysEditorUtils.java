@@ -227,6 +227,55 @@ public class UIReplaysEditorUtils
         }
     }
 
+    public static <T> Keyframe<T> ensureKeyframe(UIKeyframeSheet sheet, float tick)
+    {
+        if (sheet == null)
+        {
+            return null;
+        }
+
+        for (Keyframe<T> keyframe : (List<Keyframe<T>>) sheet.channel.getKeyframes())
+        {
+            if (keyframe.getTick() == tick)
+            {
+                return keyframe;
+            }
+        }
+
+        KeyframeSegment<T> segment = sheet.channel.find(tick);
+        BaseValueBasic property = sheet.property;
+        Keyframe<T> template = null;
+        T value;
+
+        if (segment != null)
+        {
+            value = segment.createInterpolated();
+            template = segment.a;
+        }
+        else if (property != null)
+        {
+            value = (T) sheet.channel.getFactory().copy(property.get());
+        }
+        else if (sheet.seed != null)
+        {
+            value = (T) sheet.seed.get();
+        }
+        else
+        {
+            value = (T) sheet.channel.getFactory().createEmpty();
+        }
+
+        int index = sheet.channel.insert(tick, value);
+        Keyframe<T> keyframe = (Keyframe<T>) sheet.channel.get(index);
+
+        if (template != null && template != keyframe)
+        {
+            keyframe.copyOverExtra(template);
+        }
+
+        return keyframe;
+    }
+
     public static <T> void forEachSelectedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, Consumer<Keyframe<T>> consumer)
     {
         if (editor == null || keyframe == null)
@@ -244,6 +293,29 @@ public class UIReplaysEditorUtils
             for (Keyframe selected : sheet.selection.getSelected())
             {
                 consumer.accept((Keyframe<T>) selected);
+            }
+        }
+    }
+
+    public static <T> void forEachRecordedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, int tick, Consumer<Keyframe<T>> consumer)
+    {
+        if (editor == null || keyframe == null)
+        {
+            return;
+        }
+
+        for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
+        {
+            if (sheet.channel.getFactory() != keyframe.getFactory() || sheet.selection.getSelected().isEmpty())
+            {
+                continue;
+            }
+
+            Keyframe<T> recorded = ensureKeyframe(sheet, tick);
+
+            if (recorded != null)
+            {
+                consumer.accept(recorded);
             }
         }
     }
@@ -474,6 +546,7 @@ public class UIReplaysEditorUtils
                 ModelPhysicsConfig.Wind wind = config.wind();
 
                 control.strength = wind.strength();
+                control.local = wind.local();
                 control.x = wind.x();
                 control.y = wind.y();
                 control.z = wind.z();
@@ -767,6 +840,17 @@ public class UIReplaysEditorUtils
     {
         if (form == null || keyframeEditor == null || bone.isEmpty())
         {
+            return;
+        }
+
+        /* Keep the live pose factory intact while Ctrl toggles bones; rebuilding
+         * the selected keyframe would reset the accumulated multi-selection. */
+        if (!insert && Window.isCtrlPressed()
+            && keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory
+            && poseFactory.poseEditor.hasBone(bone))
+        {
+            poseFactory.poseEditor.selectBone(bone, true);
+
             return;
         }
 
@@ -1120,7 +1204,7 @@ public class UIReplaysEditorUtils
             return false;
         }
 
-        if (Window.isCtrlPressed())
+        if (Window.isAltPressed() && !Window.isCtrlPressed())
         {
             offerAdjacent(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
         }

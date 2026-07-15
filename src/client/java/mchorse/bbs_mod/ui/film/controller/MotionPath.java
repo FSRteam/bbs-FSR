@@ -87,14 +87,13 @@ public class MotionPath
         "swipe", "jump", "jump_alt", "hurt", "land", "shoot", "consume", "base_pre", "base_post"
     };
 
-    public static void render(IBbsWorldRenderContext context, ValueMotionPath config, UIFilmController controller, Replay replay, float currentTick)
+    public static void render(IBbsWorldRenderContext context, ValueMotionPath config, UIFilmController controller, Replay replay, Pair<String, Boolean> bone, float currentTick)
     {
         if (replay == null || replay.relative.get())
         {
             return;
         }
 
-        Pair<String, Boolean> bone = controller.getBone();
         String bonePath = bone == null ? null : bone.a;
 
         Trajectory trajectory = bonePath == null ? null : boneTrajectory(controller, replay, bonePath);
@@ -145,68 +144,80 @@ public class MotionPath
         RenderSystem.disableDepthTest();
         RenderSystem.disableCull();
 
-        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-
-        /* The interpolated curve: a camera-facing ribbon with a dot on every
-         * tick (so the spacing shows speed), the exact endpoints kept. */
-        trajectory.worldAt(first, POINT_A);
-        POINT_A.sub(cx, cy, cz);
-
-        gradient(config, first, currentTick, first, last, COLOR_A);
-
-        if (config.frames.get())
+        try
         {
-            dot(builder, stack, POINT_A, config.frameSize.get(), brighten(COLOR_A, DOT_COLOR));
-        }
+            BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (float tick = first; tick < last; )
-        {
-            tick = Math.min(tick + 1F, last);
+            /* The interpolated curve: a camera-facing ribbon with a dot on every
+             * tick (so the spacing shows speed), the exact endpoints kept. */
+            trajectory.worldAt(first, POINT_A);
+            POINT_A.sub(cx, cy, cz);
 
-            trajectory.worldAt(tick, POINT_B);
-            POINT_B.sub(cx, cy, cz);
-
-            gradient(config, tick, currentTick, first, last, COLOR_B);
-            ribbon(builder, matrix, POINT_A, POINT_B, COLOR_A, COLOR_B, halfWidth);
+            gradient(config, first, currentTick, first, last, COLOR_A);
 
             if (config.frames.get())
             {
-                dot(builder, stack, POINT_B, config.frameSize.get(), brighten(COLOR_B, DOT_COLOR));
+                dot(builder, stack, POINT_A, config.frameSize.get(), brighten(COLOR_A, DOT_COLOR));
             }
 
-            POINT_A.set(POINT_B);
-            System.arraycopy(COLOR_B, 0, COLOR_A, 0, 3);
-        }
-
-        /* A bigger marker on every keyframe inside the window. */
-        if (config.keyframes.get())
-        {
-            unpack(config.keyframeColor.get(), SCRATCH);
-
-            for (float tick : trajectory.keyframeTicks())
+            for (float tick = first; tick < last; )
             {
-                if (tick >= first && tick <= last)
+                tick = Math.min(tick + 1F, last);
+
+                trajectory.worldAt(tick, POINT_B);
+                POINT_B.sub(cx, cy, cz);
+
+                gradient(config, tick, currentTick, first, last, COLOR_B);
+                ribbon(builder, matrix, POINT_A, POINT_B, COLOR_A, COLOR_B, halfWidth);
+
+                if (config.frames.get())
                 {
-                    trajectory.worldAt(tick, POINT_B);
-                    POINT_B.sub(cx, cy, cz);
-                    dot(builder, stack, POINT_B, config.keyframeSize.get(), SCRATCH);
+                    dot(builder, stack, POINT_B, config.frameSize.get(), brighten(COLOR_B, DOT_COLOR));
+                }
+
+                POINT_A.set(POINT_B);
+                System.arraycopy(COLOR_B, 0, COLOR_A, 0, 3);
+            }
+
+            /* A bigger marker on every keyframe inside the window. */
+            if (config.keyframes.get())
+            {
+                unpack(config.keyframeColor.get(), SCRATCH);
+
+                for (float tick : trajectory.keyframeTicks())
+                {
+                    if (tick >= first && tick <= last)
+                    {
+                        trajectory.worldAt(tick, POINT_B);
+                        POINT_B.sub(cx, cy, cz);
+                        dot(builder, stack, POINT_B, config.keyframeSize.get(), SCRATCH);
+                    }
                 }
             }
-        }
 
-        /* The current frame's place on the path, when it falls inside the window. */
-        if (config.current.get() && currentTick >= first && currentTick <= last)
+            /* The current frame's place on the path, when it falls inside the window. */
+            if (config.current.get() && currentTick >= first && currentTick <= last)
+            {
+                unpack(config.currentColor.get(), SCRATCH);
+                trajectory.worldAt(currentTick, POINT_B);
+                POINT_B.sub(cx, cy, cz);
+                dot(builder, stack, POINT_B, config.currentSize.get(), SCRATCH);
+            }
+
+            com.mojang.blaze3d.vertex.MeshData mesh = builder.build();
+
+            if (mesh == null)
+            {
+                return;
+            }
+
+            BufferUploader.drawWithShader(mesh);
+        }
+        finally
         {
-            unpack(config.currentColor.get(), SCRATCH);
-            trajectory.worldAt(currentTick, POINT_B);
-            POINT_B.sub(cx, cy, cz);
-            dot(builder, stack, POINT_B, config.currentSize.get(), SCRATCH);
+            RenderSystem.enableCull();
+            RenderSystem.enableDepthTest();
         }
-
-        BufferUploader.drawWithShader(builder.buildOrThrow());
-
-        RenderSystem.enableCull();
-        RenderSystem.enableDepthTest();
     }
 
     /**
