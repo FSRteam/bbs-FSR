@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
 import mchorse.bbs_mod.graphics.Framebuffer;
 import mchorse.bbs_mod.graphics.Renderbuffer;
@@ -36,9 +37,11 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 {
     private static final Quad quad = new Quad();
     private static final Quad uvQuad = new Quad();
-    private static final Link framebufferKey = Link.bbs("framebuffer_form");
     private static final Vector3f framebufferLight0 = new Vector3f(0F, 0F, 1F);
     private static final Vector3f framebufferLight1 = new Vector3f(0F, 0F, 1F);
+
+    /* Nested framebuffer forms need separate targets and one outer Iris state change. */
+    private static int depth;
 
     private final Matrix4f projectionMatrix = new Matrix4f();
     private final Matrix4f orthoMatrix = new Matrix4f();
@@ -56,7 +59,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
     @Override
     public void renderBodyParts(FormRenderingContext context)
     {
-        Framebuffer framebuffer = BBSModClient.getFramebuffers().getFramebuffer(framebufferKey, (f) ->
+        Framebuffer framebuffer = BBSModClient.getFramebuffers().getFramebuffer(Link.bbs("framebuffer_form_" + depth), (f) ->
         {
             Texture texture = new Texture();
 
@@ -114,7 +117,26 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         context.stack.last().pose().identity();
         context.stack.last().normal().identity();
 
-        super.renderBodyParts(context);
+        depth += 1;
+
+        if (depth == 1)
+        {
+            BBSRendering.setIrisMainBound(false);
+        }
+
+        try
+        {
+            super.renderBodyParts(context);
+        }
+        finally
+        {
+            depth -= 1;
+
+            if (depth == 0)
+            {
+                BBSRendering.setIrisMainBound(true);
+            }
+        }
 
         context.stack.popPose();
 

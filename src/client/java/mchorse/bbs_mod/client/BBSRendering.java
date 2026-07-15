@@ -11,6 +11,7 @@ import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
+import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -21,7 +22,6 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
@@ -40,6 +40,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexSorting;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
 import org.lwjgl.opengl.GL11;
@@ -148,7 +149,9 @@ public class BBSRendering
 
     public static boolean canReplaceFramebuffer()
     {
-        return customSize && renderingWorld;
+        /* Keep the HUD at export resolution while the world export framebuffer is active.
+         * Film-editor UI remains at the real window size and uses its own preview target. */
+        return customSize && (renderingWorld || (toggleFramebuffer && UIScreen.getCurrentMenu() == null));
     }
 
     public static boolean isCustomSize()
@@ -419,6 +422,8 @@ public class BBSRendering
             }
         }
 
+        renderRecordingOverlay();
+
         toggleFramebuffer(false);
 
         if (pendingExportResolutionAction != null)
@@ -467,29 +472,48 @@ public class BBSRendering
     public static void renderHud(GuiGraphics drawContext, float tickDelta)
     {
         Batcher2D batcher2D = new Batcher2D(drawContext);
-        VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+    }
 
-        if (BBSSettings.recordingOverlays.get() && UIScreen.getCurrentMenu() == null)
+    /**
+     * Draw operator-only recording status after the export texture was copied,
+     * so the status is visible on screen but absent from the encoded frame.
+     */
+    private static void renderRecordingOverlay()
+    {
+        if (!BBSSettings.recordingOverlays.get() || UIScreen.getCurrentMenu() != null)
         {
-            if (BBSModClient.isVideoExportDelayPending())
-            {
-                int countdown = Math.max(0, (int) Math.ceil(BBSModClient.getVideoExportDelayRemainingMs() / 50D));
-
-                renderRecordingTimerOverlay(batcher2D, String.valueOf(countdown / 20F));
-            }
-            else if (videoRecorder.isRecording())
-            {
-                int count = videoRecorder.getCounter();
-                String label = UIKeys.FILM_VIDEO_RECORDING.format(
-                    count,
-                    BBSModClient.getKeyRecordVideo().getTranslatedKeyMessage().getString()
-                ).get();
-
-                renderRecordingTimerOverlay(batcher2D, label);
-            }
+            return;
         }
+
+        String label;
+
+        if (BBSModClient.isVideoExportDelayPending())
+        {
+            int countdown = Math.max(0, (int) Math.ceil(BBSModClient.getVideoExportDelayRemainingMs() / 50D));
+
+            label = String.valueOf(countdown / 20F);
+        }
+        else if (BBSModClient.getVideoRecorder().isRecording())
+        {
+            int count = BBSModClient.getVideoRecorder().getCounter();
+
+            label = UIKeys.FILM_VIDEO_RECORDING.format(
+                count,
+                BBSModClient.getKeyRecordVideo().getTranslatedKeyMessage().getString()
+            ).get();
+        }
+        else
+        {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
+
+        renderRecordingTimerOverlay(new Batcher2D(drawContext), label);
+        drawContext.flush();
     }
 
     public static void renderRecordingTimerOverlay(Batcher2D batcher2D, String label)
@@ -509,6 +533,10 @@ public class BBSRendering
     {
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
         Matrix4f oldProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
+
+        /* Minecraft 1.21.1 removed RenderSystem's inverse-view holder. Keep the
+         * active world camera rotation available to VAO shader uniforms. */
+        InverseView.set(new Matrix3f().rotation(worldRenderContext.camera().rotation()));
 
         /* BBS world renderers use camera-relative PoseStacks; the view matrix stays in RenderSystem. */
         RenderSystem.setProjectionMatrix(worldRenderContext.projectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
@@ -564,6 +592,18 @@ public class BBSRendering
         }
 
         return IrisUtils.isShadowPass();
+    }
+
+    /**
+     * Tell Iris when a framebuffer form temporarily renders outside the main
+     * world target, preventing Iris from masking its color and depth writes.
+     */
+    public static void setIrisMainBound(boolean bound)
+    {
+        if (iris)
+        {
+            IrisUtils.setMainBound(bound);
+        }
     }
 
     public static void trackTexture(Texture texture)
