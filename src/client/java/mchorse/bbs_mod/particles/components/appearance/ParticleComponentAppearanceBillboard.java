@@ -47,9 +47,9 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
     public boolean loop = false;
 
     /* Billboard direction sub-feature */
-    public String directionMode = null; /* null = not set, "derive_from_velocity" or "custom" */
+    public BillboardDirection directionMode = BillboardDirection.DERIVE_FROM_VELOCITY;
     public float speedThreshold = 0.01F;
-    public MolangExpression[] customDirection = null; /* 3-element array: x, y, z */
+    public MolangExpression[] customDirection = {MolangParser.ZERO, MolangParser.ZERO, MolangParser.ZERO};
 
     /* Full texture UV mode */
     public boolean fullTexture = false;
@@ -99,17 +99,17 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         data.putString("facing_camera_mode", this.facing.id);
 
         /* Billboard direction sub-feature */
-        if (this.directionMode != null)
+        if (this.directionMode == BillboardDirection.CUSTOM_DIRECTION || this.speedThreshold != 0.01F)
         {
             MapType direction = new MapType();
 
-            direction.putString("mode", this.directionMode);
+            direction.putString("mode", this.directionMode.id);
 
-            if ("derive_from_velocity".equals(this.directionMode))
+            if (this.directionMode == BillboardDirection.DERIVE_FROM_VELOCITY)
             {
                 direction.putFloat("min_speed_threshold", this.speedThreshold);
             }
-            else if ("custom".equals(this.directionMode) && this.customDirection != null)
+            else
             {
                 ListType customDir = new ListType();
                 customDir.add(this.customDirection[0].toData());
@@ -229,24 +229,23 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
             if (direction.has("mode"))
             {
-                this.directionMode = direction.getString("mode");
+                this.directionMode = BillboardDirection.fromString(direction.getString("mode"));
+            }
 
-                if ("derive_from_velocity".equals(this.directionMode) && direction.has("min_speed_threshold"))
-                {
-                    this.speedThreshold = direction.getFloat("min_speed_threshold");
-                }
-                else if ("custom".equals(this.directionMode) && direction.has("custom_direction", BaseType.TYPE_LIST))
-                {
-                    ListType customDir = direction.getList("custom_direction");
+            if (direction.has("min_speed_threshold"))
+            {
+                this.speedThreshold = direction.getFloat("min_speed_threshold");
+            }
 
-                    if (customDir.size() >= 3)
-                    {
-                        this.customDirection = new MolangExpression[]{
-                            parser.parseDataSilently(customDir.get(0)),
-                            parser.parseDataSilently(customDir.get(1), MolangParser.ONE),
-                            parser.parseDataSilently(customDir.get(2))
-                        };
-                    }
+            if (direction.has("custom_direction", BaseType.TYPE_LIST))
+            {
+                ListType customDir = direction.getList("custom_direction");
+
+                if (customDir.size() >= 3)
+                {
+                    this.customDirection[0] = parser.parseDataSilently(customDir.get(0));
+                    this.customDirection[1] = parser.parseDataSilently(customDir.get(1));
+                    this.customDirection[2] = parser.parseDataSilently(customDir.get(2));
                 }
             }
         }
@@ -542,7 +541,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
     private void resolveDirection(Particle particle)
     {
-        if ("custom".equals(this.directionMode) && this.customDirection != null)
+        if (this.directionMode == BillboardDirection.CUSTOM_DIRECTION)
         {
             this.direction.set((float) this.customDirection[0].get(), (float) this.customDirection[1].get(), (float) this.customDirection[2].get());
         }

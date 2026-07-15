@@ -46,6 +46,7 @@ import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeLifetimeSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeMotionSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeParticleInitializationSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeRateSection;
+import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeRotationSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeShapeSection;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSpaceSection;
@@ -175,7 +176,13 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         emitterPage.addSection(new UIParticleSchemeRateSection(this));
         emitterPage.addSection(new UIParticleSchemeLifetimeSection(this));
         emitterPage.addSection(new UIParticleSchemeShapeSection(this));
-        motionPage.addSection(new UIParticleSchemeMotionSection(this));
+        UIParticleSchemeMotionSection motionSection = new UIParticleSchemeMotionSection(this);
+        UIParticleSchemeRotationSection rotationSection = new UIParticleSchemeRotationSection(this);
+
+        motionSection.link(rotationSection);
+        rotationSection.link(motionSection);
+        motionPage.addSection(motionSection);
+        motionPage.addSection(rotationSection);
         motionPage.addSection(new UIParticleSchemeCollisionSection(this));
         appearancePage.addSection(new UIParticleSchemeAppearanceSection(this));
         appearancePage.addSection(new UIParticleSchemeCollisionAppearanceSection(this));
