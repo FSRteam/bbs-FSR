@@ -9,7 +9,11 @@ import org.joml.Vector2f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * A {@link ModelWeld} resolved against a concrete model. The weld seals a bending joint by pulling both
@@ -66,6 +70,66 @@ public class WeldBinding
         }
 
         return layers.isEmpty() ? null : new WeldBinding(sourceGroup, targetGroup, layers);
+    }
+
+    /**
+     * Whether any of the group's welds actually moves its geometry this frame — a seam identical to the
+     * rigid pose renders the same as the baked VAO, so the group can stay on it instead of tessellating on
+     * the CPU. A seam differs from rigid whenever the joint bends OR the two welded faces don't already
+     * coincide at rest (mismatched or overlapping cubes), so a rest-pose gap seals here too, not only bends.
+     */
+    public static boolean hasActiveSeam(List<WeldBinding> welds, ModelGroup group)
+    {
+        for (WeldBinding weld : welds)
+        {
+            if (weld.sourceGroup != group && weld.targetGroup != group)
+            {
+                continue;
+            }
+
+            for (Layer layer : weld.layers)
+            {
+                if (layer.seamReady && !layer.identity)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Welded face quads per cube, so the bevel can leave those faces (and their edges) sharp — the seam
+     * lives on them — while the rest of the cube still rounds.
+     */
+    public static Map<ModelCube, Set<ModelQuad>> weldedFaces(Model model, List<ModelWeld> welds)
+    {
+        Map<ModelCube, Set<ModelQuad>> faces = new HashMap<>();
+
+        for (ModelWeld weld : welds)
+        {
+            collectFaces(model, weld.sourceBone, weld.sourceFace, faces);
+            collectFaces(model, weld.targetBone, weld.targetFace, faces);
+        }
+
+        return faces;
+    }
+
+    private static void collectFaces(Model model, String bone, String faceName, Map<ModelCube, Set<ModelQuad>> faces)
+    {
+        CubeFace face = CubeFace.fromName(faceName);
+        ModelGroup group = model.getGroup(bone);
+
+        if (face == null || group == null)
+        {
+            return;
+        }
+
+        for (ModelCube cube : facedCubes(group, face))
+        {
+            faces.computeIfAbsent(cube, (k) -> new HashSet<>()).add(faceQuad(cube, face));
+        }
     }
 
     /** The group's cubes that carry the welded face, in model order; {@link #pairByCrossSection} pairs them up. */
@@ -162,20 +226,6 @@ public class WeldBinding
         return new Vector3f[] {new Vector3f(1F, 0F, 0F), new Vector3f(0F, 1F, 0F)};
     }
 
-    /** Index of the corner matching {@code local} (by position), or -1 if none — used to spot welded vertices. */
-    public static int cornerIndex(Vector3f[] corners, Vector3f local)
-    {
-        for (int i = 0; i < corners.length; i++)
-        {
-            if (corners[i].distanceSquared(local) < EPS_SQ)
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
     private static int nearest(Vector3f world, Vector3f[] corners)
     {
         int best = 0;
@@ -259,6 +309,10 @@ public class WeldBinding
      */
     public static class Layer
     {
+        /* Max world-space slack (squared) between a welded corner and its seam still counted as "already there":
+         * ~1e-3 blocks (0.016 texel), far above matrix-chain float noise yet far below any visible joint gap. */
+        private static final float IDENTITY_EPS_SQ = 1.0e-6F;
+
         public final ModelCube sourceCube;
         public final ModelCube targetCube;
 
@@ -307,6 +361,10 @@ public class WeldBinding
         public boolean sourceCaptured;
         public boolean targetCaptured;
         public boolean seamReady;
+
+        /* The seam leaves both welded faces exactly where the rigid pose already puts them (no bend AND no
+         * rest gap between the faces), so snapping to it is a no-op and the group may ride its baked VAO. */
+        public boolean identity;
 
         private Layer(ModelCube sourceCube, CubeFace sourceFace, ModelCube targetCube, CubeFace targetFace, float maxBend, float falloff)
         {
@@ -363,27 +421,56 @@ public class WeldBinding
 
             if (across == null)
             {
+                /* No fold direction (the joint isn't bent), so the seam sits on the target's rigid face. */
                 for (int k = 0; k < this.seam.length; k++)
                 {
                     this.seam[k].set(this.capturedTargetWorld[k]);
                 }
+            }
+            else
+            {
+                float tanHalf = (float) Math.tan(Math.min(this.bendAngle(), this.maxBend) * 0.5F);
 
-                this.seamReady = true;
+                for (int k = 0; k < this.seam.length; k++)
+                {
+                    Vector3f target = this.capturedTargetWorld[k];
+                    float position = (target.x - center.x) * across.x + (target.y - center.y) * across.y + (target.z - center.z) * across.z;
 
-                return;
+                    this.seam[k].set(normal).mul(position * tanHalf).add(target);
+                }
             }
 
-            float tanHalf = (float) Math.tan(Math.min(this.bendAngle(), this.maxBend) * 0.5F);
+            /* Ride the VAO only when the seam moves nothing — no bend AND the faces already meet at rest. A
+             * rest-pose gap makes this false, so the weld seals it now instead of snapping it shut on first bend. */
+            this.identity = this.seamMatchesRigid();
+            this.seamReady = true;
+        }
 
+        /**
+         * Whether the finished seam leaves BOTH welded faces exactly where their rigid pose already puts them:
+         * the target corners unmoved and every source corner already sitting on the seam it maps to. Only then
+         * is snapping a true no-op — a bent joint moves the target, and a rest gap (mismatched or overlapping
+         * cubes) leaves the source off-seam — so anything else must render through the seam, not the VAO.
+         */
+        private boolean seamMatchesRigid()
+        {
             for (int k = 0; k < this.seam.length; k++)
             {
-                Vector3f target = this.capturedTargetWorld[k];
-                float position = (target.x - center.x) * across.x + (target.y - center.y) * across.y + (target.z - center.z) * across.z;
-
-                this.seam[k].set(normal).mul(position * tanHalf).add(target);
+                if (this.seam[k].distanceSquared(this.capturedTargetWorld[k]) > IDENTITY_EPS_SQ)
+                {
+                    return false;
+                }
             }
 
-            this.seamReady = true;
+            for (int r = 0; r < this.sourceToTarget.length; r++)
+            {
+                if (this.capturedSourceWorld[r].distanceSquared(this.seam[this.sourceToTarget[r]]) > IDENTITY_EPS_SQ)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /**
@@ -434,6 +521,63 @@ public class WeldBinding
             }
 
             return -1;
+        }
+
+        /* The seam is indexed by target corner, so the target face reads it in place. */
+        private static final int[] TARGET_ORDER = {0, 1, 2, 3};
+
+        /**
+         * Seam position for a point on the target cube's welded plane — bilinear over the face rect, so
+         * inset (beveled) geometry at the joint rides the seam too, not only the four exact corners.
+         */
+        public Vector3f seamAtTarget(Vector3f local, Vector3f dest)
+        {
+            return this.seamAt(this.targetCorners, TARGET_ORDER, local, dest);
+        }
+
+        public Vector3f seamAtSource(Vector3f local, Vector3f dest)
+        {
+            return this.seamAt(this.sourceCorners, this.sourceToTarget, local, dest);
+        }
+
+        private Vector3f seamAt(Vector3f[] corners, int[] order, Vector3f local, Vector3f dest)
+        {
+            Vector3f c0 = corners[0];
+            Vector3f c1 = corners[1];
+            Vector3f c3 = corners[3];
+            float e1x = c1.x - c0.x;
+            float e1y = c1.y - c0.y;
+            float e1z = c1.z - c0.z;
+            float e2x = c3.x - c0.x;
+            float e2y = c3.y - c0.y;
+            float e2z = c3.z - c0.z;
+            float dx = local.x - c0.x;
+            float dy = local.y - c0.y;
+            float dz = local.z - c0.z;
+            float l1 = e1x * e1x + e1y * e1y + e1z * e1z;
+            float l2 = e2x * e2x + e2y * e2y + e2z * e2z;
+
+            /* A face inset to a line by a large bevel has a degenerate edge — park that param mid-seam. */
+            float s = l1 > EPS_SQ ? (dx * e1x + dy * e1y + dz * e1z) / l1 : 0.5F;
+            float t = l2 > EPS_SQ ? (dx * e2x + dy * e2y + dz * e2z) / l2 : 0.5F;
+
+            s = Math.max(0F, Math.min(1F, s));
+            t = Math.max(0F, Math.min(1F, t));
+
+            Vector3f s0 = this.seam[order[0]];
+            Vector3f s1 = this.seam[order[1]];
+            Vector3f s2 = this.seam[order[2]];
+            Vector3f s3 = this.seam[order[3]];
+            float w0 = (1F - s) * (1F - t);
+            float w1 = s * (1F - t);
+            float w2 = s * t;
+            float w3 = (1F - s) * t;
+
+            return dest.set(
+                s0.x * w0 + s1.x * w1 + s2.x * w2 + s3.x * w3,
+                s0.y * w0 + s1.y * w1 + s2.y * w2 + s3.y * w3,
+                s0.z * w0 + s1.z * w1 + s2.z * w2 + s3.z * w3
+            );
         }
     }
 }

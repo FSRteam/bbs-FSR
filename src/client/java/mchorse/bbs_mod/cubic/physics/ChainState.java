@@ -15,8 +15,11 @@ class ChainState
     public float renderAlpha;
     public Vector3f[] pos;
     public Vector3f[] prev;
-    public Vector3f[] settled;
-    public Vector3f[] settledPrev;
+
+    /** Settled shapes of the two latest simulation ticks, each stored in its own tick's anchor frame. */
+    public Vector3f[] settledLocal;
+    public Vector3f[] settledPrevLocal;
+
     public Vector3f[] render;
 
     /** The animated pose the chain springs toward, stored relative to the live anchor frame. */

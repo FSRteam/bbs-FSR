@@ -2,6 +2,7 @@ package mchorse.bbs_mod.cubic.render.vao;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.shaders.Uniform;
+import mchorse.bbs_mod.graphics.InverseView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -53,6 +54,13 @@ public class ModelVAORenderer
         if (normalUniform != null)
         {
             normalUniform.set(stack.last().normal());
+        }
+
+        Uniform viewRotationUniform = shader.getUniform("ViewRotationMat");
+
+        if (viewRotationUniform != null)
+        {
+            viewRotationUniform.set(InverseView.get());
         }
 
         RenderSystem.setupShaderLights(shader);

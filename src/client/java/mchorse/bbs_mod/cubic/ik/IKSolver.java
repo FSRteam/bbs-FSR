@@ -24,9 +24,15 @@ final class IKSolver
 {
     private static final float EPS = 1.0e-6f;
 
-    /* Keep the goal a hair inside reach so the chain never locks dead straight
-     * (a fully extended chain has an undefined bend plane and rolls). */
-    private static final float REACH_LIMIT = 0.999F;
+    /* Cap the goal at exactly full reach (never past it). A dead-straight chain
+     * IS allowed — an authored-straight limb straightened by the target must land
+     * perfectly straight, not a hair bent. Full extension has no defined bend
+     * plane, but the orientation pass handles that gracefully: at sinA==0 the
+     * elbow lands exactly on the axis and the roll reference falls back to a
+     * deterministic perpendicular (see ModelIKApplier.transportNormals), so a
+     * straight chain is stable rather than rolling. Keeping it a hair bent instead
+     * only fed that pass a numerically noisy near-zero bend normal. */
+    private static final float REACH_LIMIT = 1F;
 
     private IKSolver()
     {
@@ -43,10 +49,18 @@ final class IKSolver
 
     public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance)
     {
-        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, null, null, null);
+        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, null, null, null, null);
     }
 
-    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Vector3f restHinge)
+    /**
+     * @param outBendNormal when non-null, receives the world bend-plane normal the
+     * solve settled on (the side the chain bends towards, sign-matched to {@code
+     * dir0 x dir1}). It is well-defined even at full extension — where the geometry
+     * is straight and the normal can't be recovered from positions — so the
+     * orientation pass can seed a continuous roll reference and not jitter as the
+     * chain crosses full reach. Left untouched when the bend plane is undefined.
+     */
+    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Vector3f restHinge, Vector3f outBendNormal)
     {
         int n = positions.size();
 
@@ -108,13 +122,15 @@ final class IKSolver
          * The bend plane it produces — its normal — is what rolls the chain: the cubic
          * orientation pass reads that normal and orients each bone to it (see
          * ModelIKApplier.buildChainOrientations), so swing and roll come from one place. */
+        Vector3f bendNormal;
+
         if (n == 3)
         {
             /* Analytic is ideal for a two-bone limb — full reach, no flip, clean
              * pole control. The pole defines the hinge; limits ride on top as
              * range clamps (e.g. stop the elbow hyperextending). */
             solveTwoBone(positions, root, goal);
-            orientBend(positions, hinge, polePoint, poleAngle);
+            bendNormal = orientBend(positions, hinge, polePoint, poleAngle);
 
             if (constrained)
             {
@@ -127,7 +143,7 @@ final class IKSolver
              * pole re-aims the bend about root->tip — that preserves every joint's
              * local rotation, so it can't break the limits. */
             solveCCD(positions, root, goal, maxIterations, tolerance, limits, rootParentRotation);
-            orientBend(positions, hinge, polePoint, poleAngle);
+            bendNormal = orientBend(positions, hinge, polePoint, poleAngle);
         }
         else
         {
@@ -138,7 +154,12 @@ final class IKSolver
              * frame. FABRIK distributes the bend evenly and lands on the same
              * shape for the same input — a rope drapes instead of coiling. */
             solveFabrik(positions, root, goal, maxIterations, tolerance);
-            orientBend(positions, hinge, polePoint, poleAngle);
+            bendNormal = orientBend(positions, hinge, polePoint, poleAngle);
+        }
+
+        if (outBendNormal != null && bendNormal != null)
+        {
+            outBendNormal.set(bendNormal);
         }
 
         return positions;
@@ -149,10 +170,10 @@ final class IKSolver
      * this is "soft IK": near full extension the effective distance approaches the
      * chain length asymptotically (and C1-continuously), so the limb never snaps
      * dead straight when the target is pulled out of reach. The effective reach is
-     * still capped at {@code total * REACH_LIMIT}, same as the hard clamp — a fully
-     * extended chain has an undefined bend plane and would roll/writhe as the target
-     * moves; the soft falloff just approaches that cap smoothly instead of snapping.
-     * With softness 0 it is a hard clamp at {@code total * REACH_LIMIT}.
+     * still capped at {@code total * REACH_LIMIT} (full reach), same as the hard
+     * clamp — the target can't drag the chain past full extension; the soft falloff
+     * just approaches that cap smoothly instead of snapping. With softness 0 it is a
+     * hard clamp at {@code total * REACH_LIMIT}.
      */
     private static Vector3f clampReach(Vector3f root, Vector3f target, float total, float softness)
     {
@@ -636,13 +657,13 @@ final class IKSolver
      * that aimed bend about the limb axis — Blender's pole angle, an offset baked into
      * the elbow position, so it is stable (no twist singularity).
      */
-    private static void orientBend(List<Vector3f> p, Vector3f hinge, Vector3f polePoint, float poleAngle)
+    private static Vector3f orientBend(List<Vector3f> p, Vector3f hinge, Vector3f polePoint, float poleAngle)
     {
         int n = p.size();
 
         if (n < 3)
         {
-            return;
+            return null;
         }
 
         Vector3f root = p.get(0);
@@ -650,7 +671,7 @@ final class IKSolver
 
         if (!normalize(axis))
         {
-            return;
+            return null;
         }
 
         Vector3f desired = new Vector3f();
@@ -664,7 +685,7 @@ final class IKSolver
 
             if (!project(desired, axis))
             {
-                return;
+                return null;
             }
         }
         else if (hinge != null)
@@ -676,12 +697,12 @@ final class IKSolver
 
             if (!project(desired, axis))
             {
-                return;
+                return null;
             }
         }
         else
         {
-            return;
+            return null;
         }
 
         /* Pole angle: roll the aimed bend about the limb axis. desired is already
@@ -693,6 +714,15 @@ final class IKSolver
         }
 
         orientBendTo(p, root, axis, desired);
+
+        /* The bend-plane normal (world), sign-matched to {@code dir0 x dir1} — its
+         * value is exactly {@code desired x axis}. Unlike the live cross product it
+         * stays defined at full extension (desired comes from the stable pole/hinge,
+         * not the vanishing elbow offset), so the orientation pass seeds its roll
+         * reference with it and the twist stays continuous as the chain straightens. */
+        Vector3f normal = new Vector3f(desired).cross(axis);
+
+        return normalize(normal) ? normal : null;
     }
 
     /** Rotates the interior joints about the root-to-tip {@code axis} so the bend points at {@code desired} (already perpendicular to the axis). */

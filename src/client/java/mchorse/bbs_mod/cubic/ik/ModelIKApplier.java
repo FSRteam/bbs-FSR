@@ -40,7 +40,12 @@ final class ModelIKApplier
 
         /* Apply ancestor chains (shallower root) first, and re-collect frames per
          * chain, so a child chain (e.g. an arm) sees the pose its parent chain
-         * (e.g. the body) already produced and rides along with it. */
+         * (e.g. the body) already produced and rides along with it. The re-collect
+         * folds in the ancestors' IK stretch (their transient offset) too, so a child
+         * rooted under a stretched parent solves against the parent's shifted position
+         * — the spot the renderer actually draws it — instead of the un-stretched pose.
+         * A chain's OWN stretch is written only after its solve, so its offset is still
+         * null at collect time and never leaks into its own solve. */
         List<ModelIKCache.CompiledChain> ordered = new ArrayList<>(chains);
         ordered.sort(Comparator.comparingInt((ModelIKCache.CompiledChain chain) -> rootDepth(model, chain)));
 
@@ -56,7 +61,7 @@ final class ModelIKApplier
             }
 
             Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-            ModelPivotFrames.collect(model, wanted, frames);
+            ModelPivotFrames.collect(model, wanted, frames, null, true);
 
             applyChain(model, chain, frames, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, boneLimits);
         }
@@ -177,7 +182,13 @@ final class ModelIKApplier
         IKSolver.Limit[] limits = buildLimits(model, workIds, boneLimits);
         Vector3f restHinge = restBendNormal(model, workIds, rootParentRotation);
 
-        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation, restHinge);
+        Vector3f bendNormal = new Vector3f();
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation, restHinge, bendNormal);
+
+        /* The bend-plane normal the solve settled on (zero when undefined). Passed to the
+         * orientation pass as the roll-reference seed so a fully straight chain keeps a
+         * stable twist instead of jittering at the reach boundary. */
+        Vector3f bendSeed = bendNormal.lengthSquared() < EPS * EPS ? null : bendNormal;
 
         /* IK stretch: when the controller is pulled past the chain's reach, the solver lands the tip
          * on the reach sphere, short of the target. The gap (tip -> target, eased by softness so it
@@ -202,11 +213,11 @@ final class ModelIKApplier
          * (size 2) keeps the euler reconstruction. */
         if (model instanceof Model cubic && workIds.size() >= 3)
         {
-            buildChainOrientations(cubic, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap);
+            buildChainOrientations(cubic, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap, bendSeed);
         }
         else if (model instanceof BOBJModel bobj && workIds.size() >= 3)
         {
-            buildChainOrientationsBobj(bobj, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap);
+            buildChainOrientationsBobj(bobj, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap, bendSeed);
         }
         else
         {
@@ -281,7 +292,7 @@ final class ModelIKApplier
      * advancing by each bone's rendered (blended) orientation so children inherit the
      * same frame the renderer establishes.
      */
-    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap)
+    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
     {
         int bones = chainIds.size() - 1;
         Vector3f[] restDir = new Vector3f[bones];
@@ -316,7 +327,7 @@ final class ModelIKApplier
         boolean doStretch = stretchGap != null && reach >= 1 && reachTotal > EPS;
 
         Vector3f[] restNormal = transportNormals(restDir);
-        Vector3f[] solvedNormal = transportNormals(segWorld);
+        Vector3f[] solvedNormal = transportNormals(segWorld, bendSeed);
 
         Quaternionf parentWorld = new Quaternionf(rootParentRotation);
 
@@ -421,11 +432,36 @@ final class ModelIKApplier
      */
     private static Vector3f[] transportNormals(Vector3f[] dirs)
     {
+        return transportNormals(dirs, null);
+    }
+
+    /**
+     * {@code seedHint} (when non-null) is a stable bend-plane normal used to seed the
+     * roll reference where the first two segments are collinear — a straightened chain.
+     * It is the LIMIT the live bend normal {@code dirs[0] x dirs[1]} approaches as the
+     * chain straightens, so seeding with it keeps the roll continuous through full
+     * extension: the raw cross product vanishes there and would otherwise snap to a
+     * fixed perpendicular unrelated to the bend, popping the twist frame to frame (the
+     * jitter a straightened limb showed at the reach boundary). When the chain is
+     * actually bent the cross product is used as before; the hint only fills the
+     * degenerate seed, and falls back to the fixed perpendicular when itself absent.
+     */
+    private static Vector3f[] transportNormals(Vector3f[] dirs, Vector3f seedHint)
+    {
         int m = dirs.length;
         Vector3f[] normals = new Vector3f[m];
         Vector3f seed = m >= 2 ? new Vector3f(dirs[0]).cross(dirs[1]) : new Vector3f();
 
-        normals[0] = seed.lengthSquared() < 1.0e-10f ? stablePerpendicular(dirs[0]) : seed.normalize();
+        if (seed.lengthSquared() < 1.0e-10f)
+        {
+            Vector3f hint = seedHint == null ? null : perpendicularTo(seedHint, dirs[0]);
+
+            normals[0] = hint != null ? hint : stablePerpendicular(dirs[0]);
+        }
+        else
+        {
+            normals[0] = seed.normalize();
+        }
 
         for (int i = 1; i < m; i++)
         {
@@ -435,6 +471,19 @@ final class ModelIKApplier
         }
 
         return normals;
+    }
+
+    /** {@code v} projected onto the plane perpendicular to unit {@code axis}, normalized; {@code null} if degenerate. */
+    private static Vector3f perpendicularTo(Vector3f v, Vector3f axis)
+    {
+        Vector3f out = new Vector3f(v);
+        float dot = out.dot(axis);
+
+        out.x -= axis.x * dot;
+        out.y -= axis.y * dot;
+        out.z -= axis.z * dot;
+
+        return out.lengthSquared() < EPS * EPS ? null : out.normalize();
     }
 
     /** The bone's FK local rotation (its euler rotate as a quaternion), the blend base when IK weight is below one. */
@@ -456,7 +505,7 @@ final class ModelIKApplier
      * coincide and the orientation is identity — no baseline twist. Same X-mirror as
      * cubic ({@link Matrices#orientMirroredX}).
      */
-    private static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap)
+    private static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
     {
         int bones = chainIds.size() - 1;
         Map<String, BOBJBone> bonesMap = model.getArmature().bones;
@@ -500,7 +549,7 @@ final class ModelIKApplier
         }
 
         Vector3f[] restNormalWorld = transportNormals(restDirWorld);
-        Vector3f[] solvedNormalWorld = transportNormals(segWorld);
+        Vector3f[] solvedNormalWorld = transportNormals(segWorld, bendSeed);
 
         /* Solved-pose world frame advances by each bone's applied orientation, then the
          * next bone's relBoneMat — so a child decomposes against the frame the armature

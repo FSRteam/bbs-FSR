@@ -21,6 +21,7 @@ public class WindControl implements IMapSerializable
     public static final float DEFAULT_TURBULENCE = 0.5F;
     public static final float DEFAULT_TURBULENCE_SPEED = 1F;
     public static final float DEFAULT_TURBULENCE_SCALE = 1F;
+    public static final boolean DEFAULT_LOCAL = false;
 
     public static final WindControl DEFAULT = new WindControl();
 
@@ -31,6 +32,7 @@ public class WindControl implements IMapSerializable
     public float turbulence = DEFAULT_TURBULENCE;
     public float turbulenceSpeed = DEFAULT_TURBULENCE_SPEED;
     public float turbulenceScale = DEFAULT_TURBULENCE_SCALE;
+    public boolean local = DEFAULT_LOCAL;
 
     public void identity()
     {
@@ -41,6 +43,7 @@ public class WindControl implements IMapSerializable
         this.turbulence = DEFAULT_TURBULENCE;
         this.turbulenceSpeed = DEFAULT_TURBULENCE_SPEED;
         this.turbulenceScale = DEFAULT_TURBULENCE_SCALE;
+        this.local = DEFAULT_LOCAL;
     }
 
     public void lerp(WindControl preA, WindControl a, WindControl b, WindControl postB, IInterp interp, float frac)
@@ -52,6 +55,7 @@ public class WindControl implements IMapSerializable
         this.turbulence = (float) interp.interpolate(IInterp.context.set(preA.turbulence, a.turbulence, b.turbulence, postB.turbulence, frac));
         this.turbulenceSpeed = (float) interp.interpolate(IInterp.context.set(preA.turbulenceSpeed, a.turbulenceSpeed, b.turbulenceSpeed, postB.turbulenceSpeed, frac));
         this.turbulenceScale = (float) interp.interpolate(IInterp.context.set(preA.turbulenceScale, a.turbulenceScale, b.turbulenceScale, postB.turbulenceScale, frac));
+        this.local = a.local; // discrete flag, held from the active keyframe
     }
 
     public void autoLerp(WindControl preA, WindControl a, WindControl b, WindControl postB, float pt, float at, float bt, float qt, boolean clamped, float frac)
@@ -63,6 +67,7 @@ public class WindControl implements IMapSerializable
         this.turbulence = (float) AutoBezier.get(preA.turbulence, a.turbulence, b.turbulence, postB.turbulence, pt, at, bt, qt, clamped, frac);
         this.turbulenceSpeed = (float) AutoBezier.get(preA.turbulenceSpeed, a.turbulenceSpeed, b.turbulenceSpeed, postB.turbulenceSpeed, pt, at, bt, qt, clamped, frac);
         this.turbulenceScale = (float) AutoBezier.get(preA.turbulenceScale, a.turbulenceScale, b.turbulenceScale, postB.turbulenceScale, pt, at, bt, qt, clamped, frac);
+        this.local = a.local; // discrete flag, held from the active keyframe
     }
 
     public WindControl copy()
@@ -83,6 +88,7 @@ public class WindControl implements IMapSerializable
         this.turbulence = other.turbulence;
         this.turbulenceSpeed = other.turbulenceSpeed;
         this.turbulenceScale = other.turbulenceScale;
+        this.local = other.local;
     }
 
     public boolean isDefault()
@@ -106,7 +112,8 @@ public class WindControl implements IMapSerializable
                 && this.z == control.z
                 && this.turbulence == control.turbulence
                 && this.turbulenceSpeed == control.turbulenceSpeed
-                && this.turbulenceScale == control.turbulenceScale;
+                && this.turbulenceScale == control.turbulenceScale
+                && this.local == control.local;
         }
 
         return false;
@@ -122,6 +129,7 @@ public class WindControl implements IMapSerializable
         data.putDouble("turbulence", this.turbulence);
         data.putDouble("turbulence_speed", this.turbulenceSpeed);
         data.putDouble("turbulence_scale", this.turbulenceScale);
+        data.putBool("local", this.local);
     }
 
     @Override
@@ -134,5 +142,6 @@ public class WindControl implements IMapSerializable
         this.turbulence = (float) data.getDouble("turbulence", DEFAULT.turbulence);
         this.turbulenceSpeed = (float) data.getDouble("turbulence_speed", DEFAULT.turbulenceSpeed);
         this.turbulenceScale = (float) data.getDouble("turbulence_scale", DEFAULT.turbulenceScale);
+        this.local = data.getBool("local", DEFAULT.local);
     }
 }

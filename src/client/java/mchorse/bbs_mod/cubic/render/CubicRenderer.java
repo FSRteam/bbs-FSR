@@ -75,10 +75,25 @@ public class CubicRenderer
 
     public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out)
     {
-        collectPivotFrames(model, wanted, out, null);
+        collectPivotFrames(model, wanted, out, null, false);
     }
 
     public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out, Matrix4f baseTransform)
+    {
+        collectPivotFrames(model, wanted, out, baseTransform, false);
+    }
+
+    /**
+     * @param applyStretch when true, each bone's transient {@link ModelGroup#offset} (the IK stretch
+     * telescope) is folded into its frame exactly as {@link ICubicRenderer#applyGroupTransformations}
+     * folds it — offset first, in the parent frame — so a chain collected AFTER an ancestor chain has
+     * stretched reads the ancestor's shifted position, the same spot the renderer draws it. Off (the
+     * default) reads the un-stretched pose, which the debug overlay and a chain's OWN solve want: a
+     * chain's offset is not written until its own solve runs, so with this on a chain still only ever
+     * inherits ANCESTOR stretch, never its own. Offset is a pure translation, so it moves {@code
+     * position} only — {@code parentRotation}/{@code worldRotation} are untouched.
+     */
+    public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out, Matrix4f baseTransform, boolean applyStretch)
     {
         if (model == null || wanted == null || wanted.isEmpty() || out == null)
         {
@@ -98,13 +113,20 @@ public class CubicRenderer
 
         for (ModelGroup group : model.topGroups)
         {
-            collectPivotFramesRec(stack, group, wanted, out);
+            collectPivotFramesRec(stack, group, wanted, out, applyStretch);
         }
     }
 
-    private static void collectPivotFramesRec(PoseStack stack, ModelGroup group, Set<String> wanted, Map<String, PivotFrame> out)
+    private static void collectPivotFramesRec(PoseStack stack, ModelGroup group, Set<String> wanted, Map<String, PivotFrame> out, boolean applyStretch)
     {
         stack.pushPose();
+
+        /* Offset leads, matching the renderer (ICubicRenderer.applyGroupTransformations), so a stretched
+         * ancestor shifts this bone and everything below it before its own pose — see the applyStretch note. */
+        if (applyStretch)
+        {
+            ICubicRenderer.offsetGroup(stack, group);
+        }
 
         ICubicRenderer.translateGroup(stack, group);
         ICubicRenderer.moveToGroupPivot(stack, group);
@@ -139,7 +161,7 @@ public class CubicRenderer
 
         for (ModelGroup child : group.children)
         {
-            collectPivotFramesRec(stack, child, wanted, out);
+            collectPivotFramesRec(stack, child, wanted, out, applyStretch);
         }
 
         stack.popPose();

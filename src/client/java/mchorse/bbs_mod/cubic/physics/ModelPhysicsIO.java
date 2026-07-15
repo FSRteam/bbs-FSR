@@ -30,6 +30,7 @@ public final class ModelPhysicsIO
     private static final String KEY_WIND_TURBULENCE = "turbulence";
     private static final String KEY_WIND_TURBULENCE_SPEED = "turbulence_speed";
     private static final String KEY_WIND_TURBULENCE_SCALE = "turbulence_scale";
+    private static final String KEY_WIND_LOCAL = "local";
 
     private static final float DEFAULT_GRAVITY = 1F;
     private static final float DEFAULT_DAMPING = 0.15F;
@@ -49,6 +50,7 @@ public final class ModelPhysicsIO
     private static final float DEFAULT_WIND_TURBULENCE = ModelPhysicsConfig.Wind.NONE.turbulence();
     private static final float DEFAULT_WIND_TURBULENCE_SPEED = ModelPhysicsConfig.Wind.NONE.turbulenceSpeed();
     private static final float DEFAULT_WIND_TURBULENCE_SCALE = ModelPhysicsConfig.Wind.NONE.turbulenceScale();
+    private static final boolean DEFAULT_WIND_LOCAL = ModelPhysicsConfig.Wind.NONE.local();
 
     private ModelPhysicsIO()
     {
@@ -120,8 +122,9 @@ public final class ModelPhysicsIO
         float turbulence = wind.getFloat(KEY_WIND_TURBULENCE, DEFAULT_WIND_TURBULENCE);
         float turbulenceSpeed = wind.getFloat(KEY_WIND_TURBULENCE_SPEED, DEFAULT_WIND_TURBULENCE_SPEED);
         float turbulenceScale = wind.getFloat(KEY_WIND_TURBULENCE_SCALE, DEFAULT_WIND_TURBULENCE_SCALE);
+        boolean local = wind.getBool(KEY_WIND_LOCAL, DEFAULT_WIND_LOCAL);
 
-        return new ModelPhysicsConfig.Wind(strength, x, y, z, turbulence, turbulenceSpeed, turbulenceScale);
+        return new ModelPhysicsConfig.Wind(strength, x, y, z, turbulence, turbulenceSpeed, turbulenceScale, local);
     }
 
     public static MapType toData(ModelPhysicsConfig config)
@@ -246,6 +249,11 @@ public final class ModelPhysicsIO
         if (wind.turbulenceScale() != DEFAULT_WIND_TURBULENCE_SCALE)
         {
             windMap.putFloat(KEY_WIND_TURBULENCE_SCALE, wind.turbulenceScale());
+        }
+
+        if (wind.local() != DEFAULT_WIND_LOCAL)
+        {
+            windMap.putBool(KEY_WIND_LOCAL, wind.local());
         }
 
         if (!windMap.isEmpty())

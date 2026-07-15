@@ -27,10 +27,14 @@ public record ModelPhysicsConfig(Map<String, Bone> bones, Wind wind)
      * modulated by a noise field that drifts downwind over time ({@code turbulenceSpeed}) and varies across
      * space ({@code turbulenceScale}), so points along a chain ripple rather than move rigidly. Turbulence 0
      * leaves a steady force.
+     *
+     * <p>{@code local} makes the direction relative to the model instead of the world: when set, the
+     * {@code x}/{@code y}/{@code z} direction is rotated by the model's world orientation, so the wind
+     * follows the model as it turns. When clear, the direction is a fixed world vector.
      */
-    public record Wind(float strength, float x, float y, float z, float turbulence, float turbulenceSpeed, float turbulenceScale)
+    public record Wind(float strength, float x, float y, float z, float turbulence, float turbulenceSpeed, float turbulenceScale, boolean local)
     {
-        public static final Wind NONE = new Wind(0F, 1F, 0F, 0F, DEFAULT_TURBULENCE, DEFAULT_TURBULENCE_SPEED, DEFAULT_TURBULENCE_SCALE);
+        public static final Wind NONE = new Wind(0F, 1F, 0F, 0F, DEFAULT_TURBULENCE, DEFAULT_TURBULENCE_SPEED, DEFAULT_TURBULENCE_SCALE, false);
 
         public Wind
         {

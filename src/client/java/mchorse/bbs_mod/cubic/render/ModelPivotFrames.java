@@ -19,10 +19,21 @@ public final class ModelPivotFrames
 
     public static void collect(IModel model, Set<String> wanted, Map<String, CubicRenderer.PivotFrame> out)
     {
-        collect(model, wanted, out, null);
+        collect(model, wanted, out, null, false);
     }
 
     public static void collect(IModel model, Set<String> wanted, Map<String, CubicRenderer.PivotFrame> out, Matrix4f baseTransform)
+    {
+        collect(model, wanted, out, baseTransform, false);
+    }
+
+    /**
+     * @param applyStretch fold each bone's IK stretch offset into the frames, so a chain collected after
+     * an ancestor chain has stretched reads the ancestor's shifted position (see {@link
+     * CubicRenderer#collectPivotFrames}). Cubic only: a BOBJ stretch rides the skinning matrix and leaves
+     * the skeleton frames (originMat/mat) nominal, so there is nothing to fold in for a BOBJ model.
+     */
+    public static void collect(IModel model, Set<String> wanted, Map<String, CubicRenderer.PivotFrame> out, Matrix4f baseTransform, boolean applyStretch)
     {
         if (model == null || wanted == null || wanted.isEmpty() || out == null)
         {
@@ -31,7 +42,7 @@ public final class ModelPivotFrames
 
         if (model instanceof Model cubic)
         {
-            CubicRenderer.collectPivotFrames(cubic, wanted, out, baseTransform);
+            CubicRenderer.collectPivotFrames(cubic, wanted, out, baseTransform, applyStretch);
             return;
         }
 
