@@ -24,8 +24,6 @@ final class ModelIKApplier
     private static final int MAX_ITERATIONS = 12;
     private static final float TOLERANCE = 1.0e-4f;
     private static final float EPS = 1.0e-6f;
-    private static final float HYSTERESIS_RAD = (float) Math.toRadians(20F);
-    private static final float SINGULARITY_RAD = (float) Math.toRadians(3F);
 
     static final class ChainWorkspace
     {
@@ -295,9 +293,12 @@ final class ModelIKApplier
 
         if (stretch && solved.size() >= 3)
         {
-            Vector3f gap = workspace.stretchGap.set(target).sub(solved.get(solved.size() - 1));
+            Vector3f solvedRoot = solved.get(0);
+            Vector3f solvedTip = solved.get(solved.size() - 1);
+            Vector3f gap = workspace.stretchGap.set(target).sub(solvedTip);
+            boolean targetOutsideSolvedTip = solvedRoot.distanceSquared(target) > solvedRoot.distanceSquared(solvedTip) + EPS * EPS;
 
-            if (gap.lengthSquared() > EPS * EPS)
+            if (targetOutsideSolvedTip && gap.lengthSquared() > EPS * EPS)
             {
                 stretchGap = gap.mul(weight);
             }
@@ -1062,13 +1063,13 @@ final class ModelIKApplier
         cosine = Math.max(-1F, Math.min(1F, cosine));
         float bendAngle = (float) Math.acos(cosine);
 
-        if (bendAngle <= SINGULARITY_RAD)
+        if (bendAngle <= IKSolver.STRAIGHT_RESTORE_RAD)
         {
             workspace.recoveringBend = true;
             return restHinge != null ? restHinge : workspace.hasStableBend ? workspace.stableBendNormal : null;
         }
 
-        if (workspace.recoveringBend && bendAngle < HYSTERESIS_RAD)
+        if (workspace.recoveringBend && bendAngle < IKSolver.BEND_HYSTERESIS_RAD)
         {
             return workspace.hasStableBend ? workspace.stableBendNormal : restHinge;
         }

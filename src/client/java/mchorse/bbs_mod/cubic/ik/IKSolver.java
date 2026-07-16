@@ -34,6 +34,11 @@ final class IKSolver
      * only fed that pass a numerically noisy near-zero bend normal. */
     private static final float REACH_LIMIT = 1F;
 
+    /** Within this predicted bend angle, authored-straight limbs stay exactly straight. */
+    static final float STRAIGHT_RESTORE_RAD = (float) Math.toRadians(3F);
+    static final float BEND_HYSTERESIS_RAD = (float) Math.toRadians(20F);
+    private static final float STRAIGHT_RESTORE_COS = (float) Math.cos(STRAIGHT_RESTORE_RAD);
+
     private IKSolver()
     {
     }
@@ -129,7 +134,7 @@ final class IKSolver
             /* Analytic is ideal for a two-bone limb — full reach, no flip, clean
              * pole control. The pole defines the hinge; limits ride on top as
              * range clamps (e.g. stop the elbow hyperextending). */
-            solveTwoBone(positions, root, goal);
+            solveTwoBone(positions, root, goal, softness <= EPS);
             bendNormal = orientBend(positions, hinge, polePoint, poleAngle);
 
             if (constrained)
@@ -222,19 +227,34 @@ final class IKSolver
         return Math.min(distance, limit);
     }
 
-    private static void solveTwoBone(List<Vector3f> p, Vector3f root, Vector3f goal)
+    private static void solveTwoBone(List<Vector3f> p, Vector3f root, Vector3f goal, boolean restoreStraight)
     {
         float l1 = root.distance(p.get(1));
         float l2 = p.get(1).distance(p.get(2));
         Vector3f dir = new Vector3f(goal).sub(root);
         float dist = dir.length();
 
-        if (dist < EPS)
+        if (dist < EPS || l1 < EPS || l2 < EPS)
         {
             return;
         }
 
         dir.div(dist);
+
+        /* A nearly degenerate triangle is the authored-straight dead zone, not a
+         * tiny bend whose sign can fall on the forbidden side of a zero-degree
+         * joint limit. Snap both segments onto the reach axis. The chain end may
+         * sit a few sub-pixels beyond an inside target, deliberately trading that
+         * tiny positional error for the model's exact original straight angle. */
+        float jointCos = (dist * dist - l1 * l1 - l2 * l2) / (2F * l1 * l2);
+
+        if (restoreStraight && jointCos >= STRAIGHT_RESTORE_COS)
+        {
+            p.get(1).set(root).fma(l1, dir);
+            p.get(2).set(root).fma(l1 + l2, dir);
+
+            return;
+        }
 
         float cosA = (l1 * l1 + dist * dist - l2 * l2) / (2F * l1 * dist);
         cosA = Math.max(-1F, Math.min(1F, cosA));
