@@ -86,7 +86,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private ActionsConfig lastConfigs;
     private IAnimator animator;
     private ModelInstance lastModel;
+    private final ModelIKRuntime ikRuntime = new ModelIKRuntime();
     private final ModelPhysicsRuntime physicsRuntime = new ModelPhysicsRuntime();
+    private final Matrix4f ikInverseBase = new Matrix4f();
+    private final Map<String, Vector3f> ikLocalTargets = new HashMap<>();
+    private final Map<String, Vector3f> ikLocalPoles = new HashMap<>();
     private final Object uiSimulationOwner = new Object();
     private final Object armSimulationOwner = new Object();
     private boolean ikAppliedThisRender;
@@ -350,7 +354,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         /* Clamp the FK input first. IK and physics each enforce the same limits internally; applying
          * the generic Euler clamp afterward would clear their composed quaternion orientation. */
         this.applyConstraintsOnce(model);
-        this.applyIKOnce(model, baseTransform);
+        this.applyIKOnce(model, simulationOwner == null ? target : simulationOwner, baseTransform);
         this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform);
 
         /* Default texture for materials without their own: the form's texture override, else the
@@ -433,7 +437,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform)
+    private void applyIKOnce(ModelInstance model, Object simulationOwner, Matrix4f baseTransform)
     {
         if (this.ikAppliedThisRender)
         {
@@ -448,27 +452,28 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (!hasOverrides)
         {
-            ModelIKRuntime.apply(model, null, null);
+            this.ikRuntime.apply(simulationOwner, model, null, null);
             return;
         }
 
-        Matrix4f inv = new Matrix4f(baseTransform).invert();
-        Map<String, Vector3f> local = toModelSpace(this.form.ikTargetOverrides, inv);
-        Map<String, Vector3f> poleLocal = toModelSpace(this.form.poleTargetOverrides, inv);
+        Matrix4f inv = this.ikInverseBase.set(baseTransform).invert();
 
-        if (local.isEmpty() && poleLocal.isEmpty())
+        toModelSpace(this.form.ikTargetOverrides, inv, this.ikLocalTargets);
+        toModelSpace(this.form.poleTargetOverrides, inv, this.ikLocalPoles);
+
+        if (this.ikLocalTargets.isEmpty() && this.ikLocalPoles.isEmpty())
         {
-            ModelIKRuntime.apply(model, null, null);
+            this.ikRuntime.apply(simulationOwner, model, null, null);
             return;
         }
 
-        ModelIKRuntime.apply(model, local.isEmpty() ? null : local, poleLocal.isEmpty() ? null : poleLocal);
+        this.ikRuntime.apply(simulationOwner, model, this.ikLocalTargets.isEmpty() ? null : this.ikLocalTargets, this.ikLocalPoles.isEmpty() ? null : this.ikLocalPoles);
     }
 
     /** World-space target overrides into the model's local space (the space the solver and pivot frames use). */
-    private static Map<String, Vector3f> toModelSpace(Map<String, Vector3f> world, Matrix4f inv)
+    private static void toModelSpace(Map<String, Vector3f> world, Matrix4f inv, Map<String, Vector3f> local)
     {
-        Map<String, Vector3f> local = new HashMap<>(world.size() * 2);
+        local.keySet().retainAll(world.keySet());
 
         for (Map.Entry<String, Vector3f> entry : world.entrySet())
         {
@@ -477,15 +482,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             if (key == null || key.isEmpty() || worldPos == null)
             {
+                local.remove(key);
                 continue;
             }
 
-            Vector3f pos = new Vector3f(worldPos);
-            inv.transformPosition(pos);
-            local.put(key, pos);
-        }
+            Vector3f pos = local.computeIfAbsent(key, (ignored) -> new Vector3f());
 
-        return local;
+            pos.set(worldPos);
+            inv.transformPosition(pos);
+        }
     }
 
     private void applyPhysicsOnce(IEntity target, Object simulationOwner, ModelInstance model, float transition, Matrix4f baseTransform)
@@ -851,7 +856,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
              * keyed into the pose are already baked in and reached). */
             model.form = this.form;
             ModelConstraintsRuntime.apply(model);
-            ModelIKRuntime.apply(model, null, null);
+            this.ikRuntime.apply(this.uiSimulationOwner, model, null, null);
 
             stack.mulPose(ROTATE_Y_180);
             this.captureMatrices(model);
@@ -989,7 +994,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             /* Same as collectMatrices: solve IK so an IK-driven anchor bone's root motion is sampled
              * from the solved pose the anchor system and gizmo see. */
             model.form = this.form;
-            ModelIKRuntime.apply(model, null, null);
+            this.ikRuntime.apply(this.uiSimulationOwner, model, null, null);
         }
 
         stack.mulPose(ROTATE_Y_180);

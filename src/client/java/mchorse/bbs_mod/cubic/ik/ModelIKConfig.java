@@ -7,7 +7,7 @@ public record ModelIKConfig(List<Chain> chains)
     public static final float DEFAULT_WEIGHT = 1F;
     public static final String DEFAULT_POLE_TARGET = "";
     public static final float DEFAULT_POLE_ANGLE = 0F;
-    public static final float DEFAULT_SOFTNESS = 0.05F;
+    public static final float DEFAULT_SOFTNESS = 0F;
     public static final int DEFAULT_CHAIN_LENGTH = 0;
     public static final boolean DEFAULT_TIP_ROTATION = false;
     public static final boolean DEFAULT_STRETCH = false;

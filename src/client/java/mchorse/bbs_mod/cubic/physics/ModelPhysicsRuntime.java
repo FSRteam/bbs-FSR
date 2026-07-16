@@ -15,11 +15,8 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +32,10 @@ public final class ModelPhysicsRuntime
     static final class InstanceState
     {
         public final Map<String, ChainState> chains = new HashMap<>();
+        public final Map<String, PivotFrame> frames = new HashMap<>();
+        public final ModelPivotFrames.Workspace frameCollector = new ModelPivotFrames.Workspace();
+        public final Vector3f windDirection = new Vector3f();
+        public ModelPhysicsCache.Compiled compiled;
     }
 
     /** Weak registry preserves the existing global cache-invalidation API without making histories global. */
@@ -117,9 +118,9 @@ public final class ModelPhysicsRuntime
             wind = new ModelPhysicsConfig.Wind(override.strength, override.x, override.y, override.z, override.turbulence, override.turbulenceSpeed, override.turbulenceScale, override.local);
         }
 
-        wind = resolveWindDirection(wind, baseTransform);
+        wind = resolveWindDirection(wind, baseTransform, state.windDirection);
 
-        applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled.chains(), wind, constraints, state, baseTransform);
+        applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled, wind, constraints, state, baseTransform);
     }
 
     /**
@@ -128,55 +129,34 @@ public final class ModelPhysicsRuntime
      * wind follows the model as it turns. The solver only ever sees a plain world-space direction. A
      * world-space or inactive wind is returned unchanged.
      */
-    private static ModelPhysicsConfig.Wind resolveWindDirection(ModelPhysicsConfig.Wind wind, Matrix4f baseTransform)
+    private static ModelPhysicsConfig.Wind resolveWindDirection(ModelPhysicsConfig.Wind wind, Matrix4f baseTransform, Vector3f scratchDirection)
     {
         if (wind == null || !wind.local() || !wind.active() || baseTransform == null)
         {
             return wind;
         }
 
-        Vector3f dir = new Vector3f(wind.x(), wind.y(), wind.z());
+        Vector3f dir = scratchDirection.set(wind.x(), wind.y(), wind.z());
 
         baseTransform.transformDirection(dir);
 
         return new ModelPhysicsConfig.Wind(wind.strength(), dir.x, dir.y, dir.z, wind.turbulence(), wind.turbulenceSpeed(), wind.turbulenceScale(), false);
     }
 
-    private static void applyCompiled(Level world, int age, float transition, IModel model, ModelInstance instance, List<ModelPhysicsCache.CompiledChain> compiledChains, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)
+    private static void applyCompiled(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.Compiled compiled, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)
     {
-        Set<String> wanted = new HashSet<>();
-        Set<String> chainIds = new HashSet<>();
-
-        for (ModelPhysicsCache.CompiledChain chain : compiledChains)
+        if (state.compiled != compiled)
         {
-            chainIds.add(chain.id());
-            wanted.addAll(chain.chainRootToEnd());
-
-            if (chain.targetBone() != null && !chain.targetBone().isEmpty())
-            {
-                wanted.add(chain.targetBone());
-            }
+            state.chains.keySet().retainAll(compiled.chainIds());
+            state.frames.clear();
+            state.compiled = compiled;
         }
 
-        if (!state.chains.isEmpty())
+        ModelPivotFrames.collect(model, compiled.wantedBones(), state.frames, baseTransform, false, state.frameCollector);
+
+        for (ModelPhysicsCache.CompiledChain chain : compiled.chains())
         {
-            Iterator<String> it = state.chains.keySet().iterator();
-
-            while (it.hasNext())
-            {
-                if (!chainIds.contains(it.next()))
-                {
-                    it.remove();
-                }
-            }
-        }
-
-        Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-        ModelPivotFrames.collect(model, wanted, frames, baseTransform);
-
-        for (ModelPhysicsCache.CompiledChain chain : compiledChains)
-        {
-            applyChain(world, age, transition, model, instance, chain, wind, constraints, frames, state);
+            applyChain(world, age, transition, model, instance, chain, wind, constraints, state.frames, state);
         }
     }
 
@@ -240,7 +220,9 @@ public final class ModelPhysicsRuntime
             state.lastAge = Integer.MIN_VALUE;
         }
 
-        List<PivotFrame> chainFrames = new ArrayList<>(pivotCount);
+        List<PivotFrame> chainFrames = state.chainFrames;
+
+        chainFrames.clear();
 
         for (int i = 0; i < pivotCount; i++)
         {
@@ -270,7 +252,7 @@ public final class ModelPhysicsRuntime
 
                 if (targetWeight >= 1F)
                 {
-                    target = new Vector3f(worldPos);
+                    target = state.pinTarget.set(worldPos);
                 }
                 else if (targetWeight > 0F)
                 {
@@ -280,8 +262,8 @@ public final class ModelPhysicsRuntime
                     Vector3f tip = state.pos[state.pos.length - 1];
 
                     target = state.lastAge == Integer.MIN_VALUE
-                        ? new Vector3f(worldPos)
-                        : new Vector3f(tip).lerp(worldPos, targetWeight);
+                        ? state.pinTarget.set(worldPos)
+                        : state.pinTarget.set(tip).lerp(worldPos, targetWeight);
                 }
                 /* targetWeight <= 0: fully faded out — leave the chain free this frame. */
             }
@@ -309,8 +291,8 @@ public final class ModelPhysicsRuntime
             }
         }
 
-        ChainSolver.computePoseTargets(model, ids, chainFrames, chain.restLengths(), anchor, anchorRotation, target != null, state);
-        ChainSolver.step(world, age, transition, model, ids, chain, gravity, damping, stiffness, wind, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
+        ChainSolver.computePoseTargets(chain, chainFrames, anchor, anchorRotation, target != null, state);
+        ChainSolver.step(world, age, transition, ids, chain, gravity, damping, stiffness, wind, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
 
         Vector3f[] positions = ChainSolver.renderInterpolate(state, state.renderAlpha, anchor, anchorRotation, target);
         ModelRotationBlender.applyWeightedRotations(model, chainFrames.get(0).parentRotation(), ids, positions, weight);

@@ -10,30 +10,160 @@ import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 final class ModelIKApplier
 {
     private static final int MAX_ITERATIONS = 12;
     private static final float TOLERANCE = 1.0e-4f;
     private static final float EPS = 1.0e-6f;
+    private static final float HYSTERESIS_RAD = (float) Math.toRadians(20F);
+    private static final float SINGULARITY_RAD = (float) Math.toRadians(3F);
+
+    static final class ChainWorkspace
+    {
+        final Map<String, PivotFrame> frames = new HashMap<>();
+        final ModelPivotFrames.Workspace frameCollector = new ModelPivotFrames.Workspace();
+        final List<Vector3f> positions = new ArrayList<>();
+        final Quaternionf rootParentRotation = new Quaternionf();
+        final Quaternionf tipTarget = new Quaternionf();
+        final Vector3f target = new Vector3f();
+        final Vector3f polePoint = new Vector3f();
+        final Vector3f bendNormal = new Vector3f();
+        final Vector3f stableBendNormal = new Vector3f();
+        final Vector3f restBendLocal = new Vector3f();
+        final Vector3f restBendWorld = new Vector3f();
+        final Vector3f stretchGap = new Vector3f();
+        final Vector3f scratchA = new Vector3f();
+        final Vector3f scratchB = new Vector3f();
+        final Quaternionf scratchRotation = new Quaternionf();
+        final Quaternionf orientationParent = new Quaternionf();
+        final Quaternionf orientationInverse = new Quaternionf();
+        final Quaternionf orientationLocal = new Quaternionf();
+        final Quaternionf orientationResult = new Quaternionf();
+        final Quaternionf tipRelativeRotation = new Quaternionf();
+        final Quaternionf transportRotation = new Quaternionf();
+        final Vector3f orientationSegment = new Vector3f();
+        final Vector3f orientationNormal = new Vector3f();
+        final Vector3f orientationRestNormal = new Vector3f();
+        final Vector3f transportSeed = new Vector3f();
+        final Vector3f frameU = new Vector3f();
+        final Vector3f frameV = new Vector3f();
+        final Vector3f frameW = new Vector3f();
+        final Matrix3f restFrameMatrix = new Matrix3f();
+        final Matrix3f targetFrameMatrix = new Matrix3f();
+        final Matrix3f rotationMatrix = new Matrix3f();
+        Vector3f[] restDirections = new Vector3f[0];
+        Vector3f[] segmentWorld = new Vector3f[0];
+        Vector3f[] restNormals = new Vector3f[0];
+        Vector3f[] solvedNormals = new Vector3f[0];
+        Vector3f[] restDirectionWorld = new Vector3f[0];
+        Quaternionf[] relativeRotations = new Quaternionf[0];
+        Quaternionf[] restFrames = new Quaternionf[0];
+        Quaternionf[] outputOrientations = new Quaternionf[0];
+        Vector3f[] stretchOffsets = new Vector3f[0];
+        BOBJBone[] bobjBones = new BOBJBone[0];
+        Map<String, BoneConstraint> limitsSource;
+        IKSolver.Limit[] limits;
+        Vector3f[] solvedArray = new Vector3f[0];
+        boolean hasStableBend;
+        boolean restBendComputed;
+        boolean hasRestBend;
+        boolean recoveringBend;
+        boolean orientationRestComputed;
+
+        void loadPositions(List<String> ids, Map<String, PivotFrame> frames)
+        {
+            while (this.positions.size() < ids.size())
+            {
+                this.positions.add(new Vector3f());
+            }
+
+            while (this.positions.size() > ids.size())
+            {
+                this.positions.remove(this.positions.size() - 1);
+            }
+
+            for (int i = 0; i < ids.size(); i++)
+            {
+                this.positions.get(i).set(frames.get(ids.get(i)).position());
+            }
+        }
+
+        Vector3f[] solvedArray()
+        {
+            if (this.solvedArray.length != this.positions.size())
+            {
+                this.solvedArray = new Vector3f[this.positions.size()];
+            }
+
+            for (int i = 0; i < this.positions.size(); i++)
+            {
+                this.solvedArray[i] = this.positions.get(i);
+            }
+
+            return this.solvedArray;
+        }
+
+        void ensureOrientationCapacity(int bones)
+        {
+            if (this.restDirections.length == bones)
+            {
+                return;
+            }
+
+            this.restDirections = vectors(bones);
+            this.segmentWorld = vectors(bones);
+            this.restNormals = vectors(bones);
+            this.solvedNormals = vectors(bones);
+            this.restDirectionWorld = vectors(bones);
+            this.relativeRotations = quaternions(bones);
+            this.restFrames = quaternions(bones);
+            this.outputOrientations = quaternions(bones + 1);
+            this.stretchOffsets = vectors(bones + 1);
+            this.bobjBones = new BOBJBone[bones];
+            this.orientationRestComputed = false;
+        }
+
+        private static Vector3f[] vectors(int size)
+        {
+            Vector3f[] out = new Vector3f[size];
+
+            for (int i = 0; i < size; i++)
+            {
+                out[i] = new Vector3f();
+            }
+
+            return out;
+        }
+
+        private static Quaternionf[] quaternions(int size)
+        {
+            Quaternionf[] out = new Quaternionf[size];
+
+            for (int i = 0; i < size; i++)
+            {
+                out[i] = new Quaternionf();
+            }
+
+            return out;
+        }
+    }
 
     private ModelIKApplier()
     {
     }
 
-    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
+    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, List<ChainWorkspace> workspaces, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
     {
-        if (model == null || chains == null || chains.isEmpty())
+        if (model == null || chains == null || chains.isEmpty() || workspaces == null || workspaces.size() != chains.size())
         {
             return;
         }
@@ -46,51 +176,17 @@ final class ModelIKApplier
          * — the spot the renderer actually draws it — instead of the un-stretched pose.
          * A chain's OWN stretch is written only after its solve, so its offset is still
          * null at collect time and never leaks into its own solve. */
-        List<ModelIKCache.CompiledChain> ordered = new ArrayList<>(chains);
-        ordered.sort(Comparator.comparingInt((ModelIKCache.CompiledChain chain) -> rootDepth(model, chain)));
-
-        for (ModelIKCache.CompiledChain chain : ordered)
+        for (int i = 0; i < chains.size(); i++)
         {
-            Set<String> wanted = new HashSet<>();
-            wanted.add(chain.target());
-            wanted.addAll(chain.chainRootToEffector());
+            ModelIKCache.CompiledChain chain = chains.get(i);
+            ChainWorkspace workspace = workspaces.get(i);
 
-            if (chain.poleTarget() != null && !chain.poleTarget().isEmpty())
-            {
-                wanted.add(chain.poleTarget());
-            }
-
-            Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-            ModelPivotFrames.collect(model, wanted, frames, null, true);
-
-            applyChain(model, chain, frames, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, boneLimits);
+            ModelPivotFrames.collect(model, chain.wantedBones(), workspace.frames, null, true, workspace.frameCollector);
+            applyChain(model, chain, workspace, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, boneLimits);
         }
     }
 
-    /** Depth of the chain's root bone from the model root, for ancestor-first ordering. */
-    private static int rootDepth(IModel model, ModelIKCache.CompiledChain chain)
-    {
-        List<String> ids = chain.chainRootToEffector();
-        String group = ids.isEmpty() ? chain.tip() : ids.get(0);
-        int depth = 0;
-
-        while (group != null && !group.isEmpty() && depth < 256)
-        {
-            String parent = model.getParentGroupKey(group);
-
-            if (parent == null || parent.equals(group))
-            {
-                break;
-            }
-
-            group = parent;
-            depth++;
-        }
-
-        return depth;
-    }
-
-    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
+    private static void applyChain(IModel model, ModelIKCache.CompiledChain chain, ChainWorkspace workspace, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<String, BoneConstraint> boneLimits)
     {
         /* The film's `ik` track may override the chain's static config scalars.
          * IK weight is independent of pose `fix` — freezing a bone pins it to rest
@@ -115,6 +211,7 @@ final class ModelIKApplier
             return;
         }
 
+        Map<String, PivotFrame> frames = workspace.frames;
         PivotFrame targetFrame = frames.get(chain.target());
 
         if (targetFrame == null)
@@ -122,19 +219,9 @@ final class ModelIKApplier
             return;
         }
 
-        List<String> chainIds = chain.chainRootToEffector();
-
-        /* Auto-tail (foot IK): with "tip follows target" on, a chain ending in a bare
-         * marker bone (no geometry, no children) treats that marker as the EFFECTOR's tail
-         * — the bone before it becomes the orientable end, and the IK reaches the tail. So
-         * the foot turns to the controller while the leg above bends to plant the tail (the
-         * foot's bottom) on the target. Off, or no marker: the chain is used as-is. */
         boolean tipRotation = chain.tipRotation();
-        String tailId = tipRotation ? autoTailId(model, chainIds) : null;
-        List<String> workIds = tailId == null ? chainIds : chainIds.subList(0, chainIds.size() - 1);
-
-        List<Vector3f> currentPositions = new ArrayList<>(workIds.size());
-        Quaternionf rootParentRotation = null;
+        String tailId = chain.tailId();
+        List<String> workIds = chain.workRootToEffector();
 
         for (String id : workIds)
         {
@@ -144,24 +231,16 @@ final class ModelIKApplier
             {
                 return;
             }
-
-            currentPositions.add(new Vector3f(frame.position()));
-
-            if (rootParentRotation == null)
-            {
-                rootParentRotation = new Quaternionf(frame.parentRotation());
-            }
         }
 
-        if (rootParentRotation == null)
-        {
-            return;
-        }
+        workspace.loadPositions(workIds, frames);
+        List<Vector3f> currentPositions = workspace.positions;
+        Quaternionf rootParentRotation = workspace.rootParentRotation.set(frames.get(workIds.get(0)).parentRotation());
 
         /* The film's target/pole overrides ride a 0..1 weight that eases them in/out across
          * a "None" keyframe, so fading a target glides from the bone's own frame, not origin. */
         Vector3f override = controllerTargets == null ? null : controllerTargets.get(chain.target());
-        Vector3f target = new Vector3f(targetFrame.position());
+        Vector3f target = workspace.target.set(targetFrame.position());
 
         if (override != null)
         {
@@ -169,26 +248,43 @@ final class ModelIKApplier
         }
 
         /* "Tip follows target": the effector copies the controller's orientation. Null = keep FK. */
-        Quaternionf tipTarget = tipRotation && targetFrame.worldRotation() != null ? new Quaternionf(targetFrame.worldRotation()) : null;
+        Quaternionf tipTarget = tipRotation && targetFrame.worldRotation() != null ? workspace.tipTarget.set(targetFrame.worldRotation()) : null;
 
         /* Foot IK: back the reach off so the effector's TAIL (the marker), not its pivot,
          * lands on the target once the effector is turned to the controller's orientation. */
         if (tailId != null && tipTarget != null)
         {
-            shiftTargetForTail(target, tipTarget, workIds.get(workIds.size() - 1), tailId, frames);
+            shiftTargetForTail(target, tipTarget, workIds.get(workIds.size() - 1), tailId, frames, workspace);
         }
 
-        Vector3f polePoint = resolvePolePoint(pole, chain.poleTarget(), frames, poleTargets, poleWeights);
-        IKSolver.Limit[] limits = buildLimits(model, workIds, boneLimits);
-        Vector3f restHinge = restBendNormal(model, workIds, rootParentRotation);
+        Vector3f polePoint = resolvePolePoint(pole, chain.poleTarget(), frames, poleTargets, poleWeights, workspace.polePoint);
 
-        Vector3f bendNormal = new Vector3f();
-        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation, restHinge, bendNormal);
+        if (workspace.limitsSource != boneLimits)
+        {
+            workspace.limits = buildLimits(model, workIds, boneLimits);
+            workspace.limitsSource = boneLimits;
+        }
+
+        IKSolver.Limit[] limits = workspace.limits;
+        Vector3f restHinge = restBendNormal(model, workIds, rootParentRotation, workspace);
+        Vector3f bendHint = selectBendHint(currentPositions, target, softness, restHinge, workspace);
+        boolean preferBendHint = workspace.recoveringBend && bendHint != null;
+
+        workspace.bendNormal.zero();
+        List<Vector3f> solved = IKSolver.solve(currentPositions, target, pole, polePoint, poleAngle, softness, MAX_ITERATIONS, TOLERANCE, limits, limits == null ? null : rootParentRotation, bendHint, preferBendHint, workspace.bendNormal);
+
+        if (workspace.bendNormal.lengthSquared() >= EPS * EPS)
+        {
+            workspace.stableBendNormal.set(workspace.bendNormal).normalize();
+            workspace.hasStableBend = true;
+        }
 
         /* The bend-plane normal the solve settled on (zero when undefined). Passed to the
          * orientation pass as the roll-reference seed so a fully straight chain keeps a
          * stable twist instead of jittering at the reach boundary. */
-        Vector3f bendSeed = bendNormal.lengthSquared() < EPS * EPS ? null : bendNormal;
+        Vector3f bendSeed = workspace.bendNormal.lengthSquared() >= EPS * EPS
+            ? workspace.bendNormal
+            : workspace.hasStableBend ? workspace.stableBendNormal : null;
 
         /* IK stretch: when the controller is pulled past the chain's reach, the solver lands the tip
          * on the reach sphere, short of the target. The gap (tip -> target, eased by softness so it
@@ -199,7 +295,7 @@ final class ModelIKApplier
 
         if (stretch && solved.size() >= 3)
         {
-            Vector3f gap = new Vector3f(target).sub(solved.get(solved.size() - 1));
+            Vector3f gap = workspace.stretchGap.set(target).sub(solved.get(solved.size() - 1));
 
             if (gap.lengthSquared() > EPS * EPS)
             {
@@ -213,16 +309,15 @@ final class ModelIKApplier
          * (size 2) keeps the euler reconstruction. */
         if (model instanceof Model cubic && workIds.size() >= 3)
         {
-            buildChainOrientations(cubic, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap, bendSeed);
+            buildChainOrientations(cubic, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap, bendSeed, workspace);
         }
         else if (model instanceof BOBJModel bobj && workIds.size() >= 3)
         {
-            buildChainOrientationsBobj(bobj, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap, bendSeed);
+            buildChainOrientationsBobj(bobj, workIds, solved, rootParentRotation, weight, tipTarget, stretchGap, bendSeed, workspace);
         }
         else
         {
-            Vector3f[] solvedArray = solved.toArray(new Vector3f[solved.size()]);
-            ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, workIds, solvedArray, weight);
+            ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, workIds, workspace.solvedArray(), weight);
         }
     }
 
@@ -233,31 +328,13 @@ final class ModelIKApplier
      * {@code null} when there is none, the model is not cubic, or the chain is too short to
      * keep a bendable run after dropping the tail.
      */
-    private static String autoTailId(IModel model, List<String> chainIds)
-    {
-        if (chainIds.size() < 4 || !(model instanceof Model cubic))
-        {
-            return null;
-        }
-
-        String lastId = chainIds.get(chainIds.size() - 1);
-        ModelGroup last = cubic.getGroup(lastId);
-
-        if (last == null || !last.cubes.isEmpty() || !last.meshes.isEmpty() || !last.children.isEmpty())
-        {
-            return null;
-        }
-
-        return lastId;
-    }
-
     /**
      * Backs the IK target off by the effector's tail offset, turned to the controller's
      * orientation, so the tail (the marker) — not the effector's pivot — lands on the
      * original target once the effector is oriented to the controller. The offset is the
      * tail's rest position in the effector's local frame (constant geometry).
      */
-    private static void shiftTargetForTail(Vector3f target, Quaternionf tipTarget, String effectorId, String tailId, Map<String, PivotFrame> frames)
+    private static void shiftTargetForTail(Vector3f target, Quaternionf tipTarget, String effectorId, String tailId, Map<String, PivotFrame> frames, ChainWorkspace workspace)
     {
         PivotFrame eff = frames.get(effectorId);
         PivotFrame tail = frames.get(tailId);
@@ -267,8 +344,9 @@ final class ModelIKApplier
             return;
         }
 
-        Vector3f offsetLocal = new Quaternionf(eff.worldRotation()).conjugate().transform(new Vector3f(tail.position()).sub(eff.position()));
-        Vector3f shift = new Quaternionf(tipTarget).transform(offsetLocal);
+        Vector3f offsetLocal = workspace.scratchA.set(tail.position()).sub(eff.position());
+        workspace.scratchRotation.set(eff.worldRotation()).conjugate().transform(offsetLocal);
+        Vector3f shift = workspace.scratchRotation.set(tipTarget).transform(workspace.scratchB.set(offsetLocal));
 
         target.sub(shift);
     }
@@ -292,24 +370,42 @@ final class ModelIKApplier
      * advancing by each bone's rendered (blended) orientation so children inherit the
      * same frame the renderer establishes.
      */
-    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
+    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed, ChainWorkspace workspace)
     {
         int bones = chainIds.size() - 1;
-        Vector3f[] restDir = new Vector3f[bones];
-        Vector3f[] segWorld = new Vector3f[bones];
+        workspace.ensureOrientationCapacity(bones);
+
+        Vector3f[] restDir = workspace.restDirections;
+        Vector3f[] segWorld = workspace.segmentWorld;
+
+        if (!workspace.orientationRestComputed)
+        {
+            for (int i = 0; i < bones; i++)
+            {
+                Vector3f rest = restDirection(model, chainIds, i);
+
+                if (rest == null)
+                {
+                    return;
+                }
+
+                restDir[i].set(rest);
+            }
+
+            transportNormals(restDir, workspace.restNormals, null, workspace);
+            workspace.orientationRestComputed = true;
+        }
 
         for (int i = 0; i < bones; i++)
         {
-            Vector3f seg = new Vector3f(solved.get(i + 1)).sub(solved.get(i));
+            Vector3f seg = segWorld[i].set(solved.get(i + 1)).sub(solved.get(i));
 
-            restDir[i] = restDirection(model, chainIds, i);
-
-            if (restDir[i] == null || seg.lengthSquared() < EPS * EPS)
+            if (seg.lengthSquared() < EPS * EPS)
             {
                 return;
             }
 
-            segWorld[i] = seg.normalize();
+            seg.normalize();
         }
 
         /* Distribute the gap only up to the last bone that actually has geometry: a chain ending in a
@@ -326,10 +422,12 @@ final class ModelIKApplier
 
         boolean doStretch = stretchGap != null && reach >= 1 && reachTotal > EPS;
 
-        Vector3f[] restNormal = transportNormals(restDir);
-        Vector3f[] solvedNormal = transportNormals(segWorld, bendSeed);
+        Vector3f[] restNormal = workspace.restNormals;
+        Vector3f[] solvedNormal = workspace.solvedNormals;
 
-        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
+        transportNormals(segWorld, solvedNormal, bendSeed, workspace);
+
+        Quaternionf parentWorld = workspace.orientationParent.set(rootParentRotation);
 
         for (int i = 0; i < bones; i++)
         {
@@ -340,12 +438,21 @@ final class ModelIKApplier
                 return;
             }
 
-            Quaternionf invParent = new Quaternionf(parentWorld).conjugate();
-            Vector3f segLocal = invParent.transform(new Vector3f(segWorld[i]));
-            Vector3f normalLocal = invParent.transform(new Vector3f(solvedNormal[i]));
+            Quaternionf invParent = workspace.orientationInverse.set(parentWorld).conjugate();
+            Vector3f segLocal = invParent.transform(segWorld[i], workspace.orientationSegment);
+            Vector3f normalLocal = invParent.transform(solvedNormal[i], workspace.orientationNormal);
 
-            Quaternionf localRot = Matrices.orientMirroredX(restDir[i], restNormal[i], segLocal, normalLocal);
-            Quaternionf oriented = weight >= 1F - EPS ? new Quaternionf(localRot) : fkLocal(bone).slerp(localRot, weight);
+            Quaternionf localRot = Matrices.orientMirroredX(restDir[i], restNormal[i], segLocal, normalLocal, workspace.orientationResult, workspace.restFrameMatrix, workspace.targetFrameMatrix, workspace.rotationMatrix, workspace.frameU, workspace.frameV, workspace.frameW);
+            Quaternionf oriented = workspace.outputOrientations[i];
+
+            if (weight >= 1F - EPS)
+            {
+                oriented.set(localRot);
+            }
+            else
+            {
+                fkLocal(bone, oriented).slerp(localRot, weight);
+            }
 
             bone.orient = oriented;
 
@@ -354,7 +461,7 @@ final class ModelIKApplier
              * frame here, so the world gap maps into the local translate the renderer applies. */
             if (doStretch && i >= 1 && i <= reach)
             {
-                bone.offset = stretchOffset(stretchGap, solved.get(i - 1).distance(solved.get(i)), reachTotal, parentWorld);
+                bone.offset = stretchOffset(stretchGap, solved.get(i - 1).distance(solved.get(i)), reachTotal, parentWorld, workspace.stretchOffsets[i], workspace);
             }
 
             /* Advance by the orientation the renderer will actually apply (the blended
@@ -375,16 +482,26 @@ final class ModelIKApplier
          * end-marker beyond the reach bone gets nothing and rides the reach bone's full shift. */
         if (doStretch && bones <= reach)
         {
-            tip.offset = stretchOffset(stretchGap, solved.get(bones - 1).distance(solved.get(bones)), reachTotal, parentWorld);
+            tip.offset = stretchOffset(stretchGap, solved.get(bones - 1).distance(solved.get(bones)), reachTotal, parentWorld, workspace.stretchOffsets[bones], workspace);
         }
 
         /* Tip follows target: the effector (last id, not in the directed loop) copies the
          * controller's world orientation. parentWorld is now the tip's parent frame. */
         if (tipTarget != null)
         {
-            Quaternionf tipLocal = new Quaternionf(parentWorld).conjugate().mul(tipTarget);
+            Quaternionf tipLocal = workspace.orientationLocal.set(parentWorld).conjugate().mul(tipTarget);
+            Quaternionf tipOriented = workspace.outputOrientations[bones];
 
-            tip.orient = weight >= 1F - EPS ? tipLocal : fkLocal(tip).slerp(tipLocal, weight);
+            if (weight >= 1F - EPS)
+            {
+                tipOriented.set(tipLocal);
+            }
+            else
+            {
+                fkLocal(tip, tipOriented).slerp(tipLocal, weight);
+            }
+
+            tip.orient = tipOriented;
         }
     }
 
@@ -394,11 +511,11 @@ final class ModelIKApplier
      * telescopes evenly), turned into {@code parentWorld}'s frame — the frame the renderer's
      * pre-translate runs in, so {@code ModelGroup.offset} lands the bone in the right world spot.
      */
-    private static Vector3f stretchOffset(Vector3f gap, float segLength, float total, Quaternionf parentWorld)
+    private static Vector3f stretchOffset(Vector3f gap, float segLength, float total, Quaternionf parentWorld, Vector3f out, ChainWorkspace workspace)
     {
-        Vector3f share = new Vector3f(gap).mul(segLength / total);
+        out.set(gap).mul(segLength / total);
 
-        return new Quaternionf(parentWorld).conjugate().transform(share);
+        return workspace.orientationInverse.set(parentWorld).conjugate().transform(out);
     }
 
     /**
@@ -430,11 +547,6 @@ final class ModelIKApplier
      * — the same frame inheritance Blender gives a bone from its parent — and never
      * flips the way a per-joint bend normal does when a joint straightens.
      */
-    private static Vector3f[] transportNormals(Vector3f[] dirs)
-    {
-        return transportNormals(dirs, null);
-    }
-
     /**
      * {@code seedHint} (when non-null) is a stable bend-plane normal used to seed the
      * roll reference where the first two segments are collinear — a straightened chain.
@@ -446,52 +558,70 @@ final class ModelIKApplier
      * actually bent the cross product is used as before; the hint only fills the
      * degenerate seed, and falls back to the fixed perpendicular when itself absent.
      */
-    private static Vector3f[] transportNormals(Vector3f[] dirs, Vector3f seedHint)
+    private static void transportNormals(Vector3f[] dirs, Vector3f[] normals, Vector3f seedHint, ChainWorkspace workspace)
     {
         int m = dirs.length;
-        Vector3f[] normals = new Vector3f[m];
-        Vector3f seed = m >= 2 ? new Vector3f(dirs[0]).cross(dirs[1]) : new Vector3f();
+        Vector3f seed = workspace.transportSeed;
 
-        if (seed.lengthSquared() < 1.0e-10f)
+        if (m == 0 || normals.length < m)
         {
-            Vector3f hint = seedHint == null ? null : perpendicularTo(seedHint, dirs[0]);
+            return;
+        }
 
-            normals[0] = hint != null ? hint : stablePerpendicular(dirs[0]);
+        if (m >= 2)
+        {
+            seed.set(dirs[0]).cross(dirs[1]);
         }
         else
         {
-            normals[0] = seed.normalize();
+            seed.zero();
+        }
+
+        if (seed.lengthSquared() < 1.0e-10f)
+        {
+            if (seedHint == null || !perpendicularTo(seedHint, dirs[0], normals[0]))
+            {
+                stablePerpendicular(dirs[0], normals[0]);
+            }
+        }
+        else
+        {
+            normals[0].set(seed).normalize();
         }
 
         for (int i = 1; i < m; i++)
         {
-            Vector3f n = new Quaternionf().rotationTo(dirs[i - 1], dirs[i]).transform(new Vector3f(normals[i - 1]));
-
-            normals[i] = n.normalize();
+            workspace.transportRotation.rotationTo(dirs[i - 1], dirs[i]).transform(normals[i - 1], normals[i]);
+            normals[i].normalize();
         }
-
-        return normals;
     }
 
-    /** {@code v} projected onto the plane perpendicular to unit {@code axis}, normalized; {@code null} if degenerate. */
-    private static Vector3f perpendicularTo(Vector3f v, Vector3f axis)
+    /** {@code v} projected onto the plane perpendicular to unit {@code axis}, normalized. */
+    private static boolean perpendicularTo(Vector3f v, Vector3f axis, Vector3f out)
     {
-        Vector3f out = new Vector3f(v);
+        out.set(v);
         float dot = out.dot(axis);
 
         out.x -= axis.x * dot;
         out.y -= axis.y * dot;
         out.z -= axis.z * dot;
 
-        return out.lengthSquared() < EPS * EPS ? null : out.normalize();
+        if (out.lengthSquared() < EPS * EPS)
+        {
+            return false;
+        }
+
+        out.normalize();
+
+        return true;
     }
 
     /** The bone's FK local rotation (its euler rotate as a quaternion), the blend base when IK weight is below one. */
-    private static Quaternionf fkLocal(ModelGroup bone)
+    private static Quaternionf fkLocal(ModelGroup bone, Quaternionf out)
     {
         Vector3f r = bone.current.rotate;
 
-        return Matrices.toQuaternionZYXDegrees(r.x, r.y, r.z);
+        return out.rotationZYX((float) Math.toRadians(r.z), (float) Math.toRadians(r.y), (float) Math.toRadians(r.x));
     }
 
     /**
@@ -505,66 +635,95 @@ final class ModelIKApplier
      * coincide and the orientation is identity — no baseline twist. Same X-mirror as
      * cubic ({@link Matrices#orientMirroredX}).
      */
-    private static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
+    private static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed, ChainWorkspace workspace)
     {
         int bones = chainIds.size() - 1;
+        workspace.ensureOrientationCapacity(bones);
+
         Map<String, BOBJBone> bonesMap = model.getArmature().bones;
-        BOBJBone[] chainBones = new BOBJBone[bones];
-        Vector3f[] restDir = new Vector3f[bones];
-        Quaternionf[] relRot = new Quaternionf[bones];
-        Vector3f[] segWorld = new Vector3f[bones];
+        BOBJBone[] chainBones = workspace.bobjBones;
+        Vector3f[] restDir = workspace.restDirections;
+        Quaternionf[] relRot = workspace.relativeRotations;
+        Vector3f[] segWorld = workspace.segmentWorld;
+
+        if (!workspace.orientationRestComputed)
+        {
+            for (int i = 0; i < bones; i++)
+            {
+                BOBJBone bone = bonesMap.get(chainIds.get(i));
+                Vector3f rest = restDirection(model, chainIds, i);
+
+                if (bone == null || rest == null)
+                {
+                    return;
+                }
+
+                chainBones[i] = bone;
+                restDir[i].set(rest);
+                bone.relBoneMat.getNormalizedRotation(relRot[i]);
+            }
+
+            workspace.orientationRestComputed = true;
+        }
 
         for (int i = 0; i < bones; i++)
         {
-            BOBJBone bone = bonesMap.get(chainIds.get(i));
-            Vector3f seg = new Vector3f(solved.get(i + 1)).sub(solved.get(i));
+            Vector3f seg = segWorld[i].set(solved.get(i + 1)).sub(solved.get(i));
 
-            restDir[i] = restDirection(model, chainIds, i);
-
-            if (bone == null || restDir[i] == null || seg.lengthSquared() < EPS * EPS)
+            if (seg.lengthSquared() < EPS * EPS)
             {
                 return;
             }
 
-            chainBones[i] = bone;
-            relRot[i] = bone.relBoneMat.getNormalizedRotation(new Quaternionf());
-            segWorld[i] = seg.normalize();
+            seg.normalize();
         }
 
         /* Rest-pose world frames advance by relBoneMat alone (geometry rest, no bone
          * rotation); the root's own relBoneMat is already baked into rootParentRotation. */
-        Quaternionf[] restFrame = new Quaternionf[bones];
-        restFrame[0] = new Quaternionf(rootParentRotation);
+        Quaternionf[] restFrame = workspace.restFrames;
+        restFrame[0].set(rootParentRotation);
 
         for (int i = 1; i < bones; i++)
         {
-            restFrame[i] = new Quaternionf(restFrame[i - 1]).mul(relRot[i]);
+            restFrame[i].set(restFrame[i - 1]).mul(relRot[i]);
         }
 
-        Vector3f[] restDirWorld = new Vector3f[bones];
+        Vector3f[] restDirWorld = workspace.restDirectionWorld;
 
         for (int i = 0; i < bones; i++)
         {
-            restDirWorld[i] = restFrame[i].transform(new Vector3f(restDir[i]));
+            restFrame[i].transform(restDir[i], restDirWorld[i]);
         }
 
-        Vector3f[] restNormalWorld = transportNormals(restDirWorld);
-        Vector3f[] solvedNormalWorld = transportNormals(segWorld, bendSeed);
+        Vector3f[] restNormalWorld = workspace.restNormals;
+        Vector3f[] solvedNormalWorld = workspace.solvedNormals;
+
+        transportNormals(restDirWorld, restNormalWorld, null, workspace);
+        transportNormals(segWorld, solvedNormalWorld, bendSeed, workspace);
 
         /* Solved-pose world frame advances by each bone's applied orientation, then the
          * next bone's relBoneMat — so a child decomposes against the frame the armature
          * actually establishes (blended orientation at weight < 1). */
-        Quaternionf originRot = new Quaternionf(rootParentRotation);
+        Quaternionf originRot = workspace.orientationParent.set(rootParentRotation);
 
         for (int i = 0; i < bones; i++)
         {
-            Quaternionf invOrigin = new Quaternionf(originRot).conjugate();
-            Vector3f segLocal = invOrigin.transform(new Vector3f(segWorld[i]));
-            Vector3f normalLocal = invOrigin.transform(new Vector3f(solvedNormalWorld[i]));
-            Vector3f restNormalLocal = new Quaternionf(restFrame[i]).conjugate().transform(new Vector3f(restNormalWorld[i]));
+            Quaternionf invOrigin = workspace.orientationInverse.set(originRot).conjugate();
+            Vector3f segLocal = invOrigin.transform(segWorld[i], workspace.orientationSegment);
+            Vector3f normalLocal = invOrigin.transform(solvedNormalWorld[i], workspace.orientationNormal);
+            Vector3f restNormalLocal = workspace.orientationLocal.set(restFrame[i]).conjugate().transform(restNormalWorld[i], workspace.orientationRestNormal);
 
-            Quaternionf localRot = Matrices.orientMirroredX(restDir[i], restNormalLocal, segLocal, normalLocal);
-            Quaternionf oriented = weight >= 1F - EPS ? new Quaternionf(localRot) : bobjFkLocal(chainBones[i]).slerp(localRot, weight);
+            Quaternionf localRot = Matrices.orientMirroredX(restDir[i], restNormalLocal, segLocal, normalLocal, workspace.orientationResult, workspace.restFrameMatrix, workspace.targetFrameMatrix, workspace.rotationMatrix, workspace.frameU, workspace.frameV, workspace.frameW);
+            Quaternionf oriented = workspace.outputOrientations[i];
+
+            if (weight >= 1F - EPS)
+            {
+                oriented.set(localRot);
+            }
+            else
+            {
+                bobjFkLocal(chainBones[i], oriented).slerp(localRot, weight);
+            }
 
             chainBones[i].orient = oriented;
 
@@ -583,17 +742,26 @@ final class ModelIKApplier
 
             if (tip != null)
             {
-                Quaternionf tipRelRot = tip.relBoneMat.getNormalizedRotation(new Quaternionf());
-                Quaternionf tipParent = new Quaternionf(originRot).mul(chainBones[bones - 1].orient).mul(tipRelRot);
-                Quaternionf tipLocal = tipParent.conjugate().mul(tipTarget);
+                Quaternionf tipRelRot = tip.relBoneMat.getNormalizedRotation(workspace.tipRelativeRotation);
+                Quaternionf tipLocal = workspace.orientationLocal.set(originRot).mul(chainBones[bones - 1].orient).mul(tipRelRot).conjugate().mul(tipTarget);
+                Quaternionf tipOriented = workspace.outputOrientations[bones];
 
-                tip.orient = weight >= 1F - EPS ? new Quaternionf(tipLocal) : bobjFkLocal(tip).slerp(tipLocal, weight);
+                if (weight >= 1F - EPS)
+                {
+                    tipOriented.set(tipLocal);
+                }
+                else
+                {
+                    bobjFkLocal(tip, tipOriented).slerp(tipLocal, weight);
+                }
+
+                tip.orient = tipOriented;
             }
         }
 
         if (stretchGap != null)
         {
-            stretchBobj(model, bonesMap, chainIds, solved, stretchGap);
+            stretchBobj(model, bonesMap, chainIds, solved, stretchGap, workspace);
         }
     }
 
@@ -608,7 +776,7 @@ final class ModelIKApplier
      * Written to {@link BOBJBone#offset}, which the armature folds into the skinning matrix only,
      * leaving the skeleton frames nominal.
      */
-    private static void stretchBobj(BOBJModel model, Map<String, BOBJBone> bonesMap, List<String> chainIds, List<Vector3f> solved, Vector3f gap)
+    private static void stretchBobj(BOBJModel model, Map<String, BOBJBone> bonesMap, List<String> chainIds, List<Vector3f> solved, Vector3f gap, ChainWorkspace workspace)
     {
         int joints = chainIds.size();
         int reach = lastInfluenceIndex(model, bonesMap, chainIds);
@@ -634,7 +802,7 @@ final class ModelIKApplier
 
             if (bone != null)
             {
-                bone.offset = new Vector3f(gap).mul(Math.min(arclen / reachTotal, 1F));
+                bone.offset = workspace.stretchOffsets[i].set(gap).mul(Math.min(arclen / reachTotal, 1F));
             }
         }
     }
@@ -660,17 +828,17 @@ final class ModelIKApplier
     }
 
     /** A BOBJ bone's FK local rotation (its radian euler rotate as a quaternion), the blend base when IK weight is below one. */
-    private static Quaternionf bobjFkLocal(BOBJBone bone)
+    private static Quaternionf bobjFkLocal(BOBJBone bone, Quaternionf out)
     {
         Vector3f r = bone.transform.rotate;
 
-        return new Quaternionf().rotationZYX(r.z, r.y, r.x);
+        return out.rotationZYX(r.z, r.y, r.x);
     }
 
     /** A deterministic unit perpendicular to {@code dir}, cross with world Z (falling back to world Y when parallel). */
-    private static Vector3f stablePerpendicular(Vector3f dir)
+    private static Vector3f stablePerpendicular(Vector3f dir, Vector3f out)
     {
-        Vector3f perp = new Vector3f(dir).cross(0F, 0F, 1F);
+        Vector3f perp = out.set(dir).cross(0F, 0F, 1F);
 
         if (perp.lengthSquared() < EPS * EPS)
         {
@@ -686,7 +854,7 @@ final class ModelIKApplier
      * the pole bone's current position. Returns {@code null} (automatic hinge)
      * when the chain has no pole or no pole target.
      */
-    private static Vector3f resolvePolePoint(boolean pole, String poleTarget, Map<String, PivotFrame> frames, Map<String, Vector3f> poleTargets, Map<String, Float> poleWeights)
+    private static Vector3f resolvePolePoint(boolean pole, String poleTarget, Map<String, PivotFrame> frames, Map<String, Vector3f> poleTargets, Map<String, Float> poleWeights, Vector3f out)
     {
         if (!pole || poleTarget == null || poleTarget.isEmpty())
         {
@@ -695,16 +863,17 @@ final class ModelIKApplier
 
         Vector3f override = poleTargets == null ? null : poleTargets.get(poleTarget);
         PivotFrame frame = frames.get(poleTarget);
-        Vector3f config = frame == null ? null : new Vector3f(frame.position());
 
         if (override == null)
         {
-            return config;
+            return frame == null ? null : out.set(frame.position());
         }
 
         /* Slide the pole from its config bone to the keyframed target by the fade
          * weight, so fading a pole in/out glides from the config pole, not origin. */
-        return config == null ? new Vector3f(override) : config.lerp(override, weightOf(poleWeights, poleTarget));
+        return frame == null
+            ? out.set(override)
+            : out.set(frame.position()).lerp(override, weightOf(poleWeights, poleTarget));
     }
 
     /** The override's 0..1 fade weight (1 = full override) — 1 when the chain has no weighted fade this frame. */
@@ -829,29 +998,84 @@ final class ModelIKApplier
      * Returns {@code null} when the chain is shorter than two bones or the rest
      * pose is dead straight (no plane — then only a pole or limit can pick a side).
      */
-    private static Vector3f restBendNormal(IModel model, List<String> chainIds, Quaternionf rootParentRotation)
+    private static Vector3f restBendNormal(IModel model, List<String> chainIds, Quaternionf rootParentRotation, ChainWorkspace workspace)
     {
         if (chainIds.size() < 3)
         {
             return null;
         }
 
-        Vector3f a = restDirection(model, chainIds, 0);
-        Vector3f b = restDirection(model, chainIds, 1);
+        if (!workspace.restBendComputed)
+        {
+            Vector3f a = restDirection(model, chainIds, 0);
+            Vector3f b = restDirection(model, chainIds, 1);
 
-        if (a == null || b == null)
+            workspace.restBendComputed = true;
+
+            if (a != null && b != null)
+            {
+                workspace.restBendLocal.set(a).cross(b);
+                workspace.hasRestBend = workspace.restBendLocal.lengthSquared() >= EPS * EPS;
+
+                if (workspace.hasRestBend)
+                {
+                    workspace.restBendLocal.normalize();
+                }
+            }
+        }
+
+        if (!workspace.hasRestBend)
         {
             return null;
         }
 
-        Vector3f normal = new Vector3f(a).cross(b);
+        return rootParentRotation.transform(workspace.restBendLocal, workspace.restBendWorld);
+    }
 
-        if (normal.lengthSquared() < EPS * EPS)
+    /**
+     * Holds the authored bend side while a two-bone limb crosses the straight-chain singularity.
+     * Enter at 3 degrees, leave only after 20 degrees: this dead band prevents tiny numerical bends
+     * from choosing a new side every frame, while a clearly bent limb returns to live/pole control.
+     */
+    private static Vector3f selectBendHint(List<Vector3f> positions, Vector3f target, float softness, Vector3f restHinge, ChainWorkspace workspace)
+    {
+        if (positions.size() != 3)
         {
-            return null;
+            workspace.recoveringBend = false;
+            return restHinge;
         }
 
-        return rootParentRotation.transform(normal.normalize());
+        float firstLength = positions.get(0).distance(positions.get(1));
+        float secondLength = positions.get(1).distance(positions.get(2));
+
+        if (firstLength < EPS || secondLength < EPS)
+        {
+            workspace.recoveringBend = true;
+            return restHinge != null ? restHinge : workspace.hasStableBend ? workspace.stableBendNormal : null;
+        }
+
+        float total = firstLength + secondLength;
+        float targetDistance = positions.get(0).distance(target);
+        float effectiveDistance = IKSolver.effectiveReachDistance(targetDistance, total, softness);
+        float cosine = (effectiveDistance * effectiveDistance - firstLength * firstLength - secondLength * secondLength) / (2F * firstLength * secondLength);
+
+        cosine = Math.max(-1F, Math.min(1F, cosine));
+        float bendAngle = (float) Math.acos(cosine);
+
+        if (bendAngle <= SINGULARITY_RAD)
+        {
+            workspace.recoveringBend = true;
+            return restHinge != null ? restHinge : workspace.hasStableBend ? workspace.stableBendNormal : null;
+        }
+
+        if (workspace.recoveringBend && bendAngle < HYSTERESIS_RAD)
+        {
+            return workspace.hasStableBend ? workspace.stableBendNormal : restHinge;
+        }
+
+        workspace.recoveringBend = false;
+
+        return restHinge;
     }
 
     private static Vector3f normalizeRest(Vector3f restDir)

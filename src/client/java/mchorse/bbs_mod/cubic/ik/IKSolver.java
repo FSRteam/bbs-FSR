@@ -49,7 +49,7 @@ final class IKSolver
 
     public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance)
     {
-        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, null, null, null, null);
+        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, null, null, null, false, null);
     }
 
     /**
@@ -60,7 +60,7 @@ final class IKSolver
      * orientation pass can seed a continuous roll reference and not jitter as the
      * chain crosses full reach. Left untouched when the bend plane is undefined.
      */
-    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Vector3f restHinge, Vector3f outBendNormal)
+    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Vector3f bendHint, boolean preferBendHint, Vector3f outBendNormal)
     {
         int n = positions.size();
 
@@ -98,11 +98,11 @@ final class IKSolver
              * a stable side axis — so the bend plane always exists (poleAngle has a
              * reference to roll from) and the bend never lands on an arbitrary side
              * when the model and pose are both straight. */
-            hinge = liveBendNormal(positions);
+            hinge = preferBendHint && bendHint != null ? bendHint : liveBendNormal(positions);
 
             if (hinge == null)
             {
-                hinge = restHinge;
+                hinge = bendHint;
             }
 
             if (hinge == null)
@@ -186,24 +186,40 @@ final class IKSolver
         }
 
         Vector3f dir = new Vector3f(target).sub(root).div(dist);
+        float effective = effectiveReachDistance(dist, total, softness);
+
+        if (Float.compare(effective, dist) != 0)
+        {
+            goal.set(root).fma(effective, dir);
+        }
+
+        return goal;
+    }
+
+    /** Effective root-to-goal distance used by soft/hard reach, exposed to the bend hysteresis predictor. */
+    static float effectiveReachDistance(float distance, float total, float softness)
+    {
+        float limit = total * REACH_LIMIT;
+
+        if (distance <= EPS || total <= EPS)
+        {
+            return Math.max(0F, distance);
+        }
 
         if (softness > EPS)
         {
             float soft = Math.min(softness, 1F) * total;
             float da = total - soft;
 
-            if (dist > da)
+            if (distance > da)
             {
-                float eff = total - soft * (float) Math.exp(-(dist - da) / soft);
-                goal.set(root).fma(Math.min(eff, total * REACH_LIMIT), dir);
+                float effective = total - soft * (float) Math.exp(-(distance - da) / soft);
+
+                return Math.min(effective, limit);
             }
         }
-        else if (dist > total * REACH_LIMIT)
-        {
-            goal.set(root).fma(total * REACH_LIMIT, dir);
-        }
 
-        return goal;
+        return Math.min(distance, limit);
     }
 
     private static void solveTwoBone(List<Vector3f> p, Vector3f root, Vector3f goal)

@@ -95,18 +95,32 @@ public class CubicRenderer
      */
     public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out, Matrix4f baseTransform, boolean applyStretch)
     {
+        collectPivotFrames(model, wanted, out, baseTransform, applyStretch, null);
+    }
+
+    public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out, Matrix4f baseTransform, boolean applyStretch, ModelPivotFrames.Workspace workspace)
+    {
         if (model == null || wanted == null || wanted.isEmpty() || out == null)
         {
             return;
         }
 
-        PoseStack stack = new PoseStack();
+        PoseStack stack = workspace == null ? new PoseStack() : workspace.stack;
+
+        if (workspace != null)
+        {
+            stack.setIdentity();
+        }
 
         if (baseTransform != null)
         {
-            Vector3f t = baseTransform.getTranslation(new Vector3f());
-            Quaternionf r = baseTransform.getNormalizedRotation(new Quaternionf());
-            Matrix4f rigid = new Matrix4f().rotation(r).setTranslation(t);
+            Vector3f t = workspace == null ? new Vector3f() : workspace.baseTranslation;
+            Quaternionf r = workspace == null ? new Quaternionf() : workspace.baseRotation;
+            Matrix4f rigid = workspace == null ? new Matrix4f() : workspace.rigidTransform;
+
+            baseTransform.getTranslation(t);
+            baseTransform.getNormalizedRotation(r);
+            rigid.rotation(r).setTranslation(t);
 
             stack.last().pose().set(rigid);
         }
@@ -132,19 +146,21 @@ public class CubicRenderer
         ICubicRenderer.moveToGroupPivot(stack, group);
 
         boolean store = wanted.contains(group.id);
-        Vector3f pos;
-        Quaternionf parentRot;
+        PivotFrame frame = null;
 
         if (store)
         {
+            frame = out.get(group.id);
+
+            if (frame == null)
+            {
+                frame = new PivotFrame(new Vector3f(), new Quaternionf(), new Quaternionf());
+                out.put(group.id, frame);
+            }
+
             Matrix4f mat = stack.last().pose();
-            pos = mat.getTranslation(new Vector3f());
-            parentRot = mat.getNormalizedRotation(new Quaternionf());
-        }
-        else
-        {
-            pos = null;
-            parentRot = null;
+            mat.getTranslation(frame.position());
+            mat.getNormalizedRotation(frame.parentRotation());
         }
 
         ICubicRenderer.rotateGroup(stack, group);
@@ -152,8 +168,7 @@ public class CubicRenderer
         if (store)
         {
             Matrix4f mat = stack.last().pose();
-            Quaternionf worldRot = mat.getNormalizedRotation(new Quaternionf());
-            out.put(group.id, new PivotFrame(pos, parentRot, worldRot));
+            mat.getNormalizedRotation(frame.worldRotation());
         }
 
         ICubicRenderer.scaleGroup(stack, group);

@@ -186,14 +186,23 @@ public class Matrices
      */
     public static Quaternionf orientMirroredX(Vector3f restDir, Vector3f restNormal, Vector3f toDir, Vector3f toNormal)
     {
-        Matrix3f rest = mirroredFrame(restDir, restNormal);
-        Matrix3f to = mirroredFrame(toDir, toNormal);
-        Matrix3f rotMir = to.mul(rest.transpose());
+        return orientMirroredX(restDir, restNormal, toDir, toNormal, new Quaternionf(), new Matrix3f(), new Matrix3f(), new Matrix3f(), new Vector3f(), new Vector3f(), new Vector3f());
+    }
 
-        Matrix3f mirror = new Matrix3f().scaling(-1F, 1F, 1F);
-        Matrix3f rot = new Matrix3f(mirror).mul(rotMir).mul(mirror);
+    /** Allocation-free form for render/solver hot paths; all destination and scratch objects are caller-owned. */
+    public static Quaternionf orientMirroredX(Vector3f restDir, Vector3f restNormal, Vector3f toDir, Vector3f toNormal, Quaternionf out, Matrix3f rest, Matrix3f to, Matrix3f rotation, Vector3f u, Vector3f v, Vector3f w)
+    {
+        mirroredFrame(restDir, restNormal, rest, u, v, w);
+        mirroredFrame(toDir, toNormal, to, u, v, w);
+        rotation.set(to).mul(rest.transpose());
 
-        return new Quaternionf().setFromNormalized(rot);
+        /* Conjugate by mirror(-X) without constructing two diagonal matrices. */
+        rotation.m01 = -rotation.m01;
+        rotation.m02 = -rotation.m02;
+        rotation.m10 = -rotation.m10;
+        rotation.m20 = -rotation.m20;
+
+        return out.setFromNormalized(rotation);
     }
 
     /**
@@ -202,28 +211,25 @@ public class Matrices
      * component). Falls back to an arbitrary perpendicular when the normal is parallel
      * to the direction (degenerate roll).
      */
-    private static Matrix3f mirroredFrame(Vector3f dir, Vector3f normal)
+    private static void mirroredFrame(Vector3f dir, Vector3f normal, Matrix3f out, Vector3f u, Vector3f v, Vector3f w)
     {
-        Vector3f u = new Vector3f(-dir.x, dir.y, dir.z).normalize();
-        Vector3f w = new Vector3f(u).cross(-normal.x, normal.y, normal.z);
+        u.set(-dir.x, dir.y, dir.z).normalize();
+        w.set(u).cross(-normal.x, normal.y, normal.z);
 
         if (w.lengthSquared() < 1.0e-12f)
         {
-            Vector3f ref = Math.abs(u.x) < 0.9F ? new Vector3f(1F, 0F, 0F) : new Vector3f(0F, 1F, 0F);
+            v.set(Math.abs(u.x) < 0.9F ? 1F : 0F, Math.abs(u.x) < 0.9F ? 0F : 1F, 0F);
 
-            w.set(u).cross(ref);
+            w.set(u).cross(v);
         }
 
         w.normalize();
 
-        Vector3f v = new Vector3f(w).cross(u);
-        Matrix3f m = new Matrix3f();
+        v.set(w).cross(u);
 
-        m.m00 = u.x; m.m01 = u.y; m.m02 = u.z;
-        m.m10 = v.x; m.m11 = v.y; m.m12 = v.z;
-        m.m20 = w.x; m.m21 = w.y; m.m22 = w.z;
-
-        return m;
+        out.m00 = u.x; out.m01 = u.y; out.m02 = u.z;
+        out.m10 = v.x; out.m11 = v.y; out.m12 = v.z;
+        out.m20 = w.x; out.m21 = w.y; out.m22 = w.z;
     }
 
     public static Quaternionf twistAbout(Quaternionf q, Vector3f axis)

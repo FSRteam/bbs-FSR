@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.cubic.physics;
 
-import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.utils.joml.Matrices;
@@ -10,6 +9,7 @@ import net.minecraft.world.level.Level;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -67,18 +67,19 @@ final class ChainSolver
      * last bone's animated rotation and rest direction (the same convention the rotation appliers use),
      * unless the tip is hard-pinned to a target, in which case its pose slot is left unused.
      */
-    static void computePoseTargets(IModel model, List<String> ids, List<PivotFrame> chainFrames, float[] lengths, Vector3f anchor, Quaternionf anchorRotation, boolean hardTarget, ChainState state)
+    static void computePoseTargets(ModelPhysicsCache.CompiledChain chain, List<PivotFrame> chainFrames, Vector3f anchor, Quaternionf anchorRotation, boolean hardTarget, ChainState state)
     {
         Vector3f[] poseLocal = state.poseLocal;
         int pivotCount = chainFrames.size();
+        float[] lengths = chain.restLengths();
 
         if (poseLocal == null || poseLocal.length != pivotCount + 1)
         {
             return;
         }
 
-        Quaternionf invAnchor = new Quaternionf(anchorRotation).invert();
-        Vector3f tmp = new Vector3f();
+        Quaternionf invAnchor = state.inverseAnchor.set(anchorRotation).invert();
+        Vector3f tmp = state.localScratch;
 
         poseLocal[0].set(0F, 0F, 0F);
 
@@ -96,16 +97,18 @@ final class ChainSolver
             return;
         }
 
-        Vector3f tipDir = lengths != null && lengths.length >= pivotCount ? PhysicsRig.tipRestDirectionLocal(model, ids) : null;
+        Vector3f tipRestDirection = chain.tipRestDirection();
 
-        if (tipDir == null || tipDir.lengthSquared() < EPS * EPS)
+        if (tipRestDirection == null || tipRestDirection.lengthSquared() < EPS * EPS || lengths == null || lengths.length < pivotCount)
         {
             poseLocal[tip].set(poseLocal[pivotCount - 1]);
             return;
         }
 
         PivotFrame lastFrame = chainFrames.get(pivotCount - 1);
-        new Quaternionf(lastFrame.worldRotation()).transform(tipDir.normalize()).mul(lengths[pivotCount - 1]);
+        Vector3f tipDir = state.tipDirection.set(tipRestDirection);
+
+        lastFrame.worldRotation().transform(tipDir).mul(lengths[pivotCount - 1]);
         tmp.set(lastFrame.position()).add(tipDir).sub(anchor);
         poseLocal[tip].set(invAnchor.transform(tmp));
     }
@@ -131,10 +134,10 @@ final class ChainSolver
 
         float alpha = clamp01(transition);
 
-        Vector3f dir = new Vector3f();
-        Vector3f dirCurr = new Vector3f();
-        Quaternionf segRot = new Quaternionf();
-        Quaternionf frac = new Quaternionf();
+        Vector3f dir = state.renderPreviousDirection;
+        Vector3f dirCurr = state.renderCurrentDirection;
+        Quaternionf segRot = state.renderSegmentRotation;
+        Quaternionf frac = state.renderFractionRotation;
 
         /* Root point is pinned to the live anchor, the rest is rebuilt outwards from it */
         render[0].set(liveAnchor);
@@ -193,9 +196,9 @@ final class ChainSolver
     }
 
     /** Snapshots the chain shape into the given anchor frame — the form the settled shapes are stored in, so the render can plant them on the live anchor. */
-    private static void snapshotLocal(Vector3f[] pos, Vector3f anchor, Quaternionf anchorRotation, Vector3f[] out)
+    private static void snapshotLocal(Vector3f[] pos, Vector3f anchor, Quaternionf anchorRotation, Vector3f[] out, ChainState state)
     {
-        Quaternionf inv = new Quaternionf(anchorRotation).invert();
+        Quaternionf inv = state.inverseAnchor.set(anchorRotation).invert();
 
         for (int i = 0; i < pos.length; i++)
         {
@@ -204,7 +207,7 @@ final class ChainSolver
         }
     }
 
-    static void step(Level world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
+    static void step(Level world, int age, float transition, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -272,7 +275,7 @@ final class ChainSolver
 
         /* Gravity (per chain), folded once into the per-sub-step acceleration: it scales by gravityScale
          * (the squared sub-step length, the Verlet dt²). */
-        Vector3f gravityVec = new Vector3f();
+        Vector3f gravityVec = state.gravityDirection;
         PhysicsForces.computeGravityDirection(chain, parentRotation, gravity, gravityVec);
         float gravityX = gravityVec.x * gravityScale;
         float gravityY = gravityVec.y * gravityScale;
@@ -281,36 +284,30 @@ final class ChainSolver
         /* Wind: its steady direction and base magnitude are resolved once here, but the actual force is
          * asked for per point inside the sub-step loop, because turbulence varies it across space and time
          * (so the chain ripples and gusts drift downwind). Lives in the same world frame as gravity. */
-        Vector3f windDir = new Vector3f();
+        Vector3f windDir = state.windDirection;
         float windMagnitude = PhysicsForces.prepareWind(wind, BASE_GRAVITY, windDir);
         boolean hasWind = windMagnitude > 0F;
-        Vector3f windVec = hasWind ? new Vector3f() : null;
+        Vector3f windVec = hasWind ? state.windForce : null;
         int startAge = state.lastAge;
 
         /* Per-point spring-back fraction toward the animated pose for one sub-step, falling off toward the
          * floppier tip. Applied as an angular pull in solveSpring, not a positional one. */
-        float[] stiffStep = computeStiffnessSteps(clamp01(stiffnessValue), state.pos.length, h);
+        float[] stiffStep = computeStiffnessSteps(clamp01(stiffnessValue), state.pos.length, h, state);
 
         /* Per-bone angle limits: each bone's swing is decomposed into a local euler rotation off its rest
          * direction and clamped to its constraint's per-axis min/max. Skipped when nothing is constrained. */
-        boolean limits = constraints != null && !constraints.isEmpty();
-        PhysicsRig rig = limits ? PhysicsRig.of(model) : null;
+        boolean limits = constraints != null && !constraints.isEmpty() && chain.restDirections() != null;
 
-        if (rig == null)
-        {
-            limits = false;
-        }
+        Vector3f startAnchor = state.startAnchor.set(state.anchor);
+        Quaternionf startAnchorRotation = state.startAnchorRotation.set(state.anchorRotation);
+        Vector3f stepAnchor = state.stepAnchor;
+        Quaternionf stepAnchorRotation = state.stepAnchorRotation;
+        Vector3f vel = state.velocity;
 
-        Vector3f startAnchor = new Vector3f(state.anchor);
-        Quaternionf startAnchorRotation = new Quaternionf(state.anchorRotation);
-        Vector3f stepAnchor = new Vector3f();
-        Quaternionf stepAnchorRotation = new Quaternionf();
-        Vector3f vel = new Vector3f();
+        Vector3f poseDir = state.poseDirection;
+        Vector3f curDir = state.currentDirection;
 
-        Vector3f poseDir = new Vector3f();
-        Vector3f curDir = new Vector3f();
-
-        BlockPos.MutableBlockPos mutable = collisions ? new BlockPos.MutableBlockPos() : null;
+        BlockPos.MutableBlockPos mutable = collisions ? state.collisionBlock : null;
 
         /* Roll the settled snapshots: the previous tick's shape keeps its own anchor frame, the new
          * tick's shape is snapshot after the sub-steps in its. renderInterpolate blends the two local
@@ -378,9 +375,9 @@ final class ChainSolver
                     state.pos[last].set(targetPosition);
                 }
 
-                lengthBackward(state.pos, lengths, last);
+                lengthBackward(state.pos, lengths, last, state.lengthDirection);
                 state.pos[0].set(state.anchor);
-                lengthForward(state.pos, lengths);
+                lengthForward(state.pos, lengths, state.lengthDirection);
 
                 if (hardTarget)
                 {
@@ -393,11 +390,11 @@ final class ChainSolver
              * lengths and endpoints the clamp disturbed; when collisions are off, do it here. */
             if (limits)
             {
-                applyAngleConstraints(rig, ids, state.pos, lengths, constraints, parentRotation);
+                applyAngleConstraints(chain, ids, state.pos, lengths, constraints, parentRotation, state);
 
                 if (!collisions)
                 {
-                    lengthForward(state.pos, lengths);
+                    lengthForward(state.pos, lengths, state.lengthDirection);
                     pinEnds(state.pos, state.anchor, targetPosition, last);
                 }
             }
@@ -407,12 +404,12 @@ final class ChainSolver
             if (collisions)
             {
                 resolveCollisions(world, state.pos, state.prev, state.anchor, targetPosition, last, radius);
-                lengthForward(state.pos, lengths);
+                lengthForward(state.pos, lengths, state.lengthDirection);
                 pinEnds(state.pos, state.anchor, targetPosition, last);
             }
         }
 
-        snapshotLocal(state.pos, state.anchor, state.anchorRotation, state.settledLocal);
+        snapshotLocal(state.pos, state.anchor, state.anchorRotation, state.settledLocal, state);
         state.lastAge = age;
     }
 
@@ -436,7 +433,7 @@ final class ChainSolver
             state.prev[i].set(p);
         }
 
-        Vector3f tipDir = new Vector3f();
+        Vector3f tipDir = state.tipDirection;
 
         if (chainFrames.size() >= 2)
         {
@@ -459,7 +456,7 @@ final class ChainSolver
         state.pos[state.pos.length - 1].set(state.pos[chainFrames.size() - 1]).add(tipDir.mul(lengths[lengths.length - 1]));
         state.prev[state.prev.length - 1].set(state.pos[state.pos.length - 1]);
 
-        snapshotLocal(state.pos, anchor, anchorRotation, state.settledLocal);
+        snapshotLocal(state.pos, anchor, anchorRotation, state.settledLocal, state);
         copyPositions(state.settledLocal, state.settledPrevLocal);
     }
 
@@ -489,9 +486,23 @@ final class ChainSolver
      * factor is converted from a per-tick pull to a per-sub-step pull so the result is independent of
      * how many sub-steps run. Index 0 (the anchor) and the unused slots stay zero.
      */
-    private static float[] computeStiffnessSteps(float baseStiffness, int pointCount, float h)
+    private static float[] computeStiffnessSteps(float baseStiffness, int pointCount, float h, ChainState state)
     {
-        float[] out = new float[pointCount];
+        if (state.stiffnessSteps.length != pointCount)
+        {
+            state.stiffnessSteps = new float[pointCount];
+            state.stiffnessBase = Float.NaN;
+        }
+
+        float[] out = state.stiffnessSteps;
+
+        if (Float.compare(state.stiffnessBase, baseStiffness) == 0)
+        {
+            return out;
+        }
+
+        state.stiffnessBase = baseStiffness;
+        Arrays.fill(out, 0F);
 
         if (baseStiffness <= 0F || pointCount <= 1)
         {
@@ -609,10 +620,8 @@ final class ChainSolver
     }
 
     /** Length-projects the chain from the tip inward, holding each segment at its rest length (paired with {@link #lengthForward} for a symmetric two-way relaxation). */
-    private static void lengthBackward(Vector3f[] pos, float[] lengths, int last)
+    private static void lengthBackward(Vector3f[] pos, float[] lengths, int last, Vector3f dir)
     {
-        Vector3f dir = new Vector3f();
-
         for (int i = last - 1; i >= 0; i--)
         {
             Vector3f a = pos[i];
@@ -633,10 +642,8 @@ final class ChainSolver
     }
 
     /** Length-projects the chain from the anchor outward, holding each segment at its rest length. */
-    private static void lengthForward(Vector3f[] pos, float[] lengths)
+    private static void lengthForward(Vector3f[] pos, float[] lengths, Vector3f dir)
     {
-        Vector3f dir = new Vector3f();
-
         for (int i = 1; i < pos.length; i++)
         {
             Vector3f a = pos[i - 1];
@@ -663,7 +670,7 @@ final class ChainSolver
      * along the clamped direction. Only enabled constraints clamp; every bone still advances the parent
      * frame so the next bone is measured in the right space.
      */
-    private static void applyAngleConstraints(PhysicsRig rig, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation)
+    private static void applyAngleConstraints(ModelPhysicsCache.CompiledChain chain, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation, ChainState state)
     {
         int boneCount = ids.size();
 
@@ -672,33 +679,32 @@ final class ChainSolver
             return;
         }
 
-        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
+        Vector3f[] restDirections = chain.restDirections();
+
+        if (restDirections == null || restDirections.length < boneCount)
+        {
+            return;
+        }
+
+        Quaternionf parentWorld = state.constraintParentRotation.set(rootParentRotation);
 
         for (int i = 0; i < boneCount; i++)
         {
             String boneId = ids.get(i);
-            String childId = i + 1 < boneCount ? ids.get(i + 1) : null;
             ModelConstraintsConfig.BoneConstraint c = boneId == null ? null : constraints.get(boneId);
 
-            Vector3f restDirLocal = rig.restDirectionLocal(boneId, childId);
-
-            if (restDirLocal == null)
-            {
-                return;
-            }
-
-            Vector3f desiredDirWorld = new Vector3f(pos[i + 1]).sub(pos[i]);
+            Vector3f restDirLocal = restDirections[i];
+            Vector3f desiredDirWorld = state.constraintDesiredWorld.set(pos[i + 1]).sub(pos[i]);
 
             if (restDirLocal.lengthSquared() < EPS * EPS || desiredDirWorld.lengthSquared() < EPS * EPS)
             {
                 continue;
             }
 
-            restDirLocal.normalize();
             desiredDirWorld.normalize();
 
-            Quaternionf invParent = new Quaternionf(parentWorld).invert();
-            Vector3f desiredDirLocal = new Vector3f(desiredDirWorld);
+            Quaternionf invParent = state.constraintInverseParent.set(parentWorld).invert();
+            Vector3f desiredDirLocal = state.constraintDesiredLocal.set(desiredDirWorld);
             invParent.transform(desiredDirLocal);
 
             if (desiredDirLocal.lengthSquared() < EPS * EPS)
@@ -748,7 +754,7 @@ final class ChainSolver
                 eulerDeg.z = clampAngleArc(eulerDeg.z, minZ, maxZ);
 
                 applied = Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z);
-                Vector3f dirLocal = new Vector3f(restDirLocal);
+                Vector3f dirLocal = state.constraintDirection.set(restDirLocal);
                 applied.transform(dirLocal);
                 parentWorld.transform(dirLocal);
 

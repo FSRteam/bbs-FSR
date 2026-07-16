@@ -8,7 +8,9 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.WeakHashMap;
 
 final class ModelPhysicsCache
@@ -20,6 +22,8 @@ final class ModelPhysicsCache
         private final String targetBone;
         private final List<String> chainRootToEnd;
         private final float[] restLengths;
+        private final Vector3f[] restDirections;
+        private final Vector3f tipRestDirection;
         private final float gravity;
         private final float damping;
         private final float stiffness;
@@ -31,13 +35,15 @@ final class ModelPhysicsCache
         private final float radius;
         private final float weight;
 
-        public CompiledChain(String id, String attach, String targetBone, List<String> chainRootToEnd, float[] restLengths, ModelPhysicsConfig.Bone bone)
+        public CompiledChain(String id, String attach, String targetBone, List<String> chainRootToEnd, float[] restLengths, Vector3f[] restDirections, Vector3f tipRestDirection, ModelPhysicsConfig.Bone bone)
         {
             this.id = id;
             this.attach = attach;
             this.targetBone = targetBone;
             this.chainRootToEnd = chainRootToEnd;
             this.restLengths = restLengths;
+            this.restDirections = restDirections;
+            this.tipRestDirection = tipRestDirection;
             this.gravity = bone.gravity();
             this.damping = bone.damping();
             this.stiffness = bone.stiffness();
@@ -75,6 +81,16 @@ final class ModelPhysicsCache
         public float[] restLengths()
         {
             return this.restLengths;
+        }
+
+        public Vector3f[] restDirections()
+        {
+            return this.restDirections;
+        }
+
+        public Vector3f tipRestDirection()
+        {
+            return this.tipRestDirection;
         }
 
         public float gravity()
@@ -131,13 +147,13 @@ final class ModelPhysicsCache
         }
     }
 
-    public record Compiled(List<CompiledChain> chains, ModelPhysicsConfig.Wind wind)
+    public record Compiled(List<CompiledChain> chains, ModelPhysicsConfig.Wind wind, Set<String> wantedBones, Set<String> chainIds)
     {
     }
 
     private static final WeakHashMap<MapType, EmbeddedCompiled> EMBEDDED = new WeakHashMap<>();
 
-    private record EmbeddedCompiled(IModel model, List<CompiledChain> chains, ModelPhysicsConfig.Wind wind)
+    private record EmbeddedCompiled(IModel model, Compiled compiled)
     {
     }
 
@@ -161,17 +177,37 @@ final class ModelPhysicsCache
 
         if (cached != null && cached.model == model)
         {
-            return new Compiled(cached.chains, cached.wind);
+            return cached.compiled;
         }
 
         ModelPhysicsConfig config = ModelPhysicsIO.fromData(data);
         List<CompiledChain> compiled = compile(model, config);
         ModelPhysicsConfig.Wind wind = config != null ? config.wind() : ModelPhysicsConfig.Wind.NONE;
+        Set<String> wanted = new LinkedHashSet<>();
+        Set<String> chainIds = new LinkedHashSet<>();
 
-        EmbeddedCompiled next = new EmbeddedCompiled(model, compiled, wind);
+        for (CompiledChain chain : compiled)
+        {
+            chainIds.add(chain.id());
+            wanted.addAll(chain.chainRootToEnd());
+
+            if (chain.targetBone() != null && !chain.targetBone().isEmpty())
+            {
+                wanted.add(chain.targetBone());
+            }
+        }
+
+        Compiled result = new Compiled(
+            Collections.unmodifiableList(compiled),
+            wind,
+            Collections.unmodifiableSet(wanted),
+            Collections.unmodifiableSet(chainIds)
+        );
+
+        EmbeddedCompiled next = new EmbeddedCompiled(model, result);
         EMBEDDED.put(data, next);
 
-        return new Compiled(compiled, wind);
+        return result;
     }
 
     private static List<CompiledChain> compile(IModel model, ModelPhysicsConfig config)
@@ -210,16 +246,23 @@ final class ModelPhysicsCache
             }
 
             float[] lengths = computeRestLengths(model, ids);
+            Vector3f[] restDirections = computeRestDirections(model, ids);
+            Vector3f tipRestDirection = PhysicsRig.tipRestDirectionLocal(model, ids);
 
-            if (lengths == null)
+            if (lengths == null || restDirections == null)
             {
                 continue;
+            }
+
+            if (tipRestDirection != null && tipRestDirection.lengthSquared() >= 1.0e-12F)
+            {
+                tipRestDirection.normalize();
             }
 
             String attach = rootId;
 
             String id = rootId + ":" + endId;
-            out.add(new CompiledChain(id, attach, chain.targetBone(), ids, lengths, chain));
+            out.add(new CompiledChain(id, attach, chain.targetBone(), Collections.unmodifiableList(ids), lengths, restDirections, tipRestDirection, chain));
         }
 
         return out;
@@ -294,5 +337,32 @@ final class ModelPhysicsCache
         lengths[n - 1] = lengths[n - 2];
 
         return lengths;
+    }
+
+    private static Vector3f[] computeRestDirections(IModel model, List<String> ids)
+    {
+        PhysicsRig rig = PhysicsRig.of(model);
+
+        if (rig == null)
+        {
+            return null;
+        }
+
+        Vector3f[] directions = new Vector3f[ids.size()];
+
+        for (int i = 0; i < ids.size(); i++)
+        {
+            String childId = i + 1 < ids.size() ? ids.get(i + 1) : null;
+            Vector3f direction = rig.restDirectionLocal(ids.get(i), childId);
+
+            if (direction == null || direction.lengthSquared() < 1.0e-12F)
+            {
+                return null;
+            }
+
+            directions[i] = direction.normalize();
+        }
+
+        return directions;
     }
 }
