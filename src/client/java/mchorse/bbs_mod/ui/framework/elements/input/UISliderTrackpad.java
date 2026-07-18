@@ -9,6 +9,7 @@ import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -45,6 +46,8 @@ public class UISliderTrackpad extends UIElement
     protected final Area handleArea = new Area();
 
     protected boolean dragging;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
     protected double startValue;
     protected long dragTime;
     protected int dragOffsetX;
@@ -183,12 +186,12 @@ public class UISliderTrackpad extends UIElement
 
     public boolean isDragging()
     {
-        return this.dragging;
+        return this.dragging && this.dragOwnership.isActive();
     }
 
     public boolean isDraggingTime()
     {
-        return this.dragging && System.currentTimeMillis() - this.dragTime > DRAG_DELAY;
+        return this.isDragging() && System.currentTimeMillis() - this.dragTime > DRAG_DELAY;
     }
 
     public double getValue()
@@ -206,7 +209,7 @@ public class UISliderTrackpad extends UIElement
         double oldValue = this.value;
 
         this.setValue(value);
-        this.accept(value, oldValue);
+        this.accept(this.value, oldValue);
     }
 
     protected void setValueInternal(double value)
@@ -312,31 +315,49 @@ public class UISliderTrackpad extends UIElement
 
     protected void stopDragging()
     {
+        this.dragOwnership.release(0, this.dragGeneration);
+        this.dragGeneration = 0L;
         this.dragging = false;
         this.dragOffsetX = 0;
     }
 
     protected void cancelDragging()
     {
-        this.setValueAndNotify(this.startValue);
+        if (!this.isDragging())
+        {
+            return;
+        }
+
+        double restoreValue = this.startValue;
+
         this.stopDragging();
+        this.setValueAndNotify(restoreValue);
     }
 
     protected void finishDragging(int mouseX)
     {
-        this.updateDragging(mouseX);
+        double gestureStart = this.startValue;
+        double finalValue = this.hasSliderRange() ? this.getValueFromMouse(mouseX) : this.value;
+
+        this.stopDragging();
+        this.applySliderValue(finalValue);
         this.updateHandleArea();
 
         if (this.delayedInput)
         {
-            this.setValueAndNotify(this.value);
+            this.accept(this.value, gestureStart);
         }
-
-        this.stopDragging();
     }
 
     protected void beginDragging(UIContext context)
     {
+        this.dragGeneration = this.dragOwnership.acquireToken(context.mouseButton);
+
+        if (this.dragGeneration == 0L)
+        {
+            return;
+        }
+
         this.dragging = true;
         this.startValue = this.value;
         this.dragTime = System.currentTimeMillis();
@@ -356,14 +377,7 @@ public class UISliderTrackpad extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.allowCanceling && context.mouseButton == 1 && this.dragging)
-        {
-            this.cancelDragging();
-
-            return true;
-        }
-
-        if (context.mouseButton == 2 && this.area.isInside(context))
+        if (context.mouseButton == 2 && !this.isDragging() && this.area.isInside(context))
         {
             this.setValueAndNotify(-this.value);
 
@@ -377,7 +391,7 @@ public class UISliderTrackpad extends UIElement
 
         this.updateHandleArea();
 
-        if (this.hasSliderRange() && this.area.isInside(context))
+        if (!this.isDragging() && this.hasSliderRange() && this.area.isInside(context))
         {
             if (Window.isCtrlPressed())
             {
@@ -397,14 +411,8 @@ public class UISliderTrackpad extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (context.mouseButton == 1 && this.dragging)
-        {
-            this.cancelDragging();
-
-            return true;
-        }
-
-        if (context.mouseButton == 0 && this.dragging)
+        if (context.mouseButton == 0
+            && this.dragOwnership.isOwnedBy(context.mouseButton, this.dragGeneration))
         {
             this.finishDragging(context.mouseX);
 
@@ -417,12 +425,13 @@ public class UISliderTrackpad extends UIElement
     @Override
     protected boolean subMouseScrolled(UIContext context)
     {
-        if (this.dragging)
+        if (this.isDragging() && context.mouseWheel != 0D)
         {
             return true;
         }
 
-        if (this.area.isInside(context) && context.hasNotScrolledForMore(500) && BBSSettings.enableTrackpadScrolling.get())
+        if (context.mouseWheel != 0D && this.area.isInside(context)
+            && context.hasNotScrolledForMore(500) && BBSSettings.enableTrackpadScrolling.get())
         {
             if (context.mouseWheel > 0)
             {
@@ -442,7 +451,7 @@ public class UISliderTrackpad extends UIElement
     @Override
     public boolean subKeyPressed(UIContext context)
     {
-        if (this.dragging && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        if (this.allowCanceling && this.isDragging() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
             this.cancelDragging();
 
@@ -505,7 +514,7 @@ public class UISliderTrackpad extends UIElement
     {
         this.updateHandleArea();
 
-        if (this.dragging)
+        if (this.isDragging())
         {
             this.updateDragging(context.mouseX);
             this.updateHandleArea();

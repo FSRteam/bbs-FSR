@@ -1,11 +1,14 @@
 package mchorse.bbs_mod.entity;
 
+import mchorse.bbs_mod.actions.AuthorizedCommandExecutor;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.items.GunProperties;
+import mchorse.bbs_mod.items.GunProjectileBudget;
+import mchorse.bbs_mod.items.GunPropertiesPolicy;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.core.BlockPos;
@@ -43,6 +46,8 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
     private Form form;
     private final IEntity stub = new StubEntity();
     private final IEntity target = new MCEntity(this);
+    private GunProjectileBudget.Lease budgetLease;
+    private ServerPlayer commandRequester;
 
     private boolean stuck;
     private int lifeLeft;
@@ -57,11 +62,18 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
 
     private void vanish()
     {
+        ServerPlayer requester = this.commandRequester;
+
         this.discard();
-        this.executeCommand(this.properties.cmdVanish);
+        this.executeCommand(requester, this.properties.cmdVanish);
     }
 
     private void impact()
+    {
+        this.impact(this.commandRequester);
+    }
+
+    private void impact(ServerPlayer requester)
     {
         if (this.level().isClientSide)
         {
@@ -76,14 +88,24 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
             this.impacted = true;
         }
 
-        this.executeCommand(this.properties.cmdImpact);
+        this.executeCommand(requester, this.properties.cmdImpact);
     }
 
     private void executeCommand(String command)
     {
-        if (!command.isEmpty() && this.getServer() != null)
+        this.executeCommand(this.commandRequester, command);
+    }
+
+    private void executeCommand(ServerPlayer requester, String command)
+    {
+        if (requester != null)
         {
-            this.getServer().getCommands().performPrefixedCommand(this.createCommandSourceStack(), command);
+            AuthorizedCommandExecutor.execute(
+                requester,
+                command,
+                GunPropertiesPolicy.isCommandAllowed(command),
+                this
+            );
         }
     }
 
@@ -100,6 +122,26 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
     {
         this.properties = properties;
         this.bounces = properties.bounces;
+    }
+
+    public void setBudgetLease(GunProjectileBudget.Lease lease)
+    {
+        if (lease == null || this.budgetLease != null)
+        {
+            throw new IllegalStateException("Gun projectile budget lease is invalid");
+        }
+
+        this.budgetLease = lease;
+    }
+
+    public void setCommandRequester(ServerPlayer requester)
+    {
+        if (!AuthorizedCommandExecutor.isCurrentPlayer(requester, this.getServer()))
+        {
+            throw new IllegalArgumentException("Gun projectile requester is not current");
+        }
+
+        this.commandRequester = requester;
     }
 
     @Override
@@ -131,12 +173,6 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
     }
 
     @Override
-    protected int getPermissionLevel()
-    {
-        return 2;
-    }
-
-    @Override
     public boolean acceptsSuccess()
     {
         return false;
@@ -151,6 +187,13 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
     @Override
     public void tick()
     {
+        if (!GunPropertiesPolicy.isAllowed(this.properties))
+        {
+            this.discard();
+
+            return;
+        }
+
         super.tick();
 
         this.getEntity().update();
@@ -174,6 +217,8 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
             if (this.lifeLeft >= this.properties.lifeSpan)
             {
                 this.vanish();
+
+                return;
             }
         }
 
@@ -317,7 +362,7 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
         int damage = Mth.ceil(Mth.clamp(length * this.properties.damage, 0F, Integer.MAX_VALUE));
 
         Entity owner = this.getOwner();
-        DamageSource source = this.damageSources().magic();
+        DamageSource source = this.damageSources().indirectMagic(this, owner);
 
         int fireTicks = entity.getRemainingFireTicks();
         boolean deflectsArrows = entity.getType().is(EntityTypeTags.DEFLECTS_PROJECTILES);
@@ -379,6 +424,7 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
     {
         super.onHitBlock(blockHitResult);
 
+        ServerPlayer requester = this.commandRequester;
         Vec3 velocity = blockHitResult.getLocation().subtract(this.getX(), this.getY(), this.getZ());
 
         if (this.bounces > 0)
@@ -409,7 +455,7 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
         Vec3 gravity = velocity.normalize().scale(0.05D);
 
         this.setPos(this.getX() - gravity.x, this.getY() - gravity.y, this.getZ() - gravity.z);
-        this.impact();
+        this.impact(requester);
     }
 
     protected void onHit(LivingEntity target)
@@ -434,6 +480,27 @@ public class GunProjectileEntity extends Projectile implements IEntityFormProvid
     public boolean isAttackable()
     {
         return false;
+    }
+
+    @Override
+    public void remove(Entity.RemovalReason reason)
+    {
+        try
+        {
+            super.remove(reason);
+        }
+        finally
+        {
+            GunProjectileBudget.Lease lease = this.budgetLease;
+
+            this.budgetLease = null;
+            this.commandRequester = null;
+
+            if (lease != null)
+            {
+                lease.close();
+            }
+        }
     }
 
     @Override

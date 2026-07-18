@@ -86,13 +86,16 @@ public class UIFormUndoHandler
     {
         this.undoManager = new UndoManager<>(100);
         this.undoManager.setCallback(this::handleUndos);
+        this.cachedValues.clear();
+        this.uiData = null;
+        this.cacheMarkLastUndoNoMerging = false;
     }
 
     /**
      * Handle undo/redo. This method primarily updates the UI state, according to
      * the undo/redo changes were done.
      */
-    private void handleUndos(IUndo<ValueGroup> undo, boolean redo)
+    protected void handleUndos(IUndo<ValueGroup> undo, boolean redo)
     {
         IUndo<ValueGroup> anotherUndo = undo;
 
@@ -107,6 +110,8 @@ public class UIFormUndoHandler
 
             this.uiElement.getRoot().applyAllUndoData(change.getUIData(redo));
         }
+
+        this.handleUndoApplied(undo, redo);
     }
 
     public void handlePreValues(BaseValue baseValue, int flag)
@@ -139,6 +144,7 @@ public class UIFormUndoHandler
         reduceUndoRedundancy(this.cachedValues);
 
         List<ValueChangeUndo> changeUndos = new ArrayList<>();
+        List<BaseValue> committedValues = new ArrayList<>(this.cachedValues.keySet());
 
         for (Map.Entry<BaseValue, BaseType> entry : this.cachedValues.entrySet())
         {
@@ -161,6 +167,11 @@ public class UIFormUndoHandler
             this.undoManager.pushUndo(new CompoundUndo<>(changeUndos.toArray(new IUndo[0])));
         }
 
+        if (!changeUndos.isEmpty())
+        {
+            this.handleCommittedValues(committedValues);
+        }
+
         this.cachedValues.clear();
         this.uiData = null;
 
@@ -175,6 +186,14 @@ public class UIFormUndoHandler
     }
 
     protected void handleValue(BaseValue value)
+    {}
+
+    /** Stable hook after one local batch was committed to undo history. */
+    protected void handleCommittedValues(List<BaseValue> values)
+    {}
+
+    /** Stable hook after undo/redo has changed the backing values and UI state. */
+    protected void handleUndoApplied(IUndo<ValueGroup> undo, boolean redo)
     {}
 
     protected void handleTimers()

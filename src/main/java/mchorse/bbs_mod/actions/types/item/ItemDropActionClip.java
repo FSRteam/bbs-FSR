@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.actions.types.item;
 
+import mchorse.bbs_mod.actions.ActionCommandContext;
+import mchorse.bbs_mod.actions.FilmPlaybackPolicy;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -9,6 +11,7 @@ import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.utils.clips.Clip;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 public class ItemDropActionClip extends ItemActionClip
@@ -34,26 +37,50 @@ public class ItemDropActionClip extends ItemActionClip
         this.add(this.relative);
     }
 
+    @Override
     public void shift(double dx, double dy, double dz)
     {
-        this.posX.set(this.posX.get() + dx);
-        this.posY.set(this.posY.get() + dy);
-        this.posZ.set(this.posZ.get() + dz);
+        if (!this.relative.get())
+        {
+            this.posX.set(this.posX.get() + dx);
+            this.posY.set(this.posY.get() + dy);
+            this.posZ.set(this.posZ.get() + dz);
+        }
     }
 
     @Override
     public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
-        this.applyPositionRotation(player, replay, tick);
+        if (!ActionCommandContext.isAuthorizedFor(player))
+        {
+            return;
+        }
+
+        if (!this.tryApplyPositionRotation(player, replay, tick))
+        {
+            return;
+        }
 
         Vec3 pos = player.position();
         double x = this.relative.get() ? this.posX.get() + pos.x : this.posX.get();
         double y = this.relative.get() ? this.posY.get() + pos.y : this.posY.get();
         double z = this.relative.get() ? this.posZ.get() + pos.z : this.posZ.get();
+        double velocityX = this.velocityX.get();
+        double velocityY = this.velocityY.get();
+        double velocityZ = this.velocityZ.get();
+        ItemStack stack = this.itemStack.get().copy();
+
+        if (!FilmPlaybackPolicy.isItemDropInputAllowed(
+            x, y, z, velocityX, velocityY, velocityZ, false
+        ) || stack.isEmpty() || !stack.isItemEnabled(player.serverLevel().enabledFeatures()))
+        {
+            return;
+        }
+
         ItemEntity entity = new ItemEntity(
             player.serverLevel(),
-            x, y, z, this.itemStack.get().copy(),
-            this.velocityX.get(), this.velocityY.get(), this.velocityZ.get()
+            x, y, z, stack,
+            velocityX, velocityY, velocityZ
         );
 
         entity.setDefaultPickUpDelay();

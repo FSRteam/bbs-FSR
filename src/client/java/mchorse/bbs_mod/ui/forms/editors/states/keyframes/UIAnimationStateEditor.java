@@ -4,7 +4,6 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.forms.FormUtils;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
@@ -434,7 +433,7 @@ public class UIAnimationStateEditor extends UIElement
         }
 
         Form root = FormUtils.getRoot(this.editor.form);
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(this.editor.renderer.getTargetEntity(), transition);
+        MatrixCache map = this.editor.renderer.collectPreviewMatrices(root, transition);
         Matrix4f matrix = (!forceMatrix && bone.b) ? map.get(bone.a).origin() : map.get(bone.a).matrix();
 
         return matrix == null ? Matrices.EMPTY_4F : matrix;

@@ -92,7 +92,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private final Map<String, Vector3f> ikLocalTargets = new HashMap<>();
     private final Map<String, Vector3f> ikLocalPoles = new HashMap<>();
     private final Object uiSimulationOwner = new Object();
-    private final Object armSimulationOwner = new Object();
+    private final Object mainArmSimulationOwner = new Object();
+    private final Object offArmSimulationOwner = new Object();
+    private final StubEntity armSimulationClock = new StubEntity();
+    private PoseStack armSimulationWorld = new PoseStack();
     private boolean ikAppliedThisRender;
     private boolean physicsAppliedThisRender;
     private boolean constraintsAppliedThisRender;
@@ -274,51 +277,62 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             PoseStack stack = context.batcher.getContext().pose();
 
             stack.pushPose();
+            try
+            {
 
-            Matrix4f uiMatrix = getUIMatrix(context, x1, y1, x2, y2);
+                Matrix4f uiMatrix = getUIMatrix(context, x1, y1, x2, y2);
 
-            this.applyTransforms(uiMatrix, context.getTransition());
+                this.applyTransforms(uiMatrix, context.getTransition());
 
-            Link link = this.form.texture.get();
-            Link texture = link == null ? model.getTexture() : link;
-            Color color = this.renderColor.set(1F, 1F, 1F, 1F);
-            float scale = this.form.uiScale.get() * model.getUiScale();
+                Link link = this.form.texture.get();
+                Link texture = link == null ? model.getTexture() : link;
+                Color color = this.renderColor.set(1F, 1F, 1F, 1F);
+                float scale = this.form.uiScale.get() * model.getUiScale();
 
-            FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
-            model.model.resetPose();
+                FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+                model.model.resetPose();
 
-            this.animator.applyActions(null, model, context.getTransition());
-            model.model.applyPose(this.getPose(this.renderPose));
+                this.animator.applyActions(null, model, context.getTransition());
+                model.model.applyPose(this.getPose(this.renderPose));
 
-            MatrixStackUtils.multiply(stack, uiMatrix);
-            stack.scale(scale, scale, scale);
+                MatrixStackUtils.multiply(stack, uiMatrix);
+                stack.scale(scale, scale, scale);
 
-            BBSModClient.getTextures().bindTexture(texture);
-            RenderSystem.depthFunc(GL11.GL_LEQUAL);
+                BBSModClient.getTextures().bindTexture(texture);
+                RenderSystem.depthFunc(GL11.GL_LEQUAL);
 
-            Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
-                ? GameRenderer::getRendertypeEntityTranslucentCullShader
-                : BBSShaders::getModel;
+                Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
+                    ? GameRenderer::getRendertypeEntityTranslucentCullShader
+                    : BBSShaders::getModel;
 
-            this.renderModel(this.entity, this.uiSimulationOwner, mainShader, stack, model, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, color, true, null, context.getTransition(), null);
+                this.renderModel(this.entity, this.uiSimulationOwner, mainShader, stack, model, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, color, true, null, context.getTransition(), null, false, false);
 
-            /* Render body parts */
-            stack.pushPose();
-            stack.last().normal().getScale(Vectors.EMPTY_3F);
-            stack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
+                /* Render body parts */
+                stack.pushPose();
+                try
+                {
+                    stack.last().normal().getScale(Vectors.EMPTY_3F);
+                    stack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
-            this.renderBodyParts(new FormRenderingContext()
-                .set(FormRenderType.ENTITY, this.entity, stack, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, context.getTransition())
-                .inUI());
-
-            stack.popPose();
-            stack.popPose();
-
-            RenderSystem.depthFunc(GL11.GL_ALWAYS);
+                    this.renderBodyParts(new FormRenderingContext()
+                        .set(FormRenderType.ENTITY, this.entity, stack, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, context.getTransition())
+                        .simulationOwner(this.uiSimulationOwner)
+                        .inUI());
+                }
+                finally
+                {
+                    stack.popPose();
+                }
+            }
+            finally
+            {
+                stack.popPose();
+                RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            }
         }
     }
 
-    private void renderModel(IEntity target, Object simulationOwner, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition, PoseStack world)
+    private void renderModel(IEntity target, Object simulationOwner, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition, PoseStack world, boolean allowWorldTargetOverrides, boolean allowWorldCollisions)
     {
         this.ikAppliedThisRender = false;
         this.physicsAppliedThisRender = false;
@@ -334,92 +348,97 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
         gameRenderer.lightTexture().turnOnLightLayer();
-        gameRenderer.overlayTexture().setupOverlayColor();
-
-        PoseStack newStack = this.getModelStack();
-
-        MatrixStackUtils.multiply(newStack, stack.last().pose());
-        newStack.last().normal().set(stack.last().normal());
-
-        if (ui)
+        try
         {
-            newStack.last().normal().getScale(Vectors.EMPTY_3F);
-            newStack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
-        }
+            gameRenderer.overlayTexture().setupOverlayColor();
 
-        /* Rendering may be camera-relative or already contain an editor view matrix. Physics and
-         * world-space IK targets must only see the separately propagated semantic world transform. */
-        Matrix4f baseTransform = ui ? null : new Matrix4f((world == null ? stack : world).last().pose());
+            PoseStack newStack = this.getModelStack();
 
-        /* Clamp the FK input first. IK and physics each enforce the same limits internally; applying
-         * the generic Euler clamp afterward would clear their composed quaternion orientation. */
-        this.applyConstraintsOnce(model);
-        this.applyIKOnce(model, simulationOwner == null ? target : simulationOwner, baseTransform);
-        this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform);
+            MatrixStackUtils.multiply(newStack, stack.last().pose());
+            newStack.last().normal().set(stack.last().normal());
 
-        /* Default texture for materials without their own: the form's texture override, else the
-         * model's default. Per-material textures (folder defaults now, animation tracks later)
-         * layer on top via the resolver. */
-        Link defaultTexture = this.form.texture.get();
-
-        if (defaultTexture == null)
-        {
-            defaultTexture = model.getTexture();
-        }
-
-        final Link resolvedDefault = defaultTexture;
-
-        /* A model with at most one material ignores the material system entirely: a single texture
-         * (form.texture, else the model's base texture) covers the whole model, regardless of any
-         * per-material folder/Kd default, editor pick, or animation track. Only with multiple materials
-         * is the Default ambiguous - it's hidden in the editor then and must not affect them here either,
-         * so they fall back to the model base texture. */
-        final boolean ignoreMaterials = model.materials.size() <= 1;
-        final Link materialFallback = ignoreMaterials ? resolvedDefault : model.getTexture();
-
-        model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
-        {
-            if (ignoreMaterials)
+            if (ui)
             {
-                return resolvedDefault;
+                newStack.last().normal().getScale(Vectors.EMPTY_3F);
+                newStack.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
             }
 
-            /* Resolution order: animated per-material track > editor-picked static per-material
-             * texture > the material's loaded default (folder/Kd) > the model base texture. */
-            Link override = this.form.materialTextureOverrides.get(material);
+            /* Rendering may be camera-relative or already contain an editor view matrix. Physics and
+             * world-space IK targets must only see the separately propagated semantic world transform. */
+            Matrix4f baseTransform = ui ? null : new Matrix4f((world == null ? stack : world).last().pose());
 
-            if (override != null)
+            /* Clamp the FK input first. IK and physics each enforce the same limits internally; applying
+             * the generic Euler clamp afterward would clear their composed quaternion orientation. */
+            this.applyConstraintsOnce(model);
+            this.applyIKOnce(model, simulationOwner == null ? target : simulationOwner, baseTransform, allowWorldTargetOverrides);
+            this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
+
+            /* Default texture for materials without their own: the form's texture override, else the
+             * model's default. Per-material textures (folder defaults now, animation tracks later)
+             * layer on top via the resolver. */
+            Link defaultTexture = this.form.texture.get();
+
+            if (defaultTexture == null)
             {
-                return override;
+                defaultTexture = model.getTexture();
             }
 
-            Link picked = this.form.materialTextures.getLink(material);
+            final Link resolvedDefault = defaultTexture;
 
-            if (picked != null)
+            /* A model with at most one material ignores the material system entirely: a single texture
+             * (form.texture, else the model's base texture) covers the whole model, regardless of any
+             * per-material folder/Kd default, editor pick, or animation track. Only with multiple materials
+             * is the Default ambiguous - it's hidden in the editor then and must not affect them here either,
+             * so they fall back to the model base texture. */
+            final boolean ignoreMaterials = model.materials.size() <= 1;
+            final Link materialFallback = ignoreMaterials ? resolvedDefault : model.getTexture();
+
+            model.render(newStack, program, color, light, overlay, stencilMap, this.form.shapeKeys.get(), (material) ->
             {
-                return picked;
+                if (ignoreMaterials)
+                {
+                    return resolvedDefault;
+                }
+
+                /* Resolution order: animated per-material track > editor-picked static per-material
+                 * texture > the material's loaded default (folder/Kd) > the model base texture. */
+                Link override = this.form.materialTextureOverrides.get(material);
+
+                if (override != null)
+                {
+                    return override;
+                }
+
+                Link picked = this.form.materialTextures.getLink(material);
+
+                if (picked != null)
+                {
+                    return picked;
+                }
+
+                return model.getMaterialTexture(material, materialFallback);
+            });
+
+            if (stencilMap == null && !this.renderingArm && this.form != null && this.form.ik.get() instanceof MapType ikMap)
+            {
+                ModelIKDebug.render(newStack, model.model, ikMap, "");
             }
 
-            return model.getMaterialTexture(material, materialFallback);
-        });
-
-        if (stencilMap == null && !this.renderingArm && this.form != null && this.form.ik.get() instanceof MapType ikMap)
-        {
-            ModelIKDebug.render(newStack, model.model, ikMap, "");
+            if (stencilMap == null && !this.renderingArm && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+            {
+                ModelPhysicsDebug.render(newStack, model.model, physicsMap, target.getAge(), "");
+            }
         }
-
-        if (stencilMap == null && !this.renderingArm && this.form != null && this.form.physics.get() instanceof MapType physicsMap)
+        finally
         {
-            ModelPhysicsDebug.render(newStack, model.model, physicsMap, target.getAge(), "");
-        }
+            gameRenderer.lightTexture().turnOffLightLayer();
+            gameRenderer.overlayTexture().teardownOverlayColor();
+            RenderSystem.disableBlend();
 
-        gameRenderer.lightTexture().turnOffLightLayer();
-        gameRenderer.overlayTexture().teardownOverlayColor();
-        RenderSystem.disableBlend();
-
-        if (!model.isCulling())
-        {
-            RenderSystem.enableCull();
+            if (!model.isCulling())
+            {
+                RenderSystem.enableCull();
+            }
         }
 
         /* Render items */
@@ -437,7 +456,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyIKOnce(ModelInstance model, Object simulationOwner, Matrix4f baseTransform)
+    private void applyIKOnce(ModelInstance model, Object simulationOwner, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         if (this.ikAppliedThisRender)
         {
@@ -445,9 +464,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.ikAppliedThisRender = true;
+        this.applyIK(model, simulationOwner, baseTransform, allowWorldTargetOverrides);
+    }
+
+    private void applyIK(ModelInstance model, Object simulationOwner, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
+    {
         model.form = this.form;
 
-        boolean hasOverrides = baseTransform != null && this.form != null
+        boolean hasOverrides = allowWorldTargetOverrides && baseTransform != null && this.form != null
             && (!this.form.ikTargetOverrides.isEmpty() || !this.form.poleTargetOverrides.isEmpty());
 
         if (!hasOverrides)
@@ -493,7 +517,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyPhysicsOnce(IEntity target, Object simulationOwner, ModelInstance model, float transition, Matrix4f baseTransform)
+    private void applyPhysicsOnce(IEntity target, Object simulationOwner, ModelInstance model, float transition, Matrix4f baseTransform, boolean allowWorldTargetOverrides, boolean allowWorldCollisions)
     {
         if (this.physicsAppliedThisRender)
         {
@@ -502,7 +526,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         this.physicsAppliedThisRender = true;
         model.form = this.form;
-        this.physicsRuntime.apply(target, simulationOwner, model, transition, baseTransform);
+        this.physicsRuntime.apply(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
     }
 
     private void applyConstraintsOnce(ModelInstance model)
@@ -539,21 +563,24 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
             stack.pushPose();
-            MatrixStackUtils.multiply(stack, matrix);
-            MatrixStackUtils.applyTransform(stack, armorSlot.transform);
-            stack.mulPose(ROTATE_X_180);
+            try
+            {
+                MatrixStackUtils.multiply(stack, matrix);
+                MatrixStackUtils.applyTransform(stack, armorSlot.transform);
+                stack.mulPose(ROTATE_X_180);
 
-            CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+                CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
 
-            ActorEntityRenderer.armorRenderer.renderArmorSlot(stack, consumers, target, type.slot, type, light);
-            consumers.draw();
-
-            CustomVertexConsumerProvider.clearRunnables();
-
-            stack.popPose();
-
-            RenderSystem.enableBlend();
-            RenderSystem.enableDepthTest();
+                ActorEntityRenderer.armorRenderer.renderArmorSlot(stack, consumers, target, type.slot, type, light);
+                consumers.draw();
+            }
+            finally
+            {
+                CustomVertexConsumerProvider.clearRunnables();
+                stack.popPose();
+                RenderSystem.enableBlend();
+                RenderSystem.enableDepthTest();
+            }
         }
     }
 
@@ -575,37 +602,46 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
                 stack.pushPose();
-                MatrixStackUtils.multiply(stack, matrix);
-                stack.mulPose(ROTATE_X_90);
-                stack.mulPose(ROTATE_Y_180);
-                stack.translate(0F, 0.125F, 0F);
-                MatrixStackUtils.applyTransform(stack, armorSlot.transform);
-
-                CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
-
-                consumers.setSubstitute(BBSRendering.getColorConsumer(color));
-
-                /* For some reason, due to Sodium and my color consumer, in some cases items like Trident,
-                 * shield, etc. not get rendered, but if in another arm there is another item, it does render...
-                 * So, I render a 0 size oak button to circumvent that bug! */
-                if (model.model instanceof BOBJModel)
+                try
                 {
-                    stack.pushPose();
-                    stack.scale(0F, 0F, 0F);
-                    Minecraft.getInstance().getItemRenderer().renderStatic(null, OAK_BUTTON_STACK, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
+                    MatrixStackUtils.multiply(stack, matrix);
+                    stack.mulPose(ROTATE_X_90);
+                    stack.mulPose(ROTATE_Y_180);
+                    stack.translate(0F, 0.125F, 0F);
+                    MatrixStackUtils.applyTransform(stack, armorSlot.transform);
+
+                    CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+                    consumers.setSubstitute(BBSRendering.getColorConsumer(color));
+
+                    /* For some reason, due to Sodium and my color consumer, in some cases items like Trident,
+                     * shield, etc. not get rendered, but if in another arm there is another item, it does render...
+                     * So, I render a 0 size oak button to circumvent that bug! */
+                    if (model.model instanceof BOBJModel)
+                    {
+                        stack.pushPose();
+                        try
+                        {
+                            stack.scale(0F, 0F, 0F);
+                            Minecraft.getInstance().getItemRenderer().renderStatic(null, OAK_BUTTON_STACK, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
+                            consumers.draw();
+                        }
+                        finally
+                        {
+                            stack.popPose();
+                        }
+                    }
+
+                    Minecraft.getInstance().getItemRenderer().renderStatic(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                     consumers.draw();
-                    stack.popPose();
                 }
+                finally
+                {
+                    consumers.setSubstitute(null);
+                    CustomVertexConsumerProvider.clearRunnables();
+                    stack.popPose();
 
-                Minecraft.getInstance().getItemRenderer().renderStatic(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
-                consumers.draw();
-                consumers.setSubstitute(null);
-
-                CustomVertexConsumerProvider.clearRunnables();
-
-                stack.popPose();
-
-                RenderSystem.enableDepthTest();
+                    RenderSystem.enableDepthTest();
+                }
             }
         }
     }
@@ -650,40 +686,69 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 group.visible = visible;
             }
 
-            model.model.resetPose();
-
-            matrices.pushPose();
-            matrices.mulPose(ROTATE_Y_180);
-            MatrixStackUtils.applyTransform(matrices, slot.transform);
-
-            BBSModClient.getTextures().bindTexture(texture);
-
-            Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
-                ? GameRenderer::getRendertypeEntityTranslucentCullShader
-                : BBSShaders::getModel;
-
-            RenderSystem.enableDepthTest();
-            RenderSystem.enableBlend();
-
-            this.renderingArm = true;
+            boolean matricesPushed = false;
+            boolean oldRenderingArm = this.renderingArm;
 
             try
             {
-                this.renderModel(this.entity, this.armSimulationOwner, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F, null);
+                model.model.resetPose();
+
+                matrices.pushPose();
+                matricesPushed = true;
+                matrices.mulPose(ROTATE_Y_180);
+                MatrixStackUtils.applyTransform(matrices, slot.transform);
+
+                /* First-person matrices already contain the camera/hand view. Physics
+                 * must instead see a stable hand-local semantic transform and clock;
+                 * otherwise looking around becomes fake model acceleration. Main and
+                 * off hands also need independent histories when they use the same
+                 * model resource. */
+                if (!this.armSimulationWorld.clear())
+                {
+                    this.armSimulationWorld = new PoseStack();
+                }
+                else
+                {
+                    this.armSimulationWorld.setIdentity();
+                }
+
+                this.armSimulationWorld.mulPose(ROTATE_Y_180);
+                MatrixStackUtils.applyTransform(this.armSimulationWorld, slot.transform);
+                this.armSimulationClock.setWorld(null);
+                this.armSimulationClock.setAge(player.tickCount);
+
+                Object simulationOwner = hand == InteractionHand.MAIN_HAND
+                    ? this.mainArmSimulationOwner
+                    : this.offArmSimulationOwner;
+
+                BBSModClient.getTextures().bindTexture(texture);
+
+                Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
+                    ? GameRenderer::getRendertypeEntityTranslucentCullShader
+                    : BBSShaders::getModel;
+
+                RenderSystem.enableDepthTest();
+                RenderSystem.enableBlend();
+
+                this.renderingArm = true;
+                this.renderModel(this.armSimulationClock, simulationOwner, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F, this.armSimulationWorld, false, false);
+
+                return true;
             }
             finally
             {
-                this.renderingArm = false;
+                this.renderingArm = oldRenderingArm;
+
+                for (ModelGroup group : model.getModel().getAllGroups())
+                {
+                    group.visible = true;
+                }
+
+                if (matricesPushed)
+                {
+                    matrices.popPose();
+                }
             }
-
-            for (ModelGroup group : model.getModel().getAllGroups())
-            {
-                group.visible = true;
-            }
-
-            matrices.popPose();
-
-            return true;
         }
 
         return super.renderArm(matrices, light, player, hand);
@@ -730,7 +795,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 : BBSShaders::getModel;
             Supplier<ShaderInstance> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);
 
-            this.renderModel(context.entity, context.simulationOwner, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world);
+            this.renderModel(context.entity, context.simulationOwner, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world, context.allowWorldTargetOverrides, context.allowWorldCollisions);
         }
     }
 
@@ -759,162 +824,274 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     private void captureMatrices(ModelInstance model)
     {
-        /* this.bones.clear()? */
+        /* A failed render can skip renderBodyParts(), so never let its captured
+         * bones leak into the next placement or a model that removed a bone. */
+        this.bones.clear();
         model.captureMatrices(this.bones);
     }
 
     @Override
     public void renderBodyParts(FormRenderingContext context)
     {
+        PoseStack world = context.world;
+        boolean stackPushed = false;
+        boolean worldPushed = false;
+
         context.stack.pushPose();
+        stackPushed = true;
 
-        if (context.world != null)
+        if (world != null)
         {
-            context.world.pushPose();
+            world.pushPose();
+            worldPushed = true;
         }
 
-        for (BodyPart part : this.form.parts.getAllTyped())
+        try
         {
-            Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
-
-            context.stack.pushPose();
-
-            if (context.world != null)
+            for (BodyPart part : this.form.parts.getAllTyped())
             {
-                context.world.pushPose();
-            }
+                Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
+                boolean childStackPushed = false;
+                boolean childWorldPushed = false;
 
-            if (matrix != null)
-            {
-                MatrixStackUtils.multiply(context.stack, matrix);
+                context.stack.pushPose();
+                childStackPushed = true;
 
-                if (context.world != null)
+                if (world != null)
                 {
-                    MatrixStackUtils.multiply(context.world, matrix);
+                    world.pushPose();
+                    childWorldPushed = true;
                 }
-            }
-            else
-            {
-                context.stack.mulPose(ROTATE_Y_180);
 
-                if (context.world != null)
+                try
                 {
-                    context.world.mulPose(ROTATE_Y_180);
+                    if (matrix != null)
+                    {
+                        MatrixStackUtils.multiply(context.stack, matrix);
+
+                        if (world != null)
+                        {
+                            MatrixStackUtils.multiply(world, matrix);
+                        }
+                    }
+                    else
+                    {
+                        context.stack.mulPose(ROTATE_Y_180);
+
+                        if (world != null)
+                        {
+                            world.mulPose(ROTATE_Y_180);
+                        }
+                    }
+
+                    this.renderBodyPart(part, context);
                 }
-            }
-
-            this.renderBodyPart(part, context);
-
-            context.stack.popPose();
-
-            if (context.world != null)
-            {
-                context.world.popPose();
+                finally
+                {
+                    try
+                    {
+                        if (childStackPushed)
+                        {
+                            context.stack.popPose();
+                        }
+                    }
+                    finally
+                    {
+                        if (childWorldPushed)
+                        {
+                            world.popPose();
+                        }
+                    }
+                }
             }
         }
-
-        this.bones.clear();
-        context.stack.popPose();
-
-        if (context.world != null)
+        finally
         {
-            context.world.popPose();
+            this.bones.clear();
+
+            try
+            {
+                if (stackPushed)
+                {
+                    context.stack.popPose();
+                }
+            }
+            finally
+            {
+                if (worldPushed)
+                {
+                    world.popPose();
+                }
+            }
         }
     }
 
     @Override
     public void collectMatrices(IEntity entity, PoseStack stack, MatrixCache matrices, String prefix, float transition)
     {
+        this.collectMatrices(entity, null, null, false, false, stack, matrices, prefix, transition);
+    }
+
+    @Override
+    protected void collectMatricesWithAppliedStates(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, PoseStack stack, MatrixCache matrices, String prefix, float transition)
+    {
+        this.bones.clear();
+        this.ensureAnimator(transition);
+
         ModelInstance model = this.getModel();
         Matrix4f mm = new Matrix4f();
         Matrix4f oo = new Matrix4f();
+        Matrix4f modelSemanticBase = null;
 
-        stack.pushPose();
-        this.applyTransforms(stack, true, transition);
-        oo.set(stack.last().pose());
-        stack.popPose();
-
-        stack.pushPose();
-        this.applyTransforms(stack, false, transition);
-        mm.set(stack.last().pose());
-
-        matrices.put(prefix, mm, oo);
-
-        /* Collect bones and add them to matrix list */
-        if (this.animator != null && model != null)
+        if (semanticBase != null)
         {
-            model.model.resetPose();
-
-            this.animator.applyActions(entity, model, transition);
-            model.model.applyPose(this.getPose(this.renderPose));
-
-            /* Solve IK here too, so a bone anchored to an IK-driven bone (a head pinned to
-             * body_upper) rides the solved pose — these matrices feed the anchor system, the
-             * gizmo and trackers, which otherwise see the FK-only pose the render path moved
-             * past. The live-drag world-space target overrides need a base transform this
-             * local pass doesn't carry, so the config/`ik`-track solve runs (controllers
-             * keyed into the pose are already baked in and reached). */
-            model.form = this.form;
-            ModelConstraintsRuntime.apply(model);
-            this.ikRuntime.apply(this.uiSimulationOwner, model, null, null);
-
-            stack.mulPose(ROTATE_Y_180);
-            this.captureMatrices(model);
+            modelSemanticBase = new Matrix4f(semanticBase);
+            this.applyTransforms(modelSemanticBase, transition);
+            modelSemanticBase.rotate(ROTATE_Y_180);
         }
 
-        for (Map.Entry<String, MatrixCacheEntry> entry : this.bones.entrySet())
+        stack.pushPose();
+        try
         {
-            Matrix4f matrix = new Matrix4f();
-            Matrix4f o = new Matrix4f();
-
-            stack.pushPose();
-            MatrixStackUtils.multiply(stack, entry.getValue().matrix());
-            matrix.set(stack.last().pose());
+            this.applyTransforms(stack, true, transition);
+            oo.set(stack.last().pose());
+        }
+        finally
+        {
             stack.popPose();
-
-            stack.pushPose();
-            MatrixStackUtils.multiply(stack, entry.getValue().origin());
-            o.set(stack.last().pose());
-            stack.popPose();
-
-            matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), matrix, o);
         }
 
-        int i = 0;
-
-        /* Recursively do the same thing with body parts */
-        for (BodyPart part : this.form.parts.getAllTyped())
+        stack.pushPose();
+        try
         {
-            Form form = part.getForm();
+            this.applyTransforms(stack, false, transition);
+            mm.set(stack.last().pose());
 
-            if (form != null)
+            matrices.put(prefix, mm, oo);
+
+            /* Collect bones and add them to matrix list */
+            if (this.animator != null && model != null)
             {
-                Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
+                model.model.resetPose();
 
-                stack.pushPose();
+                this.animator.applyActions(entity, model, transition);
+                model.model.applyPose(this.getPose(this.renderPose));
 
-                if (matrix != null)
+                /* Film placement-aware collection receives the exact semantic base and owner,
+                 * so absolute target overrides and physics produce the same attachment bone as
+                 * render3D. Legacy/UI collection keeps its isolated local IK-only behavior. */
+                ModelConstraintsRuntime.apply(model);
+                Object owner = simulationOwner == null ? this.uiSimulationOwner : simulationOwner;
+
+                this.applyIK(model, owner, modelSemanticBase, allowWorldTargetOverrides);
+
+                if (modelSemanticBase != null)
                 {
-                    MatrixStackUtils.multiply(stack, matrix);
-                }
-                else
-                {
-                    stack.mulPose(ROTATE_Y_180);
+                    this.physicsRuntime.apply(entity, owner, model, transition, modelSemanticBase, allowWorldTargetOverrides, allowWorldCollisions);
                 }
 
-                MatrixStackUtils.applyTransform(stack, part.transform.get());
-
-                FormUtilsClient.getRenderer(form).collectMatrices(part.useTarget.get() ? entity : part.getEntity(), stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
-
-                stack.popPose();
+                stack.mulPose(ROTATE_Y_180);
+                this.captureMatrices(model);
             }
 
-            i += 1;
+            for (Map.Entry<String, MatrixCacheEntry> entry : this.bones.entrySet())
+            {
+                Matrix4f matrix = new Matrix4f();
+                Matrix4f o = new Matrix4f();
+
+                stack.pushPose();
+                try
+                {
+                    MatrixStackUtils.multiply(stack, entry.getValue().matrix());
+                    matrix.set(stack.last().pose());
+                }
+                finally
+                {
+                    stack.popPose();
+                }
+
+                stack.pushPose();
+                try
+                {
+                    MatrixStackUtils.multiply(stack, entry.getValue().origin());
+                    o.set(stack.last().pose());
+                }
+                finally
+                {
+                    stack.popPose();
+                }
+
+                matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), matrix, o);
+            }
+
+            int i = 0;
+
+            /* Recursively do the same thing with body parts */
+            for (BodyPart part : this.form.parts.getAllTyped())
+            {
+                Form form = part.getForm();
+
+                if (form != null)
+                {
+                    Matrix4f matrix = this.bones.get(part.bone.get()).matrix();
+
+                    stack.pushPose();
+                    try
+                    {
+                        Matrix4f childSemanticBase = modelSemanticBase == null ? null : new Matrix4f(modelSemanticBase);
+
+                        if (matrix != null)
+                        {
+                            MatrixStackUtils.multiply(stack, matrix);
+
+                            if (childSemanticBase != null)
+                            {
+                                childSemanticBase.mul(matrix);
+                            }
+                        }
+                        else
+                        {
+                            stack.mulPose(ROTATE_Y_180);
+
+                            if (childSemanticBase != null)
+                            {
+                                childSemanticBase.rotate(ROTATE_Y_180);
+                            }
+                        }
+
+                        MatrixStackUtils.applyTransform(stack, part.transform.get());
+
+                        if (childSemanticBase != null)
+                        {
+                            childSemanticBase.mul(part.transform.get().setupMatrix(new Matrix4f()));
+                        }
+
+                        FormUtilsClient.getRenderer(form).collectMatrices(
+                            part.useTarget.get() ? entity : part.getEntity(),
+                            simulationOwner,
+                            childSemanticBase,
+                            allowWorldTargetOverrides,
+                            allowWorldCollisions,
+                            stack,
+                            matrices,
+                            StringUtils.combinePaths(prefix, String.valueOf(i)),
+                            transition
+                        );
+                    }
+                    finally
+                    {
+                        stack.popPose();
+                    }
+                }
+
+                i += 1;
+            }
         }
-
-        stack.popPose();
-
-        this.bones.clear();
+        finally
+        {
+            this.bones.clear();
+            stack.popPose();
+        }
     }
 
     /**
@@ -925,6 +1102,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
      */
     @Override
     public Vector3f getShadowDisplacement(IEntity entity, float transition)
+    {
+        return this.getShadowDisplacement(entity, null, null, false, false, transition);
+    }
+
+    @Override
+    public Vector3f getShadowDisplacement(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, float transition)
     {
         ModelInstance model = this.getModel();
 
@@ -940,8 +1123,14 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return super.getShadowDisplacement(entity, transition);
         }
 
-        Vector3f current = this.sampleBoneOrigin(entity, transition, anchor, false);
-        Vector3f rest = this.sampleBoneOrigin(entity, transition, anchor, true);
+        MatrixCache matrices = semanticBase == null
+            ? this.collectMatrices(entity, transition)
+            : this.collectMatrices(entity, simulationOwner, semanticBase, allowWorldTargetOverrides, allowWorldCollisions, transition);
+        MatrixCacheEntry currentEntry = matrices.get(anchor);
+        Vector3f current = currentEntry == null || currentEntry.origin() == null
+            ? null
+            : currentEntry.origin().getTranslation(new Vector3f());
+        Vector3f rest = this.sampleRestBoneOrigin(anchor);
 
         if (current == null || rest == null)
         {
@@ -951,13 +1140,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         return current.sub(rest);
     }
 
-    /**
-     * Capture a bone's origin translation in form-local space, either in the current animated pose
-     * ({@code rest = false}) or the model's rest/bind pose ({@code rest = true}). Mirrors the root-form
-     * portion of {@link #collectMatrices} so both samples share the same frame and the form's own
-     * transform cancels out when they are subtracted.
-     */
-    private Vector3f sampleBoneOrigin(IEntity entity, float transition, String bone, boolean rest)
+    /** Capture a bone's bind-pose origin in the same scaled/model-axis frame as collected matrices. */
+    private Vector3f sampleRestBoneOrigin(String bone)
     {
         ModelInstance model = this.getModel();
 
@@ -969,33 +1153,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         PoseStack stack = new PoseStack();
 
         stack.pushPose();
-
-        /* The current sample includes the form's own transform (so its keyframes move the shadow); the
-         * rest sample omits it and stays in the bind pose, so subtracting the two yields the full
-         * displacement of the model from rest — form transform plus anchor-bone root motion. The
-         * model's default scale is static, though, so it must be applied to BOTH samples or it won't
-         * cancel and the bind pose ends up at a different height (a constant ~1/16 shadow sink). */
-        if (rest)
-        {
-            stack.scale(model.getScale().x, model.getScale().y, model.getScale().z);
-        }
-        else
-        {
-            this.applyTransforms(stack, false, transition);
-        }
+        stack.scale(model.getScale().x, model.getScale().y, model.getScale().z);
 
         model.model.resetPose();
-
-        if (!rest && this.animator != null)
-        {
-            this.animator.applyActions(entity, model, transition);
-            model.model.applyPose(this.getPose(this.renderPose));
-
-            /* Same as collectMatrices: solve IK so an IK-driven anchor bone's root motion is sampled
-             * from the solved pose the anchor system and gizmo see. */
-            model.form = this.form;
-            this.ikRuntime.apply(this.uiSimulationOwner, model, null, null);
-        }
 
         stack.mulPose(ROTATE_Y_180);
         this.captureMatrices(model);

@@ -24,6 +24,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
 
 import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.lang.reflect.Method;
@@ -71,18 +72,35 @@ public class ModelBlockItemRenderer
                 item.expiration = 20;
 
                 Transform transform = properties.getTransform(mode);
+                PoseStack semanticWorld = new PoseStack();
+
+                MatrixStackUtils.applyTransform(semanticWorld, transform);
 
                 matrices.pushPose();
-                matrices.translate(0.5F, 0F, 0.5F);
-                MatrixStackUtils.applyTransform(matrices, transform);
+                try
+                {
+                    matrices.translate(0.5F, 0F, 0.5F);
+                    MatrixStackUtils.applyTransform(matrices, transform);
 
-                RenderSystem.enableDepthTest();
-                FormUtilsClient.render(form, new FormRenderingContext()
-                    .set(resolveRenderType(mode), item.formEntity, matrices, light, overlay, getTickDelta())
-                    .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
-                RenderSystem.disableDepthTest();
-
-                matrices.popPose();
+                    RenderSystem.enableDepthTest();
+                    try
+                    {
+                        FormUtilsClient.render(form, new FormRenderingContext()
+                            .set(FormRenderType.fromModelMode(mode), item.formEntity, matrices, light, overlay, getTickDelta())
+                            .simulationOwner(item.getSimulationOwner(mode))
+                            .semanticWorld(semanticWorld)
+                            .localSimulation()
+                            .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
+                    }
+                    finally
+                    {
+                        RenderSystem.disableDepthTest();
+                    }
+                }
+                finally
+                {
+                    matrices.popPose();
+                }
             }
         }
     }
@@ -122,34 +140,20 @@ public class ModelBlockItemRenderer
         public ModelBlockEntity entity;
         public IEntity formEntity;
         public int expiration = 20;
+        private final Map<ItemDisplayContext, Object> simulationOwners = new EnumMap<>(ItemDisplayContext.class);
 
         public Item(ModelBlockEntity entity)
         {
             this.entity = entity;
-            this.formEntity = new StubEntity(Minecraft.getInstance().level);
-        }
-    }
-
-    private static FormRenderType resolveRenderType(ItemDisplayContext mode)
-    {
-        if (mode.firstPerson())
-        {
-            return FormRenderType.ITEM_FP;
-        }
-        else if (mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND || mode == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND)
-        {
-            return FormRenderType.ITEM_TP;
-        }
-        else if (mode == ItemDisplayContext.GROUND)
-        {
-            return FormRenderType.ITEM;
-        }
-        else if (mode == ItemDisplayContext.GUI)
-        {
-            return FormRenderType.ITEM_INVENTORY;
+            this.formEntity = new StubEntity();
         }
 
-        return FormRenderType.ENTITY;
+        public Object getSimulationOwner(ItemDisplayContext mode)
+        {
+            ItemDisplayContext key = mode == null ? ItemDisplayContext.NONE : mode;
+
+            return this.simulationOwners.computeIfAbsent(key, (ignored) -> new Object());
+        }
     }
 
     private static float getTickDelta()

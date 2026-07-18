@@ -43,7 +43,7 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
             catch (Exception e)
             {}
 
-            File folder = this.panel.getType().getRepository().getFolder();
+            File folder = this.panel.getRepository().getFolder();
 
             if (folder != null)
             {
@@ -86,13 +86,13 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
 
             if (mapType == null)
             {
-                data = (T) this.panel.getType().getRepository().create(name);
+                data = this.panel.getRepository().create(name);
 
                 this.fillDefaultData(data);
             }
             else
             {
-                data = (T) this.panel.getType().getRepository().create(name, mapType);
+                data = this.panel.getRepository().create(name, mapType);
             }
 
             this.panel.fill(data);
@@ -114,7 +114,7 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
             return;
         }
 
-        this.panel.getType().getRepository().addFolder(path, (bool) ->
+        this.panel.getRepository().addFolder(path, (bool) ->
         {
             if (bool)
             {
@@ -141,10 +141,10 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
         if (this.panel.getData() != null && !this.namesList.hasInHierarchy(name))
         {
             this.panel.save();
-            this.panel.getType().getRepository().save(name, this.panel.getData().toData().asMap());
+            this.panel.getRepository().save(name, this.panel.getData().toData().asMap());
             this.namesList.addFile(name);
 
-            T data = (T) this.panel.getType().getRepository().create(name, this.panel.getData().toData().asMap());
+            T data = this.panel.getRepository().create(name, this.panel.getData().toData().asMap());
 
             this.panel.fill(data);
         }
@@ -164,7 +164,7 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
         {
             String from = this.panel.getData().getId();
 
-            this.panel.getType().getRepository().rename(from, name);
+            this.panel.getRepository().rename(from, name);
 
             this.namesList.removeFile(this.panel.getData().getId());
             this.namesList.addFile(name);
@@ -191,7 +191,7 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
 
         String path = this.namesList.getCurrentFirst().toString();
 
-        this.panel.getType().getRepository().renameFolder(path, name, (bool) ->
+        this.panel.getRepository().renameFolder(path, name, (bool) ->
         {
             if (bool)
             {
@@ -215,7 +215,7 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
         {
             String id = this.panel.getData().getId();
 
-            this.panel.getType().getRepository().delete(id);
+            this.panel.getRepository().delete(id);
 
             this.namesList.removeFile(this.panel.getData().getId());
             this.panel.fill(null);
@@ -228,7 +228,7 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
     {
         String path = this.namesList.getCurrentFirst().toString();
 
-        this.panel.getType().getRepository().deleteFolder(path, (bool) ->
+        this.panel.getRepository().deleteFolder(path, (bool) ->
         {
             if (bool)
             {

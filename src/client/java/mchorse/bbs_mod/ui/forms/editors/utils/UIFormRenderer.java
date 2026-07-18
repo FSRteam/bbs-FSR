@@ -25,6 +25,7 @@ public class UIFormRenderer extends UIModelRenderer
             .set(FormRenderType.PREVIEW, this.entity, context.batcher.getContext().pose(), LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, context.getTransition())
             .camera(this.camera)
             .simulationOwner(this)
+            .localSimulation()
             .modelRenderer();
 
         FormUtilsClient.render(this.form, formContext);

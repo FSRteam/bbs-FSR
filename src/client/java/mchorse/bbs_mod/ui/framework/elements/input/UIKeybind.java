@@ -6,6 +6,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
@@ -25,6 +26,8 @@ public class UIKeybind extends UIElement
     private boolean escape;
 
     private boolean first;
+    private final MouseGestureOwnership mouseOwnership = new MouseGestureOwnership();
+    private long mouseGeneration;
 
     public UIKeybind(Consumer<KeyCombo> callback)
     {
@@ -74,6 +77,9 @@ public class UIKeybind extends UIElement
     private void finish()
     {
         this.reading = false;
+        this.first = false;
+        this.mouseOwnership.cancel();
+        this.mouseGeneration = 0L;
 
         this.callback();
     }
@@ -83,24 +89,62 @@ public class UIKeybind extends UIElement
     {
         if (this.area.isInside(context) && context.mouseButton == 0)
         {
-            context.unfocus();
+            long generation = this.mouseOwnership.acquireToken(context.mouseButton);
 
-            this.first = true;
-            this.reading = true;
-            this.combo.keys.clear();
+            if (generation == 0L)
+            {
+                return true;
+            }
+
+            this.mouseGeneration = generation;
+
+            try
+            {
+                this.first = true;
+                this.reading = true;
+                this.combo.keys.clear();
+                context.unfocus();
+            }
+            catch (RuntimeException | Error exception)
+            {
+                this.mouseOwnership.release(context.mouseButton, generation);
+                this.mouseGeneration = 0L;
+                this.first = false;
+                this.reading = false;
+
+                throw exception;
+            }
         }
         else if (this.reading && this.mouse)
         {
+            long generation = this.mouseOwnership.acquireToken(context.mouseButton);
+
+            if (generation == 0L)
+            {
+                return true;
+            }
+
+            this.mouseGeneration = generation;
             int key = -context.mouseButton;
 
-            if (!this.combo.keys.contains(key))
+            try
             {
-                if (this.single)
+                if (!this.combo.keys.contains(key))
                 {
-                    this.combo.keys.clear();
-                }
+                    if (this.single)
+                    {
+                        this.combo.keys.clear();
+                    }
 
-                this.combo.keys.add(0, key);
+                    this.combo.keys.add(0, key);
+                }
+            }
+            catch (RuntimeException | Error exception)
+            {
+                this.mouseOwnership.release(context.mouseButton, generation);
+                this.mouseGeneration = 0L;
+
+                throw exception;
             }
 
             return true;
@@ -112,12 +156,23 @@ public class UIKeybind extends UIElement
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        long generation = this.mouseGeneration;
+
         if (this.first)
         {
+            if (!this.mouseOwnership.release(context.mouseButton, generation))
+            {
+                return super.subMouseReleased(context);
+            }
+
+            this.mouseGeneration = 0L;
             this.first = false;
+
+            return true;
         }
-        else if (this.reading && this.mouse)
+        else if (this.reading && this.mouse && this.mouseOwnership.release(context.mouseButton, generation))
         {
+            this.mouseGeneration = 0L;
             this.finish();
 
             return true;

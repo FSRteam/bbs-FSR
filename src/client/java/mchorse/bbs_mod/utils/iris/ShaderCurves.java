@@ -255,37 +255,50 @@ public class ShaderCurves
     {
         Set<String> deconst = new HashSet<>();
         StringBuilder builder = new StringBuilder();
-        int index = 0;
+        int searchIndex = 0;
         int lastIndex = 0;
+        int index;
 
-        while ((index = source.indexOf("const ", index + 1)) != -1)
+        while ((index = source.indexOf("const ", searchIndex)) != -1)
         {
             int semicolon = source.indexOf(';', index);
 
-            if (semicolon >= 0)
+            if (semicolon < 0)
             {
-                String substr = source.substring(index, semicolon);
+                break;
+            }
 
-                if (substr.indexOf('{') == -1 && function.apply(substr))
+            /* A declaration is one non-overlapping source interval. Searching again
+             * from index + 1 can find the word "const" inside the same declaration
+             * (usually in a comment or macro expression), making the next index less
+             * than the previous semicolon and producing an invalid append range. */
+            String substr = source.substring(index, semicolon);
+
+            if (substr.indexOf('{') == -1 && function.apply(substr))
+            {
+                builder.append(source, lastIndex, index);
+                builder.append(source, index + 6, semicolon);
+
+                int equals = substr.indexOf('=');
+
+                if (equals > 0)
                 {
-                    builder.append(source, lastIndex, index);
-                    builder.append(source, index + 6, semicolon);
+                    String declaration = substr.substring(0, equals).trim();
+                    int separator = declaration.lastIndexOf(' ');
 
-                    int equals = substr.indexOf('=');
-                    String sub = substr.substring(0, equals).trim();
-
-                    equals = sub.lastIndexOf(' ');
-                    sub = sub.substring(equals).trim();
-
-                    deconst.add(sub);
+                    if (separator >= 0 && separator + 1 < declaration.length())
+                    {
+                        deconst.add(declaration.substring(separator + 1).trim());
+                    }
                 }
-                else
-                {
-                    builder.append(source, lastIndex, semicolon);
-                }
+            }
+            else
+            {
+                builder.append(source, lastIndex, semicolon);
             }
 
             lastIndex = semicolon;
+            searchIndex = semicolon + 1;
         }
 
         builder.append(source, lastIndex, source.length());

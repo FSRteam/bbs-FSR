@@ -19,6 +19,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.level.Level;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -36,6 +37,8 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
     private final Matrix4f renderMatrix = new Matrix4f();
     private final Matrix4f cameraViewMatrix = new Matrix4f();
     private final Vector3d renderTranslation = new Vector3d();
+    private final Vector3d uiEmitterPosition = new Vector3d();
+    private final Matrix3f uiEmitterRotation = new Matrix3f();
 
     public ParticleFormRenderer(ParticleForm form)
     {
@@ -99,9 +102,20 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             MatrixStackUtils.scaleStack(stack, scale, scale, scale);
 
             this.updateTexture(context.getTransition());
-            emitter.lastGlobal.set(0, 0, 0);
-            emitter.rotation.identity();
-            emitter.renderUI(stack, context.getTransition());
+            this.uiEmitterPosition.set(emitter.lastGlobal);
+            this.uiEmitterRotation.set(emitter.rotation);
+
+            try
+            {
+                emitter.lastGlobal.set(0, 0, 0);
+                emitter.rotation.identity();
+                emitter.renderUI(stack, context.getTransition());
+            }
+            finally
+            {
+                emitter.lastGlobal.set(this.uiEmitterPosition);
+                emitter.rotation.set(this.uiEmitterRotation);
+            }
 
             stack.popPose();
         }
@@ -127,12 +141,18 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             this.updateTexture(context.getTransition());
 
-            boolean cameraRelativeWorld = this.isCameraRelativeWorld(context);
+            FormRenderSpace renderSpace = context.renderSpace == null
+                ? FormRenderSpace.forType(context.type)
+                : context.renderSpace;
             Matrix4f matrix = this.renderMatrix;
 
-            if (cameraRelativeWorld)
+            if (renderSpace == FormRenderSpace.CAMERA_RELATIVE_WORLD)
             {
                 matrix.set(context.stack.last().pose());
+            }
+            else if (renderSpace == FormRenderSpace.ENTITY_LOCAL && context.world != null)
+            {
+                matrix.set(context.world.last().pose());
             }
             else
             {
@@ -142,7 +162,11 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
 
             Vector3f translation = matrix.getTranslation(Vectors.TEMP_3F);
             this.renderTranslation.set(translation.x, translation.y, translation.z);
-            this.renderTranslation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
+
+            if (renderSpace != FormRenderSpace.ENTITY_LOCAL)
+            {
+                this.renderTranslation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
+            }
 
             GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
 
@@ -152,12 +176,12 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             context.stack.pushPose();
             context.stack.setIdentity();
 
-            if (!cameraRelativeWorld)
+            if (renderSpace == FormRenderSpace.UI_LOCAL)
             {
                 context.stack.mulPose(this.cameraViewMatrix.set(context.camera.view));
             }
 
-            emitter.lastGlobal.set(this.renderTranslation);
+            emitter.setRootPosition(this.renderTranslation);
             emitter.rotation.set(matrix);
 
             if (!BBSRendering.isIrisShadowPass())
@@ -178,12 +202,6 @@ public class ParticleFormRenderer extends FormRenderer<ParticleForm> implements 
             gameRenderer.lightTexture().turnOffLightLayer();
             gameRenderer.overlayTexture().teardownOverlayColor();
         }
-    }
-
-    private boolean isCameraRelativeWorld(FormRenderingContext context)
-    {
-        /* World stacks are camera-relative; UI/model previews already include the camera view. */
-        return BBSRendering.isRenderingWorld() && !context.modelRenderer && !context.ui;
     }
 
     private void updateTexture(float transition)

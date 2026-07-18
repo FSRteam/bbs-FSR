@@ -107,7 +107,7 @@ public class BBSCommands
         RequiredArgumentBuilder<CommandSourceStack, String> state = Commands.argument("state", StringArgumentType.string());
 
         LiteralArgumentBuilder<CommandSourceStack> refresh = Commands.literal("refresh");
-        RequiredArgumentBuilder<CommandSourceStack, Integer> randomRange = Commands.argument("random_range", IntegerArgumentType.integer());
+        RequiredArgumentBuilder<CommandSourceStack, Integer> randomRange = Commands.argument("random_range", IntegerArgumentType.integer(0, ServerNetwork.MAX_MODEL_BLOCK_REFRESH_TICKS));
 
         state.suggests((ctx, builder) ->
         {
@@ -456,10 +456,11 @@ public class BBSCommands
     {
         Collection<ServerPlayer> players = EntityArgument.getPlayers(source, "target");
         String filmId = StringArgumentType.getString(source, "film");
+        ServerPlayer requester = source.getSource().getEntity() instanceof ServerPlayer player ? player : null;
 
-        for (ServerPlayer player : players)
+        for (ServerPlayer target : players)
         {
-            ServerNetwork.sendPlayFilm(player, filmId, withCamera);
+            ServerNetwork.sendPlayFilm(target, requester, filmId, withCamera);
         }
 
         return 1;
@@ -469,13 +470,17 @@ public class BBSCommands
     {
         Collection<ServerPlayer> players = EntityArgument.getPlayers(source, "target");
         String filmId = StringArgumentType.getString(source, "film");
+        int stopped = 0;
 
         for (ServerPlayer player : players)
         {
-            ServerNetwork.sendStopFilm(player, filmId);
+            if (ServerNetwork.stopFilmForPlayer(player, filmId))
+            {
+                stopped += 1;
+            }
         }
 
-        return 1;
+        return stopped;
     }
 
     private static int DCCommandShutdown(CommandContext<CommandSourceStack> source)

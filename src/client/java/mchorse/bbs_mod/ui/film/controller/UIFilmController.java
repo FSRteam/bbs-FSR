@@ -236,7 +236,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     {
         List<Replay> list = this.panel.getData().replays.getList();
 
-        int index = list.indexOf(this.getReplay());
+        int index = CollectionUtils.getIndex(list, this.getReplay());
         int newIndex = MathUtils.cycler(index + direction, list);
         Replay replay = list.get(newIndex);
 
@@ -340,7 +340,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         Replay replay = this.getReplay();
 
-        return replay == null ? -1 : this.panel.getData().replays.getList().indexOf(replay);
+        return replay == null ? -1 : CollectionUtils.getIndex(this.panel.getData().replays.getList(), replay);
     }
 
     public StencilFormFramebuffer getStencil()
@@ -368,6 +368,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
     public void setPov(int pov)
     {
         int mode = Math.floorMod(pov, CAMERA_MODE_COUNT);
+
+        if (mode != this.getPovMode())
+        {
+            this.cancelOrbitGesture();
+        }
 
         this.pov = mode;
         this.orbit.enabled = mode > CAMERA_MODE_FREE;
@@ -573,7 +578,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
             Minecraft.getInstance().setScreen(null);
 
             Replay replay = this.panel.replayEditor.getReplay();
-            int index = this.panel.getData().replays.getList().indexOf(replay);
+            int index = CollectionUtils.getIndex(this.panel.getData().replays.getList(), replay);
 
             if (index >= 0)
             {
@@ -791,26 +796,125 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.gizmo.stop();
     }
 
+    public void resetOrbit()
+    {
+        long generation = this.orbit.gestureGeneration();
+
+        this.orbit.reset();
+
+        if (generation != 0L && this.panel.replayEditor != null)
+        {
+            this.panel.replayEditor.cancelViewportPick(generation);
+        }
+    }
+
+    private void cancelOrbitGesture()
+    {
+        long generation = this.orbit.gestureGeneration();
+
+        this.orbit.stop();
+
+        if (generation != 0L && this.panel.replayEditor != null)
+        {
+            this.panel.replayEditor.cancelViewportPick(generation);
+        }
+    }
+
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
-        if (this.canControl())
+        boolean controlling = this.canControl();
+        long orbitGeneration = this.orbit.gestureGeneration();
+        boolean orbitDragged = this.orbit.wasDragged();
+        boolean consumed = false;
+        boolean orbitReleased = false;
+        boolean inherited = false;
+        Throwable failure = null;
+
+        try
         {
-            return true;
+            consumed = this.gizmo.mouseReleased(context);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = mergeInputFailure(failure, exception);
         }
 
-        boolean consumed = this.gizmo.mouseReleased(context);
-
-        this.stopGizmoInteraction();
-        this.panel.replayEditor.releaseViewport(context, this.orbit.wasDragged());
-        this.orbit.stop();
-
-        if (this.panel.isFlying() && context.mouseButton == 2)
+        try
         {
-            this.panel.dashboard.orbit.release();
+            orbitReleased = this.orbit.stop(context.mouseButton, orbitGeneration);
+
+            if (orbitReleased)
+            {
+                this.panel.replayEditor.releaseViewport(context, orbitDragged, orbitGeneration);
+            }
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = mergeInputFailure(failure, exception);
         }
 
-        return consumed || super.subMouseReleased(context);
+        try
+        {
+            if (this.panel.isFlying() && context.mouseButton == 2)
+            {
+                this.panel.dashboard.orbit.release();
+            }
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = mergeInputFailure(failure, exception);
+        }
+
+        if (!controlling)
+        {
+            try
+            {
+                inherited = super.subMouseReleased(context);
+            }
+            catch (RuntimeException | Error exception)
+            {
+                failure = mergeInputFailure(failure, exception);
+            }
+        }
+
+        rethrowInputFailure(failure);
+
+        return controlling || consumed || orbitReleased || inherited;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.gizmo.stop();
+        super.subMouseCanceled(context);
+    }
+
+    private static Throwable mergeInputFailure(Throwable failure, Throwable exception)
+    {
+        if (failure == null)
+        {
+            return exception;
+        }
+
+        if (failure != exception)
+        {
+            failure.addSuppressed(exception);
+        }
+
+        return failure;
+    }
+
+    private static void rethrowInputFailure(Throwable failure)
+    {
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+        else if (failure instanceof Error error)
+        {
+            throw error;
+        }
     }
 
     @Override
@@ -1621,9 +1725,23 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return keyframeEditor != null ? keyframeEditor.getBone() : null;
     }
 
+    public boolean isAnchorGizmo()
+    {
+        UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
+
+        return keyframeEditor != null && keyframeEditor.isFormAnchorTrack();
+    }
+
+    public boolean getAnchorLocal()
+    {
+        UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
+
+        return keyframeEditor != null && keyframeEditor.getAnchorLocal();
+    }
+
     private boolean canShowGizmo()
     {
-        return UIBaseMenu.shouldRenderAxes() && !this.isRecording() && this.getBone() != null;
+        return UIBaseMenu.shouldRenderAxes() && !this.isRecording() && (this.getBone() != null || this.isAnchorGizmo());
     }
 
     private void renderStencil(IBbsWorldRenderContext renderContext, UIContext context, boolean altPressed)
@@ -1700,7 +1818,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
                         this.stencilMap.objectIndex = replays.size() + REPLAY_STENCIL_OFFSET;
                         this.stencilMap.setIncrement(true);
 
-                        filmContext.bone(bone == null ? null : bone.a, bone != null && bone.b);
+                        filmContext
+                            .bone(bone == null ? null : bone.a, bone != null && bone.b)
+                            .anchorGizmo(this.isAnchorGizmo(), this.getAnchorLocal());
                     }
                     else
                     {
@@ -1722,7 +1842,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
                     .transition(isPlaying ? renderContext.tickDelta() : 0)
                     .stencil(this.stencilMap)
                     .relative(selectedReplay.relative.get())
-                    .bone(bone == null ? null : bone.a, bone != null && bone.b));
+                    .bone(bone == null ? null : bone.a, bone != null && bone.b)
+                    .anchorGizmo(this.isAnchorGizmo(), this.getAnchorLocal()));
             }
 
             int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);

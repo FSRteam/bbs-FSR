@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.cubic.physics;
 
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
+import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
 import net.minecraft.core.BlockPos;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -32,6 +33,7 @@ class ChainState
 
     /** Per-chain containers and math scratch are retained after warm-up; none is shared across owners. */
     public final List<PivotFrame> chainFrames = new ArrayList<>();
+    public final ModelRotationBlender.Workspace rotationWorkspace = new ModelRotationBlender.Workspace();
     public final Vector3f pinTarget = new Vector3f();
     public final Quaternionf inverseAnchor = new Quaternionf();
     public final Vector3f localScratch = new Vector3f();

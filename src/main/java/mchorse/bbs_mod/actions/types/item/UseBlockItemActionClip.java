@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.actions.types.item;
 
+import mchorse.bbs_mod.actions.ActionCommandContext;
+import mchorse.bbs_mod.actions.InteractionActionSemantics;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.values.ValueBlockHitResult;
 import mchorse.bbs_mod.film.Film;
@@ -33,17 +35,42 @@ public class UseBlockItemActionClip extends ItemActionClip
     @Override
     public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
+        if (!ActionCommandContext.isAuthorizedFor(player))
+        {
+            return;
+        }
+
+        InteractionActionSemantics.withIsolatedInteractionState(player, () ->
+            this.applyIsolatedAction(actor, player, film, replay, tick));
+    }
+
+    private void applyIsolatedAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    {
         InteractionHand hand = this.hand.get() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
         ItemStack copy = this.itemStack.get().copy();
 
-        GunItem.actor = actor;
+        if (!this.applyInteractionPositionRotation(player, replay, tick))
+        {
+            return;
+        }
+        if (!InteractionActionSemantics.canReplayBlock(player, this.hit.getHitResult())
+            || !copy.isItemEnabled(player.serverLevel().enabledFeatures()))
+        {
+            return;
+        }
 
-        this.applyPositionRotation(player, replay, tick);
+        ItemStack previous = player.getItemInHand(hand);
         player.setItemInHand(hand, copy);
-        this.itemStack.get().useOn(new UseOnContext(player.level(), player, hand, copy, this.hit.getHitResult()));
-        player.setItemInHand(hand, ItemStack.EMPTY);
 
-        GunItem.actor = null;
+        try
+        {
+            InteractionActionSemantics.withIsolatedItemCooldown(player, copy, () ->
+                GunItem.withActor(actor, () -> copy.useOn(new UseOnContext(player.level(), player, hand, copy, this.hit.getHitResult()))));
+        }
+        finally
+        {
+            player.setItemInHand(hand, previous);
+        }
     }
 
     @Override

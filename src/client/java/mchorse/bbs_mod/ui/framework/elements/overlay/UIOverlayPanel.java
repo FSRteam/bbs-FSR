@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.events.UIOverlayCloseEvent;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -25,6 +26,7 @@ public class UIOverlayPanel extends UIElement
     public UIElement content;
 
     private boolean moving;
+    private final MouseGestureOwnership moveOwnership = new MouseGestureOwnership();
     private int lastX;
     private int lastY;
 
@@ -80,7 +82,7 @@ public class UIOverlayPanel extends UIElement
     {
         if (this.title.area.isInside(context))
         {
-            if (Window.isCtrlPressed())
+            if (context.mouseButton == GLFW.GLFW_MOUSE_BUTTON_RIGHT && Window.isCtrlPressed())
             {
                 this.flex.x.offset = this.initialOffsetX;
                 this.flex.y.offset = this.initialOffsetY;
@@ -90,11 +92,15 @@ public class UIOverlayPanel extends UIElement
                 return true;
             }
 
-            this.moving = true;
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
+            if (context.mouseButton == GLFW.GLFW_MOUSE_BUTTON_LEFT
+                && this.moveOwnership.acquire(context.mouseButton))
+            {
+                this.moving = true;
+                this.lastX = context.mouseX;
+                this.lastY = context.mouseY;
 
-            return true;
+                return true;
+            }
         }
 
         return super.subMouseClicked(context);
@@ -103,9 +109,23 @@ public class UIOverlayPanel extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        this.moving = super.subMouseReleased(context);
+        if (!this.moveOwnership.release(context.mouseButton))
+        {
+            return super.subMouseReleased(context);
+        }
 
-        return false;
+        this.moving = false;
+
+        return true;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (this.moveOwnership.release(context.mouseButton))
+        {
+            this.moving = false;
+        }
     }
 
     @Override

@@ -121,76 +121,88 @@ public class ParticleComponentMotionCollision extends ParticleComponentBase impl
 
         if (emitter.world == null)
         {
+            particle.updateCollisionEventCrossing(false);
+
             return;
         }
 
-        if (!particle.manualPosition && !Operation.equals(this.enabled.get(), 0))
+        if (particle.manualPosition || Operation.equals(this.enabled.get(), 0))
         {
-            float r = this.radius;
+            particle.updateCollisionEventCrossing(false);
 
-            this.previous.set(particle.getGlobalPosition(emitter, particle.prevPosition));
-            this.current.set(particle.getGlobalPosition(emitter));
+            return;
+        }
 
-            Vector3d prev = this.previous;
-            Vector3d now = this.current;
+        float r = this.radius;
 
-            double x = now.x - prev.x;
-            double y = now.y - prev.y;
-            double z = now.z - prev.z;
-            boolean veryBig = Math.abs(x) > 10 || Math.abs(y) > 10 || Math.abs(z) > 10;
+        this.previous.set(particle.getGlobalPosition(emitter, particle.prevPosition));
+        this.current.set(particle.getGlobalPosition(emitter));
 
-            if (veryBig)
+        Vector3d prev = this.previous;
+        Vector3d now = this.current;
+
+        double x = now.x - prev.x;
+        double y = now.y - prev.y;
+        double z = now.z - prev.z;
+        boolean veryBig = Math.abs(x) > 10 || Math.abs(y) > 10 || Math.abs(z) > 10;
+
+        if (veryBig)
+        {
+            particle.updateCollisionEventCrossing(false);
+
+            return;
+        }
+
+        AABB box = new AABB(prev.x - r, prev.y - r, prev.z - r, prev.x + r, prev.y + r, prev.z + r);
+        Vec3 vec = Entity.collideBoundingBox(null, new Vec3(x, y, z), box, emitter.world, Collections.emptyList());
+
+        boolean hadCollision = vec.x != x || vec.y != y || vec.z != z;
+        boolean collisionEventCrossing = particle.updateCollisionEventCrossing(hadCollision);
+
+        if (hadCollision && !particle.intersected)
+        {
+            particle.firstIntersection = particle.age;
+            particle.intersected = true;
+        }
+
+        if (hadCollision)
+        {
+            this.collision(particle, emitter, prev, particle.speed.length(), collisionEventCrossing);
+
+            now.set(prev.x + vec.x, prev.y + vec.y, prev.z + vec.z);
+
+            if (vec.y != y)
             {
-                return;
+                this.collisionHandler(particle, 1, now);
+            }
+            if (vec.x != x)
+            {
+                this.collisionHandler(particle, 0, now);
+            }
+            if (vec.z != z)
+            {
+                this.collisionHandler(particle, 2, now);
             }
 
-            AABB box = new AABB(prev.x - r, prev.y - r, prev.z - r, prev.x + r, prev.y + r, prev.z + r);
-            Vec3 vec = Entity.collideBoundingBox(null, new Vec3(x, y, z), box, emitter.world, Collections.emptyList());
-
-            boolean hadCollision = vec.x != x || vec.y != y || vec.z != z;
-
-            if (hadCollision && !particle.intersected)
-            {
-                particle.firstIntersection = particle.age;
-                particle.intersected = true;
-            }
-
-            if (hadCollision)
-            {
-                this.collision(particle, emitter, prev, particle.speed.length());
-
-                now.set(prev.x + vec.x, prev.y + vec.y, prev.z + vec.z);
-
-                if (vec.y != y)
-                {
-                    this.collisionHandler(particle, 1, now);
-                }
-                if (vec.x != x)
-                {
-                    this.collisionHandler(particle, 0, now);
-                }
-                if (vec.z != z)
-                {
-                    this.collisionHandler(particle, 2, now);
-                }
-
-                particle.position.set(now);
-                this.drag(particle);
-            }
-            else if (this.realisticCollisionDrag)
-            {
-                particle.dragFactor = 0;
-            }
-            else
-            {
-                particle.rotationCollisionDrag = 0;
-            }
+            particle.position.set(now);
+            this.drag(particle);
+        }
+        else if (this.realisticCollisionDrag)
+        {
+            particle.dragFactor = 0;
+        }
+        else
+        {
+            particle.rotationCollisionDrag = 0;
         }
     }
 
-    private void collision(Particle particle, ParticleEmitter emitter, Vector3d prev, double speed)
+    private void collision(Particle particle, ParticleEmitter emitter, Vector3d prev, double speed, boolean dispatchEvents)
     {
-        ParticleEventDispatcher.dispatch(emitter, particle, this.collisionEvents, speed);
+        if (dispatchEvents)
+        {
+            ParticleEventDispatcher.dispatch(emitter, particle, this.collisionEvents, speed);
+        }
 
         if (this.expireOnImpact)
         {

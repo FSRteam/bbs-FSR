@@ -1,11 +1,15 @@
 package mchorse.bbs_mod.ui.film;
 
+import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.UIScreen;
+import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -85,11 +89,22 @@ public class FilmQueueExporter
 
         UIFilmRecorder recorder = this.panel.recorder;
 
+        BBSRendering.cancelPendingExportResolutionActions();
+
+        if (this.state == State.FINISHED)
+        {
+            return;
+        }
+
         recorder.setFinishedListener(null);
 
         if (recorder.isExporting())
         {
             recorder.cancel();
+        }
+        else
+        {
+            recorder.cancelPendingExport();
         }
 
         this.finish(true);
@@ -162,28 +177,114 @@ public class FilmQueueExporter
 
         recorder.setFinishedListener(this::onRecordingFinished);
 
-        UIFilmPanel.applyExportSizeToBBS();
-        BBSRendering.scheduleAfterNextExportFrame(() ->
+        BBSRendering.cancelPendingExportResolutionActions();
+
+        if (!recorder.reserveExport())
         {
-            if (this.state != State.RECORDING)
-            {
-                return;
-            }
+            recorder.setFinishedListener(null);
+            this.notify(this.panel.getContext(), UIKeys.FILM_RENDER_QUEUE_CANCELLED, true);
+            this.finish(true);
 
-            recorder.startRecording(
-                duration,
-                BBSRendering.getTexture().id,
-                BBSRendering.getVideoWidth(),
-                BBSRendering.getVideoHeight()
+            return;
+        }
+
+        boolean scheduled = false;
+
+        try
+        {
+            UIFilmPanel.applyExportSizeToBBS();
+            BBSRendering.scheduleAfterNextExportFrame(
+                () -> this.isPendingRecordingValid(recorder),
+                () ->
+                {
+                    if (this.state != State.RECORDING)
+                    {
+                        return;
+                    }
+
+                    boolean started = recorder.tryStartRecording(
+                        duration,
+                        BBSRendering.getTexture().id,
+                        BBSRendering.getVideoWidth(),
+                        BBSRendering.getVideoHeight()
+                    );
+
+                    if (!started && this.state == State.RECORDING)
+                    {
+                        this.panel.restorePreviewSize();
+                        recorder.setFinishedListener(null);
+                        this.notify(this.panel.getContext(), UIKeys.FILM_RENDER_QUEUE_CANCELLED, true);
+                        this.finish(true);
+                    }
+                },
+                () -> this.abortPendingRecording(recorder, this.isPanelOwnerValid())
             );
-
-            if (!recorder.isExporting())
+            scheduled = true;
+        }
+        finally
+        {
+            if (!scheduled)
             {
-                recorder.setFinishedListener(null);
-                this.notify(this.panel.getContext(), UIKeys.FILM_RENDER_QUEUE_CANCELLED, true);
-                this.finish(true);
+                this.abortPendingRecording(recorder, true);
             }
-        });
+        }
+    }
+
+    private boolean isPendingRecordingValid(UIFilmRecorder recorder)
+    {
+        UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
+
+        return this.state == State.RECORDING
+            && !recorder.isExporting()
+            && this.isPanelOwnerValid(dashboard);
+    }
+
+    private boolean isPanelOwnerValid()
+    {
+        return this.isPanelOwnerValid(BBSModClient.getDashboardIfCreated());
+    }
+
+    private boolean isPanelOwnerValid(UIDashboard dashboard)
+    {
+        return Minecraft.getInstance().level != null
+            && dashboard != null
+            && UIScreen.getCurrentMenu() == dashboard
+            && dashboard.getPanels().panel == this.panel
+            && this.panel.getContext() != null;
+    }
+
+    private void abortPendingRecording(UIFilmRecorder recorder, boolean finishQueue)
+    {
+        try
+        {
+            recorder.cancelPendingExport();
+        }
+        finally
+        {
+            recorder.setFinishedListener(null);
+
+            try
+            {
+                if (this.isPanelOwnerValid())
+                {
+                    this.panel.restorePreviewSize();
+                }
+            }
+            finally
+            {
+                if (finishQueue && this.state == State.RECORDING)
+                {
+                    try
+                    {
+                        this.notify(this.panel.getContext(), UIKeys.FILM_RENDER_QUEUE_CANCELLED, true);
+                    }
+                    finally
+                    {
+                        this.finish(true);
+                    }
+                }
+            }
+        }
     }
 
     private void onRecordingFinished(boolean cancelled)
@@ -206,25 +307,31 @@ public class FilmQueueExporter
     private void finish(boolean aborted)
     {
         this.state = State.FINISHED;
-        this.setMainInteractive(true);
 
-        if (this.returnToFilmId != null)
+        try
         {
-            Film current = this.panel.getData();
-            String currentId = current == null ? null : current.getId();
+            this.setMainInteractive(true);
 
-            if (!this.returnToFilmId.equals(currentId))
+            if (this.returnToFilmId != null)
             {
-                int idx = this.findTabIndex(this.returnToFilmId);
+                Film current = this.panel.getData();
+                String currentId = current == null ? null : current.getId();
 
-                if (idx >= 0)
+                if (!this.returnToFilmId.equals(currentId))
                 {
-                    this.panel.switchTab(idx);
+                    int idx = this.findTabIndex(this.returnToFilmId);
+
+                    if (idx >= 0)
+                    {
+                        this.panel.switchTab(idx);
+                    }
                 }
             }
         }
-
-        this.panel.clearQueueExporter(this);
+        finally
+        {
+            this.panel.clearQueueExporter(this);
+        }
     }
 
     private void setMainInteractive(boolean interactive)

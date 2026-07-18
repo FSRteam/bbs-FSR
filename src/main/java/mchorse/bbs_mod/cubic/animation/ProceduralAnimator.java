@@ -10,6 +10,7 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -269,22 +270,22 @@ public class ProceduralAnimator implements IAnimator
 
             if (handSwingProgress > 0F && torso != null && leftArm != null && rightArm != null)
             {
-                ModelGroup group;
+                boolean offHandSwing = target.getSwingingArm() == InteractionHand.OFF_HAND;
+                ModelGroup attackArm = offHandSwing ? leftArm : rightArm;
+                ModelGroup oppositeArm = offHandSwing ? rightArm : leftArm;
+                float direction = offHandSwing ? -1F : 1F;
                 float swingFactor = handSwingProgress;
 
-                torso.current.rotate.y = -MathUtils.toDeg(Mth.sin(Mth.sqrt(swingFactor) * MathUtils.PI * 2F) * 0.2F);
+                torso.current.rotate.y = -MathUtils.toDeg(Mth.sin(Mth.sqrt(swingFactor) * MathUtils.PI * 2F) * 0.2F) * direction;
 
                 leftArm.current.translate.z += (float) Math.sin(MathUtils.toRad(torso.current.rotate.y)) * 5F;
                 leftArm.current.translate.x += (float) Math.cos(MathUtils.toRad(torso.current.rotate.y)) * 5F - 5F;
                 rightArm.current.translate.z -= (float) Math.sin(MathUtils.toRad(torso.current.rotate.y)) * 5F;
                 rightArm.current.translate.x -= (float) Math.cos(MathUtils.toRad(torso.current.rotate.y)) * 5F - 5F;
 
-                group = rightArm;
-                group.current.rotate.y += torso.current.rotate.y;
-                group = leftArm;
-                group.current.rotate.y += torso.current.rotate.y;
-                group = leftArm;
-                group.current.rotate.x += torso.current.rotate.y;
+                rightArm.current.rotate.y += torso.current.rotate.y;
+                leftArm.current.rotate.y += torso.current.rotate.y;
+                oppositeArm.current.rotate.x += torso.current.rotate.y;
 
                 swingFactor = 1F - handSwingProgress;
                 swingFactor *= swingFactor;
@@ -294,9 +295,9 @@ public class ProceduralAnimator implements IAnimator
                 float headPitch = 0F;
                 float swing1 = Mth.sin(swingFactor * MathUtils.PI);
                 float swign2 = Mth.sin(handSwingProgress * MathUtils.PI) * -(headPitch - 0.7F) * 0.75F;
-                rightArm.current.rotate.x = group.current.rotate.x + MathUtils.toDeg(swing1 * 1.2F + swign2);
-                rightArm.current.rotate.y += torso.current.rotate.y * 2F;
-                rightArm.current.rotate.z += MathUtils.toDeg(Mth.sin(handSwingProgress * MathUtils.PI) * -0.4F);
+                attackArm.current.rotate.x = oppositeArm.current.rotate.x + MathUtils.toDeg(swing1 * 1.2F + swign2);
+                attackArm.current.rotate.y += torso.current.rotate.y * 2F;
+                attackArm.current.rotate.z += MathUtils.toDeg(Mth.sin(handSwingProgress * MathUtils.PI) * -0.4F) * direction;
             }
         }
         /* For BOBJ models */
@@ -406,21 +407,21 @@ public class ProceduralAnimator implements IAnimator
 
             if (handSwingProgress > 0F && bobjLeftArm != null && bobjRightArm != null)
             {
-                BOBJBone group;
+                boolean offHandSwing = target.getSwingingArm() == InteractionHand.OFF_HAND;
+                BOBJBone attackArm = offHandSwing ? bobjLeftArm : bobjRightArm;
+                BOBJBone oppositeArm = offHandSwing ? bobjRightArm : bobjLeftArm;
+                float direction = offHandSwing ? -1F : 1F;
                 float swingFactor = handSwingProgress;
-                float rotate = -MathUtils.toDeg(Mth.sin(Mth.sqrt(swingFactor) * MathUtils.PI * 2F) * 0.2F);
+                float rotate = -MathUtils.toDeg(Mth.sin(Mth.sqrt(swingFactor) * MathUtils.PI * 2F) * 0.2F) * direction;
 
                 bobjLeftArm.transform.translate.z -= ((float) Math.sin(MathUtils.toRad(rotate)) * 5F) / 16F;
                 bobjLeftArm.transform.translate.x -= ((float) Math.cos(MathUtils.toRad(rotate)) * 5F - 5F) / 16F;
                 bobjRightArm.transform.translate.z += ((float) Math.sin(MathUtils.toRad(rotate)) * 5F) / 16F;
                 bobjRightArm.transform.translate.x += ((float) Math.cos(MathUtils.toRad(rotate)) * 5F - 5F) / 16F;
 
-                group = bobjRightArm;
-                group.transform.rotate.y -= MathUtils.toRad(rotate);
-                group = bobjLeftArm;
-                group.transform.rotate.y -= MathUtils.toRad(rotate);
-                group = bobjLeftArm;
-                group.transform.rotate.x += MathUtils.toRad(rotate);
+                bobjRightArm.transform.rotate.y -= MathUtils.toRad(rotate);
+                bobjLeftArm.transform.rotate.y -= MathUtils.toRad(rotate);
+                oppositeArm.transform.rotate.x += MathUtils.toRad(rotate);
 
                 swingFactor = 1F - handSwingProgress;
                 swingFactor *= swingFactor;
@@ -430,9 +431,9 @@ public class ProceduralAnimator implements IAnimator
                 float headPitch = 0F;
                 float swing1 = Mth.sin(swingFactor * MathUtils.PI);
                 float swign2 = Mth.sin(handSwingProgress * MathUtils.PI) * -(headPitch - 0.7F) * 0.75F;
-                bobjRightArm.transform.rotate.x = MathUtils.toRad(group.transform.rotate.x + MathUtils.toDeg(swing1 * 1.2F + swign2));
-                bobjRightArm.transform.rotate.y -= MathUtils.toRad(rotate * 2F);
-                bobjRightArm.transform.rotate.z -= Mth.sin(handSwingProgress * MathUtils.PI) * -0.4F;
+                attackArm.transform.rotate.x = MathUtils.toRad(oppositeArm.transform.rotate.x + MathUtils.toDeg(swing1 * 1.2F + swign2));
+                attackArm.transform.rotate.y -= MathUtils.toRad(rotate * 2F);
+                attackArm.transform.rotate.z -= Mth.sin(handSwingProgress * MathUtils.PI) * -0.4F * direction;
             }
         }
 

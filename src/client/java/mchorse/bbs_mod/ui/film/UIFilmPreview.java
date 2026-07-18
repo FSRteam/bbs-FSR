@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioRenderer;
+import mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
@@ -19,6 +20,7 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.settings.ui.UISettingsOverlayPanel;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.controller.UIMotionPathContextMenu;
 import mchorse.bbs_mod.ui.film.controller.UIOnionSkinContextMenu;
@@ -192,11 +194,39 @@ public class UIFilmPreview extends UIElement
             }
 
             int duration = this.panel.getData().camera.calculateDuration();
-            UIFilmPanel.applyExportSizeToBBS();
-            BBSRendering.scheduleAfterNextExportFrame(() ->
+
+            BBSRendering.cancelPendingExportResolutionActions();
+
+            if (!this.panel.recorder.reserveExport())
             {
-                this.panel.recorder.startRecording(duration, BBSRendering.getTexture().id, BBSRendering.getVideoWidth(), BBSRendering.getVideoHeight());
-            });
+                return;
+            }
+
+            boolean scheduled = false;
+
+            try
+            {
+                UIFilmPanel.applyExportSizeToBBS();
+                BBSRendering.scheduleAfterNextExportFrame(
+                    this::isExportOwnerValid,
+                    () ->
+                    {
+                        if (!this.panel.recorder.tryStartRecording(duration, BBSRendering.getTexture().id, BBSRendering.getVideoWidth(), BBSRendering.getVideoHeight()))
+                        {
+                            this.panel.restorePreviewSize();
+                        }
+                    },
+                    this::cancelPendingVideoExport
+                );
+                scheduled = true;
+            }
+            finally
+            {
+                if (!scheduled)
+                {
+                    this.cancelPendingVideoExport();
+                }
+            }
         });
         this.recordVideo.tooltip(UIKeys.CAMERA_TOOLTIPS_RECORD);
         this.recordVideo.context((menu) ->
@@ -206,26 +236,44 @@ public class UIFilmPreview extends UIElement
                 ScreenshotRecorder recorder = BBSModClient.getScreenshotRecorder();
                 File output = Window.isAltPressed() ? null : recorder.getScreenshotFile();
 
-                UIFilmPanel.applyExportSizeToBBS();
-                BBSRendering.scheduleAfterNextExportFrame(() ->
-                {
-                    Texture texture = BBSRendering.getTexture();
-                    int w = BBSRendering.getVideoWidth();
-                    int h = BBSRendering.getVideoHeight();
-                    recorder.takeScreenshot(output, texture.id, w, h);
-                    this.panel.restorePreviewSize();
+                BBSRendering.cancelPendingExportResolutionActions();
+                boolean scheduled = false;
 
-                    UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
-                    if (currentMenu != null)
+                try
+                {
+                    UIFilmPanel.applyExportSizeToBBS();
+                    BBSRendering.scheduleAfterNextExportFrame(
+                        this::isPanelOwnerValid,
+                        () ->
+                        {
+                            Texture texture = BBSRendering.getTexture();
+                            int w = BBSRendering.getVideoWidth();
+                            int h = BBSRendering.getVideoHeight();
+                            recorder.takeScreenshot(output, texture.id, w, h);
+                            this.panel.restorePreviewSize();
+
+                            UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
+                            if (currentMenu != null)
+                            {
+                                UIMessageFolderOverlayPanel overlayPanel = new UIMessageFolderOverlayPanel(
+                                    UIKeys.FILM_SCREENSHOT_TITLE,
+                                    UIKeys.FILM_SCREENSHOT_DESCRIPTION,
+                                    recorder.getScreenshots()
+                                );
+                                UIOverlay.addOverlay(currentMenu.context, overlayPanel);
+                            }
+                        },
+                        this::restorePreviewIfOwned
+                    );
+                    scheduled = true;
+                }
+                finally
+                {
+                    if (!scheduled)
                     {
-                        UIMessageFolderOverlayPanel overlayPanel = new UIMessageFolderOverlayPanel(
-                            UIKeys.FILM_SCREENSHOT_TITLE,
-                            UIKeys.FILM_SCREENSHOT_DESCRIPTION,
-                            recorder.getScreenshots()
-                        );
-                        UIOverlay.addOverlay(currentMenu.context, overlayPanel);
+                        this.restorePreviewIfOwned();
                     }
-                });
+                }
             });
 
             menu.action(Icons.FILM, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEOS, () -> this.panel.recorder.openMovies());
@@ -247,6 +295,37 @@ public class UIFilmPreview extends UIElement
 
         this.icons.add(this.onionSkin, this.motionPath, this.plause, this.teleport, this.flight, this.control, this.perspective, this.recordReplay, this.recordVideo);
         this.add(this.icons);
+    }
+
+    private boolean isPanelOwnerValid()
+    {
+        Minecraft mc = Minecraft.getInstance();
+        UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
+
+        return mc.level != null
+            && dashboard != null
+            && UIScreen.getCurrentMenu() == dashboard
+            && dashboard.getPanels().panel == this.panel
+            && this.panel.getContext() != null;
+    }
+
+    private boolean isExportOwnerValid()
+    {
+        return this.isPanelOwnerValid() && !this.panel.recorder.isExporting();
+    }
+
+    private void cancelPendingVideoExport()
+    {
+        this.panel.recorder.cancelPendingExport();
+        this.restorePreviewIfOwned();
+    }
+
+    private void restorePreviewIfOwned()
+    {
+        if (this.isPanelOwnerValid())
+        {
+            this.panel.restorePreviewSize();
+        }
     }
 
     public void openOnionSkin()
@@ -363,7 +442,21 @@ public class UIFilmPreview extends UIElement
 
         if (texture != null)
         {
-            context.batcher.texturedBox(texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, texture.height, texture.width, 0, texture.width, texture.height);
+            context.batcher.surfaceBox(
+                BBSRenderSurfaceKind.FILM_PREVIEW,
+                texture.id,
+                Colors.WHITE,
+                area.x,
+                area.y,
+                area.w,
+                area.h,
+                0,
+                texture.height,
+                texture.width,
+                0,
+                texture.width,
+                texture.height
+            );
         }
 
         this.renderCursor(context);

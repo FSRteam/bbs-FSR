@@ -1,9 +1,18 @@
 package mchorse.bbs_mod.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import mchorse.bbs_mod.actions.AttackRecordingContext;
+import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.IMorphProvider;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,6 +29,35 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Player.class)
 public class PlayerEntityMixin
 {
+    @WrapMethod(method = "attack")
+    private void bbs$capturePrimaryAttackTarget(Entity target, Operation<Void> original)
+    {
+        AttackRecordingContext.withPrimaryTarget(target, () -> original.call(target));
+    }
+
+    @WrapOperation(
+        method = "attack",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/Entity;hurt(Lnet/minecraft/world/damagesource/DamageSource;F)Z"
+        )
+    )
+    private boolean bbs$recordNonLivingAttack(Entity target, DamageSource source, float amount, Operation<Boolean> original)
+    {
+        boolean successful = original.call(target, source, amount);
+
+        if (AttackRecordingContext.shouldRecordNonLivingAttack(successful, target instanceof LivingEntity)
+            && (Object) this instanceof ServerPlayer player
+            && !(player instanceof SuperFakePlayer)
+            && source.getEntity() == player
+            && source.getDirectEntity() == player)
+        {
+            AttackRecordingContext.recordDamage(player, target, amount);
+        }
+
+        return successful;
+    }
+
     @Inject(method = "addAdditionalSaveData", at = @At("TAIL"))
     public void onAddAdditionalSaveData(CompoundTag nbt, CallbackInfo info)
     {

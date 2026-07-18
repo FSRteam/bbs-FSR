@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiRemoteHeldState;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.MathBuilder;
@@ -1565,14 +1566,19 @@ public class UIPropTransform extends UITransform
              *
              * It gets updated outside the window only when one of mouse buttons is
              * being held! */
-            GLFW.glfwGetCursorPos(Window.getWindow(), CURSOR_X, CURSOR_Y);
+            boolean remoteInput = BBSUiRemoteHeldState.isActive();
+
+            if (!remoteInput)
+            {
+                GLFW.glfwGetCursorPos(Window.getWindow(), CURSOR_X, CURSOR_Y);
+            }
 
             Minecraft mc = Minecraft.getInstance();
             int w = mc.getWindow().getScreenWidth();
             int h = mc.getWindow().getScreenHeight();
 
-            double rawX = CURSOR_X[0];
-            double rawY = CURSOR_Y[0];
+            double rawX = remoteInput ? w / 2D : CURSOR_X[0];
+            double rawY = remoteInput ? h / 2D : CURSOR_Y[0];
             double fx = Math.ceil(w / (double) context.menu.width);
             double fy = Math.ceil(h / (double) context.menu.height);
             int border = 5;
@@ -1580,7 +1586,7 @@ public class UIPropTransform extends UITransform
 
             this.updateFineCursor(context.mouseX, context.mouseY);
 
-            if (rawX <= border)
+            if (!remoteInput && rawX <= border)
             {
                 Window.moveCursor(w - borderPadding, (int) mc.mouseHandler.ypos());
 
@@ -1590,7 +1596,7 @@ public class UIPropTransform extends UITransform
 
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
-            else if (rawX >= w - border)
+            else if (!remoteInput && rawX >= w - border)
             {
                 Window.moveCursor(borderPadding, (int) mc.mouseHandler.ypos());
 
@@ -1600,7 +1606,7 @@ public class UIPropTransform extends UITransform
 
                 if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
             }
-            else if (rawY <= border)
+            else if (!remoteInput && rawY <= border)
             {
                 Window.moveCursor((int) mc.mouseHandler.xpos(), h - borderPadding);
 
@@ -1610,7 +1616,7 @@ public class UIPropTransform extends UITransform
 
                 if (this.useRayDrag()) this.beginRayDrag(context.mouseX, this.lastY);
             }
-            else if (rawY >= h - border)
+            else if (!remoteInput && rawY >= h - border)
             {
                 Window.moveCursor((int) mc.mouseHandler.xpos(), borderPadding);
 

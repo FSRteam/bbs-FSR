@@ -15,7 +15,9 @@ import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationBridge;
 import mchorse.bbs_mod.client.renderer.MorphRenderer;
+import mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
@@ -28,6 +30,7 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.network.ClientNetwork;
+import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
@@ -93,6 +96,7 @@ import java.util.LinkedHashMap;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -158,6 +162,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private boolean newFilm;
     private double timelineXMin = Double.NaN;
     private double timelineXMax = Double.NaN;
+    private final FilmEditorMigrationLogic.TimelineScrollMemory timelineScrollByFilm = new FilmEditorMigrationLogic.TimelineScrollMemory();
     private FilmQueueExporter queueExporter;
 
     /* Docking: layout panels and drag-to-swap/split */
@@ -505,7 +510,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             @Override
             protected boolean subMouseScrolled(UIContext context)
             {
-                if (Window.isCtrlPressed() && !UIFilmPanel.this.isFlying())
+                if (FilmEditorMigrationLogic.shouldMoveCursorWithWheel(
+                    Window.isCtrlPressed(),
+                    UIFilmPanel.this.isFlying(),
+                    UIFilmPanel.this.isCursorOverTimeline(context)
+                ))
                 {
                     int magnitude = Window.isShiftPressed() ? BBSSettings.editorJump.get() : 1;
                     int newCursor = UIFilmPanel.this.getCursor() + (int) Math.copySign(magnitude, context.mouseWheel);
@@ -535,6 +544,32 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.selectionPanel.relative(this).y(UIDataTabs.TABS_HEIGHT_PX).wTo(this.iconBar.area).h(1F, -UIDataTabs.TABS_HEIGHT_PX);
         this.add(this.selectionPanel);
+    }
+
+    private boolean isCursorOverTimeline(UIContext context)
+    {
+        return this.isCursorOverClipsTimeline(this.cameraEditor, context)
+            || this.isCursorOverClipsTimeline(this.actionEditor, context)
+            || this.isCursorOverReplayTimeline(context);
+    }
+
+    private boolean isCursorOverClipsTimeline(UIClipsPanel panel, UIContext context)
+    {
+        return panel != null
+            && panel.isVisible()
+            && panel.clips != null
+            && panel.clips.isVisible()
+            && panel.clips.area.isInside(context);
+    }
+
+    private boolean isCursorOverReplayTimeline(UIContext context)
+    {
+        return this.replayEditor != null
+            && this.replayEditor.isVisible()
+            && this.replayEditor.keyframeEditor != null
+            && this.replayEditor.keyframeEditor.view != null
+            && this.replayEditor.keyframeEditor.view.isVisible()
+            && this.replayEditor.keyframeEditor.view.area.isInside(context);
     }
 
     public boolean isLayoutLocked()
@@ -587,6 +622,18 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.onDataRenamed(from, to);
     }
 
+    @Override
+    public void onDataRenamed(String from, String to)
+    {
+        this.flushFilmCollaborationEdits();
+        super.onDataRenamed(from, to);
+
+        if (this.lifecycleActive)
+        {
+            BBSFilmCollaborationBridge.attach(this, this.data);
+        }
+    }
+
     public void renameFilmFolder(String fromPath, String toPath)
     {
         if (fromPath == null || toPath == null || toPath.trim().isEmpty())
@@ -602,6 +649,18 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.onDataFolderRenamed(fromPath, toPath);
+    }
+
+    @Override
+    public void onDataFolderRenamed(String fromPath, String toPath)
+    {
+        this.flushFilmCollaborationEdits();
+        super.onDataFolderRenamed(fromPath, toPath);
+
+        if (this.lifecycleActive)
+        {
+            BBSFilmCollaborationBridge.attach(this, this.data);
+        }
     }
 
     public void deleteFilmIds(Set<String> ids)
@@ -1560,13 +1619,23 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         });
         handle.dragEnd(() ->
         {
-            if (this.draggingPanelId == null || this.dropTargetPanelId == null || this.draggingPanelId.equals(this.dropTargetPanelId))
+            String dragId = this.draggingPanelId;
+            String targetId = this.dropTargetPanelId;
+            int targetZone = this.dropTargetZone;
+
+            try
+            {
+                if (dragId == null || targetId == null || dragId.equals(targetId))
+                {
+                    return;
+                }
+
+                this.applyPanelDropResult(dragId, targetId, targetZone);
+            }
+            finally
             {
                 this.clearPanelDragState();
-                return;
             }
-            this.applyPanelDropResult(this.draggingPanelId, this.dropTargetPanelId, this.dropTargetZone);
-            this.clearPanelDragState();
         });
         handle.hoverOnly().rendering((context) -> this.renderPanelDragHandle(context, handle));
         return handle;
@@ -2179,6 +2248,51 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
     }
 
+    private void captureTimelineScroll()
+    {
+        if (this.data == null || this.data.getId() == null)
+        {
+            return;
+        }
+
+        double replayScroll = 0D;
+
+        if (this.replayEditor.keyframeEditor != null)
+        {
+            replayScroll = this.replayEditor.keyframeEditor.view.getDopeSheet().getYAxis().getScroll();
+        }
+
+        this.timelineScrollByFilm.capture(
+            this.data.getId(),
+            this.cameraEditor.clips.vertical.getScroll(),
+            this.actionEditor.clips.vertical.getScroll(),
+            replayScroll
+        );
+    }
+
+    private void restoreTimelineScroll()
+    {
+        if (this.data == null || this.data.getId() == null)
+        {
+            return;
+        }
+
+        FilmEditorMigrationLogic.TimelineScroll scroll = this.timelineScrollByFilm.get(this.data.getId());
+
+        if (scroll == null)
+        {
+            return;
+        }
+
+        this.cameraEditor.clips.restoreVerticalScroll(scroll.camera);
+        this.actionEditor.clips.restoreVerticalScroll(scroll.action);
+
+        if (this.replayEditor.keyframeEditor != null)
+        {
+            this.replayEditor.keyframeEditor.view.getDopeSheet().getYAxis().setScroll(scroll.replay);
+        }
+    }
+
     public UIFilmController getController()
     {
         return this.controller;
@@ -2260,7 +2374,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.save();
 
-        this.getType().getRepository().load(sourceId, (loaded) ->
+        this.getRepository().load(sourceId, (loaded) ->
         {
             Film source = (Film) loaded;
 
@@ -2343,38 +2457,99 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         super.open();
 
         Recorder recorder = BBSModClient.getFilms().stopRecording();
+        Film film = this.data;
 
-        if (recorder == null || recorder.hasNotStarted())
+        if (recorder == null
+            || film == null
+            || !Objects.equals(film.getId(), recorder.getRecordingFilmId())
+            || !CollectionUtils.inRange(film.replays.getList(), recorder.getRecordingReplayId())
+            || !recorder.hasRecordedFrame()
+            || !recorder.isInCurrentLevel())
         {
             this.notifyServer(ActionState.RESTART);
 
             return;
         }
 
-        this.applyRecordedKeyframes(recorder, this.data);
+        this.applyRecordedKeyframes(recorder, film);
     }
 
+    /** Preserve the legacy direct-addon JVM descriptor and action-only behavior. */
     public void receiveActions(String filmId, int replayId, int tick, BaseType clips)
+    {
+        this.receiveActions(
+            filmId,
+            replayId,
+            tick,
+            clips,
+            null,
+            false,
+            true,
+            ServerNetwork.RecordingTerminal.LEGACY_MANUAL
+        );
+    }
+
+    public void receiveActions(
+        String filmId,
+        int replayId,
+        int tick,
+        BaseType clips,
+        Recorder recorder,
+        boolean applyKeyframes,
+        boolean mergeActions,
+        ServerNetwork.RecordingTerminal recordingTerminal
+    )
     {
         Film film = this.data;
 
         if (film != null && film.getId().equals(filmId) && CollectionUtils.inRange(film.replays.getList(), replayId))
         {
-            BaseValue.edit(film.replays.getList().get(replayId), IValueListener.FLAG_UNMERGEABLE, (replay) ->
+            boolean changed = false;
+
+            boolean exactRecorder = recorder != null && recorder.matchesRecording(filmId, replayId, tick);
+
+            if (applyKeyframes && exactRecorder && recorder.hasRecordedFrame())
             {
-                Clips newClips = new Clips("", BBSMod.getFactoryActionClips());
+                this.applyRecordedKeyframes(recorder, film);
+                changed = true;
+            }
 
-                newClips.fromData(clips);
-                replay.actions.copyOver(newClips, tick);
-            });
+            /* A forced server terminal can legitimately carry an empty clip
+             * list (for example when its countdown never started).  Empty
+             * forced data is an acknowledgement/teardown, not an instruction
+             * to remove the replay's existing actions from this tick onward.
+             * Legacy/manual terminals retain the historical empty replacement
+             * behavior used by the editor's explicit stop action. */
+            boolean mergeTerminalActions = mergeActions
+                && clips != null
+                && clips.isList()
+                && recordingTerminal != ServerNetwork.RecordingTerminal.START_REJECTED
+                && (recordingTerminal == ServerNetwork.RecordingTerminal.LEGACY_MANUAL
+                    || !clips.asList().isEmpty());
+
+            if (mergeTerminalActions)
+            {
+                BaseValue.edit(film.replays.getList().get(replayId), IValueListener.FLAG_UNMERGEABLE, (replay) ->
+                {
+                    Clips newClips = new Clips("", BBSMod.getFactoryActionClips());
+
+                    newClips.fromData(clips);
+                    replay.actions.copyOver(newClips, tick);
+                });
+
+                changed = true;
+            }
+
+            if (changed)
+            {
+                this.save();
+            }
         }
-
-        this.save();
     }
 
     public void applyRecordedKeyframes(Recorder recorder, Film film)
     {
-        int replayId = recorder.exception;
+        int replayId = recorder.getRecordingReplayId();
         Replay rp = CollectionUtils.getSafe(film.replays.getList(), replayId);
 
         if (rp != null)
@@ -2453,6 +2628,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.lifecycleActive = true;
+        BBSFilmCollaborationBridge.attach(this, this.getData());
         BBSRendering.setCustomSize(true);
         MorphRenderer.hidePlayer = true;
 
@@ -2469,6 +2645,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void close()
     {
+        this.flushFilmCollaborationEdits();
+        BBSFilmCollaborationBridge.detach(this);
+
         if (this.queueExporter != null)
         {
             this.queueExporter.cancel();
@@ -2494,6 +2673,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void disappear()
     {
+        this.flushFilmCollaborationEdits();
+        BBSFilmCollaborationBridge.detach(this);
         super.disappear();
 
         BBSRendering.setCustomSize(false);
@@ -2568,8 +2749,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         boolean wasNewFilm = this.newFilm && data != null;
 
+        /* UIFormUndoHandler batches edits until render. Flush while the old Film is
+         * still this panel's active data so a close/tab switch cannot lose its last
+         * local collaboration mutation. submitUndo() is idempotent when empty. */
+        this.flushFilmCollaborationEdits();
+        this.captureTimelineScroll();
         this.notifyServer(ActionState.STOP);
         super.fill(data);
+        this.restoreTimelineScroll();
 
         if (wasNewFilm)
         {
@@ -2577,6 +2764,60 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.notifyServer(ActionState.RESTART);
+    }
+
+    /** Flush the undo batch before a remote CAS check or session teardown. */
+    public void flushFilmCollaborationEdits()
+    {
+        if (this.undoHandler != null)
+        {
+            this.undoHandler.submitUndo();
+        }
+
+        BBSFilmCollaborationBridge.flushPending(this);
+    }
+
+    @Override
+    public void forceSave()
+    {
+        Throwable failure = null;
+
+        try
+        {
+            this.flushFilmCollaborationEdits();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = exception;
+        }
+
+        try
+        {
+            /* The base panel owns the repository selected when this Film data
+             * session started. Always attempt that persistence even when the
+             * collaboration transport failed during teardown. */
+            super.forceSave();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            if (failure == null)
+            {
+                failure = exception;
+            }
+            else if (failure != exception)
+            {
+                failure.addSuppressed(exception);
+            }
+        }
+
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+        else if (failure instanceof Error error)
+        {
+            throw error;
+        }
     }
 
     @Override
@@ -2631,6 +2872,15 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         else
         {
             this.filmUserActivity.reset();
+        }
+
+        if (this.lifecycleActive)
+        {
+            BBSFilmCollaborationBridge.attach(this, data);
+        }
+        else if (data == null)
+        {
+            BBSFilmCollaborationBridge.detach(this);
         }
 
         this.updateTabVisibility();
@@ -2868,6 +3118,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 long ticks = (long) (this.timeSpentActiveAccumulator / 50);
 
                 this.getData().timeSpentActive.set(this.getData().timeSpentActive.get() + ticks);
+                BBSFilmCollaborationBridge.captureCommittedValues(this, List.of(this.getData().timeSpentActive));
                 this.timeSpentActiveAccumulator -= ticks * 50;
             }
         }
@@ -2883,6 +3134,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.undoHandler.submitUndo();
         }
+
+        BBSFilmCollaborationBridge.samplePresence(this, context);
 
         if (this.queueExporter != null)
         {
@@ -2913,6 +3166,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             BBSSettings.lightInputs = false;
         }
+
+        /* Drawn through Batcher2D so native UI and web command replay see the
+         * same bounded participant overlay. */
+        BBSFilmCollaborationBridge.renderRemotePresence(this, context);
 
         if (this.entered)
         {
@@ -3152,6 +3409,95 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (this.replayEditor.keyframeEditor != null && this.replayEditor.keyframeEditor.editor != null)
         {
             this.replayEditor.keyframeEditor.editor.update();
+        }
+    }
+
+    /** Internal targeted refresh used after validated semantic collaboration updates. */
+    public void refreshFilmCollaboration(
+        BBSFilmRefreshHint hint,
+        boolean snapshot,
+        boolean invalidateUndo,
+        List<List<String>> changedPaths
+    )
+    {
+        if (this.data == null || hint == null)
+        {
+            return;
+        }
+
+        if (snapshot)
+        {
+            if (this.undoHandler != null)
+            {
+                this.undoHandler.reset();
+            }
+
+            this.actionEditor.setClips(null);
+            this.runner.setWork(this.data.camera);
+            this.cameraEditor.setClips(this.data.camera);
+            this.replayEditor.setFilm(this.data);
+            this.cameraEditor.pickClip(null);
+            this.fillData();
+            this.controller.createEntities();
+
+            return;
+        }
+
+        if (invalidateUndo && this.undoHandler != null)
+        {
+            /* Numeric list paths are revision-scoped. A subtree replacement can
+             * make an old undo resolve to a different Replay/clip, so discard it. */
+            this.undoHandler.reset();
+        }
+
+        boolean cameraStructure = false;
+        boolean replayStructure = false;
+
+        if (hint == BBSFilmRefreshHint.STRUCTURE && changedPaths != null)
+        {
+            for (List<String> path : changedPaths)
+            {
+                if (!path.isEmpty() && path.get(0).equals("camera"))
+                {
+                    cameraStructure = true;
+                }
+                else if (!path.isEmpty() && path.get(0).equals("replays"))
+                {
+                    replayStructure = true;
+                }
+            }
+        }
+
+        if (cameraStructure)
+        {
+            this.runner.setWork(this.data.camera);
+            this.cameraEditor.setClips(this.data.camera);
+            this.cameraEditor.pickClip(null);
+        }
+
+        if (replayStructure)
+        {
+            this.actionEditor.setClips(null);
+            this.replayEditor.setFilm(this.data);
+        }
+
+        switch (hint)
+        {
+            case NONE ->
+            {}
+            case VALUE, TIMELINE -> this.fillData();
+            case REPLAY ->
+            {
+                this.replayEditor.replaysList.replays.refreshReplayList();
+                this.fillData();
+                this.controller.createEntities();
+            }
+            case STRUCTURE ->
+            {
+                this.replayEditor.replaysList.replays.refreshReplayList();
+                this.fillData();
+                this.controller.createEntities();
+            }
         }
     }
 

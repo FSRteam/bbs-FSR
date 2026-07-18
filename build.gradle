@@ -66,8 +66,92 @@ sourceSets {
     videoExportTest {
         java.srcDirs = ['src/videoExportTest/java']
         resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    platformResourceTest {
+        java.srcDirs = ['src/platformResourceTest/java']
+        resources.srcDirs = []
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
+    }
+    folderManagerTest {
+        java.srcDirs = ['src/folderManagerTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+    interactionActionTest {
+        java.srcDirs = ['src/interactionActionTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output
+    }
+    networkSecurityTest {
+        java.srcDirs = ['src/networkSecurityTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+    addonLifecycleTest {
+        java.srcDirs = ['src/addonLifecycleTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output
+    }
+    filmCollaborationTest {
+        java.srcDirs = ['src/filmCollaborationTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    surfaceMirrorTest {
+        java.srcDirs = ['src/surfaceMirrorTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    uiInputMailboxTest {
+        java.srcDirs = ['src/uiInputMailboxTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    uiMirrorDemandTest {
+        java.srcDirs = ['src/uiMirrorDemandTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    replayKeyframeTest {
+        java.srcDirs = ['src/replayKeyframeTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    filmEditorTest {
+        java.srcDirs = ['src/filmEditorTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    particleRuntimeTest {
+        java.srcDirs = ['src/particleRuntimeTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    ikPhysicsTest {
+        java.srcDirs = ['src/ikPhysicsTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    clientRegistrationTest {
+        java.srcDirs = ['src/clientRegistrationTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
 }
 
@@ -75,8 +159,36 @@ configurations {
     clientImplementation.extendsFrom implementation
     clientCompileOnly.extendsFrom compileOnly
     clientRuntimeOnly.extendsFrom runtimeOnly
-    videoExportTestImplementation.extendsFrom implementation
-    videoExportTestRuntimeOnly.extendsFrom runtimeOnly
+    videoExportTestImplementation.extendsFrom clientImplementation
+    videoExportTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    platformResourceTestImplementation.extendsFrom implementation
+    platformResourceTestRuntimeOnly.extendsFrom runtimeOnly
+    folderManagerTestImplementation.extendsFrom implementation
+    folderManagerTestRuntimeOnly.extendsFrom runtimeOnly
+    interactionActionTestImplementation.extendsFrom implementation
+    interactionActionTestRuntimeOnly.extendsFrom runtimeOnly
+    networkSecurityTestImplementation.extendsFrom implementation
+    networkSecurityTestRuntimeOnly.extendsFrom runtimeOnly
+    addonLifecycleTestImplementation.extendsFrom implementation
+    addonLifecycleTestRuntimeOnly.extendsFrom runtimeOnly
+    filmCollaborationTestImplementation.extendsFrom clientImplementation
+    filmCollaborationTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    surfaceMirrorTestImplementation.extendsFrom clientImplementation
+    surfaceMirrorTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    uiInputMailboxTestImplementation.extendsFrom clientImplementation
+    uiInputMailboxTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    uiMirrorDemandTestImplementation.extendsFrom clientImplementation
+    uiMirrorDemandTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    replayKeyframeTestImplementation.extendsFrom clientImplementation
+    replayKeyframeTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    filmEditorTestImplementation.extendsFrom clientImplementation
+    filmEditorTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    particleRuntimeTestImplementation.extendsFrom clientImplementation
+    particleRuntimeTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    ikPhysicsTestImplementation.extendsFrom clientImplementation
+    ikPhysicsTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    clientRegistrationTestImplementation.extendsFrom clientImplementation
+    clientRegistrationTestRuntimeOnly.extendsFrom clientRuntimeOnly
 }
 
 java {
@@ -147,13 +259,103 @@ tasks.named('build') {
 }
 
 tasks.register('testVideoExportUtils', JavaExec) {
-    dependsOn tasks.named('videoExportTestClasses')
+    dependsOn tasks.named('clientClasses'), tasks.named('videoExportTestClasses')
     classpath = sourceSets.videoExportTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.utils.VideoExportUtilsTest'
 }
 
+tasks.register('testPlatformResourceConsistency', JavaExec) {
+    dependsOn tasks.named('compileJava'), tasks.named('platformResourceTestClasses')
+    classpath = sourceSets.platformResourceTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.compat.PlatformResourceConsistencyTest'
+}
+
+tasks.register('testFolderManagerContainment', JavaExec) {
+    dependsOn tasks.named('folderManagerTestClasses')
+    classpath = sourceSets.folderManagerTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.utils.manager.FolderManagerContainmentTest'
+}
+
+tasks.register('testInteractionActions', JavaExec) {
+    dependsOn tasks.named('interactionActionTestClasses')
+    classpath = sourceSets.interactionActionTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.actions.InteractionActionSemanticsTest'
+}
+
+tasks.register('testNetworkSecurity', JavaExec) {
+    dependsOn tasks.named('networkSecurityTestClasses')
+    classpath = sourceSets.networkSecurityTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.network.NetworkSecurityTest'
+}
+
+tasks.register('testAddonLifecycle', JavaExec) {
+    dependsOn tasks.named('addonLifecycleTestClasses')
+    classpath = sourceSets.addonLifecycleTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.addon.v2.BBSAddonLifecycleTest'
+}
+
+tasks.register('testFilmCollaborationApi', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('filmCollaborationTestClasses')
+    classpath = sourceSets.filmCollaborationTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationApiTest'
+}
+
+tasks.register('testUiSurfacePlacement', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('surfaceMirrorTestClasses')
+    classpath = sourceSets.surfaceMirrorTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.client.ui.mirror.BBSUiSurfacePlacementTest'
+}
+
+tasks.register('testUiInputMailbox', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('uiInputMailboxTestClasses')
+    classpath = sourceSets.uiInputMailboxTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.client.ui.mirror.BBSUiInputDispatcherTest'
+}
+
+tasks.register('testUiMirrorDemand', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('uiMirrorDemandTestClasses')
+    classpath = sourceSets.uiMirrorDemandTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorDemandTest'
+}
+
+tasks.register('testReplayKeyframeConsistency', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('replayKeyframeTestClasses')
+    classpath = sourceSets.replayKeyframeTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.ui.film.replays.ReplayIndexRemappingTest'
+}
+
+tasks.register('testFilmEditorMigration', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('filmEditorTestClasses')
+    classpath = sourceSets.filmEditorTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.ui.film.FilmEditorMigrationLogicTest'
+}
+
+tasks.register('testParticleRuntimeConsistency', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('particleRuntimeTestClasses')
+    classpath = sourceSets.particleRuntimeTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.particles.ParticleRuntimeConsistencyTest'
+}
+
+tasks.register('testIkPhysicsConsistency', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('ikPhysicsTestClasses')
+    classpath = sourceSets.ikPhysicsTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.cubic.ik.IKPhysicsConsistencyTest'
+}
+
+tasks.register('testClientStructuralRegistration', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('clientRegistrationTestClasses')
+    classpath = sourceSets.clientRegistrationTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.client.compat.ClientStructuralRegistrationWindowTest'
+}
+
+tasks.register('testBinaryCompatibility', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('clientRegistrationTestClasses')
+    classpath = sourceSets.clientRegistrationTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.client.compat.LegacyPublicDescriptorCompatibilityTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('testVideoExportUtils')
+    dependsOn tasks.named('testVideoExportUtils'), tasks.named('testPlatformResourceConsistency'), tasks.named('testFolderManagerContainment'), tasks.named('testInteractionActions'), tasks.named('testNetworkSecurity'), tasks.named('testAddonLifecycle'), tasks.named('testClientStructuralRegistration'), tasks.named('testBinaryCompatibility'), tasks.named('testFilmCollaborationApi'), tasks.named('testUiSurfacePlacement'), tasks.named('testUiInputMailbox'), tasks.named('testUiMirrorDemand'), tasks.named('testReplayKeyframeConsistency'), tasks.named('testFilmEditorMigration'), tasks.named('testParticleRuntimeConsistency'), tasks.named('testIkPhysicsConsistency')
 }
 
 tasks.named("cacheVersionExtractedServer${minecraft_version}") {

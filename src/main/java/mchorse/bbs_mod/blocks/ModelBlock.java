@@ -3,6 +3,7 @@ package mchorse.bbs_mod.blocks;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.network.ServerNetwork;
+import mchorse.bbs_mod.utils.PermissionUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
@@ -111,12 +112,17 @@ public class ModelBlock extends Block implements EntityBlock, SimpleWaterloggedB
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit)
     {
-        if (player instanceof ServerPlayer serverPlayer)
+        if (world.isClientSide)
+        {
+            return InteractionResult.SUCCESS;
+        }
+
+        if (player instanceof ServerPlayer serverPlayer && canEdit(serverPlayer))
         {
             ServerNetwork.sendClickedModelBlock(serverPlayer, pos);
         }
 
-        return InteractionResult.SUCCESS;
+        return InteractionResult.CONSUME;
     }
 
     @Override
@@ -124,15 +130,25 @@ public class ModelBlock extends Block implements EntityBlock, SimpleWaterloggedB
     {
         if (hand == InteractionHand.MAIN_HAND)
         {
-            if (player instanceof ServerPlayer serverPlayer)
+            if (world.isClientSide)
+            {
+                return ItemInteractionResult.SUCCESS;
+            }
+
+            if (player instanceof ServerPlayer serverPlayer && canEdit(serverPlayer))
             {
                 ServerNetwork.sendClickedModelBlock(serverPlayer, pos);
             }
 
-            return ItemInteractionResult.SUCCESS;
+            return ItemInteractionResult.CONSUME;
         }
 
         return super.useItemOn(stack, state, world, pos, player, hand, hit);
+    }
+
+    private static boolean canEdit(ServerPlayer player)
+    {
+        return player.getServer() != null && PermissionUtils.arePanelsAllowed(player.getServer(), player);
     }
 
     /* SimpleWaterloggedBlock implementation */

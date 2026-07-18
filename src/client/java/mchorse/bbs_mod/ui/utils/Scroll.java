@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.utils;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -40,6 +41,7 @@ public class Scroll
      * Whether this scroll area gets dragged 
      */
     public boolean dragging;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
 
     /**
      * Speed of how fast shit's scrolling  
@@ -405,7 +407,7 @@ public class Scroll
 
     public boolean mouseClicked(UIContext context)
     {
-        return context.mouseButton == 0 && this.mouseClicked(context.mouseX, context.mouseY);
+        return context.mouseButton == 0 && this.mouseClicked(context.mouseX, context.mouseY, context.mouseButton);
     }
 
     /**
@@ -413,7 +415,12 @@ public class Scroll
      */
     public boolean mouseClicked(int x, int y)
     {
-        if (!this.scrollbar)
+        return this.mouseClicked(x, y, 0);
+    }
+
+    private boolean mouseClicked(int x, int y, int button)
+    {
+        if (!this.scrollbar || this.dragOwnership.isActive())
         {
             return false;
         }
@@ -422,7 +429,7 @@ public class Scroll
 
         if (isInside)
         {
-            this.dragging = true;
+            this.beginDragging(button);
 
             Area area = this.getScrollbarArea();
 
@@ -441,7 +448,19 @@ public class Scroll
 
     public boolean mouseScroll(UIContext context)
     {
-        boolean canceled = this.mouseScroll(context.mouseX, context.mouseY, context.mouseWheel);
+        double amount = context.mouseWheel;
+
+        if (this.direction == ScrollDirection.HORIZONTAL && context.mouseWheelHorizontal != 0D)
+        {
+            amount = context.mouseWheelHorizontal;
+        }
+
+        if (amount == 0D)
+        {
+            return false;
+        }
+
+        boolean canceled = this.mouseScroll(context.mouseX, context.mouseY, amount);
 
         if (canceled)
         {
@@ -485,9 +504,15 @@ public class Scroll
         return isInside && ((this.cancelScrollEdge && this.scrollSize > this.direction.getSide(this.area)) || lastScroll != this.targetScroll);
     }
 
+    /** Compatibility entry point retained for addons compiled against API 2.0. */
     public void mouseReleased(UIContext context)
     {
-        this.mouseReleased(context.mouseX, context.mouseY);
+        this.tryMouseReleased(context);
+    }
+
+    public boolean tryMouseReleased(UIContext context)
+    {
+        return this.tryMouseReleased(context.mouseX, context.mouseY, context.mouseButton);
     }
 
     /**
@@ -495,7 +520,55 @@ public class Scroll
      */
     public void mouseReleased(int x, int y)
     {
+        this.tryMouseReleased(x, y);
+    }
+
+    public boolean tryMouseReleased(int x, int y)
+    {
+        return this.tryMouseReleased(x, y, 0);
+    }
+
+    private boolean tryMouseReleased(int x, int y, int button)
+    {
+        if (!this.dragOwnership.release(button))
+        {
+            return false;
+        }
+
         this.dragging = false;
+
+        return true;
+    }
+
+    /** Begin an externally selected scrollbar/timeline drag with its physical owner. */
+    public boolean beginDragging(int button)
+    {
+        if (!this.dragOwnership.acquire(button))
+        {
+            return false;
+        }
+
+        this.dragging = true;
+
+        return true;
+    }
+
+    public void cancelDragging()
+    {
+        this.dragOwnership.cancel();
+        this.dragging = false;
+    }
+
+    public boolean cancelDragging(int button)
+    {
+        if (!this.dragOwnership.release(button))
+        {
+            return false;
+        }
+
+        this.dragging = false;
+
+        return true;
     }
 
     public void drag(UIContext context)
@@ -524,8 +597,25 @@ public class Scroll
 
         if (this.dragging)
         {
+            if (!this.hasScrollbar())
+            {
+                this.cancelDragging();
+                this.scrollTo(0D);
+
+                return;
+            }
+
             int scrollbar = this.getScrollbar();
             int h = this.direction.getSide(this.area) - scrollbar;
+
+            if (h <= 0)
+            {
+                this.cancelDragging();
+                this.scrollTo(0D);
+
+                return;
+            }
+
             float progress = (this.direction.getMouse(x, y) - (this.direction.getPosition(this.area, 0F) + scrollbar * this.scrollbarRatio)) / (float) h;
             float to = progress * (this.scrollSize - this.direction.getSide(this.area));
 

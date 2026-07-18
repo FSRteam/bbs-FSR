@@ -40,19 +40,13 @@ public class TrackerClientClip extends TrackerClip
         IEntity entity = entities.get(0);
         Form form = entity == null ? null : entity.getForm();
 
-        if (form == null)
+        if (form == null || BaseFilmController.isRelativeReplayEntity(entity))
         {
             return;
         }
 
-        MatrixCache map = FormUtilsClient.getRenderer(form).collectMatrices(entity, context.transition);
         Vector3f relativeFormPos = new Vector3f();
         String targetGroup = this.group.get();
-
-        if (!map.has(targetGroup))
-        {
-            return;
-        }
 
         Matrix4f formTransform = BaseFilmController.getMatrixForRenderWithRotation(entity, position.point.x, position.point.y, position.point.z, context.transition);
         Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(((CameraClipContext) context).entities, form.anchor.get(), formTransform, position.point.x, position.point.y, position.point.z, context.transition, 0);
@@ -60,6 +54,23 @@ public class TrackerClientClip extends TrackerClip
         if (totalMatrix.a != null)
         {
             formTransform = totalMatrix.a;
+        }
+
+        Matrix4f semanticBase = new Matrix4f()
+            .translation((float) position.point.x, (float) position.point.y, (float) position.point.z)
+            .mul(formTransform);
+        MatrixCache map = FormUtilsClient.getRenderer(form).collectMatrices(
+            entity,
+            entity,
+            semanticBase,
+            true,
+            true,
+            context.transition
+        );
+
+        if (!map.has(targetGroup))
+        {
+            return;
         }
 
         formTransform.mul(map.get(targetGroup).matrix());

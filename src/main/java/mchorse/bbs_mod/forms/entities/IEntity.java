@@ -2,6 +2,7 @@ package mchorse.bbs_mod.forms.entities;
 
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.utils.AABB;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.WalkAnimationState;
@@ -44,6 +45,16 @@ public interface IEntity
     public void setOnGround(boolean ground);
 
     public void swingArm();
+
+    public default void swingArm(InteractionHand hand)
+    {
+        this.swingArm();
+    }
+
+    public default InteractionHand getSwingingArm()
+    {
+        return InteractionHand.MAIN_HAND;
+    }
 
     public float getHandSwingProgress(float tickDelta);
 

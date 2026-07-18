@@ -1513,40 +1513,46 @@ public class UIPixelsEditor extends UICanvasEditor
     public boolean subMouseClicked(UIContext context)
     {
         if (this.editing && context.mouseButton == 1 && this.area.isInside(context)
-            && this.getActivePaintTool() == TexturePaintTool.BRUSH)
+            && this.getActivePaintTool() == TexturePaintTool.BRUSH && !this.dragging)
         {
             /* While the brush is selected, the right mouse button temporarily acts as the
              * eraser: engage the secondary eraser (which switches the active tool) and run
              * the stroke as a regular left-button drag, reverting on release. */
             this.secondaryEraser = true;
-            this.secondaryEraserToggle.accept(true);
+            boolean started = false;
 
-            this.dragging = true;
-            this.mouse = 0;
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
+            try
+            {
+                this.secondaryEraserToggle.accept(true);
+                started = this.beginOwnedDrag(context, 0);
 
-            this.startDragging(context);
-
-            return true;
+                if (started)
+                {
+                    return true;
+                }
+            }
+            finally
+            {
+                if (!started)
+                {
+                    this.restoreSecondaryEraser();
+                }
+            }
         }
 
         if (this.area.isInside(context) && this.isMouseButtonAllowed(context.mouseButton))
         {
-            this.dragging = true;
-            this.mouse = context.mouseButton;
+            int dragButton = context.mouseButton;
 
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
-
-            if (this.mouse == 0 && Window.isCtrlPressed() && this.getActivePaintTool() != TexturePaintTool.SELECTION)
+            if (dragButton == 0 && Window.isCtrlPressed() && this.getActivePaintTool() != TexturePaintTool.SELECTION)
             {
-                this.mouse = 2;
+                dragButton = 2;
             }
 
-            this.startDragging(context);
-
-            return true;
+            if (this.beginOwnedDrag(context, dragButton))
+            {
+                return true;
+            }
         }
 
         return super.subMouseClicked(context);
@@ -1650,68 +1656,87 @@ public class UIPixelsEditor extends UICanvasEditor
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (this.dragging && this.getActivePaintTool() == TexturePaintTool.SELECTION && this.currentSelection != null)
+        if (!this.isDragOwnedBy(context.mouseButton))
         {
-            Vector2i hoverPixel = this.getHoverPixel(context.mouseX, context.mouseY);
-
-            this.currentSelection.x2 = hoverPixel.x;
-            this.currentSelection.y2 = hoverPixel.y;
-            this.applyCurrentSelection();
+            return super.subMouseReleased(context);
         }
 
-        if (this.dragging && this.pixelsUndo != null)
+        if (!this.retireOwnedDrag(context.mouseButton))
         {
-            Vector2i hoverPixel = this.getHoverPixel(context.mouseX, context.mouseY);
+            return false;
+        }
 
-            if (Window.isShiftPressed() && this.lastPixel != null)
+        try
+        {
+            if (this.getActivePaintTool() == TexturePaintTool.SELECTION && this.currentSelection != null)
             {
-                LineRasterizer rasterizer = new LineRasterizer(
-                    new Vector2d(this.lastPixel.x, this.lastPixel.y),
-                    new Vector2d(hoverPixel.x, hoverPixel.y)
-                );
-                Set<Vector2i> pixels = new HashSet<>();
+                Vector2i hoverPixel = this.getHoverPixel(context.mouseX, context.mouseY);
 
-                rasterizer.setupRange(0F, 1F, 1F / (float) this.lastPixel.distance(hoverPixel));
-                rasterizer.solve(pixels);
-
-                for (Vector2i pixel : pixels)
-                {
-                    this.paint(pixel.x, pixel.y);
-                }
-
-                this.updateTexture();
+                this.currentSelection.x2 = hoverPixel.x;
+                this.currentSelection.y2 = hoverPixel.y;
+                this.applyCurrentSelection();
             }
 
-            this.undoManager.pushUndo(this.pixelsUndo);
+            if (this.pixelsUndo != null)
+            {
+                Vector2i hoverPixel = this.getHoverPixel(context.mouseX, context.mouseY);
 
-            this.pixelsUndo = null;
-            this.strokeStrengths.clear();
-            this.lastPixel = hoverPixel;
+                if (Window.isShiftPressed() && this.lastPixel != null)
+                {
+                    LineRasterizer rasterizer = new LineRasterizer(
+                        new Vector2d(this.lastPixel.x, this.lastPixel.y),
+                        new Vector2d(hoverPixel.x, hoverPixel.y)
+                    );
+                    Set<Vector2i> pixels = new HashSet<>();
+
+                    rasterizer.setupRange(0F, 1F, 1F / (float) this.lastPixel.distance(hoverPixel));
+                    rasterizer.solve(pixels);
+
+                    for (Vector2i pixel : pixels)
+                    {
+                        this.paint(pixel.x, pixel.y);
+                    }
+
+                    this.updateTexture();
+                }
+
+                this.undoManager.pushUndo(this.pixelsUndo);
+
+                this.pixelsUndo = null;
+                this.strokeStrengths.clear();
+                this.lastPixel = hoverPixel;
+            }
+
+            /* Commit the move gesture as a single undo entry if the layer offset actually changed. */
+            if (this.moveUndoBefore != null)
+            {
+                TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+                boolean moved = layer != null && (layer.offsetX != this.moveStartOffsetX || layer.offsetY != this.moveStartOffsetY);
+
+                if (moved && this.undoManager != null)
+                {
+                    this.undoManager.pushUndo(new LayerStateUndo(this.moveUndoBefore, this.document.toData()));
+                }
+
+                this.moveUndoBefore = null;
+            }
+
+            return true;
         }
+        finally
+        {
+            /* Restore the brush even if stroke finalization or undo creation fails. */
+            this.restoreSecondaryEraser();
+        }
+    }
 
-        /* Restore the brush once the right-mouse-button eraser stroke is finalized (the undo
-         * entry has already been pushed above, so reverting the tool does not affect it). */
+    private void restoreSecondaryEraser()
+    {
         if (this.secondaryEraser)
         {
             this.secondaryEraser = false;
             this.secondaryEraserToggle.accept(false);
         }
-
-        /* Commit the move gesture as a single undo entry if the layer offset actually changed. */
-        if (this.moveUndoBefore != null)
-        {
-            TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
-            boolean moved = layer != null && (layer.offsetX != this.moveStartOffsetX || layer.offsetY != this.moveStartOffsetY);
-
-            if (moved && this.undoManager != null)
-            {
-                this.undoManager.pushUndo(new LayerStateUndo(this.moveUndoBefore, this.document.toData()));
-            }
-
-            this.moveUndoBefore = null;
-        }
-
-        return super.subMouseReleased(context);
     }
 
     @Override

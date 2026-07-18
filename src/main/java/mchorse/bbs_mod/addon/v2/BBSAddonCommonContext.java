@@ -21,6 +21,7 @@ final class BBSAddonCommonContext implements BBSAddonRegistrationContext, BBSAdd
 {
     private final BBSAddonDescriptor descriptor;
     private final BBSAddonDiagnosticRecord diagnostics;
+    private final BBSAddonRegistrationWindow registrationWindow;
     private final LoaderAccess loader;
     private final BBSResourceRegistry resources;
     private final BBSFormRegistry forms;
@@ -33,6 +34,7 @@ final class BBSAddonCommonContext implements BBSAddonRegistrationContext, BBSAdd
     BBSAddonCommonContext(
         BBSAddonDescriptor descriptor,
         BBSAddonDiagnosticRecord diagnostics,
+        BBSAddonRegistrationWindow registrationWindow,
         LoaderAccess loader,
         BBSResourceRegistry resources,
         BBSFormRegistry forms,
@@ -45,6 +47,7 @@ final class BBSAddonCommonContext implements BBSAddonRegistrationContext, BBSAdd
     {
         this.descriptor = descriptor;
         this.diagnostics = diagnostics;
+        this.registrationWindow = registrationWindow;
         this.loader = loader;
         this.resources = resources;
         this.forms = forms;
@@ -53,6 +56,11 @@ final class BBSAddonCommonContext implements BBSAddonRegistrationContext, BBSAdd
         this.particles = particles;
         this.network = network;
         this.events = events;
+    }
+
+    void close()
+    {
+        this.registrationWindow.close();
     }
 
     @Override

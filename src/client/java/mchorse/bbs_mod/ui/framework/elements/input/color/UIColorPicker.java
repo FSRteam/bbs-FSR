@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -73,6 +74,8 @@ public class UIColorPicker extends UIElement
     public Area alpha = new Area();
     public Area preview = new Area();
 
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
     private int dragging = -1;
     private final Color hsv = new Color();
     private final Color tempColor = new Color();
@@ -442,7 +445,13 @@ public class UIColorPicker extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        this.dragging = -1;
+        long generation = this.dragGeneration;
+
+        if (this.dragOwnership.release(context.mouseButton, generation))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = -1;
+        }
 
         return super.subMouseReleased(context);
     }
@@ -485,61 +494,94 @@ public class UIColorPicker extends UIElement
 
     private boolean beginDragging(UIContext context)
     {
-        if (this.isHsvPicker())
+        if (context.mouseButton != 0)
         {
-            if (this.picker.isInside(context))
+            return false;
+        }
+
+        long generation = this.dragOwnership.acquireToken(context.mouseButton);
+
+        if (generation == 0L)
+        {
+            return true;
+        }
+
+        this.dragGeneration = generation;
+        boolean started = false;
+
+        try
+        {
+            if (this.isHsvPicker())
             {
-                this.dragging = DRAG_HSV_PICKER;
+                if (this.picker.isInside(context))
+                {
+                    this.dragging = DRAG_HSV_PICKER;
+                    started = true;
+
+                    return true;
+                }
+
+                if (this.hue.isInside(context))
+                {
+                    this.dragging = DRAG_HUE;
+                    started = true;
+
+                    return true;
+                }
+
+                if (this.editAlpha && this.alpha.isInside(context))
+                {
+                    this.dragging = DRAG_HSV_ALPHA;
+                    started = true;
+
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (this.red.isInside(context))
+            {
+                this.dragging = DRAG_RGB_RED;
+                started = true;
 
                 return true;
             }
 
-            if (this.hue.isInside(context))
+            if (this.green.isInside(context))
             {
-                this.dragging = DRAG_HUE;
+                this.dragging = DRAG_RGB_GREEN;
+                started = true;
+
+                return true;
+            }
+
+            if (this.blue.isInside(context))
+            {
+                this.dragging = DRAG_RGB_BLUE;
+                started = true;
 
                 return true;
             }
 
             if (this.editAlpha && this.alpha.isInside(context))
             {
-                this.dragging = DRAG_HSV_ALPHA;
+                this.dragging = DRAG_RGB_ALPHA;
+                started = true;
 
                 return true;
             }
 
             return false;
         }
-
-        if (this.red.isInside(context))
+        finally
         {
-            this.dragging = DRAG_RGB_RED;
-
-            return true;
+            if (!started)
+            {
+                this.dragOwnership.release(context.mouseButton, generation);
+                this.dragGeneration = 0L;
+            }
         }
-
-        if (this.green.isInside(context))
-        {
-            this.dragging = DRAG_RGB_GREEN;
-
-            return true;
-        }
-
-        if (this.blue.isInside(context))
-        {
-            this.dragging = DRAG_RGB_BLUE;
-
-            return true;
-        }
-
-        if (this.editAlpha && this.alpha.isInside(context))
-        {
-            this.dragging = DRAG_RGB_ALPHA;
-
-            return true;
-        }
-
-        return false;
     }
 
     private void handleDragging(UIContext context)

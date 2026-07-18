@@ -9,6 +9,9 @@ import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
+import mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind;
+import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceRuntime;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiFrameRecorder;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.graphics.InverseView;
@@ -18,6 +21,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
+import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
@@ -51,10 +55,12 @@ import com.mojang.logging.LogUtils;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 public class BBSRendering
@@ -84,7 +90,17 @@ public class BBSRendering
     private static RenderTarget clientFramebuffer;
     private static Texture texture;
 
-    private static Runnable pendingExportResolutionAction;
+    private static volatile long exportFrameGeneration;
+    private static final ExportResolutionActionGate EXPORT_RESOLUTION_ACTIONS =
+        new ExportResolutionActionGate((stage, failure) ->
+        {
+            switch (stage)
+            {
+                case OWNER_VALIDATION -> LOGGER.warn("Failed to validate pending export-resolution owner", failure);
+                case ACTION -> LOGGER.error("Pending export-resolution action failed", failure);
+                case CLEANUP -> LOGGER.warn("Failed to clean up a cancelled export-resolution action", failure);
+            }
+        });
 
     public static int getMotionBlur()
     {
@@ -130,6 +146,19 @@ public class BBSRendering
         int frameRate = BBSSettings.videoSettings.frameRate.get();
 
         return frameRate * (1 << getMotionBlur(frameRate, getMotionBlurFactor()));
+    }
+
+    public static long getExportFrameGeneration()
+    {
+        return exportFrameGeneration;
+    }
+
+    public static boolean isExportFrameReadyAfter(long generation, int expectedWidth, int expectedHeight)
+    {
+        return exportFrameGeneration > generation
+            && texture != null
+            && texture.width == expectedWidth
+            && texture.height == expectedHeight;
     }
 
     public static File getVideoFolder()
@@ -320,14 +349,22 @@ public class BBSRendering
         }
         else
         {
+            Window window = mc.getWindow();
+
             reassignFramebuffer(clientFramebuffer);
 
             mc.getMainRenderTarget().bindWrite(true);
 
-            /* Film preview and export consumers read from BBSRendering.getTexture().
-             * Do not blit the off-screen framebuffer directly to the screen here:
-             * Screen/overlay rendering uses GuiGraphics batching, while blitToScreen()
-             * bypasses the UI tree and can cover panels that were drawn after it. */
+            /* F4/F6 world export renders the live world into our private target.
+             * The encoder reads its copied texture, but the player still needs
+             * that same current frame presented to the vanilla window target;
+             * otherwise the window keeps showing the last pre-recording frame.
+             * Film/Morph editors render the private target inside their own UI,
+             * so never stretch it over a live BBS screen. */
+            if (customSize && UIScreen.getCurrentMenu() == null)
+            {
+                framebuffer.blitToScreen(window.getWidth(), window.getHeight());
+            }
         }
     }
 
@@ -360,36 +397,92 @@ public class BBSRendering
         toggleFramebuffer(true);
     }
 
+    /** Whether the main world target currently contains a Replay playback. */
+    public static boolean isWorldReplayActive()
+    {
+        return currentWorldReplayController() != null;
+    }
+
+    public static boolean isMorphWorldPreviewActive()
+    {
+        UIBaseMenu menu = UIScreen.getCurrentMenu();
+
+        return menu instanceof UIDashboard dashboard
+            && dashboard.getPanels().panel instanceof UIMorphingPanel panel
+            && !panel.palette.editor.isEditing();
+    }
+
     public static void onWorldRenderEnd()
     {
         Minecraft mc = Minecraft.getInstance();
-
-        if (BBSModClient.getCameraController().getCurrent() instanceof PlayCameraController controller)
-        {
-            GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
-            Batcher2D batcher = new Batcher2D(drawContext);
-
-            UISubtitleRenderer.renderSubtitles(batcher.getContext().pose(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
-        }
-
-        if (!customSize)
-        {
-            renderingWorld = false;
-
-            return;
-        }
-
+        EnumSet<BBSRenderSurfaceKind> surfaces = EnumSet.noneOf(BBSRenderSurfaceKind.class);
+        PlayCameraController playback = currentWorldReplayController();
         UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
+        UIFilmPanel filmPanel = null;
 
-        if (currentMenu instanceof UIDashboard dashboard)
+        if (customSize)
         {
-            if (dashboard.getPanels().panel instanceof UIFilmPanel panel)
+            if (currentMenu instanceof UIDashboard dashboard && dashboard.getPanels().panel instanceof UIFilmPanel panel)
             {
+                filmPanel = panel;
                 UISubtitleRenderer.renderSubtitles(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
+                surfaces.add(BBSRenderSurfaceKind.FILM_PREVIEW);
             }
         }
 
+        if (playback != null)
+        {
+            /* A Film editor target already received its own runner subtitles above. If a
+             * playback controller is also present, expose both logical aliases without
+             * drawing a second subtitle layer into the shared physical target. */
+            if (filmPanel == null)
+            {
+                GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
+                Batcher2D batcher = new Batcher2D(drawContext);
+
+                UISubtitleRenderer.renderSubtitles(batcher.getContext().pose(), batcher, SubtitleClip.getSubtitles(playback.getContext()));
+            }
+
+            surfaces.add(BBSRenderSurfaceKind.WORLD_REPLAY);
+        }
+
+        if (isMorphWorldPreviewActive())
+        {
+            surfaces.add(BBSRenderSurfaceKind.MORPH_WORLD_PREVIEW);
+        }
+
+        if (playback != null && currentMenu == null && BBSRenderSurfaceRuntime.hasDemand(surfaces))
+        {
+            Window window = mc.getWindow();
+
+            /* There is no native BBS UIScreen to carry painter placement in
+             * this mode. Publish a bounded placement-only mirror frame before
+             * the asynchronous JPEG can reach listeners. */
+            BBSUiFrameRecorder.publishStandaloneWorldReplayFrame(
+                window.getGuiScaledWidth(),
+                window.getGuiScaledHeight(),
+                window.getWidth(),
+                window.getHeight()
+            );
+        }
+        else
+        {
+            BBSUiFrameRecorder.closeStandaloneWorldReplaySession();
+        }
+
+        /* The active main target is the vanilla world target during normal playback and
+         * FSR's private target while the Film editor is visible. Capture after Replay and
+         * subtitles, but before HUD/UI composition. A single JPEG payload may therefore
+         * satisfy both logical surface kinds without exposing either framebuffer. */
+        BBSRenderSurfaceRuntime.capture(mc.getMainRenderTarget(), surfaces);
         renderingWorld = false;
+    }
+
+    private static PlayCameraController currentWorldReplayController()
+    {
+        return BBSModClient.getCameraController().getCurrent() instanceof PlayCameraController controller
+            ? controller
+            : null;
     }
 
     public static void onRenderBeforeScreen()
@@ -399,44 +492,85 @@ public class BBSRendering
             return;
         }
 
-        if (customSize && framebuffer != null)
+        try
         {
-            Texture texture = getTexture();
-            int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
-            int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
-
-            try
+            if (customSize && framebuffer != null)
             {
-                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer.frameBufferId);
-                GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+                int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+                int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+                int previousTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
 
-                texture.bind();
-                texture.setSize(framebuffer.width, framebuffer.height);
-                GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer.width, framebuffer.height);
-                texture.unbind();
+                try
+                {
+                    Texture texture = getTexture();
+
+                    GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer.frameBufferId);
+                    GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+
+                    texture.bind();
+
+                    /* Keep the preview texture allocation stable across frames. Besides avoiding a
+                     * needless glTexImage2D stall, this is important for remote surface capture:
+                     * consumers can reuse their GPU/PBO resources until the preview size changes. */
+                    if (texture.width != framebuffer.width || texture.height != framebuffer.height)
+                    {
+                        texture.setSize(framebuffer.width, framebuffer.height);
+                    }
+
+                    GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer.width, framebuffer.height);
+                    exportFrameGeneration += 1L;
+                }
+                finally
+                {
+                    GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
+                    GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+                    GL11.glReadBuffer(previousReadBuffer);
+                }
             }
-            finally
-            {
-                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
-                GL11.glReadBuffer(previousReadBuffer);
-            }
+
+            renderRecordingOverlay();
+        }
+        finally
+        {
+            /* Rebind the client's original target even when preview copying or
+             * overlay rendering aborts, otherwise subsequent frames keep
+             * drawing into the private export target. */
+            toggleFramebuffer(false);
         }
 
-        renderRecordingOverlay();
+        ExportResolutionActionGate.Action action = EXPORT_RESOLUTION_ACTIONS.queuePending();
 
-        toggleFramebuffer(false);
-
-        if (pendingExportResolutionAction != null)
+        if (action != null)
         {
-            Runnable action = pendingExportResolutionAction;
-            pendingExportResolutionAction = null;
-            Minecraft.getInstance().execute(action);
+            try
+            {
+                Minecraft.getInstance().execute(action::runIfCurrent);
+            }
+            catch (RuntimeException | Error e)
+            {
+                synchronized (BBSRendering.class)
+                {
+                    EXPORT_RESOLUTION_ACTIONS.cancelQueued(action);
+                }
+                LOGGER.error("Failed to queue pending export-resolution action", e);
+            }
         }
     }
 
-    public static void scheduleAfterNextExportFrame(Runnable action)
+    public static synchronized void scheduleAfterNextExportFrame(Runnable action)
     {
-        pendingExportResolutionAction = action;
+        scheduleAfterNextExportFrame(() -> true, action, () -> {});
+    }
+
+    public static synchronized void scheduleAfterNextExportFrame(BooleanSupplier ownerValid, Runnable action, Runnable cancelled)
+    {
+        EXPORT_RESOLUTION_ACTIONS.schedule(ownerValid, action, cancelled);
+    }
+
+    /** Fence both the pending slot and a wrapper already queued on Minecraft's executor. */
+    public static synchronized void cancelPendingExportResolutionActions()
+    {
+        EXPORT_RESOLUTION_ACTIONS.cancelAll();
     }
 
     public static void onRenderChunkLayer(PoseStack stack)
@@ -533,34 +667,58 @@ public class BBSRendering
     {
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
         Matrix4f oldProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
+        VertexSorting oldVertexSorting = RenderSystem.getVertexSorting();
+        Matrix3f oldInverseView = new Matrix3f(InverseView.get());
+        boolean oldDepthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
 
-        /* Minecraft 1.21.1 removed RenderSystem's inverse-view holder. Keep the
-         * active world camera rotation available to VAO shader uniforms. */
-        InverseView.set(new Matrix3f().rotation(worldRenderContext.camera().rotation()));
-
-        /* BBS world renderers use camera-relative PoseStacks; the view matrix stays in RenderSystem. */
-        RenderSystem.setProjectionMatrix(worldRenderContext.projectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
         modelViewStack.pushMatrix();
-        modelViewStack.identity();
-        modelViewStack.mul(worldRenderContext.modelViewMatrix());
-        RenderSystem.applyModelViewMatrix();
 
         try
         {
+            /* Minecraft 1.21.1 removed RenderSystem's inverse-view holder. Keep the
+             * active world camera rotation available to VAO shader uniforms. */
+            InverseView.set(new Matrix3f().rotation(worldRenderContext.camera().rotation()));
+
+            /* BBS world renderers use camera-relative PoseStacks; the view matrix stays in RenderSystem. */
+            RenderSystem.setProjectionMatrix(worldRenderContext.projectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
+            modelViewStack.identity();
+            modelViewStack.mul(worldRenderContext.modelViewMatrix());
+            RenderSystem.applyModelViewMatrix();
+
             if (Minecraft.getInstance().screen instanceof UIScreen screen)
             {
                 screen.renderInWorld(worldRenderContext);
             }
 
             BBSModClient.getFilms().render(worldRenderContext);
-
-            worldRenderContext.consumers().endBatch();
         }
         finally
         {
-            modelViewStack.popMatrix();
-            RenderSystem.applyModelViewMatrix();
-            RenderSystem.setProjectionMatrix(oldProjection, VertexSorting.DISTANCE_TO_ORIGIN);
+            try
+            {
+                try
+                {
+                    worldRenderContext.consumers().endBatch();
+                }
+                finally
+                {
+                    InverseView.set(oldInverseView);
+                    modelViewStack.popMatrix();
+                    RenderSystem.applyModelViewMatrix();
+                    RenderSystem.setProjectionMatrix(oldProjection, oldVertexSorting);
+                }
+            }
+            finally
+            {
+                if (oldDepthTest)
+                {
+                    RenderSystem.enableDepthTest();
+                }
+                else
+                {
+                    RenderSystem.disableDepthTest();
+                }
+            }
         }
     }
 

@@ -238,7 +238,7 @@ public class UIFormCategory extends UIElement
 
             if (y < 0)
             {
-                if (x < this.area.x + 30 + context.batcher.getFont().getWidth(this.category.title.get()))
+                if (UIFormCategoryHitTest.isHeaderToggle(x, context.batcher.getFont().getWidth(this.category.title.get())))
                 {
                     this.category.visible.set(!this.category.visible.get());
 

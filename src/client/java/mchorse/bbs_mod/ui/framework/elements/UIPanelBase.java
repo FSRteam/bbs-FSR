@@ -165,6 +165,30 @@ public class UIPanelBase <T extends UIElement> extends UIElement
      */
     public void setPanel(T panel)
     {
+        if (this.view == panel)
+        {
+            return;
+        }
+
+        UIContext context = this.getContext();
+
+        if (context == null)
+        {
+            this.setPanelNow(panel);
+        }
+        else
+        {
+            context.menu.runAfterCapturedMouseRelease(() -> this.setPanelNow(panel));
+        }
+    }
+
+    private void setPanelNow(T panel)
+    {
+        if (this.view == panel)
+        {
+            return;
+        }
+
         if (this.view != null)
         {
             this.view.removeFromParent();

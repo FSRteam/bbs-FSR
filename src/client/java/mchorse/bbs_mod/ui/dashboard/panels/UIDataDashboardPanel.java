@@ -15,11 +15,11 @@ import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.utils.UIDataUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.interps.Interpolations;
+import mchorse.bbs_mod.utils.repos.IRepository;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -41,6 +41,9 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     private Timer savingTimer = new Timer(0);
     private long dataRequestVersion;
+    private final RepositorySession<IRepository<T>> repositorySession = new RepositorySession<>(
+        () -> (IRepository<T>) this.getType().getRepository()
+    );
 
     public UIDataDashboardPanel(UIDashboard dashboard)
     {
@@ -608,6 +611,26 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
      */
     public abstract ContentType getType();
 
+    /**
+     * Current repository before a data session begins, or the pinned owner
+     * afterward. A remote Film keeps its server repository after handshake
+     * teardown, while an idle pre-handshake panel can still refresh to remote.
+     */
+    public final IRepository<T> getRepository()
+    {
+        return this.repositorySession.get();
+    }
+
+    private IRepository<T> pinRepository()
+    {
+        return this.repositorySession.pin();
+    }
+
+    private IRepository<T> pinRepository(IRepository<T> repository)
+    {
+        return this.repositorySession.pin(repository);
+    }
+
     @Override
     protected UICRUDOverlayPanel createOverlayPanel()
     {
@@ -668,7 +691,12 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         this.markDataLoading(requestTab, id);
         this.editor.setEnabled(false);
 
-        this.getType().getRepository().load(id, (data) ->
+        /* Capture the request owner without pinning an idle/failed load. Once a
+         * result is accepted, pin this exact repository before population so a
+         * later disconnect cannot retarget its save. */
+        IRepository<T> requestRepository = this.getRepository();
+
+        requestRepository.load(id, (data) ->
         {
             if (requestVersion != this.dataRequestVersion)
             {
@@ -678,6 +706,11 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
             if (this.tabsEnabled && (requestTab == null || this.getCurrentDataTab() != requestTab || !Objects.equals(requestTab.dataId, id)))
             {
                 return;
+            }
+
+            if (data != null)
+            {
+                this.pinRepository(requestRepository);
             }
 
             this.fill((T) data);
@@ -704,6 +737,12 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         /* Any explicit population supersedes an in-flight repository response. */
         this.dataRequestVersion += 1;
         this.editor.setEnabled(true);
+
+        if (data != null)
+        {
+            this.pinRepository();
+        }
+
         this.data = data;
 
         if (this.tabsEnabled && this.currentTab >= 0 && this.currentTab < this.tabs.size())
@@ -798,7 +837,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     @Override
     public void requestNames()
     {
-        UIDataUtils.requestNames(this.getType(), this::fillNames);
+        this.getRepository().requestKeys(this::fillNames);
     }
 
     public void save()
@@ -811,7 +850,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     public void forceSave()
     {
-        this.getType().getRepository().save(this.data.getId(), this.data.toData().asMap());
+        this.pinRepository().save(this.data.getId(), this.data.toData().asMap());
     }
 
     @Override

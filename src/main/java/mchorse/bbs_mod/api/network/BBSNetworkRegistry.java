@@ -10,13 +10,13 @@ import net.minecraft.world.entity.Entity;
 public interface BBSNetworkRegistry
 {
     /**
-     * Binds a server receiver to a BBS-owned, already registered C2S payload id.
-     *
-     * This is a legacy raw-buffer bridge for controlled compatibility. It does
-     * not create NeoForge CustomPacketPayload types at addon registration time,
-     * and arbitrary addon namespaces are rejected by NetworkCompat unless BBS
-     * first promotes a channel into the frozen payload table.
+     * Retained source/binary compatibility signature for the old raw receiver
+     * experiment. API 2.0 registration runs after NeoForge freezes payload
+     * types, and every frozen BBS C2S channel is core-owned, so the core facade
+     * explicitly rejects this call. Use {@link #registerServerReceiver} and the
+     * pre-registered addon broker instead.
      */
+    @Deprecated(forRemoval = false, since = "2.0")
     BBSRegistrationResult registerLegacyServerReceiver(ResourceLocation id, NetworkCompat.ServerReceiver receiver);
 
     /**

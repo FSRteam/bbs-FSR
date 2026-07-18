@@ -15,6 +15,12 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
  */
 public final class FabricRegistryCompat
 {
+    enum TrackingRangeUnit
+    {
+        BLOCKS,
+        CHUNKS
+    }
+
     private FabricRegistryCompat() {}
 
     public static BlockBehaviour.Properties blockSettings()
@@ -31,11 +37,14 @@ public final class FabricRegistryCompat
         int updateRate
     )
     {
-        return EntityType.Builder.of(factory, spawnGroup)
-            .sized(dimensions.width(), dimensions.height())
-            .clientTrackingRange(trackingRangeBlocks)
-            .updateInterval(updateRate)
-            .build(id);
+        return buildEntityType(
+            id,
+            spawnGroup,
+            factory,
+            dimensions,
+            toNeoForgeTrackingRange(trackingRangeBlocks, TrackingRangeUnit.BLOCKS),
+            updateRate
+        );
     }
 
     public static <T extends Entity> EntityType<T> buildEntityTypeWithChunkRange(
@@ -47,14 +56,35 @@ public final class FabricRegistryCompat
         int updateRate
     )
     {
-        return buildEntityTypeWithBlockRange(
+        return buildEntityType(
             id,
             spawnGroup,
             factory,
             dimensions,
-            trackingRangeChunks * 16,
+            toNeoForgeTrackingRange(trackingRangeChunks, TrackingRangeUnit.CHUNKS),
             updateRate
         );
+    }
+
+    static int toNeoForgeTrackingRange(int trackingRange, TrackingRangeUnit unit)
+    {
+        return unit == TrackingRangeUnit.BLOCKS ? (trackingRange + 15) / 16 : trackingRange;
+    }
+
+    private static <T extends Entity> EntityType<T> buildEntityType(
+        String id,
+        MobCategory spawnGroup,
+        EntityType.EntityFactory<T> factory,
+        EntityDimensions dimensions,
+        int trackingRangeChunks,
+        int updateRate
+    )
+    {
+        return EntityType.Builder.of(factory, spawnGroup)
+            .sized(dimensions.width(), dimensions.height())
+            .clientTrackingRange(trackingRangeChunks)
+            .updateInterval(updateRate)
+            .build(id);
     }
 
     public static <T extends BlockEntity> BlockEntityType<T> buildBlockEntityType(

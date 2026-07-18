@@ -186,6 +186,7 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
             this.resize();
             this.panel.fillData();
             this.panel.setVisible(this.propertiesVisible);
+            this.panel.restoreScroll();
 
             if (this.filmPanel.isFlying())
             {

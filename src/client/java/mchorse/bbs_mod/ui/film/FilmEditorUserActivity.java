@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.ui.film;
 
-import com.mojang.blaze3d.platform.InputConstants;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import net.minecraft.client.Minecraft;
@@ -45,7 +45,7 @@ public final class FilmEditorUserActivity
             return false;
         }
 
-        if (this.detectActivity(mc, context))
+        if (this.detectActivity(context))
         {
             this.lastActivityMs = nowMs;
         }
@@ -53,7 +53,7 @@ public final class FilmEditorUserActivity
         return nowMs - this.lastActivityMs < AFK_IDLE_MS;
     }
 
-    private boolean detectActivity(Minecraft mc, UIContext context)
+    private boolean detectActivity(UIContext context)
     {
         if (context.mouseX != this.lastMouseX || context.mouseY != this.lastMouseY)
         {
@@ -67,11 +67,9 @@ public final class FilmEditorUserActivity
             return true;
         }
 
-        long handle = mc.getWindow().getWindow();
-
         for (int b = 0; b <= GLFW.GLFW_MOUSE_BUTTON_LAST; b++)
         {
-            if (GLFW.glfwGetMouseButton(handle, b) == GLFW.GLFW_PRESS)
+            if (Window.isMouseButtonPressed(b))
             {
                 return true;
             }
@@ -91,7 +89,7 @@ public final class FilmEditorUserActivity
 
             try
             {
-                if (InputConstants.isKeyDown(handle, key))
+                if (Window.isKeyPressed(key))
                 {
                     return true;
                 }

@@ -135,7 +135,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
                 }
             }
 
-            File folder = this.panel.getType().getRepository().getFolder();
+            File folder = this.panel.getRepository().getFolder();
 
             if (folder != null)
             {
@@ -374,12 +374,12 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
 
         if (mapType == null)
         {
-            data = (T) this.panel.getType().getRepository().create(name);
+            data = this.panel.getRepository().create(name);
             this.panel.fillDefaultData(data);
         }
         else
         {
-            data = (T) this.panel.getType().getRepository().create(name, mapType);
+            data = this.panel.getRepository().create(name, mapType);
         }
 
         this.panel.fill(data);
@@ -409,7 +409,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
             return;
         }
 
-        this.panel.getType().getRepository().addFolder(path, (bool) ->
+        this.panel.getRepository().addFolder(path, (bool) ->
         {
             if (bool)
             {
@@ -434,7 +434,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
 
         String id = files.get(0).toString();
 
-        this.panel.getType().getRepository().load(id, (data) ->
+        this.panel.getRepository().load(id, (data) ->
         {
             if (data != null)
             {
@@ -482,14 +482,14 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
             String from = src.toString();
             String to = this.getNextDupeId(src);
 
-            this.panel.getType().getRepository().load(from, (data) ->
+            this.panel.getRepository().load(from, (data) ->
             {
                 T loaded = (T) data;
 
                 if (loaded != null)
                 {
                     this.onDuplicateData(loaded);
-                    this.panel.getType().getRepository().save(to, loaded.toData().asMap());
+                    this.panel.getRepository().save(to, loaded.toData().asMap());
                 }
 
                 remaining[0] -= 1;
@@ -533,14 +533,14 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
             return;
         }
 
-        this.panel.getType().getRepository().load(from, (data) ->
+        this.panel.getRepository().load(from, (data) ->
         {
             T loaded = (T) data;
 
             if (loaded != null)
             {
                 this.onDuplicateData(loaded);
-                this.panel.getType().getRepository().save(to, loaded.toData().asMap());
+                this.panel.getRepository().save(to, loaded.toData().asMap());
             }
 
             this.panel.requestNames();
@@ -600,7 +600,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
             return;
         }
 
-        this.panel.getType().getRepository().renameFolder(from, to, (bool) ->
+        this.panel.getRepository().renameFolder(from, to, (bool) ->
         {
             if (bool)
             {
@@ -631,7 +631,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
             return;
         }
 
-        this.panel.getType().getRepository().rename(from, to);
+        this.panel.getRepository().rename(from, to);
 
         if (this.panel.getData() != null && from.equals(this.panel.getData().getId()))
         {
@@ -683,7 +683,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
                     String folder = dataPath.toString();
 
                     pendingFolders[0] += 1;
-                    this.panel.getType().getRepository().deleteFolder(folder, (b) ->
+                    this.panel.getRepository().deleteFolder(folder, (b) ->
                     {
                         if (b)
                         {
@@ -708,7 +708,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
                 String id = dataPath.toString();
 
                 removedData.add(id);
-                this.panel.getType().getRepository().delete(id);
+                this.panel.getRepository().delete(id);
             }
         }
 

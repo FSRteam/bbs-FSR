@@ -37,31 +37,44 @@ final class BBSAddonDiagnosticRecord implements BBSAddonDiagnosticSink
         this.state = state;
     }
 
-    String addonId()
+    synchronized String addonId()
     {
         return this.addonId;
     }
 
-    BBSAddonState state()
+    synchronized BBSAddonState state()
     {
         return this.state;
     }
 
-    void state(BBSAddonState state)
+    synchronized void state(BBSAddonState state)
     {
         this.state = state;
     }
 
-    void fail(BBSAddonPhase phase, Throwable throwable)
+    synchronized void fail(BBSAddonPhase phase, Throwable throwable)
+    {
+        this.fail(phase, throwable, "phase " + phase + " failed");
+    }
+
+    synchronized void fail(BBSAddonPhase phase, Throwable throwable, String message)
     {
         this.state = BBSAddonState.FAILED;
         this.failedPhase = phase;
         this.lastErrorClass = throwable == null ? null : throwable.getClass().getName();
-        this.error("phase " + phase + " failed", throwable);
+        this.error(message, throwable);
+    }
+
+    synchronized void fail(BBSAddonPhase phase, String errorClass, String message)
+    {
+        this.state = BBSAddonState.FAILED;
+        this.failedPhase = phase;
+        this.lastErrorClass = errorClass;
+        this.errors.add(message == null ? "phase " + phase + " failed" : message);
     }
 
     @Override
-    public void info(String message)
+    public synchronized void info(String message)
     {
         if (message != null && !message.isBlank())
         {
@@ -70,7 +83,7 @@ final class BBSAddonDiagnosticRecord implements BBSAddonDiagnosticSink
     }
 
     @Override
-    public void warn(String message)
+    public synchronized void warn(String message)
     {
         if (message != null && !message.isBlank())
         {
@@ -79,7 +92,7 @@ final class BBSAddonDiagnosticRecord implements BBSAddonDiagnosticSink
     }
 
     @Override
-    public void error(String message, Throwable error)
+    public synchronized void error(String message, Throwable error)
     {
         String suffix = error == null ? "" : " (" + error.getClass().getName() + ": " + error.getMessage() + ")";
 
@@ -87,7 +100,7 @@ final class BBSAddonDiagnosticRecord implements BBSAddonDiagnosticSink
     }
 
     @Override
-    public BBSRegistrationResult record(BBSRegistrationResult result)
+    public synchronized BBSRegistrationResult record(BBSRegistrationResult result)
     {
         if (result == null)
         {
@@ -106,7 +119,7 @@ final class BBSAddonDiagnosticRecord implements BBSAddonDiagnosticSink
         return result;
     }
 
-    BBSAddonDiagnostics snapshot()
+    synchronized BBSAddonDiagnostics snapshot()
     {
         return new BBSAddonDiagnostics(
             this.addonId,
@@ -122,5 +135,36 @@ final class BBSAddonDiagnosticRecord implements BBSAddonDiagnosticSink
             this.warnings,
             this.errors
         );
+    }
+
+    synchronized void mergeRejectedAttempt(BBSAddonDiagnostics attempt)
+    {
+        if (attempt == null)
+        {
+            return;
+        }
+
+        String prefix = "rejected " + attempt.protocol() + " attempt: ";
+
+        for (String rejected : attempt.rejectedRegistrations())
+        {
+            this.rejectedRegistrations.add(prefix + rejected);
+        }
+
+        for (String warning : attempt.warnings())
+        {
+            this.warnings.add(prefix + warning);
+        }
+
+        for (String error : attempt.errors())
+        {
+            this.errors.add(prefix + error);
+        }
+
+        if (attempt.failedPhase() != null || attempt.lastErrorClass() != null)
+        {
+            this.warnings.add(prefix + "failedPhase=" + attempt.failedPhase()
+                + " lastErrorClass=" + attempt.lastErrorClass());
+        }
     }
 }

@@ -144,12 +144,18 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
             MatrixStackUtils.applyTransform(matrices, applied);
 
+            PoseStack semanticWorld = new PoseStack();
+
+            semanticWorld.translate(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D);
+            MatrixStackUtils.applyTransform(semanticWorld, applied);
+
             int lightAbove = LevelRenderer.getLightColor(entity.getLevel(), pos.offset((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
             Camera camera = mc.gameRenderer.getMainCamera();
 
             RenderSystem.enableDepthTest();
             MorphRenderer.renderForm(properties.getForm(), new FormRenderingContext()
                 .set(FormRenderType.MODEL_BLOCK, entity.getEntity(), matrices, lightAbove, overlay, tickDelta)
+                .entityLocal(semanticWorld)
                 .camera(camera));
             RenderSystem.disableDepthTest();
 

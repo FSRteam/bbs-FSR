@@ -2,6 +2,7 @@ package mchorse.bbs_mod.camera.clips;
 
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.actions.FilmPlaybackPolicy;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -43,22 +44,56 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
 
         if (capture) this.captureSnapshots = false;
 
-        boolean result = super.applyUnderneath(ticks, transition, position, filter);
-
-        if (capture) this.captureSnapshots = true;
-
-        return result;
+        try
+        {
+            return super.applyUnderneath(ticks, transition, position, filter);
+        }
+        finally
+        {
+            if (capture) this.captureSnapshots = true;
+        }
     }
 
     @Override
     public boolean apply(Clip clip, Position position)
     {
-        if (clip instanceof CameraClip)
+        if (clip instanceof CameraClip && position != null)
         {
+            CameraState state = this.captureState();
+
             this.currentLayer = clip.layer.get();
             this.relativeTick = this.ticks - clip.tick.get();
+            Position rollback = new Position();
 
-            ((CameraClip) clip).apply(this, position);
+            if (FilmPlaybackPolicy.isCameraPoseAllowed(position))
+            {
+                this.lastPosition.copy(position);
+                rollback.copy(position);
+            }
+            else
+            {
+                rollback.copy(this.lastPosition);
+            }
+
+            try
+            {
+                ((CameraClip) clip).apply(this, position);
+            }
+            catch (RuntimeException e)
+            {
+                position.copy(rollback);
+                this.restoreState(state, rollback);
+
+                throw e;
+            }
+
+            if (!FilmPlaybackPolicy.isCameraPoseAllowed(position))
+            {
+                position.copy(rollback);
+                this.restoreState(state, rollback);
+
+                return false;
+            }
 
             if (this.captureSnapshots)
             {
@@ -89,6 +124,56 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
 
         return false;
     }
+
+    private CameraState captureState()
+    {
+        Map<Clip, Position> snapshots = new HashMap<>();
+
+        for (Map.Entry<Clip, Position> entry : this.snapshots.entrySet())
+        {
+            snapshots.put(entry.getKey(), entry.getValue().copy());
+        }
+
+        return new CameraState(
+            this.ticks,
+            this.relativeTick,
+            this.transition,
+            this.currentLayer,
+            this.count,
+            this.distance,
+            this.velocity,
+            this.captureSnapshots,
+            snapshots
+        );
+    }
+
+    private void restoreState(CameraState state, Position rollback)
+    {
+        this.ticks = state.ticks();
+        this.relativeTick = state.relativeTick();
+        this.transition = state.transition();
+        this.currentLayer = state.currentLayer();
+        this.count = state.count();
+        this.distance = state.distance();
+        this.velocity = state.velocity();
+        this.lastPosition.copy(rollback);
+        this.captureSnapshots = state.captureSnapshots();
+        this.snapshots.clear();
+        this.snapshots.putAll(state.snapshots());
+    }
+
+    private record CameraState(
+        int ticks,
+        int relativeTick,
+        float transition,
+        int currentLayer,
+        int count,
+        double distance,
+        double velocity,
+        boolean captureSnapshots,
+        Map<Clip, Position> snapshots
+    )
+    {}
 
     public void shutdown()
     {

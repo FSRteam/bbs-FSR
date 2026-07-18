@@ -23,6 +23,8 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class UIContext implements IViewportStack
@@ -37,6 +39,8 @@ public class UIContext implements IViewportStack
     public final UINotifications notifications;
     public IFocusedUIElement activeElement;
     public UIContextMenu contextMenu;
+    private long contextMenuIntentGeneration;
+    private final Set<UIContextMenu> pendingContextMenuRemovals = new LinkedHashSet<>();
 
     /* Mouse states */
     public int mouseX;
@@ -292,6 +296,11 @@ public class UIContext implements IViewportStack
         this.cursorShape = shape;
     }
 
+    int getCursorShape()
+    {
+        return this.cursorShape;
+    }
+
     public void resetCursor()
     {
         this.cursorShape = GLFW.GLFW_ARROW_CURSOR;
@@ -419,12 +428,22 @@ public class UIContext implements IViewportStack
             return;
         }
 
-        menu.setMouse(this);
-        menu.resize();
+        long generation = this.advanceContextMenuIntentGeneration();
 
-        this.contextMenu = menu;
-        this.menu.overlay.add(menu);
-        this.menu.getRoot().moveToFront(this.menu.overlay);
+        this.menu.runAfterCapturedMouseRelease(() ->
+        {
+            if (generation != this.contextMenuIntentGeneration || this.hasContextMenu())
+            {
+                return;
+            }
+
+            menu.setMouse(this);
+            menu.resize();
+
+            this.contextMenu = menu;
+            this.menu.overlay.add(menu);
+            this.menu.getRoot().moveToFront(this.menu.overlay);
+        });
     }
 
     public void replaceContextMenu(Consumer<ContextMenuManager> consumer)
@@ -446,26 +465,98 @@ public class UIContext implements IViewportStack
             return;
         }
 
-        if (this.contextMenu != null)
+        UIContextMenu previous = this.contextMenu;
+        this.contextMenu = null;
+        long generation = this.advanceContextMenuIntentGeneration();
+
+        if (previous != null)
         {
-            this.contextMenu.removeFromParent();
+            this.pendingContextMenuRemovals.add(previous);
         }
 
-        menu.setMouse(this);
-        menu.resize();
+        this.menu.runAfterCapturedMouseRelease(() ->
+        {
+            this.removePendingContextMenu(previous);
 
-        this.contextMenu = menu;
-        this.menu.overlay.add(menu);
-        this.menu.getRoot().moveToFront(this.menu.overlay);
+            if (generation != this.contextMenuIntentGeneration)
+            {
+                return;
+            }
+
+            menu.setMouse(this);
+            menu.resize();
+
+            this.contextMenu = menu;
+            this.menu.overlay.add(menu);
+            this.menu.getRoot().moveToFront(this.menu.overlay);
+        });
     }
 
     public void closeContextMenu()
     {
+        UIContextMenu previous = this.contextMenu;
+
+        this.contextMenu = null;
+        this.advanceContextMenuIntentGeneration();
+
+        if (previous != null)
+        {
+            this.queueContextMenuRemoval(previous);
+        }
+    }
+
+    /** Reissue cleanup-only intents after a screen lifecycle invalidated old barriers. */
+    public void invalidateContextMenus()
+    {
+        this.advanceContextMenuIntentGeneration();
+
         if (this.contextMenu != null)
         {
-            this.contextMenu.removeFromParent();
+            this.pendingContextMenuRemovals.add(this.contextMenu);
             this.contextMenu = null;
         }
+
+        for (UIContextMenu menu : List.copyOf(this.pendingContextMenuRemovals))
+        {
+            this.menu.runAfterHierarchyCleanup(() -> this.removePendingContextMenu(menu));
+        }
+    }
+
+    private void queueContextMenuRemoval(UIContextMenu menu)
+    {
+        if (menu == null)
+        {
+            return;
+        }
+
+        this.pendingContextMenuRemovals.add(menu);
+        this.menu.runAfterHierarchyMutation(() -> this.removePendingContextMenu(menu));
+    }
+
+    private void removePendingContextMenu(UIContextMenu menu)
+    {
+        if (menu == null)
+        {
+            return;
+        }
+
+        try
+        {
+            menu.removeFromParent();
+        }
+        finally
+        {
+            this.pendingContextMenuRemovals.remove(menu);
+        }
+    }
+
+    private long advanceContextMenuIntentGeneration()
+    {
+        this.contextMenuIntentGeneration = this.contextMenuIntentGeneration == Long.MAX_VALUE
+            ? 1L
+            : this.contextMenuIntentGeneration + 1L;
+
+        return this.contextMenuIntentGeneration;
     }
 
     /* Viewport */

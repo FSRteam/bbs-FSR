@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 public class ParticleScheme extends ValueGroup {
-    public static final Link DEFAULT_TEXTURE = Link.assets("textures/default_atlas.png");
+    public static final Link DEFAULT_TEXTURE = Link.assets("textures/default_particles.png");
     public static final ParticleParser PARSER = new ParticleParser();
 
     /* Particles identifier */

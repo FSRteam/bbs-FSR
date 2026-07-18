@@ -138,7 +138,7 @@ public class UIPointsModule extends UIAbstractModule
         {
             if (context.mouseButton == 2 || (context.mouseButton == 0 && Window.isCtrlPressed()))
             {
-                this.scroll.dragging = true;
+                this.scroll.beginDragging(context.mouseButton);
 
                 return true;
             }

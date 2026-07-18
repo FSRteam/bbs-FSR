@@ -17,10 +17,37 @@ public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
     @Override
     public ItemStack fromData(BaseType data)
     {
-        DataResult<Pair<ItemStack, Tag>> decode = ItemStack.CODEC.decode(NbtOps.INSTANCE, DataStorageUtils.toNbt(data));
-        Optional<Pair<ItemStack, Tag>> result = decode.result();
+        return this.tryFromData(data).orElse(ItemStack.EMPTY);
+    }
 
-        return result.map(Pair::getFirst).orElse(ItemStack.EMPTY);
+    /**
+     * Unlike {@link #fromData(BaseType)}, this preserves decode failure so a
+     * network mutation can stage the complete inventory before touching the
+     * player. An empty map is the existing serialized representation of an
+     * empty slot and remains valid.
+     */
+    public Optional<ItemStack> tryFromData(BaseType data)
+    {
+        if (data == null)
+        {
+            return Optional.empty();
+        }
+
+        if (data instanceof MapType map && map.isEmpty())
+        {
+            return Optional.of(ItemStack.EMPTY);
+        }
+
+        try
+        {
+            DataResult<Pair<ItemStack, Tag>> decode = ItemStack.CODEC.decode(NbtOps.INSTANCE, DataStorageUtils.toNbt(data));
+
+            return decode.result().map(Pair::getFirst);
+        }
+        catch (RuntimeException e)
+        {
+            return Optional.empty();
+        }
     }
 
     @Override

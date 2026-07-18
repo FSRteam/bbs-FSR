@@ -133,10 +133,27 @@ public class MCEntity implements IEntity
     @Override
     public void swingArm()
     {
+        this.swingArm(InteractionHand.MAIN_HAND);
+    }
+
+    @Override
+    public void swingArm(InteractionHand hand)
+    {
         if (this.mcEntity instanceof LivingEntity living)
         {
-            living.swing(InteractionHand.MAIN_HAND);
+            living.swing(hand);
         }
+    }
+
+    @Override
+    public InteractionHand getSwingingArm()
+    {
+        if (this.mcEntity instanceof LivingEntity living && living.swingingArm != null)
+        {
+            return living.swingingArm;
+        }
+
+        return InteractionHand.MAIN_HAND;
     }
 
     @Override

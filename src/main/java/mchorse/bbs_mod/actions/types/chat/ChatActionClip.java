@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.actions.types.chat;
 
+import mchorse.bbs_mod.actions.ActionCommandContext;
+import mchorse.bbs_mod.actions.FilmPlaybackPolicy;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.film.Film;
@@ -23,9 +25,17 @@ public class ChatActionClip extends ActionClip
     @Override
     public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
+        String message = this.message.get();
+
+        if (!ActionCommandContext.isAuthorizedFor(player)
+            || !FilmPlaybackPolicy.isChatActionAllowed(message, this.frequency.get()))
+        {
+            return;
+        }
+
         for (Player entity : player.level().players())
         {
-            entity.sendSystemMessage(Component.literal(StringUtils.processColoredText(this.message.get())));
+            entity.sendSystemMessage(Component.literal(StringUtils.processColoredText(message)));
         }
     }
 

@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.entities;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.utils.AABB;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.WalkAnimationState;
@@ -44,6 +45,7 @@ public class StubEntity implements IEntity
     private float bodyYaw;
 
     private int armSwing;
+    private InteractionHand swingingArm = InteractionHand.MAIN_HAND;
 
     private Vec3 velocity = Vec3.ZERO;
 
@@ -152,7 +154,20 @@ public class StubEntity implements IEntity
     @Override
     public void swingArm()
     {
+        this.swingArm(InteractionHand.MAIN_HAND);
+    }
+
+    @Override
+    public void swingArm(InteractionHand hand)
+    {
+        this.swingingArm = hand == null ? InteractionHand.MAIN_HAND : hand;
         this.armSwing = 6;
+    }
+
+    @Override
+    public InteractionHand getSwingingArm()
+    {
+        return this.swingingArm;
     }
 
     @Override

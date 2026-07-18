@@ -83,6 +83,11 @@ public final class ModelPhysicsRuntime
 
     public void apply(IEntity entity, Object simulationOwner, ModelInstance instance, float transition, Matrix4f baseTransform)
     {
+        this.apply(entity, simulationOwner, instance, transition, baseTransform, true, true);
+    }
+
+    public void apply(IEntity entity, Object simulationOwner, ModelInstance instance, float transition, Matrix4f baseTransform, boolean allowWorldTargetOverrides, boolean allowWorldCollisions)
+    {
         if (entity == null || instance == null || instance.model == null)
         {
             return;
@@ -120,7 +125,9 @@ public final class ModelPhysicsRuntime
 
         wind = resolveWindDirection(wind, baseTransform, state.windDirection);
 
-        applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled, wind, constraints, state, baseTransform);
+        Level world = allowWorldCollisions ? entity.getWorld() : null;
+
+        applyCompiled(world, entity.getAge(), transition, model, instance, compiled, wind, constraints, state, baseTransform, allowWorldTargetOverrides);
     }
 
     /**
@@ -143,7 +150,7 @@ public final class ModelPhysicsRuntime
         return new ModelPhysicsConfig.Wind(wind.strength(), dir.x, dir.y, dir.z, wind.turbulence(), wind.turbulenceSpeed(), wind.turbulenceScale(), false);
     }
 
-    private static void applyCompiled(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.Compiled compiled, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)
+    private static void applyCompiled(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.Compiled compiled, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         if (state.compiled != compiled)
         {
@@ -156,11 +163,11 @@ public final class ModelPhysicsRuntime
 
         for (ModelPhysicsCache.CompiledChain chain : compiled.chains())
         {
-            applyChain(world, age, transition, model, instance, chain, wind, constraints, state.frames, state);
+            applyChain(world, age, transition, model, instance, chain, wind, constraints, state.frames, state, allowWorldTargetOverrides);
         }
     }
 
-    private static void applyChain(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState)
+    private static void applyChain(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState, boolean allowWorldTargetOverrides)
     {
         List<String> ids = chain.chainRootToEnd();
         int pivotCount = ids.size();
@@ -241,7 +248,7 @@ public final class ModelPhysicsRuntime
         Quaternionf anchorRotation = rootFrame.worldRotation();
 
         Vector3f target = null;
-        if (instance != null && instance.form instanceof ModelForm modelForm)
+        if (allowWorldTargetOverrides && instance != null && instance.form instanceof ModelForm modelForm)
         {
             String rootBone = ids.get(0);
             Vector3f worldPos = modelForm.physicsTargetOverrides.get(rootBone);
@@ -295,6 +302,18 @@ public final class ModelPhysicsRuntime
         ChainSolver.step(world, age, transition, ids, chain, gravity, damping, stiffness, wind, constraints, anchor, anchorRotation, chainFrames.get(0).parentRotation(), target, chainFrames, state);
 
         Vector3f[] positions = ChainSolver.renderInterpolate(state, state.renderAlpha, anchor, anchorRotation, target);
-        ModelRotationBlender.applyWeightedRotations(model, chainFrames.get(0).parentRotation(), ids, positions, weight);
+        /* Reconstruct, blend and constrain the exact local quaternion written to
+         * the renderer. The retained workspace also makes the actual applied
+         * parent frame (not an unconstrained direction-only approximation) the
+         * frame used for every descendant. */
+        ModelRotationBlender.applyWeightedRotations(
+            model,
+            chainFrames.get(0).parentRotation(),
+            ids,
+            positions,
+            weight,
+            constraints,
+            state.rotationWorkspace
+        );
     }
 }

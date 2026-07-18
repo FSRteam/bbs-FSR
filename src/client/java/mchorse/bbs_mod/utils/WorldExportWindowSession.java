@@ -25,6 +25,11 @@ public class WorldExportWindowSession
             return;
         }
 
+        /* Record rollback ownership before the first window mutation. */
+        this.changed = this.snapshot.maximized
+            || this.snapshot.width != width
+            || this.snapshot.height != height;
+
         if (this.snapshot.maximized)
         {
             GLFW.glfwRestoreWindow(handle);
@@ -36,41 +41,73 @@ public class WorldExportWindowSession
         }
 
         this.restoreOriginalPosition(handle);
-
-        this.changed = this.snapshot.maximized
-            || this.snapshot.width != width
-            || this.snapshot.height != height;
     }
 
     public void restore()
     {
-        if (this.snapshot == null)
+        WindowSnapshot snapshot = this.snapshot;
+
+        if (snapshot == null)
         {
             return;
         }
 
-        Window window = Minecraft.getInstance().getWindow();
-        long handle = window.getWindow();
+        Throwable failure = null;
 
-        if (!this.snapshot.fullscreen && this.changed)
+        try
         {
-            int width = Math.max(this.snapshot.width, 2);
-            int height = Math.max(this.snapshot.height, 2);
+            Window window = Minecraft.getInstance().getWindow();
+            long handle = window.getWindow();
 
-            if (window.getScreenWidth() != width || window.getScreenHeight() != height)
+            if (!snapshot.fullscreen && this.changed)
             {
-                window.setWindowed(width, height);
-            }
+                int width = Math.max(snapshot.width, 2);
+                int height = Math.max(snapshot.height, 2);
 
-            this.restoreOriginalPosition(handle);
+                try
+                {
+                    if (window.getScreenWidth() != width || window.getScreenHeight() != height)
+                    {
+                        window.setWindowed(width, height);
+                    }
+                }
+                catch (Exception | LinkageError e)
+                {
+                    failure = appendFailure(failure, e);
+                }
 
-            if (this.snapshot.maximized)
-            {
-                GLFW.glfwMaximizeWindow(handle);
+                try
+                {
+                    this.restoreOriginalPosition(handle);
+                }
+                catch (Exception | LinkageError e)
+                {
+                    failure = appendFailure(failure, e);
+                }
+
+                if (snapshot.maximized)
+                {
+                    try
+                    {
+                        GLFW.glfwMaximizeWindow(handle);
+                    }
+                    catch (Exception | LinkageError e)
+                    {
+                        failure = appendFailure(failure, e);
+                    }
+                }
             }
         }
+        catch (Exception | LinkageError e)
+        {
+            failure = appendFailure(failure, e);
+        }
+        finally
+        {
+            this.clear();
+        }
 
-        this.clear();
+        rethrow(failure);
     }
 
     public void clear()
@@ -86,6 +123,39 @@ public class WorldExportWindowSession
         if (position.x != this.snapshot.x || position.y != this.snapshot.y)
         {
             GLFW.glfwSetWindowPos(handle, this.snapshot.x, this.snapshot.y);
+        }
+    }
+
+    private static Throwable appendFailure(Throwable current, Throwable next)
+    {
+        if (current == null)
+        {
+            return next;
+        }
+
+        if (current != next)
+        {
+            current.addSuppressed(next);
+        }
+
+        return current;
+    }
+
+    private static void rethrow(Throwable failure)
+    {
+        if (failure instanceof RuntimeException runtimeException)
+        {
+            throw runtimeException;
+        }
+
+        if (failure instanceof LinkageError linkageError)
+        {
+            throw linkageError;
+        }
+
+        if (failure != null)
+        {
+            throw new IllegalStateException("Failed to restore the video export window", failure);
         }
     }
 

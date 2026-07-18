@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.film.UIClips;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
@@ -41,6 +42,8 @@ public class UIAudioEditor extends UIElement
 
     private Scale scale = new Scale(this.area, ScrollDirection.HORIZONTAL);
 
+    private final MouseGestureOwnership gestureOwnership = new MouseGestureOwnership();
+    private long gestureGeneration;
     private boolean navigating;
     private int dragging = -2;
     private int lastX;
@@ -219,54 +222,11 @@ public class UIAudioEditor extends UIElement
     {
         if (this.area.isInside(context))
         {
-            if (context.mouseButton == 0)
+            if (context.mouseButton == 0 || context.mouseButton == 2)
             {
-                if (Window.isCtrlPressed())
-                {
-                    this.dragged = this.createNewCode();
+                this.beginGesture(context.mouseButton, () -> this.startGesture(context));
 
-                    this.colorCodes.add(this.dragged);
-                    this.setCurrent(this.dragged);
-
-                    return true;
-                }
-
-                if (this.current != null)
-                {
-                    Area codeArea = this.getColorCodeArea(this.current);
-
-                    if (codeArea.isInside(context))
-                    {
-                        this.dragging = this.getColorCodeHandle(context, codeArea);
-
-                        return true;
-                    }
-                }
-
-                for (ColorCode code : this.colorCodes)
-                {
-                    Area codeArea = this.getColorCodeArea(code);
-
-                    if (codeArea.isInside(context))
-                    {
-                        this.setCurrent(code);
-
-                        this.dragging = this.getColorCodeHandle(context, codeArea);
-
-                        return true;
-                    }
-                }
-
-                this.dragging = -1;
-
-                if (this.player != null)
-                {
-                    this.player.setPlaybackPosition((float) this.scale.from(context.mouseX));
-                }
-            }
-            else if (context.mouseButton == 2)
-            {
-                this.navigating = true;
+                return true;
             }
 
             return context.mouseButton != 1;
@@ -275,9 +235,101 @@ public class UIAudioEditor extends UIElement
         return super.subMouseClicked(context);
     }
 
+    private void startGesture(UIContext context)
+    {
+        if (context.mouseButton == 0)
+        {
+            if (Window.isCtrlPressed())
+            {
+                this.dragged = this.createNewCode();
+
+                this.colorCodes.add(this.dragged);
+                this.setCurrent(this.dragged);
+
+                return;
+            }
+
+            if (this.current != null)
+            {
+                Area codeArea = this.getColorCodeArea(this.current);
+
+                if (codeArea.isInside(context))
+                {
+                    this.dragging = this.getColorCodeHandle(context, codeArea);
+
+                    return;
+                }
+            }
+
+            for (ColorCode code : this.colorCodes)
+            {
+                Area codeArea = this.getColorCodeArea(code);
+
+                if (codeArea.isInside(context))
+                {
+                    this.setCurrent(code);
+
+                    this.dragging = this.getColorCodeHandle(context, codeArea);
+
+                    return;
+                }
+            }
+
+            this.dragging = -1;
+
+            if (this.player != null)
+            {
+                this.player.setPlaybackPosition((float) this.scale.from(context.mouseX));
+            }
+        }
+        else
+        {
+            this.navigating = true;
+        }
+    }
+
+    private boolean beginGesture(int button, Runnable starter)
+    {
+        long generation = this.gestureOwnership.acquireToken(button);
+
+        if (generation == 0L)
+        {
+            return false;
+        }
+
+        this.gestureGeneration = generation;
+        boolean started = false;
+
+        try
+        {
+            starter.run();
+            started = true;
+
+            return true;
+        }
+        finally
+        {
+            if (!started && this.gestureOwnership.release(button, generation))
+            {
+                this.gestureGeneration = 0L;
+                this.dragged = null;
+                this.navigating = false;
+                this.dragging = -2;
+            }
+        }
+    }
+
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        long generation = this.gestureGeneration;
+
+        if (!this.gestureOwnership.release(context.mouseButton, generation))
+        {
+            return super.subMouseReleased(context);
+        }
+
+        this.gestureGeneration = 0L;
         this.dragged = null;
         this.navigating = false;
         this.dragging = -2;

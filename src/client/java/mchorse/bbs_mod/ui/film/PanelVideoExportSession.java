@@ -26,8 +26,12 @@ public class PanelVideoExportSession extends VideoExportSession
     private final UIFilmPanel editor;
 
     private int duration;
+    private int start;
     private int end;
+    private int restoreCursor;
     private boolean restorePaused;
+    private boolean setupStarted;
+    private boolean setupCompleted;
 
     public PanelVideoExportSession(UIFilmRecorder ui, UIFilmPanel editor)
     {
@@ -76,14 +80,26 @@ public class PanelVideoExportSession extends VideoExportSession
         }
 
         this.restorePaused = this.editor.getController().isPaused();
+        this.restoreCursor = this.editor.getCursor();
+        this.setupStarted = false;
+        this.setupCompleted = false;
 
         int min = this.editor.cameraEditor.clips.loopMin;
         int max = this.editor.cameraEditor.clips.loopMax;
         boolean looping = BBSSettings.editorLoop.get();
 
+        this.start = looping ? Math.min(min, max) : 0;
         this.end = looping && min != max ? Math.max(min, max) : this.duration;
 
-        this.editor.setCursor(looping ? Math.min(min, max) : 0);
+        return true;
+    }
+
+    @Override
+    protected void applyExportTarget()
+    {
+        /* All mutations happen after the base session entered teardown-owned WARMUP. */
+        this.setupStarted = true;
+        this.editor.setCursor(this.start);
         this.editor.notifyServer(ActionState.RESTART);
 
         if (this.ui.resetReplays)
@@ -92,8 +108,7 @@ public class PanelVideoExportSession extends VideoExportSession
         }
 
         this.ui.attachOverlay();
-
-        return true;
+        this.setupCompleted = true;
     }
 
     @Override
@@ -172,14 +187,45 @@ public class PanelVideoExportSession extends VideoExportSession
     @Override
     protected void teardown(boolean cancelled)
     {
-        this.editor.getController().setPaused(this.restorePaused);
-        this.editor.restorePreviewSize();
+        boolean rollbackPartialSetup = this.setupStarted && !this.setupCompleted;
 
-        if (this.editor.isRunning())
-        {
-            this.editor.togglePlayback();
-        }
-
-        this.ui.detachOverlay();
+        this.runCleanupSteps(
+            () ->
+            {
+                if (rollbackPartialSetup)
+                {
+                    this.editor.setCursor(this.restoreCursor);
+                }
+            },
+            () ->
+            {
+                if (rollbackPartialSetup)
+                {
+                    this.editor.notifyServer(ActionState.RESTART);
+                }
+            },
+            () ->
+            {
+                if (rollbackPartialSetup && this.ui.resetReplays)
+                {
+                    this.editor.getController().createEntities();
+                }
+            },
+            () -> this.editor.getController().setPaused(this.restorePaused),
+            this.editor::restorePreviewSize,
+            () ->
+            {
+                if (this.editor.isRunning())
+                {
+                    this.editor.togglePlayback();
+                }
+            },
+            this.ui::detachOverlay,
+            () ->
+            {
+                this.setupStarted = false;
+                this.setupCompleted = false;
+            }
+        );
     }
 }

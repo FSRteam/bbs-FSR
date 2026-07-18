@@ -66,6 +66,7 @@ public class Particle
     public int firstIntersection = -1;
     public float rotationCollisionDrag;
     public boolean realisticCollisionDrag;
+    private boolean collisionEventActive;
 
     /* Expiration delay (set by collision with expirationDelay) */
     private int expireAge = -1;
@@ -116,6 +117,19 @@ public class Particle
             this.expirationDelay = Math.abs(expDelay);
             this.expireAge = this.age + this.expirationDelay;
         }
+    }
+
+    /**
+     * Returns true only when collision event state crosses from clear to
+     * colliding. A clear update rearms the next independent collision.
+     */
+    public boolean updateCollisionEventCrossing(boolean colliding)
+    {
+        boolean crossing = colliding && !this.collisionEventActive;
+
+        this.collisionEventActive = colliding;
+
+        return crossing;
     }
 
     public double getAge(float transition)

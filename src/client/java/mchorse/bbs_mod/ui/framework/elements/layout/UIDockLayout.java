@@ -1108,14 +1108,23 @@ public class UIDockLayout extends UIElement
 
         handle.dragEnd(() ->
         {
-            if (this.draggingPanelId == null || this.dropTargetPanelId == null || this.draggingPanelId.equals(this.dropTargetPanelId))
+            String dragId = this.draggingPanelId;
+            String targetId = this.dropTargetPanelId;
+            int targetZone = this.dropTargetZone;
+
+            try
+            {
+                if (dragId == null || targetId == null || dragId.equals(targetId))
+                {
+                    return;
+                }
+
+                this.applyPanelDropResult(dragId, targetId, targetZone);
+            }
+            finally
             {
                 this.clearPanelDragState();
-                return;
             }
-
-            this.applyPanelDropResult(this.draggingPanelId, this.dropTargetPanelId, this.dropTargetZone);
-            this.clearPanelDragState();
         });
         handle.hoverOnly().cursors(GLFW.GLFW_HAND_CURSOR, GLFW.GLFW_HAND_CURSOR).rendering((context) -> this.renderPanelDragHandle(context, handle));
 

@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.mixin;
 
-import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.actions.types.AttackActionClip;
+import mchorse.bbs_mod.actions.AttackRecordingContext;
+import mchorse.bbs_mod.actions.SuperFakePlayer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -19,16 +19,11 @@ public class LivingEntityMixin
     {
         Entity attacker = source.getEntity();
 
-        if (attacker != null && attacker == source.getDirectEntity() && attacker.getClass() == ServerPlayer.class)
+        if (attacker instanceof ServerPlayer player && !(attacker instanceof SuperFakePlayer) && attacker == source.getDirectEntity())
         {
-            BBSMod.getActions().addAction((ServerPlayer) attacker, () ->
-            {
-                AttackActionClip clip = new AttackActionClip();
+            Entity target = (Entity) (Object) this;
 
-                clip.damage.set(amount);
-
-                return clip;
-            });
+            AttackRecordingContext.recordDamage(player, target, amount);
         }
     }
 

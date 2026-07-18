@@ -15,14 +15,19 @@ public class ParticleCollisionEvents
 {
     public final List<Entry> entries = new ArrayList<>();
 
+    /* Parsed Entry instances and raw BaseType siblings in their original order. */
+    private final List<Object> elementOrder = new ArrayList<>();
     private BaseType raw;
     private boolean edited;
+    private boolean hasRawSiblings;
 
     public void fromData(BaseType data)
     {
         this.entries.clear();
+        this.elementOrder.clear();
         this.raw = null;
         this.edited = false;
+        this.hasRawSiblings = false;
 
         if (data == null)
         {
@@ -61,41 +66,42 @@ public class ParticleCollisionEvents
             return;
         }
 
-        boolean supported = true;
-
         for (BaseType element : data.asList())
         {
-            if (element.isString())
+            if (element.isString() && !element.asString().trim().isEmpty())
             {
                 this.entries.add(new Entry(element.asString(), 0));
+                this.elementOrder.add(this.entries.get(this.entries.size() - 1));
 
                 continue;
             }
 
             if (!element.isMap())
             {
-                supported = false;
+                this.elementOrder.add(element.copy());
+                this.hasRawSiblings = true;
 
                 continue;
             }
 
-            Entry entry = Entry.fromData(element.asMap());
+            MapType map = element.asMap();
+            Entry entry = map.has("event") && map.get("event").isString()
+                ? Entry.fromData(map)
+                : null;
 
-            if (entry.event.isEmpty())
+            if (entry == null || entry.event.isEmpty())
             {
-                supported = false;
+                this.elementOrder.add(element.copy());
+                this.hasRawSiblings = true;
             }
             else
             {
                 this.entries.add(entry);
+                this.elementOrder.add(entry);
             }
         }
 
-        if (!supported)
-        {
-            this.raw = data.copy();
-        }
-        else if (!this.entries.isEmpty())
+        if (!this.entries.isEmpty() || this.hasRawSiblings)
         {
             this.raw = data.copy();
         }
@@ -120,22 +126,43 @@ public class ParticleCollisionEvents
 
         ListType list = new ListType();
 
+        for (Object element : this.elementOrder)
+        {
+            if (element instanceof Entry entry)
+            {
+                if (this.entries.contains(entry))
+                {
+                    this.addEntry(list, entry);
+                }
+            }
+            else
+            {
+                list.add(((BaseType) element).copy());
+            }
+        }
+
         for (Entry entry : this.entries)
         {
-            if (entry.event == null || entry.event.trim().isEmpty())
+            if (!this.elementOrder.contains(entry))
             {
-                continue;
+                this.addEntry(list, entry);
             }
-
-            list.add(entry.toData());
         }
 
         return list.isEmpty() ? null : list;
     }
 
+    private void addEntry(ListType list, Entry entry)
+    {
+        if (entry.event != null && !entry.event.trim().isEmpty())
+        {
+            list.add(entry.toData());
+        }
+    }
+
     public boolean isEmpty()
     {
-        return this.entries.isEmpty() && this.raw == null;
+        return this.entries.isEmpty() && this.raw == null && !this.hasRawSiblings;
     }
 
     public void replaceEvent(String oldId, String newId)

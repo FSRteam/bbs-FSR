@@ -16,13 +16,16 @@ public class IKControl implements IMapSerializable
     /* Mirrors ModelIKConfig's defaults; duplicated because that config class lives
      * in the client source set and this keyframe value lives in main. */
     public static final float DEFAULT_WEIGHT = 1F;
+    /** Legacy API 2.0 constant; old addon classfiles inline this value. */
+    @Deprecated(forRemoval = false, since = "2.0")
     public static final float DEFAULT_SOFTNESS = 0.05F;
+    public static final float HARD_REACH_DEFAULT_SOFTNESS = 0F;
     public static final float DEFAULT_POLE_ANGLE = 0F;
 
     public static final IKControl DEFAULT = new IKControl();
 
     public float weight = DEFAULT_WEIGHT;
-    public float softness = DEFAULT_SOFTNESS;
+    public float softness = HARD_REACH_DEFAULT_SOFTNESS;
     public float poleAngle = DEFAULT_POLE_ANGLE;
     public boolean enabled = true;
     public boolean pole = true;
@@ -30,7 +33,7 @@ public class IKControl implements IMapSerializable
     public void identity()
     {
         this.weight = DEFAULT_WEIGHT;
-        this.softness = DEFAULT_SOFTNESS;
+        this.softness = HARD_REACH_DEFAULT_SOFTNESS;
         this.poleAngle = DEFAULT_POLE_ANGLE;
         this.enabled = true;
         this.pole = true;

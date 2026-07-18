@@ -96,10 +96,15 @@ public class UIScrollView extends UIElement implements IViewport
         }
 
         this.apply(context);
-        IUIElement result = super.childrenMouseClicked(context);
-        this.unapply(context);
 
-        return result;
+        try
+        {
+            return super.childrenMouseClicked(context);
+        }
+        finally
+        {
+            this.unapply(context);
+        }
     }
 
     @Override
@@ -116,8 +121,16 @@ public class UIScrollView extends UIElement implements IViewport
         }
 
         this.apply(context);
-        IUIElement result = super.childrenMouseScrolled(context);
-        this.unapply(context);
+        IUIElement result;
+
+        try
+        {
+            result = super.childrenMouseScrolled(context);
+        }
+        finally
+        {
+            this.unapply(context);
+        }
 
         if (result != null)
         {
@@ -130,33 +143,51 @@ public class UIScrollView extends UIElement implements IViewport
     @Override
     protected IUIElement childrenMouseReleased(UIContext context)
     {
-        this.scroll.mouseReleased(context);
+        boolean scrollReleased = this.scroll.tryMouseReleased(context);
 
         this.apply(context);
-        IUIElement result = super.childrenMouseReleased(context);
-        this.unapply(context);
+        IUIElement result;
 
-        return result;
+        try
+        {
+            result = super.childrenMouseReleased(context);
+        }
+        finally
+        {
+            this.unapply(context);
+        }
+
+        return result == null && scrollReleased ? this : result;
     }
 
     @Override
     protected IUIElement childrenKeyPressed(UIContext context)
     {
         this.apply(context);
-        IUIElement result = super.childrenKeyPressed(context);
-        this.unapply(context);
 
-        return result;
+        try
+        {
+            return super.childrenKeyPressed(context);
+        }
+        finally
+        {
+            this.unapply(context);
+        }
     }
 
     @Override
     protected IUIElement childrenTextInput(UIContext context)
     {
         this.apply(context);
-        IUIElement result = super.childrenTextInput(context);
-        this.unapply(context);
 
-        return result;
+        try
+        {
+            return super.childrenTextInput(context);
+        }
+        finally
+        {
+            this.unapply(context);
+        }
     }
 
     @Override
@@ -168,17 +199,27 @@ public class UIScrollView extends UIElement implements IViewport
 
         context.batcher.clip(this.area, context);
 
-        this.apply(context);
+        try
+        {
+            this.apply(context);
 
-        this.preRender(context);
-        super.render(context);
-        this.postRender(context);
+            try
+            {
+                this.preRender(context);
+                super.render(context);
+                this.postRender(context);
+            }
+            finally
+            {
+                this.unapply(context);
+            }
 
-        this.unapply(context);
-
-        this.scroll.renderScrollbar(context.batcher);
-
-        context.batcher.unclip(context);
+            this.scroll.renderScrollbar(context.batcher);
+        }
+        finally
+        {
+            context.batcher.unclip(context);
+        }
 
         /* Clear tooltip in case if it was set outside of scroll area within the scroll */
         if (!this.area.isInside(context) && context.tooltip.element != lastTooltip)

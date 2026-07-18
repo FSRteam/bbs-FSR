@@ -8,6 +8,11 @@ import mchorse.bbs_mod.api.particles.BBSParticleRegistry;
 import mchorse.bbs_mod.api.resources.BBSResourceRegistry;
 import mchorse.bbs_mod.api.settings.BBSSettingsRegistry;
 
+/**
+ * Callback-scoped structural registration facade. Registration methods are
+ * accepted only while {@link BBSAddon#register} is executing; retained facade
+ * instances reject mutations after that phase closes.
+ */
 public interface BBSAddonRegistrationContext extends BBSAddonContext
 {
     BBSResourceRegistry resources();

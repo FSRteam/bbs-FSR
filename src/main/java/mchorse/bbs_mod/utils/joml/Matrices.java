@@ -145,17 +145,27 @@ public class Matrices
 
     public static Vector3f toEulerZYXDegrees(Quaternionf q)
     {
-        Vector3f radZYX = new Vector3f();
+        return toEulerZYXDegrees(q, new Vector3f(), new Quaternionf());
+    }
 
-        new Quaternionf(q).normalize().getEulerAnglesZYX(radZYX);
+    /** Allocation-free ZYX quaternion to degree-Euler conversion. */
+    public static Vector3f toEulerZYXDegrees(Quaternionf q, Vector3f out, Quaternionf scratch)
+    {
+        scratch.set(q).normalize().getEulerAnglesZYX(out);
 
-        return radZYX.mul((float) (180.0 / Math.PI));
+        return out.mul((float) (180.0 / Math.PI));
     }
 
     public static Quaternionf fromToMirroredX(Vector3f restDirLocal, Vector3f desiredDirLocal)
     {
-        Vector3f rest = new Vector3f(restDirLocal);
-        Vector3f desired = new Vector3f(desiredDirLocal);
+        return fromToMirroredX(restDirLocal, desiredDirLocal, new Quaternionf(), new Quaternionf(), new Matrix3f(), new Vector3f(), new Vector3f());
+    }
+
+    /** Allocation-free form of {@link #fromToMirroredX(Vector3f, Vector3f)}. */
+    public static Quaternionf fromToMirroredX(Vector3f restDirLocal, Vector3f desiredDirLocal, Quaternionf out, Quaternionf mirrored, Matrix3f matrix, Vector3f rest, Vector3f desired)
+    {
+        rest.set(restDirLocal);
+        desired.set(desiredDirLocal);
 
         rest.x = -rest.x;
         desired.x = -desired.x;
@@ -163,12 +173,16 @@ public class Matrices
         rest.normalize();
         desired.normalize();
 
-        Quaternionf mirrored = new Quaternionf().rotationTo(rest, desired);
-        Matrix3f mirroredMatrix = new Matrix3f().set(mirrored);
-        Matrix3f mirror = new Matrix3f().scaling(-1F, 1F, 1F);
-        Matrix3f matrix = new Matrix3f(mirror).mul(mirroredMatrix).mul(mirror);
+        mirrored.rotationTo(rest, desired);
+        matrix.set(mirrored);
 
-        return new Quaternionf().setFromNormalized(matrix);
+        /* Conjugate by mirror(-X) without allocating diagonal matrices. */
+        matrix.m01 = -matrix.m01;
+        matrix.m02 = -matrix.m02;
+        matrix.m10 = -matrix.m10;
+        matrix.m20 = -matrix.m20;
+
+        return out.setFromNormalized(matrix);
     }
 
     /**
@@ -234,14 +248,20 @@ public class Matrices
 
     public static Quaternionf twistAbout(Quaternionf q, Vector3f axis)
     {
-        float dot = q.x * axis.x + q.y * axis.y + q.z * axis.z;
-        Quaternionf twist = new Quaternionf(axis.x * dot, axis.y * dot, axis.z * dot, q.w);
+        return twistAbout(q, axis, new Quaternionf());
+    }
 
-        if (twist.lengthSquared() < 1.0e-12f)
+    /** Allocation-free swing/twist projection around {@code axis}. */
+    public static Quaternionf twistAbout(Quaternionf q, Vector3f axis, Quaternionf out)
+    {
+        float dot = q.x * axis.x + q.y * axis.y + q.z * axis.z;
+        out.set(axis.x * dot, axis.y * dot, axis.z * dot, q.w);
+
+        if (out.lengthSquared() < 1.0e-12f)
         {
-            return new Quaternionf();
+            return out.identity();
         }
 
-        return twist.normalize();
+        return out.normalize();
     }
 }

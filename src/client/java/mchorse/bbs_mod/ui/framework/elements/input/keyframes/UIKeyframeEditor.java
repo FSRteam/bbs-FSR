@@ -7,6 +7,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTransformKeyframeFactory;
@@ -104,6 +105,11 @@ public class UIKeyframeEditor extends UIElement
         }
 
         this.resize();
+
+        if (this.editor != null)
+        {
+            this.editor.restoreScroll();
+        }
     }
 
     public void setTimelineVisible(boolean visible)
@@ -249,6 +255,24 @@ public class UIKeyframeEditor extends UIElement
         }
 
         return null;
+    }
+
+    /** Whether the active keyframe edits the root form anchor rather than an IK/physics anchor value. */
+    public boolean isFormAnchorTrack()
+    {
+        if (!(this.editor instanceof UIAnchorKeyframeFactory))
+        {
+            return false;
+        }
+
+        UIKeyframeSheet sheet = this.getSheet(this.editor.getKeyframe());
+
+        return sheet != null && sheet.property != null && "anchor".equals(sheet.id);
+    }
+
+    public boolean getAnchorLocal()
+    {
+        return this.editor instanceof UIAnchorKeyframeFactory factory && factory.transform.isLocal();
     }
 
     @Override

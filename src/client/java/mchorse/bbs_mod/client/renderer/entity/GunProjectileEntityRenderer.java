@@ -42,15 +42,28 @@ public class GunProjectileEntityRenderer extends EntityRenderer<GunProjectileEnt
         float bodyYaw = Mth.rotLerp(tickDelta, projectile.yRotO, projectile.getYRot());
         float pitch = Mth.rotLerp(tickDelta, projectile.xRotO, projectile.getXRot());
         float scale = Lerps.envelope(projectile.tickCount + tickDelta, 0, properties.fadeIn, out - properties.fadeOut, out);
+        PoseStack semanticWorld = new PoseStack();
+
+        semanticWorld.translate(
+            Mth.lerp(tickDelta, projectile.xo, projectile.getX()),
+            Mth.lerp(tickDelta, projectile.yo, projectile.getY()),
+            Mth.lerp(tickDelta, projectile.zo, projectile.getZ())
+        );
 
         if (properties.yaw) matrices.mulPose(Axis.YP.rotationDegrees(bodyYaw));
         if (properties.pitch) matrices.mulPose(Axis.XP.rotationDegrees(-pitch));
         matrices.scale(scale, scale, scale);
         MatrixStackUtils.applyTransform(matrices, properties.projectileTransform);
 
+        if (properties.yaw) semanticWorld.mulPose(Axis.YP.rotationDegrees(bodyYaw));
+        if (properties.pitch) semanticWorld.mulPose(Axis.XP.rotationDegrees(-pitch));
+        semanticWorld.scale(scale, scale, scale);
+        MatrixStackUtils.applyTransform(semanticWorld, properties.projectileTransform);
+
         RenderSystem.enableDepthTest();
         MorphRenderer.renderForm(projectile.getForm(), new FormRenderingContext()
             .set(FormRenderType.ENTITY, projectile.getEntity(), matrices, light, OverlayTexture.NO_OVERLAY, tickDelta)
+            .entityLocal(semanticWorld)
             .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
         RenderSystem.disableDepthTest();
 

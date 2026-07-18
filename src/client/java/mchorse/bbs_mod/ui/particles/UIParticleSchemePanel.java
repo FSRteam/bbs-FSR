@@ -825,13 +825,23 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         });
         handle.dragEnd(() ->
         {
-            if (this.draggingPanelId == null || this.dropTargetPanelId == null || this.draggingPanelId.equals(this.dropTargetPanelId))
+            String dragId = this.draggingPanelId;
+            String targetId = this.dropTargetPanelId;
+            int targetZone = this.dropTargetZone;
+
+            try
+            {
+                if (dragId == null || targetId == null || dragId.equals(targetId))
+                {
+                    return;
+                }
+
+                this.applyPanelDropResult(dragId, targetId, targetZone);
+            }
+            finally
             {
                 this.clearPanelDragState();
-                return;
             }
-            this.applyPanelDropResult(this.draggingPanelId, this.dropTargetPanelId, this.dropTargetZone);
-            this.clearPanelDragState();
         });
         handle.hoverOnly().rendering((context) -> this.renderPanelDragHandle(context, handle));
         return handle;
@@ -1504,7 +1514,6 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     {
         public UIParticleSchemePanelKeys(UIParticleSchemePanel panel)
         {
-            this.keys().ignoreFocus();
             this.keys().register(Keys.UNDO, panel::undo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
             this.keys().register(Keys.REDO, panel::redo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
             this.keys().register(Keys.PARTICLE_PLAUSE, panel::togglePlause).category(UIKeys.PARTICLE_EDITOR_TITLE);

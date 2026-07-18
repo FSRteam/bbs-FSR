@@ -309,7 +309,7 @@ public class BBSSettings {
 	}
 
 	public static int getDefaultDuration() {
-		return duration.get();
+		return duration == null ? 30 : duration.get();
 	}
 
 	public static float getFov() {
@@ -340,6 +340,10 @@ public class BBSSettings {
 	 * {@link KeyframeShape#SQUARE} if the stored ordinal is out of range.
 	 */
 	public static KeyframeShape getDefaultKeyframeShape() {
+		if (keyframeDefaultShape == null) {
+			return KeyframeShape.SQUARE;
+		}
+
 		int index = keyframeDefaultShape.get();
 		KeyframeShape[] values = KeyframeShape.values();
 

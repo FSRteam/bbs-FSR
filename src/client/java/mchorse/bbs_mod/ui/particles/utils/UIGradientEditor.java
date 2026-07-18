@@ -8,6 +8,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIConstants;
@@ -24,6 +25,8 @@ public class UIGradientEditor extends UIElement
     private Gradient gradient;
 
     private Gradient.ColorStop current;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
     private int dragging = -1;
     private int lastX;
 
@@ -155,12 +158,33 @@ public class UIGradientEditor extends UIElement
 
                 if (area.isInside(context))
                 {
-                    this.dragging = 0;
-                    this.lastX = context.mouseX;
+                    long generation = this.dragOwnership.acquireToken(context.mouseButton);
 
-                    this.fillStop(stop);
+                    if (generation == 0L)
+                    {
+                        return true;
+                    }
 
-                    return true;
+                    this.dragGeneration = generation;
+                    boolean started = false;
+
+                    try
+                    {
+                        this.dragging = 0;
+                        this.lastX = context.mouseX;
+                        this.fillStop(stop);
+                        started = true;
+
+                        return true;
+                    }
+                    finally
+                    {
+                        if (!started && this.dragOwnership.release(context.mouseButton, generation))
+                        {
+                            this.dragGeneration = 0L;
+                            this.dragging = -1;
+                        }
+                    }
                 }
             }
 
@@ -173,12 +197,22 @@ public class UIGradientEditor extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (this.dragging != -1)
+        long generation = this.dragGeneration;
+
+        if (!this.dragOwnership.release(context.mouseButton, generation))
+        {
+            return super.subMouseReleased(context);
+        }
+
+        boolean wasDragging = this.dragging != -1;
+
+        this.dragGeneration = 0L;
+        this.dragging = -1;
+
+        if (wasDragging)
         {
             this.section.dirty();
         }
-
-        this.dragging = -1;
 
         return super.subMouseReleased(context);
     }

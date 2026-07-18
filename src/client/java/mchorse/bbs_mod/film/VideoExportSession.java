@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.VideoExportUtils;
+import mchorse.bbs_mod.utils.VideoExportProcess;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import org.slf4j.Logger;
 
@@ -24,6 +25,13 @@ public abstract class VideoExportSession
         RECORDING
     }
 
+    public enum Result
+    {
+        SUCCESS,
+        CANCELLED,
+        FAILED
+    }
+
     protected State state = State.IDLE;
     protected long warmupEndsAtMs;
 
@@ -34,6 +42,13 @@ public abstract class VideoExportSession
     protected int height;
 
     private FinishedListener finishedListener;
+    private Result lastResult;
+    private Throwable lastFailure;
+    private VideoRecorder reservedRecorder;
+    private FinishedListener deferredFinishedListener;
+    private boolean deferredFinishedAborted;
+    private boolean beginning;
+    private boolean finishing;
 
     protected VideoRecorder getRecorder()
     {
@@ -52,7 +67,19 @@ public abstract class VideoExportSession
 
     public boolean isRecording()
     {
-        return this.state == State.RECORDING && this.getRecorder().isRecording();
+        VideoRecorder recorder = this.getSessionRecorder();
+
+        return this.state == State.RECORDING && recorder != null && recorder.isRecording();
+    }
+
+    public Result getLastResult()
+    {
+        return this.lastResult;
+    }
+
+    public Throwable getLastFailure()
+    {
+        return this.lastFailure;
     }
 
     public long getWarmupRemainingMs()
@@ -70,124 +97,289 @@ public abstract class VideoExportSession
         this.finishedListener = listener;
     }
 
-    protected final boolean begin(int textureId, int width, int height, long delayMs)
+    /** Reserve the shared encoder before a deferred export-resolution frame. */
+    public final boolean reserveRecorder()
     {
-        VideoRecorder recorder = this.getRecorder();
-
-        if (this.isExporting() || recorder == null || recorder.isRecording())
+        if (this.isExporting() || this.beginning || this.finishing)
         {
             return false;
         }
 
+        if (this.reservedRecorder != null)
+        {
+            return true;
+        }
+
+        VideoRecorder recorder = this.getRecorder();
+
+        if (recorder == null || recorder.isRecording() || !recorder.tryReserve(this))
+        {
+            return false;
+        }
+
+        this.reservedRecorder = recorder;
+
+        return true;
+    }
+
+    protected final boolean begin(int textureId, int width, int height, long delayMs)
+    {
+        if (!this.reserveRecorder())
+        {
+            return false;
+        }
+
+        this.beginning = true;
+        this.lastResult = null;
+        this.lastFailure = null;
         this.textureId = textureId;
         this.width = width;
         this.height = height;
         this.audioFile = null;
 
-        if (!this.prepare())
+        try
         {
-            this.reset();
+            if (!this.prepare())
+            {
+                this.failBeforeStart(null);
+
+                return false;
+            }
+
+            /* Mark the session active before applying any target-side effects. */
+            this.state = State.WARMUP;
+            this.applyExportTarget();
+
+            this.warmupEndsAtMs = System.currentTimeMillis() + Math.max(0L, delayMs);
+
+            if (delayMs > 0L || !this.isWarmupReady())
+            {
+                this.onWarmupStarted();
+            }
+            else
+            {
+                this.beginRecording();
+            }
+
+            /* The finally block may notify a listener which starts a new
+             * export. Return only whether this begin attempt stayed active. */
+            return this.state != State.IDLE;
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Failed to prepare video export", e);
+
+            if (this.state == State.IDLE)
+            {
+                this.failBeforeStart(e);
+            }
+            else
+            {
+                this.fail(e);
+            }
 
             return false;
         }
-
-        this.applyExportTarget();
-
-        if (delayMs > 0L)
+        finally
         {
-            this.state = State.WARMUP;
-            this.warmupEndsAtMs = System.currentTimeMillis() + delayMs;
-            this.onWarmupStarted();
+            this.beginning = false;
+            this.dispatchDeferredFinishedListener();
         }
-        else
-        {
-            this.beginRecording();
-        }
-
-        return this.isExporting();
     }
 
     public final void update()
     {
-        if (this.state == State.WARMUP)
+        try
         {
-            if (this.shouldAbortWarmup())
+            if (this.state == State.WARMUP)
             {
-                this.cancel();
+                if (this.shouldAbortWarmup())
+                {
+                    this.cancel();
 
-                return;
+                    return;
+                }
+
+                if (!this.isWarmupReady() || System.currentTimeMillis() < this.warmupEndsAtMs)
+                {
+                    return;
+                }
+
+                this.beginRecording();
             }
-
-            if (!this.isWarmupReady() || System.currentTimeMillis() < this.warmupEndsAtMs)
+            else if (this.state == State.RECORDING)
             {
-                return;
-            }
+                VideoRecorder recorder = this.getSessionRecorder();
 
-            this.beginRecording();
+                if (recorder == null || !recorder.checkRecordingHealth())
+                {
+                    Throwable failure = recorder == null ? null : recorder.getFailure();
+
+                    this.fail(failure == null ? new IllegalStateException("FFmpeg stopped before video export completed") : failure);
+
+                    return;
+                }
+
+                if (this.isFinished())
+                {
+                    this.stop();
+                }
+            }
         }
-        else if (this.state == State.RECORDING && this.isFinished())
+        catch (Exception | LinkageError e)
         {
-            this.stop();
+            LOGGER.error("Video export session update failed", e);
+            this.fail(e);
         }
     }
 
     private void beginRecording()
     {
-        VideoRecorder recorder = this.getRecorder();
+        VideoRecorder recorder = this.getSessionRecorder();
+
+        if (recorder == null)
+        {
+            this.fail(new IllegalStateException("Video recorder is unavailable"));
+
+            return;
+        }
 
         /* Enter the state before starting so every failure takes the teardown path. */
         this.state = State.RECORDING;
 
         try
         {
-            recorder.startRecording(this.getMovieName(), this.audioFile, this.textureId, this.width, this.height);
+            if (!recorder.tryStartRecording(this.getMovieName(), this.audioFile, this.textureId, this.width, this.height))
+            {
+                Throwable failure = recorder.getFailure();
+
+                this.fail(failure == null ? new IllegalStateException("FFmpeg failed to start") : failure);
+
+                return;
+            }
         }
-        catch (Exception e)
+        catch (Exception | LinkageError e)
         {
             LOGGER.error("Failed to start video export", e);
-            this.cancel();
+            this.fail(e);
 
             return;
         }
 
-        if (!recorder.isRecording())
+        try
         {
-            this.cancel();
-
-            return;
+            this.onRecordingStarted();
         }
-
-        this.onRecordingStarted();
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Failed to enter the recording phase", e);
+            this.fail(e);
+        }
     }
 
     public final void stop()
     {
-        this.finish(false);
+        this.finish(Result.SUCCESS, null);
     }
 
     public final void cancel()
     {
-        this.finish(true);
+        if (this.state == State.IDLE)
+        {
+            if (!this.beginning && !this.finishing)
+            {
+                this.releaseRecorderReservation();
+            }
+
+            return;
+        }
+
+        this.finish(Result.CANCELLED, null);
     }
 
-    private void finish(boolean cancelled)
+    /** Release a deferred-start lease without cancelling a recording that won the race. */
+    public final void cancelPendingReservation()
     {
-        if (this.state == State.IDLE)
+        if (this.state == State.IDLE && !this.beginning && !this.finishing)
+        {
+            this.releaseRecorderReservation();
+        }
+    }
+
+    protected final void fail(Throwable failure)
+    {
+        this.finish(Result.FAILED, failure);
+    }
+
+    private void finish(Result requested, Throwable failure)
+    {
+        if (this.state == State.IDLE || this.finishing)
         {
             return;
         }
 
-        VideoRecorder recorder = this.getRecorder();
+        this.finishing = true;
+        State previousState = this.state;
+        Result result = requested;
+        VideoRecorder recorder = this.getSessionRecorder();
 
-        if (recorder != null && recorder.isRecording())
+        try
         {
-            try
+            if (previousState == State.RECORDING)
             {
-                recorder.stopRecording();
+                if (recorder == null)
+                {
+                    result = Result.FAILED;
+                    failure = appendFailure(failure, new IllegalStateException("Video recorder disappeared during export"));
+                }
+                else
+                {
+                    VideoExportProcess.Outcome outcome;
+
+                    if (requested == Result.SUCCESS)
+                    {
+                        outcome = recorder.completeRecording();
+                    }
+                    else if (requested == Result.CANCELLED)
+                    {
+                        outcome = recorder.cancelRecording();
+                    }
+                    else
+                    {
+                        outcome = recorder.failRecording(failure);
+                    }
+
+                    result = mapOutcome(outcome);
+
+                    if (result == Result.FAILED)
+                    {
+                        failure = appendFailure(failure, recorder.getFailure());
+                    }
+                }
             }
-            catch (Exception e)
+            else if (requested == Result.SUCCESS)
             {
-                LOGGER.error("Failed to stop video export cleanly", e);
+                result = Result.FAILED;
+                failure = appendFailure(failure, new IllegalStateException("Video export completed before FFmpeg started"));
+            }
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Failed to stop video export cleanly", e);
+            result = Result.FAILED;
+            failure = appendFailure(failure, e);
+
+            if (recorder != null)
+            {
+                try
+                {
+                    recorder.failRecording(e);
+                }
+                catch (Exception | LinkageError cleanupError)
+                {
+                    LOGGER.error("Failed to abort video recorder after a session error", cleanupError);
+                    failure = appendFailure(failure, cleanupError);
+                }
             }
         }
 
@@ -195,31 +387,211 @@ public abstract class VideoExportSession
 
         try
         {
-            this.teardown(cancelled);
+            this.teardown(result != Result.SUCCESS);
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Failed to tear down video export session", e);
+            result = Result.FAILED;
+            failure = appendFailure(failure, e);
+        }
+
+        try
+        {
+            this.reset();
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Failed to reset video export session", e);
+            result = Result.FAILED;
+            failure = appendFailure(failure, e);
         }
         finally
         {
-            this.reset();
+            this.releaseRecorderReservation();
         }
 
         FinishedListener listener = this.finishedListener;
         this.finishedListener = null;
+        this.lastResult = result;
+        this.lastFailure = result == Result.FAILED ? failure : null;
+        this.finishing = false;
 
-        if (listener != null)
+        if (result == Result.SUCCESS && recorder != null)
         {
-            listener.onFinished(cancelled);
+            recorder.announceSuccessfulCompletion();
+        }
+
+        this.notifyFinishedListener(listener, result != Result.SUCCESS);
+
+        if (result == Result.FAILED && failure != null)
+        {
+            LOGGER.error("Video export failed", failure);
+        }
+    }
+
+    private void failBeforeStart(Throwable failure)
+    {
+        Throwable terminalFailure = failure;
+
+        try
+        {
+            this.reset();
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Failed to reset video export after preparation failure", e);
+            terminalFailure = appendFailure(terminalFailure, e);
+        }
+        finally
+        {
+            this.releaseRecorderReservation();
+        }
+
+        this.lastResult = Result.FAILED;
+        this.lastFailure = terminalFailure == null ? new IllegalStateException("Video export preparation failed") : terminalFailure;
+        FinishedListener listener = this.finishedListener;
+
+        this.finishedListener = null;
+        this.notifyFinishedListener(listener, true);
+    }
+
+    private void notifyFinishedListener(FinishedListener listener, boolean aborted)
+    {
+        if (listener == null)
+        {
+            return;
+        }
+
+        if (this.beginning)
+        {
+            this.deferredFinishedListener = listener;
+            this.deferredFinishedAborted = aborted;
+
+            return;
+        }
+
+        try
+        {
+            listener.onFinished(aborted);
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Video export completion listener failed", e);
+        }
+    }
+
+    private void dispatchDeferredFinishedListener()
+    {
+        FinishedListener listener = this.deferredFinishedListener;
+        boolean aborted = this.deferredFinishedAborted;
+
+        this.deferredFinishedListener = null;
+        this.deferredFinishedAborted = false;
+        this.notifyFinishedListener(listener, aborted);
+    }
+
+    private void releaseRecorderReservation()
+    {
+        if (this.reservedRecorder != null)
+        {
+            this.reservedRecorder.releaseReservation(this);
+            this.reservedRecorder = null;
+        }
+    }
+
+    private VideoRecorder getSessionRecorder()
+    {
+        return this.reservedRecorder == null ? this.getRecorder() : this.reservedRecorder;
+    }
+
+    private static Result mapOutcome(VideoExportProcess.Outcome outcome)
+    {
+        if (outcome == VideoExportProcess.Outcome.SUCCEEDED)
+        {
+            return Result.SUCCESS;
+        }
+
+        if (outcome == VideoExportProcess.Outcome.CANCELLED)
+        {
+            return Result.CANCELLED;
+        }
+
+        return Result.FAILED;
+    }
+
+    private static Throwable appendFailure(Throwable current, Throwable next)
+    {
+        if (next == null)
+        {
+            return current;
+        }
+
+        if (current == null)
+        {
+            return next;
+        }
+
+        if (current != next)
+        {
+            current.addSuppressed(next);
+        }
+
+        return current;
+    }
+
+    /**
+     * Run independent teardown actions without letting one failure skip the
+     * remaining session-owned cleanup. The first failure is rethrown after
+     * later failures have been attached as suppressed exceptions.
+     */
+    protected final void runCleanupSteps(CleanupStep... steps)
+    {
+        Throwable failure = null;
+
+        for (CleanupStep step : steps)
+        {
+            try
+            {
+                step.run();
+            }
+            catch (Exception | LinkageError e)
+            {
+                failure = appendFailure(failure, e);
+            }
+        }
+
+        if (failure instanceof RuntimeException runtimeException)
+        {
+            throw runtimeException;
+        }
+
+        if (failure instanceof LinkageError linkageError)
+        {
+            throw linkageError;
+        }
+
+        if (failure != null)
+        {
+            throw new IllegalStateException("Video export cleanup failed", failure);
         }
     }
 
     private void reset()
     {
-        this.deleteTemporaryAudio();
-        this.state = State.IDLE;
-        this.warmupEndsAtMs = 0L;
-        this.audioFile = null;
-        this.textureId = 0;
-        this.width = 0;
-        this.height = 0;
+        try
+        {
+            this.deleteTemporaryAudio();
+        }
+        finally
+        {
+            this.state = State.IDLE;
+            this.warmupEndsAtMs = 0L;
+            this.audioFile = null;
+            this.textureId = 0;
+            this.width = 0;
+            this.height = 0;
+        }
     }
 
     /** Create and track a uniquely owned WAV path for this session. */
@@ -247,13 +619,15 @@ public abstract class VideoExportSession
     /** Delete only the uniquely created file owned by this session. */
     protected final void deleteTemporaryAudio()
     {
-        VideoExportUtils.deleteTemporaryFile(this.temporaryAudioFile);
-        this.temporaryAudioFile = null;
+        File temporary = this.temporaryAudioFile;
 
-        if (this.audioFile != null)
+        if (!VideoExportUtils.tryDeleteTemporaryFile(temporary))
         {
-            this.audioFile = null;
+            throw new IllegalStateException("Failed to delete temporary export audio " + temporary);
         }
+
+        this.temporaryAudioFile = null;
+        this.audioFile = null;
     }
 
     /** Base filename without an extension. Film-panel exports override this for templates. */
@@ -287,8 +661,15 @@ public abstract class VideoExportSession
     protected abstract void teardown(boolean cancelled);
 
     @FunctionalInterface
+    protected interface CleanupStep
+    {
+        void run() throws Exception;
+    }
+
+    @FunctionalInterface
     public interface FinishedListener
     {
-        void onFinished(boolean cancelled);
+        /** {@code aborted} is true for cancellation and failure, never success. */
+        void onFinished(boolean aborted);
     }
 }

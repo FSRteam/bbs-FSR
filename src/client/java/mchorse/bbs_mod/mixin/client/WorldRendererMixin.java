@@ -43,7 +43,14 @@ public abstract class WorldRendererMixin
     {
         if (BBSSettings.chromaSkyEnabled.get() && !BBSSettings.chromaSkyTerrain.get())
         {
-            BBSRendering.onRenderChunkLayer(frustumMatrix, projectionMatrix);
+            /* Hidden terrain still needs the BBS world composite, but
+             * renderSectionLayer is invoked once for every chunk layer. Keep
+             * the composite at the same solid-layer boundary as the normal
+             * path so each Iris frame/pass receives it exactly once. */
+            if (renderType == RenderType.solid())
+            {
+                BBSRendering.onRenderChunkLayer(frustumMatrix, projectionMatrix);
+            }
 
             info.cancel();
         }

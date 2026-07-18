@@ -21,6 +21,7 @@ import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -59,6 +60,13 @@ public class Recorder extends WorldFilmController
 
     public int countdown;
     public final int initialTick;
+    private final ClientLevel initialLevel;
+    private final LocalPlayer initialPlayer;
+    /* The network tuple is immutable even if the editor later renames the
+     * Film or another controller mutates the inherited playback fields. */
+    private final String recordingFilmId;
+    private final int recordingReplayId;
+    private final int recordingTick;
 
     public static void renderCameraPreview(Position position, Camera camera, PoseStack stack)
     {
@@ -125,11 +133,58 @@ public class Recorder extends WorldFilmController
         this.tick = tick;
         this.countdown = TimeUtils.toTick(BBSSettings.recordingCountdown.get());
         this.initialTick = tick;
+        this.initialLevel = Minecraft.getInstance().level;
+        this.initialPlayer = Minecraft.getInstance().player;
+        this.recordingFilmId = film == null ? null : film.getId();
+        this.recordingReplayId = replayId;
+        this.recordingTick = tick;
+    }
+
+    public String getRecordingFilmId()
+    {
+        return this.recordingFilmId;
+    }
+
+    public int getRecordingReplayId()
+    {
+        return this.recordingReplayId;
+    }
+
+    public int getRecordingTick()
+    {
+        return this.recordingTick;
+    }
+
+    public boolean matchesRecording(String filmId, int replayId, int tick)
+    {
+        return this.recordingReplayId == replayId
+            && this.recordingTick == tick
+            && (this.recordingFilmId == null ? filmId == null : this.recordingFilmId.equals(filmId));
+    }
+
+    ClientLevel getInitialLevel()
+    {
+        return this.initialLevel;
+    }
+
+    public boolean isInCurrentLevel()
+    {
+        Minecraft client = Minecraft.getInstance();
+
+        return this.initialLevel != null
+            && this.initialPlayer != null
+            && client.level == this.initialLevel
+            && client.player == this.initialPlayer;
     }
 
     public boolean hasNotStarted()
     {
         return this.countdown > 0;
+    }
+
+    public boolean hasRecordedFrame()
+    {
+        return this.lastPosition != null;
     }
 
     public void update()
@@ -225,16 +280,67 @@ public class Recorder extends WorldFilmController
     @Override
     public void shutdown()
     {
-        Vector3d pos = this.lastPosition;
+        this.shutdown(true);
+    }
 
-        if (pos != null)
+    void shutdown(boolean restorePlayer)
+    {
+        Vector3d pos = this.lastPosition;
+        Throwable failure = null;
+
+        if (restorePlayer && this.isInCurrentLevel() && pos != null)
         {
             Vector4f rot = this.lastRotation;
 
-            PlayerUtils.teleport(pos.x, pos.y, pos.z, rot.z, rot.y);
-            ClientNetwork.sendPlayerForm(this.lastForm);
+            try
+            {
+                PlayerUtils.teleport(pos.x, pos.y, pos.z, rot.z, rot.y);
+            }
+            catch (RuntimeException | Error exception)
+            {
+                failure = exception;
+            }
+
+            try
+            {
+                ClientNetwork.sendPlayerForm(this.lastForm);
+            }
+            catch (RuntimeException | Error exception)
+            {
+                if (failure == null)
+                {
+                    failure = exception;
+                }
+                else if (failure != exception)
+                {
+                    failure.addSuppressed(exception);
+                }
+            }
         }
 
-        super.shutdown();
+        try
+        {
+            super.shutdown();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            if (failure == null)
+            {
+                failure = exception;
+            }
+            else if (failure != exception)
+            {
+                failure.addSuppressed(exception);
+            }
+        }
+
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+        else if (failure instanceof Error error)
+        {
+            throw error;
+        }
     }
 }

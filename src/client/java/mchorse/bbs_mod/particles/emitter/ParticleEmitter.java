@@ -147,6 +147,7 @@ public class ParticleEmitter
     private final Vector3f particlePosition = new Vector3f();
     private final Matrix4f minecraftCameraRotation = new Matrix4f();
     private boolean eventLastGlobalSet;
+    private boolean rootPositionInitialized;
     private ParticleEmitter boundParent;
     private Particle boundParticle;
     private boolean boundToEmitter;
@@ -170,6 +171,29 @@ public class ParticleEmitter
     public void setWorld(Level world)
     {
         this.world = world;
+    }
+
+    /**
+     * Places a root form emitter in world space. The first placement establishes
+     * the distance-event baseline instead of treating the offset from the origin
+     * as emitter travel.
+     */
+    public void setRootPosition(Vector3d position)
+    {
+        if (position == null)
+        {
+            return;
+        }
+
+        this.lastGlobal.set(position);
+
+        if (!this.rootPositionInitialized)
+        {
+            this.eventLastGlobal.set(position);
+            this.eventLastGlobalSet = true;
+            this.eventTravelDistance = 0;
+            this.rootPositionInitialized = true;
+        }
     }
 
     public void setScheme(ParticleScheme scheme)

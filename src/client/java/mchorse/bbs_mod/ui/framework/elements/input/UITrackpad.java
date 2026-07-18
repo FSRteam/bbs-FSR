@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import org.lwjgl.glfw.GLFW;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiRemoteHeldState;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.MathBuilder;
@@ -23,6 +24,7 @@ import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragStartEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UIBaseTextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -69,7 +71,8 @@ public class UITrackpad extends UIBaseTextbox
 
     /* Value dragging fields */
     private boolean wasInside;
-    private boolean dragging;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
     private int shiftX;
     private int initialX;
     private int initialY;
@@ -78,6 +81,7 @@ public class UITrackpad extends UIBaseTextbox
     private Timer changed = new Timer(30);
 
     private long time;
+    private double focusStartValue;
     private Area plusOne = new Area();
     private Area minusOne = new Area();
 
@@ -91,7 +95,12 @@ public class UITrackpad extends UIBaseTextbox
 
     public static void updateAmplifier(UIContext context)
     {
-        globalFactor.addX((int) context.mouseWheel);
+        if (context.mouseWheel == 0D)
+        {
+            return;
+        }
+
+        globalFactor.addX(context.mouseWheel > 0D ? 1 : -1);
         context.notifyOrUpdate(UIKeys.TRACKPAD_GLOBAL_AMPLIFIER.format(globalFactor.getValue()), Colors.BLUE);
     }
 
@@ -248,7 +257,7 @@ public class UITrackpad extends UIBaseTextbox
      */
     public boolean isDragging()
     {
-        return this.dragging;
+        return this.dragOwnership.isActive();
     }
 
     public boolean isDraggingTime()
@@ -308,7 +317,19 @@ public class UITrackpad extends UIBaseTextbox
         double oldValue = this.value;
 
         this.setValue(value);
-        this.accept(value, oldValue);
+        this.accept(this.value, oldValue);
+    }
+
+    /** User commands must keep a focused textbox and its committed value in sync. */
+    private void setUserValueAndNotify(double value)
+    {
+        this.setValueAndNotify(value);
+
+        if (this.textbox.isFocused())
+        {
+            this.updateTextField();
+            this.focusStartValue = this.value;
+        }
     }
 
     private void accept(double value, double oldValue)
@@ -323,6 +344,8 @@ public class UITrackpad extends UIBaseTextbox
     public void focus(UIContext context)
     {
         super.focus(context);
+
+        this.focusStartValue = this.value;
 
         this.updateTextField();
         this.textbox.setFocused(true);
@@ -339,14 +362,12 @@ public class UITrackpad extends UIBaseTextbox
         this.textbox.setFocused(false);
 
         /* Reset the value in case it's out of range */
-        if (this.delayedInput)
+        if (this.delayedInput && Double.compare(this.value, this.focusStartValue) != 0)
         {
-            this.setValueAndNotify(this.value);
+            this.accept(this.value, this.focusStartValue);
         }
-        else
-        {
-            this.setValue(this.value);
-        }
+
+        this.setValue(this.value);
     }
 
     /**
@@ -373,28 +394,17 @@ public class UITrackpad extends UIBaseTextbox
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.allowCanceling && context.mouseButton == 1 && this.isDragging())
+        if (context.mouseButton == 2 && !this.isDragging() && this.area.isInside(context))
         {
-            this.setValueAndNotify(this.lastValue);
-
-            this.wasInside = false;
-            this.dragging = false;
-            this.shiftX = 0;
+            this.setUserValueAndNotify(-this.value);
 
             return true;
         }
-
-        if (context.mouseButton == 2 && this.area.isInside(context))
-        {
-            this.setValueAndNotify(-this.value);
-
-            return true;
-        }
-
-        this.wasInside = this.area.isInside(context);
 
         if (context.mouseButton == 0)
         {
+            this.wasInside = this.area.isInside(context);
+
             if (this.textbox.isFocused())
             {
                 this.textbox.mouseClicked(context.mouseX, context.mouseY, context.mouseButton);
@@ -405,7 +415,7 @@ public class UITrackpad extends UIBaseTextbox
                 }
             }
 
-            if (this.wasInside && !this.textbox.isFocused())
+            if (this.wasInside && !this.textbox.isFocused() && !this.isDragging())
             {
                 if (Window.isCtrlPressed())
                 {
@@ -415,13 +425,30 @@ public class UITrackpad extends UIBaseTextbox
                     return true;
                 }
 
-                this.dragging = true;
+                this.dragGeneration = this.dragOwnership.acquireToken(context.mouseButton);
+
+                if (this.dragGeneration == 0L)
+                {
+                    return true;
+                }
+
                 this.initialX = context.mouseX;
                 this.initialY = context.mouseY;
                 this.lastValue = this.value;
                 this.time = System.currentTimeMillis();
 
-                this.getEvents().emit(new UITrackpadDragStartEvent(this));
+                try
+                {
+                    this.getEvents().emit(new UITrackpadDragStartEvent(this));
+                }
+                catch (RuntimeException | Error exception)
+                {
+                    this.dragOwnership.release(context.mouseButton, this.dragGeneration);
+                    this.dragGeneration = 0L;
+                    this.wasInside = false;
+
+                    throw exception;
+                }
             }
         }
 
@@ -434,22 +461,31 @@ public class UITrackpad extends UIBaseTextbox
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (context.mouseButton == 1 && this.isDragging())
+        boolean wasDragging = this.isDragging();
+        long releasedGeneration = this.dragGeneration;
+
+        if (wasDragging && !this.dragOwnership.isOwnedBy(context.mouseButton, releasedGeneration))
         {
-            this.setValueAndNotify(this.lastValue);
-
-            this.wasInside = false;
-            this.dragging = false;
-            this.shiftX = 0;
-
-            return true;
+            return false;
         }
+
+        boolean wasDraggingTime = this.isDraggingTime();
+        boolean pressWasInside = this.wasInside;
+
+        if (wasDragging)
+        {
+            this.dragOwnership.release(context.mouseButton, releasedGeneration);
+            this.dragGeneration = 0L;
+        }
+
+        this.wasInside = false;
+        this.shiftX = 0;
 
         this.textbox.mouseReleased(context.mouseX, context.mouseY, context.mouseButton);
 
-        if (context.mouseButton == 0 && !this.isDraggingTime() && !this.textbox.isFocused())
+        if (context.mouseButton == 0 && !wasDraggingTime && !this.textbox.isFocused())
         {
-            if (this.wasInside)
+            if (pressWasInside)
             {
                 if (this.plusOne.isInside(context))
                 {
@@ -466,21 +502,36 @@ public class UITrackpad extends UIBaseTextbox
             }
         }
 
-        if (this.delayedInput && this.isDraggingTime())
+        if (this.delayedInput && wasDraggingTime)
         {
-            this.setValueAndNotify(this.value);
+            this.accept(this.value, this.lastValue);
         }
 
-        if (this.dragging)
+        if (wasDragging)
         {
             this.getEvents().emit(new UITrackpadDragEndEvent(this));
         }
 
-        this.wasInside = false;
-        this.dragging = false;
-        this.shiftX = 0;
+        return wasDragging || super.subMouseReleased(context);
+    }
 
-        return super.subMouseReleased(context);
+    private boolean cancelDragging()
+    {
+        if (!this.isDragging())
+        {
+            return false;
+        }
+
+        long generation = this.dragGeneration;
+
+        this.dragOwnership.release(0, generation);
+        this.dragGeneration = 0L;
+        this.wasInside = false;
+        this.shiftX = 0;
+        this.setValueAndNotify(this.lastValue);
+        this.getEvents().emit(new UITrackpadDragEndEvent(this));
+
+        return true;
     }
 
     @Override
@@ -493,21 +544,22 @@ public class UITrackpad extends UIBaseTextbox
         area.x = area.mx() - w / 2;
         area.w = w;
 
-        if (this.dragging)
+        if (this.isDragging() && context.mouseWheel != 0D)
         {
             updateAmplifier(context);
 
             return true;
         }
-        else if (area.isInside(context) && context.hasNotScrolledForMore(500) && BBSSettings.enableTrackpadScrolling.get())
+        else if (context.mouseWheel != 0D && area.isInside(context)
+            && context.hasNotScrolledForMore(500) && BBSSettings.enableTrackpadScrolling.get())
         {
             if (context.mouseWheel > 0)
             {
-                this.setValueAndNotify(this.value + this.getValueModifier());
+                this.setUserValueAndNotify(this.value + this.getValueModifier());
             }
             else
             {
-                this.setValueAndNotify(this.value - this.getValueModifier());
+                this.setUserValueAndNotify(this.value - this.getValueModifier());
             }
 
             return true;
@@ -519,17 +571,22 @@ public class UITrackpad extends UIBaseTextbox
     @Override
     public boolean subKeyPressed(UIContext context)
     {
+        if (this.allowCanceling && this.isDragging() && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+        {
+            return this.cancelDragging();
+        }
+
         if (this.isFocused())
         {
             if (context.isHeld(GLFW.GLFW_KEY_UP))
             {
-                this.setValueAndNotify(this.value + this.getValueModifier());
+                this.setUserValueAndNotify(this.value + this.getValueModifier());
 
                 return true;
             }
             else if (context.isHeld(GLFW.GLFW_KEY_DOWN))
             {
-                this.setValueAndNotify(this.value - this.getValueModifier());
+                this.setUserValueAndNotify(this.value - this.getValueModifier());
 
                 return true;
             }
@@ -554,7 +611,7 @@ public class UITrackpad extends UIBaseTextbox
         {
             if (!context.isFocused() && (context.isPressed(GLFW.GLFW_KEY_MINUS) || context.isPressed(GLFW.GLFW_KEY_KP_SUBTRACT)))
             {
-                this.setValueAndNotify(-this.value);
+                this.setUserValueAndNotify(-this.value);
 
                 return true;
             }
@@ -584,7 +641,7 @@ public class UITrackpad extends UIBaseTextbox
         return result;
     }
 
-    private void evaluate()
+    private boolean evaluate()
     {
         String text = this.textbox.getText().trim();
 
@@ -592,7 +649,7 @@ public class UITrackpad extends UIBaseTextbox
         {
             Float.parseFloat(text);
 
-            return;
+            return false;
         }
         catch (Exception e)
         {}
@@ -601,11 +658,22 @@ public class UITrackpad extends UIBaseTextbox
         {
             MathBuilder builder = new MathBuilder();
 
-            this.setValueAndNotify(builder.parse(text).get().doubleValue());
+            double oldValue = this.value;
+
+            this.setValue(builder.parse(text).get().doubleValue());
             this.textbox.moveCursorToEnd();
+
+            if (!this.delayedInput)
+            {
+                this.accept(this.value, oldValue);
+            }
+
+            return true;
         }
         catch (Exception e)
         {}
+
+        return false;
     }
 
     @Override
@@ -724,7 +792,9 @@ public class UITrackpad extends UIBaseTextbox
                 final int borderPadding = border + 1;
                 boolean stop = false;
 
-                if (mouseX <= border)
+                boolean wrapCursor = !BBSUiRemoteHeldState.isActive();
+
+                if (wrapCursor && mouseX <= border)
                 {
                     Window.moveCursor(ww - (int) (factor * borderPadding), (int) mc.mouseHandler.ypos());
 
@@ -732,7 +802,7 @@ public class UITrackpad extends UIBaseTextbox
                     this.changed.mark();
                     stop = true;
                 }
-                else if (mouseX >= context.menu.width - border)
+                else if (wrapCursor && mouseX >= context.menu.width - border)
                 {
                     Window.moveCursor((int) (factor * borderPadding), (int) mc.mouseHandler.ypos());
 

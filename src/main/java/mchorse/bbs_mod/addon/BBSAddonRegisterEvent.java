@@ -32,12 +32,6 @@ public final class BBSAddonRegisterEvent extends Event implements IModBusEvent
      */
     public void register(String addonId, Supplier<? extends BBSAddonMod> supplier)
     {
-        if (supplier == null)
-        {
-            return;
-        }
-
-        BBSAddonMod addon = supplier.get();
-        this.collector.register(addonId, addon);
+        this.collector.register(addonId, supplier);
     }
 }

@@ -13,21 +13,6 @@ public final class BBSApiVersion
 
     public static boolean isSupported(String version)
     {
-        if (version == null || version.isBlank())
-        {
-            return false;
-        }
-
-        int dot = version.indexOf('.');
-        String major = dot < 0 ? version : version.substring(0, dot);
-
-        try
-        {
-            return Integer.parseInt(major) == MAJOR;
-        }
-        catch (NumberFormatException e)
-        {
-            return false;
-        }
+        return version != null && CURRENT.equals(version.trim());
     }
 }

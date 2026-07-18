@@ -17,9 +17,11 @@ import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
+import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -47,6 +49,8 @@ public class OrbitFilmCameraController implements ICameraController
 
     private boolean orbiting;
     private int orbitButton = -1;
+    private final MouseGestureOwnership orbitOwnership = new MouseGestureOwnership();
+    private long orbitGeneration;
     private final Vector2i last = new Vector2i();
     private final Vector2i pressOrigin = new Vector2i();
     private boolean dragged;
@@ -74,22 +78,51 @@ public class OrbitFilmCameraController implements ICameraController
         this.reset();
     }
 
+    /** Preserve the legacy direct-addon JVM descriptor. */
     public void start(UIContext context)
+    {
+        this.startGesture(context);
+    }
+
+    public long startGesture(UIContext context)
     {
         if (!this.canStart(context))
         {
-            return;
+            return 0L;
         }
 
-        this.orbitButton = context.mouseButton;
+        int button = context.mouseButton;
+        long generation = this.orbitOwnership.acquireToken(button);
+
+        if (generation == 0L)
+        {
+            return 0L;
+        }
+
+        this.orbitButton = button;
+        this.orbitGeneration = generation;
         this.orbiting = true;
         this.dragged = false;
         this.last.set(context.mouseX, context.mouseY);
         this.pressOrigin.set(context.mouseX, context.mouseY);
 
-        if (this.isPanning())
+        try
         {
-            this.cachePanState(context);
+            if (this.isPanning())
+            {
+                this.cachePanState(context);
+            }
+
+            return generation;
+        }
+        catch (RuntimeException | Error exception)
+        {
+            if (this.orbitOwnership.release(button, generation))
+            {
+                this.clearOrbitGesture();
+            }
+
+            throw exception;
         }
     }
 
@@ -100,8 +133,37 @@ public class OrbitFilmCameraController implements ICameraController
 
     public void stop()
     {
+        this.orbitOwnership.cancel();
+        this.clearOrbitGesture();
+    }
+
+    public boolean stop(int mouseButton)
+    {
+        return this.stop(mouseButton, this.orbitGeneration);
+    }
+
+    public boolean stop(int mouseButton, long generation)
+    {
+        if (!this.orbitOwnership.release(mouseButton, generation))
+        {
+            return false;
+        }
+
+        this.clearOrbitGesture();
+
+        return true;
+    }
+
+    public long gestureGeneration()
+    {
+        return this.orbitGeneration;
+    }
+
+    private void clearOrbitGesture()
+    {
         this.orbiting = false;
         this.orbitButton = -1;
+        this.orbitGeneration = 0L;
     }
 
     public boolean keyPressed(UIContext context, Area area)
@@ -151,7 +213,7 @@ public class OrbitFilmCameraController implements ICameraController
 
     public void handleOrbiting(UIContext context)
     {
-        if (!this.orbiting)
+        if (!this.orbiting || !this.orbitOwnership.isOwnedBy(this.orbitButton, this.orbitGeneration))
         {
             return;
         }
@@ -439,7 +501,7 @@ public class OrbitFilmCameraController implements ICameraController
             return null;
         }
 
-        int index = film.replays.getList().indexOf(replay);
+        int index = CollectionUtils.getIndex(film.replays.getList(), replay);
 
         return index < 0 ? null : this.controller.getEntities().get(index);
     }
@@ -463,8 +525,7 @@ public class OrbitFilmCameraController implements ICameraController
         this.distance = 4F;
         this.targetDistance = 4F;
         this.positioned = false;
-        this.orbiting = false;
-        this.orbitButton = -1;
+        this.stop();
         this.velocityPosition.set(0, 0, 0);
         this.anchorReplay = null;
         this.anchorPosition.set(0D, 0D, 0D);
@@ -509,10 +570,11 @@ public class OrbitFilmCameraController implements ICameraController
         double x = Lerps.lerp(entity.getPrevX(), entity.getX(), transition);
         double y = Lerps.lerp(entity.getPrevY(), entity.getY(), transition) + h;
         double z = Lerps.lerp(entity.getPrevZ(), entity.getZ(), transition);
+        Replay replay = this.controller.panel.replayEditor.getReplay();
+        boolean relative = replay != null && replay.relative.get();
 
-        if (form != null)
+        if (form != null && !relative && !BaseFilmController.isRelativeReplayEntity(entity))
         {
-            MatrixCache map = FormUtilsClient.getRenderer(form).collectMatrices(entity, transition);
             String group = "anchor";
 
             if (form instanceof ModelForm modelForm)
@@ -527,19 +589,30 @@ public class OrbitFilmCameraController implements ICameraController
                 }
             }
 
+            Anchor v = form.anchor.get();
+            Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
+            Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(this.controller.getEntities(), v, defaultMatrix, x, y, z, transition, 0);
+
+            if (totalMatrix.a != null)
+            {
+                defaultMatrix = totalMatrix.a;
+            }
+
+            Matrix4f semanticBase = new Matrix4f()
+                .translation((float) x, (float) y, (float) z)
+                .mul(defaultMatrix);
+            MatrixCache map = FormUtilsClient.getRenderer(form).collectMatrices(
+                entity,
+                entity,
+                semanticBase,
+                true,
+                true,
+                transition
+            );
             Matrix4f anchor = map.get(group).matrix();
 
             if (anchor != null)
             {
-                Anchor v = form.anchor.get();
-                Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
-                Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(this.controller.getEntities(), v, defaultMatrix, x, y, z, transition, 0);
-
-                if (totalMatrix.a != null)
-                {
-                    defaultMatrix = totalMatrix.a;
-                }
-
                 defaultMatrix.mul(anchor);
 
                 Vector3f translate = defaultMatrix.getTranslation(Vectors.TEMP_3F);
@@ -555,6 +628,11 @@ public class OrbitFilmCameraController implements ICameraController
 
     private boolean canStart(UIContext context)
     {
+        if (!this.enabled)
+        {
+            return false;
+        }
+
         if (this.controller.panel.isFlying())
         {
             return context.mouseButton == 0;

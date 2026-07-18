@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.graphics.InverseView;
@@ -44,6 +45,8 @@ public abstract class UIModelRenderer extends UIElement
 
     protected int timer;
     protected int dragging;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
 
     public Camera camera = new Camera();
 
@@ -121,6 +124,14 @@ public abstract class UIModelRenderer extends UIElement
     {
         if (!this.isDragging() && this.area.isInside(context) && (context.mouseButton == 0 || context.mouseButton == 2))
         {
+            long generation = this.dragOwnership.acquireToken(context.mouseButton);
+
+            if (generation == 0L)
+            {
+                return false;
+            }
+
+            this.dragGeneration = generation;
             this.dragging = Window.isShiftPressed() || context.mouseButton == 2 ? 2 : 1;
             this.lastX = context.mouseX;
             this.lastY = context.mouseY;
@@ -157,9 +168,23 @@ public abstract class UIModelRenderer extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        this.dragging = 0;
+        if (this.dragOwnership.release(context.mouseButton, this.dragGeneration))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = 0;
+        }
 
         return super.subMouseReleased(context);
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (this.dragOwnership.release(context.mouseButton, this.dragGeneration))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = 0;
+        }
     }
 
     @Override
@@ -169,6 +194,7 @@ public abstract class UIModelRenderer extends UIElement
 
         context.batcher.clip(this.area, context);
         this.renderModel(context);
+        BBSFormPreviewCapture.include(context, this.area.x, this.area.y, this.area.ex(), this.area.ey());
         context.batcher.unclip(context);
 
         super.render(context);

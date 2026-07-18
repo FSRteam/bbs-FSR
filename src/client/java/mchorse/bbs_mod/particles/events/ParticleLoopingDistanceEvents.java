@@ -16,14 +16,19 @@ public class ParticleLoopingDistanceEvents
 {
     public final List<Entry> entries = new ArrayList<>();
 
+    /* Parsed Entry instances and raw BaseType siblings in their original order. */
+    private final List<Object> elementOrder = new ArrayList<>();
     private BaseType raw;
     private boolean edited;
+    private boolean hasRawSiblings;
 
     public void fromData(BaseType data)
     {
         this.entries.clear();
+        this.elementOrder.clear();
         this.raw = null;
         this.edited = false;
+        this.hasRawSiblings = false;
 
         if (data == null)
         {
@@ -37,18 +42,26 @@ public class ParticleLoopingDistanceEvents
             return;
         }
 
-        boolean supported = true;
-
         for (BaseType element : data.asList())
         {
             if (!element.isMap())
             {
-                supported = false;
+                this.elementOrder.add(element.copy());
+                this.hasRawSiblings = true;
 
                 continue;
             }
 
             MapType map = element.asMap();
+
+            if (!map.has("effects"))
+            {
+                this.elementOrder.add(element.copy());
+                this.hasRawSiblings = true;
+
+                continue;
+            }
+
             Entry entry = new Entry();
 
             if (map.has("distance"))
@@ -72,11 +85,7 @@ public class ParticleLoopingDistanceEvents
             }
 
             this.entries.add(entry);
-        }
-
-        if (!supported)
-        {
-            this.raw = data.copy();
+            this.elementOrder.add(entry);
         }
     }
 
@@ -100,33 +109,56 @@ public class ParticleLoopingDistanceEvents
 
         ListType list = new ListType();
 
+        for (Object element : this.elementOrder)
+        {
+            if (element instanceof Entry entry)
+            {
+                if (this.entries.contains(entry))
+                {
+                    this.addEntry(list, entry);
+                }
+            }
+            else
+            {
+                list.add(((BaseType) element).copy());
+            }
+        }
+
         for (Entry entry : this.entries)
         {
-            BaseType effects = entry.effects.toData();
-
-            if (effects == null)
+            if (!this.elementOrder.contains(entry))
             {
-                continue;
+                this.addEntry(list, entry);
             }
-
-            MapType map = new MapType(false);
-
-            for (Map.Entry<String, BaseType> extra : entry.extra.entrySet())
-            {
-                map.put(extra.getKey(), extra.getValue().copy());
-            }
-
-            map.put("distance", entry.toDistanceData());
-            map.put("effects", effects);
-            list.add(map);
         }
 
         return list.isEmpty() ? null : list;
     }
 
+    private void addEntry(ListType list, Entry entry)
+    {
+        BaseType effects = entry.effects.toData();
+
+        if (effects == null)
+        {
+            return;
+        }
+
+        MapType map = new MapType(false);
+
+        for (Map.Entry<String, BaseType> extra : entry.extra.entrySet())
+        {
+            map.put(extra.getKey(), extra.getValue().copy());
+        }
+
+        map.put("distance", entry.toDistanceData());
+        map.put("effects", effects);
+        list.add(map);
+    }
+
     public boolean isEmpty()
     {
-        return this.entries.isEmpty() && this.raw == null;
+        return this.entries.isEmpty() && this.raw == null && !this.hasRawSiblings;
     }
 
     public void markEdited()

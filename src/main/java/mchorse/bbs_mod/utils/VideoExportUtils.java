@@ -13,6 +13,24 @@ public final class VideoExportUtils
     private VideoExportUtils()
     {}
 
+    /** Validate capture dimensions and calculate the packed BGR frame size. */
+    public static int frameBufferSize(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            throw new IllegalArgumentException("Video dimensions must be positive");
+        }
+
+        try
+        {
+            return Math.multiplyExact(Math.multiplyExact(width, height), 3);
+        }
+        catch (ArithmeticException e)
+        {
+            throw new IllegalArgumentException("Video dimensions are too large", e);
+        }
+    }
+
     /**
      * Split a user-authored ffmpeg argument template without losing quoted spaces, then
      * resolve placeholders inside each complete argument. Quotes group arguments and are
@@ -144,9 +162,30 @@ public final class VideoExportUtils
 
     public static void deleteTemporaryFile(File file)
     {
-        if (file != null && file.exists() && !file.delete())
+        tryDeleteTemporaryFile(file);
+    }
+
+    public static boolean tryDeleteTemporaryFile(File file)
+    {
+        if (file == null)
         {
+            return true;
+        }
+
+        try
+        {
+            if (!file.exists() || file.delete())
+            {
+                return true;
+            }
+
             file.deleteOnExit();
         }
+        catch (SecurityException e)
+        {
+            return false;
+        }
+
+        return false;
     }
 }

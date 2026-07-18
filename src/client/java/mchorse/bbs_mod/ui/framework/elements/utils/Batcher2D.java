@@ -3,6 +3,12 @@ package mchorse.bbs_mod.ui.framework.elements.utils;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind;
+import mchorse.bbs_mod.api.client.ui.BBSUiColoredMesh;
+import mchorse.bbs_mod.api.client.ui.BBSUiTexturedMeshVertex;
+import mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason;
+import mchorse.bbs_mod.api.client.ui.BBSUiVertex;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiFrameRecorder;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -20,6 +26,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -75,6 +82,7 @@ public class Batcher2D
      */
     public void clip(int x, int y, int w, int h, int sw, int sh)
     {
+        BBSUiFrameRecorder.recordClipPush(x, y, w, h);
         this.context.enableScissor(x, y, x + w, y + h);
     }
 
@@ -85,6 +93,7 @@ public class Batcher2D
 
     public void unclip(int sw, int sh)
     {
+        BBSUiFrameRecorder.recordClipPop();
         this.context.disableScissor();
     }
 
@@ -129,6 +138,11 @@ public class Batcher2D
 
     public void fillRect(BufferBuilder builder, Matrix4f matrix4f, float x, float y, float w, float h, int color1, int color2, int color3, int color4)
     {
+        /* This is the leaf used by graph/keyframe renderers that append to an
+         * existing BufferBuilder. Recording here avoids silently missing those
+         * direct batched quads while box() still records exactly once. */
+        BBSUiFrameRecorder.recordQuad(matrix4f, x, y, w, h, color1, color2, color3, color4);
+
         /* c1 ---- c2
          * |        |
          * c3 ---- c4 */
@@ -176,6 +190,19 @@ public class Batcher2D
         bottom += offset;
 
         Matrix4f matrix4f = this.context.pose().last().pose();
+        ArrayList<BBSUiVertex> mirror = new ArrayList<>(30);
+
+        addColoredQuad(mirror, left + offset, top + offset, opaque, left + offset, bottom - offset, opaque,
+            right - offset, bottom - offset, opaque, right - offset, top + offset, opaque);
+        addColoredQuad(mirror, left, top, shadow, left + offset, top + offset, opaque,
+            right - offset, top + offset, opaque, right, top, shadow);
+        addColoredQuad(mirror, left + offset, bottom - offset, opaque, left, bottom, shadow,
+            right, bottom, shadow, right - offset, bottom - offset, opaque);
+        addColoredQuad(mirror, left, top, shadow, left, bottom, shadow,
+            left + offset, bottom - offset, opaque, left + offset, top + offset, opaque);
+        addColoredQuad(mirror, right - offset, top + offset, opaque, right - offset, bottom - offset, opaque,
+            right, bottom, shadow, right, top, shadow);
+        recordColoredTriangles(matrix4f, mirror);
 
         flushBeforeTesselator();
 
@@ -233,6 +260,21 @@ public class Batcher2D
     public void dropCircleShadow(int x, int y, int radius, int segments, int opaque, int shadow)
     {
         Matrix4f matrix4f = this.context.pose().last().pose();
+        ColoredMeshBatch mirror = new ColoredMeshBatch(matrix4f);
+
+        for (int i = 0; i < segments; i ++)
+        {
+            double a1 = i / (double) segments * Math.PI * 2 - Math.PI / 2;
+            double a2 = (i + 1) / (double) segments * Math.PI * 2 - Math.PI / 2;
+
+            mirror.addTriangle(
+                x, y, opaque,
+                (float) (x - Math.cos(a1) * radius), (float) (y + Math.sin(a1) * radius), shadow,
+                (float) (x - Math.cos(a2) * radius), (float) (y + Math.sin(a2) * radius), shadow
+            );
+        }
+
+        mirror.finish();
 
         flushBeforeTesselator();
 
@@ -263,6 +305,21 @@ public class Batcher2D
         }
 
         Matrix4f matrix4f = this.context.pose().last().pose();
+        ColoredMeshBatch baseMirror = new ColoredMeshBatch(matrix4f);
+
+        for (int i = 0; i < segments; i ++)
+        {
+            double a1 = i / (double) segments * Math.PI * 2 - Math.PI / 2;
+            double a2 = (i + 1) / (double) segments * Math.PI * 2 - Math.PI / 2;
+
+            baseMirror.addTriangle(
+                x, y, opaque,
+                (float) (x - Math.cos(a1) * offset), (float) (y + Math.sin(a1) * offset), opaque,
+                (float) (x - Math.cos(a2) * offset), (float) (y + Math.sin(a2) * offset), opaque
+            );
+        }
+
+        baseMirror.finish();
 
         /* Draw opaque base */
         flushBeforeTesselator();
@@ -287,11 +344,23 @@ public class Batcher2D
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+        ColoredMeshBatch shadowMirror = new ColoredMeshBatch(matrix4f);
 
         for (int i = 0; i < segments; i ++)
         {
             double alpha1 = i / (double) segments * Math.PI * 2 - Math.PI / 2;
             double alpha2 = (i + 1) / (double) segments * Math.PI * 2 - Math.PI / 2;
+
+            shadowMirror.addTriangle(
+                (float) (x - Math.cos(alpha2) * offset), (float) (y + Math.sin(alpha2) * offset), opaque,
+                (float) (x - Math.cos(alpha1) * offset), (float) (y + Math.sin(alpha1) * offset), opaque,
+                (float) (x - Math.cos(alpha1) * radius), (float) (y + Math.sin(alpha1) * radius), shadow
+            );
+            shadowMirror.addTriangle(
+                (float) (x - Math.cos(alpha2) * offset), (float) (y + Math.sin(alpha2) * offset), opaque,
+                (float) (x - Math.cos(alpha1) * radius), (float) (y + Math.sin(alpha1) * radius), shadow,
+                (float) (x - Math.cos(alpha2) * radius), (float) (y + Math.sin(alpha2) * radius), shadow
+            );
 
             builder.addVertex(matrix4f, (float) (x - Math.cos(alpha2) * offset), (float) (y + Math.sin(alpha2) * offset), 0F).setColor(opaque);
             builder.addVertex(matrix4f, (float) (x - Math.cos(alpha1) * offset), (float) (y + Math.sin(alpha1) * offset), 0F).setColor(opaque);
@@ -300,6 +369,8 @@ public class Batcher2D
             builder.addVertex(matrix4f, (float) (x - Math.cos(alpha1) * radius), (float) (y + Math.sin(alpha1) * radius), 0F).setColor(shadow);
             builder.addVertex(matrix4f, (float) (x - Math.cos(alpha2) * radius), (float) (y + Math.sin(alpha2) * radius), 0F).setColor(shadow);
         }
+
+        shadowMirror.finish();
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
@@ -437,6 +508,22 @@ public class Batcher2D
 
         Matrix4f matrix = this.context.pose().last().pose();
 
+        BBSUiFrameRecorder.recordTextureQuad(
+            matrix,
+            texture,
+            x,
+            y,
+            w,
+            h,
+            u1,
+            v1,
+            u2,
+            v2,
+            textureW,
+            textureH,
+            color
+        );
+
         flushBeforeTesselator();
 
         this.prepareUiBlend();
@@ -453,14 +540,95 @@ public class Batcher2D
 
     public void texturedBox(int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
-        this.texturedBox(GameRenderer::getPositionTexColorShader, texture, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH);
+        this.texturedBoxNative(
+            GameRenderer::getPositionTexColorShader,
+            texture, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH,
+            BBSUiUnsupportedReason.RAW_TEXTURE
+        );
+    }
+
+    /**
+     * Draw a native dynamic texture while recording only its stable logical
+     * surface placement for UI mirror consumers.
+     */
+    public void surfaceBox(
+        BBSRenderSurfaceKind surfaceKind,
+        int texture,
+        int color,
+        float x,
+        float y,
+        float w,
+        float h,
+        float u1,
+        float v1,
+        float u2,
+        float v2,
+        int textureW,
+        int textureH
+    )
+    {
+        if (surfaceKind == null || w <= 0F || h <= 0F || textureW <= 0 || textureH <= 0)
+        {
+            return;
+        }
+
+        Matrix4f matrix = this.context.pose().last().pose();
+
+        BBSUiFrameRecorder.recordSurfaceQuad(
+            matrix,
+            surfaceKind,
+            x,
+            y,
+            w,
+            h,
+            u1 / textureW,
+            v1 / textureH,
+            u2 / textureW,
+            v2 / textureH,
+            color
+        );
+
+        this.texturedBoxNative(
+            GameRenderer::getPositionTexColorShader,
+            texture, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH,
+            null
+        );
     }
 
     public void texturedBox(Supplier<ShaderInstance> shader, int texture, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
+        this.texturedBoxNative(
+            shader,
+            texture, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH,
+            BBSUiUnsupportedReason.CUSTOM_SHADER
+        );
+    }
+
+    private void texturedBoxNative(
+        Supplier<ShaderInstance> shader,
+        int texture,
+        int color,
+        float x,
+        float y,
+        float w,
+        float h,
+        float u1,
+        float v1,
+        float u2,
+        float v2,
+        int textureW,
+        int textureH,
+        BBSUiUnsupportedReason unsupportedReason
+    )
+    {
         if (w <= 0F || h <= 0F)
         {
             return;
+        }
+
+        if (unsupportedReason != null)
+        {
+            BBSUiFrameRecorder.recordUnsupported(unsupportedReason);
         }
 
         Matrix4f matrix = this.context.pose().last().pose();
@@ -522,6 +690,21 @@ public class Batcher2D
             float xw = ix == countX - 1 ? fillerX : tileW;
             float yh = iy == countY - 1 ? fillerY : tileH;
 
+            BBSUiFrameRecorder.recordTexturedMesh(
+                matrix,
+                texture,
+                List.of(
+                    new BBSUiTexturedMeshVertex(xx, yy + yh, u, v + yh, color),
+                    new BBSUiTexturedMeshVertex(xx + xw, yy + yh, u + xw, v + yh, color),
+                    new BBSUiTexturedMeshVertex(xx + xw, yy, u + xw, v, color),
+                    new BBSUiTexturedMeshVertex(xx, yy + yh, u, v + yh, color),
+                    new BBSUiTexturedMeshVertex(xx + xw, yy, u + xw, v, color),
+                    new BBSUiTexturedMeshVertex(xx, yy, u, v, color)
+                ),
+                tw,
+                th
+            );
+
             this.fillTexturedBox(builder, matrix, color, xx, yy, xw, yh, u, v, u + xw, v + yh, tw, th);
         }
 
@@ -570,7 +753,21 @@ public class Batcher2D
             color = Colors.opaque(color);
         }
 
-        this.context.drawString(this.font.getRenderer(), label, (int) x, (int) y, color, shadow);
+        int drawX = (int) x;
+        int drawY = (int) y;
+
+        BBSUiFrameRecorder.recordGlyphRun(
+            this.context.pose().last().pose(),
+            label,
+            drawX,
+            drawY,
+            this.font.getWidth(label),
+            this.font.getHeight(),
+            color,
+            shadow
+        );
+
+        this.context.drawString(this.font.getRenderer(), label, drawX, drawY, color, shadow);
         /* drawString() calls flushIfUnmanaged() internally which calls flush().
          * flush() re-enables depth test and may change depth func via the text
          * RenderType's setupRenderState().  Restore the depth func BBS expects. */
@@ -683,5 +880,81 @@ public class Batcher2D
     {
         RenderSystem.defaultBlendFunc();
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
+    }
+
+    private static void recordColoredTriangles(Matrix4f matrix, List<BBSUiVertex> vertices)
+    {
+        for (int offset = 0; offset < vertices.size(); offset += BBSUiColoredMesh.MAX_VERTICES)
+        {
+            int end = Math.min(vertices.size(), offset + BBSUiColoredMesh.MAX_VERTICES);
+
+            BBSUiFrameRecorder.recordColoredMesh(matrix, vertices.subList(offset, end));
+        }
+    }
+
+    private static void addColoredQuad(
+        List<BBSUiVertex> vertices,
+        float x1, float y1, int c1,
+        float x2, float y2, int c2,
+        float x3, float y3, int c3,
+        float x4, float y4, int c4
+    )
+    {
+        addColoredTriangle(vertices, x1, y1, c1, x2, y2, c2, x3, y3, c3);
+        addColoredTriangle(vertices, x1, y1, c1, x3, y3, c3, x4, y4, c4);
+    }
+
+    private static void addColoredTriangle(
+        List<BBSUiVertex> vertices,
+        float x1, float y1, int c1,
+        float x2, float y2, int c2,
+        float x3, float y3, int c3
+    )
+    {
+        vertices.add(new BBSUiVertex(x1, y1, c1));
+        vertices.add(new BBSUiVertex(x2, y2, c2));
+        vertices.add(new BBSUiVertex(x3, y3, c3));
+    }
+
+    /** Keeps mirror-side procedural meshes bounded independently of segment count. */
+    private static final class ColoredMeshBatch
+    {
+        private final Matrix4f matrix;
+        private final ArrayList<BBSUiVertex> vertices = new ArrayList<>(BBSUiColoredMesh.MAX_VERTICES);
+
+        private ColoredMeshBatch(Matrix4f matrix)
+        {
+            this.matrix = matrix;
+        }
+
+        private void addTriangle(
+            float x1, float y1, int c1,
+            float x2, float y2, int c2,
+            float x3, float y3, int c3
+        )
+        {
+            if (this.vertices.size() + 3 > BBSUiColoredMesh.MAX_VERTICES)
+            {
+                this.flush();
+            }
+
+            addColoredTriangle(this.vertices, x1, y1, c1, x2, y2, c2, x3, y3, c3);
+        }
+
+        private void finish()
+        {
+            this.flush();
+        }
+
+        private void flush()
+        {
+            if (this.vertices.isEmpty())
+            {
+                return;
+            }
+
+            BBSUiFrameRecorder.recordColoredMesh(this.matrix, this.vertices);
+            this.vertices.clear();
+        }
     }
 }

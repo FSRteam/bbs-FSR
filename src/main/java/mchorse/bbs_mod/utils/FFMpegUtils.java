@@ -2,6 +2,8 @@ package mchorse.bbs_mod.utils;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,10 +18,14 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class FFMpegUtils
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-video-export");
     private static final Set<String> SKIP_DIRS = Set.of("Windows", "Program Files", "Program Files (x86)", "$Recycle.Bin", "System Volume Information", "AppData");
+    private static final long HEALTH_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5L);
+    private static final long TERMINATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1L);
 
     /**
      * People usually are not bright enough, even though everything is stated
@@ -30,8 +36,12 @@ public class FFMpegUtils
      */
     private static File findFFMPEG(String path)
     {
+        return findFFMPEG(path, OS.CURRENT == OS.WINDOWS);
+    }
+
+    static File findFFMPEG(String path, boolean isWin)
+    {
         File file = new File(path);
-        boolean isWin = OS.CURRENT == OS.WINDOWS;
 
         if (file.isDirectory())
         {
@@ -43,7 +53,7 @@ public class FFMpegUtils
                 return bin;
             }
 
-            bin = new File(file, "bin" + File.pathSeparator + subpath);
+            bin = new File(new File(file, "bin"), subpath);
 
             if (bin.isFile())
             {
@@ -78,7 +88,12 @@ public class FFMpegUtils
 
     public static boolean checkFFMPEG()
     {
-        return execute(BBSMod.getGameFolder(), "-version");
+        List<String> args = new ArrayList<>();
+
+        args.add(getFFMPEG());
+        args.add("-version");
+
+        return executeCommand(BBSMod.getGameFolder(), BBSMod.getSettingsPath("converter.log"), args, HEALTH_CHECK_TIMEOUT_MS);
     }
 
     public static boolean execute(File folder, String... arguments)
@@ -92,8 +107,14 @@ public class FFMpegUtils
             args.add(arg);
         }
 
-        ProcessBuilder builder = new ProcessBuilder(args);
         File log = BBSMod.getSettingsPath("converter.log");
+
+        return executeCommand(folder, log, args, 0L);
+    }
+
+    static boolean executeCommand(File folder, File log, List<String> arguments, long timeoutMs)
+    {
+        ProcessBuilder builder = new ProcessBuilder(arguments);
 
         builder.directory(folder);
         builder.redirectErrorStream(true);
@@ -103,14 +124,122 @@ public class FFMpegUtils
         {
             Process start = builder.start();
 
-            return start.waitFor() == 0;
+            return waitForProcess(start, timeoutMs);
         }
-        catch (Exception e)
+        catch (Exception | LinkageError e)
         {
-            e.printStackTrace();
+            if (e instanceof InterruptedException)
+            {
+                Thread.currentThread().interrupt();
+            }
+
+            LOGGER.warn("[BBS-SEM] topic=ffmpeg.process phase=launch result=failed error_class={}",
+                e.getClass().getName());
         }
 
         return false;
+    }
+
+    static boolean waitForProcess(Process process, long timeoutMs)
+    {
+        boolean interrupted = false;
+
+        try
+        {
+            boolean exited;
+
+            if (timeoutMs > 0L)
+            {
+                exited = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
+            }
+            else
+            {
+                process.waitFor();
+                exited = true;
+            }
+
+            return exited && process.exitValue() == 0;
+        }
+        catch (InterruptedException e)
+        {
+            interrupted = true;
+
+            return false;
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.warn("[BBS-SEM] topic=ffmpeg.process phase=wait result=failed error_class={}",
+                e.getClass().getName());
+
+            return false;
+        }
+        finally
+        {
+            closeProcessStreams(process);
+
+            try
+            {
+                if (process.isAlive())
+                {
+                    process.destroy();
+
+                    if (!process.waitFor(TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+                    {
+                        process.destroyForcibly();
+                        process.waitFor(TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                    }
+                }
+            }
+            catch (InterruptedException e)
+            {
+                interrupted = true;
+
+                try
+                {
+                    process.destroyForcibly();
+                }
+                catch (Exception | LinkageError ignored)
+                {}
+            }
+            catch (Exception | LinkageError e)
+            {
+                try
+                {
+                    process.destroyForcibly();
+                }
+                catch (Exception | LinkageError ignored)
+                {}
+            }
+
+            if (interrupted)
+            {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private static void closeProcessStreams(Process process)
+    {
+        try
+        {
+            process.getOutputStream().close();
+        }
+        catch (Exception | LinkageError ignored)
+        {}
+
+        try
+        {
+            process.getInputStream().close();
+        }
+        catch (Exception | LinkageError ignored)
+        {}
+
+        try
+        {
+            process.getErrorStream().close();
+        }
+        catch (Exception | LinkageError ignored)
+        {}
     }
 
     public static Optional<Path> findFFMpeg(Path root)
@@ -127,7 +256,8 @@ public class FFMpegUtils
         }
         catch (IOException e)
         {
-            e.printStackTrace();
+            LOGGER.warn("[BBS-SEM] topic=ffmpeg.discovery phase=executable_scan result=failed error_class={}",
+                e.getClass().getName());
         }
 
         return Optional.empty();

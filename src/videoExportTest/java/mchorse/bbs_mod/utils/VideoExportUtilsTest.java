@@ -1,12 +1,23 @@
 package mchorse.bbs_mod.utils;
 
+import mchorse.bbs_mod.client.ExportResolutionActionGateTest;
+import mchorse.bbs_mod.film.VideoExportSessionTest;
+
 import java.io.File;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-/** Executable regression checks for argument boundaries and owned temp-file cleanup. */
+/** Executable regression checks for argument, path, process, and owned-resource lifecycles. */
 public class VideoExportUtilsTest
 {
     public static void main(String[] args) throws Exception
@@ -19,7 +30,24 @@ public class VideoExportUtilsTest
         assertExplicitEmptyArgument();
         assertUnclosedQuoteRejected();
         assertReplacementDoesNotCascade();
+        assertFrameBufferSizeValidation();
+        assertInstallRootResolution();
         assertTemporaryAudioCleanup();
+        assertFailedTemporaryCleanupReported();
+        assertEncoderStartupFailure();
+        assertProcessOwnedBeforeChannelAdaptation();
+        assertEncoderEarlyExit();
+        assertEncoderPipeFailure();
+        assertEncoderNonzeroExit();
+        assertEncoderSuccess();
+        assertCompletionTimeoutCannotSucceed();
+        assertEncoderCancellationIsIdempotent();
+        assertCancelledTerminationTimeoutDiagnosed();
+        assertHangingHealthProbeTerminated();
+        assertInterruptedProbeRestoresInterrupt();
+        assertProcessWaitUsesBoundedSemanticDiagnostics();
+        ExportResolutionActionGateTest.runAll();
+        VideoExportSessionTest.runAll();
     }
 
     private static void assertFilmName(String name)
@@ -96,6 +124,50 @@ public class VideoExportUtilsTest
         );
     }
 
+    private static void assertFrameBufferSizeValidation()
+    {
+        if (VideoExportUtils.frameBufferSize(1920, 1080) != 1920 * 1080 * 3)
+        {
+            throw new AssertionError("Packed BGR frame size was calculated incorrectly");
+        }
+
+        assertInvalidFrameSize(0, 1080);
+        assertInvalidFrameSize(1920, -1);
+        assertInvalidFrameSize(Integer.MAX_VALUE, Integer.MAX_VALUE);
+    }
+
+    private static void assertInvalidFrameSize(int width, int height)
+    {
+        try
+        {
+            VideoExportUtils.frameBufferSize(width, height);
+        }
+        catch (IllegalArgumentException e)
+        {
+            return;
+        }
+
+        throw new AssertionError("Invalid video dimensions were accepted: " + width + "x" + height);
+    }
+
+    private static void assertInstallRootResolution() throws Exception
+    {
+        Path root = Files.createTempDirectory("bbs-ffmpeg-root-");
+        Path bin = Files.createDirectory(root.resolve("bin"));
+        Path windowsEncoder = Files.createFile(bin.resolve("ffmpeg.exe"));
+
+        assertEquals(windowsEncoder.toFile().getCanonicalFile(), FFMpegUtils.findFFMPEG(root.toString(), true).getCanonicalFile());
+        Files.delete(windowsEncoder);
+
+        Path unixEncoder = Files.createFile(bin.resolve("ffmpeg"));
+
+        assertEquals(unixEncoder.toFile().getCanonicalFile(), FFMpegUtils.findFFMPEG(root.toString(), false).getCanonicalFile());
+
+        Files.delete(unixEncoder);
+        Files.delete(bin);
+        Files.delete(root);
+    }
+
     private static void assertTemporaryAudioCleanup() throws Exception
     {
         Path folder = Files.createTempDirectory("bbs-export-test-");
@@ -103,7 +175,11 @@ public class VideoExportUtilsTest
         Files.writeString(userFile.toPath(), "keep");
 
         File temporary = VideoExportUtils.createTemporaryAudioFile(folder.toFile());
-        VideoExportUtils.deleteTemporaryFile(temporary);
+
+        if (!VideoExportUtils.tryDeleteTemporaryFile(temporary))
+        {
+            throw new AssertionError("Owned temporary audio was not deleted");
+        }
 
         if (temporary.exists() || !userFile.exists())
         {
@@ -114,11 +190,514 @@ public class VideoExportUtilsTest
         Files.delete(folder);
     }
 
+    private static void assertFailedTemporaryCleanupReported() throws Exception
+    {
+        Path directory = Files.createTempDirectory("bbs-export-delete-failure-");
+        Path child = Files.writeString(directory.resolve("child.tmp"), "keep directory non-empty");
+
+        if (VideoExportUtils.tryDeleteTemporaryFile(directory.toFile()))
+        {
+            throw new AssertionError("Failed temporary cleanup was reported as successful");
+        }
+
+        Files.delete(child);
+        Files.delete(directory);
+    }
+
+    private static void assertEncoderStartupFailure()
+    {
+        FakeProcess process = new FakeProcess(false, 1);
+        CountingChannel channel = new CountingChannel(false);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        if (lifecycle.start(process, channel))
+        {
+            throw new AssertionError("An already-exited FFmpeg process was accepted");
+        }
+
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.getOutcome());
+        assertEquals(1, channel.closeCount);
+    }
+
+    private static void assertProcessOwnedBeforeChannelAdaptation()
+    {
+        FakeProcess process = new FakeProcess(true, 0);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process);
+        lifecycle.fail(new IOException("fake stdin adaptation failure"));
+
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.getOutcome());
+        assertEquals(1, process.output.closeCount);
+        assertEquals(1, process.input.closeCount);
+        assertEquals(1, process.error.closeCount);
+
+        if (process.destroyCount != 1)
+        {
+            throw new AssertionError("Pre-channel startup failure did not terminate FFmpeg exactly once");
+        }
+    }
+
+    private static void assertEncoderEarlyExit()
+    {
+        FakeProcess process = new FakeProcess(true, 0);
+        CountingChannel channel = new CountingChannel(false);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process, channel);
+        process.exit();
+
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.complete());
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.poll());
+        assertEquals(1, channel.closeCount);
+    }
+
+    private static void assertEncoderPipeFailure()
+    {
+        FakeProcess process = new FakeProcess(true, 0);
+        CountingChannel channel = new CountingChannel(true);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process, channel);
+
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.write(ByteBuffer.wrap(new byte[] {1, 2, 3})));
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.cancel());
+        assertEquals(1, channel.closeCount);
+
+        if (process.destroyCount != 1)
+        {
+            throw new AssertionError("Pipe failure did not terminate FFmpeg exactly once");
+        }
+    }
+
+    private static void assertEncoderNonzeroExit()
+    {
+        FakeProcess process = new FakeProcess(true, 7);
+        CountingChannel channel = new CountingChannel(false);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process, channel);
+
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.complete());
+
+        if (lifecycle.getFailure() == null || !lifecycle.getFailure().getMessage().contains("code 7"))
+        {
+            throw new AssertionError("Nonzero FFmpeg exit code was not surfaced");
+        }
+    }
+
+    private static void assertEncoderSuccess()
+    {
+        FakeProcess process = new FakeProcess(true, 0);
+        CountingChannel channel = new CountingChannel(false);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process, channel);
+
+        assertEquals(VideoExportProcess.Outcome.RUNNING, lifecycle.write(ByteBuffer.wrap(new byte[] {1, 2, 3})));
+        assertEquals(VideoExportProcess.Outcome.SUCCEEDED, lifecycle.complete());
+        assertEquals(VideoExportProcess.Outcome.SUCCEEDED, lifecycle.complete());
+        assertEquals(1, channel.closeCount);
+    }
+
+    private static void assertEncoderCancellationIsIdempotent()
+    {
+        FakeProcess process = new FakeProcess(true, 0);
+        CountingChannel channel = new CountingChannel(false);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process, channel);
+
+        assertEquals(VideoExportProcess.Outcome.CANCELLED, lifecycle.cancel());
+        assertEquals(VideoExportProcess.Outcome.CANCELLED, lifecycle.cancel());
+        assertEquals(VideoExportProcess.Outcome.CANCELLED, lifecycle.complete());
+        assertEquals(1, channel.closeCount);
+
+        if (process.destroyCount != 1)
+        {
+            throw new AssertionError("Repeated disconnect/cancel cleanup terminated FFmpeg more than once");
+        }
+    }
+
+    private static void assertCompletionTimeoutCannotSucceed()
+    {
+        CompletionTimeoutProcess process = new CompletionTimeoutProcess();
+        CountingChannel channel = new CountingChannel(false);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process, channel);
+
+        assertEquals(VideoExportProcess.Outcome.FAILED, lifecycle.complete());
+
+        if (lifecycle.getFailure() == null || !lifecycle.getFailure().getMessage().contains("Timed out"))
+        {
+            throw new AssertionError("Forced FFmpeg completion was reported as a natural success");
+        }
+
+        if (process.destroyCount != 1)
+        {
+            throw new AssertionError("Timed-out FFmpeg completion was not terminated exactly once");
+        }
+    }
+
+    private static void assertHangingHealthProbeTerminated()
+    {
+        HangingProcess process = new HangingProcess();
+
+        if (FFMpegUtils.waitForProcess(process, 1L))
+        {
+            throw new AssertionError("Hanging FFmpeg health probe was reported as healthy");
+        }
+
+        if (process.isAlive() || process.destroyCount != 1)
+        {
+            throw new AssertionError("Hanging FFmpeg health probe was not terminated exactly once");
+        }
+    }
+
+    private static void assertCancelledTerminationTimeoutDiagnosed()
+    {
+        StubbornProcess process = new StubbornProcess();
+        CountingChannel channel = new CountingChannel(false);
+        VideoExportProcess lifecycle = new VideoExportProcess(0L);
+
+        lifecycle.start(process, channel);
+
+        assertEquals(VideoExportProcess.Outcome.CANCELLED, lifecycle.cancel());
+
+        if (lifecycle.getFailure() == null || !lifecycle.getFailure().getMessage().contains("Timed out"))
+        {
+            throw new AssertionError("Cancellation cleanup timeout was not surfaced");
+        }
+    }
+
+    private static void assertInterruptedProbeRestoresInterrupt()
+    {
+        InterruptingProcess process = new InterruptingProcess();
+
+        if (FFMpegUtils.waitForProcess(process, 1L))
+        {
+            throw new AssertionError("Interrupted FFmpeg probe was reported as healthy");
+        }
+
+        if (!Thread.currentThread().isInterrupted())
+        {
+            throw new AssertionError("FFmpeg probe swallowed the interrupt flag");
+        }
+
+        Thread.interrupted();
+    }
+
+    private static void assertProcessWaitUsesBoundedSemanticDiagnostics() throws IOException
+    {
+        Path source = findProjectRoot().resolve("src/main/java/mchorse/bbs_mod/utils/FFMpegUtils.java");
+        String utils = Files.readString(source);
+        int start = utils.indexOf("static boolean waitForProcess(Process process, long timeoutMs)");
+        int end = start < 0 ? -1 : utils.indexOf("private static void closeProcessStreams", start);
+
+        if (start < 0 || end <= start)
+        {
+            throw new AssertionError("Could not locate FFMpegUtils.waitForProcess source boundaries");
+        }
+
+        String waitForProcess = utils.substring(start, end);
+
+        if (utils.contains("printStackTrace")
+            || !utils.contains("topic=ffmpeg.process phase=launch")
+            || !waitForProcess.contains("topic=ffmpeg.process")
+            || !waitForProcess.contains("phase=wait")
+            || !utils.contains("topic=ffmpeg.discovery phase=executable_scan")
+            || !utils.contains("error_class={}"))
+        {
+            throw new AssertionError("FFmpeg failure diagnostics are no longer bounded and phase-specific");
+        }
+    }
+
+    private static Path findProjectRoot()
+    {
+        Path current = Path.of("").toAbsolutePath();
+
+        while (current != null)
+        {
+            if (Files.isRegularFile(current.resolve("src/main/java/mchorse/bbs_mod/utils/FFMpegUtils.java")))
+            {
+                return current;
+            }
+
+            Path nested = current.resolve("new");
+
+            if (Files.isRegularFile(nested.resolve("src/main/java/mchorse/bbs_mod/utils/FFMpegUtils.java")))
+            {
+                return nested;
+            }
+
+            current = current.getParent();
+        }
+
+        throw new AssertionError("Could not locate new project root");
+    }
+
     private static void assertEquals(List<String> expected, List<String> actual)
     {
         if (!actual.equals(expected))
         {
             throw new AssertionError("Expected " + expected + " but got " + actual);
+        }
+    }
+
+    private static void assertEquals(Object expected, Object actual)
+    {
+        if (!expected.equals(actual))
+        {
+            throw new AssertionError("Expected " + expected + " but got " + actual);
+        }
+    }
+
+    private static class CountingChannel implements WritableByteChannel
+    {
+        private final boolean failWrites;
+        private boolean open = true;
+        private int closeCount;
+
+        private CountingChannel(boolean failWrites)
+        {
+            this.failWrites = failWrites;
+        }
+
+        @Override
+        public int write(ByteBuffer source) throws IOException
+        {
+            if (this.failWrites)
+            {
+                throw new IOException("fake pipe failure");
+            }
+
+            int remaining = source.remaining();
+
+            source.position(source.limit());
+
+            return remaining;
+        }
+
+        @Override
+        public boolean isOpen()
+        {
+            return this.open;
+        }
+
+        @Override
+        public void close()
+        {
+            if (this.open)
+            {
+                this.open = false;
+                this.closeCount += 1;
+            }
+        }
+    }
+
+    private static class FakeProcess extends Process
+    {
+        protected final int exitCode;
+        protected final CloseTrackingOutputStream output = new CloseTrackingOutputStream();
+        protected final CloseTrackingInputStream input = new CloseTrackingInputStream();
+        protected final CloseTrackingInputStream error = new CloseTrackingInputStream();
+        protected boolean alive;
+        protected int destroyCount;
+
+        private FakeProcess(boolean alive, int exitCode)
+        {
+            this.alive = alive;
+            this.exitCode = exitCode;
+        }
+
+        private void exit()
+        {
+            this.alive = false;
+        }
+
+        @Override
+        public OutputStream getOutputStream()
+        {
+            return this.output;
+        }
+
+        @Override
+        public InputStream getInputStream()
+        {
+            return this.input;
+        }
+
+        @Override
+        public InputStream getErrorStream()
+        {
+            return this.error;
+        }
+
+        @Override
+        public int waitFor()
+        {
+            this.alive = false;
+
+            return this.exitCode;
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException
+        {
+            this.alive = false;
+
+            return true;
+        }
+
+        @Override
+        public int exitValue()
+        {
+            if (this.alive)
+            {
+                throw new IllegalThreadStateException("Fake process is still alive");
+            }
+
+            return this.exitCode;
+        }
+
+        @Override
+        public void destroy()
+        {
+            if (this.alive)
+            {
+                this.destroyCount += 1;
+                this.alive = false;
+            }
+        }
+
+        @Override
+        public Process destroyForcibly()
+        {
+            this.destroy();
+
+            return this;
+        }
+
+        @Override
+        public boolean isAlive()
+        {
+            return this.alive;
+        }
+    }
+
+    private static class HangingProcess extends FakeProcess
+    {
+        private HangingProcess()
+        {
+            super(true, 0);
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit)
+        {
+            return !this.alive;
+        }
+    }
+
+    private static class InterruptingProcess extends FakeProcess
+    {
+        private InterruptingProcess()
+        {
+            super(true, 0);
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException
+        {
+            throw new InterruptedException("fake probe interruption");
+        }
+    }
+
+    private static class CompletionTimeoutProcess extends FakeProcess
+    {
+        private boolean destroyRequested;
+
+        private CompletionTimeoutProcess()
+        {
+            super(true, 0);
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit)
+        {
+            if (!this.destroyRequested)
+            {
+                return false;
+            }
+
+            this.alive = false;
+
+            return true;
+        }
+
+        @Override
+        public void destroy()
+        {
+            this.destroyCount += 1;
+            this.destroyRequested = true;
+        }
+    }
+
+    private static class StubbornProcess extends FakeProcess
+    {
+        private StubbornProcess()
+        {
+            super(true, 0);
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit)
+        {
+            return false;
+        }
+
+        @Override
+        public void destroy()
+        {
+            this.destroyCount += 1;
+        }
+
+        @Override
+        public Process destroyForcibly()
+        {
+            this.destroyCount += 1;
+
+            return this;
+        }
+    }
+
+    private static class CloseTrackingOutputStream extends ByteArrayOutputStream
+    {
+        private int closeCount;
+
+        @Override
+        public void close() throws IOException
+        {
+            super.close();
+            this.closeCount += 1;
+        }
+    }
+
+    private static class CloseTrackingInputStream extends ByteArrayInputStream
+    {
+        private int closeCount;
+
+        private CloseTrackingInputStream()
+        {
+            super(new byte[0]);
+        }
+
+        @Override
+        public void close() throws IOException
+        {
+            super.close();
+            this.closeCount += 1;
         }
     }
 }

@@ -14,6 +14,7 @@ public class ClipFactoryData
     public final Icon icon;
     public final int color;
     public final Map<Link, IClipConverter<? extends Clip, ? extends Clip>> converters = new HashMap<>();
+    private boolean addable = true;
 
     public ClipFactoryData(Icon icon, int color)
     {
@@ -26,5 +27,17 @@ public class ClipFactoryData
         this.converters.put(to, converter);
 
         return this;
+    }
+
+    public ClipFactoryData recordingOnly()
+    {
+        this.addable = false;
+
+        return this;
+    }
+
+    public boolean isAddable()
+    {
+        return this.addable;
     }
 }

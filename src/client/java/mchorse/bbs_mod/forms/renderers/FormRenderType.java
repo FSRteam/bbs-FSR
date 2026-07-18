@@ -8,7 +8,7 @@ public enum FormRenderType
 
     public static FormRenderType fromModelMode(ItemDisplayContext mode)
     {
-        if (mode.firstPerson())
+        if (mode != null && mode.firstPerson())
         {
             return ITEM_FP;
         }
@@ -16,15 +16,19 @@ public enum FormRenderType
         {
             return ITEM_TP;
         }
-        else if (mode == ItemDisplayContext.GROUND)
-        {
-            return ITEM;
-        }
         else if (mode == ItemDisplayContext.GUI)
         {
             return ITEM_INVENTORY;
         }
 
-        return ENTITY;
+        /* Ground, fixed, head and NONE are still item-local renders. Treating
+         * them as ENTITY gives procedural simulation a world host it does not
+         * have and lets unrelated display modes share world semantics. */
+        return ITEM;
+    }
+
+    public boolean hasWorldHost()
+    {
+        return this == ENTITY || this == MODEL_BLOCK;
     }
 }

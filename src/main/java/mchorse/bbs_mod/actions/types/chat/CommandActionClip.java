@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.actions.types.chat;
 
+import mchorse.bbs_mod.actions.ActionCommandContext;
+import mchorse.bbs_mod.actions.FilmPlaybackPolicy;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.film.Film;
@@ -19,13 +21,20 @@ public class CommandActionClip extends ActionClip
     @Override
     public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
-        this.applyPositionRotation(player, replay, tick);
-
         String command = this.command.get();
-        player.getServer().getCommands().performPrefixedCommand(
-            actor == null ? player.createCommandSourceStack() : actor.createCommandSourceStack(),
-            command
-        );
+
+        if (!ActionCommandContext.isAuthorizedFor(player)
+            || !FilmPlaybackPolicy.isCommandActionAllowed(command, this.frequency.get()))
+        {
+            return;
+        }
+
+        if (!this.tryApplyPositionRotation(player, replay, tick))
+        {
+            return;
+        }
+
+        ActionCommandContext.execute(command, this.frequency.get(), actor == null ? player : actor);
     }
 
     @Override

@@ -150,7 +150,7 @@ public class UISection extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.title.area.isInside(context))
+        if (context.mouseButton == 0 && this.title.area.isInside(context))
         {
             this.toggle();
 

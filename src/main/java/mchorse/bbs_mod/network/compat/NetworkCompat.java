@@ -2,6 +2,7 @@ package mchorse.bbs_mod.network.compat;
 
 import io.netty.buffer.Unpooled;
 import mchorse.bbs_mod.BBSMod;
+import net.minecraft.network.Connection;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -10,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -89,8 +91,9 @@ public final class NetworkCompat
     }
 
     /**
-     * Legacy API2 receiver hook. This binds only already-registered C2S payload
-     * ids and refuses BBS core-owned frozen channels.
+     * Legacy API2 signature retained for compatibility. The approved frozen
+     * table is entirely core-owned, so addon calls are intentionally rejected;
+     * addon messages use the s15/c18 broker instead.
      */
     public static void registerServerReceiver(ResourceLocation id, ServerReceiver receiver)
     {
@@ -352,20 +355,53 @@ public final class NetworkCompat
 
     private static void handleClientPayload(RawPayload payload, IPayloadContext context)
     {
+        Connection connection;
+        Player player;
+
+        try
+        {
+            connection = context.connection();
+            player = context.player();
+        }
+        catch (RuntimeException | LinkageError e)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.client_dispatch phase=client_payload result=drop reason=invalid_context id={}",
+                payloadKey(payload.binding().id),
+                e);
+            return;
+        }
+
+        if (connection == null || player == null)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.client_dispatch phase=client_payload result=drop reason=missing_transport_scope id={}",
+                payloadKey(payload.binding().id));
+            return;
+        }
+
         FriendlyByteBuf buf = wrapBytes(payload.bytes());
 
         try
         {
             Class<?> bridgeClass = Class.forName(NETWORK_COMPAT_CLIENT_CLASS);
-            Method method = bridgeClass.getMethod("dispatchClientPayload", ResourceLocation.class, FriendlyByteBuf.class);
+            Method method = bridgeClass.getMethod(
+                "dispatchClientPayload",
+                ResourceLocation.class,
+                FriendlyByteBuf.class,
+                Connection.class,
+                Player.class
+            );
 
-            method.invoke(null, payload.binding().id, buf);
+            method.invoke(null, payload.binding().id, buf, connection, player);
         }
         catch (ReflectiveOperationException | LinkageError e)
         {
             LOGGER.warn("[BBS-SEM] topic=net.client_dispatch phase=client_payload result=drop reason=bridge_unavailable id={}",
                 payloadKey(payload.binding().id),
                 e);
+        }
+        finally
+        {
+            buf.release();
         }
     }
 

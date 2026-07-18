@@ -514,7 +514,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     {
         if (Window.isCtrlPressed() && !pair.b.isEmpty())
         {
-            if (this.bodyPartEditor.pickBone(pair) || (this.editor != null && this.editor.toggleBoneSelection(pair.b)))
+            if (this.bodyPartEditor.pickBone(pair)
+                || (this.editor != null && this.editor.form == pair.a && this.editor.toggleBoneSelection(pair.b)))
             {
                 return;
             }

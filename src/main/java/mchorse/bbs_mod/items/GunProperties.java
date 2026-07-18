@@ -5,6 +5,8 @@ import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.network.NetworkDataDecoder;
+import mchorse.bbs_mod.network.compat.NetworkCompat;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -145,9 +147,15 @@ public class GunProperties extends ModelProperties
 
     public void fromNetwork(FriendlyByteBuf buf)
     {
-        BaseType type = DataStorageUtils.readFromPacket(buf);
+        byte[] transformBytes = buf.readByteArray(NetworkCompat.MAX_CLIENTBOUND_RAW_PAYLOAD_BYTES);
+        MapType transform = NetworkDataDecoder.decodeMap(transformBytes);
 
-        this.projectileTransform.fromData(type != null && type.isMap() ? type.asMap() : new MapType());
+        if (transform == null)
+        {
+            throw new IllegalArgumentException("Gun projectile transform must be a bounded BBS1 map");
+        }
+
+        this.projectileTransform.fromData(transform);
         this.useTarget = buf.readBoolean();
         this.lifeSpan = buf.readInt();
         this.speed = buf.readFloat();
@@ -165,6 +173,11 @@ public class GunProperties extends ModelProperties
         this.knockback = buf.readFloat();
         this.collideBlocks = buf.readBoolean();
         this.collideEntities = buf.readBoolean();
+
+        if (!GunPropertiesPolicy.isProjectileRuntimeAllowed(this))
+        {
+            throw new IllegalArgumentException("Gun projectile properties violate the runtime policy");
+        }
     }
 
     public void toNetwork(FriendlyByteBuf buf)

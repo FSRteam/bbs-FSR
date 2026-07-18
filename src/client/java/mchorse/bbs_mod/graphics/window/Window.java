@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.graphics.window;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiRemoteHeldState;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
@@ -27,9 +29,12 @@ public class Window
     private static final Map<Integer, Long> standardCursors = new HashMap<>();
     private static int currentCursorShape = -1;
 
-    private static long lastShiftPress;
-    private static long lastCtrlPress;
-    private static long lastAltPress;
+    private static long lastLocalShiftPress;
+    private static long lastLocalCtrlPress;
+    private static long lastLocalAltPress;
+    private static long lastRemoteShiftPress;
+    private static long lastRemoteCtrlPress;
+    private static long lastRemoteAltPress;
 
     public static long getWindow()
     {
@@ -54,22 +59,34 @@ public class Window
 
     public static boolean isMouseButtonPressed(int mouse)
     {
-        return GLFW.glfwGetMouseButton(getWindow(), mouse) == GLFW.GLFW_PRESS;
+        return BBSUiRemoteHeldState.resolveMouseButtonPressed(
+            mouse,
+            () -> GLFW.glfwGetMouseButton(getWindow(), mouse) == GLFW.GLFW_PRESS
+        );
     }
 
     public static boolean isCtrlPressed()
     {
-        return Screen.hasControlDown();
+        return BBSUiRemoteHeldState.resolveModifierPressed(
+            BBSUiRemoteInputState.MOD_CONTROL,
+            Screen::hasControlDown
+        );
     }
 
     public static boolean isShiftPressed()
     {
-        return Screen.hasShiftDown();
+        return BBSUiRemoteHeldState.resolveModifierPressed(
+            BBSUiRemoteInputState.MOD_SHIFT,
+            Screen::hasShiftDown
+        );
     }
 
     public static boolean isAltPressed()
     {
-        return Screen.hasAltDown();
+        return BBSUiRemoteHeldState.resolveModifierPressed(
+            BBSUiRemoteInputState.MOD_ALT,
+            Screen::hasAltDown
+        );
     }
 
     public static void noteModifierKeyEvent(int key, int action)
@@ -80,30 +97,35 @@ public class Window
         }
 
         long now = System.nanoTime();
+        boolean remote = BBSUiRemoteHeldState.isActive();
 
         if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT)
         {
-            lastShiftPress = now;
+            if (remote) lastRemoteShiftPress = now;
+            else lastLocalShiftPress = now;
         }
         else if (key == GLFW.GLFW_KEY_LEFT_CONTROL || key == GLFW.GLFW_KEY_RIGHT_CONTROL)
         {
-            lastCtrlPress = now;
+            if (remote) lastRemoteCtrlPress = now;
+            else lastLocalCtrlPress = now;
         }
         else if (key == GLFW.GLFW_KEY_LEFT_ALT || key == GLFW.GLFW_KEY_RIGHT_ALT)
         {
-            lastAltPress = now;
+            if (remote) lastRemoteAltPress = now;
+            else lastLocalAltPress = now;
         }
     }
 
     public static int getLastModifier()
     {
-        boolean shift = Screen.hasShiftDown();
-        boolean ctrl = Screen.hasControlDown();
-        boolean alt = Screen.hasAltDown();
+        boolean shift = isShiftPressed();
+        boolean ctrl = isCtrlPressed();
+        boolean alt = isAltPressed();
 
-        long shiftTime = shift ? lastShiftPress : Long.MIN_VALUE;
-        long ctrlTime = ctrl ? lastCtrlPress : Long.MIN_VALUE;
-        long altTime = alt ? lastAltPress : Long.MIN_VALUE;
+        boolean remote = BBSUiRemoteHeldState.isActive();
+        long shiftTime = shift ? (remote ? lastRemoteShiftPress : lastLocalShiftPress) : Long.MIN_VALUE;
+        long ctrlTime = ctrl ? (remote ? lastRemoteCtrlPress : lastLocalCtrlPress) : Long.MIN_VALUE;
+        long altTime = alt ? (remote ? lastRemoteAltPress : lastLocalAltPress) : Long.MIN_VALUE;
 
         if (shiftTime == Long.MIN_VALUE && ctrlTime == Long.MIN_VALUE && altTime == Long.MIN_VALUE)
         {
@@ -118,7 +140,7 @@ public class Window
 
     public static boolean isKeyPressed(int key)
     {
-        return InputConstants.isKeyDown(getWindow(), key);
+        return BBSUiRemoteHeldState.resolveKeyPressed(key, () -> InputConstants.isKeyDown(getWindow(), key));
     }
 
     public static String getClipboard()

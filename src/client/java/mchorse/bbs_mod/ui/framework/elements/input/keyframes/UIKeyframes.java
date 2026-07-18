@@ -28,6 +28,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.KeyframeType
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIVector3KeyframeGraph;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
@@ -57,6 +58,8 @@ public class UIKeyframes extends UIElement
     private boolean navigating;
     private int dragging = -1;
     private Pair<Keyframe, KeyframeType> draggingData;
+    private final MouseGestureOwnership editingOwnership = new MouseGestureOwnership();
+    private long editingGeneration;
     private boolean scaling;
     private float scalingAnchor;
     private Map<Keyframe, Float> scaleTicks = new HashMap<>();
@@ -192,12 +195,15 @@ public class UIKeyframes extends UIElement
         /* Keys */
         IKey category = UIKeys.KEYFRAMES_KEYS_CATEGORY;
         Supplier<Boolean> canModify = () -> !this.scaling;
+        Supplier<Boolean> canModifyGraph = () -> canModify.get() && this.isCursorInsideGraph();
+        Supplier<Boolean> canModifyTrack = () -> canModify.get() && this.getSheetUnderCursor() != null;
+        Supplier<Boolean> canNavigate = () -> canModify.get() && this.hasKeyframeNavigationContext();
 
         this.keys().register(Keys.KEYFRAMES_MAXIMIZE, this::resetView).inside().category(category);
         this.keys().register(Keys.KEYFRAMES_SELECT_ALL, () -> this.currentGraph.selectAll()).inside().category(category).active(canModify);
-        this.keys().register(Keys.KEYFRAMES_SELECT_TRACK, this::selectAllOnTrackUnderCursor).inside().category(category).active(canModify);
-        this.keys().register(Keys.KEYFRAMES_SELECT_TRACK_LEFT, () -> this.selectTrackSideUnderCursor(-1)).inside().category(category).active(canModify);
-        this.keys().register(Keys.KEYFRAMES_SELECT_TRACK_RIGHT, () -> this.selectTrackSideUnderCursor(1)).inside().category(category).active(canModify);
+        this.keys().register(Keys.KEYFRAMES_SELECT_TRACK, this::selectAllOnTrackUnderCursor).inside().category(category).active(canModifyTrack);
+        this.keys().register(Keys.KEYFRAMES_SELECT_TRACK_LEFT, () -> this.selectTrackSideUnderCursor(-1)).inside().category(category).active(canModifyTrack);
+        this.keys().register(Keys.KEYFRAMES_SELECT_TRACK_RIGHT, () -> this.selectTrackSideUnderCursor(1)).inside().category(category).active(canModifyTrack);
         this.keys().register(Keys.COPY, () ->
         {
             if (this.copyPasteController.copy()) UIUtils.playClick();
@@ -224,18 +230,18 @@ public class UIKeyframes extends UIElement
             UIContext context = this.getContext();
 
             this.selectAfter(context.mouseX, context.mouseY, -1);
-        }).category(category).active(canModify);
+        }).inside().strict().category(category).active(canModifyGraph);
         this.keys().register(Keys.KEYFRAMES_SELECT_RIGHT, () ->
         {
             UIContext context = this.getContext();
 
             this.selectAfter(context.mouseX, context.mouseY, 1);
-        }).category(category).active(canModify);
+        }).inside().strict().category(category).active(canModifyGraph);
         this.keys().register(Keys.KEYFRAMES_SELECT_SAME, this::selectSame).category(category).active(canModify);
         this.keys().register(Keys.KEYFRAMES_SCALE_TIME, this::scaleTime).inside().category(category);
         this.keys().register(Keys.KEYFRAMES_STACK_KEYFRAMES, () -> this.stackKeyframes(false)).inside().category(category);
-        this.keys().register(Keys.KEYFRAMES_SELECT_PREV, () -> this.selectNextKeyframe(-1)).category(category);
-        this.keys().register(Keys.KEYFRAMES_SELECT_NEXT, () -> this.selectNextKeyframe(1)).category(category);
+        this.keys().register(Keys.KEYFRAMES_SELECT_PREV, () -> this.selectNextKeyframe(-1)).inside().strict().category(category).active(canNavigate);
+        this.keys().register(Keys.KEYFRAMES_SELECT_NEXT, () -> this.selectNextKeyframe(1)).inside().strict().category(category).active(canNavigate);
         this.keys().register(Keys.KEYFRAMES_SPREAD, this::spreadKeyframes).category(category);
         this.keys().register(Keys.KEYFRAMES_FLIP, this::flipKeyframes).category(category).active(canModify);
         this.keys().register(Keys.KEYFRAMES_ADJUST_VALUES, this::adjustValues).category(category);
@@ -335,8 +341,7 @@ public class UIKeyframes extends UIElement
 
     private void selectAllOnTrackUnderCursor()
     {
-        UIContext context = this.getContext();
-        UIKeyframeSheet sheet = this.currentGraph.getSheet(context.mouseY);
+        UIKeyframeSheet sheet = this.getSheetUnderCursor();
 
         if (sheet != null)
         {
@@ -353,7 +358,7 @@ public class UIKeyframes extends UIElement
     private void selectTrackSideUnderCursor(int direction)
     {
         UIContext context = this.getContext();
-        UIKeyframeSheet sheet = this.currentGraph.getSheet(context.mouseY);
+        UIKeyframeSheet sheet = this.getSheetAtGraphPosition(context.mouseX, context.mouseY);
 
         if (sheet != null)
         {
@@ -368,39 +373,72 @@ public class UIKeyframes extends UIElement
     protected void selectNextKeyframe(int direction)
     {
         IUIKeyframeGraph graph = this.getGraph();
-        Keyframe keyframe = graph.getSelected();
+        UIContext context = this.getContext();
 
-        if (keyframe == null)
+        if (!this.graphArea.isInside(context.mouseX, context.mouseY))
         {
-            UIContext context = this.getContext();
-            UIKeyframeSheet sheet = this.getGraph().getSheet(context.mouseY);
-            KeyframeSegment segment = sheet.channel.find((float) this.fromGraphX(context.mouseX));
-
-            if (segment != null)
-            {
-                keyframe = direction < 0 ? segment.a : segment.b;
-
-                graph.clearSelection();
-                graph.selectKeyframe(keyframe);
-
-                return;
-            }
+            return;
         }
+
+        Keyframe selected = graph.getSelected();
+        UIKeyframeSheet sheet = this.getSheetAtGraphPosition(context.mouseX, context.mouseY);
+        Keyframe keyframe = resolveNavigationTarget(
+            selected,
+            sheet == null ? null : sheet.channel,
+            (float) this.fromGraphX(context.mouseX),
+            direction
+        );
 
         if (keyframe != null)
         {
-            KeyframeChannel channel = (KeyframeChannel) keyframe.getParent();
-            int existingIndex = channel.getKeyframes().indexOf(keyframe);
-            int index = MathUtils.cycler(existingIndex + direction, channel.getAll());
-            Keyframe nextKeyframe = channel.get(index);
-
             graph.clearSelection();
-            graph.selectKeyframe(nextKeyframe);
+            graph.selectKeyframe(keyframe);
         }
+    }
+
+    static Keyframe resolveNavigationTarget(Keyframe selected, KeyframeChannel hoveredChannel, float tick, int direction)
+    {
+        if (direction == 0)
+        {
+            return null;
+        }
+
+        if (selected == null)
+        {
+            if (hoveredChannel == null)
+            {
+                return null;
+            }
+
+            KeyframeSegment segment = hoveredChannel.find(tick);
+
+            return segment == null ? null : (direction < 0 ? segment.a : segment.b);
+        }
+
+        if (!(selected.getParent() instanceof KeyframeChannel channel))
+        {
+            return null;
+        }
+
+        int existingIndex = channel.getKeyframes().indexOf(selected);
+
+        if (existingIndex < 0 || channel.getAll().isEmpty())
+        {
+            return null;
+        }
+
+        int index = MathUtils.cycler(existingIndex + Integer.signum(direction), channel.getAll());
+
+        return channel.get(index);
     }
 
     private void selectAfter(int mouseX, int mouseY, int direction)
     {
+        if (!this.graphArea.isInside(mouseX, mouseY))
+        {
+            return;
+        }
+
         float tick = (float) this.fromGraphX(mouseX);
 
         if (!Window.isShiftPressed())
@@ -409,9 +447,53 @@ public class UIKeyframes extends UIElement
         }
         else
         {
-            this.currentGraph.getSheet(mouseY).selection.after(tick, direction);
+            UIKeyframeSheet sheet = this.getSheetAtGraphPosition(mouseX, mouseY);
+
+            if (sheet == null)
+            {
+                return;
+            }
+
+            sheet.selection.after(tick, direction);
             this.currentGraph.pickSelected();
         }
+    }
+
+    private boolean isCursorInsideGraph()
+    {
+        UIContext context = this.getContext();
+
+        return this.graphArea.isInside(context.mouseX, context.mouseY);
+    }
+
+    private UIKeyframeSheet getSheetUnderCursor()
+    {
+        UIContext context = this.getContext();
+
+        return this.getSheetAtGraphPosition(context.mouseX, context.mouseY);
+    }
+
+    private UIKeyframeSheet getSheetAtGraphPosition(int mouseX, int mouseY)
+    {
+        return this.graphArea.isInside(mouseX, mouseY) ? this.currentGraph.getSheet(mouseY) : null;
+    }
+
+    private boolean hasKeyframeNavigationContext()
+    {
+        UIContext context = this.getContext();
+        boolean inside = this.graphArea.isInside(context.mouseX, context.mouseY);
+        UIKeyframeSheet sheet = inside ? this.currentGraph.getSheet(context.mouseY) : null;
+
+        return hasNavigationContext(
+            inside,
+            this.currentGraph.getSelected(),
+            sheet == null ? null : sheet.channel
+        );
+    }
+
+    static boolean hasNavigationContext(boolean cursorInsideGraph, Keyframe selected, KeyframeChannel hoveredChannel)
+    {
+        return cursorInsideGraph && (selected != null || hoveredChannel != null);
     }
 
     private void selectSame()
@@ -1073,6 +1155,11 @@ public class UIKeyframes extends UIElement
 
         if (this.graphArea.isInside(context))
         {
+            if (this.editingOwnership.isActive())
+            {
+                return context.mouseButton != 1;
+            }
+
             this.lastX = this.originalX = context.mouseX;
             this.lastY = this.originalY = context.mouseY;
 
@@ -1086,17 +1173,62 @@ public class UIKeyframes extends UIElement
             }
             else if (context.mouseButton == 0)
             {
-                this.pickOrStartSelectingKeyframes(context);
+                if (this.beginEditingGesture(context.mouseButton))
+                {
+                    long generation = this.editingGeneration;
+
+                    try
+                    {
+                        this.pickOrStartSelectingKeyframes(context);
+                    }
+                    catch (RuntimeException | Error exception)
+                    {
+                        this.rollbackEditingGesture(context.mouseButton, generation);
+
+                        throw exception;
+                    }
+                }
             }
             else if (context.mouseButton == 2)
             {
-                this.navigating = true;
+                if (this.beginEditingGesture(context.mouseButton))
+                {
+                    this.navigating = true;
+                }
             }
 
             return context.mouseButton != 1;
         }
 
         return super.subMouseClicked(context);
+    }
+
+    private boolean beginEditingGesture(int button)
+    {
+        long generation = this.editingOwnership.acquireToken(button);
+
+        if (generation == 0L)
+        {
+            return false;
+        }
+
+        this.editingGeneration = generation;
+
+        return true;
+    }
+
+    private void rollbackEditingGesture(int button, long generation)
+    {
+        if (!this.editingOwnership.release(button, generation))
+        {
+            return;
+        }
+
+        this.editingGeneration = 0L;
+        this.navigating = false;
+        this.selecting = false;
+        this.dragging = -1;
+        this.draggingData = null;
     }
 
     private void removeOrCreateKeyframe(UIContext context)
@@ -1185,24 +1317,95 @@ public class UIKeyframes extends UIElement
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
-        this.currentGraph.mouseReleased(context);
+        long generation = this.editingGeneration;
 
-        if (this.selecting)
+        if (!this.editingOwnership.release(context.mouseButton, generation))
         {
-            this.currentGraph.selectInArea(this.getGrabbingArea(context));
+            this.currentGraph.mouseReleased(context);
+
+            return super.subMouseReleased(context);
         }
 
-        if (this.dragging > 0)
-        {
-            this.submitKeyframes();
-            this.currentGraph.pickSelected();
-        }
+        boolean wasSelecting = this.selecting;
+        boolean wasDragging = this.dragging > 0;
+        Throwable failure = null;
 
+        this.editingGeneration = 0L;
         this.navigating = false;
         this.selecting = false;
         this.dragging = -1;
+        this.draggingData = null;
 
-        return super.subMouseReleased(context);
+        failure = runEditingReleaseStep(failure, () -> this.currentGraph.mouseReleased(context));
+
+        if (wasSelecting)
+        {
+            failure = runEditingReleaseStep(
+                failure,
+                () -> this.currentGraph.selectInArea(this.getGrabbingArea(context))
+            );
+        }
+
+        if (wasDragging)
+        {
+            failure = runEditingReleaseStep(failure, this::submitKeyframes);
+            failure = runEditingReleaseStep(failure, this.currentGraph::pickSelected);
+        }
+
+        boolean handled = false;
+
+        try
+        {
+            handled = super.subMouseReleased(context);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = appendEditingReleaseFailure(failure, exception);
+        }
+
+        rethrowEditingReleaseFailure(failure);
+
+        return handled;
+    }
+
+    private static Throwable runEditingReleaseStep(Throwable failure, Runnable step)
+    {
+        try
+        {
+            step.run();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            return appendEditingReleaseFailure(failure, exception);
+        }
+
+        return failure;
+    }
+
+    private static Throwable appendEditingReleaseFailure(Throwable failure, Throwable exception)
+    {
+        if (failure == null)
+        {
+            return exception;
+        }
+        if (failure != exception)
+        {
+            failure.addSuppressed(exception);
+        }
+
+        return failure;
+    }
+
+    private static void rethrowEditingReleaseFailure(Throwable failure)
+    {
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+        if (failure instanceof Error error)
+        {
+            throw error;
+        }
     }
 
     @Override

@@ -105,7 +105,9 @@ public class ParticleComponentEmitterLifetimeEvents extends ParticleComponentBas
             return;
         }
 
-        double previousAge = Math.max(0, (emitter.age - 1) / 20D);
+        /* Keep the pre-start sample negative so timeline key 0 crosses on the
+         * emitter's first update instead of being pinned to 0 forever. */
+        double previousAge = (emitter.age - 1) / 20D;
         double currentAge = emitter.getAge(0);
 
         List<ParticleEventTimeline.Entry> timelineEntries = this.timeline.runtimeSortedEntries();

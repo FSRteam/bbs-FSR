@@ -12,14 +12,20 @@ public class ParticleEventTriggerList
 {
     public final List<String> events = new ArrayList<>();
 
+    /* Null entries reserve the position of a parsed string; non-null entries
+     * are unsupported siblings that must survive edits to supported strings. */
+    private final List<BaseType> elementOrder = new ArrayList<>();
     private BaseType raw;
     private boolean edited;
+    private boolean hasRawSiblings;
 
     public void fromData(BaseType data)
     {
         this.events.clear();
+        this.elementOrder.clear();
         this.raw = null;
         this.edited = false;
+        this.hasRawSiblings = false;
 
         if (data == null)
         {
@@ -32,23 +38,18 @@ public class ParticleEventTriggerList
         }
         else if (data.isList())
         {
-            boolean supported = true;
-
             for (BaseType element : data.asList())
             {
-                if (element.isString())
+                if (element.isString() && !element.asString().trim().isEmpty())
                 {
                     this.add(element.asString());
+                    this.elementOrder.add(null);
                 }
                 else
                 {
-                    supported = false;
+                    this.elementOrder.add(element.copy());
+                    this.hasRawSiblings = true;
                 }
-            }
-
-            if (!supported)
-            {
-                this.raw = data.copy();
             }
         }
         else
@@ -100,21 +101,40 @@ public class ParticleEventTriggerList
             return this.raw.copy();
         }
 
-        if (this.events.isEmpty())
+        if (this.events.isEmpty() && !this.hasRawSiblings)
         {
             return null;
         }
 
-        if (this.events.size() == 1)
+        if (!this.hasRawSiblings && this.events.size() == 1)
         {
             return new StringType(this.events.get(0));
         }
 
         ListType list = new ListType();
+        int eventIndex = 0;
 
-        for (String event : this.events)
+        if (this.hasRawSiblings)
         {
-            list.addString(event);
+            for (BaseType element : this.elementOrder)
+            {
+                if (element == null)
+                {
+                    if (eventIndex < this.events.size())
+                    {
+                        list.addString(this.events.get(eventIndex++));
+                    }
+                }
+                else
+                {
+                    list.add(element.copy());
+                }
+            }
+        }
+
+        while (eventIndex < this.events.size())
+        {
+            list.addString(this.events.get(eventIndex++));
         }
 
         return list;
@@ -122,7 +142,7 @@ public class ParticleEventTriggerList
 
     public boolean isEmpty()
     {
-        return this.events.isEmpty() && this.raw == null;
+        return this.events.isEmpty() && this.raw == null && !this.hasRawSiblings;
     }
 
     public void markEdited()

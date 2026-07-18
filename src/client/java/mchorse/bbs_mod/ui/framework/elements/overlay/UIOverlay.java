@@ -95,28 +95,36 @@ public class UIOverlay extends UIElement
             return;
         }
 
-        Flex flex = panel.getFlex();
-        Vector2i offset = offsets.get(panel.getClass().getSimpleName());
-
-        panel.setInitialOffset(flex.x.offset, flex.y.offset);
-
-        if (offset != null)
+        context.menu.runAfterCapturedMouseRelease(() ->
         {
-            flex.x.offset = offset.x;
-            flex.y.offset = offset.y;
-        }
+            if (panel.hasParent())
+            {
+                return;
+            }
 
-        overlay.full(context.menu.overlay);
-        context.menu.overlay.add(overlay);
-        UIElement root = context.menu.getRoot();
+            Flex flex = panel.getFlex();
+            Vector2i offset = offsets.get(panel.getClass().getSimpleName());
 
-        if (root != null)
-        {
-            root.moveToFront(context.menu.overlay);
-        }
+            panel.setInitialOffset(flex.x.offset, flex.y.offset);
 
-        overlay.add(panel);
-        context.menu.overlay.resize();
+            if (offset != null)
+            {
+                flex.x.offset = offset.x;
+                flex.y.offset = offset.y;
+            }
+
+            overlay.full(context.menu.overlay);
+            context.menu.overlay.add(overlay);
+            UIElement root = context.menu.getRoot();
+
+            if (root != null)
+            {
+                root.moveToFront(context.menu.overlay);
+            }
+
+            overlay.add(panel);
+            context.menu.overlay.resize();
+        });
     }
 
     public static boolean has(UIContext context)
@@ -163,7 +171,12 @@ public class UIOverlay extends UIElement
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
-        this.closeItself();
+        if (context.mouseButton == 0)
+        {
+            this.closeItself();
+
+            return true;
+        }
 
         return super.subMouseClicked(context);
     }

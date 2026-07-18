@@ -22,7 +22,10 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import org.lwjgl.opengl.GL11;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -31,8 +34,11 @@ import java.util.Map;
 
 public class Films
 {
+    private static final int MAX_PENDING_RECORDING_TERMINALS = 32;
+
     private List<BaseFilmController> controllers = new ArrayList<BaseFilmController>();
     private Recorder recorder;
+    private final ArrayDeque<PendingRecordingTerminal> pendingRecordingTerminals = new ArrayDeque<>();
 
     public Map<String, Map<String, Integer>> actors = new HashMap<>();
 
@@ -145,7 +151,13 @@ public class Films
 
         if (ClientNetwork.isIsBBSModOnServer())
         {
-            ClientNetwork.sendActionRecording(film.getId(), replayId, this.recorder.getTick(), this.recorder.countdown, true);
+            ClientNetwork.sendActionRecording(
+                this.recorder.getRecordingFilmId(),
+                this.recorder.getRecordingReplayId(),
+                this.recorder.getRecordingTick(),
+                this.recorder.countdown,
+                true
+            );
         }
 
         Replay replay = CollectionUtils.getSafe(film.replays.getList(), replayId);
@@ -158,34 +170,199 @@ public class Films
 
     public Recorder stopRecording()
     {
+        return this.stopRecording(this.recorder, true);
+    }
+
+    public Recorder stopRecordingFromServer(String filmId, int replayId, int tick)
+    {
         Recorder recorder = this.recorder;
+
+        if (recorder == null || !recorder.matchesRecording(filmId, replayId, tick))
+        {
+            return null;
+        }
+
+        return this.stopRecording(recorder, false);
+    }
+
+    public ManualRecordingTerminal consumeManualRecordingTerminal(String filmId, int replayId, int tick)
+    {
+        if (filmId == null)
+        {
+            return ManualRecordingTerminal.NONE;
+        }
+
+        RecordingIdentity identity = new RecordingIdentity(filmId, replayId, tick);
+        Iterator<PendingRecordingTerminal> iterator = this.pendingRecordingTerminals.iterator();
+
+        while (iterator.hasNext())
+        {
+            PendingRecordingTerminal terminal = iterator.next();
+
+            if (terminal.identity().equals(identity))
+            {
+                iterator.remove();
+
+                if (!terminal.started())
+                {
+                    return ManualRecordingTerminal.CANCELED_BEFORE_START;
+                }
+
+                return terminal.level() != null && terminal.level() == Minecraft.getInstance().level
+                    ? ManualRecordingTerminal.STOPPED_AFTER_START
+                    : ManualRecordingTerminal.STOPPED_AFTER_START_MERGE_BLOCKED;
+            }
+        }
+
+        return ManualRecordingTerminal.NONE;
+    }
+
+    private Recorder stopRecording(Recorder recorder, boolean notifyServer)
+    {
+        return this.stopRecording(recorder, notifyServer, true);
+    }
+
+    public Recorder stopRecordingForClientLifecycle(Recorder recorder)
+    {
+        return this.stopRecording(recorder, false, false);
+    }
+
+    private Recorder stopRecording(Recorder recorder, boolean notifyServer, boolean restorePlayer)
+    {
+        if (recorder == null || this.recorder != recorder)
+        {
+            return null;
+        }
 
         this.recorder = null;
 
-        if (recorder != null)
+        Throwable failure = null;
+
+        for (KeyframeChannel<?> channel : recorder.keyframes.getChannels())
         {
-            for (KeyframeChannel<?> channel : recorder.keyframes.getChannels())
+            try
             {
                 channel.simplify();
             }
-
-            for (Recorder.RecordedMob mob : recorder.mobs)
+            catch (RuntimeException | Error exception)
             {
-                for (KeyframeChannel<?> channel : mob.keyframes.getChannels())
+                failure = appendFailure(failure, exception);
+            }
+        }
+
+        for (Recorder.RecordedMob mob : recorder.mobs)
+        {
+            for (KeyframeChannel<?> channel : mob.keyframes.getChannels())
+            {
+                try
                 {
                     channel.simplify();
                 }
+                catch (RuntimeException | Error exception)
+                {
+                    failure = appendFailure(failure, exception);
+                }
             }
-
-            if (ClientNetwork.isIsBBSModOnServer())
-            {
-                ClientNetwork.sendActionRecording(recorder.film.getId(), recorder.exception, recorder.initialTick, 0, false);
-            }
-
-            recorder.shutdown();
         }
 
+        if (notifyServer && ClientNetwork.isIsBBSModOnServer())
+        {
+            PendingRecordingTerminal pending = this.markPendingRecordingTerminal(recorder);
+
+            try
+            {
+                ClientNetwork.sendActionRecording(
+                    recorder.getRecordingFilmId(),
+                    recorder.getRecordingReplayId(),
+                    recorder.getRecordingTick(),
+                    0,
+                    false
+                );
+            }
+            catch (RuntimeException | Error exception)
+            {
+                this.removePendingRecordingTerminal(pending);
+                failure = appendFailure(failure, exception);
+            }
+        }
+
+        try
+        {
+            recorder.shutdown(restorePlayer);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = appendFailure(failure, exception);
+        }
+
+        rethrowFailure(failure);
+
         return recorder;
+    }
+
+    private PendingRecordingTerminal markPendingRecordingTerminal(Recorder recorder)
+    {
+        RecordingIdentity identity = new RecordingIdentity(
+            recorder.getRecordingFilmId(),
+            recorder.getRecordingReplayId(),
+            recorder.getRecordingTick()
+        );
+        PendingRecordingTerminal pending = new PendingRecordingTerminal(
+            identity,
+            recorder.hasRecordedFrame(),
+            recorder.getInitialLevel()
+        );
+
+        this.pendingRecordingTerminals.addLast(pending);
+
+        while (this.pendingRecordingTerminals.size() > MAX_PENDING_RECORDING_TERMINALS)
+        {
+            this.pendingRecordingTerminals.removeFirst();
+        }
+
+        return pending;
+    }
+
+    private void removePendingRecordingTerminal(PendingRecordingTerminal pending)
+    {
+        Iterator<PendingRecordingTerminal> iterator = this.pendingRecordingTerminals.iterator();
+
+        while (iterator.hasNext())
+        {
+            if (iterator.next() == pending)
+            {
+                iterator.remove();
+
+                return;
+            }
+        }
+    }
+
+    private static Throwable appendFailure(Throwable failure, Throwable exception)
+    {
+        if (failure == null)
+        {
+            return exception;
+        }
+
+        if (failure != exception)
+        {
+            failure.addSuppressed(exception);
+        }
+
+        return failure;
+    }
+
+    private static void rethrowFailure(Throwable failure)
+    {
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+        else if (failure instanceof Error error)
+        {
+            throw error;
+        }
     }
 
     public void add(BaseFilmController controller)
@@ -258,9 +435,18 @@ public class Films
             return film.hasFinished();
         });
 
-        if (this.recorder != null)
+        Recorder recorder = this.recorder;
+
+        if (recorder != null && !recorder.isInCurrentLevel())
         {
-            this.recorder.update();
+            this.stopRecordingForClientLifecycle(recorder);
+
+            return;
+        }
+
+        if (recorder != null)
+        {
+            recorder.update();
         }
     }
 
@@ -274,19 +460,38 @@ public class Films
 
     public void render(IBbsWorldRenderContext context)
     {
-        RenderSystem.enableDepthTest();
-
-        for (BaseFilmController controller : this.controllers)
+        if (this.controllers.isEmpty() && this.recorder == null)
         {
-            controller.render(context);
+            return;
         }
 
-        if (this.recorder != null)
-        {
-            this.recorder.render(context);
-        }
+        boolean depthTestEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
 
-        RenderSystem.disableDepthTest();
+        try
+        {
+            RenderSystem.enableDepthTest();
+
+            for (BaseFilmController controller : this.controllers)
+            {
+                controller.render(context);
+            }
+
+            if (this.recorder != null)
+            {
+                this.recorder.render(context);
+            }
+        }
+        finally
+        {
+            if (depthTestEnabled)
+            {
+                RenderSystem.enableDepthTest();
+            }
+            else
+            {
+                RenderSystem.disableDepthTest();
+            }
+        }
     }
 
     public void renderHud(Batcher2D batcher2D, float tickDelta)
@@ -342,8 +547,52 @@ public class Films
 
     public void reset()
     {
-        controllers.clear();
+        Throwable failure = null;
+        Recorder recorder = this.recorder;
+        List<BaseFilmController> controllers = new ArrayList<>(this.controllers);
 
-        recorder = null;
+        this.controllers.clear();
+        this.actors.clear();
+        this.pendingRecordingTerminals.clear();
+
+        if (recorder != null)
+        {
+            try
+            {
+                this.stopRecordingForClientLifecycle(recorder);
+            }
+            catch (RuntimeException | Error exception)
+            {
+                failure = appendFailure(failure, exception);
+            }
+        }
+
+        for (BaseFilmController controller : controllers)
+        {
+            try
+            {
+                controller.shutdown();
+            }
+            catch (RuntimeException | Error exception)
+            {
+                failure = appendFailure(failure, exception);
+            }
+        }
+
+        rethrowFailure(failure);
+    }
+
+    private record RecordingIdentity(String filmId, int replayId, int tick)
+    {}
+
+    private record PendingRecordingTerminal(RecordingIdentity identity, boolean started, ClientLevel level)
+    {}
+
+    public enum ManualRecordingTerminal
+    {
+        NONE,
+        CANCELED_BEFORE_START,
+        STOPPED_AFTER_START,
+        STOPPED_AFTER_START_MERGE_BLOCKED
     }
 }

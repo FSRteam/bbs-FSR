@@ -92,7 +92,9 @@ public class ParticleComponentParticleLifetimeEvents extends ParticleComponentBa
     {
         if (!particle.isDead())
         {
-            double previousAge = Math.max(0, (particle.age - 1) / 20D);
+            /* Particle.update() advances age before component updates. Use a
+             * pre-start sample on that first update so timeline key 0 fires. */
+            double previousAge = particle.age <= 1 ? -1 / 20D : (particle.age - 1) / 20D;
             double currentAge = particle.getAge(0);
 
             List<ParticleEventTimeline.Entry> entries = this.timeline.runtimeSortedEntries();

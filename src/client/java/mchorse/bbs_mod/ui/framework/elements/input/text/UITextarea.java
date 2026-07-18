@@ -11,6 +11,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.utils.TextLine;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.ITextColoring;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
@@ -45,6 +46,8 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
 
     /* Editing */
     private boolean focused;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
     private int dragging;
     protected List<T> text = new ArrayList<>();
     public final Cursor cursor = new Cursor();
@@ -1008,8 +1011,10 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
         boolean shift = Window.isShiftPressed();
 
         this.focused = this.area.isInside(context);
+        boolean blockedByGesture = this.focused && this.dragOwnership.isActive()
+            && (context.mouseButton == 0 || context.mouseButton == 2);
 
-        if (this.focused)
+        if (this.focused && !blockedByGesture)
         {
             if (context.mouseButton == 0)
             {
@@ -1022,22 +1027,28 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
                 {
                     if (!shift)
                     {
-                        this.deselect();
-
-                        this.dragging = 1;
+                        this.beginGesture(context.mouseButton, 1, () ->
+                        {
+                            this.deselect();
+                            this.moveCursorTo(this.getFont(), this.cursor, context.mouseX, context.mouseY);
+                            this.lastClick = System.currentTimeMillis() + 200;
+                        });
                     }
-                    else if (!this.isSelected())
+                    else
                     {
-                        this.startSelecting();
-                    }
+                        if (!this.isSelected())
+                        {
+                            this.startSelecting();
+                        }
 
-                    this.moveCursorTo(this.getFont(), this.cursor, context.mouseX, context.mouseY);
-                    this.lastClick = System.currentTimeMillis() + 200;
+                        this.moveCursorTo(this.getFont(), this.cursor, context.mouseX, context.mouseY);
+                        this.lastClick = System.currentTimeMillis() + 200;
+                    }
                 }
             }
             else if (context.mouseButton == 2)
             {
-                this.dragging = 3;
+                this.beginGesture(context.mouseButton, 3, () -> {});
             }
 
             this.lastMX = context.mouseX;
@@ -1050,6 +1061,36 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
         }
 
         return this.focused && context.mouseButton != 1;
+    }
+
+    private boolean beginGesture(int button, int dragging, Runnable starter)
+    {
+        long generation = this.dragOwnership.acquireToken(button);
+
+        if (generation == 0L)
+        {
+            return false;
+        }
+
+        this.dragGeneration = generation;
+        boolean started = false;
+
+        try
+        {
+            starter.run();
+            this.dragging = dragging;
+            started = true;
+
+            return true;
+        }
+        finally
+        {
+            if (!started && this.dragOwnership.release(button, generation))
+            {
+                this.dragGeneration = 0L;
+                this.dragging = 0;
+            }
+        }
     }
 
     @Override
@@ -1068,7 +1109,14 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
     {
         this.horizontal.mouseReleased(context);
         this.vertical.mouseReleased(context);
-        this.dragging = 0;
+
+        long generation = this.dragGeneration;
+
+        if (this.dragOwnership.release(context.mouseButton, generation))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = 0;
+        }
 
         return super.subMouseReleased(context);
     }

@@ -32,6 +32,9 @@ public class FilmControllerContext
     public String bone2;
     public boolean local2;
 
+    public boolean anchorGizmo;
+    public boolean anchorLocal;
+
     public String nameTag = "";
     public boolean relative;
 
@@ -45,6 +48,8 @@ public class FilmControllerContext
         this.color = Colors.WHITE;
         this.bone = null;
         this.local = false;
+        this.anchorGizmo = false;
+        this.anchorLocal = false;
         this.nameTag = "";
         this.relative = false;
     }
@@ -126,6 +131,14 @@ public class FilmControllerContext
     {
         this.bone2 = bone;
         this.local2 = local;
+
+        return this;
+    }
+
+    public FilmControllerContext anchorGizmo(boolean anchorGizmo, boolean anchorLocal)
+    {
+        this.anchorGizmo = anchorGizmo;
+        this.anchorLocal = anchorLocal;
 
         return this;
     }

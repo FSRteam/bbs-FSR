@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.keys.KeyCodes;
 import mchorse.bbs_mod.utils.Pair;
@@ -61,6 +62,8 @@ public abstract class UIList <T> extends UIElement
     private String filter = "";
     private List<Pair<T, Integer>> filtered = new ArrayList<>();
 
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
     protected int dragging = -1;
     protected long dragTime;
 
@@ -525,6 +528,11 @@ public abstract class UIList <T> extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        if (this.area.isInside(context) && this.dragOwnership.isActive())
+        {
+            return true;
+        }
+
         if (this.scroll.mouseClicked(context))
         {
             return true;
@@ -534,6 +542,7 @@ public abstract class UIList <T> extends UIElement
         {
             int index = this.scroll.getIndex(context.mouseX, context.mouseY);
             boolean filtering = this.isFiltering();
+            long startedGeneration = 0L;
 
             if (filtering)
             {
@@ -546,22 +555,52 @@ public abstract class UIList <T> extends UIElement
 
                 if (!filtering && this.sorting && this.current.size() == 1)
                 {
-                    this.dragging = index;
-                    this.dragTime = System.currentTimeMillis();
+                    long generation = this.dragOwnership.acquireToken(context.mouseButton);
+
+                    if (generation != 0L)
+                    {
+                        this.dragGeneration = generation;
+                        this.dragging = index;
+                        this.dragTime = System.currentTimeMillis();
+                        startedGeneration = generation;
+                    }
                 }
 
-                List<T> current = this.getCurrent();
-
-                if (this.callback != null)
+                try
                 {
-                    this.callback.accept(current);
+                    List<T> current = this.getCurrent();
 
-                    return true;
+                    if (this.callback != null)
+                    {
+                        this.callback.accept(current);
+
+                        return true;
+                    }
+
+                    if (startedGeneration != 0L)
+                    {
+                        return true;
+                    }
+                }
+                catch (RuntimeException | Error exception)
+                {
+                    this.rollbackDragStart(context.mouseButton, startedGeneration);
+
+                    throw exception;
                 }
             }
         }
 
         return super.subMouseClicked(context);
+    }
+
+    private void rollbackDragStart(int button, long generation)
+    {
+        if (generation != 0L && this.dragOwnership.release(button, generation))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = -1;
+        }
     }
 
     /**
@@ -599,9 +638,19 @@ public abstract class UIList <T> extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (this.sorting && !this.isFiltering())
+        boolean handled = this.scroll.tryMouseReleased(context);
+        long generation = this.dragGeneration;
+
+        if (this.dragOwnership.release(context.mouseButton, generation))
         {
-            if (this.isDragging())
+            int draggedIndex = this.dragging;
+            boolean wasDragging = this.exists(draggedIndex)
+                && System.currentTimeMillis() - this.dragTime > 100;
+
+            this.dragGeneration = 0L;
+            this.dragging = -1;
+
+            if (this.sorting && !this.isFiltering() && wasDragging)
             {
                 int index = this.scroll.getIndex(context.mouseX, context.mouseY);
 
@@ -610,23 +659,35 @@ public abstract class UIList <T> extends UIElement
                     index = this.getList().size() - 1;
                 }
 
-                if (index != this.dragging && this.exists(index))
+                if (index != draggedIndex && this.exists(index))
                 {
-                    this.handleSwap(this.dragging, index);
+                    this.handleSwap(draggedIndex, index);
                 }
             }
 
-            this.dragging = -1;
+            handled = true;
         }
 
-        this.scroll.mouseReleased(context);
+        return super.subMouseReleased(context) || handled;
+    }
 
-        return super.subMouseReleased(context);
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.scroll.cancelDragging(context.mouseButton);
+
+        long generation = this.dragGeneration;
+
+        if (this.dragOwnership.release(context.mouseButton, generation))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = -1;
+        }
     }
 
     protected void handleSwap(int from, int to)
     {
-        T value = this.list.remove(this.dragging);
+        T value = this.list.remove(from);
 
         this.list.add(to, value);
         this.setIndex(to);

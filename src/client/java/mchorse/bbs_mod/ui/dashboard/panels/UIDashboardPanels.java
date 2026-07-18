@@ -141,6 +141,25 @@ public class UIDashboardPanels extends UIElement
 
     public void setPanel(UIDashboardPanel panel)
     {
+        if (this.panel == panel)
+        {
+            return;
+        }
+
+        UIContext context = this.getContext();
+
+        if (context == null)
+        {
+            this.setPanelNow(panel);
+        }
+        else
+        {
+            context.menu.runAfterCapturedMouseRelease(() -> this.setPanelNow(panel));
+        }
+    }
+
+    private void setPanelNow(UIDashboardPanel panel)
+    {
         UIDashboardPanel lastPanel = this.panel;
 
         if (lastPanel == panel)

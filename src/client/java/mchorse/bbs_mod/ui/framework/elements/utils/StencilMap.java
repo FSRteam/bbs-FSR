@@ -20,17 +20,20 @@ public class StencilMap
 
     public void setup()
     {
-        this.objectIndex = 7;
+        /* Gizmo now owns move, scale and rotate handles in the complete
+         * [STENCIL_X, STENCIL_MAX] range. Form and bone ids must start after
+         * that range; starting at the old value 7 makes the first bones look
+         * like scale/rotate handles and lets GizmoInteraction steal clicks. */
+        this.objectIndex = Gizmo.STENCIL_MAX + 1;
 
-        /* Reset map and setup pairs for Gizmo's individual axes
-         * and perpendicular planes */
+        /* Seed every reserved handle id as a non-form entry. This keeps the
+         * CPU map identical to the ids rendered by Gizmo#renderStencil. */
         this.indexMap.clear();
-        this.indexMap.put(Gizmo.STENCIL_X, new Pair<>(null, "x"));
-        this.indexMap.put(Gizmo.STENCIL_Y, new Pair<>(null, "y"));
-        this.indexMap.put(Gizmo.STENCIL_Z, new Pair<>(null, "z"));
-        this.indexMap.put(Gizmo.STENCIL_XZ, new Pair<>(null, "xz"));
-        this.indexMap.put(Gizmo.STENCIL_XY, new Pair<>(null, "xy"));
-        this.indexMap.put(Gizmo.STENCIL_ZY, new Pair<>(null, "zy"));
+
+        for (Gizmo.Handle handle : Gizmo.Handle.values())
+        {
+            this.indexMap.put(handle.index, new Pair<>(null, handle.name().toLowerCase()));
+        }
     }
 
     public void addPicking(Form form)
@@ -51,4 +54,5 @@ public class StencilMap
             this.indexMap.put(this.objectIndex, new Pair<>(form, ""));
         }
     }
+
 }

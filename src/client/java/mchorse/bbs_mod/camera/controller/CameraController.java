@@ -84,6 +84,27 @@ public class CameraController implements ICameraController
         this.updateCurrent();
     }
 
+    public List<ICameraController> removeAll(Class<? extends ICameraController> clazz)
+    {
+        List<ICameraController> removed = new ArrayList<>();
+        Iterator<ICameraController> it = this.controllers.iterator();
+
+        while (it.hasNext())
+        {
+            ICameraController controller = it.next();
+
+            if (controller.getClass() == clazz)
+            {
+                it.remove();
+                removed.add(controller);
+            }
+        }
+
+        this.updateCurrent();
+
+        return removed;
+    }
+
     public ICameraController remove(ICameraController controller)
     {
         Iterator<ICameraController> it = this.controllers.iterator();
@@ -144,6 +165,7 @@ public class CameraController implements ICameraController
 
     public void reset()
     {
+        this.controllers.clear();
         this.current = null;
     }
 }

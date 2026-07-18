@@ -110,6 +110,7 @@ public class UIReplaysEditor extends UIElement {
     private Replay replay;
     private boolean settingReplay;
     private Pair<Form, String> pendingPick;
+    private long pendingPickGeneration;
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
@@ -558,7 +559,7 @@ public class UIReplaysEditor extends UIElement {
             this.replay = replay;
 
             if (orbit == OrbitReaction.RESET) {
-                this.filmPanel.getController().orbit.reset();
+                this.filmPanel.getController().resetOrbit();
             }
             else if (orbit == OrbitReaction.SWITCH && replay != null && BBSSettings.editorOrbitTeleportOnSwitch.get())
             {
@@ -1151,11 +1152,23 @@ public class UIReplaysEditor extends UIElement {
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert);
     }
 
+    /** Preserve the legacy direct-addon JVM descriptor. */
     public void releaseViewport(UIContext context, boolean dragged)
     {
+        this.releaseViewport(context, dragged, this.pendingPickGeneration);
+    }
+
+    public void releaseViewport(UIContext context, boolean dragged, long generation)
+    {
+        if (generation == 0L || this.pendingPickGeneration != generation)
+        {
+            return;
+        }
+
         Pair<Form, String> pending = this.pendingPick;
 
         this.pendingPick = null;
+        this.pendingPickGeneration = 0L;
 
         if (pending == null || dragged || context.mouseButton != 0)
         {
@@ -1168,6 +1181,15 @@ public class UIReplaysEditor extends UIElement {
         }
 
         UIReplaysEditorUtils.pickFormWithOffers(context, pending, this::pickFormBone);
+    }
+
+    public void cancelViewportPick(long generation)
+    {
+        if (generation != 0L && this.pendingPickGeneration == generation)
+        {
+            this.pendingPick = null;
+            this.pendingPickGeneration = 0L;
+        }
     }
 
     public boolean clickViewport(UIContext context, Area area) {
@@ -1202,8 +1224,12 @@ public class UIReplaysEditor extends UIElement {
         }
 
         if (inside && context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
-            this.pendingPick = stencil != null && stencil.hasPicked() ? stencil.getPicked() : null;
-            this.filmPanel.getController().orbit.start(context);
+            long generation = this.filmPanel.getController().orbit.startGesture(context);
+
+            if (generation != 0L) {
+                this.pendingPick = stencil != null && stencil.hasPicked() ? stencil.getPicked() : null;
+                this.pendingPickGeneration = generation;
+            }
 
             return true;
         }
@@ -1292,7 +1318,7 @@ public class UIReplaysEditor extends UIElement {
             lastFilm = this.film.getId();
             Replay r = this.getReplay();
 
-            lastReplay = r == null ? 0 : this.film.replays.getList().indexOf(r);
+            lastReplay = r == null ? 0 : CollectionUtils.getIndex(this.film.replays.getList(), r);
         }
     }
 
@@ -1365,7 +1391,7 @@ public class UIReplaysEditor extends UIElement {
     public void collectUndoData(MapType data) {
         super.collectUndoData(data);
 
-        int index = this.film.replays.getList().indexOf(this.getReplay());
+        int index = CollectionUtils.getIndex(this.film.replays.getList(), this.getReplay());
 
         data.putInt("replay", index);
         data.put(

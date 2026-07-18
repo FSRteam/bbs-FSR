@@ -52,12 +52,7 @@ public class ParticleEventDispatcher
                 continue;
             }
 
-            String guard = "particle.collision." + i + "." + entry.event + "." + entry.minSpeed;
-
-            if (particle == null || particle.eventGuards.add(guard))
-            {
-                dispatch(emitter, particle, entry.event);
-            }
+            dispatch(emitter, particle, entry.event);
         }
     }
 

@@ -19,6 +19,8 @@ import mchorse.bbs_mod.utils.clips.Clips;
 import net.minecraft.world.entity.LivingEntity;
 
 import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 public class Replay extends ValueGroup
 {
@@ -133,12 +135,57 @@ public class Replay extends ValueGroup
 
     public void applyActions(LivingEntity actor, SuperFakePlayer fakePlayer, Film film, int tick)
     {
+        this.applyActions(actor, fakePlayer, film, tick, () -> true);
+    }
+
+    public boolean applyActions(
+        LivingEntity actor,
+        SuperFakePlayer fakePlayer,
+        Film film,
+        int tick,
+        BooleanSupplier continueAuthorized
+    )
+    {
         List<Clip> clips = this.actions.getClips(tick);
+
+        return applyAuthorizedActions(clips, continueAuthorized, (action) ->
+            action.apply(actor, fakePlayer, film, this, tick));
+    }
+
+    static boolean applyAuthorizedActions(
+        List<Clip> clips,
+        BooleanSupplier continueAuthorized,
+        Consumer<ActionClip> apply
+    )
+    {
+        if (clips == null || continueAuthorized == null || apply == null)
+        {
+            return false;
+        }
 
         for (Clip clip : clips)
         {
-            ((ActionClip) clip).apply(actor, fakePlayer, film, this, tick);
+            if (!(clip instanceof ActionClip action))
+            {
+                return false;
+            }
+
+            try
+            {
+                if (!continueAuthorized.getAsBoolean())
+                {
+                    return false;
+                }
+            }
+            catch (RuntimeException e)
+            {
+                return false;
+            }
+
+            apply.accept(action);
         }
+
+        return true;
     }
 
     public void applyClientActions(int tick, IEntity entity, Film film)

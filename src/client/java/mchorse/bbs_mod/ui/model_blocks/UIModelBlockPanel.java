@@ -25,6 +25,7 @@ import mchorse.bbs_mod.ui.forms.UINestedEdit;
 import mchorse.bbs_mod.ui.forms.UIToggleEditorEvent;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -433,7 +434,10 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
             Gizmo.INSTANCE.renderStencilInterface(context, this.gizmoProjection, this.getGizmoArea(), this.gizmoStencilMap);
 
-            this.gizmoStencil.pick((int) mc.mouseHandler.xpos(), h - (int) mc.mouseHandler.ypos(), BBSSettings.gizmoHoverTolerance.get() * BBSModClient.getGUIScale(), Gizmo.STENCIL_MAX);
+            int mouseX = scaleCoordinate(context.mouseX, context.menu.width, w);
+            int mouseY = scaleCoordinate(context.mouseY, context.menu.height, h);
+
+            this.gizmoStencil.pick(mouseX, h - mouseY, BBSSettings.gizmoHoverTolerance.get() * BBSModClient.getGUIScale(), Gizmo.STENCIL_MAX);
         }
         finally
         {
@@ -596,11 +600,16 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
-        boolean consumed = this.canShowGizmo() && this.gizmo.mouseReleased(context);
-
-        this.gizmo.stop();
+        boolean consumed = this.gizmo.mouseReleased(context);
 
         return super.subMouseReleased(context) || consumed;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.gizmo.stop();
+        super.subMouseCanceled(context);
     }
 
     @Override
@@ -677,13 +686,13 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         Vec3 pos = camera.getPosition();
 
         Minecraft mc = Minecraft.getInstance();
-        double x = mc.mouseHandler.xpos();
-        double y = mc.mouseHandler.ypos();
+        int x = this.getOwnerFramebufferMouseX(mc);
+        int y = this.getOwnerFramebufferMouseY(mc);
 
         this.mouseDirection.set(CameraUtils.getMouseDirection(
             context.projectionMatrix(),
             context.modelViewMatrix(),
-            (int) x, (int) y, 0, 0, mc.getWindow().getScreenWidth(), mc.getWindow().getScreenHeight()
+            x, y, 0, 0, mc.getWindow().getScreenWidth(), mc.getWindow().getScreenHeight()
         ));
         this.hovered = this.getClosestObject(new Vector3d(pos.x, pos.y, pos.z), this.mouseDirection);
 
@@ -714,6 +723,25 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         RenderSystem.disableDepthTest();
 
         this.renderGizmo(context, pos);
+    }
+
+    private int getOwnerFramebufferMouseX(Minecraft mc)
+    {
+        return mc.screen instanceof UIScreen screen
+            ? screen.getOwnerFramebufferMouseX()
+            : (int) mc.mouseHandler.xpos();
+    }
+
+    private int getOwnerFramebufferMouseY(Minecraft mc)
+    {
+        return mc.screen instanceof UIScreen screen
+            ? screen.getOwnerFramebufferMouseY()
+            : (int) mc.mouseHandler.ypos();
+    }
+
+    private static int scaleCoordinate(int coordinate, int sourceSize, int targetSize)
+    {
+        return sourceSize <= 0 ? coordinate : (int) Math.round(coordinate * (double) targetSize / sourceSize);
     }
 
     private ModelBlockEntity getClosestObject(Vector3d finalPosition, Vector3f mouseDirection)

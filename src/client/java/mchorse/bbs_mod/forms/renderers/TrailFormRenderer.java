@@ -20,7 +20,6 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
-import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import java.util.ArrayDeque;
@@ -70,6 +69,10 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             return;
         }
 
+        FormRenderSpace renderSpace = context.renderSpace == null
+            ? FormRenderSpace.forType(context.type)
+            : context.renderSpace;
+
         if (context.modelRenderer || context.ui)
         {
             PoseStack stack = context.stack;
@@ -97,13 +100,7 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             return;
         }
 
-        if (!BBSRendering.isRenderingWorld())
-        {
-            return;
-        }
-
         PoseStack stack = context.stack;
-        Matrix4f camInverse = this.cameraInverse.set(context.camera.view).invert();
 
         Camera camera = context.camera;
         double baseX = camera.position.x;
@@ -115,15 +112,27 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
 
         if (!this.form.paused.get())
         {
-            Matrix4f modelView = stack.last().pose();
+            Matrix4f model;
+
+            if (renderSpace == FormRenderSpace.ENTITY_LOCAL && context.world != null)
+            {
+                model = context.world.last().pose();
+            }
+            else if (renderSpace == FormRenderSpace.UI_LOCAL)
+            {
+                model = this.cameraInverse.set(context.camera.view).invert();
+                model.mul(stack.last().pose());
+            }
+            else
+            {
+                model = stack.last().pose();
+            }
 
             Vector4f top = this.top.set(0F, 1F, 0F, 1F);
             Vector4f bottom = this.bottom.set(0F, -1F, 0F, 1F);
 
-            modelView.transform(top);
-            modelView.transform(bottom);
-            camInverse.transform(top);
-            camInverse.transform(bottom);
+            model.transform(top);
+            model.transform(bottom);
 
             top.mul(1F / top.w);
             bottom.mul(1F / bottom.w);
@@ -136,8 +145,17 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
             }
 
             record.tick = current;
-            record.top.set(top.x + baseX, top.y + baseY, top.z + baseZ);
-            record.bottom.set(bottom.x + baseX, bottom.y + baseY, bottom.z + baseZ);
+
+            if (renderSpace != FormRenderSpace.ENTITY_LOCAL)
+            {
+                record.top.set(top.x + baseX, top.y + baseY, top.z + baseZ);
+                record.bottom.set(bottom.x + baseX, bottom.y + baseY, bottom.z + baseZ);
+            }
+            else
+            {
+                record.top.set(top.x, top.y, top.z);
+                record.bottom.set(bottom.x, bottom.y, bottom.z);
+            }
 
             float dx = top.x - bottom.x;
             float dy = top.y - bottom.y;
@@ -179,14 +197,17 @@ public class TrailFormRenderer extends FormRenderer<TrailForm> implements ITicka
         BBSModClient.getTextures().bindTexture(this.form.texture.get());
 
         stack.pushPose();
+        stack.setIdentity();
+
+        if (renderSpace == FormRenderSpace.UI_LOCAL)
+        {
+            stack.mulPose(this.cameraInverse.set(context.camera.view));
+        }
 
         Trail last = null;
         Trail trail;
         BufferBuilder builder;
         Matrix4f m = stack.last().pose();
-
-        m.set(camInverse);
-        m.invert();
 
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
 

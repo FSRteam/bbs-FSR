@@ -15,6 +15,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -45,6 +46,8 @@ public class UICurve extends UIElement
     private Area graph = new Area();
     private ParticleCurve curve;
     private int index = -1;
+    private final MouseGestureOwnership gestureOwnership = new MouseGestureOwnership();
+    private long gestureGeneration;
     private boolean dragging;
     private boolean moving;
     private int lastX;
@@ -275,17 +278,33 @@ public class UICurve extends UIElement
     {
         if (this.graph.isInside(context) && context.mouseButton == 2)
         {
-            this.panning = true;
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
-            this.panOffsetX = this.viewOffsetX;
-            this.panOffsetY = this.viewOffsetY;
+            if (this.gestureOwnership.isActive())
+            {
+                return true;
+            }
+
+            if (!this.beginGesture(context.mouseButton, () ->
+            {
+                this.panning = true;
+                this.lastX = context.mouseX;
+                this.lastY = context.mouseY;
+                this.panOffsetX = this.viewOffsetX;
+                this.panOffsetY = this.viewOffsetY;
+            }))
+            {
+                return true;
+            }
 
             return true;
         }
 
         if (this.area.isInside(context) && context.mouseButton == 0)
         {
+            if (this.gestureOwnership.isActive())
+            {
+                return true;
+            }
+
             boolean ctrl = Window.isCtrlPressed();
 
             if (this.curve.type == ParticleCurveType.BEZIER)
@@ -308,11 +327,18 @@ public class UICurve extends UIElement
 
                 if (d <= 25)
                 {
-                    this.setIndex(i);
+                    int selectedIndex = i;
 
-                    this.dragging = true;
-                    this.lastX = context.mouseX;
-                    this.lastY = context.mouseY;
+                    if (!this.beginGesture(context.mouseButton, () ->
+                    {
+                        this.setIndex(selectedIndex);
+                        this.dragging = true;
+                        this.lastX = context.mouseX;
+                        this.lastY = context.mouseY;
+                    }))
+                    {
+                        return true;
+                    }
 
                     return true;
                 }
@@ -324,6 +350,44 @@ public class UICurve extends UIElement
         }
 
         return super.subMouseClicked(context);
+    }
+
+    private boolean beginGesture(int button, Runnable starter)
+    {
+        long generation = this.gestureOwnership.acquireToken(button);
+
+        if (generation == 0L)
+        {
+            return false;
+        }
+
+        this.gestureGeneration = generation;
+        boolean started = false;
+
+        try
+        {
+            starter.run();
+            started = true;
+
+            return true;
+        }
+        finally
+        {
+            if (!started && this.gestureOwnership.release(button, generation))
+            {
+                this.gestureGeneration = 0L;
+                this.clearGestureState();
+            }
+        }
+    }
+
+    private void clearGestureState()
+    {
+        this.dragging = false;
+        this.moving = false;
+        this.panning = false;
+        this.chainDraggingCPOut = false;
+        this.chainDraggingCPIn = false;
     }
 
     @Override
@@ -386,11 +450,18 @@ public class UICurve extends UIElement
                     return true;
                 }
 
-                this.setIndex(i);
+                int selectedIndex = i;
 
-                this.dragging = true;
-                this.lastX = context.mouseX;
-                this.lastY = context.mouseY;
+                if (!this.beginGesture(context.mouseButton, () ->
+                {
+                    this.setIndex(selectedIndex);
+                    this.dragging = true;
+                    this.lastX = context.mouseX;
+                    this.lastY = context.mouseY;
+                }))
+                {
+                    return true;
+                }
 
                 return true;
             }
@@ -404,14 +475,22 @@ public class UICurve extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (this.moving)
+        long generation = this.gestureGeneration;
+
+        if (!this.gestureOwnership.release(context.mouseButton, generation))
+        {
+            return super.subMouseReleased(context);
+        }
+
+        boolean updateRange = this.moving;
+
+        this.gestureGeneration = 0L;
+        this.clearGestureState();
+
+        if (updateRange)
         {
             this.updateRange();
         }
-
-        this.dragging = false;
-        this.moving = false;
-        this.panning = false;
 
         return super.subMouseReleased(context);
     }
@@ -883,12 +962,19 @@ public class UICurve extends UIElement
                     return true;
                 }
 
-                this.chainSelectedKey = time;
-                this.chainDraggingCPOut = false;
-                this.chainDraggingCPIn = false;
-                this.dragging = true;
-                this.lastX = context.mouseX;
-                this.lastY = context.mouseY;
+                if (!this.beginGesture(context.mouseButton, () ->
+                {
+                    this.chainSelectedKey = time;
+                    this.chainDraggingCPOut = false;
+                    this.chainDraggingCPIn = false;
+                    this.dragging = true;
+                    this.lastX = context.mouseX;
+                    this.lastY = context.mouseY;
+                }))
+                {
+                    return true;
+                }
+
                 return true;
             }
 
@@ -898,12 +984,19 @@ public class UICurve extends UIElement
                 Vector2d leftHandle = this.getChainLeftHandlePos(time, anchorVal, node.leftSlope, this.range.x, this.range.y);
                 if (dist(leftHandle, context) <= 25)
                 {
-                    this.chainSelectedKey = time;
-                    this.chainDraggingCPOut = false;
-                    this.chainDraggingCPIn = true;
-                    this.dragging = true;
-                    this.lastX = context.mouseX;
-                    this.lastY = context.mouseY;
+                    if (!this.beginGesture(context.mouseButton, () ->
+                    {
+                        this.chainSelectedKey = time;
+                        this.chainDraggingCPOut = false;
+                        this.chainDraggingCPIn = true;
+                        this.dragging = true;
+                        this.lastX = context.mouseX;
+                        this.lastY = context.mouseY;
+                    }))
+                    {
+                        return true;
+                    }
+
                     return true;
                 }
             }
@@ -914,12 +1007,19 @@ public class UICurve extends UIElement
                 Vector2d rightHandle = this.getChainRightHandlePos(time, anchorVal, node.rightSlope, this.range.x, this.range.y);
                 if (dist(rightHandle, context) <= 25)
                 {
-                    this.chainSelectedKey = time;
-                    this.chainDraggingCPOut = true;
-                    this.chainDraggingCPIn = false;
-                    this.dragging = true;
-                    this.lastX = context.mouseX;
-                    this.lastY = context.mouseY;
+                    if (!this.beginGesture(context.mouseButton, () ->
+                    {
+                        this.chainSelectedKey = time;
+                        this.chainDraggingCPOut = true;
+                        this.chainDraggingCPIn = false;
+                        this.dragging = true;
+                        this.lastX = context.mouseX;
+                        this.lastY = context.mouseY;
+                    }))
+                    {
+                        return true;
+                    }
+
                     return true;
                 }
             }

@@ -9,6 +9,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
@@ -109,6 +110,18 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         return this.target == null ? this.entity : this.target;
     }
 
+    public MatrixCache collectPreviewMatrices(Form root, float transition)
+    {
+        return FormUtilsClient.getRenderer(root).collectMatrices(
+            this.getTargetEntity(),
+            this,
+            new Matrix4f(),
+            false,
+            false,
+            transition
+        );
+    }
+
     public void setTarget(IEntity target)
     {
         this.target = target;
@@ -149,9 +162,14 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     {
         boolean handled = this.gizmoInteraction.mouseReleased(context);
 
-        this.gizmoInteraction.stop();
-
         return super.subMouseReleased(context) || handled;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.gizmoInteraction.stop();
+        super.subMouseCanceled(context);
     }
 
     @Override
@@ -168,6 +186,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
             .set(FormRenderType.PREVIEW, this.target == null ? this.entity : this.target, context.batcher.getContext().pose(), LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, context.getTransition())
             .camera(this.camera)
             .simulationOwner(this)
+            .localSimulation()
             .modelRenderer();
 
         if (this.renderForm == null || this.renderForm.get())

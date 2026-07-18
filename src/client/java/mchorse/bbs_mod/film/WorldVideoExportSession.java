@@ -32,7 +32,10 @@ public class WorldVideoExportSession extends VideoExportSession
     private Film film;
     private boolean firstTickPaused;
     private boolean filmControllerSeen;
+    private boolean filmPlaybackRequested;
+    private boolean filmPlaybackRemote;
     private long filmControllerDeadlineMs;
+    private long exportFrameGeneration;
 
     public String getFilmId()
     {
@@ -42,39 +45,70 @@ public class WorldVideoExportSession extends VideoExportSession
     /** Pass {@code null}/{@code null} for F4, or a film id and its data for F6. */
     public boolean start(String filmId, Film film)
     {
-        if (this.isExporting() || this.getRecorder() == null || this.getRecorder().isRecording())
+        if ((filmId == null) != (film == null)
+            || this.isExporting()
+            || (filmId != null && BBSModClient.getFilms().has(filmId))
+            || !this.reserveRecorder())
         {
             return false;
         }
 
-        Window window = Minecraft.getInstance().getWindow();
-        VideoSize size = this.getVideoSize(window);
-
-        this.applyWindowSize(size);
-
-        this.filmId = filmId;
-        this.film = film;
-        this.firstTickPaused = false;
-        this.filmControllerSeen = false;
-        this.filmControllerDeadlineMs = filmId == null ? 0L : System.currentTimeMillis() + FILM_CONTROLLER_TIMEOUT_MS;
-
-        long delayMs = (long) (Math.max(0F, BBSSettings.videoSettings.delay.get()) * 1000F);
-        boolean started = this.begin(BBSRendering.getTexture().id, size.width, size.height, delayMs);
-
-        if (!started)
+        try
         {
-            this.windowSession.restore();
-            this.clearFilmState();
+            Window window = Minecraft.getInstance().getWindow();
+            VideoSize size = this.getVideoSize(window);
+
+            this.filmId = filmId;
+            this.film = film;
+            this.firstTickPaused = false;
+            this.filmControllerSeen = false;
+            this.filmPlaybackRequested = false;
+            this.filmPlaybackRemote = false;
+            /* Audio preparation can be slow. Start the controller timeout only
+             * after the play request has actually been issued. */
+            this.filmControllerDeadlineMs = 0L;
+
+            this.applyWindowSize(size);
+            this.exportFrameGeneration = BBSRendering.getExportFrameGeneration();
+
+            long delayMs = (long) (Math.max(0F, BBSSettings.videoSettings.delay.get()) * 1000F);
+            boolean started = this.begin(BBSRendering.getTexture().id, size.width, size.height, delayMs);
+
+            if (!started)
+            {
+                /* A synchronous listener may already have started a new export
+                 * on this reusable session. Never roll back the new owner. */
+                if (!this.isExporting())
+                {
+                    this.rollbackUnstartedExport(null);
+                }
+
+                return false;
+            }
+
+            if (filmId != null)
+            {
+                this.startFilmPlayback();
+                this.filmControllerDeadlineMs = System.currentTimeMillis() + FILM_CONTROLLER_TIMEOUT_MS;
+            }
+
+            return true;
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.error("Failed to start world video export", e);
+
+            if (this.isExporting())
+            {
+                this.fail(e);
+            }
+            else
+            {
+                this.rollbackUnstartedExport(e);
+            }
 
             return false;
         }
-
-        if (filmId != null)
-        {
-            Films.playFilm(filmId, false);
-        }
-
-        return true;
     }
 
     @Override
@@ -125,6 +159,11 @@ public class WorldVideoExportSession extends VideoExportSession
     @Override
     protected boolean isWarmupReady()
     {
+        if (!BBSRendering.isExportFrameReadyAfter(this.exportFrameGeneration, this.width, this.height))
+        {
+            return false;
+        }
+
         if (this.filmId == null || this.firstTickPaused)
         {
             return true;
@@ -202,14 +241,39 @@ public class WorldVideoExportSession extends VideoExportSession
     @Override
     protected void teardown(boolean cancelled)
     {
-        if (cancelled && this.filmId != null && BBSModClient.getFilms().has(this.filmId))
-        {
-            Films.playFilm(this.filmId, false);
-        }
+        this.runCleanupSteps(
+            () ->
+            {
+                if (cancelled && this.filmPlaybackRequested)
+                {
+                    this.stopFilmPlayback();
+                }
+            },
+            () -> BBSRendering.setCustomSize(false, 0, 0),
+            this.windowSession::restore,
+            this::clearFilmState
+        );
+    }
 
-        BBSRendering.setCustomSize(false, 0, 0);
-        this.windowSession.restore();
-        this.clearFilmState();
+    private void rollbackUnstartedExport(Throwable startupFailure)
+    {
+        try
+        {
+            this.runCleanupSteps(
+                this::cancelPendingReservation,
+                this.windowSession::restore,
+                this::clearFilmState
+            );
+        }
+        catch (Exception | LinkageError cleanupFailure)
+        {
+            if (startupFailure != null && startupFailure != cleanupFailure)
+            {
+                startupFailure.addSuppressed(cleanupFailure);
+            }
+
+            LOGGER.error("Failed to roll back world video export startup", cleanupFailure);
+        }
     }
 
     private void clearFilmState()
@@ -218,7 +282,42 @@ public class WorldVideoExportSession extends VideoExportSession
         this.film = null;
         this.firstTickPaused = false;
         this.filmControllerSeen = false;
+        this.filmPlaybackRequested = false;
+        this.filmPlaybackRemote = false;
         this.filmControllerDeadlineMs = 0L;
+        this.exportFrameGeneration = 0L;
+    }
+
+    private void startFilmPlayback()
+    {
+        this.filmPlaybackRemote = ClientNetwork.isIsBBSModOnServer();
+
+        if (this.filmPlaybackRemote)
+        {
+            ClientNetwork.sendToggleFilm(this.filmId, false);
+        }
+        else
+        {
+            /* The panel already supplied the current Film, so avoid an
+             * uncancellable repository callback that could outlive export. */
+            Films.playFilm(this.film, false);
+        }
+
+        this.filmPlaybackRequested = true;
+    }
+
+    private void stopFilmPlayback()
+    {
+        if (this.filmPlaybackRemote)
+        {
+            /* STOP is idempotent when the start request was rejected or lost;
+             * another toggle could start the film during cancellation. */
+            ClientNetwork.sendActionState(this.filmId, ActionState.STOP, 0);
+        }
+        else
+        {
+            Films.stopFilm(this.filmId);
+        }
     }
 
     private void applyWindowSize(VideoSize size)

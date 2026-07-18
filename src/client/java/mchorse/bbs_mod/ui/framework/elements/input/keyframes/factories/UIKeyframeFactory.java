@@ -84,17 +84,17 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         }
     }
 
+    /** Restore after the property panel has a laid-out viewport, so clamping uses its real size. */
+    public void restoreScroll()
+    {
+        this.scroll.scroll.setScroll(SCROLLS.getOrDefault(this.keyframe.getFactory(), 0));
+    }
+
     public static <T> UIKeyframeFactory createPanel(Keyframe<T> keyframe, UIKeyframes editor)
     {
         IUIKeyframeFactoryFactory<T> factory = FACTORIES.get(keyframe.getFactory());
-        UIKeyframeFactory uiEditor = factory == null ? null : factory.create(keyframe, editor);
 
-        if (uiEditor != null)
-        {
-            uiEditor.scroll.scroll.setScroll(SCROLLS.getOrDefault(keyframe.getFactory(), 0));
-        }
-
-        return uiEditor;
+        return factory == null ? null : factory.create(keyframe, editor);
     }
 
     public UIKeyframeFactory(Keyframe<T> keyframe, UIKeyframes editor)

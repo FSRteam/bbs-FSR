@@ -3,6 +3,9 @@ package mchorse.bbs_mod.utils.manager;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -22,7 +25,12 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
 
     public File getFolder()
     {
-        File file = this.folder.get();
+        File file = this.folder == null ? null : this.folder.get();
+
+        if (file == null)
+        {
+            return null;
+        }
 
         if (!file.exists())
         {
@@ -35,17 +43,20 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
     @Override
     public boolean exists(String name)
     {
-        return this.getFile(name).exists();
+        File file = this.getFile(name);
+
+        return file != null && file.exists();
     }
 
     @Override
     public boolean rename(String from, String to)
     {
         File file = this.getFile(from);
+        File destination = this.getFile(to);
 
-        if (file != null && file.exists())
+        if (file != null && destination != null && file.exists())
         {
-            if (file.renameTo(this.getFile(to)))
+            if (file.renameTo(destination))
             {
                 return true;
             }
@@ -67,9 +78,9 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
      */
     public boolean addFolder(String path)
     {
-        File folder = this.getFolder(this.normalizePath(path));
+        File folder = this.getFolder(path);
 
-        if (folder.exists())
+        if (folder == null || folder.exists())
         {
             return false;
         }
@@ -78,18 +89,16 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
     }
 
     /**
-     * Rename given folder to another name. From and to arguments expect trailing slashes!
+     * Rename given folder to another name.
      */
     public boolean renameFolder(String from, String to)
     {
-        from = this.normalizePath(from);
-        to = this.normalizePath(to);
-
         File folder = this.getFolder(from);
+        File destination = this.getFolder(to);
 
-        if (folder.isDirectory())
+        if (folder != null && destination != null && folder.isDirectory())
         {
-            if (folder.renameTo(this.getFolder(to)))
+            if (folder.renameTo(destination))
             {
                 return true;
             }
@@ -103,9 +112,9 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
      */
     public boolean deleteFolder(String path)
     {
-        File folder = this.getFolder(this.normalizePath(path));
+        File folder = this.getFolder(path);
 
-        if (folder.isDirectory())
+        if (folder != null && folder.isDirectory())
         {
             if (folder.delete())
             {
@@ -114,11 +123,6 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
         }
 
         return false;
-    }
-
-    private String normalizePath(String path)
-    {
-        return path.endsWith("/") ? path : path + "/";
     }
 
     @Override
@@ -131,15 +135,39 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
             return set;
         }
 
-        this.recursiveFind(set, this.getFolder(), "");
+        File root = this.getCanonicalRoot();
+
+        if (root != null)
+        {
+            this.recursiveFind(set, root, "", root.toPath(), new HashSet<>());
+        }
 
         return set;
     }
 
-    private void recursiveFind(Set<String> set, File folder, String prefix)
+    private void recursiveFind(Set<String> set, File folder, String prefix, Path root, Set<Path> visited)
     {
-        for (File file : folder.listFiles())
+        File canonicalFolder = this.getContainedFile(root, folder, true);
+
+        if (canonicalFolder == null || !canonicalFolder.isDirectory() || !visited.add(canonicalFolder.toPath()))
         {
+            return;
+        }
+
+        File[] entries = canonicalFolder.listFiles();
+
+        if (entries == null)
+        {
+            return;
+        }
+
+        for (File file : entries)
+        {
+            if (this.getContainedFile(root, file, false) == null)
+            {
+                continue;
+            }
+
             String name = file.getName();
 
             if (file.isFile() && this.isData(file))
@@ -156,7 +184,7 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
                 }
                 else
                 {
-                    this.recursiveFind(set, file, prefix + name + "/");
+                    this.recursiveFind(set, file, prefix + name + "/", root, visited);
                 }
             }
         }
@@ -169,22 +197,118 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
 
     public File getFile(String name)
     {
-        if (this.folder == null)
-        {
-            return null;
-        }
-
-        return new File(this.getFolder(), name + this.getExtension());
+        return this.resolveContained(name, true);
     }
 
     public File getFolder(String path)
     {
-        if (this.folder == null)
+        return this.resolveContained(path, false);
+    }
+
+    private File resolveContained(String value, boolean file)
+    {
+        Path relative = this.getRelativePath(value, file);
+
+        if (relative == null)
         {
             return null;
         }
 
-        return new File(this.getFolder(), path);
+        File root = this.getCanonicalRoot();
+
+        if (root == null)
+        {
+            return null;
+        }
+
+        if (file)
+        {
+            String fileName = relative.getFileName().toString() + this.getExtension();
+
+            relative = relative.resolveSibling(fileName);
+        }
+
+        return this.getContainedFile(root.toPath(), root.toPath().resolve(relative).normalize().toFile(), false);
+    }
+
+    private Path getRelativePath(String value, boolean file)
+    {
+        if (value == null || value.isBlank())
+        {
+            return null;
+        }
+
+        String path = value.replace('\\', '/');
+
+        if (path.startsWith("/") || this.hasWindowsDrivePrefix(path) || (file && path.endsWith("/")))
+        {
+            return null;
+        }
+
+        try
+        {
+            Path relative = Path.of(path);
+
+            if (relative.isAbsolute() || relative.getRoot() != null || relative.getNameCount() == 0)
+            {
+                return null;
+            }
+
+            for (Path component : relative)
+            {
+                String name = component.toString();
+
+                if (name.isEmpty() || name.equals(".") || name.equals(".."))
+                {
+                    return null;
+                }
+            }
+
+            return relative;
+        }
+        catch (InvalidPathException e)
+        {
+            return null;
+        }
+    }
+
+    private boolean hasWindowsDrivePrefix(String path)
+    {
+        return path.length() >= 2 && Character.isLetter(path.charAt(0)) && path.charAt(1) == ':';
+    }
+
+    private File getCanonicalRoot()
+    {
+        try
+        {
+            File root = this.getFolder();
+
+            return root == null ? null : root.getCanonicalFile();
+        }
+        catch (IOException | SecurityException e)
+        {
+            return null;
+        }
+    }
+
+    private File getContainedFile(Path root, File candidate, boolean allowRoot)
+    {
+        try
+        {
+            File canonical = candidate.getCanonicalFile();
+            Path path = canonical.toPath();
+
+            if (!path.startsWith(root) || (!allowRoot && path.equals(root)))
+            {
+                return null;
+            }
+
+            return canonical;
+        }
+        catch (IOException | SecurityException e)
+        {
+            return null;
+        }
     }
 
     protected String getExtension()

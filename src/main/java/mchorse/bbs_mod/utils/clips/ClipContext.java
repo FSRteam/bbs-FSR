@@ -96,24 +96,29 @@ public abstract class ClipContext <T extends Clip, E>
             this.ticks = ticks;
             this.transition = transition;
 
-            boolean applied = false;
-
-            for (Clip clip : this.clips.getClips(ticks, lastLayer))
+            try
             {
-                boolean allowed = filter == null || filter.test(clip);
+                boolean applied = false;
 
-                if (allowed && this.apply(clip, position))
+                for (Clip clip : this.clips.getClips(ticks, lastLayer))
                 {
-                    applied = true;
+                    boolean allowed = filter == null || filter.test(clip);
+
+                    if (allowed && this.apply(clip, position))
+                    {
+                        applied = true;
+                    }
                 }
+
+                return applied;
             }
-
-            this.currentLayer = lastLayer;
-            this.ticks = lastTicks;
-            this.relativeTick = lastRelativeTicks;
-            this.transition = lastTransition;
-
-            return applied;
+            finally
+            {
+                this.currentLayer = lastLayer;
+                this.ticks = lastTicks;
+                this.relativeTick = lastRelativeTicks;
+                this.transition = lastTransition;
+            }
         }
 
         return false;

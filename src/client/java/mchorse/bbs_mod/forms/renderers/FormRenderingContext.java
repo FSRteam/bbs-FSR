@@ -4,19 +4,24 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
 public class FormRenderingContext
 {
     public FormRenderType type;
+    public FormRenderSpace renderSpace;
     public IEntity entity;
     public Object simulationOwner;
     public PoseStack stack;
     public PoseStack world;
+    public boolean allowWorldTargetOverrides;
+    public boolean allowWorldCollisions;
     public int light;
     public int overlay;
     public float transition;
@@ -34,10 +39,13 @@ public class FormRenderingContext
     public FormRenderingContext set(FormRenderType type, IEntity entity, PoseStack stack, int light, int overlay, float transition)
     {
         this.type = type == null ? FormRenderType.ENTITY : type;
+        this.renderSpace = FormRenderSpace.forType(this.type);
         this.entity = entity;
         this.simulationOwner = entity;
         this.stack = stack;
         this.world = new PoseStack();
+        this.allowWorldTargetOverrides = this.type.hasWorldHost();
+        this.allowWorldCollisions = this.type.hasWorldHost();
         this.light = light;
         this.overlay = overlay;
         this.transition = transition;
@@ -88,6 +96,8 @@ public class FormRenderingContext
     public FormRenderingContext inUI()
     {
         this.ui = true;
+        this.renderSpace = FormRenderSpace.UI_LOCAL;
+        this.localSimulation();
 
         return this;
     }
@@ -102,6 +112,73 @@ public class FormRenderingContext
     public FormRenderingContext modelRenderer()
     {
         this.modelRenderer = true;
+        this.renderSpace = FormRenderSpace.UI_LOCAL;
+        this.localSimulation();
+
+        return this;
+    }
+
+    public FormRenderingContext renderSpace(FormRenderSpace renderSpace)
+    {
+        this.renderSpace = renderSpace == null ? FormRenderSpace.forType(this.type) : renderSpace;
+
+        return this;
+    }
+
+    public FormRenderingContext cameraRelativeWorld()
+    {
+        return this.renderSpace(FormRenderSpace.CAMERA_RELATIVE_WORLD);
+    }
+
+    /**
+     * Set an absolute semantic transform from a camera-relative render target.
+     * The target can already include film-anchor/bone transforms; adding the
+     * camera origin converts the exact matrix shown on screen back to world
+     * space without leaking the view rotation into simulation history.
+     */
+    public FormRenderingContext semanticWorldFromCameraRelative(Matrix4f target, double cameraX, double cameraY, double cameraZ)
+    {
+        PoseStack semanticWorld = new PoseStack();
+
+        semanticWorld.translate(cameraX, cameraY, cameraZ);
+
+        if (target != null)
+        {
+            MatrixStackUtils.multiply(semanticWorld, target);
+        }
+
+        this.world = semanticWorld;
+
+        return this;
+    }
+
+    public FormRenderingContext semanticWorld(PoseStack world)
+    {
+        if (world != null)
+        {
+            this.world = world;
+        }
+
+        return this;
+    }
+
+    /** Use stable model-local simulation and reject all absolute-world inputs. */
+    public FormRenderingContext localSimulation()
+    {
+        this.allowWorldTargetOverrides = false;
+        this.allowWorldCollisions = false;
+
+        return this;
+    }
+
+    public FormRenderingContext entityLocal(PoseStack world)
+    {
+        this.renderSpace = FormRenderSpace.ENTITY_LOCAL;
+
+        if (world != null)
+        {
+            this.world = world;
+        }
 
         return this;
     }

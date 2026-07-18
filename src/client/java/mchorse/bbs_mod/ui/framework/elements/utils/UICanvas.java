@@ -13,6 +13,8 @@ public abstract class UICanvas extends UIElement
 
     public boolean dragging;
     public int mouse;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
 
     protected int lastX;
     protected int lastY;
@@ -54,22 +56,16 @@ public abstract class UICanvas extends UIElement
     {
         if (this.area.isInside(context) && this.isMouseButtonAllowed(context.mouseButton))
         {
-            this.dragging = true;
-            this.mouse = context.mouseButton;
-
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
+            int dragButton = context.mouseButton;
 
             /* Fake middle mouse click to add an ability to navigate
              * with Ctrl + click dragging */
-            if (this.mouse == 0 && Window.isCtrlPressed())
+            if (dragButton == 0 && Window.isCtrlPressed())
             {
-                this.mouse = 2;
+                dragButton = 2;
             }
 
-            this.startDragging(context);
-
-            return true;
+            return this.beginOwnedDrag(context, dragButton);
         }
 
         return super.subMouseClicked(context);
@@ -78,6 +74,61 @@ public abstract class UICanvas extends UIElement
     protected boolean isMouseButtonAllowed(int mouseButton)
     {
         return mouseButton == 0 || mouseButton == 2;
+    }
+
+    /** Begin one drag while retaining the physical button as its owner. */
+    protected boolean beginOwnedDrag(UIContext context, int dragButton)
+    {
+        int ownerButton = context.mouseButton;
+
+        this.dragGeneration = this.dragOwnership.acquireToken(ownerButton);
+
+        if (this.dragGeneration == 0L)
+        {
+            return false;
+        }
+
+        boolean started = false;
+
+        try
+        {
+            this.dragging = true;
+            this.mouse = dragButton;
+            this.lastX = context.mouseX;
+            this.lastY = context.mouseY;
+            this.startDragging(context);
+            started = true;
+
+            return true;
+        }
+        finally
+        {
+            if (!started)
+            {
+                this.dragging = false;
+                this.dragOwnership.release(ownerButton, this.dragGeneration);
+                this.dragGeneration = 0L;
+            }
+        }
+    }
+
+    protected boolean isDragOwnedBy(int mouseButton)
+    {
+        return this.dragOwnership.isOwnedBy(mouseButton, this.dragGeneration);
+    }
+
+    /** Retire the old generation before callbacks can install a replacement drag. */
+    protected boolean retireOwnedDrag(int mouseButton)
+    {
+        if (!this.dragOwnership.release(mouseButton, this.dragGeneration))
+        {
+            return false;
+        }
+
+        this.dragGeneration = 0L;
+        this.dragging = false;
+
+        return true;
     }
 
     protected void startDragging(UIContext context)
@@ -89,15 +140,37 @@ public abstract class UICanvas extends UIElement
     @Override
     public boolean subMouseScrolled(UIContext context)
     {
-        if (this.area.isInside(context.mouseX, context.mouseY) && !this.dragging)
+        if (context.mouseWheel != 0D && this.area.isInside(context.mouseX, context.mouseY) && !this.dragging)
         {
-            this.zoom(context, (int) context.mouseWheel);
+            this.zoom(context, context.mouseWheel);
+
+            return true;
         }
 
         return super.subMouseScrolled(context);
     }
 
+    protected void zoom(UIContext context, double scroll)
+    {
+        int legacyScroll = (int) scroll;
+
+        if (scroll == legacyScroll)
+        {
+            this.zoom(context, legacyScroll);
+
+            return;
+        }
+
+        this.applyZoom(context, scroll);
+    }
+
+    /** Retained for binary compatibility with existing canvas subclasses. */
     protected void zoom(UIContext context, int scroll)
+    {
+        this.applyZoom(context, scroll);
+    }
+
+    private void applyZoom(UIContext context, double scroll)
     {
         if (scroll != 0D)
         {
@@ -109,9 +182,18 @@ public abstract class UICanvas extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        this.dragging = false;
+        if (!this.retireOwnedDrag(context.mouseButton))
+        {
+            return super.subMouseReleased(context);
+        }
 
-        return super.subMouseReleased(context);
+        return true;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.retireOwnedDrag(context.mouseButton);
     }
 
     @Override
@@ -120,8 +202,15 @@ public abstract class UICanvas extends UIElement
         this.dragging(context);
 
         context.batcher.clip(this.area, context);
-        this.renderCanvas(context);
-        context.batcher.unclip(context);
+
+        try
+        {
+            this.renderCanvas(context);
+        }
+        finally
+        {
+            context.batcher.unclip(context);
+        }
 
         super.render(context);
     }

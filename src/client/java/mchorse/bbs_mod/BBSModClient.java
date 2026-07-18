@@ -9,15 +9,21 @@ import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
+import mchorse.bbs_mod.camera.controller.ICameraController;
+import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.compat.ClientApiCompat;
+import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationBridge;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
 import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterL10nEvent;
+import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.WorldVideoExportSession;
@@ -29,6 +35,7 @@ import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.FramebufferManager;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.items.GunProperties;
+import mchorse.bbs_mod.items.GunPropertiesPolicy;
 import mchorse.bbs_mod.items.GunZoom;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.morphing.Morph;
@@ -52,6 +59,7 @@ import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.ui.utils.keys.KeybindSettings;
+import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.ScreenshotRecorder;
 import mchorse.bbs_mod.utils.VideoRecorder;
@@ -70,10 +78,13 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.network.Connection;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import org.lwjgl.glfw.GLFW;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.io.File;
@@ -84,6 +95,8 @@ import java.util.function.Consumer;
 
 public class BBSModClient
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BBSModClient.class);
+
     private static TextureManager textures;
     private static FramebufferManager framebuffers;
     private static SoundManager sounds;
@@ -546,37 +559,69 @@ public class BBSModClient
 
     public static void onClientDisconnect()
     {
-        ClientApiCompat.emitDisconnect(Minecraft.getInstance());
+        UIFilmPanel filmPanel = getFilmPanelForLifecycle("disconnect");
 
-        if (dashboard != null)
+        try
         {
-            UIFilmPanel panel = dashboard.getPanel(UIFilmPanel.class);
+            runClientLifecycleStep("stop disconnect Film recording", () -> stopFilmRecordingForLifecycle(filmPanel, "disconnect"));
+            saveFilmPanelForLifecycle(filmPanel, "disconnect");
+            runClientLifecycleStep("notify addon disconnect", () -> ClientApiCompat.emitDisconnect(Minecraft.getInstance()));
+            runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
+            runClientLifecycleStep("reset UI mirror", () -> BBSUiMirrorRuntime.reset());
+            runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
+        }
+        finally
+        {
+            /* Identity clearing is unconditional and independent of callbacks. */
+            dashboard = null;
+        }
 
-            if (panel != null)
+        runClientLifecycleStep("reset Film controller state", () -> films.reset());
+        runClientLifecycleStep("replace Film controller", () -> films = new Films());
+        runClientLifecycleStep("reset network handshake", () -> ClientNetwork.resetHandshake());
+        resetCameraControllersForLifecycle("disconnect");
+    }
+
+    public static void onClientPlayerClone(Connection connection, LocalPlayer oldPlayer, LocalPlayer newPlayer)
+    {
+        runClientLifecycleStep("replace exact client network player scope",
+            () -> ClientNetwork.onClientPlayerClone(connection, oldPlayer, newPlayer));
+        runClientLifecycleStep("reset Film controller state for client-player clone", () ->
+        {
+            if (films != null)
             {
-                /* Cancel through the session while its UI is still reachable so warm-up and
-                 * recording exports both run teardown and delete their temporary audio. */
-                panel.recorder.cancel();
+                films.reset();
+            }
+        });
+        runClientLifecycleStep("replace Film controller for client-player clone", () -> films = new Films());
+        resetCameraControllersForLifecycle("client-player clone");
+    }
+
+    private static void resetCameraControllersForLifecycle(String lifecycle)
+    {
+        List<ICameraController> removed = Collections.emptyList();
+
+        try
+        {
+            removed = cameraController.removeAll(PlayCameraController.class);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            LOGGER.error("[bbs-client] failed to remove Film playback cameras during {}; continuing lifecycle teardown",
+                lifecycle,
+                exception);
+        }
+
+        for (ICameraController controller : removed)
+        {
+            if (controller instanceof PlayCameraController play)
+            {
+                runClientLifecycleStep(lifecycle + " shutdown Film playback camera",
+                    () -> play.getContext().shutdown());
             }
         }
 
-        dashboard = null;
-        worldExportSession.stop();
-
-        /* A panel export can also own the shared recorder. Its UI is discarded on
-         * disconnect, so make sure an orphaned encoder and custom target cannot leak. */
-        if (videoRecorder != null && videoRecorder.isRecording())
-        {
-            videoRecorder.stopRecording();
-        }
-
-        BBSRendering.setCustomSize(false, 0, 0);
-
-        films = new Films();
-
-        ClientNetwork.resetHandshake();
-        films.reset();
-        cameraController.reset();
+        runClientLifecycleStep(lifecycle + " clear camera controllers", () -> cameraController.reset());
     }
 
     public static void onClientTickPre()
@@ -601,6 +646,8 @@ public class BBSModClient
     public static void onClientTickPost()
     {
         Minecraft mc = Minecraft.getInstance();
+
+        BBSUiOpenDispatcher.tick(mc);
 
         if (mc.screen instanceof UIScreen screen)
         {
@@ -648,8 +695,11 @@ public class BBSModClient
             {
                 GunProperties properties = GunProperties.get(stack);
 
-                ClientNetwork.sendZoom(true);
-                gunZoom = new GunZoom(properties.fovTarget, properties.fovInterp, properties.fovDuration);
+                if (GunPropertiesPolicy.isAllowed(properties))
+                {
+                    ClientNetwork.sendZoom(true);
+                    gunZoom = new GunZoom(properties.fovTarget, properties.fovInterp, properties.fovDuration);
+                }
             }
         }
 
@@ -675,14 +725,130 @@ public class BBSModClient
 
     public static void onClientStopping()
     {
-        ClientApiCompat.emitClientStopping(Minecraft.getInstance());
-        BBSResources.stopWatchdog();
+        UIFilmPanel filmPanel = getFilmPanelForLifecycle("client stopping");
+
+        try
+        {
+            saveFilmPanelForLifecycle(filmPanel, "client stopping");
+            runClientLifecycleStep("notify addon client stopping", () -> ClientApiCompat.emitClientStopping(Minecraft.getInstance()));
+            runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
+            runClientLifecycleStep("shutdown UI mirror", () -> BBSUiMirrorRuntime.shutdown());
+            runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
+        }
+        finally
+        {
+            dashboard = null;
+            runClientLifecycleStep("stop resource watchdog", () -> BBSResources.stopWatchdog());
+        }
+    }
+
+    private static void cancelClientExports(UIFilmPanel filmPanel)
+    {
+        /* Fence callbacks that have not reached the panel session yet,
+         * including wrappers already queued by the render thread. */
+        runClientLifecycleStep("fence pending export startup", () -> BBSRendering.cancelPendingExportResolutionActions());
+
+        if (filmPanel != null)
+        {
+            /* Cancel through the session while its UI owner is reachable so
+             * warm-up and active exports both delete session-owned audio. */
+            runClientLifecycleStep("cancel panel export", () -> filmPanel.recorder.cancel());
+        }
+
+        runClientLifecycleStep("cancel world export", () -> worldExportSession.cancel());
+
+        /* A panel or addon can leave the shared recorder without a live UI
+         * session. Cancellation must never be reported as natural completion. */
+        runClientLifecycleStep("cancel orphaned video recorder", () ->
+        {
+            if (videoRecorder != null && videoRecorder.isRecording())
+            {
+                videoRecorder.cancelRecording();
+            }
+        });
+
+        runClientLifecycleStep("restore export render size", () -> BBSRendering.setCustomSize(false, 0, 0));
+    }
+
+    private static void stopFilmRecordingForLifecycle(UIFilmPanel filmPanel, String lifecycle)
+    {
+        Films owner = films;
+        Recorder recorder = owner == null ? null : owner.getRecorder();
+
+        if (recorder == null)
+        {
+            return;
+        }
+
+        runClientLifecycleStep(lifecycle + " stop Film recording", () -> owner.stopRecordingForClientLifecycle(recorder));
+
+        if (owner.getRecorder() == recorder)
+        {
+            return;
+        }
+
+        Film film = filmPanel == null ? null : filmPanel.getData();
+
+        if (film != null
+            && Objects.equals(film.getId(), recorder.getRecordingFilmId())
+            && CollectionUtils.inRange(film.replays.getList(), recorder.getRecordingReplayId())
+            && recorder.hasRecordedFrame()
+            && recorder.isInCurrentLevel())
+        {
+            runClientLifecycleStep(lifecycle + " apply Film recording", () -> filmPanel.applyRecordedKeyframes(recorder, film));
+        }
+    }
+
+    private static void saveFilmPanelForLifecycle(UIFilmPanel filmPanel, String lifecycle)
+    {
+        if (filmPanel == null)
+        {
+            return;
+        }
+
+        /* Keep the remote repository and collaboration owner alive for both
+         * operations, but do not let either failure skip mandatory teardown. */
+        runClientLifecycleStep(lifecycle + " film collaboration flush", () -> filmPanel.flushFilmCollaborationEdits());
+        runClientLifecycleStep(lifecycle + " film save", () -> filmPanel.save());
+    }
+
+    private static UIFilmPanel getFilmPanelForLifecycle(String lifecycle)
+    {
+        if (dashboard == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return dashboard.getPanel(UIFilmPanel.class);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            LOGGER.error("[bbs-client] failed to resolve Film panel during {}; continuing lifecycle teardown", lifecycle, exception);
+
+            return null;
+        }
+    }
+
+    private static void runClientLifecycleStep(String step, Runnable runnable)
+    {
+        try
+        {
+            runnable.run();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            LOGGER.error("[bbs-client] failed to {}; continuing lifecycle teardown", step, exception);
+        }
     }
 
     public static void onClientStarted()
     {
         BBSRendering.setupFramebuffer();
         BBSMod.getProvider().register(new MinecraftSourcePack());
+
+        BBSUiOpenDispatcher.start(Minecraft.getInstance());
 
         Window window = Minecraft.getInstance().getWindow();
 
@@ -832,18 +998,24 @@ public class BBSModClient
             if (recorder != null)
             {
                 recorder = BBSModClient.getFilms().stopRecording();
+                Film film = panel.getData();
 
-                if (recorder == null || recorder.hasNotStarted() || panel.getData() == null)
+                if (recorder == null
+                    || film == null
+                    || !Objects.equals(film.getId(), recorder.getRecordingFilmId())
+                    || !CollectionUtils.inRange(film.replays.getList(), recorder.getRecordingReplayId())
+                    || !recorder.hasRecordedFrame()
+                    || !recorder.isInCurrentLevel())
                 {
                     return;
                 }
 
-                panel.applyRecordedKeyframes(recorder, panel.getData());
+                panel.applyRecordedKeyframes(recorder, film);
             }
             else
             {
                 Replay replay = panel.replayEditor.getReplay();
-                int index = panel.getData().replays.getList().indexOf(replay);
+                int index = CollectionUtils.getIndex(panel.getData().replays.getList(), replay);
 
                 if (index >= 0)
                 {

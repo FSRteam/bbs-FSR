@@ -1,17 +1,21 @@
 package mchorse.bbs_mod.ui.film.utils;
 
 import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationBridge;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.utils.undo.ValueChangeUndo;
 import mchorse.bbs_mod.ui.forms.editors.UIFormUndoHandler;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.undo.CompoundUndo;
+import mchorse.bbs_mod.utils.undo.IUndo;
 
+import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 public class UIFilmUndoHandler extends UIFormUndoHandler
@@ -65,6 +69,36 @@ public class UIFilmUndoHandler extends UIFormUndoHandler
         }
     }
 
+    @Override
+    protected void handleCommittedValues(List<BaseValue> values)
+    {
+        BBSFilmCollaborationBridge.captureCommittedValues((UIFilmPanel) this.uiElement, values);
+    }
+
+    @Override
+    protected void handleUndoApplied(IUndo<ValueGroup> undo, boolean redo)
+    {
+        List<List<String>> paths = new ArrayList<>();
+
+        collectPaths(undo, paths);
+        BBSFilmCollaborationBridge.captureCommittedPaths((UIFilmPanel) this.uiElement, paths);
+    }
+
+    private static void collectPaths(IUndo<?> undo, List<List<String>> paths)
+    {
+        if (undo instanceof ValueChangeUndo change)
+        {
+            paths.add(List.copyOf(change.getName().strings));
+        }
+        else if (undo instanceof CompoundUndo<?> compound)
+        {
+            for (IUndo<?> child : compound.getUndos())
+            {
+                collectPaths(child, paths);
+            }
+        }
+    }
+
     private boolean isReplayActions(BaseValue value)
     {
         String path = value.getPath().toString();
@@ -82,6 +116,7 @@ public class UIFilmUndoHandler extends UIFormUndoHandler
             path.contains("/keyframes/item_legs") ||
             path.contains("/keyframes/item_feet") ||
             path.endsWith("/actor") ||
+            path.endsWith("/fp") ||
             path.endsWith("/enabled") ||
             path.endsWith("/form")
         ) {

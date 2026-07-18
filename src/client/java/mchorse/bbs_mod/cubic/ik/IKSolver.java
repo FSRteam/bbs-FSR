@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.cubic.ik;
 
 import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -39,6 +40,156 @@ final class IKSolver
     static final float BEND_HYSTERESIS_RAD = (float) Math.toRadians(20F);
     private static final float STRAIGHT_RESTORE_COS = (float) Math.cos(STRAIGHT_RESTORE_RAD);
 
+    /** Per-owner/chain scratch arena; grows only while warming a larger chain. */
+    static final class Workspace
+    {
+        private Vector3f[] vectors = vectors(48);
+        private Quaternionf[] quaternions = quaternions(24);
+        private Matrix3f[] matrices = matrices(12);
+        private float[] lengths = new float[0];
+        private Quaternionf[] parentFrames = new Quaternionf[0];
+        private int vectorCursor;
+        private int quaternionCursor;
+        private int matrixCursor;
+
+        void reset()
+        {
+            this.vectorCursor = 0;
+            this.quaternionCursor = 0;
+            this.matrixCursor = 0;
+        }
+
+        Vector3f vector()
+        {
+            if (this.vectorCursor >= this.vectors.length)
+            {
+                this.vectors = growVectors(this.vectors);
+            }
+
+            return this.vectors[this.vectorCursor++].zero();
+        }
+
+        Quaternionf quaternion()
+        {
+            if (this.quaternionCursor >= this.quaternions.length)
+            {
+                this.quaternions = growQuaternions(this.quaternions);
+            }
+
+            return this.quaternions[this.quaternionCursor++].identity();
+        }
+
+        Matrix3f matrix()
+        {
+            if (this.matrixCursor >= this.matrices.length)
+            {
+                this.matrices = growMatrices(this.matrices);
+            }
+
+            return this.matrices[this.matrixCursor++].identity();
+        }
+
+        int vectorMark()
+        {
+            return this.vectorCursor;
+        }
+
+        int quaternionMark()
+        {
+            return this.quaternionCursor;
+        }
+
+        int matrixMark()
+        {
+            return this.matrixCursor;
+        }
+
+        void rewind(int vectors, int quaternions, int matrices)
+        {
+            this.vectorCursor = vectors;
+            this.quaternionCursor = quaternions;
+            this.matrixCursor = matrices;
+        }
+
+        float[] lengths(int count)
+        {
+            if (this.lengths.length < count)
+            {
+                this.lengths = new float[count];
+            }
+
+            return this.lengths;
+        }
+
+        Quaternionf[] parentFrames(int count)
+        {
+            if (this.parentFrames.length < count)
+            {
+                Quaternionf[] next = new Quaternionf[count];
+
+                for (int i = 0; i < count; i++)
+                {
+                    next[i] = i < this.parentFrames.length ? this.parentFrames[i] : new Quaternionf();
+                }
+
+                this.parentFrames = next;
+            }
+
+            return this.parentFrames;
+        }
+
+        private static Vector3f[] vectors(int count)
+        {
+            Vector3f[] out = new Vector3f[count];
+
+            for (int i = 0; i < count; i++) out[i] = new Vector3f();
+
+            return out;
+        }
+
+        private static Quaternionf[] quaternions(int count)
+        {
+            Quaternionf[] out = new Quaternionf[count];
+
+            for (int i = 0; i < count; i++) out[i] = new Quaternionf();
+
+            return out;
+        }
+
+        private static Matrix3f[] matrices(int count)
+        {
+            Matrix3f[] out = new Matrix3f[count];
+
+            for (int i = 0; i < count; i++) out[i] = new Matrix3f();
+
+            return out;
+        }
+
+        private static Vector3f[] growVectors(Vector3f[] current)
+        {
+            Vector3f[] out = vectors(current.length * 2);
+            System.arraycopy(current, 0, out, 0, current.length);
+
+            return out;
+        }
+
+        private static Quaternionf[] growQuaternions(Quaternionf[] current)
+        {
+            Quaternionf[] out = quaternions(current.length * 2);
+            System.arraycopy(current, 0, out, 0, current.length);
+
+            return out;
+        }
+
+        private static Matrix3f[] growMatrices(Matrix3f[] current)
+        {
+            Matrix3f[] out = matrices(current.length * 2);
+            System.arraycopy(current, 0, out, 0, current.length);
+
+            return out;
+        }
+    }
+
     private IKSolver()
     {
     }
@@ -54,7 +205,7 @@ final class IKSolver
 
     public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance)
     {
-        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, null, null, null, false, null);
+        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, null, null, null, false, null, new Workspace());
     }
 
     /**
@@ -67,6 +218,13 @@ final class IKSolver
      */
     public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Vector3f bendHint, boolean preferBendHint, Vector3f outBendNormal)
     {
+        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, limits, rootParentRotation, bendHint, preferBendHint, outBendNormal, new Workspace());
+    }
+
+    static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Vector3f bendHint, boolean preferBendHint, Vector3f outBendNormal, Workspace workspace)
+    {
+        Workspace scratch = workspace == null ? new Workspace() : workspace;
+        scratch.reset();
         int n = positions.size();
 
         if (n < 2)
@@ -86,8 +244,8 @@ final class IKSolver
             return positions;
         }
 
-        Vector3f root = new Vector3f(positions.get(0));
-        Vector3f goal = clampReach(root, target, total, softness);
+        Vector3f root = scratch.vector().set(positions.get(0));
+        Vector3f goal = clampReach(root, target, total, softness, scratch);
 
         /* Bend direction. A two-bone limb follows the live posed bend when it is
          * actually bent, else falls back to the chain's authored REST bend (knee
@@ -103,7 +261,7 @@ final class IKSolver
              * a stable side axis — so the bend plane always exists (poleAngle has a
              * reference to roll from) and the bend never lands on an arbitrary side
              * when the model and pose are both straight. */
-            hinge = preferBendHint && bendHint != null ? bendHint : liveBendNormal(positions);
+            hinge = preferBendHint && bendHint != null ? bendHint : liveBendNormal(positions, scratch);
 
             if (hinge == null)
             {
@@ -112,16 +270,16 @@ final class IKSolver
 
             if (hinge == null)
             {
-                Vector3f limb = new Vector3f(positions.get(2)).sub(positions.get(0));
-                hinge = normalize(limb) ? sideAxis(limb) : null;
+                Vector3f limb = scratch.vector().set(positions.get(2)).sub(positions.get(0));
+                hinge = normalize(limb) ? sideAxis(limb, scratch) : null;
             }
         }
         else
         {
-            hinge = applyPole ? captureHingeAxis(positions) : null;
+            hinge = applyPole ? captureHingeAxis(positions, scratch) : null;
         }
 
-        boolean constrained = limits != null && rootParentRotation != null;
+        boolean constrained = rootParentRotation != null && hasEnabledLimit(limits, n - 1);
 
         /* The solve is POSITION-level: it places the joints (the pole aims the elbow).
          * The bend plane it produces — its normal — is what rolls the chain: the cubic
@@ -134,12 +292,12 @@ final class IKSolver
             /* Analytic is ideal for a two-bone limb — full reach, no flip, clean
              * pole control. The pole defines the hinge; limits ride on top as
              * range clamps (e.g. stop the elbow hyperextending). */
-            solveTwoBone(positions, root, goal, softness <= EPS);
-            bendNormal = orientBend(positions, hinge, polePoint, poleAngle);
+            solveTwoBone(positions, root, goal, softness <= EPS, scratch);
+            bendNormal = orientBend(positions, hinge, polePoint, poleAngle, scratch);
 
             if (constrained)
             {
-                solveBendForLimits(positions, limits, rootParentRotation);
+                solveBendForLimits(positions, limits, rootParentRotation, scratch);
             }
         }
         else if (constrained)
@@ -147,8 +305,8 @@ final class IKSolver
             /* Longer chain: angle-space CCD keeps each joint in its DOF, then the
              * pole re-aims the bend about root->tip — that preserves every joint's
              * local rotation, so it can't break the limits. */
-            solveCCD(positions, root, goal, maxIterations, tolerance, limits, rootParentRotation);
-            bendNormal = orientBend(positions, hinge, polePoint, poleAngle);
+            solveCCD(positions, root, goal, maxIterations, tolerance, limits, rootParentRotation, scratch);
+            bendNormal = orientBend(positions, hinge, polePoint, poleAngle, scratch);
         }
         else
         {
@@ -158,8 +316,8 @@ final class IKSolver
              * path taken, so a moving target makes the chain spring frame to
              * frame. FABRIK distributes the bend evenly and lands on the same
              * shape for the same input — a rope drapes instead of coiling. */
-            solveFabrik(positions, root, goal, maxIterations, tolerance);
-            bendNormal = orientBend(positions, hinge, polePoint, poleAngle);
+            solveFabrik(positions, root, goal, maxIterations, tolerance, scratch);
+            bendNormal = orientBend(positions, hinge, polePoint, poleAngle, scratch);
         }
 
         if (outBendNormal != null && bendNormal != null)
@@ -168,6 +326,26 @@ final class IKSolver
         }
 
         return positions;
+    }
+
+    private static boolean hasEnabledLimit(Limit[] limits, int directedBones)
+    {
+        if (limits == null)
+        {
+            return false;
+        }
+
+        int count = Math.min(directedBones, limits.length);
+
+        for (int i = 0; i < count; i++)
+        {
+            if (limits[i] != null && limits[i].enabled())
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -180,9 +358,9 @@ final class IKSolver
      * just approaches that cap smoothly instead of snapping. With softness 0 it is a
      * hard clamp at {@code total * REACH_LIMIT}.
      */
-    private static Vector3f clampReach(Vector3f root, Vector3f target, float total, float softness)
+    private static Vector3f clampReach(Vector3f root, Vector3f target, float total, float softness, Workspace workspace)
     {
-        Vector3f goal = new Vector3f(target);
+        Vector3f goal = workspace.vector().set(target);
         float dist = root.distance(target);
 
         if (dist < EPS)
@@ -190,7 +368,7 @@ final class IKSolver
             return goal;
         }
 
-        Vector3f dir = new Vector3f(target).sub(root).div(dist);
+        Vector3f dir = workspace.vector().set(target).sub(root).div(dist);
         float effective = effectiveReachDistance(dist, total, softness);
 
         if (Float.compare(effective, dist) != 0)
@@ -227,11 +405,11 @@ final class IKSolver
         return Math.min(distance, limit);
     }
 
-    private static void solveTwoBone(List<Vector3f> p, Vector3f root, Vector3f goal, boolean restoreStraight)
+    private static void solveTwoBone(List<Vector3f> p, Vector3f root, Vector3f goal, boolean restoreStraight, Workspace workspace)
     {
         float l1 = root.distance(p.get(1));
         float l2 = p.get(1).distance(p.get(2));
-        Vector3f dir = new Vector3f(goal).sub(root);
+        Vector3f dir = workspace.vector().set(goal).sub(root);
         float dist = dir.length();
 
         if (dist < EPS || l1 < EPS || l2 < EPS)
@@ -261,12 +439,12 @@ final class IKSolver
         float sinA = (float) Math.sqrt(Math.max(0F, 1F - cosA * cosA));
 
         /* Seed the bend on any valid plane; orientBend fixes the direction. */
-        Vector3f bend = perpendicular(root, p.get(1), goal);
+        Vector3f bend = perpendicular(root, p.get(1), goal, workspace);
 
         if (bend == null)
         {
-            bend = new Vector3f();
-            anyPerpendicular(dir, bend);
+            bend = workspace.vector();
+            anyPerpendicular(dir, bend, workspace);
         }
 
         p.get(1).set(root).fma(l1 * cosA, dir).fma(l1 * sinA, bend);
@@ -279,18 +457,18 @@ final class IKSolver
      * re-roots it, each preserving bone lengths. Converges in a few passes and
      * spreads the bend evenly along the chain.
      */
-    private static void solveFabrik(List<Vector3f> p, Vector3f root, Vector3f goal, int maxIterations, float tolerance)
+    private static void solveFabrik(List<Vector3f> p, Vector3f root, Vector3f goal, int maxIterations, float tolerance, Workspace workspace)
     {
         int n = p.size();
         float tolSq = tolerance * tolerance;
-        float[] lengths = new float[n - 1];
+        float[] lengths = workspace.lengths(n - 1);
 
         for (int i = 0; i < n - 1; i++)
         {
             lengths[i] = p.get(i).distance(p.get(i + 1));
         }
 
-        Vector3f dir = new Vector3f();
+        Vector3f dir = workspace.vector();
 
         for (int iter = 0; iter < maxIterations; iter++)
         {
@@ -339,14 +517,19 @@ final class IKSolver
      * so a hinge only ever moves on its free axis and the free joints naturally
      * orient the chain to reach — instead of a post-clamp fighting the solve.
      */
-    private static void solveCCD(List<Vector3f> p, Vector3f root, Vector3f goal, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation)
+    private static void solveCCD(List<Vector3f> p, Vector3f root, Vector3f goal, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Workspace workspace)
     {
         int n = p.size();
         float tolSq = tolerance * tolerance;
-        Quaternionf[] parentWorld = limits == null ? null : new Quaternionf[n];
+        Quaternionf[] parentWorld = limits == null ? null : workspace.parentFrames(n);
+        int vectorMark = workspace.vectorMark();
+        int quaternionMark = workspace.quaternionMark();
+        int matrixMark = workspace.matrixMark();
 
         for (int iter = 0; iter < maxIterations; iter++)
         {
+            workspace.rewind(vectorMark, quaternionMark, matrixMark);
+
             if (p.get(n - 1).distanceSquared(goal) <= tolSq)
             {
                 break;
@@ -354,12 +537,14 @@ final class IKSolver
 
             if (limits != null)
             {
-                computeParentFrames(p, limits, rootParentRotation, parentWorld);
+                computeParentFrames(p, limits, rootParentRotation, parentWorld, workspace);
             }
 
-            ccdSweep(p, goal, limits, parentWorld);
+            ccdSweep(p, goal, limits, parentWorld, workspace);
             p.get(0).set(root);
         }
+
+        workspace.rewind(vectorMark, quaternionMark, matrixMark);
     }
 
     /**
@@ -368,28 +553,41 @@ final class IKSolver
      * ancestors have not moved yet, so these frames stay valid when the joint is
      * reached — letting the per-joint limit be expressed in the correct local space.
      */
-    private static void computeParentFrames(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation, Quaternionf[] parentWorld)
+    private static void computeParentFrames(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation, Quaternionf[] parentWorld, Workspace workspace)
     {
         int n = p.size();
-        Vector3f dirWorld = new Vector3f();
-        Vector3f dirLocal = new Vector3f();
-        parentWorld[0] = new Quaternionf(rootParentRotation);
+        int startVectorMark = workspace.vectorMark();
+        int startQuaternionMark = workspace.quaternionMark();
+        int startMatrixMark = workspace.matrixMark();
+        Vector3f dirWorld = workspace.vector();
+        Vector3f dirLocal = workspace.vector();
+        int vectorMark = workspace.vectorMark();
+        int quaternionMark = workspace.quaternionMark();
+        int matrixMark = workspace.matrixMark();
+        parentWorld[0].set(rootParentRotation);
 
         for (int i = 0; i < n - 1; i++)
         {
-            Quaternionf local = localRotation(p, i, limits[i], parentWorld[i], dirWorld, dirLocal);
-            parentWorld[i + 1] = new Quaternionf(parentWorld[i]);
+            workspace.rewind(vectorMark, quaternionMark, matrixMark);
+            Quaternionf local = localRotation(p, i, limits[i], parentWorld[i], dirWorld, dirLocal, workspace);
+            parentWorld[i + 1].set(parentWorld[i]);
 
             if (local != null)
             {
-                Vector3f euler = Matrices.toEulerZYXDegrees(local);
-                parentWorld[i + 1].mul(Matrices.toQuaternionZYXDegrees(euler.x, euler.y, euler.z));
+                Vector3f euler = Matrices.toEulerZYXDegrees(local, workspace.vector(), workspace.quaternion());
+                parentWorld[i + 1].mul(workspace.quaternion().rotationZYX(
+                    (float) Math.toRadians(euler.z),
+                    (float) Math.toRadians(euler.y),
+                    (float) Math.toRadians(euler.x)
+                ));
             }
         }
+
+        workspace.rewind(startVectorMark, startQuaternionMark, startMatrixMark);
     }
 
     /** Reconstructs joint {@code i}'s local rotation (relative to rest) from its current world direction, the renderer's way. */
-    private static Quaternionf localRotation(List<Vector3f> p, int i, Limit lim, Quaternionf parentWorld, Vector3f dirWorld, Vector3f dirLocal)
+    private static Quaternionf localRotation(List<Vector3f> p, int i, Limit lim, Quaternionf parentWorld, Vector3f dirWorld, Vector3f dirLocal, Workspace workspace)
     {
         if (lim == null || lim.restDir() == null)
         {
@@ -404,27 +602,42 @@ final class IKSolver
         }
 
         dirLocal.set(dirWorld);
-        new Quaternionf(parentWorld).conjugate().transform(dirLocal);
+        workspace.quaternion().set(parentWorld).conjugate().transform(dirLocal);
 
         if (!normalize(dirLocal))
         {
             return null;
         }
 
-        return Matrices.fromToMirroredX(lim.restDir(), dirLocal);
+        return Matrices.fromToMirroredX(
+            lim.restDir(),
+            dirLocal,
+            workspace.quaternion(),
+            workspace.quaternion(),
+            workspace.matrix(),
+            workspace.vector(),
+            workspace.vector()
+        );
     }
 
-    private static void ccdSweep(List<Vector3f> p, Vector3f goal, Limit[] limits, Quaternionf[] parentWorld)
+    private static void ccdSweep(List<Vector3f> p, Vector3f goal, Limit[] limits, Quaternionf[] parentWorld, Workspace workspace)
     {
         int n = p.size();
-        Vector3f toEff = new Vector3f();
-        Vector3f toGoal = new Vector3f();
-        Vector3f dirWorld = new Vector3f();
-        Vector3f dirLocal = new Vector3f();
-        Vector3f rel = new Vector3f();
+        int startVectorMark = workspace.vectorMark();
+        int startQuaternionMark = workspace.quaternionMark();
+        int startMatrixMark = workspace.matrixMark();
+        Vector3f toEff = workspace.vector();
+        Vector3f toGoal = workspace.vector();
+        Vector3f dirWorld = workspace.vector();
+        Vector3f dirLocal = workspace.vector();
+        Vector3f rel = workspace.vector();
+        int vectorMark = workspace.vectorMark();
+        int quaternionMark = workspace.quaternionMark();
+        int matrixMark = workspace.matrixMark();
 
         for (int j = n - 2; j >= 0; j--)
         {
+            workspace.rewind(vectorMark, quaternionMark, matrixMark);
             Vector3f pj = p.get(j);
 
             toEff.set(p.get(n - 1)).sub(pj);
@@ -435,13 +648,13 @@ final class IKSolver
                 continue;
             }
 
-            Quaternionf free = new Quaternionf().rotationTo(toEff, toGoal);
+            Quaternionf free = workspace.quaternion().rotationTo(toEff, toGoal);
             Quaternionf q = free;
             Limit lim = limits == null ? null : limits[j];
 
             if (lim != null && lim.enabled())
             {
-                q = restrictToLimit(p, j, lim, parentWorld[j], free, dirWorld, dirLocal);
+                q = restrictToLimit(p, j, lim, parentWorld[j], free, dirWorld, dirLocal, workspace);
             }
 
             if (q == null)
@@ -456,6 +669,8 @@ final class IKSolver
                 p.get(k).set(pj).add(rel);
             }
         }
+
+        workspace.rewind(startVectorMark, startQuaternionMark, startMatrixMark);
     }
 
     /**
@@ -465,26 +680,26 @@ final class IKSolver
      * its current to that clamped orientation (to apply to the downstream chain).
      * A hinge (two axes locked to 0) thus only ever rotates on its free axis.
      */
-    private static Quaternionf restrictToLimit(List<Vector3f> p, int j, Limit lim, Quaternionf parentWorld, Quaternionf free, Vector3f dirWorld, Vector3f dirLocal)
+    private static Quaternionf restrictToLimit(List<Vector3f> p, int j, Limit lim, Quaternionf parentWorld, Quaternionf free, Vector3f dirWorld, Vector3f dirLocal, Workspace workspace)
     {
-        Quaternionf curLocal = localRotation(p, j, lim, parentWorld, dirWorld, dirLocal);
+        Quaternionf curLocal = localRotation(p, j, lim, parentWorld, dirWorld, dirLocal, workspace);
 
         if (curLocal == null)
         {
             return free;
         }
 
-        Quaternionf invParent = new Quaternionf(parentWorld).conjugate();
-        Quaternionf candLocal = new Quaternionf(invParent).mul(free).mul(parentWorld).mul(curLocal);
-        Vector3f euler = Matrices.toEulerZYXDegrees(candLocal);
+        Quaternionf invParent = workspace.quaternion().set(parentWorld).conjugate();
+        Quaternionf candLocal = workspace.quaternion().set(invParent).mul(free).mul(parentWorld).mul(curLocal);
+        Vector3f euler = Matrices.toEulerZYXDegrees(candLocal, workspace.vector(), workspace.quaternion());
 
         float cx = clamp(euler.x, lim.minX(), lim.maxX());
         float cy = clamp(euler.y, lim.minY(), lim.maxY());
         float cz = clamp(euler.z, lim.minZ(), lim.maxZ());
 
-        Quaternionf clampedLocal = Matrices.toQuaternionZYXDegrees(cx, cy, cz);
-        Quaternionf curBoneWorld = new Quaternionf(parentWorld).mul(curLocal);
-        Quaternionf clampedBoneWorld = new Quaternionf(parentWorld).mul(clampedLocal);
+        Quaternionf clampedLocal = workspace.quaternion().rotationZYX((float) Math.toRadians(cz), (float) Math.toRadians(cy), (float) Math.toRadians(cx));
+        Quaternionf curBoneWorld = workspace.quaternion().set(parentWorld).mul(curLocal);
+        Quaternionf clampedBoneWorld = workspace.quaternion().set(parentWorld).mul(clampedLocal);
 
         return clampedBoneWorld.mul(curBoneWorld.conjugate());
     }
@@ -507,7 +722,7 @@ final class IKSolver
      * nudges the bend when it is actually exceeded, otherwise the pose/pole bend is
      * kept (the cost tie-breaks toward no change). Reach is preserved either way.
      */
-    private static void solveBendForLimits(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation)
+    private static void solveBendForLimits(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation, Workspace workspace)
     {
         int n = p.size();
 
@@ -516,8 +731,8 @@ final class IKSolver
             return;
         }
 
-        Vector3f root = new Vector3f(p.get(0));
-        Vector3f axis = new Vector3f(p.get(n - 1)).sub(root);
+        Vector3f root = workspace.vector().set(p.get(0));
+        Vector3f axis = workspace.vector().set(p.get(n - 1)).sub(root);
 
         if (!normalize(axis))
         {
@@ -525,7 +740,7 @@ final class IKSolver
         }
 
         float bestPhi = 0F;
-        float bestCost = bendCost(p, limits, rootParentRotation, root, axis, 0F);
+        float bestCost = bendCost(p, limits, rootParentRotation, root, axis, 0F, workspace);
 
         if (bestCost > EPS)
         {
@@ -545,7 +760,7 @@ final class IKSolver
                 }
 
                 float phi = window * s / half;
-                float cost = bendCost(p, limits, rootParentRotation, root, axis, phi);
+                float cost = bendCost(p, limits, rootParentRotation, root, axis, phi, workspace);
 
                 if (cost < bestCost)
                 {
@@ -567,7 +782,7 @@ final class IKSolver
                     continue;
                 }
 
-                float cost = bendCost(p, limits, rootParentRotation, root, axis, phi);
+                float cost = bendCost(p, limits, rootParentRotation, root, axis, phi, workspace);
 
                 if (cost < bestCost)
                 {
@@ -579,8 +794,8 @@ final class IKSolver
 
         if (Math.abs(bestPhi) > EPS)
         {
-            Quaternionf q = new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, bestPhi);
-            Vector3f rel = new Vector3f();
+            Quaternionf q = workspace.quaternion().fromAxisAngleRad(axis.x, axis.y, axis.z, bestPhi);
+            Vector3f rel = workspace.vector();
 
             for (int i = 1; i < n - 1; i++)
             {
@@ -592,26 +807,38 @@ final class IKSolver
     }
 
     /** Limit violation (degrees) at bend angle {@code phi}, plus a tiny penalty for moving (keeps the pole bend when limits already hold). */
-    private static float bendCost(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation, Vector3f root, Vector3f axis, float phi)
+    private static float bendCost(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation, Vector3f root, Vector3f axis, float phi, Workspace workspace)
     {
-        return bendViolation(p, limits, rootParentRotation, root, axis, phi) + 0.01F * Math.abs((float) Math.toDegrees(phi));
+        int vectorMark = workspace.vectorMark();
+        int quaternionMark = workspace.quaternionMark();
+        int matrixMark = workspace.matrixMark();
+        float cost = bendViolation(p, limits, rootParentRotation, root, axis, phi, workspace)
+            + 0.01F * Math.abs((float) Math.toDegrees(phi));
+
+        workspace.rewind(vectorMark, quaternionMark, matrixMark);
+
+        return cost;
     }
 
     /** Sum of how far each constrained joint's euler is outside its limits, if the bend were rotated by {@code phi} about {@code axis}. */
-    private static float bendViolation(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation, Vector3f root, Vector3f axis, float phi)
+    private static float bendViolation(List<Vector3f> p, Limit[] limits, Quaternionf rootParentRotation, Vector3f root, Vector3f axis, float phi, Workspace workspace)
     {
         int n = p.size();
-        Quaternionf q = new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, phi);
-        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
-        Vector3f a = new Vector3f();
-        Vector3f b = new Vector3f();
-        Vector3f dirWorld = new Vector3f();
-        Vector3f dirLocal = new Vector3f();
-        Vector3f rel = new Vector3f();
+        Quaternionf q = workspace.quaternion().fromAxisAngleRad(axis.x, axis.y, axis.z, phi);
+        Quaternionf parentWorld = workspace.quaternion().set(rootParentRotation);
+        Vector3f a = workspace.vector();
+        Vector3f b = workspace.vector();
+        Vector3f dirWorld = workspace.vector();
+        Vector3f dirLocal = workspace.vector();
+        Vector3f rel = workspace.vector();
+        int vectorMark = workspace.vectorMark();
+        int quaternionMark = workspace.quaternionMark();
+        int matrixMark = workspace.matrixMark();
         float violation = 0F;
 
         for (int i = 0; i < n - 1; i++)
         {
+            workspace.rewind(vectorMark, quaternionMark, matrixMark);
             Limit lim = i < limits.length ? limits[i] : null;
 
             if (lim == null || lim.restDir() == null)
@@ -629,14 +856,23 @@ final class IKSolver
             }
 
             dirLocal.set(dirWorld);
-            new Quaternionf(parentWorld).conjugate().transform(dirLocal);
+            workspace.quaternion().set(parentWorld).conjugate().transform(dirLocal);
 
             if (!normalize(dirLocal))
             {
                 continue;
             }
 
-            Vector3f euler = Matrices.toEulerZYXDegrees(Matrices.fromToMirroredX(lim.restDir(), dirLocal));
+            Quaternionf local = Matrices.fromToMirroredX(
+                lim.restDir(),
+                dirLocal,
+                workspace.quaternion(),
+                workspace.quaternion(),
+                workspace.matrix(),
+                workspace.vector(),
+                workspace.vector()
+            );
+            Vector3f euler = Matrices.toEulerZYXDegrees(local, workspace.vector(), workspace.quaternion());
 
             if (lim.enabled())
             {
@@ -645,7 +881,11 @@ final class IKSolver
                 violation += overflow(euler.z, lim.minZ(), lim.maxZ());
             }
 
-            parentWorld.mul(Matrices.toQuaternionZYXDegrees(euler.x, euler.y, euler.z));
+            parentWorld.mul(workspace.quaternion().rotationZYX(
+                (float) Math.toRadians(euler.z),
+                (float) Math.toRadians(euler.y),
+                (float) Math.toRadians(euler.x)
+            ));
         }
 
         return violation;
@@ -693,7 +933,7 @@ final class IKSolver
      * that aimed bend about the limb axis — Blender's pole angle, an offset baked into
      * the elbow position, so it is stable (no twist singularity).
      */
-    private static Vector3f orientBend(List<Vector3f> p, Vector3f hinge, Vector3f polePoint, float poleAngle)
+    private static Vector3f orientBend(List<Vector3f> p, Vector3f hinge, Vector3f polePoint, float poleAngle, Workspace workspace)
     {
         int n = p.size();
 
@@ -703,14 +943,14 @@ final class IKSolver
         }
 
         Vector3f root = p.get(0);
-        Vector3f axis = new Vector3f(p.get(n - 1)).sub(root);
+        Vector3f axis = workspace.vector().set(p.get(n - 1)).sub(root);
 
         if (!normalize(axis))
         {
             return null;
         }
 
-        Vector3f desired = new Vector3f();
+        Vector3f desired = workspace.vector();
 
         if (polePoint != null)
         {
@@ -746,40 +986,40 @@ final class IKSolver
          * signed angle stays valid. Applies to the pole and auto-hinge bends alike. */
         if (poleAngle != 0F)
         {
-            new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, poleAngle).transform(desired);
+            workspace.quaternion().fromAxisAngleRad(axis.x, axis.y, axis.z, poleAngle).transform(desired);
         }
 
-        orientBendTo(p, root, axis, desired);
+        orientBendTo(p, root, axis, desired, workspace);
 
         /* The bend-plane normal (world), sign-matched to {@code dir0 x dir1} — its
          * value is exactly {@code desired x axis}. Unlike the live cross product it
          * stays defined at full extension (desired comes from the stable pole/hinge,
          * not the vanishing elbow offset), so the orientation pass seeds its roll
          * reference with it and the twist stays continuous as the chain straightens. */
-        Vector3f normal = new Vector3f(desired).cross(axis);
+        Vector3f normal = workspace.vector().set(desired).cross(axis);
 
         return normalize(normal) ? normal : null;
     }
 
     /** Rotates the interior joints about the root-to-tip {@code axis} so the bend points at {@code desired} (already perpendicular to the axis). */
-    private static void orientBendTo(List<Vector3f> p, Vector3f root, Vector3f axis, Vector3f desired)
+    private static void orientBendTo(List<Vector3f> p, Vector3f root, Vector3f axis, Vector3f desired, Workspace workspace)
     {
-        Vector3f current = new Vector3f(p.get(1)).sub(root);
+        Vector3f current = workspace.vector().set(p.get(1)).sub(root);
 
         if (!project(current, axis))
         {
             return;
         }
 
-        float theta = signedAngle(current, desired, axis);
+        float theta = signedAngle(current, desired, axis, workspace);
 
         if (Math.abs(theta) < EPS)
         {
             return;
         }
 
-        Quaternionf q = new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, theta);
-        Vector3f rel = new Vector3f();
+        Quaternionf q = workspace.quaternion().fromAxisAngleRad(axis.x, axis.y, axis.z, theta);
+        Vector3f rel = workspace.vector();
 
         for (int i = 1; i < p.size() - 1; i++)
         {
@@ -797,9 +1037,9 @@ final class IKSolver
      * (or x worldUp), which is a fixed direction independent of the target, so
      * locking the bend to it never flips. Null only for a degenerate chain.
      */
-    private static Vector3f captureHingeAxis(List<Vector3f> p)
+    private static Vector3f captureHingeAxis(List<Vector3f> p, Workspace workspace)
     {
-        Vector3f normal = liveBendNormal(p);
+        Vector3f normal = liveBendNormal(p, workspace);
 
         if (normal != null)
         {
@@ -807,9 +1047,9 @@ final class IKSolver
         }
 
         /* Straight limb: derive a stable side axis from the limb direction. */
-        Vector3f limb = new Vector3f(p.get(p.size() - 1)).sub(p.get(0));
+        Vector3f limb = workspace.vector().set(p.get(p.size() - 1)).sub(p.get(0));
 
-        return normalize(limb) ? sideAxis(limb) : null;
+        return normalize(limb) ? sideAxis(limb, workspace) : null;
     }
 
     /**
@@ -818,7 +1058,7 @@ final class IKSolver
      * (no posed plane), letting the caller fall back to the authored rest bend or a
      * fixed side axis.
      */
-    private static Vector3f liveBendNormal(List<Vector3f> p)
+    private static Vector3f liveBendNormal(List<Vector3f> p, Workspace workspace)
     {
         if (p.size() < 3)
         {
@@ -826,7 +1066,7 @@ final class IKSolver
         }
 
         Vector3f a = p.get(0);
-        Vector3f normal = new Vector3f(p.get(1)).sub(a).cross(new Vector3f(p.get(2)).sub(a));
+        Vector3f normal = workspace.vector().set(p.get(1)).sub(a).cross(workspace.vector().set(p.get(2)).sub(a));
 
         return normalize(normal) ? normal : null;
     }
@@ -838,16 +1078,16 @@ final class IKSolver
      * breathes with the animation. Used as the straight-limb hinge fallback and as
      * the stable zero for the pole roll.
      */
-    private static Vector3f sideAxis(Vector3f axis)
+    private static Vector3f sideAxis(Vector3f axis, Workspace workspace)
     {
-        Vector3f side = new Vector3f(axis).cross(0F, 0F, 1F);
+        Vector3f side = workspace.vector().set(axis).cross(0F, 0F, 1F);
 
         if (normalize(side))
         {
             return side;
         }
 
-        side = new Vector3f(axis).cross(0F, 1F, 0F);
+        side.set(axis).cross(0F, 1F, 0F);
 
         return normalize(side) ? side : null;
     }
@@ -864,23 +1104,25 @@ final class IKSolver
         return value < min ? min : Math.min(value, max);
     }
 
-    private static Vector3f perpendicular(Vector3f a, Vector3f b, Vector3f c)
+    private static Vector3f perpendicular(Vector3f a, Vector3f b, Vector3f c, Workspace workspace)
     {
-        Vector3f axis = new Vector3f(c).sub(a);
+        Vector3f axis = workspace.vector().set(c).sub(a);
 
         if (!normalize(axis))
         {
             return null;
         }
 
-        Vector3f out = new Vector3f(b).sub(a);
+        Vector3f out = workspace.vector().set(b).sub(a);
 
         return project(out, axis) ? out : null;
     }
 
-    private static void anyPerpendicular(Vector3f axis, Vector3f out)
+    private static void anyPerpendicular(Vector3f axis, Vector3f out, Workspace workspace)
     {
-        Vector3f ref = Math.abs(axis.x) < 0.9F ? new Vector3f(1F, 0F, 0F) : new Vector3f(0F, 1F, 0F);
+        Vector3f ref = Math.abs(axis.x) < 0.9F
+            ? workspace.vector().set(1F, 0F, 0F)
+            : workspace.vector().set(0F, 1F, 0F);
 
         out.set(axis).cross(ref);
 
@@ -890,9 +1132,9 @@ final class IKSolver
         }
     }
 
-    private static float signedAngle(Vector3f from, Vector3f to, Vector3f axis)
+    private static float signedAngle(Vector3f from, Vector3f to, Vector3f axis, Workspace workspace)
     {
-        Vector3f cross = new Vector3f(from).cross(to);
+        Vector3f cross = workspace.vector().set(from).cross(to);
         float sin = axis.dot(cross);
         float cos = from.dot(to);
 

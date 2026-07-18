@@ -2,45 +2,97 @@ package mchorse.bbs_mod.cubic.render;
 
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig.BoneConstraint;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Applies weighted blending between current local bone rotations and solver output.
+ * Applies a procedural chain's solved directions as final local quaternions.
+ * The parent frame is advanced with the exact blended and constrained value
+ * assigned to the renderer, so descendants never decompose against a pose that
+ * is different from the one that will be drawn.
  */
 public final class ModelRotationBlender
 {
     private static final float EPS = 1.0e-6f;
 
+    /** Mutable math storage retained by the renderer/owner/chain runtime. */
+    public static final class Workspace
+    {
+        private final Quaternionf parentWorld = new Quaternionf();
+        private final Quaternionf inverseParent = new Quaternionf();
+        private final Quaternionf baseLocal = new Quaternionf();
+        private final Quaternionf secondaryLocal = new Quaternionf();
+        private final Quaternionf localRotation = new Quaternionf();
+        private final Quaternionf mirroredRotation = new Quaternionf();
+        private final Quaternionf twist = new Quaternionf();
+        private final Quaternionf eulerScratch = new Quaternionf();
+        private final Quaternionf relativeRotation = new Quaternionf();
+        private final Matrix3f mirroredMatrix = new Matrix3f();
+        private final Vector3f restDirection = new Vector3f();
+        private final Vector3f desiredWorld = new Vector3f();
+        private final Vector3f desiredLocal = new Vector3f();
+        private final Vector3f mirroredRest = new Vector3f();
+        private final Vector3f mirroredDesired = new Vector3f();
+        private final Vector3f eulerDegrees = new Vector3f();
+        private Quaternionf[] outputOrientations = new Quaternionf[0];
+
+        private void ensureCapacity(int count)
+        {
+            if (this.outputOrientations.length == count)
+            {
+                return;
+            }
+
+            this.outputOrientations = new Quaternionf[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                this.outputOrientations[i] = new Quaternionf();
+            }
+        }
+    }
+
     private ModelRotationBlender()
     {
     }
 
+    /** Compatibility overload for non-hot external callers. */
     public static void applyWeightedRotations(IModel model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions, float weight)
+    {
+        applyWeightedRotations(model, rootParentRotation, ids, positions, weight, null, new Workspace());
+    }
+
+    /**
+     * Hot-path entry. {@code workspace} must belong to the renderer's simulation
+     * owner and chain; it is never stored on the shared model resource.
+     */
+    public static void applyWeightedRotations(IModel model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions, float weight, Map<String, BoneConstraint> constraints, Workspace workspace)
     {
         float factor = clamp01(weight);
 
-        if (factor <= EPS)
+        if (factor <= EPS || model == null || rootParentRotation == null || ids == null || positions == null || ids.isEmpty() || positions.length < 2)
         {
             return;
         }
+
+        Workspace scratch = workspace == null ? new Workspace() : workspace;
 
         if (model instanceof Model cubic)
         {
-            applyWeightedRotationsCubic(cubic, rootParentRotation, ids, positions, factor);
-            return;
+            applyCubic(cubic, rootParentRotation, ids, positions, factor, constraints, scratch);
         }
-
-        if (model instanceof BOBJModel bobj)
+        else if (model instanceof BOBJModel bobj)
         {
-            applyWeightedRotationsBobj(bobj, rootParentRotation, ids, positions, factor);
+            applyBobj(bobj, rootParentRotation, ids, positions, factor, constraints, scratch);
         }
     }
 
@@ -49,19 +101,8 @@ public final class ModelRotationBlender
         applyWeightedRotations((IModel) model, rootParentRotation, ids, positions, weight);
     }
 
-    private static void applyWeightedRotationsCubic(Model model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions, float factor)
+    private static void applyCubic(Model model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions, float factor, Map<String, BoneConstraint> constraints, Workspace scratch)
     {
-        if (model == null || rootParentRotation == null || ids == null || positions == null || ids.isEmpty() || positions.length < 2)
-        {
-            return;
-        }
-
-        if (factor >= 1F - EPS)
-        {
-            CubicRenderer.applyRotations(model, rootParentRotation, ids, positions);
-            return;
-        }
-
         int rotCount = getRotationCount(ids, positions);
 
         if (rotCount <= 0)
@@ -69,59 +110,57 @@ public final class ModelRotationBlender
             return;
         }
 
-        ModelGroup[] bones = new ModelGroup[rotCount];
-        Quaternionf[] baseLocal = new Quaternionf[rotCount];
-        float[] baseX = new float[rotCount];
-        float[] baseY = new float[rotCount];
-        float[] baseZ = new float[rotCount];
+        scratch.ensureCapacity(rotCount);
+        Quaternionf parentWorld = scratch.parentWorld.set(rootParentRotation);
 
         for (int i = 0; i < rotCount; i++)
         {
             ModelGroup bone = model.getGroup(ids.get(i));
 
-            if (bone == null)
+            if (bone == null || !cubicRestDirection(model, ids, i, scratch.restDirection))
             {
                 return;
             }
 
-            bones[i] = bone;
-            baseX[i] = bone.current.rotate.x;
-            baseY[i] = bone.current.rotate.y;
-            baseZ[i] = bone.current.rotate.z;
-            baseLocal[i] = toLocalRotation(bone.current.rotate, bone.current.rotate2);
-        }
+            Vector3f desiredWorld = scratch.desiredWorld.set(positions[i + 1]).sub(positions[i]);
 
-        CubicRenderer.applyRotations(model, rootParentRotation, ids, positions);
+            if (!normalize(desiredWorld))
+            {
+                continue;
+            }
 
-        for (int i = 0; i < rotCount; i++)
-        {
-            ModelGroup bone = bones[i];
-            Quaternionf solved = toLocalRotation(bone.current.rotate, bone.current.rotate2);
-            Quaternionf blended = new Quaternionf(baseLocal[i]).slerp(solved, factor);
-            Vector3f euler = Matrices.toEulerZYXDegrees(blended);
+            Vector3f desiredLocal = scratch.desiredLocal.set(desiredWorld);
+            scratch.inverseParent.set(parentWorld).invert().transform(desiredLocal);
 
-            euler.x = wrapDegreesNear(euler.x, baseX[i]);
-            euler.y = wrapDegreesNear(euler.y, baseY[i]);
-            euler.z = wrapDegreesNear(euler.z, baseZ[i]);
+            if (!normalize(desiredLocal))
+            {
+                continue;
+            }
 
-            bone.current.rotate.set(euler);
-            bone.current.rotate2.set(0F, 0F, 0F);
+            Quaternionf base = cubicLocal(bone, scratch.baseLocal, scratch.secondaryLocal);
+            Quaternionf solved = Matrices.fromToMirroredX(
+                scratch.restDirection,
+                desiredLocal,
+                scratch.localRotation,
+                scratch.mirroredRotation,
+                scratch.mirroredMatrix,
+                scratch.mirroredRest,
+                scratch.mirroredDesired
+            );
+
+            solved.mul(Matrices.twistAbout(base, scratch.restDirection, scratch.twist));
+
+            Quaternionf applied = scratch.outputOrientations[i];
+            blend(applied, base, solved, factor);
+            clampFinalOrientation(applied, constraint(constraints, bone.id), scratch);
+
+            bone.orient = applied;
+            parentWorld.mul(applied);
         }
     }
 
-    private static void applyWeightedRotationsBobj(BOBJModel model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions, float factor)
+    private static void applyBobj(BOBJModel model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions, float factor, Map<String, BoneConstraint> constraints, Workspace scratch)
     {
-        if (model == null || rootParentRotation == null || ids == null || positions == null || ids.isEmpty() || positions.length < 2)
-        {
-            return;
-        }
-
-        if (factor >= 1F - EPS)
-        {
-            applyRotationsBobj(model, rootParentRotation, ids, positions);
-            return;
-        }
-
         int rotCount = getRotationCount(ids, positions);
 
         if (rotCount <= 0)
@@ -129,127 +168,210 @@ public final class ModelRotationBlender
             return;
         }
 
-        Map<String, BOBJBone> bonesMap = model.getArmature().bones;
-        BOBJBone[] bones = new BOBJBone[rotCount];
-        Quaternionf[] baseLocal = new Quaternionf[rotCount];
-        float[] baseX = new float[rotCount];
-        float[] baseY = new float[rotCount];
-        float[] baseZ = new float[rotCount];
-
-        for (int i = 0; i < rotCount; i++)
-        {
-            BOBJBone bone = bonesMap.get(ids.get(i));
-
-            if (bone == null)
-            {
-                return;
-            }
-
-            bones[i] = bone;
-            baseX[i] = bone.transform.rotate.x;
-            baseY[i] = bone.transform.rotate.y;
-            baseZ[i] = bone.transform.rotate.z;
-            baseLocal[i] = toLocalRotationRadians(bone.transform.rotate, bone.transform.rotate2);
-        }
-
-        applyRotationsBobj(model, rootParentRotation, ids, positions);
-
-        for (int i = 0; i < rotCount; i++)
-        {
-            BOBJBone bone = bones[i];
-            Quaternionf solved = toLocalRotationRadians(bone.transform.rotate, bone.transform.rotate2);
-            Quaternionf blended = new Quaternionf(baseLocal[i]).slerp(solved, factor);
-            Vector3f euler = new Quaternionf(blended).normalize().getEulerAnglesZYX(new Vector3f());
-
-            euler.x = wrapRadiansNear(euler.x, baseX[i]);
-            euler.y = wrapRadiansNear(euler.y, baseY[i]);
-            euler.z = wrapRadiansNear(euler.z, baseZ[i]);
-
-            bone.transform.rotate.set(euler);
-            bone.transform.rotate2.set(0F, 0F, 0F);
-            bone.orient = null;
-        }
-    }
-
-    private static void applyRotationsBobj(BOBJModel model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions)
-    {
-        if (model == null || rootParentRotation == null || ids == null || positions == null || ids.isEmpty() || positions.length < 2)
-        {
-            return;
-        }
-
+        scratch.ensureCapacity(rotCount);
+        Quaternionf parentWorld = scratch.parentWorld.set(rootParentRotation);
         Map<String, BOBJBone> bones = model.getArmature().bones;
-        Quaternionf parentWorld = new Quaternionf(rootParentRotation);
-        int boneCount = ids.size();
-        int rotCount = getRotationCount(ids, positions);
 
         for (int i = 0; i < rotCount; i++)
         {
             BOBJBone bone = bones.get(ids.get(i));
-            BOBJBone child = i + 1 < boneCount ? bones.get(ids.get(i + 1)) : null;
 
-            if (bone == null)
+            if (bone == null
+                || !getBobjRestDirection(model, bone, i + 1 < ids.size() ? bones.get(ids.get(i + 1)) : null, ids, i, scratch.restDirection)
+                || !normalize(scratch.restDirection))
             {
                 return;
             }
 
-            Vector3f restDirLocal = getBobjRestDirection(model, bone, child, ids, i);
-            Vector3f desiredDirWorld = new Vector3f(positions[i + 1]).sub(positions[i]);
+            Vector3f desiredWorld = scratch.desiredWorld.set(positions[i + 1]).sub(positions[i]);
 
-            if (restDirLocal.lengthSquared() < EPS * EPS || desiredDirWorld.lengthSquared() < EPS * EPS)
+            if (!normalize(desiredWorld))
             {
                 continue;
             }
 
-            restDirLocal.normalize();
-            desiredDirWorld.normalize();
+            Vector3f desiredLocal = scratch.desiredLocal.set(desiredWorld);
+            scratch.inverseParent.set(parentWorld).invert().transform(desiredLocal);
 
-            Quaternionf invParent = new Quaternionf(parentWorld).invert();
-            Vector3f desiredDirLocal = new Vector3f(desiredDirWorld);
-            invParent.transform(desiredDirLocal);
-
-            if (desiredDirLocal.lengthSquared() < EPS * EPS)
+            if (!normalize(desiredLocal))
             {
                 continue;
             }
 
-            desiredDirLocal.normalize();
+            Quaternionf base = bobjLocal(bone, scratch.baseLocal, scratch.secondaryLocal);
+            Quaternionf solved = Matrices.fromToMirroredX(
+                scratch.restDirection,
+                desiredLocal,
+                scratch.localRotation,
+                scratch.mirroredRotation,
+                scratch.mirroredMatrix,
+                scratch.mirroredRest,
+                scratch.mirroredDesired
+            );
 
-            Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
-            localRot.mul(Matrices.twistAbout(toLocalRotationRadians(bone.transform.rotate, bone.transform.rotate2), restDirLocal));
-            Vector3f eulerRad = new Quaternionf(localRot).normalize().getEulerAnglesZYX(new Vector3f());
+            solved.mul(Matrices.twistAbout(base, scratch.restDirection, scratch.twist));
 
-            eulerRad.x = wrapRadiansNear(eulerRad.x, bone.transform.rotate.x);
-            eulerRad.y = wrapRadiansNear(eulerRad.y, bone.transform.rotate.y);
-            eulerRad.z = wrapRadiansNear(eulerRad.z, bone.transform.rotate.z);
+            Quaternionf applied = scratch.outputOrientations[i];
+            blend(applied, base, solved, factor);
+            clampFinalOrientation(applied, constraint(constraints, bone.name), scratch);
 
-            bone.transform.rotate.set(eulerRad);
-            bone.transform.rotate2.set(0F, 0F, 0F);
-            bone.orient = null;
+            bone.orient = applied;
 
-            parentWorld.mul(new Quaternionf().rotationZYX(eulerRad.z, eulerRad.y, eulerRad.x));
+            if (i + 1 < rotCount)
+            {
+                BOBJBone next = bones.get(ids.get(i + 1));
+
+                if (next == null)
+                {
+                    return;
+                }
+
+                next.relBoneMat.getNormalizedRotation(scratch.relativeRotation);
+                parentWorld.mul(applied).mul(scratch.relativeRotation);
+            }
         }
+    }
+
+    private static Quaternionf cubicLocal(ModelGroup bone, Quaternionf out, Quaternionf secondary)
+    {
+        if (bone.orient != null)
+        {
+            return out.set(bone.orient);
+        }
+
+        out.rotationZYX(
+            (float) Math.toRadians(bone.current.rotate.z),
+            (float) Math.toRadians(bone.current.rotate.y),
+            (float) Math.toRadians(bone.current.rotate.x)
+        );
+
+        if (bone.current.rotate2.x != 0F || bone.current.rotate2.y != 0F || bone.current.rotate2.z != 0F)
+        {
+            out.mul(secondary.rotationZYX(
+                (float) Math.toRadians(bone.current.rotate2.z),
+                (float) Math.toRadians(bone.current.rotate2.y),
+                (float) Math.toRadians(bone.current.rotate2.x)
+            ));
+        }
+
+        return out;
+    }
+
+    private static Quaternionf bobjLocal(BOBJBone bone, Quaternionf out, Quaternionf secondary)
+    {
+        if (bone.orient != null)
+        {
+            return out.set(bone.orient);
+        }
+
+        out.rotationZYX(bone.transform.rotate.z, bone.transform.rotate.y, bone.transform.rotate.x);
+
+        if (bone.transform.rotate2.x != 0F || bone.transform.rotate2.y != 0F || bone.transform.rotate2.z != 0F)
+        {
+            out.mul(secondary.rotationZYX(bone.transform.rotate2.z, bone.transform.rotate2.y, bone.transform.rotate2.x));
+        }
+
+        return out;
+    }
+
+    private static void blend(Quaternionf out, Quaternionf base, Quaternionf solved, float factor)
+    {
+        if (factor >= 1F - EPS)
+        {
+            out.set(solved);
+        }
+        else
+        {
+            out.set(base).slerp(solved, factor);
+        }
+
+        out.normalize();
+    }
+
+    /** Clamp the exact quaternion assigned to cubic/BOBJ rendering. */
+    static void clampFinalOrientation(Quaternionf orientation, BoneConstraint constraint, Workspace scratch)
+    {
+        if (constraint == null || !constraint.enabled())
+        {
+            return;
+        }
+
+        Vector3f euler = Matrices.toEulerZYXDegrees(orientation, scratch.eulerDegrees, scratch.eulerScratch);
+        float x = clampRange(euler.x, constraint.minX(), constraint.maxX());
+        float y = clampRange(euler.y, constraint.minY(), constraint.maxY());
+        float z = clampRange(euler.z, constraint.minZ(), constraint.maxZ());
+
+        orientation.rotationZYX((float) Math.toRadians(z), (float) Math.toRadians(y), (float) Math.toRadians(x));
+    }
+
+    private static BoneConstraint constraint(Map<String, BoneConstraint> constraints, String id)
+    {
+        return constraints == null || constraints.isEmpty() ? null : constraints.get(id);
+    }
+
+    private static boolean cubicRestDirection(Model model, List<String> ids, int index, Vector3f out)
+    {
+        ModelGroup bone = model.getGroup(ids.get(index));
+        ModelGroup child = index + 1 < ids.size() ? model.getGroup(ids.get(index + 1)) : null;
+
+        if (bone == null)
+        {
+            return false;
+        }
+
+        if (child != null)
+        {
+            out.set(child.initial.translate).sub(bone.initial.translate);
+        }
+        else if (ids.size() >= 2)
+        {
+            ModelGroup parent = model.getGroup(ids.get(index - 1));
+
+            if (parent == null)
+            {
+                return false;
+            }
+
+            out.set(bone.initial.translate).sub(parent.initial.translate);
+        }
+        else if (bone.children != null && !bone.children.isEmpty())
+        {
+            out.set(bone.children.get(0).initial.translate).sub(bone.initial.translate);
+        }
+        else
+        {
+            out.set(0F, -1F, 0F);
+        }
+
+        return normalize(out);
     }
 
     public static Vector3f getBobjRestDirection(BOBJModel model, BOBJBone bone, BOBJBone child, List<String> ids, int index)
     {
+        Vector3f out = new Vector3f();
+
+        return getBobjRestDirection(model, bone, child, ids, index, out) ? out : out.set(0F, -1F, 0F);
+    }
+
+    private static boolean getBobjRestDirection(BOBJModel model, BOBJBone bone, BOBJBone child, List<String> ids, int index, Vector3f out)
+    {
         if (child != null)
         {
-            Vector3f out = child.relBoneMat.getTranslation(new Vector3f());
+            child.relBoneMat.getTranslation(out);
 
             if (out.lengthSquared() > EPS * EPS)
             {
-                return out;
+                return true;
             }
         }
 
         if (index > 0)
         {
-            Vector3f out = bone.relBoneMat.getTranslation(new Vector3f());
+            bone.relBoneMat.getTranslation(out);
 
             if (out.lengthSquared() > EPS * EPS)
             {
-                return out;
+                return true;
             }
         }
 
@@ -257,40 +379,18 @@ public final class ModelRotationBlender
         {
             if (candidate != null && candidate.parentBone == bone)
             {
-                Vector3f out = candidate.relBoneMat.getTranslation(new Vector3f());
+                candidate.relBoneMat.getTranslation(out);
 
                 if (out.lengthSquared() > EPS * EPS)
                 {
-                    return out;
+                    return true;
                 }
             }
         }
 
-        return new Vector3f(0F, -1F, 0F);
-    }
+        out.set(0F, -1F, 0F);
 
-    private static Quaternionf toLocalRotation(Vector3f rotate, Vector3f rotate2)
-    {
-        Quaternionf q = Matrices.toQuaternionZYXDegrees(rotate.x, rotate.y, rotate.z);
-
-        if (rotate2.x != 0F || rotate2.y != 0F || rotate2.z != 0F)
-        {
-            q.mul(Matrices.toQuaternionZYXDegrees(rotate2.x, rotate2.y, rotate2.z));
-        }
-
-        return q;
-    }
-
-    private static Quaternionf toLocalRotationRadians(Vector3f rotate, Vector3f rotate2)
-    {
-        Quaternionf q = new Quaternionf().rotationZYX(rotate.z, rotate.y, rotate.x);
-
-        if (rotate2.x != 0F || rotate2.y != 0F || rotate2.z != 0F)
-        {
-            q.mul(new Quaternionf().rotationZYX(rotate2.z, rotate2.y, rotate2.x));
-        }
-
-        return q;
+        return true;
     }
 
     private static int getRotationCount(List<String> ids, Vector3f[] positions)
@@ -301,53 +401,34 @@ public final class ModelRotationBlender
         return boneCount - 1 + (hasTip ? 1 : 0);
     }
 
+    private static boolean normalize(Vector3f value)
+    {
+        float lengthSquared = value.lengthSquared();
+
+        if (lengthSquared <= EPS * EPS)
+        {
+            return false;
+        }
+
+        value.mul(1F / (float) Math.sqrt(lengthSquared));
+
+        return true;
+    }
+
     private static float clamp01(float value)
     {
-        if (value < 0F)
-        {
-            return 0F;
-        }
-
-        return Math.min(value, 1F);
+        return value < 0F ? 0F : Math.min(value, 1F);
     }
 
-    private static float wrapDegreesNear(float angle, float reference)
+    private static float clampRange(float value, float min, float max)
     {
-        float delta = angle - reference;
-
-        while (delta > 180F)
+        if (min > max)
         {
-            angle -= 360F;
-            delta -= 360F;
+            float swap = min;
+            min = max;
+            max = swap;
         }
 
-        while (delta < -180F)
-        {
-            angle += 360F;
-            delta += 360F;
-        }
-
-        return angle;
-    }
-
-    private static float wrapRadiansNear(float angle, float reference)
-    {
-        float delta = angle - reference;
-        float period = (float) (Math.PI * 2.0);
-        float half = (float) Math.PI;
-
-        while (delta > half)
-        {
-            angle -= period;
-            delta -= period;
-        }
-
-        while (delta < -half)
-        {
-            angle += period;
-            delta += period;
-        }
-
-        return angle;
+        return Math.max(min, Math.min(max, value));
     }
 }

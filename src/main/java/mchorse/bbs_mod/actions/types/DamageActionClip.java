@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.actions.types;
 
+import mchorse.bbs_mod.actions.ActionCommandContext;
+import mchorse.bbs_mod.actions.FilmPlaybackPolicy;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -21,14 +23,22 @@ public class DamageActionClip extends ActionClip
     @Override
     public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
-        float damage = this.damage.get();
-
-        if (damage <= 0F)
+        if (!ActionCommandContext.isAuthorizedFor(player))
         {
             return;
         }
 
-        this.applyPositionRotation(player, replay, tick);
+        float damage = this.damage.get();
+
+        if (damage <= 0F || !FilmPlaybackPolicy.isDamageAllowed(damage))
+        {
+            return;
+        }
+
+        if (!this.tryApplyPositionRotation(player, replay, tick))
+        {
+            return;
+        }
 
         if (actor != null)
         {

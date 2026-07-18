@@ -15,6 +15,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorK
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.utils.CollectionUtils;
 
 import java.util.function.Consumer;
 
@@ -121,7 +122,7 @@ public class UIReplayPropertiesPanel extends UIElement
 
             if (replay != null && filmPanel.getData() != null)
             {
-                UIAnchorKeyframeFactory.displayAttachments(filmPanel, filmPanel.getData().replays.getList().indexOf(replay), replay.axesPreviewBone.get(), (s) ->
+                UIAnchorKeyframeFactory.displayAttachments(filmPanel, CollectionUtils.getIndex(filmPanel.getData().replays.getList(), replay), replay.axesPreviewBone.get(), (s) ->
                 {
                     this.edit((r) -> r.axesPreviewBone.set(s));
                 });

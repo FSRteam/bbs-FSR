@@ -30,7 +30,7 @@ public abstract class UIContextMenu extends UIElement
     {
         if (!this.area.isInside(context))
         {
-            this.removeFromParent();
+            context.closeContextMenu();
         }
 
         return super.subMouseClicked(context);
@@ -41,7 +41,7 @@ public abstract class UIContextMenu extends UIElement
     {
         if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
-            this.removeFromParent();
+            context.closeContextMenu();
 
             return true;
         }

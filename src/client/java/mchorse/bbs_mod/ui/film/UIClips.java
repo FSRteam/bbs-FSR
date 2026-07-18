@@ -24,6 +24,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.Scroll;
@@ -77,6 +78,8 @@ public class UIClips extends UIElement
     private boolean grabbing;
     private boolean scrubbing;
     private boolean scrolling;
+    private final MouseGestureOwnership gestureOwnership = new MouseGestureOwnership();
+    private long gestureGeneration;
     private int lastX;
     private int lastY;
     private int initialX;
@@ -98,6 +101,8 @@ public class UIClips extends UIElement
 
     private Vector3i addPreview;
     private int layers;
+    /** A newly opened film is centered after layout gives the scroll viewport its real size. */
+    private boolean centerScrollOnRender;
 
     private UIClipRenderers renderers = new UIClipRenderers();
 
@@ -371,6 +376,11 @@ public class UIClips extends UIElement
             {
                 IKey typeKey = UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_CLIP_TYPE.format(UIKeys.C_CLIP.get(type));
                 ClipFactoryData data = this.factory.getData(type);
+
+                if (data == null || !data.isAddable())
+                {
+                    continue;
+                }
 
                 add.action(data.icon, typeKey, data.color, () -> this.addClip(type, preview.x, preview.y, preview.z));
             }
@@ -969,15 +979,66 @@ public class UIClips extends UIElement
 
     public void setClips(Clips clips)
     {
+        boolean changed = this.clips != clips;
+
         this.clips = clips;
         this.addPreview = null;
 
-        this.vertical.scrollToEnd();
-        this.vertical.updateTarget();
+        this.centerScrollOnRender = clips != null && changed;
         this.clearSelection();
         this.embedView(null);
 
         this.resetView();
+    }
+
+    private void centerScroll()
+    {
+        if (this.clips == null)
+        {
+            return;
+        }
+
+        List<Clip> list = this.clips.get();
+
+        if (list.isEmpty())
+        {
+            this.vertical.scrollToEnd();
+            this.vertical.updateTarget();
+
+            return;
+        }
+
+        int minLayer = Integer.MAX_VALUE;
+        int maxLayer = 0;
+
+        for (Clip clip : list)
+        {
+            int layer = clip.layer.get();
+
+            minLayer = Math.min(minLayer, layer);
+            maxLayer = Math.max(maxLayer, layer);
+        }
+
+        this.vertical.setScroll(FilmEditorMigrationLogic.centeredVerticalScroll(
+            this.vertical.scrollSize,
+            this.vertical.area.h,
+            this.getLayerHeight(),
+            minLayer,
+            maxLayer
+        ));
+    }
+
+    /** Restore a remembered film scroll after setClips(), overriding first-open centering. */
+    public void restoreVerticalScroll(double scroll)
+    {
+        if (this.clips == null)
+        {
+            return;
+        }
+
+        this.updateScrollSize();
+        this.centerScrollOnRender = false;
+        this.vertical.setScroll(scroll);
     }
 
     private void resetView()
@@ -1137,6 +1198,11 @@ public class UIClips extends UIElement
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (this.area.isInside(context) && (this.gestureOwnership.isActive() || this.vertical.dragging))
+        {
+            return true;
+        }
+
         if (this.vertical.mouseClicked(context))
         {
             return true;
@@ -1169,6 +1235,11 @@ public class UIClips extends UIElement
 
     private boolean handleLeftClick(UIContext context, int mouseX, int mouseY, boolean ctrl, boolean shift, boolean alt)
     {
+        if (!this.beginGesture(context.mouseButton))
+        {
+            return true;
+        }
+
         if (!this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
             int tick = (int) Math.floor(this.scale.from(mouseX));
@@ -1261,6 +1332,8 @@ public class UIClips extends UIElement
             this.selectingLoop = 0;
             this.loopMin = this.fromGraphX(mouseX);
             this.verifyLoopMinMax();
+
+            return true;
         }
         else
         {
@@ -1269,14 +1342,17 @@ public class UIClips extends UIElement
 
             return true;
         }
-
-        return false;
     }
 
     private boolean handleRightClick(int mouseX, int mouseY, boolean ctrl, boolean shift, boolean alt)
     {
         if (alt)
         {
+            if (!this.beginGesture(1))
+            {
+                return true;
+            }
+
             boolean same = this.loopMin == this.loopMax;
 
             this.selectingLoop = 1;
@@ -1305,6 +1381,11 @@ public class UIClips extends UIElement
         }
         else
         {
+            if (!this.beginGesture(2))
+            {
+                return true;
+            }
+
             this.scrolling = true;
             this.setMouse(mouseX, mouseY);
 
@@ -1312,6 +1393,20 @@ public class UIClips extends UIElement
         }
 
         return false;
+    }
+
+    private boolean beginGesture(int button)
+    {
+        long generation = this.gestureOwnership.acquireToken(button);
+
+        if (generation == 0L)
+        {
+            return false;
+        }
+
+        this.gestureGeneration = generation;
+
+        return true;
     }
 
     @Override
@@ -1425,18 +1520,17 @@ public class UIClips extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (this.hasEmbeddedView())
+        boolean handled = this.vertical.tryMouseReleased(context);
+        long generation = this.gestureGeneration;
+
+        if (!this.gestureOwnership.release(context.mouseButton, generation))
         {
-            return super.subMouseReleased(context);
+            return super.subMouseReleased(context) || handled;
         }
 
-        this.vertical.mouseReleased(context);
+        boolean wasSelecting = this.selecting;
 
-        if (this.selecting)
-        {
-            this.pickLastSelectedClip();
-        }
-
+        this.gestureGeneration = 0L;
         this.grabMode = 0;
         this.grabbing = false;
         this.selecting = false;
@@ -1449,7 +1543,12 @@ public class UIClips extends UIElement
         this.snappingPoints.clear();
         this.grabbedData.clear();
 
-        return super.subMouseReleased(context);
+        if (wasSelecting)
+        {
+            this.pickLastSelectedClip();
+        }
+
+        return true;
     }
 
     @Override
@@ -1470,6 +1569,12 @@ public class UIClips extends UIElement
     public void render(UIContext context)
     {
         this.updateScrollSize();
+
+        if (this.centerScrollOnRender)
+        {
+            this.centerScrollOnRender = false;
+            this.centerScroll();
+        }
 
         if (this.clips != null && !this.hasEmbeddedView())
         {

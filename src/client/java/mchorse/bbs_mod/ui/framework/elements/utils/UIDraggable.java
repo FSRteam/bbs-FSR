@@ -16,7 +16,7 @@ public class UIDraggable extends UIElement
     private Consumer<UIContext> render;
     private Supplier<Vector2i> reference;
     private Runnable dragEndCallback;
-    private boolean dragging;
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
     private boolean hover;
     private boolean referenceX = true;
     private boolean referenceY = true;
@@ -105,17 +105,17 @@ public class UIDraggable extends UIElement
 
     public boolean isDragging()
     {
-        return this.dragging;
+        return this.dragOwnership.isActive();
     }
 
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
-        if (this.enabled.get() && this.area.isInside(context) && context.mouseButton == 0)
+        if (this.enabled.get() && this.area.isInside(context) && context.mouseButton == 0 && !this.isDragging())
         {
             this.mouseX = context.mouseX;
             this.mouseY = context.mouseY;
-            this.dragging = true;
+            this.dragOwnership.acquire(context.mouseButton);
 
             if (this.reference != null)
             {
@@ -131,16 +131,26 @@ public class UIDraggable extends UIElement
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
-        boolean wasDragging = this.dragging;
+        if (!this.dragOwnership.release(context.mouseButton))
+        {
+            return super.subMouseReleased(context);
+        }
 
-        this.dragging = false;
-
-        if (wasDragging && this.dragEndCallback != null)
+        if (this.dragEndCallback != null)
         {
             this.dragEndCallback.run();
         }
 
-        return super.subMouseReleased(context);
+        return true;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (this.dragOwnership.release(context.mouseButton))
+        {
+            this.referenceMouse = null;
+        }
     }
 
     @Override
@@ -150,7 +160,7 @@ public class UIDraggable extends UIElement
 
         if (this.enabled.get())
         {
-            if (this.dragging)
+            if (this.isDragging())
             {
                 context.requestCursor(this.dragCursor);
             }
@@ -160,7 +170,7 @@ public class UIDraggable extends UIElement
             }
         }
 
-        if (!this.hover || this.area.isInside(context) || this.dragging)
+        if (!this.hover || this.area.isInside(context) || this.isDragging())
         {
             if (this.render != null)
             {
@@ -172,7 +182,7 @@ public class UIDraggable extends UIElement
             }
         }
 
-        if (this.dragging && this.callback != null)
+        if (this.isDragging() && this.callback != null)
         {
             int mouseX = context.mouseX;
             int mouseY = context.mouseY;

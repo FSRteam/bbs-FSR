@@ -70,6 +70,7 @@ import org.joml.Vector3f;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.WeakHashMap;
 
 public abstract class BaseFilmController
 {
@@ -82,6 +83,9 @@ public abstract class BaseFilmController
 
     private static final Matrix4f IDENTITY = new Matrix4f();
     private static final Vector3f TEMP_VECTOR = new Vector3f();
+    private static final Map<IEntity, Boolean> RELATIVE_REPLAY_ENTITIES = new WeakHashMap<>();
+    private static final Map<IEntity, Object> RELATIVE_SIMULATION_OWNERS = new WeakHashMap<>();
+    private static final Map<IEntity, Object> TARGET_RESOLUTION_OWNERS = new WeakHashMap<>();
 
     /* Rendering helpers */
 
@@ -111,6 +115,8 @@ public abstract class BaseFilmController
         double cz = camera.getPosition().z;
 
         boolean relative = context.replay != null && context.relative;
+
+        markRelativeReplayEntity(entity, relative);
 
         if (relative)
         {
@@ -153,28 +159,53 @@ public abstract class BaseFilmController
 
         FormRenderingContext formContext = new FormRenderingContext()
             .set(FormRenderType.ENTITY, entity, stack, light, overlay, transition)
+            .cameraRelativeWorld()
             .camera(camera)
             .stencilMap(context.map)
             .color(context.color);
 
-        stack.pushPose();
-
         if (relative)
         {
-            stack.last().pose().identity();
-            stack.last().normal().identity();
+            PoseStack semanticWorld = new PoseStack();
+
+            MatrixStackUtils.multiply(semanticWorld, target);
+            formContext
+                .semanticWorld(semanticWorld)
+                .simulationOwner(relativeSimulationOwner(entity))
+                .localSimulation();
         }
-
-        MatrixStackUtils.multiply(stack, target);
-        FormUtilsClient.render(form, formContext);
-
-        if (UIBaseMenu.shouldRenderAxes())
+        else
         {
-            if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, entity, transition, stack);
-            if (context.bone2 != null && context.map == null) renderAxes(context.bone2, context.local2, context.map, form, entity, transition, stack);
+            formContext.semanticWorldFromCameraRelative(target, cx, cy, cz);
         }
 
-        stack.popPose();
+        stack.pushPose();
+        try
+        {
+            if (relative)
+            {
+                stack.last().pose().identity();
+                stack.last().normal().identity();
+            }
+
+            MatrixStackUtils.multiply(stack, target);
+            FormUtilsClient.render(form, formContext);
+
+            if (UIBaseMenu.shouldRenderAxes())
+            {
+                if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, formContext, stack);
+                if (context.bone2 != null && context.map == null) renderAxes(context.bone2, context.local2, context.map, form, formContext, stack);
+            }
+        }
+        finally
+        {
+            stack.popPose();
+        }
+
+        if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)
+        {
+            renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorLocal, context.map, stack);
+        }
 
         if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
         {
@@ -194,7 +225,14 @@ public abstract class BaseFilmController
 
             if (renderer != null && !BBSRendering.isIrisShadowPass() && context.replay != null && context.replay.shadowFollow.get())
             {
-                Vector3f displacement = renderer.getShadowDisplacement(entity, transition);
+                Vector3f displacement = renderer.getShadowDisplacement(
+                    entity,
+                    formContext.simulationOwner,
+                    formContext.world == null ? null : new Matrix4f(formContext.world.last().pose()),
+                    formContext.allowWorldTargetOverrides,
+                    formContext.allowWorldCollisions,
+                    transition
+                );
 
                 if (displacement != null)
                 {
@@ -215,11 +253,15 @@ public abstract class BaseFilmController
             }
 
             stack.pushPose();
-            stack.translate(shadowX - cx, shadowY - cy, shadowZ - cz);
-
-            ModelBlockEntityRenderer.renderShadow(context.consumers, stack, transition, shadowX, shadowY, shadowZ, 0F, 0F, 0F, context.shadowRadius, opacity);
-
-            stack.popPose();
+            try
+            {
+                stack.translate(shadowX - cx, shadowY - cy, shadowZ - cz);
+                ModelBlockEntityRenderer.renderShadow(context.consumers, stack, transition, shadowX, shadowY, shadowZ, 0F, 0F, 0F, context.shadowRadius, opacity);
+            }
+            finally
+            {
+                stack.popPose();
+            }
         }
 
         if (!relative && !context.nameTag.isEmpty() && context.map == null && form.visible.get())
@@ -227,39 +269,100 @@ public abstract class BaseFilmController
             /* Hide the name tag along with the form (form.visible, animatable via keyframes): when the
              * form renders nothing, its name tag must vanish too - same reasoning as the shadow above. */
             stack.pushPose();
-            stack.translate(position.x - cx, position.y - cy, position.z - cz);
-
-            renderNameTag(entity, Component.literal(StringUtils.processColoredText(context.nameTag)), stack, context.consumers, light);
-
-            stack.popPose();
+            try
+            {
+                stack.translate(position.x - cx, position.y - cy, position.z - cz);
+                renderNameTag(entity, Component.literal(StringUtils.processColoredText(context.nameTag)), stack, context.consumers, light);
+            }
+            finally
+            {
+                stack.popPose();
+            }
         }
 
         RenderSystem.enableDepthTest();
     }
 
-    private static void renderAxes(String bone, boolean local, StencilMap stencilMap, Form form, IEntity entity, float transition, PoseStack stack)
+    private static void renderAxes(String bone, boolean local, StencilMap stencilMap, Form form, FormRenderingContext context, PoseStack stack)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+            context.entity,
+            context.simulationOwner,
+            context.world == null ? null : new Matrix4f(context.world.last().pose()),
+            context.allowWorldTargetOverrides,
+            context.allowWorldCollisions,
+            context.getTransition()
+        );
         Matrix4f matrix = local ? map.get(mapKey).matrix() : map.get(mapKey).origin();
 
         if (matrix != null)
         {
             stack.pushPose();
+            try
+            {
+                MatrixStackUtils.multiply(stack, matrix);
+
+                if (stencilMap == null)
+                {
+                    /* The visual is drawn later, in the panel's UI pass (see
+                     * Gizmo#renderInterface) — here we only snapshot its placement. */
+                    Gizmo.INSTANCE.captureVisual(stack);
+                }
+                else
+                {
+                    Gizmo.INSTANCE.renderStencil(stack, stencilMap);
+                }
+            }
+            finally
+            {
+                RenderSystem.enableDepthTest();
+                stack.popPose();
+            }
+        }
+    }
+
+    /** Capture or stencil the whole-form gizmo at the resolved anchor transform. */
+    private static void renderAnchorGizmo(IntObjectMap<IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, boolean local, StencilMap stencilMap, PoseStack stack)
+    {
+        Form form = entity.getForm();
+
+        if (form == null || full == null)
+        {
+            return;
+        }
+
+        Matrix4f matrix;
+
+        if (local)
+        {
+            matrix = MatrixStackUtils.stripScale(full);
+        }
+        else
+        {
+            Matrix4f parent = getEntityMatrix(entities, cx, cy, cz, form.anchor.get(), defaultMatrix, transition, 0, true);
+
+            matrix = MatrixStackUtils.stripScale(parent);
+            matrix.setTranslation(full.getTranslation(new Vector3f()));
+        }
+
+        stack.pushPose();
+        try
+        {
             MatrixStackUtils.multiply(stack, matrix);
 
             if (stencilMap == null)
             {
-                /* The visual is drawn later, in the panel's UI pass (see
-                 * Gizmo#renderInterface) — here we only snapshot its placement. */
                 Gizmo.INSTANCE.captureVisual(stack);
             }
             else
             {
                 Gizmo.INSTANCE.renderStencil(stack, stencilMap);
             }
-
+        }
+        finally
+        {
             RenderSystem.enableDepthTest();
             stack.popPose();
         }
@@ -271,6 +374,11 @@ public abstract class BaseFilmController
     }
 
     public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix)
+    {
+        return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, true);
+    }
+
+    private static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware)
     {
         /* Stupid recursion stop, I don't think anyone would need more than that */
         if (i > 5)
@@ -285,9 +393,12 @@ public abstract class BaseFilmController
         if (same || only)
         {
             Anchor anchor = same ? value : value.previous;
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, anchor, defaultMatrix, transition, i, fullMatrix);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, anchor, defaultMatrix, transition, i, fullMatrix, placementAware);
 
-            matrix = applyAnchorTransform(matrix, anchor);
+            if (!isRelativeAnchorTarget(entities, anchor))
+            {
+                matrix = applyAnchorTransform(matrix, anchor);
+            }
 
             if (matrix != defaultMatrix)
             {
@@ -297,11 +408,18 @@ public abstract class BaseFilmController
         }
         else
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i, fullMatrix);
-            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i, fullMatrix);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i, fullMatrix, placementAware);
+            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i, fullMatrix, placementAware);
 
-            matrix = applyAnchorTransform(matrix, value);
-            lastMatrix = applyAnchorTransform(lastMatrix, value.previous);
+            if (!isRelativeAnchorTarget(entities, value))
+            {
+                matrix = applyAnchorTransform(matrix, value);
+            }
+
+            if (!isRelativeAnchorTarget(entities, value.previous))
+            {
+                lastMatrix = applyAnchorTransform(lastMatrix, value.previous);
+            }
 
             result.a = value.x >= 1F ? matrix : Matrices.lerp(lastMatrix, matrix, value.x);
 
@@ -311,6 +429,28 @@ public abstract class BaseFilmController
         }
 
         return result;
+    }
+
+    private static boolean isRelativeAnchorTarget(IntObjectMap<IEntity> entities, Anchor anchor)
+    {
+        return anchor != null && isRelativeReplayEntity(entities.get(anchor.replay));
+    }
+
+    private static boolean hasRelativeAnchorTarget(IntObjectMap<IEntity> entities, Anchor anchor)
+    {
+        Anchor current = anchor;
+
+        for (int i = 0; current != null && i <= 5; i++)
+        {
+            if (isRelativeAnchorTarget(entities, current))
+            {
+                return true;
+            }
+
+            current = current.previous;
+        }
+
+        return false;
     }
 
     private static Matrix4f applyAnchorTransform(Matrix4f matrix, Anchor anchor)
@@ -330,9 +470,17 @@ public abstract class BaseFilmController
 
     public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix)
     {
+        return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, true);
+    }
+
+    private static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, boolean placementAware)
+    {
         IEntity entity = entities.get(anchor.replay);
 
-        if (entity != null)
+        /* A relative replay intentionally has no absolute world host. Letting an
+         * absolute child/target consume its local matrix would silently mix owner,
+         * collision and coordinate policies, so cross-policy anchors fail closed. */
+        if (entity != null && !isRelativeReplayEntity(entity))
         {
             Matrix4f basic = getMatrixForRenderWithRotation(entity, cameraX, cameraY, cameraZ, transition);
 
@@ -340,14 +488,36 @@ public abstract class BaseFilmController
 
             if (form != null)
             {
-                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1, fullMatrix);
+                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1, fullMatrix, placementAware);
 
                 if (totalMatrix.a != null)
                 {
                     basic = totalMatrix.a;
                 }
 
-                MatrixCache map = FormUtilsClient.getRenderer(form).collectMatrices(entity, transition);
+                MatrixCache map;
+
+                if (placementAware)
+                {
+                    Matrix4f semanticBase = absoluteSemanticMatrix(basic, cameraX, cameraY, cameraZ);
+
+                    map = FormUtilsClient.getRenderer(form).collectMatrices(entity, entity, semanticBase, true, true, transition);
+                }
+                else
+                {
+                    /* Target-channel resolution must not advance current-age physics while
+                     * the frame's absolute target maps are still being assembled. It uses
+                     * the deterministic animation/local-IK attachment pose; placement and
+                     * visual consumers use the full path above after target setup finishes. */
+                    map = FormUtilsClient.getRenderer(form).collectMatrices(
+                        entity,
+                        targetResolutionOwner(entity),
+                        null,
+                        false,
+                        false,
+                        transition
+                    );
+                }
                 Matrix4f matrix = map.get(anchor.attachment).matrix();
 
                 if (matrix != null)
@@ -470,7 +640,21 @@ public abstract class BaseFilmController
             : bonePath;
 
         Form root = FormUtils.getRoot(form);
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(entity, transition);
+        Matrix4f semanticBase = relative
+            ? new Matrix4f(target)
+            : absoluteSemanticMatrix(target, cx, cy, cz);
+        /* Keep placement sampling on the exact same history owner as
+         * renderEntity(). Using the Replay value here creates a second Verlet/IK
+         * history, so gizmos and other bone consumers can disagree with the mesh. */
+        Object simulationOwner = relative ? relativeSimulationOwner(entity) : entity;
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+            entity,
+            simulationOwner,
+            semanticBase,
+            !relative,
+            !relative,
+            transition
+        );
         MatrixCacheEntry entry = map.get(mapKey);
 
         if (entry == null)
@@ -488,31 +672,85 @@ public abstract class BaseFilmController
         return new Matrix4f(target).mul(bone);
     }
 
+    private static Matrix4f absoluteSemanticMatrix(Matrix4f cameraRelative, double cameraX, double cameraY, double cameraZ)
+    {
+        return new Matrix4f()
+            .translation((float) cameraX, (float) cameraY, (float) cameraZ)
+            .mul(cameraRelative);
+    }
+
+    /** The camera-relative matrix of the whole form after its anchor chain and offset are applied. */
+    public static Matrix4f getGizmoAnchorCompositeMatrix(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition
+    )
+    {
+        if (entity == null || entity.getForm() == null)
+        {
+            return null;
+        }
+
+        Form form = entity.getForm();
+        boolean relative = replay != null && replay.relative.get();
+        double cx = cameraX;
+        double cy = cameraY;
+        double cz = cameraZ;
+
+        if (relative)
+        {
+            cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
+            cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
+            cz = replay.keyframes.z.interpolate(0F) + replay.relativeOffset.get().z;
+        }
+
+        Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cx, cy, cz, transition);
+        Matrix4f full = defaultMatrix;
+
+        if (!relative)
+        {
+            Pair<Matrix4f, Float> pair = getTotalMatrix(entities, form.anchor.get(), defaultMatrix, cx, cy, cz, transition, 0);
+
+            full = pair.a != null ? pair.a : defaultMatrix;
+        }
+
+        return MatrixStackUtils.stripScale(full);
+    }
+
     private static void renderNameTag(IEntity entity, Component text, PoseStack matrices, MultiBufferSource vertexConsumers, int light)
     {
         boolean sneaking = !entity.isSneaking();
         float hitboxH = (float) entity.getPickingHitbox().h + 0.5F;
 
         matrices.pushPose();
-        matrices.translate(0F, hitboxH, 0F);
-        matrices.mulPose(Minecraft.getInstance().getEntityRenderDispatcher().cameraOrientation());
-        matrices.scale(-0.025F, -0.025F, 0.025F);
-
-        Matrix4f matrix4f = matrices.last().pose();
-        Font textRenderer = Minecraft.getInstance().font;
-
-        float opacity = Minecraft.getInstance().options.getBackgroundOpacity(0.25F);
-        int background = (int) (opacity * 255F) << 24;
-        float h = (float) (-textRenderer.width(text) / 2);
-
-        textRenderer.drawInBatch(text, h, 0, 0x20ffffff, false, matrix4f, vertexConsumers, sneaking ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.NORMAL, background, light);
-
-        if (sneaking)
+        try
         {
-            textRenderer.drawInBatch(text, h, 0, -1, false, matrix4f, vertexConsumers, Font.DisplayMode.NORMAL, 0, light);
-        }
+            matrices.translate(0F, hitboxH, 0F);
+            matrices.mulPose(Minecraft.getInstance().getEntityRenderDispatcher().cameraOrientation());
+            matrices.scale(-0.025F, -0.025F, 0.025F);
 
-        matrices.popPose();
+            Matrix4f matrix4f = matrices.last().pose();
+            Font textRenderer = Minecraft.getInstance().font;
+
+            float opacity = Minecraft.getInstance().options.getBackgroundOpacity(0.25F);
+            int background = (int) (opacity * 255F) << 24;
+            float h = (float) (-textRenderer.width(text) / 2);
+
+            textRenderer.drawInBatch(text, h, 0, 0x20ffffff, false, matrix4f, vertexConsumers, sneaking ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.NORMAL, background, light);
+
+            if (sneaking)
+            {
+                textRenderer.drawInBatch(text, h, 0, -1, false, matrix4f, vertexConsumers, Font.DisplayMode.NORMAL, 0, light);
+            }
+        }
+        finally
+        {
+            matrices.popPose();
+        }
     }
 
     /* Film controller */
@@ -585,6 +823,13 @@ public abstract class BaseFilmController
 
     protected void updateEntities(int ticks)
     {
+        Level level = Minecraft.getInstance().level;
+
+        if (level == null)
+        {
+            return;
+        }
+
         for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
             int i = entry.getKey();
@@ -602,10 +847,12 @@ public abstract class BaseFilmController
                 continue;
             }
 
-            ticks = replay.getTick(ticks);
+            /* Every replay maps the controller tick independently. Reusing the
+             * previous replay's mapped value makes looping depend on list order. */
+            int replayTick = replay.getTick(ticks);
 
-            this.updateEntityAndForm(entity, ticks);
-            this.applyReplay(replay, ticks, entity);
+            this.updateEntityAndForm(entity, replayTick);
+            this.applyReplay(replay, replayTick, entity);
 
             Map<String, Integer> actors = this.getActors();
 
@@ -615,20 +862,20 @@ public abstract class BaseFilmController
 
                 if (entityId != null)
                 {
-                    Entity anEntity = Minecraft.getInstance().level.getEntity(entityId);
+                    Entity anEntity = level.getEntity(entityId);
 
                     if (anEntity instanceof ActorEntity actor)
                     {
-                        this.applyActorReplay(replay, ticks, actor, entity);
+                        this.applyActorReplay(replay, replayTick, actor, entity);
                     }
                     else if (anEntity instanceof Player player)
                     {
-                        double x = replay.keyframes.x.interpolate(ticks);
-                        double y = replay.keyframes.y.interpolate(ticks);
-                        double z = replay.keyframes.z.interpolate(ticks);
-                        double prevX = replay.keyframes.x.interpolate(ticks - 1);
-                        double prevY = replay.keyframes.y.interpolate(ticks - 1);
-                        double prevZ = replay.keyframes.z.interpolate(ticks - 1);
+                        double x = replay.keyframes.x.interpolate(replayTick);
+                        double y = replay.keyframes.y.interpolate(replayTick);
+                        double z = replay.keyframes.z.interpolate(replayTick);
+                        double prevX = replay.keyframes.x.interpolate(replayTick - 1);
+                        double prevY = replay.keyframes.y.interpolate(replayTick - 1);
+                        double prevZ = replay.keyframes.z.interpolate(replayTick - 1);
 
                         player.setDeltaMovement(x - prevX, y - prevY, z - prevZ);
                     }
@@ -640,6 +887,12 @@ public abstract class BaseFilmController
     public void updateEndWorld()
     {
         int ticks = this.getTick();
+        Level level = Minecraft.getInstance().level;
+
+        if (level == null)
+        {
+            return;
+        }
 
         for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
@@ -658,7 +911,7 @@ public abstract class BaseFilmController
                 continue;
             }
 
-            ticks = replay.getTick(ticks);
+            int replayTick = replay.getTick(ticks);
 
             Map<String, Integer> actors = this.getActors();
 
@@ -668,15 +921,15 @@ public abstract class BaseFilmController
 
                 if (entityId != null)
                 {
-                    Entity anEntity = Minecraft.getInstance().level.getEntity(entityId);
+                    Entity anEntity = level.getEntity(entityId);
 
                     if (anEntity instanceof Player player)
                     {
-                        double x = replay.keyframes.x.interpolate(ticks);
-                        double y = replay.keyframes.y.interpolate(ticks);
-                        double z = replay.keyframes.z.interpolate(ticks);
-                        boolean sneaking = replay.keyframes.sneaking.interpolate(ticks) > 0;
-                        boolean grounded = replay.keyframes.grounded.interpolate(ticks) > 0;
+                        double x = replay.keyframes.x.interpolate(replayTick);
+                        double y = replay.keyframes.y.interpolate(replayTick);
+                        double z = replay.keyframes.z.interpolate(replayTick);
+                        boolean sneaking = replay.keyframes.sneaking.interpolate(replayTick) > 0;
+                        boolean grounded = replay.keyframes.grounded.interpolate(replayTick) > 0;
 
                         Vec3 pos = player.position();
 
@@ -708,7 +961,7 @@ public abstract class BaseFilmController
                             playerEntity.input.shiftKeyDown = sneaking;
                         }
 
-                        player.fallDistance = replay.keyframes.fall.interpolate(ticks).floatValue();
+                        player.fallDistance = replay.keyframes.fall.interpolate(replayTick).floatValue();
                     }
                 }
             }
@@ -756,11 +1009,19 @@ public abstract class BaseFilmController
 
     public void startRenderFrame(float transition)
     {
+        /* Phase 1: every replay receives this frame's ordinary properties and
+         * scalar procedural controls before any target channel samples another
+         * replay's bones. This removes replay iteration order from simulation. */
         for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
             int i = entry.getKey();
             IEntity entity = entry.getValue();
             Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
+
+            if (replay != null)
+            {
+                markRelativeReplayEntity(entity, replay.relative.get());
+            }
 
             if (replay == null || !replay.enabled.get())
             {
@@ -778,66 +1039,137 @@ public abstract class BaseFilmController
             /* Apply property */
             Form form1 = entity.getForm();
             replay.properties.applyProperties(form1, tick + delta);
-            this.applyTargetOverrides(replay, form1, tick + delta, delta);
+            this.applyTargetControls(replay, form1, tick + delta);
 
-            Map<String, Integer> actors = this.getActors();
+            Entity anEntity = this.getReplayActor(replay);
 
-            if (actors != null)
+            if (anEntity instanceof ActorEntity actor)
             {
-                Integer entityId = actors.get(replay.getId());
+                Form form = actor.getForm();
 
-                if (entityId != null)
+                replay.properties.applyProperties(form, tick + delta);
+                this.applyTargetControls(replay, form, tick + delta);
+            }
+            else if (anEntity instanceof Player player)
+            {
+                Morph morph = Morph.getMorph(player);
+
+                if (morph != null)
                 {
-                    Entity anEntity = Minecraft.getInstance().level.getEntity(entityId);
+                    Form form = morph.getForm();
 
-                    if (anEntity instanceof ActorEntity actor)
-                    {
-                        Form form = actor.getForm();
-                        replay.properties.applyProperties(form, tick + delta);
-                        this.applyTargetOverrides(replay, form, tick + delta, delta);
-                    }
-                    else if (anEntity instanceof Player player)
-                    {
-                        Morph morph = Morph.getMorph(player);
+                    replay.properties.applyProperties(form, tick + delta);
+                    this.applyTargetControls(replay, form, tick + delta);
+                }
 
-                        if (morph != null)
-                        {
-                            Form form = morph.getForm();
-                            replay.properties.applyProperties(form, tick + delta);
-                            this.applyTargetOverrides(replay, form, tick + delta, delta);
-                        }
+                float yawHead = replay.keyframes.headYaw.interpolate(tick + delta).floatValue();
+                float yawBody = replay.keyframes.bodyYaw.interpolate(tick + delta).floatValue();
+                float pitch = replay.keyframes.pitch.interpolate(tick + delta).floatValue();
 
-                        float yawHead = replay.keyframes.headYaw.interpolate(tick + delta).floatValue();
-                        float yawBody = replay.keyframes.bodyYaw.interpolate(tick + delta).floatValue();
-                        float pitch = replay.keyframes.pitch.interpolate(tick + delta).floatValue();
+                player.setYRot(yawHead);
+                player.setYHeadRot(yawHead);
+                player.setXRot(pitch);
+                player.setYBodyRot(yawBody);
+                player.yRotO = yawHead;
+                player.yHeadRotO = yawHead;
+                player.xRotO = pitch;
+                player.yBodyRotO = yawBody;
+            }
+        }
 
-                        player.setYRot(yawHead);
-                        player.setYHeadRot(yawHead);
-                        player.setXRot(pitch);
-                        player.setYBodyRot(yawBody);
-                        player.yRotO = yawHead;
-                        player.yHeadRotO = yawHead;
-                        player.xRotO = pitch;
-                        player.yBodyRotO = yawBody;
-                    }
+        /* Phase 2: target maps are now assembled without advancing current-age
+         * physics. Placement-aware sampling happens only after this phase. */
+        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
+        {
+            int i = entry.getKey();
+            IEntity entity = entry.getValue();
+            Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
+
+            if (replay == null || !replay.enabled.get() || !this.canUpdate(i, replay, entity, UpdateMode.PROPERTIES))
+            {
+                continue;
+            }
+
+            float delta = this.getTransition(entity, transition);
+            int tick = replay.getTick(this.getTick());
+
+            this.applyTargetOverrides(replay, entity.getForm(), tick + delta, delta);
+
+            Entity anEntity = this.getReplayActor(replay);
+
+            if (anEntity instanceof ActorEntity actor)
+            {
+                this.applyTargetOverrides(replay, actor.getForm(), tick + delta, delta);
+            }
+            else if (anEntity instanceof Player player)
+            {
+                Morph morph = Morph.getMorph(player);
+
+                if (morph != null)
+                {
+                    this.applyTargetOverrides(replay, morph.getForm(), tick + delta, delta);
                 }
             }
         }
     }
 
+    private Entity getReplayActor(Replay replay)
+    {
+        Map<String, Integer> actors = this.getActors();
+        Integer entityId = actors == null ? null : actors.get(replay.getId());
+        Level level = Minecraft.getInstance().level;
+
+        return entityId == null || level == null ? null : level.getEntity(entityId);
+    }
+
+    private static void markRelativeReplayEntity(IEntity entity, boolean relative)
+    {
+        if (entity != null)
+        {
+            boolean wasRelative = Boolean.TRUE.equals(RELATIVE_REPLAY_ENTITIES.get(entity));
+
+            RELATIVE_REPLAY_ENTITIES.put(entity, relative);
+
+            if (relative && !wasRelative)
+            {
+                RELATIVE_SIMULATION_OWNERS.put(entity, new Object());
+            }
+            else if (!relative)
+            {
+                RELATIVE_SIMULATION_OWNERS.remove(entity);
+            }
+        }
+    }
+
+    public static boolean isRelativeReplayEntity(IEntity entity)
+    {
+        return entity != null && Boolean.TRUE.equals(RELATIVE_REPLAY_ENTITIES.get(entity));
+    }
+
+    private static Object targetResolutionOwner(IEntity entity)
+    {
+        return TARGET_RESOLUTION_OWNERS.computeIfAbsent(entity, (ignored) -> new Object());
+    }
+
+    private static Object relativeSimulationOwner(IEntity entity)
+    {
+        return RELATIVE_SIMULATION_OWNERS.computeIfAbsent(entity, (ignored) -> new Object());
+    }
+
     public void update(Replay replay, Form root, float tick, float transition)
     {
+        this.applyTargetControls(replay, root, tick);
         this.applyTargetOverrides(replay, root, tick, transition);
     }
 
-    private void applyTargetOverrides(Replay replay, Form root, float tick, float transition)
+    private void applyTargetControls(Replay replay, Form root, float tick)
     {
         if (replay == null || root == null)
         {
             return;
         }
 
-        this.clearTargetOverrides(root);
+        this.clearControlOverrides(root);
 
         if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
         {
@@ -873,6 +1205,38 @@ public abstract class BaseFilmController
             if (FormControlKeys.isWindControlChannel(id))
             {
                 this.applyWindControls(root, FormControlKeys.parseWindControlFormPath(id), channel, tick);
+            }
+        }
+    }
+
+    private void applyTargetOverrides(Replay replay, Form root, float tick, float transition)
+    {
+        if (replay == null || root == null)
+        {
+            return;
+        }
+
+        this.clearSpatialTargetOverrides(root);
+
+        if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
+        {
+            return;
+        }
+
+        for (KeyframeChannel<?> channel : replay.properties.properties.values())
+        {
+            if (channel == null)
+            {
+                continue;
+            }
+
+            String id = channel.getId();
+
+            if (id == null || id.isEmpty()
+                || FormControlKeys.isIKControlChannel(id)
+                || FormControlKeys.isPhysicsControlChannel(id)
+                || FormControlKeys.isWindControlChannel(id))
+            {
                 continue;
             }
 
@@ -1046,12 +1410,14 @@ public abstract class BaseFilmController
             weight = 1F;
         }
 
-        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || this.entities.get(resolve.replay) == null)
+        IEntity targetEntity = this.entities.get(resolve.replay);
+
+        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || targetEntity == null || hasRelativeAnchorTarget(this.entities, resolve))
         {
             return;
         }
 
-        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
         Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
         Vector3f position = resolved.getTranslation(TEMP_VECTOR);
 
@@ -1103,12 +1469,14 @@ public abstract class BaseFilmController
             weight = 1F;
         }
 
-        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || this.entities.get(resolve.replay) == null)
+        IEntity targetEntity = this.entities.get(resolve.replay);
+
+        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || targetEntity == null || hasRelativeAnchorTarget(this.entities, resolve))
         {
             return;
         }
 
-        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true);
+        Pair<Matrix4f, Float> matrix = getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
         Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
         Vector3f position = resolved.getTranslation(TEMP_VECTOR);
 
@@ -1116,17 +1484,11 @@ public abstract class BaseFilmController
         modelForm.physicsTargetWeights.put(rootBone, weight);
     }
 
-    private void clearTargetOverrides(Form form)
+    private void clearControlOverrides(Form form)
     {
         if (form instanceof ModelForm modelForm)
         {
-            modelForm.ikTargetOverrides.clear();
-            modelForm.poleTargetOverrides.clear();
-            modelForm.ikTargetWeights.clear();
-            modelForm.poleTargetWeights.clear();
             modelForm.ikControlOverrides.clear();
-            modelForm.physicsTargetOverrides.clear();
-            modelForm.physicsTargetWeights.clear();
             modelForm.physicsControlOverrides.clear();
             modelForm.windControlOverride = null;
         }
@@ -1137,7 +1499,30 @@ public abstract class BaseFilmController
 
             if (child != null)
             {
-                this.clearTargetOverrides(child);
+                this.clearControlOverrides(child);
+            }
+        }
+    }
+
+    private void clearSpatialTargetOverrides(Form form)
+    {
+        if (form instanceof ModelForm modelForm)
+        {
+            modelForm.ikTargetOverrides.clear();
+            modelForm.poleTargetOverrides.clear();
+            modelForm.ikTargetWeights.clear();
+            modelForm.poleTargetWeights.clear();
+            modelForm.physicsTargetOverrides.clear();
+            modelForm.physicsTargetWeights.clear();
+        }
+
+        for (BodyPart part : form.parts.getAllTyped())
+        {
+            Form child = part.getForm();
+
+            if (child != null)
+            {
+                this.clearSpatialTargetOverrides(child);
             }
         }
     }

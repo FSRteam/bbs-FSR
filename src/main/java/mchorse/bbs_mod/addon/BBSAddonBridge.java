@@ -38,7 +38,7 @@ public final class BBSAddonBridge
         LOGGER.info("[bbs-addon] preparing to bridge {} addon(s): {}",
             this.collector.size(),
             this.collector.getAddonIds());
-        this.collector.bridgeTo(bus);
+        this.collector.bridgeAndCloseExternalRegistrationWindow(bus);
         LOGGER.info("[bbs-addon] bridged {} addon(s) into internal bus", this.collector.size());
     }
 }

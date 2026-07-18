@@ -141,12 +141,25 @@ public class ModelBlockEntity extends BlockEntity
 
     public void updateForm(MapType data, Level world)
     {
-        this.properties.fromData(data);
+        ModelProperties replacement = new ModelProperties();
+
+        replacement.fromData(data);
 
         BlockPos pos = this.getBlockPos();
         BlockState blockState = world.getBlockState(pos);
+        ModelProperties previous = this.properties;
 
-        this.setChanged();
-        world.sendBlockUpdated(pos, blockState, blockState, Block.UPDATE_CLIENTS);
+        try
+        {
+            this.properties = replacement;
+            this.setChanged();
+            world.sendBlockUpdated(pos, blockState, blockState, Block.UPDATE_CLIENTS);
+        }
+        catch (RuntimeException | LinkageError e)
+        {
+            this.properties = previous;
+
+            throw e;
+        }
     }
 }

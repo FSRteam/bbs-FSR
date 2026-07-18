@@ -20,6 +20,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIDataUtils;
+import mchorse.bbs_mod.utils.CollectionUtils;
 
 import java.util.function.Consumer;
 
@@ -133,7 +134,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
                 return;
             }
 
-            UIAnchorKeyframeFactory.displayAttachments(filmPanel, filmPanel.getData().replays.getList().indexOf(replay), replay.axesPreviewBone.get(), (s) -> this.edit((r) -> r.axesPreviewBone.set(s)));
+            UIAnchorKeyframeFactory.displayAttachments(filmPanel, CollectionUtils.getIndex(filmPanel.getData().replays.getList(), replay), replay.axesPreviewBone.get(), (s) -> this.edit((r) -> r.axesPreviewBone.set(s)));
         });
 
         this.properties = UI.scrollView(5, 6,

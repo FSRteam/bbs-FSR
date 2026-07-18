@@ -111,7 +111,7 @@ public class NeoForgeLoaderAccess implements LoaderAccess
         {
             addons = this.addonSupplier.get();
         }
-        catch (Exception e)
+        catch (Exception | LinkageError e)
         {
             warnOnce("supplier-error", "[bbs-addon] addon supplier failed, returning empty list");
             LOGGER.debug("[bbs-addon] addon supplier failure details", e);
@@ -249,7 +249,7 @@ public class NeoForgeLoaderAccess implements LoaderAccess
                 }
             }
         }
-        catch (Exception e)
+        catch (Exception | LinkageError e)
         {
             warnOnce("scan-failed", "[bbs-addon] scan validation failed, fallback to empty scan snapshot");
             LOGGER.debug("[bbs-addon] scan validation failure details", e);
@@ -275,7 +275,7 @@ public class NeoForgeLoaderAccess implements LoaderAccess
         {
             return Class.forName(BBS_ADDON_INTERFACE_NAME);
         }
-        catch (ClassNotFoundException e)
+        catch (ClassNotFoundException | LinkageError e)
         {
             return Object.class;
         }

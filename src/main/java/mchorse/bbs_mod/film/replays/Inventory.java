@@ -42,14 +42,89 @@ public class Inventory extends BaseValue
             return;
         }
 
-        int size = Math.min(list.size(), player.getInventory().getContainerSize());
+        applyStagedToPlayer(player, stageForPlayer(player, list));
+    }
+
+    /** Decode every submitted slot before any player inventory mutation. */
+    public static List<ItemStack> stageForPlayer(Player player, ListType list)
+    {
+        if (player == null || list == null)
+        {
+            throw new IllegalArgumentException("Player inventory data is required");
+        }
+
+        int capacity = player.getInventory().getContainerSize();
+
+        if (list.size() > capacity)
+        {
+            throw new IllegalArgumentException("Player inventory contains too many slots");
+        }
+
+        List<ItemStack> staged = new ArrayList<>(list.size());
+
+        for (int i = 0; i < list.size(); i++)
+        {
+            ItemStack stack = KeyframeFactories.ITEM_STACK.tryFromData(list.get(i))
+                .orElseThrow(() -> new IllegalArgumentException("Player inventory contains an invalid item stack"));
+
+            staged.add(stack.copy());
+        }
+
+        return List.copyOf(staged);
+    }
+
+    /** Apply already-decoded slots, rolling back if a container write fails. */
+    public static void applyStagedToPlayer(Player player, List<ItemStack> staged)
+    {
+        if (player == null || staged == null || staged.size() > player.getInventory().getContainerSize())
+        {
+            throw new IllegalArgumentException("Staged player inventory is invalid");
+        }
+
+        List<ItemStack> previous = snapshotPlayer(player, staged.size());
+
+        try
+        {
+            for (int i = 0; i < staged.size(); i++)
+            {
+                ItemStack stack = staged.get(i);
+
+                player.getInventory().setItem(i, stack == null ? ItemStack.EMPTY : stack.copy());
+            }
+        }
+        catch (RuntimeException e)
+        {
+            for (int i = 0; i < previous.size(); i++)
+            {
+                try
+                {
+                    player.getInventory().setItem(i, previous.get(i));
+                }
+                catch (RuntimeException rollbackError)
+                {
+                    e.addSuppressed(rollbackError);
+                }
+            }
+
+            throw e;
+        }
+    }
+
+    public static List<ItemStack> snapshotPlayer(Player player, int size)
+    {
+        if (player == null || size < 0 || size > player.getInventory().getContainerSize())
+        {
+            throw new IllegalArgumentException("Player inventory snapshot size is invalid");
+        }
+
+        List<ItemStack> snapshot = new ArrayList<>(size);
 
         for (int i = 0; i < size; i++)
         {
-            ItemStack stack = KeyframeFactories.ITEM_STACK.fromData(list.get(i));
-
-            player.getInventory().setItem(i, stack == null ? ItemStack.EMPTY : stack);
+            snapshot.add(player.getInventory().getItem(i).copy());
         }
+
+        return List.copyOf(snapshot);
     }
 
     @Override

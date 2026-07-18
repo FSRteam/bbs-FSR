@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.film.clips;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.DamageActionClip;
+import mchorse.bbs_mod.actions.types.EntityInteractionActionClip;
 import mchorse.bbs_mod.actions.types.SwipeActionClip;
 import mchorse.bbs_mod.actions.types.blocks.BreakBlockActionClip;
 import mchorse.bbs_mod.actions.types.blocks.InteractBlockActionClip;
@@ -41,6 +42,7 @@ import mchorse.bbs_mod.ui.film.clips.actions.UIBreakBlockActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIChatActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UICommandActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIDamageActionClip;
+import mchorse.bbs_mod.ui.film.clips.actions.UIEntityInteractionActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIInteractBlockActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIItemDropActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIPlaceBlockActionClip;
@@ -111,6 +113,7 @@ public abstract class UIClip <T extends Clip> extends UIElement
         register(BreakBlockActionClip.class, UIBreakBlockActionClip::new);
         register(UseItemActionClip.class, UIUseItemActionClip::new);
         register(UseBlockItemActionClip.class, UIUseBlockItemActionClip::new);
+        register(EntityInteractionActionClip.class, UIEntityInteractionActionClip::new);
         register(AttackActionClip.class, UIAttackActionClip::new);
         register(DamageActionClip.class, UIDamageActionClip::new);
         register(ItemDropActionClip.class, UIItemDropActionClip::new);
@@ -130,17 +133,17 @@ public abstract class UIClip <T extends Clip> extends UIElement
         }
     }
 
+    /** Restore after the property panel has a laid-out viewport, so clamping uses its real size. */
+    public void restoreScroll()
+    {
+        this.panels.scroll.setScroll(SCROLLS.getOrDefault(this.clip.getClass(), 0));
+    }
+
     public static UIClip createPanel(Clip clip, IUIClipsDelegate delegate)
     {
         IUIClipFactory factory = FACTORIES.get(clip.getClass());
-        UIClip clipEditor = factory == null ? null : factory.create(clip, delegate);
 
-        if (clipEditor != null)
-        {
-            clipEditor.panels.scroll.setScroll(SCROLLS.getOrDefault(clip.getClass(), 0));
-        }
-
-        return clipEditor;
+        return factory == null ? null : factory.create(clip, delegate);
     }
 
     public UIClip(T clip, IUIClipsDelegate editor)

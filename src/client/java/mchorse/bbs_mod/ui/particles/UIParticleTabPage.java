@@ -8,7 +8,6 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
-import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +46,7 @@ public class UIParticleTabPage extends UIElement
     @Override
     public void render(UIContext context)
     {
-        this.area.render(context.batcher, Colors.mulRGB(BBSSettings.primaryColor.get() | Colors.A75, 0.2F));
+        this.area.render(context.batcher, BBSSettings.deepSurface());
         super.render(context);
     }
 }

@@ -73,6 +73,7 @@ public final class BBSClientNeoEvents
             NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onClientTickPre);
             NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onClientTickPost);
             NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onLevelTickPost);
+            NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onPlayerClone);
             NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onLoggingOut);
             NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onGameShuttingDown);
             NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onInputKey);
@@ -83,8 +84,16 @@ public final class BBSClientNeoEvents
 
     private static void onRegisterKeyMappings(RegisterKeyMappingsEvent event)
     {
-        BBSModClient.registerKeyMappings(event::register);
-        ClientApiCompat.registerQueuedKeyMappings(event::register);
+        ClientApiCompat.closeKeyMappingRegistrationWindow();
+
+        try
+        {
+            BBSModClient.registerKeyMappings(event::register);
+        }
+        finally
+        {
+            ClientApiCompat.registerQueuedKeyMappings(event::register);
+        }
     }
 
     private static void onRegisterClientExtensions(RegisterClientExtensionsEvent event)
@@ -110,18 +119,18 @@ public final class BBSClientNeoEvents
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event)
     {
-        event.registerEntityRenderer(BBSMod.ACTOR_ENTITY.get(), ActorEntityRenderer::new);
-        event.registerEntityRenderer(BBSMod.GUN_PROJECTILE_ENTITY.get(), GunProjectileEntityRenderer::new);
-        event.registerBlockEntityRenderer(BBSMod.MODEL_BLOCK_ENTITY.get(), ModelBlockEntityRenderer::new);
+        ClientApiCompat.closeRendererRegistrationWindows();
 
-        for (ClientApiCompat.EntityRendererRegistration<?> registration : ClientApiCompat.getEntityRendererRegistrations())
+        try
         {
-            registerCompatEntityRenderer(event, registration);
+            event.registerEntityRenderer(BBSMod.ACTOR_ENTITY.get(), ActorEntityRenderer::new);
+            event.registerEntityRenderer(BBSMod.GUN_PROJECTILE_ENTITY.get(), GunProjectileEntityRenderer::new);
+            event.registerBlockEntityRenderer(BBSMod.MODEL_BLOCK_ENTITY.get(), ModelBlockEntityRenderer::new);
         }
-
-        for (ClientApiCompat.BlockEntityRendererRegistration<?> registration : ClientApiCompat.getBlockEntityRendererRegistrations())
+        finally
         {
-            registerCompatBlockEntityRenderer(event, registration);
+            ClientApiCompat.registerQueuedEntityRenderers(registration -> registerCompatEntityRenderer(event, registration));
+            ClientApiCompat.registerQueuedBlockEntityRenderers(registration -> registerCompatBlockEntityRenderer(event, registration));
         }
     }
 
@@ -204,6 +213,15 @@ public final class BBSClientNeoEvents
     private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event)
     {
         BBSModClient.onClientDisconnect();
+    }
+
+    private static void onPlayerClone(ClientPlayerNetworkEvent.Clone event)
+    {
+        BBSModClient.onClientPlayerClone(
+            event.getConnection(),
+            event.getOldPlayer(),
+            event.getNewPlayer()
+        );
     }
 
     private static void onGameShuttingDown(GameShuttingDownEvent event)

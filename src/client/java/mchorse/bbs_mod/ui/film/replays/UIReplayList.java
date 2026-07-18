@@ -6,7 +6,6 @@ import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
-import mchorse.bbs_mod.camera.clips.modifiers.EntityClip;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -14,6 +13,7 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.film.replays.Replays;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -21,7 +21,6 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.IExpression;
@@ -53,6 +52,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIFolderOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
@@ -103,6 +103,8 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     public UIFilmPanel panel;
     private final Consumer<Form> formConsumer;
+    private final MouseGestureOwnership replayDragOwnership = new MouseGestureOwnership();
+    private long replayDragGeneration;
 
     private final UICopyPasteController presetController;
 
@@ -549,7 +551,38 @@ public class UIReplayList extends UIList<ReplayListEntry>
             return -1;
         }
 
-        return film.replays.getList().indexOf(r);
+        return CollectionUtils.getIndex(film.replays.getList(), r);
+    }
+
+    /**
+     * Top Y of a currently visible Replay row for collaboration overlays.
+     * Category rows, filtering, collapsing and scroll offset are resolved by
+     * this list, so the overlay never treats a global Film index as a UI row.
+     */
+    public int getReplayRowY(Replay replay)
+    {
+        if (replay == null)
+        {
+            return Integer.MIN_VALUE;
+        }
+
+        for (int visibleIndex = 0; visibleIndex < this.list.size(); visibleIndex++)
+        {
+            ReplayListEntry entry = this.getElementAt(visibleIndex);
+
+            if (entry == null)
+            {
+                break;
+            }
+
+            if (entry.isReplay() && entry.replay == replay)
+            {
+                return this.area.y + visibleIndex * this.scroll.scrollItemSize
+                    - (int) this.scroll.getScroll();
+            }
+        }
+
+        return Integer.MIN_VALUE;
     }
 
     public void refreshReplayList()
@@ -766,6 +799,11 @@ public class UIReplayList extends UIList<ReplayListEntry>
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        if (this.area.isInside(context) && this.replayDragOwnership.isActive())
+        {
+            return true;
+        }
+
         if (this.isFiltering())
         {
             return super.subMouseClicked(context);
@@ -809,8 +847,14 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
                 if (this.sorting && entry.isReplay() && this.current.size() == 1)
                 {
-                    this.dragging = index;
-                    this.dragTime = System.currentTimeMillis();
+                    long generation = this.replayDragOwnership.acquireToken(context.mouseButton);
+
+                    if (generation != 0L)
+                    {
+                        this.replayDragGeneration = generation;
+                        this.dragging = index;
+                        this.dragTime = System.currentTimeMillis();
+                    }
                 }
 
                 if (this.callback != null)
@@ -828,48 +872,55 @@ public class UIReplayList extends UIList<ReplayListEntry>
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (this.sorting && !this.isFiltering())
+        boolean handled = this.scroll.tryMouseReleased(context);
+        long generation = this.replayDragGeneration;
+
+        if (this.replayDragOwnership.release(context.mouseButton, generation))
         {
-            if (this.isDragging())
+            int draggedIndex = this.dragging;
+            boolean wasDragging = this.exists(draggedIndex) && System.currentTimeMillis() - this.dragTime > 100;
+
+            this.replayDragGeneration = 0L;
+            this.dragging = -1;
+
+            if (this.sorting && !this.isFiltering() && wasDragging)
             {
                 int index = this.scroll.getIndex(context.mouseX, context.mouseY);
 
                 /* Past the last row (empty padding below short lists): move to root — no root replay row to drop on. */
                 if (index == -2)
                 {
-                    ReplayListEntry dragged = this.list.get(this.dragging);
+                    ReplayListEntry dragged = this.list.get(draggedIndex);
 
                     if (dragged.isReplay())
                     {
                         this.applyReplayCategory(List.of(dragged.replay), "");
                     }
                 }
-                else if (index != this.dragging && this.exists(index))
+                else if (index != draggedIndex && this.exists(index))
                 {
-                    ReplayListEntry a = this.list.get(this.dragging);
+                    ReplayListEntry a = this.list.get(draggedIndex);
                     ReplayListEntry b = this.list.get(index);
 
                     if (a.isReplay() && b.isFolder())
                     {
-                        this.dropReplaysOntoCategory(index);
+                        this.dropReplaysOntoCategory(draggedIndex, index);
                     }
                     else if (a.isReplay() && b.isReplay())
                     {
-                        this.handleSwap(this.dragging, index);
+                        this.handleSwap(draggedIndex, index);
                     }
                 }
             }
 
-            this.dragging = -1;
+            handled = true;
         }
 
-        this.scroll.mouseReleased(context);
-
-        return super.subMouseReleased(context);
+        return super.subMouseReleased(context) || handled;
     }
 
     /** Drag a replay row onto a category header to assign that category. */
-    private void dropReplaysOntoCategory(int folderIndex)
+    private void dropReplaysOntoCategory(int draggedIndex, int folderIndex)
     {
         ReplayListEntry folderEntry = this.list.get(folderIndex);
 
@@ -878,7 +929,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
             return;
         }
 
-        ReplayListEntry draggedEntry = this.list.get(this.dragging);
+        ReplayListEntry draggedEntry = this.list.get(draggedIndex);
 
         if (!draggedEntry.isReplay())
         {
@@ -894,6 +945,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
         Film data = this.panel.getData();
         Replays replays = data.replays;
         List<Replay> all = replays.getList();
+        List<Replay> previousOrder = new ArrayList<>(all);
 
         ReplayListEntry ef = this.list.get(from);
         ReplayListEntry et = this.list.get(to);
@@ -905,8 +957,8 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         this.assignReplayCategoryValue(ef.replay, et.replay.category.get());
 
-        int globalFrom = all.indexOf(ef.replay);
-        int globalTo = all.indexOf(et.replay);
+        int globalFrom = CollectionUtils.getIndex(all, ef.replay);
+        int globalTo = CollectionUtils.getIndex(all, et.replay);
 
         if (globalFrom < 0 || globalTo < 0)
         {
@@ -921,26 +973,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
         replays.add(globalTo, value);
         replays.sync();
 
-        for (Replay replay : replays.getList())
-        {
-            if (replay.properties.get("anchor") instanceof KeyframeChannel<?> channel && channel.getFactory() == KeyframeFactories.ANCHOR)
-            {
-                KeyframeChannel<Anchor> keyframeChannel = (KeyframeChannel<Anchor>) channel;
-
-                for (Keyframe<Anchor> keyframe : keyframeChannel.getKeyframes())
-                {
-                    keyframe.getValue().replay = MathUtils.remapIndex(keyframe.getValue().replay, globalFrom, globalTo);
-                }
-            }
-        }
-
-        for (Clip clip : data.camera.get())
-        {
-            if (clip instanceof EntityClip entityClip)
-            {
-                entityClip.selector.set(MathUtils.remapIndex(entityClip.selector.get(), globalFrom, globalTo));
-            }
-        }
+        remapReplayReferences(data, previousOrder);
 
         data.postNotify(IValueListener.FLAG_UNMERGEABLE);
 
@@ -1903,6 +1936,19 @@ public class UIReplayList extends UIList<ReplayListEntry>
         }
     }
 
+    /**
+     * Remap every persisted Film reference from a previous Replay order to the
+     * Film's current order. Identity is intentional: two Replay values may be
+     * structurally equal while still representing different logical actors.
+     * Removed or already-invalid targets are normalized to the no-target
+     * sentinel instead of silently pointing at the Replay that shifted into
+     * their old slot.
+     */
+    static void remapReplayReferences(Film film, List<Replay> previousOrder)
+    {
+        ReplayReferenceRemapper.remap(film, previousOrder);
+    }
+
     public void pasteReplay(MapType data)
     {
         Film film = this.panel.getData();
@@ -2200,14 +2246,20 @@ public class UIReplayList extends UIList<ReplayListEntry>
         }
 
         Film film = this.panel.getData();
+        List<Replay> previousOrder = new ArrayList<>(film.replays.getList());
         List<Replay> removing = new ArrayList<>(this.getSelectedReplays());
         Replay focus = removing.get(0);
-        int globalFocus = film.replays.getList().indexOf(focus);
+        int globalFocus = CollectionUtils.getIndex(film.replays.getList(), focus);
+
+        film.preNotify(IValueListener.FLAG_UNMERGEABLE);
 
         for (Replay replay : removing)
         {
             film.replays.remove(replay);
         }
+
+        remapReplayReferences(film, previousOrder);
+        film.postNotify(IValueListener.FLAG_UNMERGEABLE);
 
         List<Replay> remaining = film.replays.getList();
 

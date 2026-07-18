@@ -91,6 +91,16 @@ public class UIModelForm extends UIForm<ModelForm>
     @Override
     public boolean toggleBoneSelection(String bone)
     {
+        /* IK, physics and constraint panels own their own single-bone lists. A
+         * viewport click must update the active property panel before falling
+         * back to the pose editor's multi-selection; otherwise Ctrl-clicking a
+         * model bone silently changes the hidden pose list while the visible
+         * procedural panel keeps showing the previous bone's properties. */
+        if (this.view != null && this.view != this.modelPanel && this.view.pickBoneInList(bone))
+        {
+            return true;
+        }
+
         if (!this.modelPanel.poseEditor.hasBone(bone))
         {
             return false;
@@ -99,5 +109,19 @@ public class UIModelForm extends UIForm<ModelForm>
         this.modelPanel.poseEditor.selectBone(bone, true);
 
         return true;
+    }
+
+    @Override
+    public void pickBoneFromViewport(String bone, Class<?> preferredPanel)
+    {
+        /* Use the live panel instance first. UIFormEditor may rebuild the form
+         * editor while resolving the picked form, and class-based restoration is
+         * only a fallback; the visible model panel is the authoritative target. */
+        if (this.view != null && this.view.pickBoneInList(bone))
+        {
+            return;
+        }
+
+        super.pickBoneFromViewport(bone, preferredPanel);
     }
 }

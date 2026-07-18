@@ -36,6 +36,12 @@ public interface IUIElement
     public IUIElement mouseReleased(UIContext context);
 
     /**
+     * An owned mouse gesture was canceled without a physical button release.
+     */
+    public default void mouseCanceled(UIContext context)
+    {}
+
+    /**
      * Key was typed
      */
     public IUIElement keyPressed(UIContext context);

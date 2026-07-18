@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
@@ -53,6 +54,7 @@ public abstract class FormRenderer <T extends Form>
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         this.renderInUI(context, x1, y1, x2, y2);
+        BBSFormPreviewCapture.include(context, x1, y1, x2, y2);
 
         FontRenderer font = context.batcher.getFont();
         String name = this.form.name.get();
@@ -93,58 +95,85 @@ public abstract class FormRenderer <T extends Form>
             return;
         }
 
-        this.form.applyStates(context.transition);
-
         int light = context.light;
-        boolean visible = this.form.visible.get();
+        PoseStack world = context.world;
+        boolean stackPushed = false;
+        boolean worldPushed = false;
+        boolean statesApplied = false;
 
-        if (!visible)
+        try
         {
-            return;
+            statesApplied = true;
+            this.form.applyStates(context.transition);
+
+            if (!this.form.visible.get())
+            {
+                return;
+            }
+
+            boolean isPicking = context.stencilMap != null;
+
+            context.stack.pushPose();
+            stackPushed = true;
+
+            if (world != null)
+            {
+                world.pushPose();
+                worldPushed = true;
+            }
+
+            this.applyTransforms(context.stack, false, context.getTransition());
+
+            if (world != null)
+            {
+                this.applyTransforms(world, false, context.getTransition());
+            }
+
+            float lf = 1F - MathUtils.clamp(this.form.lighting.get(), 0F, 1F);
+            int u = context.light & '\uffff';
+            int v = context.light >> 16 & '\uffff';
+
+            u = (int) Lerps.lerp(u, LightTexture.FULL_BRIGHT, lf);
+            context.light = u | v << 16;
+
+            this.render3D(context);
+
+            if (isPicking)
+            {
+                this.updateStencilMap(context);
+            }
+
+            this.renderBodyParts(context);
         }
-
-        boolean isPicking = context.stencilMap != null;
-
-        context.stack.pushPose();
-
-        if (context.world != null)
+        finally
         {
-            context.world.pushPose();
+            try
+            {
+                if (stackPushed)
+                {
+                    context.stack.popPose();
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (worldPushed)
+                    {
+                        world.popPose();
+                    }
+                }
+                finally
+                {
+                    context.light = light;
+
+                    if (statesApplied)
+                    {
+                        this.form.unapplyStates();
+                    }
+                }
+            }
         }
-
-        this.applyTransforms(context.stack, false, context.getTransition());
-
-        if (context.world != null)
-        {
-            this.applyTransforms(context.world, false, context.getTransition());
-        }
-
-        float lf = 1F - MathUtils.clamp(this.form.lighting.get(), 0F, 1F);
-        int u = context.light & '\uffff';
-        int v = context.light >> 16 & '\uffff';
-
-        u = (int) Lerps.lerp(u, LightTexture.FULL_BRIGHT, lf);
-        context.light = u | v << 16;
-
-        this.render3D(context);
-
-        if (isPicking)
-        {
-            this.updateStencilMap(context);
-        }
-
-        this.renderBodyParts(context);
-
-        context.stack.popPose();
-
-        if (context.world != null)
-        {
-            context.world.popPose();
-        }
-
-        context.light = light;
-
-        this.form.unapplyStates();
     }
 
     protected void applyTransforms(PoseStack stack, boolean origin, float transition)
@@ -213,6 +242,11 @@ public abstract class FormRenderer <T extends Form>
         return displacement;
     }
 
+    public Vector3f getShadowDisplacement(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, float transition)
+    {
+        return this.getShadowDisplacement(entity, transition);
+    }
+
     protected Supplier<ShaderInstance> getShader(FormRenderingContext context, Supplier<ShaderInstance> normal, Supplier<ShaderInstance> picking)
     {
         if (context.isPicking())
@@ -257,42 +291,66 @@ public abstract class FormRenderer <T extends Form>
     {
         IEntity oldEntity = context.entity;
         Object oldSimulationOwner = context.simulationOwner;
+        PoseStack world = context.world;
+        boolean stackPushed = false;
+        boolean worldPushed = false;
 
-        context.entity = part.useTarget.get() ? oldEntity : part.getEntity();
-
-        if (!part.useTarget.get())
+        try
         {
-            context.simulationOwner = context.entity;
-        }
+            context.entity = part.useTarget.get() ? oldEntity : part.getEntity();
 
-        if (part.getForm() != null)
+            /* Entity selection controls animation/world inputs, not history ownership.
+             * Keep the caller's placement owner so rendering this same nested form in
+             * a world entity and in an editor preview cannot share Verlet/IK history.
+             * The nested form has its own renderer, so it remains isolated from the
+             * parent even when both deliberately use the same placement owner. */
+
+            if (part.getForm() != null)
+            {
+                context.stack.pushPose();
+                stackPushed = true;
+
+                if (world != null)
+                {
+                    world.pushPose();
+                    worldPushed = true;
+                }
+
+                MatrixStackUtils.applyTransform(context.stack, part.transform.get());
+
+                if (world != null)
+                {
+                    MatrixStackUtils.applyTransform(world, part.transform.get());
+                }
+
+                FormUtilsClient.render(part.getForm(), context);
+            }
+        }
+        finally
         {
-            context.stack.pushPose();
-
-            if (context.world != null)
+            try
             {
-                context.world.pushPose();
+                if (stackPushed)
+                {
+                    context.stack.popPose();
+                }
             }
-
-            MatrixStackUtils.applyTransform(context.stack, part.transform.get());
-
-            if (context.world != null)
+            finally
             {
-                MatrixStackUtils.applyTransform(context.world, part.transform.get());
-            }
-
-            FormUtilsClient.render(part.getForm(), context);
-
-            context.stack.popPose();
-
-            if (context.world != null)
-            {
-                context.world.popPose();
+                try
+                {
+                    if (worldPushed)
+                    {
+                        world.popPose();
+                    }
+                }
+                finally
+                {
+                    context.entity = oldEntity;
+                    context.simulationOwner = oldSimulationOwner;
+                }
             }
         }
-
-        context.entity = oldEntity;
-        context.simulationOwner = oldSimulationOwner;
     }
 
     public MatrixCache collectMatrices(IEntity entity, float transition)
@@ -305,41 +363,119 @@ public abstract class FormRenderer <T extends Form>
         return map;
     }
 
+    /**
+     * Collect matrices for a concrete simulation placement. Film anchors use
+     * this path so procedural bones are sampled with the same owner, absolute
+     * semantic base and world-input policy as the form that is rendered.
+     */
+    public MatrixCache collectMatrices(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, float transition)
+    {
+        MatrixCache map = new MatrixCache();
+        PoseStack stack = new PoseStack();
+
+        this.collectMatrices(entity, simulationOwner, semanticBase, allowWorldTargetOverrides, allowWorldCollisions, stack, map, "", transition);
+
+        return map;
+    }
+
     public void collectMatrices(IEntity entity, PoseStack stack, MatrixCache matrices, String prefix, float transition)
+    {
+        this.collectMatrices(entity, null, null, false, false, stack, matrices, prefix, transition);
+    }
+
+    public final void collectMatrices(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, PoseStack stack, MatrixCache matrices, String prefix, float transition)
+    {
+        boolean statesApplied = false;
+
+        try
+        {
+            statesApplied = true;
+            this.form.applyStates(transition);
+            this.collectMatricesWithAppliedStates(entity, simulationOwner, semanticBase, allowWorldTargetOverrides, allowWorldCollisions, stack, matrices, prefix, transition);
+        }
+        finally
+        {
+            if (statesApplied)
+            {
+                this.form.unapplyStates();
+            }
+        }
+    }
+
+    protected void collectMatricesWithAppliedStates(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, PoseStack stack, MatrixCache matrices, String prefix, float transition)
     {
         Matrix4f mm = new Matrix4f();
         Matrix4f oo = new Matrix4f();
 
         stack.pushPose();
-        this.applyTransforms(stack, true, transition);
-        oo.set(stack.last().pose());
-        stack.popPose();
-
-        stack.pushPose();
-        this.applyTransforms(stack, false, transition);
-        mm.set(stack.last().pose());
-
-        matrices.put(prefix, mm, oo);
-
-        int i = 0;
-
-        for (BodyPart part : this.form.parts.getAllTyped())
+        try
         {
-            Form form = part.getForm();
-
-            if (form != null)
-            {
-                stack.pushPose();
-                MatrixStackUtils.applyTransform(stack, part.transform.get());
-
-                FormUtilsClient.getRenderer(form).collectMatrices(entity, stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
-
-                stack.popPose();
-            }
-
-            i += 1;
+            this.applyTransforms(stack, true, transition);
+            oo.set(stack.last().pose());
+        }
+        finally
+        {
+            stack.popPose();
         }
 
-        stack.popPose();
+        stack.pushPose();
+        try
+        {
+            this.applyTransforms(stack, false, transition);
+            mm.set(stack.last().pose());
+
+            matrices.put(prefix, mm, oo);
+
+            Matrix4f formSemanticBase = null;
+
+            if (semanticBase != null)
+            {
+                formSemanticBase = new Matrix4f(semanticBase);
+                this.applyTransforms(formSemanticBase, transition);
+            }
+
+            int i = 0;
+
+            for (BodyPart part : this.form.parts.getAllTyped())
+            {
+                Form form = part.getForm();
+
+                if (form != null)
+                {
+                    stack.pushPose();
+                    try
+                    {
+                        MatrixStackUtils.applyTransform(stack, part.transform.get());
+
+                        Matrix4f childSemanticBase = formSemanticBase == null
+                            ? null
+                            : new Matrix4f(formSemanticBase).mul(part.transform.get().setupMatrix(new Matrix4f()));
+                        IEntity childEntity = part.useTarget.get() ? entity : part.getEntity();
+
+                        FormUtilsClient.getRenderer(form).collectMatrices(
+                            childEntity,
+                            simulationOwner,
+                            childSemanticBase,
+                            allowWorldTargetOverrides,
+                            allowWorldCollisions,
+                            stack,
+                            matrices,
+                            StringUtils.combinePaths(prefix, String.valueOf(i)),
+                            transition
+                        );
+                    }
+                    finally
+                    {
+                        stack.popPose();
+                    }
+                }
+
+                i += 1;
+            }
+        }
+        finally
+        {
+            stack.popPose();
+        }
     }
 }

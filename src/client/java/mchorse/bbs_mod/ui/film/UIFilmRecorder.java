@@ -19,6 +19,7 @@ public class UIFilmRecorder extends UIElement
 
     private final PanelVideoExportSession session;
     private final UIExit exit = new UIExit(this);
+    private long overlayGeneration;
 
     public UIFilmRecorder(UIFilmPanel editor)
     {
@@ -55,28 +56,59 @@ public class UIFilmRecorder extends UIElement
         UIUtils.openFolder(BBSRendering.getVideoFolder());
     }
 
+    public boolean reserveExport()
+    {
+        return this.session.reserveRecorder();
+    }
+
+    public void cancelPendingExport()
+    {
+        this.session.cancelPendingReservation();
+    }
+
     public void startRecording(int duration, Texture texture)
     {
-        this.startRecording(duration, texture.id, texture.width, texture.height);
+        this.tryStartRecording(duration, texture);
+    }
+
+    public boolean tryStartRecording(int duration, Texture texture)
+    {
+        return this.tryStartRecording(duration, texture.id, texture.width, texture.height);
     }
 
     public void startRecording(int duration, int id, int w, int h)
     {
+        this.tryStartRecording(duration, id, w, h);
+    }
+
+    public boolean tryStartRecording(int duration, int id, int w, int h)
+    {
         if (this.editor.isRunning() || duration <= 0)
         {
-            return;
+            this.session.cancel();
+
+            return false;
         }
 
-        this.session.start(duration, id, w, h);
+        return this.session.start(duration, id, w, h);
     }
 
     void attachOverlay()
     {
         UIContext context = this.editor.getContext();
+        long generation = this.advanceOverlayGeneration();
 
-        context.menu.main.setEnabled(false);
-        context.menu.overlay.add(this);
-        context.menu.getRoot().add(this.exit);
+        context.menu.runAfterCapturedMouseRelease(() ->
+        {
+            if (generation != this.overlayGeneration || !this.session.isExporting())
+            {
+                return;
+            }
+
+            context.menu.main.setEnabled(false);
+            context.menu.overlay.add(this);
+            context.menu.getRoot().add(this.exit);
+        });
     }
 
     public void stop()
@@ -88,9 +120,22 @@ public class UIFilmRecorder extends UIElement
     {
         UIContext context = this.editor.getContext();
 
-        context.render.postRunnable(this.exit::removeFromParent);
+        this.advanceOverlayGeneration();
         context.menu.main.setEnabled(true);
-        context.render.postRunnable(this::removeFromParent);
+        context.menu.runAfterHierarchyMutation(() ->
+        {
+            this.exit.removeFromParent();
+            this.removeFromParent();
+        });
+    }
+
+    private long advanceOverlayGeneration()
+    {
+        this.overlayGeneration = this.overlayGeneration == Long.MAX_VALUE
+            ? 1L
+            : this.overlayGeneration + 1L;
+
+        return this.overlayGeneration;
     }
 
     @Override

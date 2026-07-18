@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.dashboard.utils;
 import mchorse.bbs_mod.camera.OrbitCamera;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 
 import java.util.function.Supplier;
@@ -10,6 +11,7 @@ import java.util.function.Supplier;
 public class UIOrbitCamera implements IUIElement
 {
     public OrbitCamera orbit = new OrbitCamera();
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
     private boolean control;
     private boolean enabled = true;
 
@@ -25,11 +27,23 @@ public class UIOrbitCamera implements IUIElement
 
     public void setControl(boolean control)
     {
+        if (!control)
+        {
+            this.dragOwnership.cancel();
+            this.orbit.release();
+        }
+
         this.control = control;
     }
 
     public void setEnabled(boolean enabled)
     {
+        if (!enabled)
+        {
+            this.dragOwnership.cancel();
+            this.orbit.release();
+        }
+
         this.enabled = enabled;
     }
 
@@ -38,7 +52,7 @@ public class UIOrbitCamera implements IUIElement
     {
         int i = this.orbit.canStart(context);
 
-        if (i >= 0)
+        if (i >= 0 && this.dragOwnership.acquire(context.mouseButton))
         {
             this.orbit.start(i, context.mouseX, context.mouseY);
 
@@ -62,9 +76,23 @@ public class UIOrbitCamera implements IUIElement
     @Override
     public IUIElement mouseReleased(UIContext context)
     {
+        if (!this.dragOwnership.release(context.mouseButton))
+        {
+            return null;
+        }
+
         this.orbit.release();
 
-        return null;
+        return this;
+    }
+
+    @Override
+    public void mouseCanceled(UIContext context)
+    {
+        if (this.dragOwnership.release(context.mouseButton))
+        {
+            this.orbit.release();
+        }
     }
 
     @Override

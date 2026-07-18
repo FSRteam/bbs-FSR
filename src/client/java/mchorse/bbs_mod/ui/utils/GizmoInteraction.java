@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.utils;
 
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -18,11 +19,14 @@ public class GizmoInteraction
 
     private final GizmoViewport viewport;
     private final Vector2f sphereScreenCenter = new Vector2f();
+    private final MouseGestureOwnership gestureOwnership = new MouseGestureOwnership();
+    private long gestureGeneration;
 
     private boolean sphereHovered;
     private boolean gizmoActive;
     private int pendingDownX;
     private int pendingDownY;
+    private int pendingButton = -1;
     private Form pendingPickForm;
     private String pendingPickBone;
 
@@ -78,8 +82,17 @@ public class GizmoInteraction
 
             if (pair != null && pair.a != null)
             {
+                long generation = this.gestureOwnership.acquireToken(context.mouseButton);
+
+                if (generation == 0L)
+                {
+                    return false;
+                }
+
+                this.gestureGeneration = generation;
                 this.pendingDownX = context.mouseX;
                 this.pendingDownY = context.mouseY;
+                this.pendingButton = context.mouseButton;
                 this.pendingPickForm = pair.a;
                 this.pendingPickBone = pair.b == null ? "" : pair.b;
 
@@ -94,18 +107,29 @@ public class GizmoInteraction
 
     public boolean mouseReleased(UIContext context)
     {
-        if (this.pendingPickForm != null && context.mouseButton == 0)
+        boolean handled = false;
+        long generation = this.gestureGeneration;
+
+        if (this.pendingPickForm != null
+            && context.mouseButton == this.pendingButton
+            && this.retireGesture(context.mouseButton, generation))
         {
             Form form = this.pendingPickForm;
             String bone = this.pendingPickBone;
 
             this.clearPending();
             this.viewport.pickGizmoForm(context, form, bone);
-
-            return true;
+            handled = true;
         }
 
-        return false;
+        if (this.gizmoActive && this.retireGesture(context.mouseButton, generation))
+        {
+            this.gizmoActive = false;
+            Gizmo.INSTANCE.stop();
+            handled = true;
+        }
+
+        return handled;
     }
 
     public void update(UIContext context)
@@ -166,19 +190,56 @@ public class GizmoInteraction
             this.gizmoActive = false;
         }
 
+        this.gestureOwnership.cancel();
+        this.gestureGeneration = 0L;
         this.clearPending();
     }
 
     private boolean startGizmo(UIContext context, int index)
     {
-        if (this.viewport.startGizmo(context, index))
-        {
-            this.gizmoActive = true;
+        int ownerButton = context.mouseButton;
 
-            return true;
+        long generation = this.gestureOwnership.acquireToken(ownerButton);
+
+        if (generation == 0L)
+        {
+            return false;
         }
 
-        return false;
+        this.gestureGeneration = generation;
+
+        return this.startOwnedGizmo(context, index, ownerButton, generation);
+    }
+
+    private boolean startOwnedGizmo(UIContext context, int index, int ownerButton, long generation)
+    {
+        if (!this.gestureOwnership.isOwnedBy(ownerButton, generation))
+        {
+            return false;
+        }
+
+        boolean started = false;
+
+        try
+        {
+            started = this.viewport.startGizmo(context, index);
+
+            if (!this.gestureOwnership.isOwnedBy(ownerButton, generation))
+            {
+                return false;
+            }
+
+            this.gizmoActive = started;
+
+            return started;
+        }
+        finally
+        {
+            if (!started)
+            {
+                this.retireGesture(ownerButton, generation);
+            }
+        }
     }
 
     private void promotePendingPick(UIContext context)
@@ -193,9 +254,27 @@ public class GizmoInteraction
 
         if (dx * dx + dy * dy > BONE_VS_SPHERE_DRAG_THRESHOLD_PX * BONE_VS_SPHERE_DRAG_THRESHOLD_PX)
         {
+            int ownerButton = this.pendingButton;
+            long generation = this.gestureGeneration;
+
             this.clearPending();
-            this.startGizmo(context, Gizmo.STENCIL_TRACKBALL);
+            this.startOwnedGizmo(context, Gizmo.STENCIL_TRACKBALL, ownerButton, generation);
         }
+    }
+
+    private boolean retireGesture(int button, long generation)
+    {
+        if (!this.gestureOwnership.release(button, generation))
+        {
+            return false;
+        }
+
+        if (this.gestureGeneration == generation)
+        {
+            this.gestureGeneration = 0L;
+        }
+
+        return true;
     }
 
     private void updateSphereHover(UIContext context)
@@ -245,6 +324,7 @@ public class GizmoInteraction
 
     private void clearPending()
     {
+        this.pendingButton = -1;
         this.pendingPickForm = null;
         this.pendingPickBone = null;
     }

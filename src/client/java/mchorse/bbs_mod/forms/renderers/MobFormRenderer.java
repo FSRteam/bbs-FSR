@@ -31,7 +31,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.resources.ResourceLocation;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
@@ -382,7 +381,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                 if (handSwingProgress > 0 && this.prevHandSwing == 0)
                 {
-                    livingEntity.swing(InteractionHand.MAIN_HAND);
+                    livingEntity.swing(entity.getSwingingArm());
                 }
 
                 this.prevHandSwing = handSwingProgress;

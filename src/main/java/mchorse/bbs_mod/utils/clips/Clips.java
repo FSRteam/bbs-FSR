@@ -118,6 +118,11 @@ public class Clips extends ValueGroup
         return index >= 0 && index < this.clips.size() ? this.clips.get(index) : null;
     }
 
+    public int size()
+    {
+        return this.clips.size();
+    }
+
     public Clip getClipAt(int tick, int layer)
     {
         for (Clip clip : this.clips)

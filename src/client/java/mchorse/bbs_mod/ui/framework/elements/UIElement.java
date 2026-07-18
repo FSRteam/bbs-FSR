@@ -102,6 +102,7 @@ public class UIElement implements IUIElement, IUndoElement
      * Parent GUI element
      */
     protected UIElement parent;
+    private long parentAttachmentGeneration;
 
     /**
      * Children elements
@@ -266,8 +267,11 @@ public class UIElement implements IUIElement, IUndoElement
     {
         if (element != null)
         {
-            this.children.add(0, element);
-            this.markChild(element);
+            this.runHierarchyMutation(() ->
+            {
+                this.children.add(0, element);
+                this.markChild(element);
+            }, element);
         }
     }
 
@@ -275,59 +279,81 @@ public class UIElement implements IUIElement, IUndoElement
     {
         if (element != null)
         {
-            this.children.add(element);
-            this.markChild(element);
+            this.runHierarchyMutation(() ->
+            {
+                this.children.add(element);
+                this.markChild(element);
+            }, element);
         }
     }
 
     public void add(IUIElement... elements)
     {
-        for (IUIElement element : elements)
+        if (elements == null || elements.length == 0)
         {
-            if (element != null)
-            {
-                this.children.add(element);
-                this.markChild(element);
-            }
+            return;
         }
+
+        IUIElement[] additions = elements.clone();
+
+        this.runHierarchyMutation(() ->
+        {
+            for (IUIElement element : additions)
+            {
+                if (element != null)
+                {
+                    this.children.add(element);
+                    this.markChild(element);
+                }
+            }
+        }, additions);
     }
 
     public void addAfter(IUIElement target, IUIElement element)
     {
-        int index = this.children.indexOf(target);
-
-        if (index != -1 && element != null)
+        if (element != null)
         {
-            if (index + 1 >= this.children.size())
+            this.runHierarchyMutation(() ->
             {
-                this.children.add(element);
-            }
-            else
-            {
-                this.children.add(index + 1, element);
-            }
+                int index = this.children.indexOf(target);
 
-            this.markChild(element);
+                if (index != -1)
+                {
+                    this.children.add(index + 1, element);
+                    this.markChild(element);
+                }
+            }, element);
         }
     }
 
     public void addBefore(IUIElement target, IUIElement element)
     {
-        int index = this.children.indexOf(target);
-
-        if (index != -1 && element != null)
+        if (element != null)
         {
-            this.children.add(index, element);
+            this.runHierarchyMutation(() ->
+            {
+                int index = this.children.indexOf(target);
 
-            this.markChild(element);
+                if (index != -1)
+                {
+                    this.children.add(index, element);
+                    this.markChild(element);
+                }
+            }, element);
         }
     }
 
     public void moveToFront(IUIElement element)
     {
-        if (element != null && this.children.remove(element))
+        if (element != null && this.children.contains(element))
         {
-            this.children.add(element);
+            this.runHierarchyMutation(() ->
+            {
+                if (this.children.remove(element))
+                {
+                    this.children.add(element);
+                }
+            }, element);
         }
     }
 
@@ -338,6 +364,9 @@ public class UIElement implements IUIElement, IUndoElement
             UIElement child = (UIElement) element;
 
             child.parent = this;
+            child.parentAttachmentGeneration = child.parentAttachmentGeneration == Long.MAX_VALUE
+                ? 1L
+                : child.parentAttachmentGeneration + 1L;
             child.onAdd(this);
 
             if (this.resizer != null)
@@ -349,23 +378,40 @@ public class UIElement implements IUIElement, IUndoElement
 
     public void removeAll()
     {
-        for (IUIElement uiElement : this.children)
+        if (this.children.isEmpty())
         {
-            if (uiElement instanceof UIElement)
+            return;
+        }
+
+        List<IUIElement> removals = new ArrayList<>(this.children);
+
+        this.runHierarchyMutation(() -> this.removeAllNow(removals));
+    }
+
+    private void removeAllNow(List<IUIElement> removals)
+    {
+        Throwable failure = null;
+
+        for (IUIElement uiElement : removals)
+        {
+            try
             {
-                UIElement element = (UIElement) uiElement;
-
-                if (this.resizer != null)
+                if (uiElement instanceof UIElement)
                 {
-                    this.resizer.remove(this, element);
+                    this.removeNow((UIElement) uiElement);
                 }
-
-                element.onRemove(element.parent);
-                element.parent = null;
+                else
+                {
+                    this.children.remove(uiElement);
+                }
+            }
+            catch (RuntimeException | Error exception)
+            {
+                failure = appendHierarchyFailure(failure, exception);
             }
         }
 
-        this.children.clear();
+        rethrowHierarchyFailure(failure);
     }
 
     public void removeFromParent()
@@ -378,20 +424,150 @@ public class UIElement implements IUIElement, IUndoElement
 
     public void remove(IUIElement element)
     {
-        this.children.remove(element);
+        if (element instanceof UIElement)
+        {
+            this.remove((UIElement) element);
+
+            return;
+        }
+
+        if (element != null && this.children.contains(element))
+        {
+            this.runHierarchyMutation(() -> this.children.remove(element));
+        }
     }
 
     public void remove(UIElement element)
     {
-        if (this.children.remove(element))
+        if (element != null && this.children.contains(element))
         {
-            if (this.resizer != null)
-            {
-                this.resizer.remove(this, element);
-            }
+            this.runHierarchyMutation(() -> this.removeNow(element));
+        }
+    }
 
-            element.onRemove(element.parent);
+    private void removeNow(UIElement element)
+    {
+        if (!this.children.remove(element))
+        {
+            return;
+        }
+
+        long attachmentGeneration = element.parentAttachmentGeneration;
+        IResizer removalResizer = this.resizer;
+        Throwable failure = null;
+
+        failure = runHierarchyTeardownStep(failure, () -> this.unfocusRemovedElement(element));
+
+        if (removalResizer != null)
+        {
+            failure = runHierarchyTeardownStep(failure, () -> removalResizer.remove(this, element));
+        }
+
+        failure = runHierarchyTeardownStep(failure, () -> element.onRemove(this));
+
+        if (element.parent == this && element.parentAttachmentGeneration == attachmentGeneration)
+        {
             element.parent = null;
+        }
+
+        rethrowHierarchyFailure(failure);
+    }
+
+    private void unfocusRemovedElement(UIElement element)
+    {
+        UIContext context = this.getContext();
+
+        if (context != null && context.activeElement instanceof UIElement)
+        {
+            UIElement active = (UIElement) context.activeElement;
+
+            if (active == element || element.isDescendant(active))
+            {
+                IFocusedUIElement focused = context.activeElement;
+
+                try
+                {
+                    context.unfocus();
+                }
+                finally
+                {
+                    if (context.activeElement == focused)
+                    {
+                        context.activeElement = null;
+                    }
+                }
+            }
+        }
+    }
+
+    private static Throwable runHierarchyTeardownStep(Throwable failure, Runnable step)
+    {
+        try
+        {
+            step.run();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            return appendHierarchyFailure(failure, exception);
+        }
+
+        return failure;
+    }
+
+    private static Throwable appendHierarchyFailure(Throwable failure, Throwable exception)
+    {
+        if (failure == null)
+        {
+            return exception;
+        }
+
+        if (failure != exception)
+        {
+            failure.addSuppressed(exception);
+        }
+
+        return failure;
+    }
+
+    private static void rethrowHierarchyFailure(Throwable failure)
+    {
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+        if (failure instanceof Error error)
+        {
+            throw error;
+        }
+    }
+
+    private void runHierarchyMutation(Runnable mutation, IUIElement... affected)
+    {
+        UIContext context = this.getContext();
+
+        if (context == null && affected != null)
+        {
+            for (IUIElement element : affected)
+            {
+                if (element instanceof UIElement)
+                {
+                    context = ((UIElement) element).getContext();
+
+                    if (context != null)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (context == null)
+        {
+            mutation.run();
+        }
+        else
+        {
+            context.menu.runAfterHierarchyMutation(mutation);
         }
     }
 
@@ -1168,6 +1344,35 @@ public class UIElement implements IUIElement, IUndoElement
     }
 
     @Override
+    public final void mouseCanceled(UIContext context)
+    {
+        Throwable failure = null;
+
+        for (int i = this.children.size() - 1; i >= 0; i--)
+        {
+            try
+            {
+                this.children.get(i).mouseCanceled(context);
+            }
+            catch (RuntimeException | Error exception)
+            {
+                failure = appendHierarchyFailure(failure, exception);
+            }
+        }
+
+        try
+        {
+            this.subMouseCanceled(context);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = appendHierarchyFailure(failure, exception);
+        }
+
+        rethrowHierarchyFailure(failure);
+    }
+
+    @Override
     public final IUIElement keyPressed(UIContext context)
     {
         IUIElement element = this.childrenKeyPressed(context);
@@ -1311,6 +1516,10 @@ public class UIElement implements IUIElement, IUndoElement
     {
         return false;
     }
+
+    /** Cancel only local gesture state; cancellation must not commit an action. */
+    protected void subMouseCanceled(UIContext context)
+    {}
 
     protected boolean subKeyPressed(UIContext context)
     {
