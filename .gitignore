@@ -45,6 +45,7 @@ logs/
 
 hs_err_*.log
 replay_*.log
+javac.*.args
 *.hprof
 *.jfr
 
