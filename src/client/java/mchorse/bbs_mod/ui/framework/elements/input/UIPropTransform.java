@@ -516,11 +516,14 @@ public class UIPropTransform extends UITransform
             return;
         }
 
-        float minScale = Math.min(transform.scale.x, Math.min(transform.scale.y, transform.scale.z));
-        float maxScale = Math.max(transform.scale.x, Math.max(transform.scale.y, transform.scale.z));
-
-        if (BBSSettings.uniformScale.get())
+        /* Uniform-scale synchronization rebuilds the scale row. Never mutate that UI
+         * tree while a drag is being rendered; disable()/acceptChanges() performs the
+         * final synchronization after the gesture has ended. */
+        if (!this.editing && BBSSettings.uniformScale.get())
         {
+            float minScale = Math.min(transform.scale.x, Math.min(transform.scale.y, transform.scale.z));
+            float maxScale = Math.max(transform.scale.x, Math.max(transform.scale.y, transform.scale.z));
+
             if (
                 (minScale == maxScale && !this.isUniformScale()) ||
                 (minScale != maxScale && this.isUniformScale())

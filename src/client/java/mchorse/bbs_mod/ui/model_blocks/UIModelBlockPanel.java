@@ -411,8 +411,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         this.gizmoStencil.setup(Link.bbs("stencil_model_block"));
 
-        int w = mc.getWindow().getScreenWidth();
-        int h = mc.getWindow().getScreenHeight();
+        int w = mc.getWindow().getWidth();
+        int h = mc.getWindow().getHeight();
         Texture texture = this.gizmoStencil.getFramebuffer().getMainTexture();
 
         if (texture.width != w || texture.height != h)
@@ -437,7 +437,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             int mouseX = scaleCoordinate(context.mouseX, context.menu.width, w);
             int mouseY = scaleCoordinate(context.mouseY, context.menu.height, h);
 
-            this.gizmoStencil.pick(mouseX, h - mouseY, BBSSettings.gizmoHoverTolerance.get() * BBSModClient.getGUIScale(), Gizmo.STENCIL_MAX);
+            this.gizmoStencil.pick(mouseX, h - mouseY, Math.round(BBSSettings.gizmoHoverTolerance.get() * BBSModClient.getGUIScale()), Gizmo.STENCIL_MAX);
         }
         finally
         {

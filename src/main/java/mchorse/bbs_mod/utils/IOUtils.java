@@ -16,6 +16,9 @@ import java.io.OutputStreamWriter;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -59,10 +62,33 @@ public class IOUtils
 
     public static void writeText(File file, String string) throws IOException
     {
-        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8));
+        File absolute = file.getAbsoluteFile();
+        File parent = absolute.getParentFile();
 
-        writer.write(string);
-        writer.close();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs() && !parent.isDirectory())
+        {
+            throw new IOException("Could not create parent directory for " + file);
+        }
+
+        /* Never truncate the live settings file before the replacement is durable. */
+        File temp = new File(parent, absolute.getName() + ".tmp");
+
+        try (FileOutputStream stream = new FileOutputStream(temp);
+             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8)))
+        {
+            writer.write(string);
+            writer.flush();
+            stream.getFD().sync();
+        }
+
+        try
+        {
+            Files.move(temp.toPath(), absolute.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        }
+        catch (AtomicMoveNotSupportedException e)
+        {
+            Files.move(temp.toPath(), absolute.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     /**

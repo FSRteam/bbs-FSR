@@ -5,17 +5,25 @@ import com.mojang.blaze3d.shaders.Uniform;
 import mchorse.bbs_mod.graphics.InverseView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import org.joml.Matrix4f;
+import org.joml.Matrix3f;
 import org.lwjgl.opengl.GL30;
 
 public class ModelVAORenderer
 {
-    private static final Matrix4f modelView = new Matrix4f();
+    public static Matrix4f captureModelView(PoseStack stack)
+    {
+        return new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
+    }
 
     public static void render(ShaderInstance shader, IModelVAO modelVAO, PoseStack stack, float r, float g, float b, float a, int light, int overlay)
+    {
+        render(shader, modelVAO, captureModelView(stack), stack.last().normal(), r, g, b, a, light, overlay);
+    }
+
+    public static void render(ShaderInstance shader, IModelVAO modelVAO, Matrix4f modelView, Matrix3f normalMat, float r, float g, float b, float a, int light, int overlay)
     {
         if (shader == null || modelVAO == null)
         {
@@ -25,7 +33,7 @@ public class ModelVAORenderer
         int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
 
-        setupUniforms(stack, shader);
+        setupUniforms(shader, modelView, normalMat);
 
         shader.apply();
         modelVAO.render(shader.getVertexFormat(), r, g, b, a, light, overlay);
@@ -37,12 +45,16 @@ public class ModelVAORenderer
 
     public static void setupUniforms(PoseStack stack, ShaderInstance shader)
     {
+        setupUniforms(shader, captureModelView(stack), stack.last().normal());
+    }
+
+    public static void setupUniforms(ShaderInstance shader, Matrix4f modelView, Matrix3f normalMat)
+    {
         for (int i = 0; i < 12; i++)
         {
             shader.setSampler("Sampler" + i, RenderSystem.getShaderTexture(i));
         }
 
-        Matrix4f modelView = ModelVAORenderer.modelView.set(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
         shader.setDefaultUniforms(VertexFormat.Mode.TRIANGLES, modelView, RenderSystem.getProjectionMatrix(), Minecraft.getInstance().getWindow());
 
         /* NormalMat is present by default in Iris' shaders, but when there is no Iris,
@@ -53,7 +65,7 @@ public class ModelVAORenderer
 
         if (normalUniform != null)
         {
-            normalUniform.set(stack.last().normal());
+            normalUniform.set(normalMat);
         }
 
         Uniform viewRotationUniform = shader.getUniform("ViewRotationMat");

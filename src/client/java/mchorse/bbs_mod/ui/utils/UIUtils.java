@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.utils.OS;
@@ -12,6 +13,20 @@ import java.io.IOException;
 
 public class UIUtils
 {
+    /** Map logical GUI units to framebuffer pixels using the effective window scale. */
+    public static int[] viewportArea(Area area)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        float scale = (float) mc.getWindow().getGuiScale();
+        int vx = Math.round(area.x * scale);
+        int vy = Math.round(mc.getWindow().getHeight() - (area.y + area.h) * scale);
+        int vw = Math.round(area.w * scale);
+        int vh = Math.round(area.h * scale);
+
+        RenderSystem.viewport(vx, vy, vw, vh);
+
+        return new int[] {vx, vy, vw, vh};
+    }
     /**
      * Open web link (in default web browser)
      */

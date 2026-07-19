@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
 import mchorse.bbs_mod.graphics.Framebuffer;
 import mchorse.bbs_mod.graphics.Renderbuffer;
@@ -23,6 +24,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
@@ -124,6 +126,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             BBSRendering.setIrisMainBound(false);
         }
 
+        boolean queueWasActive = FormTranslucentQueue.suspend();
+
         try
         {
             super.renderBodyParts(context);
@@ -136,6 +140,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             {
                 BBSRendering.setIrisMainBound(true);
             }
+
+            FormTranslucentQueue.restore(queueWasActive);
         }
 
         context.stack.popPose();
@@ -153,10 +159,12 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR;
         Supplier<ShaderInstance> shader = shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionColorTexLightmapShader;
 
-        this.renderModel(framebuffer.getMainTexture(), format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
+        this.renderModel(framebuffer.getMainTexture(), format, shader, context.stack, context.overlay,
+            context.light, context.color, context.getTransition(), !context.isPicking());
     }
 
-    private void renderModel(Texture texture, VertexFormat format, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderModel(Texture texture, VertexFormat format, Supplier<ShaderInstance> shader,
+        PoseStack matrices, int overlay, int light, int overlayColor, float transition, boolean defer)
     {
         float w = texture.width;
         float h = texture.height;
@@ -185,10 +193,11 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         quad.p3.set(TLx, BRy, 0);
         quad.p4.set(BRx, BRy, 0);
 
-        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition);
+        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition, defer);
     }
 
-    private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderInstance> shader,
+        PoseStack matrices, int overlay, int light, int overlayColor, float transition, boolean defer)
     {
         BufferBuilder builder;
         Color color = this.quadColor.set(1F, 1F, 1F, 1F);
@@ -229,7 +238,24 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableBlend();
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+
+        if (defer && FormTranslucentQueue.isActive())
+        {
+            VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+            buffer.bind();
+            buffer.upload(builder.buildOrThrow());
+            VertexBuffer.unbind();
+
+            ShaderInstance capturedShader = RenderSystem.getShader();
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+            Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
+                () -> capturedShader, texture, modelView, null, origin, true, null, null));
+        }
+        else
+        {
+            BufferUploader.drawWithShader(builder.buildOrThrow());
+        }
 
         gameRenderer.lightTexture().turnOffLightLayer();
         gameRenderer.overlayTexture().teardownOverlayColor();

@@ -8,6 +8,7 @@ import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import net.minecraft.world.level.Level;
@@ -19,6 +20,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -36,6 +38,8 @@ public final class ModelPhysicsRuntime
         public final ModelPivotFrames.Workspace frameCollector = new ModelPivotFrames.Workspace();
         public final Vector3f windDirection = new Vector3f();
         public ModelPhysicsCache.Compiled compiled;
+        /** Model asset used to build this form path's mutable chain history. */
+        public String modelId;
     }
 
     /** Weak registry preserves the existing global cache-invalidation API without making histories global. */
@@ -70,11 +74,11 @@ public final class ModelPhysicsRuntime
         {
             for (ModelPhysicsRuntime runtime : RUNTIMES)
             {
-                for (Map<String, InstanceState> byModel : runtime.states.values())
+                for (Map<String, InstanceState> byForm : runtime.states.values())
                 {
-                    if (byModel != null)
+                    if (byForm != null)
                     {
-                        byModel.remove(modelId);
+                        byForm.values().removeIf((state) -> Objects.equals(state.modelId, modelId));
                     }
                 }
             }
@@ -109,8 +113,19 @@ public final class ModelPhysicsRuntime
         Map<String, ModelConstraintsConfig.BoneConstraint> constraints = ModelConstraintsRuntime.getBones(instance);
 
         Object owner = simulationOwner == null ? entity : simulationOwner;
-        Map<String, InstanceState> byModel = this.states.computeIfAbsent(owner, (e) -> new HashMap<>());
-        InstanceState state = byModel.computeIfAbsent(instance.id, (k) -> new InstanceState());
+        /* ModelInstance is shared by every form using the same asset. Keep mutable history per
+         * form-tree path so sibling body parts cannot collapse onto one chain state. */
+        String formPath = instance.form instanceof ModelForm form ? FormUtils.getPath(form) : "";
+        Map<String, InstanceState> byForm = this.states.computeIfAbsent(owner, (e) -> new HashMap<>());
+        InstanceState state = byForm.computeIfAbsent(formPath, (k) -> new InstanceState());
+
+        if (!Objects.equals(state.modelId, instance.id))
+        {
+            state.chains.clear();
+            state.frames.clear();
+            state.compiled = null;
+            state.modelId = instance.id;
+        }
 
         /* The wind track (if keyframed) replaces the configured wind wholesale at playback, mirroring how the
          * physics track layers over the per-chain config. */

@@ -7,6 +7,10 @@ import net.minecraft.client.renderer.RenderType;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import org.lwjgl.opengl.GL11;
+import com.mojang.blaze3d.vertex.VertexBuffer;
+import com.mojang.blaze3d.vertex.MeshData;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.SequencedMap;
 import java.util.function.Consumer;
@@ -19,12 +23,27 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
     private Function<VertexConsumer, VertexConsumer> substitute;
     private boolean ui;
 
-    public static void drawLayer(RenderType layer)
+    public static boolean drawLayer(RenderType layer, MeshData meshData)
     {
         if (runnables != null)
         {
             runnables.accept(layer);
         }
+
+        Vector3f origin = FormTranslucentQueue.getSortOrigin();
+
+        if (origin == null || !FormTranslucentQueue.isActive() || !isDeferrableTranslucent(layer))
+        {
+            return false;
+        }
+
+        VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+        buffer.bind();
+        buffer.upload(meshData);
+        VertexBuffer.unbind();
+        FormTranslucentQueue.add(new FormTranslucentQueue.RenderLayerCommand(
+            layer, buffer, new Matrix4f(RenderSystem.getModelViewMatrix()), new Vector3f(origin), false));
+        return true;
     }
 
     public static void hijackVertexFormat(Consumer<RenderType> runnable)
@@ -73,6 +92,12 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
         }
 
         return buffer;
+    }
+
+    private static boolean isDeferrableTranslucent(RenderType layer)
+    {
+        String name = layer.toString();
+        return name.contains("translucent") && !name.contains("glint");
     }
 
     public void draw()

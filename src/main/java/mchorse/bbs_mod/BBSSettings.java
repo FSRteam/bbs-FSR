@@ -29,6 +29,7 @@ public class BBSSettings {
 
 	public static final String DEFAULT_FFMPEG_ARGUMENTS = ValueVideoSettings.DEFAULT_FFMPEG_ARGUMENTS;
 	public static final String DEFAULT_AUDIO_FFMPEG_ARGUMENTS = ValueVideoSettings.DEFAULT_AUDIO_FFMPEG_ARGUMENTS;
+	public static final String DEFAULT_MUX_FFMPEG_ARGUMENTS = "-y -i %VIDEO% -i %AUDIO_TRACK% -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -shortest %NAME%.mp4";
 
 	public static ValueColors favoriteColors;
 	public static ValueColors recentColors;
@@ -39,7 +40,7 @@ public class BBSSettings {
 	public static ValueInt stencilHighlightColor;
 	public static ValueBoolean enableTrackpadIncrements;
 	public static ValueBoolean enableTrackpadScrolling;
-	public static ValueInt userIntefaceScale;
+	public static ValueFloat userIntefaceScale;
 	public static ValueInt tooltipStyle;
 	public static ValueInt theme;
 	public static ValueFloat fov;
@@ -105,6 +106,7 @@ public class BBSSettings {
 	public static ValueString videoExportPath;
 	public static ValueString videoExportFilenameFormat;
 	public static ValueBoolean videoExportAudio;
+	public static ValueBoolean videoExportMinecraftSounds;
 	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
 	public static ValueInt videoHeldFrames;
@@ -113,6 +115,7 @@ public class BBSSettings {
 	public static ValueBoolean videoPlaySoundAfterExport;
 	public static ValueString videoArguments;
 	public static ValueString videoArgumentsAudio;
+	public static ValueString videoArgumentsMux;
 	public static ValueVideoSettings videoSettings;
 
 	public static ValueFloat editorCameraSpeed;
@@ -458,7 +461,7 @@ public class BBSSettings {
 		builder.register(language = new ValueLanguage("language"));
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
-		userIntefaceScale = builder.getInt("ui_scale", 2, 0, 4);
+		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F);
 		tooltipStyle = builder.getInt("tooltip_style", DEFAULT_THEME);
 		tooltipStyle.invisible();
 		fov = builder.getFloat("fov", 40, 0, 180);
@@ -470,7 +473,7 @@ public class BBSSettings {
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
 		favoriteColors = new ValueColors("favorite_colors");
-		recentColors = new ValueColors("recent_colors");
+		recentColors = new ValueColors("recent_colors").limit(33);
 		disabledSheets = new ValueStringKeys("disabled_sheets");
 		disabledSheets.set(defaultFilters);
 		builder.register(favoriteColors);
@@ -556,6 +559,7 @@ public class BBSSettings {
 		videoExportPath = builder.getString("export_path", "");
 		videoExportFilenameFormat = builder.getString("filename_format", "{datetime}");
 		videoExportAudio = builder.getBoolean("audio", false);
+		videoExportMinecraftSounds = builder.getBoolean("minecraft_sounds", false);
 		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
 		videoHeldFrames = builder.getInt("held_frames", 1, 1, 1000);
@@ -564,6 +568,7 @@ public class BBSSettings {
 		videoPlaySoundAfterExport = builder.getBoolean("play_sound_after_export", true);
 		videoArguments = builder.getString("arguments", DEFAULT_FFMPEG_ARGUMENTS);
 		videoArgumentsAudio = builder.getString("arguments_audio", DEFAULT_AUDIO_FFMPEG_ARGUMENTS);
+		videoArgumentsMux = builder.getString("arguments_mux", DEFAULT_MUX_FFMPEG_ARGUMENTS);
 		videoSettings = ValueVideoSettings.bridge(
 			"settings",
 			videoArguments,

@@ -365,7 +365,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             /* Rendering may be camera-relative or already contain an editor view matrix. Physics and
              * world-space IK targets must only see the separately propagated semantic world transform. */
-            Matrix4f baseTransform = ui ? null : new Matrix4f((world == null ? stack : world).last().pose());
+            /* A missing semantic world frame (for example first-person arm rendering) is not a
+             * camera-space world. Keep simulation model-local instead of deriving gravity/collision
+             * orientation from the render stack. */
+            Matrix4f baseTransform = ui || world == null ? null : new Matrix4f(world.last().pose());
 
             /* Clamp the FK input first. IK and physics each enforce the same limits internally; applying
              * the generic Euler clamp afterward would clear their composed quaternion orientation. */
@@ -1067,7 +1070,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                         }
 
                         FormUtilsClient.getRenderer(form).collectMatrices(
-                            part.useTarget.get() ? entity : part.getEntity(),
+                            part.getRenderEntity(entity),
                             simulationOwner,
                             childSemanticBase,
                             allowWorldTargetOverrides,

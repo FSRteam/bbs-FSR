@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.ui.framework;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.IViewport;
@@ -10,6 +12,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIViewportStack;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.renderers.InputRenderer;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
@@ -91,9 +94,24 @@ public abstract class UIBaseMenu
 
         popka.keys().register(Keys.KEYBINDS, () -> this.context.toggleKeybinds());
         popka.keys().register(Keys.TRANSFORMATIONS_TOGGLE_AXES, () -> renderAxes = !renderAxes);
+        popka.keys().register(Keys.UI_SCALE_INC, () -> changeUIScale(0.25F));
+        popka.keys().register(Keys.UI_SCALE_DEC, () -> changeUIScale(-0.25F));
         this.root.add(popka);
 
         this.context.keybinds.relative(this.viewport).wh(0.5F, 1F);
+    }
+
+    /** Step the custom UI scale; zero uses Minecraft's effective scale as the base. */
+    private static void changeUIScale(float delta)
+    {
+        float current = BBSSettings.userIntefaceScale.get();
+
+        if (current <= 0F)
+        {
+            current = BBSModClient.getGUIScale();
+        }
+
+        BBSSettings.userIntefaceScale.set(MathUtils.clamp(current + delta, 0.5F, 4F));
     }
 
     public UIRootElement getRoot()

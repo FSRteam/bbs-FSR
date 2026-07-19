@@ -45,6 +45,31 @@ public class BodyPart extends ValueGroup
         return this.parent instanceof BodyPartManager parts ? parts : null;
     }
 
+    /**
+     * Resolve the entity used by a nested form and propagate the target world to the part's
+     * neutral entity. The part keeps its own animation clock when it does not mirror the target,
+     * but still belongs to the target level for collision-aware model physics.
+     */
+    public IEntity getRenderEntity(IEntity target)
+    {
+        if (this.useTarget.get())
+        {
+            return target;
+        }
+
+        this.syncWorld(target);
+
+        return this.entity;
+    }
+
+    private void syncWorld(IEntity target)
+    {
+        if (target != null && target != this.entity)
+        {
+            this.entity.setWorld(target.getWorld());
+        }
+    }
+
     public void setForm(Form form)
     {
         this.preNotify();
@@ -70,9 +95,11 @@ public class BodyPart extends ValueGroup
 
     public void update(IEntity target)
     {
+        this.syncWorld(target);
+
         if (this.form != null)
         {
-            this.form.update(this.useTarget.get() ? target : this.entity);
+            this.form.update(this.getRenderEntity(target));
         }
 
         this.entity.update();

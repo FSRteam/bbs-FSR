@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -35,6 +36,7 @@ import net.minecraft.resources.ResourceLocation;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
 import java.lang.reflect.Field;
@@ -307,42 +309,52 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 context.world.pushPose();
             }
 
-            if (this.form.mobID.get().equals("minecraft:ender_dragon"))
+            try
             {
-                context.stack.mulPose(ROTATE_Y_180);
+                if (this.form.mobID.get().equals("minecraft:ender_dragon"))
+                {
+                    context.stack.mulPose(ROTATE_Y_180);
+
+                    if (context.world != null)
+                    {
+                        context.world.mulPose(ROTATE_Y_180);
+                    }
+                }
+
+                if (this.entity instanceof LivingEntity entity)
+                {
+                    int u = context.overlay & '\uffff';
+                    int v = context.overlay >> 16 & '\uffff';
+
+                    entity.hurtTime = v != 10 ? 100 : 0;
+                }
+
+                currentPose = this.form.pose.get();
+                currentPoseOverlay = this.form.poseOverlay.get();
+
+                if (!context.isPicking())
+                {
+                    Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
+                    FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
+                }
+
+                Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
+                consumers.draw();
+            }
+            finally
+            {
+                currentPose = currentPoseOverlay = null;
+                FormTranslucentQueue.setSortOrigin(null);
+                CustomVertexConsumerProvider.clearRunnables();
+                context.stack.popPose();
 
                 if (context.world != null)
                 {
-                    context.world.mulPose(ROTATE_Y_180);
+                    context.world.popPose();
                 }
+
+                RenderSystem.enableDepthTest();
             }
-
-            if (this.entity instanceof LivingEntity entity)
-            {
-                int u = context.overlay & '\uffff';
-                int v = context.overlay >> 16 & '\uffff';
-
-                entity.hurtTime = v != 10 ? 100 : 0;
-            }
-
-            currentPose = this.form.pose.get();
-            currentPoseOverlay = this.form.poseOverlay.get();
-
-            Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
-
-            currentPose = currentPoseOverlay = null;
-
-            consumers.draw();
-            CustomVertexConsumerProvider.clearRunnables();
-
-            context.stack.popPose();
-
-            if (context.world != null)
-            {
-                context.world.popPose();
-            }
-
-            RenderSystem.enableDepthTest();
         }
     }
 

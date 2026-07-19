@@ -4,6 +4,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.utils.colors.Color;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.RenderType;
@@ -41,6 +42,11 @@ public abstract class WorldRendererMixin
     @Inject(method = "renderSectionLayer", at = @At("HEAD"), cancellable = true)
     public void onRenderSectionLayer(RenderType renderType, double cameraX, double cameraY, double cameraZ, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo info)
     {
+        if (renderType == RenderType.translucent() && !BBSRendering.isIrisShadowPass())
+        {
+            FormTranslucentQueue.flush();
+        }
+
         if (BBSSettings.chromaSkyEnabled.get() && !BBSSettings.chromaSkyTerrain.get())
         {
             /* Hidden terrain still needs the BBS world composite, but

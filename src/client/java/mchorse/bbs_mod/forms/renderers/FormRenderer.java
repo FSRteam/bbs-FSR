@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -90,6 +91,11 @@ public abstract class FormRenderer <T extends Form>
 
     public final void render(FormRenderingContext context)
     {
+        if (!context.isPicking() && !context.ui)
+        {
+            FormTranslucentQueue.ensureStarted();
+        }
+
         if (!this.form.shaderShadow.get() && BBSRendering.isIrisShadowPass())
         {
             return;
@@ -297,7 +303,7 @@ public abstract class FormRenderer <T extends Form>
 
         try
         {
-            context.entity = part.useTarget.get() ? oldEntity : part.getEntity();
+            context.entity = part.getRenderEntity(oldEntity);
 
             /* Entity selection controls animation/world inputs, not history ownership.
              * Keep the caller's placement owner so rendering this same nested form in

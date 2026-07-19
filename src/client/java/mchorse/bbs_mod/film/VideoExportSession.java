@@ -2,13 +2,23 @@ package mchorse.bbs_mod.film;
 
 import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.audio.MinecraftSoundCapture;
+import mchorse.bbs_mod.audio.MinecraftSoundMixer;
+import mchorse.bbs_mod.audio.Wave;
+import mchorse.bbs_mod.audio.wav.WaveReader;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.VideoExportUtils;
 import mchorse.bbs_mod.utils.VideoExportProcess;
+import mchorse.bbs_mod.utils.VideoMuxer;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.nio.file.Files;
 
 /**
  * Owns the lifecycle of one video export, including the optional warm-up,
@@ -49,6 +59,11 @@ public abstract class VideoExportSession
     private boolean deferredFinishedAborted;
     private boolean beginning;
     private boolean finishing;
+    private String movieName;
+    private File deferredAudioFile;
+    private double recordingFrameRate;
+    private long recordingStartedAtMs;
+    private boolean capturingMinecraftSounds;
 
     protected VideoRecorder getRecorder()
     {
@@ -247,9 +262,26 @@ public abstract class VideoExportSession
         /* Enter the state before starting so every failure takes the teardown path. */
         this.state = State.RECORDING;
 
+        String movieName = this.getMovieName();
+
+        if (movieName == null || movieName.isEmpty())
+        {
+            movieName = StringUtils.createTimestampFilename();
+        }
+
+        MinecraftSoundCapture capture = this.getMinecraftSoundCapture();
+        this.capturingMinecraftSounds = this.shouldCaptureMinecraftSounds() && capture != null;
+        File encoderAudio = this.audioFile;
+
+        if (this.capturingMinecraftSounds)
+        {
+            this.deferredAudioFile = this.audioFile;
+            encoderAudio = null;
+        }
+
         try
         {
-            if (!recorder.tryStartRecording(this.getMovieName(), this.audioFile, this.textureId, this.width, this.height))
+            if (!recorder.tryStartRecording(movieName, encoderAudio, this.textureId, this.width, this.height))
             {
                 Throwable failure = recorder.getFailure();
 
@@ -268,6 +300,15 @@ public abstract class VideoExportSession
 
         try
         {
+            this.movieName = movieName;
+            this.recordingStartedAtMs = System.currentTimeMillis();
+
+            if (this.capturingMinecraftSounds)
+            {
+                this.recordingFrameRate = BBSRendering.getVideoFrameRate();
+                capture.begin();
+            }
+
             this.onRecordingStarted();
         }
         catch (Exception | LinkageError e)
@@ -322,6 +363,7 @@ public abstract class VideoExportSession
         State previousState = this.state;
         Result result = requested;
         VideoRecorder recorder = this.getSessionRecorder();
+        int recordedFrames = recorder == null ? 0 : recorder.getCounter();
 
         try
         {
@@ -384,6 +426,21 @@ public abstract class VideoExportSession
         }
 
         this.state = State.IDLE;
+
+        if (this.capturingMinecraftSounds)
+        {
+            MinecraftSoundCapture capture = this.getMinecraftSoundCapture();
+
+            if (capture != null)
+            {
+                capture.end();
+
+                if (result == Result.SUCCESS)
+                {
+                    this.finishCapturedSounds(capture, recordedFrames);
+                }
+            }
+        }
 
         try
         {
@@ -591,7 +648,97 @@ public abstract class VideoExportSession
             this.textureId = 0;
             this.width = 0;
             this.height = 0;
+            this.movieName = null;
+            this.deferredAudioFile = null;
+            this.recordingFrameRate = 0D;
+            this.recordingStartedAtMs = 0L;
+            this.capturingMinecraftSounds = false;
         }
+    }
+
+    private void finishCapturedSounds(MinecraftSoundCapture capture, int recordedFrames)
+    {
+        File mixed = null;
+        boolean merged = false;
+
+        try
+        {
+            if (recordedFrames <= 0)
+            {
+                return;
+            }
+
+            File folder = BBSRendering.getVideoFolder();
+            Files.createDirectories(folder.toPath());
+            mixed = new File(folder, this.movieName + ".wav");
+
+            if (!MinecraftSoundMixer.mixToFile(mixed, capture.getSounds(), capture.getFrames(), readWave(this.deferredAudioFile),
+                48000, this.recordingFrameRate, recordedFrames))
+            {
+                return;
+            }
+
+            File video = this.findRecordedVideo(folder);
+
+            if (video == null || VideoMuxer.mux(video, mixed, this.movieName, BBSSettings.videoArgumentsMux.get()) == null)
+            {
+                LOGGER.warn("Minecraft sound mix completed, but FFmpeg could not merge it into {}; keeping {} for recovery",
+                    this.movieName, mixed);
+
+                return;
+            }
+
+            merged = true;
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.warn("Failed to mix captured Minecraft sounds into {}", this.movieName, e);
+        }
+        finally
+        {
+            if (merged && mixed != null && mixed.exists() && !mixed.delete())
+            {
+                LOGGER.warn("Failed to delete temporary Minecraft sound mix {}", mixed);
+            }
+        }
+    }
+
+    private static Wave readWave(File file)
+    {
+        if (file == null || !file.isFile()) return null;
+
+        try (InputStream stream = new FileInputStream(file))
+        {
+            return new WaveReader().read(stream);
+        }
+        catch (Exception e)
+        {
+            LOGGER.warn("Failed to read the deferred film audio track", e);
+            return null;
+        }
+    }
+
+    private File findRecordedVideo(File folder)
+    {
+        File[] files = folder.listFiles();
+        if (files == null || this.movieName == null) return null;
+        String prefix = this.movieName + ".";
+        long notBefore = this.recordingStartedAtMs - 10_000L;
+        File found = null;
+
+        for (File file : files)
+        {
+            if (!file.isFile() || !file.getName().startsWith(prefix) || isExportArtifact(file.getName().substring(prefix.length())) || file.lastModified() < notBefore) continue;
+            if (found == null || file.lastModified() > found.lastModified()) found = file;
+        }
+
+        return found;
+    }
+
+    protected static boolean isExportArtifact(String rest)
+    {
+        String lower = rest.toLowerCase(java.util.Locale.ROOT);
+        return lower.equals("wav") || lower.equals("log") || lower.endsWith(".log") || lower.startsWith("tmp.");
     }
 
     /** Create and track a uniquely owned WAV path for this session. */
@@ -634,6 +781,18 @@ public abstract class VideoExportSession
     protected String getMovieName()
     {
         return StringUtils.createTimestampFilename();
+    }
+
+    /** Shared settings integration enables this without changing the session lifecycle. */
+    protected boolean shouldCaptureMinecraftSounds()
+    {
+        return BBSSettings.videoExportMinecraftSounds != null && BBSSettings.videoExportMinecraftSounds.get();
+    }
+
+    /** Shared client integration supplies the singleton capture listener. */
+    protected MinecraftSoundCapture getMinecraftSoundCapture()
+    {
+        return BBSModClient.getMinecraftSoundCapture();
     }
 
     protected abstract boolean prepare();

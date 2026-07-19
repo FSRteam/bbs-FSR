@@ -2,6 +2,7 @@ package mchorse.bbs_mod;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.platform.InputConstants;
+import mchorse.bbs_mod.audio.MinecraftSoundCapture;
 import mchorse.bbs_mod.audio.SoundManager;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
@@ -29,6 +30,7 @@ import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.WorldVideoExportSession;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.categories.UserFormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
@@ -106,6 +108,7 @@ public class BBSModClient
     private static FormCategories formCategories;
     private static ScreenshotRecorder screenshotRecorder;
     private static VideoRecorder videoRecorder;
+    private static final MinecraftSoundCapture minecraftSoundCapture = new MinecraftSoundCapture();
     private static EntitySelectors selectors;
 
     private static ParticleManager particles;
@@ -133,6 +136,7 @@ public class BBSModClient
     private static final WorldVideoExportSession worldExportSession = new WorldVideoExportSession();
 
     private static float originalFramebufferScale;
+    private static boolean customGUIScale;
 
     public static TextureManager getTextures()
     {
@@ -172,6 +176,11 @@ public class BBSModClient
     public static VideoRecorder getVideoRecorder()
     {
         return videoRecorder;
+    }
+
+    public static MinecraftSoundCapture getMinecraftSoundCapture()
+    {
+        return minecraftSoundCapture;
     }
 
     public static EntitySelectors getSelectors()
@@ -235,16 +244,19 @@ public class BBSModClient
         return dashboard;
     }
 
-    public static int getGUIScale()
+    public static void setCustomGUIScale(boolean enabled)
     {
-        int scale = BBSSettings.userIntefaceScale.get();
+        customGUIScale = enabled;
+    }
 
-        if (scale == 0)
-        {
-            return Minecraft.getInstance().options.guiScale().get();
-        }
+    public static float getCustomGUIScale()
+    {
+        return customGUIScale ? BBSSettings.userIntefaceScale.get() : 0F;
+    }
 
-        return scale;
+    public static float getGUIScale()
+    {
+        return (float) Minecraft.getInstance().getWindow().getGuiScale();
     }
 
     public static float getOriginalFramebufferScale()
@@ -382,6 +394,15 @@ public class BBSModClient
         BBSMod.events.post(new RegisterClientSettingsEvent());
 
         BBSSettings.language.postCallback((v, f) -> reloadLanguage(getLanguageKey()));
+        BBSSettings.userIntefaceScale.postCallback((v, f) ->
+        {
+            Minecraft mc = Minecraft.getInstance();
+
+            if (mc.screen instanceof UIScreen)
+            {
+                mc.resizeDisplay();
+            }
+        });
         BBSSettings.editorSeconds.postCallback((v, f) ->
         {
             if (dashboard != null && dashboard.getPanels().panel instanceof UIFilmPanel panel)
@@ -551,8 +572,11 @@ public class BBSModClient
 
     public static void onRenderAfterLevel()
     {
+        FormTranslucentQueue.flush();
+
         if (videoRecorder.isRecording() && BBSRendering.canRender)
         {
+            minecraftSoundCapture.captureFrame();
             videoRecorder.recordFrame();
         }
     }
@@ -567,6 +591,7 @@ public class BBSModClient
             saveFilmPanelForLifecycle(filmPanel, "disconnect");
             runClientLifecycleStep("notify addon disconnect", () -> ClientApiCompat.emitDisconnect(Minecraft.getInstance()));
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
+            runClientLifecycleStep("stop Minecraft sound capture", minecraftSoundCapture::end);
             runClientLifecycleStep("reset UI mirror", () -> BBSUiMirrorRuntime.reset());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
         }

@@ -201,7 +201,6 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
 
     public void applyVideoPreset(int width, int height)
     {
-        BBSSettings.videoArguments.set(BBSSettings.DEFAULT_FFMPEG_ARGUMENTS);
         BBSSettings.videoWidth.set(width);
         BBSSettings.videoHeight.set(height);
         BBSSettings.videoFrameRate.set(60);

@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.ui.utils;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -561,15 +560,7 @@ public class Gizmo
         {
             RenderSystem.setProjectionMatrix(projection, VertexSorting.ORTHOGRAPHIC_Z);
 
-            float rx = (float) Math.round(mc.getWindow().getScreenWidth() / (double) context.menu.width);
-            float ry = (float) Math.round(mc.getWindow().getScreenHeight() / (double) context.menu.height);
-            float size = BBSModClient.getOriginalFramebufferScale();
-            int vx = (int) (area.x * rx);
-            int vy = (int) (mc.getWindow().getScreenHeight() - (area.y + area.h) * ry);
-            int vw = (int) (area.w * rx);
-            int vh = (int) (area.h * ry);
-
-            RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
+            UIUtils.viewportArea(area);
 
             PoseStack stack = new PoseStack();
             MatrixStackUtils.multiply(stack, this.lastRenderMatrix);
@@ -1231,15 +1222,7 @@ public class Gizmo
         {
             RenderSystem.setProjectionMatrix(projection, VertexSorting.ORTHOGRAPHIC_Z);
 
-            float rx = (float) Math.round(mc.getWindow().getScreenWidth() / (double) context.menu.width);
-            float ry = (float) Math.round(mc.getWindow().getScreenHeight() / (double) context.menu.height);
-            float size = BBSModClient.getOriginalFramebufferScale();
-            int vx = (int) (area.x * rx);
-            int vy = (int) (mc.getWindow().getScreenHeight() - (area.y + area.h) * ry);
-            int vw = (int) (area.w * rx);
-            int vh = (int) (area.h * ry);
-
-            RenderSystem.viewport((int) (vx * size), (int) (vy * size), (int) (vw * size), (int) (vh * size));
+            UIUtils.viewportArea(area);
 
             PoseStack stack = new PoseStack();
             MatrixStackUtils.multiply(stack, this.lastRenderMatrix);

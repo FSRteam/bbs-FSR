@@ -28,6 +28,7 @@ public class TextureManager implements IWatchDogListener
     private Texture error;
     private TextureExtruder extruder = new TextureExtruder();
     private int tick;
+    private Texture lastBound;
 
     public TextureManager(AssetProvider provider)
     {
@@ -101,7 +102,17 @@ public class TextureManager implements IWatchDogListener
     {
         BBSRendering.trackTexture(texture);
 
+        if (unit == 0)
+        {
+            this.lastBound = texture;
+        }
+
         RenderSystem.setShaderTexture(unit, texture.id);
+    }
+
+    public Texture getLastBound()
+    {
+        return this.lastBound;
     }
 
     public void bind(Link texture)

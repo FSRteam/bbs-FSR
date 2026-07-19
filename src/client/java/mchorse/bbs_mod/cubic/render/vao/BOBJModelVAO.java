@@ -7,6 +7,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -33,6 +34,7 @@ public class BOBJModelVAO
     private float[] tmpNormals;
     private int[] tmpLight;
     private float[] tmpTangents;
+    private int uploadCount;
 
     private final Vector4f sum = new Vector4f();
     private final Vector4f result = new Vector4f();
@@ -118,6 +120,29 @@ public class BOBJModelVAO
      */
     public void updateMesh(StencilMap stencilMap)
     {
+        this.updateMesh(stencilMap, this.armature.matrices);
+    }
+
+    public int getUploadCount()
+    {
+        return this.uploadCount;
+    }
+
+    public Matrix4f[] snapshotArmature()
+    {
+        Matrix4f[] snapshot = new Matrix4f[this.armature.matrices.length];
+
+        for (int i = 0; i < snapshot.length; i++)
+        {
+            Matrix4f matrix = this.armature.matrices[i];
+            snapshot[i] = matrix == null ? null : new Matrix4f(matrix);
+        }
+
+        return snapshot;
+    }
+
+    public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices)
+    {
         this.result.set(0F, 0F, 0F, 0F);
         this.resultNormal.set(0F, 0F, 0F);
 
@@ -125,8 +150,6 @@ public class BOBJModelVAO
         float[] newVertices = this.tmpVertices;
         float[] oldNormals = this.data.normData;
         float[] newNormals = this.tmpNormals;
-
-        Matrix4f[] matrices = this.armature.matrices;
 
         for (int i = 0, c = this.count; i < c; i++)
         {
@@ -188,7 +211,8 @@ public class BOBJModelVAO
             }
         }
 
-        this.processData(newVertices, newNormals);
+        this.processData(newVertices, newNormals, matrices);
+        this.uploadCount += 1;
 
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.vertexBuffer);
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, newVertices, GL15.GL_DYNAMIC_DRAW);
@@ -211,10 +235,15 @@ public class BOBJModelVAO
         }
     }
 
-    protected void processData(float[] newVertices, float[] newNormals)
+    protected void processData(float[] newVertices, float[] newNormals, Matrix4f[] matrices)
     {}
 
     public void render(ShaderInstance shader, PoseStack stack, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
+    {
+        this.render(shader, ModelVAORenderer.captureModelView(stack), stack.last().normal(), r, g, b, a, stencilMap, light, overlay);
+    }
+
+    public void render(ShaderInstance shader, Matrix4f modelView, Matrix3f normalMat, float r, float g, float b, float a, StencilMap stencilMap, int light, int overlay)
     {
         if (shader == null)
         {
@@ -230,7 +259,7 @@ public class BOBJModelVAO
         int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
 
-        ModelVAORenderer.setupUniforms(stack, shader);
+        ModelVAORenderer.setupUniforms(shader, modelView, normalMat);
 
         shader.apply();
 

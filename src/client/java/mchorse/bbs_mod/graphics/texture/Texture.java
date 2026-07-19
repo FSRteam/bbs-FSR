@@ -24,6 +24,7 @@ public class Texture
 
     private boolean mipmap;
     private boolean clearable;
+    private boolean translucent;
 
     private AnimatedTexture parent;
     private TextureFormat format = TextureFormat.RGBA_U8;
@@ -92,6 +93,12 @@ public class Texture
     public boolean isMipmap()
     {
         return this.mipmap;
+    }
+
+    /** Whether the texture contains blendable alpha (between the shader cutout and opaque thresholds). */
+    public boolean hasTranslucency()
+    {
+        return this.translucent;
     }
 
     public boolean isReallyMipmap()
@@ -223,6 +230,11 @@ public class Texture
         GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
 
         this.setFormat(pixels.bits == 4 ? TextureFormat.RGBA_U8 : TextureFormat.RGB_U8);
+        if (level == 0)
+        {
+            this.translucent = scanTranslucency(pixels);
+        }
+
         this.uploadTexture(target, level, pixels.width, pixels.height, pixels.getBuffer());
 
         pixels.delete();
@@ -248,5 +260,27 @@ public class Texture
         this.mipmap = true;
 
         GL30.glGenerateMipmap(this.target);
+    }
+
+    private static boolean scanTranslucency(Pixels pixels)
+    {
+        if (pixels.bits != 4)
+        {
+            return false;
+        }
+
+        ByteBuffer buffer = pixels.getBuffer();
+
+        for (int i = 3, c = buffer.limit(); i < c; i += 4)
+        {
+            int alpha = buffer.get(i) & 0xff;
+
+            if (alpha >= 26 && alpha <= 254)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

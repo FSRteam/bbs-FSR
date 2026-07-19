@@ -152,7 +152,11 @@ public class PanelVideoExportSession extends VideoExportSession
 
         for (File file : files)
         {
-            if (file.getName().toLowerCase(java.util.Locale.ROOT).startsWith(prefix))
+            String name = file.getName().toLowerCase(java.util.Locale.ROOT);
+
+            /* WAV/log/tmp files are side products of this export, not a prior video
+             * occupying the requested base name. */
+            if (name.startsWith(prefix) && !isExportArtifact(name.substring(prefix.length())))
             {
                 return true;
             }

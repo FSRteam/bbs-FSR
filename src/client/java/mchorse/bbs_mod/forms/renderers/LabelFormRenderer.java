@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
@@ -15,12 +16,15 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.MeshData;
 import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.List;
 
@@ -85,34 +89,51 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         MatrixStackUtils.scaleStack(context.stack, scale, -scale, scale);
 
-        RenderSystem.disableCull();
-
-        if (context.isPicking())
+        boolean grouped = !context.isPicking() && FormTranslucentQueue.isActive();
+        if (grouped)
         {
-            CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
+            Vector3f origin = new Matrix4f(RenderSystem.getModelViewMatrix())
+                .transformPosition(context.stack.last().pose().getTranslation(new Vector3f()));
+            FormTranslucentQueue.beginGroup(origin, false);
+        }
+
+        try
+        {
+            RenderSystem.disableCull();
+
+            if (context.isPicking())
             {
-                this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
-            });
+                CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
+                {
+                    this.setupTarget(context, BBSShaders.getPickerModelsProgram());
+                    RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
+                });
 
-            light = 0;
+                light = 0;
+            }
+
+            if (this.form.max.get() <= 10)
+            {
+                this.renderString(context, consumers, renderer, light);
+            }
+            else
+            {
+                this.renderLimitedString(context, consumers, renderer, light);
+            }
         }
-
-        if (this.form.max.get() <= 10)
+        finally
         {
-            this.renderString(context, consumers, renderer, light);
+            CustomVertexConsumerProvider.clearRunnables();
+
+            if (grouped)
+            {
+                FormTranslucentQueue.endGroup();
+            }
+
+            RenderSystem.enableDepthTest();
+            RenderSystem.enableCull();
+            context.stack.popPose();
         }
-        else
-        {
-            this.renderLimitedString(context, consumers, renderer, light);
-        }
-
-        CustomVertexConsumerProvider.clearRunnables();
-
-        RenderSystem.enableDepthTest();
-        RenderSystem.enableCull();
-
-        context.stack.popPose();
     }
 
     private void renderString(FormRenderingContext context, CustomVertexConsumerProvider consumers, Font renderer, int light)
@@ -295,7 +316,22 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        MeshData mesh = builder.buildOrThrow();
+        if (FormTranslucentQueue.isGroupOpen())
+        {
+            VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+            buffer.bind();
+            buffer.upload(mesh);
+            VertexBuffer.unbind();
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+            Vector3f origin = new Vector3f(FormTranslucentQueue.getSortOrigin());
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
+                GameRenderer::getPositionColorShader, null, modelView, null, origin, false, null, null));
+        }
+        else
+        {
+            BufferUploader.drawWithShader(mesh);
+        }
         context.stack.popPose();
     }
 }

@@ -7,6 +7,7 @@ uniform vec4 ColorModulator;
 uniform float FogStart;
 uniform float FogEnd;
 uniform vec4 FogColor;
+uniform int PassMode;
 
 in float vertexDistance;
 in vec4 vertexColor;
@@ -27,6 +28,16 @@ void main()
     }
 
     color *= vertexColor * ColorModulator;
+
+    if (PassMode == 1 && color.a < 0.999)
+    {
+        discard;
+    }
+
+    if (PassMode == 2 && color.a >= 0.999)
+    {
+        discard;
+    }
     color.rgb = mix(overlayColor.rgb, color.rgb, overlayColor.a);
     color *= lightMapColor;
 

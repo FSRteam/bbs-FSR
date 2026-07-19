@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -15,6 +16,7 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 public class BlockFormRenderer extends FormRenderer<BlockForm>
 {
@@ -68,47 +70,58 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
             context.world.pushPose();
         }
 
-        context.stack.translate(-0.5F, 0F, -0.5F);
-
-        if (context.world != null)
+        try
         {
-            context.world.translate(-0.5F, 0F, -0.5F);
-        }
+            context.stack.translate(-0.5F, 0F, -0.5F);
 
-        if (context.isPicking())
-        {
-            CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
+            if (context.world != null)
             {
-                this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
-            });
+                context.world.translate(-0.5F, 0F, -0.5F);
+            }
 
-            light = 0;
+            if (context.isPicking())
+            {
+                CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
+                {
+                    this.setupTarget(context, BBSShaders.getPickerModelsProgram());
+                    RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
+                });
+
+                light = 0;
+            }
+            else
+            {
+                CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+            }
+
+            Color set = this.form.color.get();
+
+            color.set(context.color);
+            color.mul(set);
+
+            if (!context.isPicking())
+            {
+                Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
+                FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
+            }
+
+            consumers.setSubstitute(BBSRendering.getColorConsumer(set));
+            Minecraft.getInstance().getBlockRenderer().renderSingleBlock(this.form.blockState.get(), context.stack, consumers, light, context.overlay);
+            consumers.draw();
         }
-        else
+        finally
         {
-            CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+            consumers.setSubstitute(null);
+            FormTranslucentQueue.setSortOrigin(null);
+            CustomVertexConsumerProvider.clearRunnables();
+            context.stack.popPose();
+
+            if (context.world != null)
+            {
+                context.world.popPose();
+            }
+
+            RenderSystem.enableDepthTest();
         }
-
-        Color set = this.form.color.get();
-
-        color.set(context.color);
-        color.mul(set);
-
-        consumers.setSubstitute(BBSRendering.getColorConsumer(set));
-        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(this.form.blockState.get(), context.stack, consumers, light, context.overlay);
-        consumers.draw();
-        consumers.setSubstitute(null);
-
-        CustomVertexConsumerProvider.clearRunnables();
-
-        context.stack.popPose();
-
-        if (context.world != null)
-        {
-            context.world.popPose();
-        }
-
-        RenderSystem.enableDepthTest();
     }
 }

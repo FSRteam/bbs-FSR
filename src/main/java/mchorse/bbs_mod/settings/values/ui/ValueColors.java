@@ -12,10 +12,25 @@ import java.util.StringJoiner;
 public class ValueColors extends BaseValue
 {
     private List<Color> colors = new ArrayList<>();
+    private int limit;
 
     public ValueColors(String id)
     {
         super(id);
+    }
+
+    /** Set a positive maximum for bounded histories; zero leaves the list unlimited. */
+    public ValueColors limit(int limit)
+    {
+        if (limit < 0)
+        {
+            throw new IllegalArgumentException("Color history limit cannot be negative");
+        }
+
+        this.limit = limit;
+        this.trim();
+
+        return this;
     }
 
     public List<Color> getCurrentColors()
@@ -31,7 +46,16 @@ public class ValueColors extends BaseValue
         {
             this.preNotify();
             this.colors.add(color.copy());
+            this.trim();
             this.postNotify();
+        }
+    }
+
+    private void trim()
+    {
+        while (this.limit > 0 && this.colors.size() > this.limit)
+        {
+            this.colors.remove(0);
         }
     }
 
@@ -72,6 +96,8 @@ public class ValueColors extends BaseValue
                 this.colors.add(new Color().set(color.asNumeric().intValue()));
             }
         }
+
+        this.trim();
     }
 
     @Override

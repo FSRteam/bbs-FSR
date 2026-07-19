@@ -472,7 +472,7 @@ public class UISliderTrackpad extends UIElement
 
                 return true;
             }
-            else if ((context.isPressed(GLFW.GLFW_KEY_MINUS) || context.isPressed(GLFW.GLFW_KEY_KP_SUBTRACT)))
+            else if (!Window.isCtrlPressed() && (context.isPressed(GLFW.GLFW_KEY_MINUS) || context.isPressed(GLFW.GLFW_KEY_KP_SUBTRACT)))
             {
                 this.setValueAndNotify(-this.value);
 

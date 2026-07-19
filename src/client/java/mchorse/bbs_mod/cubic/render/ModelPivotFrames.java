@@ -77,7 +77,7 @@ public final class ModelPivotFrames
             baseTranslation = workspace == null ? new Vector3f() : workspace.baseTranslation;
             baseRotation = workspace == null ? new Quaternionf() : workspace.baseRotation;
             baseTransform.getTranslation(baseTranslation);
-            baseTransform.getNormalizedRotation(baseRotation);
+            baseTransform.getUnnormalizedRotation(baseRotation);
         }
 
         model.getArmature().setupMatrices();
@@ -98,8 +98,8 @@ public final class ModelPivotFrames
             }
 
             Vector3f position = bone.originMat.getTranslation(frame.position());
-            Quaternionf parentRotation = bone.originMat.getNormalizedRotation(frame.parentRotation());
-            Quaternionf worldRotation = bone.mat.getNormalizedRotation(frame.worldRotation());
+            Quaternionf parentRotation = bone.originMat.getUnnormalizedRotation(frame.parentRotation());
+            Quaternionf worldRotation = bone.mat.getUnnormalizedRotation(frame.worldRotation());
 
             if (baseRotation != null && baseTranslation != null)
             {

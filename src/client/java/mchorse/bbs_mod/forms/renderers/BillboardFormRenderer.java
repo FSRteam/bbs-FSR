@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -26,7 +27,9 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import java.util.function.Supplier;
@@ -65,7 +68,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         this.renderModel(format, GameRenderer::getRendertypeEntityTranslucentShader,
             stack,
             OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, Colors.WHITE,
-            context.getTransition()
+            context.getTransition(), false
         );
 
         stack.popPose();
@@ -87,10 +90,12 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
         );
 
-        this.renderModel(format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
+        this.renderModel(format, shader, context.stack, context.overlay, context.light, context.color,
+            context.getTransition(), !context.isPicking());
     }
 
-    private void renderModel(VertexFormat format, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderModel(VertexFormat format, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay,
+        int light, int overlayColor, float transition, boolean defer)
     {
         Link t = this.form.texture.get();
 
@@ -163,10 +168,11 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             uvQuad.transform(matrix);
         }
 
-        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition);
+        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition, defer);
     }
 
-    private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderInstance> shader, PoseStack matrices,
+        int overlay, int light, int overlayColor, float transition, boolean defer)
     {
         BufferBuilder builder;
         Color color = this.renderColor.set(overlayColor, true);
@@ -212,7 +218,30 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableBlend();
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        boolean linear = this.form.linear.get();
+        boolean mipmap = this.form.mipmap.get();
+        boolean translucent = texture.hasTranslucency() || color.a < 1F || linear || mipmap;
+
+        if (defer && translucent && FormTranslucentQueue.isActive())
+        {
+            VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+            buffer.bind();
+            buffer.upload(builder.buildOrThrow());
+            VertexBuffer.unbind();
+
+            ShaderInstance capturedShader = RenderSystem.getShader();
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+            Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
+
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
+                () -> capturedShader, texture, modelView, null, origin, true,
+                () -> texture.setFilterMipmap(linear, mipmap),
+                () -> texture.setFilterMipmap(false, false)));
+        }
+        else
+        {
+            BufferUploader.drawWithShader(builder.buildOrThrow());
+        }
 
         texture.setFilterMipmap(false, false);
 

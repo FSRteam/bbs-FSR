@@ -60,17 +60,21 @@ public class MathUtils
 
     public static int gridIndex(int x, int y, int size, int width)
     {
-        x = x / size;
-        y = y / size;
+        int columns = Math.max(1, width / size);
 
-        return x + y * width / size;
+        return x / size + y / size * columns;
     }
 
     public static int gridRows(int count, int size, int width)
     {
-        double x = count * size / (double) width;
+        if (count <= 0)
+        {
+            return 1;
+        }
 
-        return count <= 0 ? 1 : (int) Math.ceil(x);
+        int columns = Math.max(1, width / size);
+
+        return (count + columns - 1) / columns;
     }
 
     /**

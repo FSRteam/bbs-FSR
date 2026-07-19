@@ -119,7 +119,9 @@ public class CubicRenderer
             Matrix4f rigid = workspace == null ? new Matrix4f() : workspace.rigidTransform;
 
             baseTransform.getTranslation(t);
-            baseTransform.getNormalizedRotation(r);
+            /* The base transform may contain model/form scale. Normalize its axes before
+             * extracting the rigid rotation so scaled frames remain continuous. */
+            baseTransform.getUnnormalizedRotation(r);
             rigid.rotation(r).setTranslation(t);
 
             stack.last().pose().set(rigid);
@@ -160,7 +162,7 @@ public class CubicRenderer
 
             Matrix4f mat = stack.last().pose();
             mat.getTranslation(frame.position());
-            mat.getNormalizedRotation(frame.parentRotation());
+            mat.getUnnormalizedRotation(frame.parentRotation());
         }
 
         ICubicRenderer.rotateGroup(stack, group);
@@ -168,7 +170,7 @@ public class CubicRenderer
         if (store)
         {
             Matrix4f mat = stack.last().pose();
-            mat.getNormalizedRotation(frame.worldRotation());
+            mat.getUnnormalizedRotation(frame.worldRotation());
         }
 
         ICubicRenderer.scaleGroup(stack, group);

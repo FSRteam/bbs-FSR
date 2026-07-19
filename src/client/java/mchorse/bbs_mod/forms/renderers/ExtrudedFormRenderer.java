@@ -6,6 +6,8 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -22,6 +24,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
+import org.joml.Matrix3f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.function.Supplier;
@@ -56,7 +59,7 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
         this.renderModel(BBSShaders::getModel,
             stack,
             OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, Colors.WHITE,
-            context.getTransition()
+            context.getTransition(), false
         );
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
@@ -79,10 +82,12 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
         );
 
-        this.renderModel(shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
+        this.renderModel(shader, context.stack, context.overlay, context.light, context.color,
+            context.getTransition(), !context.isPicking());
     }
 
-    private void renderModel(Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderModel(Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light,
+        int overlayColor, float transition, boolean defer)
     {
         Link texture = this.form.texture.get();
         ModelVAO data = BBSModClient.getTextures().getExtruder().get(texture);
@@ -98,7 +103,8 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
             Color formColor = this.form.color.get();
 
-            BBSModClient.getTextures().bindTexture(texture);
+            Texture textureObject = BBSModClient.getTextures().getTexture(texture);
+            BBSModClient.getTextures().bindTexture(textureObject);
 
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
@@ -106,7 +112,32 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             gameRenderer.lightTexture().turnOnLightLayer();
             gameRenderer.overlayTexture().setupOverlayColor();
 
-            ModelVAORenderer.render(shader.get(), data, matrices, color.r * formColor.r, color.g * formColor.g, color.b * formColor.b, color.a * formColor.a, light, overlay);
+            ShaderInstance finalShader = shader.get();
+            float r = color.r * formColor.r;
+            float g = color.g * formColor.g;
+            float b = color.b * formColor.b;
+            float a = color.a * formColor.a;
+            Matrix4f modelView = ModelVAORenderer.captureModelView(matrices);
+            Matrix3f normalMat = new Matrix3f(matrices.last().normal());
+
+            if (defer && FormTranslucentQueue.needsSplit(finalShader, null, textureObject, a))
+            {
+                FormTranslucentQueue.setPassMode(finalShader, FormTranslucentQueue.PASS_OPAQUE);
+                ModelVAORenderer.render(finalShader, data, modelView, normalMat, r, g, b, a, light, overlay);
+                FormTranslucentQueue.setPassMode(finalShader, FormTranslucentQueue.PASS_SINGLE);
+                FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, textureObject,
+                    modelView, normalMat, r, g, b, a, light, overlay, true));
+            }
+            else if (defer && FormTranslucentQueue.needsWholeDefer(finalShader, null, textureObject, a))
+            {
+                FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, () -> finalShader,
+                    FormTranslucentQueue.PASS_SINGLE, true, textureObject, modelView, normalMat,
+                    r, g, b, a, light, overlay, true));
+            }
+            else
+            {
+                ModelVAORenderer.render(finalShader, data, matrices, r, g, b, a, light, overlay);
+            }
 
             RenderSystem.disableBlend();
 

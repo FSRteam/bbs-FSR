@@ -24,10 +24,13 @@ import mchorse.bbs_mod.cubic.render.CubicVAOBuilderRenderer;
 import mchorse.bbs_mod.cubic.render.CubicVAORenderer;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
+import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.cubic.weld.ModelWeld;
 import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
 import mchorse.bbs_mod.resources.Link;
@@ -44,6 +47,8 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.math.Axis;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -519,7 +524,8 @@ public class ModelInstance implements IModelInstance
                 BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
 
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
-                BufferUploader.drawWithShader(builder.buildOrThrow());
+                this.drawImmediate(builder.buildOrThrow(), shader, stack, null, stencilMap,
+                    BBSModClient.getTextures().getLastBound(), color.a);
             }
         }
         else if (this.model instanceof BOBJModel model)
@@ -536,23 +542,84 @@ public class ModelInstance implements IModelInstance
                 /* One draw per mesh; bind that mesh's resolved texture (mesh name = material). */
                 for (BOBJModelVAO vao : vaos)
                 {
+                    Texture texture = null;
+
                     if (textureResolver != null)
                     {
                         Link link = textureResolver.apply(vao.data.mesh.name);
 
                         if (link != null)
                         {
-                            BBSModClient.getTextures().bindTexture(link);
+                            texture = BBSModClient.getTextures().getTexture(link);
+                            BBSModClient.getTextures().bindTexture(texture);
                         }
                     }
 
+                    if (texture == null)
+                    {
+                        texture = BBSModClient.getTextures().getLastBound();
+                    }
+
                     vao.updateMesh(stencilMap);
-                    vao.render(shader, stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                    Matrix4f modelView = ModelVAORenderer.captureModelView(stack);
+                    Matrix3f normalMat = new Matrix3f(stack.last().normal());
+
+                    if (FormTranslucentQueue.needsSplit(shader, stencilMap, texture, color.a))
+                    {
+                        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
+                        vao.render(shader, modelView, normalMat, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+                        FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                            vao.snapshotArmature(), vao.getUploadCount(), texture, modelView, normalMat,
+                            color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                    }
+                    else if (FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, color.a))
+                    {
+                        ShaderInstance capturedShader = shader;
+                        FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                            () -> capturedShader, FormTranslucentQueue.PASS_SINGLE, true,
+                            vao.snapshotArmature(), vao.getUploadCount(), texture, modelView, normalMat,
+                            color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                    }
+                    else
+                    {
+                        vao.render(shader, stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                    }
                 }
 
                 stack.popPose();
             }
         }
+    }
+
+    private void drawImmediate(MeshData mesh, ShaderInstance shader, PoseStack stack, Matrix3f normalMat,
+        StencilMap stencilMap, Texture texture, float alpha)
+    {
+        if (!FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha))
+        {
+            BufferUploader.drawWithShader(mesh);
+            return;
+        }
+
+        VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+        buffer.bind();
+        buffer.upload(mesh);
+
+        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+
+        if (normalMat != null && shader.getUniform("NormalMat") != null)
+        {
+            shader.getUniform("NormalMat").set(normalMat);
+        }
+
+        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
+        buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), shader);
+        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+        VertexBuffer.unbind();
+
+        Vector3f origin = modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f()));
+        FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+            texture, modelView, normalMat, origin, this.isCulling(), null, null));
     }
 
     /**
@@ -655,7 +722,9 @@ public class ModelInstance implements IModelInstance
                 }
             }
 
-            BufferUploader.drawWithShader(builder.buildOrThrow());
+            this.drawImmediate(builder.buildOrThrow(), drawShader, stack,
+                explicitWeld ? WELD_NORMAL_MAT : null, stencilMap,
+                BBSModClient.getTextures().getLastBound(), color.a);
         }
     }
 

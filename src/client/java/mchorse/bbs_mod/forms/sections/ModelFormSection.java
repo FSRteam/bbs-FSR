@@ -97,13 +97,15 @@ public class ModelFormSection extends SubFormSection
             if (event == WatchDogEvent.DELETED)
             {
                 this.remove(key);
-                this.parent.markDirty();
             }
-            else if (event == WatchDogEvent.CREATED)
+            else
             {
                 this.add(key);
-                this.parent.markDirty();
             }
+
+            /* WatchDog may suppress the initial CREATE for a copied file; MODIFY is
+             * also a complete, idempotent signal that the model is now available. */
+            this.parent.markDirty();
         }
     }
 

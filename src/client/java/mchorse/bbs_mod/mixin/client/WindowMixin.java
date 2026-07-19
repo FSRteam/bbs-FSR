@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Window.class)
@@ -32,6 +33,27 @@ public class WindowMixin
 
     @Shadow
     private double guiScale;
+
+    /**
+     * BBS uses the window's native double scale while a BBS screen is open.
+     * Keeping the override at setGuiScale() preserves vanilla's resize,
+     * mouse and projection calculations without leaking the value into
+     * options.txt.
+     */
+    @ModifyVariable(method = "setGuiScale", at = @At("HEAD"), argsOnly = true)
+    private double bbs$overrideScaleFactor(double scaleFactor)
+    {
+        float custom = BBSModClient.getCustomGUIScale();
+
+        if (custom > 0F)
+        {
+            double max = Math.max(1D, Math.min(this.framebufferWidth / 320D, this.framebufferHeight / 240D));
+
+            return Math.min(Math.max(custom, 0.5D), max);
+        }
+
+        return scaleFactor;
+    }
 
     @Inject(method = "getWidth", at = @At("HEAD"), cancellable = true)
     public void onGetWidth(CallbackInfoReturnable<Integer> info)

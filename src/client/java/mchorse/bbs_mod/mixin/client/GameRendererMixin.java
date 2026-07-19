@@ -7,6 +7,7 @@ import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.items.GunZoom;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -94,6 +95,11 @@ public class GameRendererMixin
     @Inject(at = @At("RETURN"), method = "renderLevel")
     private void onWorldRenderEnd(DeltaTracker deltaTracker, CallbackInfo callbackInfo)
     {
+        if (!BBSRendering.isIrisShadowPass())
+        {
+            FormTranslucentQueue.flush();
+        }
+
         BBSRendering.onWorldRenderEnd();
     }
 

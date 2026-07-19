@@ -11,9 +11,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(RenderType.class)
 public class RenderLayerMixin
 {
-    @Inject(method = "draw", at = @At("HEAD"))
+    @Inject(method = "draw", at = @At("HEAD"), cancellable = true)
     public void onDraw(MeshData meshData, CallbackInfo info)
     {
-        CustomVertexConsumerProvider.drawLayer((RenderType) (Object) this);
+        if (CustomVertexConsumerProvider.drawLayer((RenderType) (Object) this, meshData))
+        {
+            info.cancel();
+        }
     }
 }

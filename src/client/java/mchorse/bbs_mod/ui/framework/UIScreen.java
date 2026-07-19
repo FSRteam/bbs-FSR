@@ -41,7 +41,6 @@ public class UIScreen extends Screen implements IFileDropListener
     private UIBaseMenu menu;
     private UIRenderingContext context;
 
-    private int lastGuiScale;
     private boolean lastHideGui;
     private long mirrorSessionId;
     private boolean mirrorInputAttached;
@@ -131,7 +130,7 @@ public class UIScreen extends Screen implements IFileDropListener
 
         failure = runTeardownStep(failure, this::releaseLocalInputGestures);
         failure = runTeardownStep(failure, () -> BBSUiInputDispatcher.detach(this, this.mirrorSessionId));
-        failure = runTeardownStep(failure, () -> mc.options.guiScale().set(this.lastGuiScale));
+        failure = runTeardownStep(failure, () -> BBSModClient.setCustomGUIScale(false));
         failure = runTeardownStep(failure, mc::resizeDisplay);
         failure = runTeardownStep(failure, this::removedVanillaScreen);
         failure = runTeardownStep(failure, () -> this.menu.onClose(null));
@@ -204,10 +203,9 @@ public class UIScreen extends Screen implements IFileDropListener
     {
         Minecraft mc = Minecraft.getInstance();
 
-        this.lastGuiScale = mc.options.guiScale().get();
         this.lastHideGui = mc.options.hideGui;
 
-        mc.options.guiScale().set(BBSModClient.getGUIScale());
+        BBSModClient.setCustomGUIScale(true);
         mc.resizeDisplay();
 
         super.added();
