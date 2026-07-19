@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.ActionManager;
 import mchorse.bbs_mod.actions.ActionRecorder;
+import mchorse.bbs_mod.actions.BlockBreakRecordingContext;
 import mchorse.bbs_mod.actions.InteractionActionSemantics;
 import mchorse.bbs_mod.actions.types.blocks.PlaceBlockActionClip;
 import net.minecraft.core.BlockPos;
@@ -37,7 +38,7 @@ public abstract class ServerPlayerGameModeMixin
     private void bbs$captureBlockBreak(
         BlockPos pos,
         CallbackInfoReturnable<Boolean> info,
-        @Share("breakRecording") LocalRef<BreakRecordingContext> recording
+        @Share("breakRecording") LocalRef<BlockBreakRecordingContext> recording
     )
     {
         ActionManager actions = BBSMod.getActions();
@@ -56,7 +57,7 @@ public abstract class ServerPlayerGameModeMixin
 
         BlockPos immutablePos = pos.immutable();
 
-        recording.set(new BreakRecordingContext(
+        recording.set(new BlockBreakRecordingContext(
             actions,
             recorder,
             this.player,
@@ -70,32 +71,32 @@ public abstract class ServerPlayerGameModeMixin
     private void bbs$recordCommittedBlockBreak(
         BlockPos pos,
         CallbackInfoReturnable<Boolean> info,
-        @Share("breakRecording") LocalRef<BreakRecordingContext> recording
+        @Share("breakRecording") LocalRef<BlockBreakRecordingContext> recording
     )
     {
-        BreakRecordingContext context = recording.get();
+        BlockBreakRecordingContext context = recording.get();
 
         if (context == null)
         {
             return;
         }
 
-        boolean sameInvocationOwner = context.player == this.player
-            && context.level == this.level
-            && context.pos.equals(pos)
-            && context.actions.getRecorder(context.player) == context.recorder;
+        boolean sameInvocationOwner = context.player() == this.player
+            && context.level() == this.level
+            && context.pos().equals(pos)
+            && context.actions().getRecorder(context.player()) == context.recorder();
 
         if (!sameInvocationOwner)
         {
             return;
         }
 
-        BlockState state = context.level.getBlockState(context.pos);
+        BlockState state = context.level().getBlockState(context.pos());
 
         if (!InteractionActionSemantics.shouldRecordCommittedBlockBreak(
             info.getReturnValueZ(),
             true,
-            context.state,
+            context.state(),
             state
         ))
         {
@@ -104,44 +105,18 @@ public abstract class ServerPlayerGameModeMixin
 
         boolean drop = ((ServerPlayerGameMode) (Object) this).getGameModeForPlayer() == GameType.SURVIVAL;
 
-        context.actions.addActionExact(context.player, context.recorder, () ->
+        context.actions().addActionExact(context.player(), context.recorder(), () ->
         {
             PlaceBlockActionClip clip = new PlaceBlockActionClip();
 
             clip.state.set(state);
-            clip.x.set(context.pos.getX());
-            clip.y.set(context.pos.getY());
-            clip.z.set(context.pos.getZ());
+            clip.x.set(context.pos().getX());
+            clip.y.set(context.pos().getY());
+            clip.z.set(context.pos().getZ());
             clip.drop.set(drop);
 
             return clip;
         });
     }
 
-    private static final class BreakRecordingContext
-    {
-        private final ActionManager actions;
-        private final ActionRecorder recorder;
-        private final ServerPlayer player;
-        private final ServerLevel level;
-        private final BlockPos pos;
-        private final BlockState state;
-
-        private BreakRecordingContext(
-            ActionManager actions,
-            ActionRecorder recorder,
-            ServerPlayer player,
-            ServerLevel level,
-            BlockPos pos,
-            BlockState state
-        )
-        {
-            this.actions = actions;
-            this.recorder = recorder;
-            this.player = player;
-            this.level = level;
-            this.pos = pos;
-            this.state = state;
-        }
-    }
 }

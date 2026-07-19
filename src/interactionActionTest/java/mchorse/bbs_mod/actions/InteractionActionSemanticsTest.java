@@ -1152,6 +1152,9 @@ public final class InteractionActionSemanticsTest
                 && blockBreakRecorder.contains("getBlockState")
                 && blockBreakRecorder.contains("shouldRecordCommittedBlockBreak"),
             "block-break recording no longer waits for a committed state change on the captured recorder");
+        check(blockBreakRecorder.contains("mchorse/bbs_mod/actions/BlockBreakRecordingContext")
+                && !blockBreakRecorder.contains("ServerPlayerGameModeMixin$BreakRecordingContext"),
+            "block-break recording context must stay outside the Mixin package so transformed server classes can load it");
 
         String gun = classShape(GunItem.class);
 
