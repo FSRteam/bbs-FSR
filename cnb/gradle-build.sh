@@ -2,9 +2,10 @@
 set -u
 
 # CNB gives cpus: 2 a 4 GiB memory budget. Keep enough headroom for the
-# container, filesystem cache, and JVM native memory while using two workers.
+# container, filesystem cache, and JVM native memory while using one worker.
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/workspace/.gradle-home}"
 export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -XX:ActiveProcessorCount=2"
+export CI=true
 
 read_net_bytes() {
     if [ ! -r /proc/net/dev ]; then
@@ -76,7 +77,8 @@ chmod +x ./gradlew
     -Dorg.gradle.internal.repository.initial.backoff=1000 \
     -Dorg.gradle.internal.http.connectionTimeout=120000 \
     -Dorg.gradle.internal.http.socketTimeout=180000 \
-    -Dorg.gradle.workers.max=2 &
+    -Dorg.gradle.workers.max=1 \
+    -Dorg.gradle.parallel=false &
 gradle_pid=$!
 
 echo "[cnb] $(date -u '+%Y-%m-%dT%H:%M:%SZ') gradle started; network monitor interval=30s"
