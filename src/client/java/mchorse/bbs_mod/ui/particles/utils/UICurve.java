@@ -60,6 +60,24 @@ public class UICurve extends UIElement
     private double panOffsetX;
     private double panOffsetY;
 
+    /* State captured after a gesture acquires ownership.  Cancellation must
+     * undo model edits made by render-time dragging, while a physical release
+     * deliberately keeps them. */
+    private boolean gestureSnapshotActive;
+    private ParticleCurve gestureCurve;
+    private List<MolangExpression> gestureNodes;
+    private Map<Float, BezierChainNode> gestureChainNodes;
+    private float gestureBezierCP1X;
+    private float gestureBezierCP2X;
+    private float gestureBezierCP3X;
+    private float gestureBezierCP4X;
+    private int gestureIndex;
+    private float gestureChainSelectedKey;
+    private double gestureViewOffsetX;
+    private double gestureViewOffsetY;
+    private double gestureViewZoomX;
+    private double gestureViewZoomY;
+
     /* Bezier chain: selected node key (-1 = none, -2 = cp_out of prev, -3 = cp_in of next) */
     private float chainSelectedKey = -1;
     private boolean chainDraggingCPOut;
@@ -366,6 +384,7 @@ public class UICurve extends UIElement
 
         try
         {
+            this.captureGestureSnapshot();
             starter.run();
             started = true;
 
@@ -375,10 +394,80 @@ public class UICurve extends UIElement
         {
             if (!started && this.gestureOwnership.release(button, generation))
             {
+                this.restoreGestureSnapshot();
                 this.gestureGeneration = 0L;
                 this.clearGestureState();
+                this.clearGestureSnapshot();
             }
         }
+    }
+
+    private void captureGestureSnapshot()
+    {
+        this.gestureSnapshotActive = this.curve != null;
+        this.gestureCurve = this.curve;
+
+        if (!this.gestureSnapshotActive)
+        {
+            return;
+        }
+
+        this.gestureNodes = new ArrayList<>(this.curve.nodes);
+        this.gestureChainNodes = new java.util.TreeMap<>();
+
+        for (Map.Entry<Float, BezierChainNode> entry : this.curve.bezierChainNodes.entrySet())
+        {
+            BezierChainNode node = entry.getValue();
+            this.gestureChainNodes.put(entry.getKey(), new BezierChainNode(node.leftValue, node.rightValue, node.leftSlope, node.rightSlope));
+        }
+
+        this.gestureBezierCP1X = this.curve.bezierCP1X;
+        this.gestureBezierCP2X = this.curve.bezierCP2X;
+        this.gestureBezierCP3X = this.curve.bezierCP3X;
+        this.gestureBezierCP4X = this.curve.bezierCP4X;
+        this.gestureIndex = this.index;
+        this.gestureChainSelectedKey = this.chainSelectedKey;
+        this.gestureViewOffsetX = this.viewOffsetX;
+        this.gestureViewOffsetY = this.viewOffsetY;
+        this.gestureViewZoomX = this.viewZoomX;
+        this.gestureViewZoomY = this.viewZoomY;
+    }
+
+    private void restoreGestureSnapshot()
+    {
+        if (!this.gestureSnapshotActive || this.curve == null || this.curve != this.gestureCurve)
+        {
+            return;
+        }
+
+        this.curve.nodes.clear();
+        this.curve.nodes.addAll(this.gestureNodes);
+        this.curve.bezierChainNodes.clear();
+        this.curve.bezierChainNodes.putAll(this.gestureChainNodes);
+        this.curve.bezierCP1X = this.gestureBezierCP1X;
+        this.curve.bezierCP2X = this.gestureBezierCP2X;
+        this.curve.bezierCP3X = this.gestureBezierCP3X;
+        this.curve.bezierCP4X = this.gestureBezierCP4X;
+        this.index = this.gestureIndex;
+        this.chainSelectedKey = this.gestureChainSelectedKey;
+        this.viewOffsetX = this.gestureViewOffsetX;
+        this.viewOffsetY = this.gestureViewOffsetY;
+        this.viewZoomX = this.gestureViewZoomX;
+        this.viewZoomY = this.gestureViewZoomY;
+        this.updateRange();
+
+        if (this.index >= 0 && this.index < this.curve.nodes.size())
+        {
+            this.value.setValue(this.curve.nodes.get(this.index).get());
+        }
+    }
+
+    private void clearGestureSnapshot()
+    {
+        this.gestureSnapshotActive = false;
+        this.gestureCurve = null;
+        this.gestureNodes = null;
+        this.gestureChainNodes = null;
     }
 
     private void clearGestureState()
@@ -486,6 +575,7 @@ public class UICurve extends UIElement
 
         this.gestureGeneration = 0L;
         this.clearGestureState();
+        this.clearGestureSnapshot();
 
         if (updateRange)
         {
@@ -493,6 +583,22 @@ public class UICurve extends UIElement
         }
 
         return super.subMouseReleased(context);
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        long generation = this.gestureGeneration;
+
+        if (this.gestureOwnership.release(context.mouseButton, generation))
+        {
+            this.restoreGestureSnapshot();
+            this.gestureGeneration = 0L;
+            this.clearGestureState();
+            this.clearGestureSnapshot();
+        }
+
+        super.subMouseCanceled(context);
     }
 
     @Override

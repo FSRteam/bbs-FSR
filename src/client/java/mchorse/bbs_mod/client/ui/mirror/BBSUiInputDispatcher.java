@@ -637,19 +637,34 @@ public final class BBSUiInputDispatcher
                     "input sequence is not newer than the last applied batch");
             }
 
-            boolean continuingOwner = addonId.equals(controllerAddonId);
-            BBSUiRemoteInputState initialState = continuingOwner
+            boolean continuingOwner = addonId.equals(controllerAddonId)
                 && lastAppliedState != null
-                && lastAppliedSessionId == batch.sessionId()
-                && BBSUiRemoteHeldState.isLeaseCurrent(lastAppliedLeaseId)
-                    ? lastAppliedState
-                    : InputStateTimeline.initialState(batch);
+                && lastAppliedSessionId == batch.sessionId();
+            BBSUiRemoteInputState initialState = continuingOwner
+                ? lastAppliedState
+                : InputStateTimeline.initialState(batch);
 
             controllerAddonId = addonId;
             LAST_SEQUENCES.put(addonId, batch.sequence());
             lastAppliedState = initialState;
             lastAppliedSessionId = batch.sessionId();
-            lastAppliedLeaseId = BBSUiRemoteHeldState.install(batch.sessionId(), initialState);
+            long previousLeaseId = lastAppliedLeaseId;
+            if (continuingOwner
+                && BBSUiRemoteHeldState.replace(previousLeaseId, batch.sessionId(), initialState))
+            {
+                /* Keep one ownership token for the whole addon/session. A
+                 * state-only batch must not invalidate callbacks or polling
+                 * that still refer to the previous lease. */
+                lastAppliedLeaseId = previousLeaseId;
+            }
+            else
+            {
+                /* The snapshot may have been cleared by an external
+                 * lifecycle fence while the dispatcher still owns the
+                 * controller. Re-establish a fresh token from the last
+                 * committed state rather than inferring a partial gesture. */
+                lastAppliedLeaseId = BBSUiRemoteHeldState.install(batch.sessionId(), initialState);
+            }
             long leaseId = lastAppliedLeaseId;
             InputStateTimeline timeline = new InputStateTimeline(initialState);
             boolean singleEvent = batch.events().size() == 1;
@@ -674,7 +689,21 @@ public final class BBSUiInputDispatcher
                         "UI input ownership changed during input batch dispatch");
                 }
 
-                dispatch(target, event);
+                try
+                {
+                    dispatch(target, event);
+                }
+                catch (RuntimeException | Error exception)
+                {
+                    /* eventState is already the authoritative state at the
+                     * throwing callback. Re-adding a released input here would
+                     * make ownership teardown deliver the same terminal event
+                     * twice. Press failures remain present in eventState and
+                     * are still canceled by releaseInputOwnership(). */
+                    replaceHeldState(addonId, batch.sessionId(), leaseId, eventState);
+
+                    throw exception;
+                }
 
                 /* A key or button handler may synchronously close or replace
                  * the screen. Never deliver the remainder of this batch to

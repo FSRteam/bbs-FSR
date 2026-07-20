@@ -385,7 +385,7 @@ public class UIElement implements IUIElement, IUndoElement
 
         List<IUIElement> removals = new ArrayList<>(this.children);
 
-        this.runHierarchyMutation(() -> this.removeAllNow(removals));
+        this.runHierarchyRemoval(() -> this.removeAllNow(removals), removals.toArray(new IUIElement[0]));
     }
 
     private void removeAllNow(List<IUIElement> removals)
@@ -433,7 +433,7 @@ public class UIElement implements IUIElement, IUndoElement
 
         if (element != null && this.children.contains(element))
         {
-            this.runHierarchyMutation(() -> this.children.remove(element));
+            this.runHierarchyRemoval(() -> this.children.remove(element), element);
         }
     }
 
@@ -441,7 +441,7 @@ public class UIElement implements IUIElement, IUndoElement
     {
         if (element != null && this.children.contains(element))
         {
-            this.runHierarchyMutation(() -> this.removeNow(element));
+            this.runHierarchyRemoval(() -> this.removeNow(element), element);
         }
     }
 
@@ -543,6 +543,20 @@ public class UIElement implements IUIElement, IUndoElement
 
     private void runHierarchyMutation(Runnable mutation, IUIElement... affected)
     {
+        this.runHierarchyMutation(mutation, List.of(), affected);
+    }
+
+    private void runHierarchyRemoval(Runnable mutation, IUIElement... removed)
+    {
+        this.runHierarchyMutation(mutation, List.of(removed), removed);
+    }
+
+    private void runHierarchyMutation(
+        Runnable mutation,
+        List<IUIElement> detachedRoots,
+        IUIElement... affected
+    )
+    {
         UIContext context = this.getContext();
 
         if (context == null && affected != null)
@@ -567,7 +581,10 @@ public class UIElement implements IUIElement, IUndoElement
         }
         else
         {
-            context.menu.runAfterHierarchyMutation(mutation);
+            context.menu.runAfterHierarchyMutation(
+                mutation,
+                detachedRoots.toArray(new IUIElement[0])
+            );
         }
     }
 
@@ -1340,7 +1357,56 @@ public class UIElement implements IUIElement, IUndoElement
             return element;
         }
 
+        return this.mouseReleasedSelf(context);
+    }
+
+    @Override
+    public final IUIElement mouseReleasedCaptured(UIContext context, List<IUIElement> path, int index)
+    {
+        if (index < 0 || index >= path.size() || path.get(index) != this)
+        {
+            return null;
+        }
+
+        if (index == path.size() - 1)
+        {
+            return this.mouseReleasedSelf(context);
+        }
+
+        IUIElement child = path.get(index + 1);
+
+        /* A physical release must still reach the press owner after a
+         * sibling refresh hides/disables this child. Attachment is the only
+         * validity check here; owner detachment is canceled by the hierarchy
+         * barrier before the mutation is committed. */
+        if (!this.children.contains(child))
+        {
+            return null;
+        }
+
+        IUIElement element = this.childMouseReleasedCaptured(context, child, path, index + 1);
+
+        if (element != null)
+        {
+            return element;
+        }
+
+        return this.mouseReleasedSelf(context);
+    }
+
+    private IUIElement mouseReleasedSelf(UIContext context)
+    {
         return this.subMouseReleased(context) || this.cantPropagate(this.mousePropagation, context) ? this : null;
+    }
+
+    protected IUIElement childMouseReleasedCaptured(
+        UIContext context,
+        IUIElement child,
+        List<IUIElement> path,
+        int childIndex
+    )
+    {
+        return child.mouseReleasedCaptured(context, path, childIndex);
     }
 
     @Override

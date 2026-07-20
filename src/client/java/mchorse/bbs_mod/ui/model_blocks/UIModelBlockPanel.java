@@ -230,7 +230,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         this.keyDude.removeFromParent();
         this.dashboard.orbitKeysUI.setEnabled(null);
-        this.gizmo.stop();
+        this.gizmo.cancel();
 
         if (this.cameraController != null)
         {
@@ -505,7 +505,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         super.close();
 
-        this.gizmo.stop();
+        this.gizmo.cancel();
         this.removeCameraController();
 
         for (ModelBlockEntity entity : this.toSave)
@@ -582,7 +582,14 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
          * disc doesn't block a click on the model block under it - but while the sphere is hovered the
          * block fill is skipped, so the rotate disc can actually be grabbed (the gizmo sits on the
          * selected block, so this.hovered is almost always non-null and would steal the click). */
-        if (this.canShowGizmo() && this.gizmo.mouseClicked(context))
+        boolean[] gizmoHandled = {false};
+
+        if (this.canShowGizmo())
+        {
+            context.menu.runWithPreservedMouseCapture(this, () -> gizmoHandled[0] = this.gizmo.mouseClicked(context));
+        }
+
+        if (gizmoHandled[0])
         {
             return true;
         }
@@ -608,7 +615,9 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     @Override
     protected void subMouseCanceled(UIContext context)
     {
-        this.gizmo.stop();
+        long generation = this.gizmo.gestureGeneration();
+
+        this.gizmo.cancel(context.mouseButton, generation);
         super.subMouseCanceled(context);
     }
 

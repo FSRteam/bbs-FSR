@@ -5,6 +5,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.IViewportStack;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -158,6 +159,44 @@ public class UIScrollView extends UIElement implements IViewport
         }
 
         return result == null && scrollReleased ? this : result;
+    }
+
+    @Override
+    protected IUIElement childMouseReleasedCaptured(
+        UIContext context,
+        IUIElement child,
+        List<IUIElement> path,
+        int childIndex
+    )
+    {
+        boolean scrollReleased = this.scroll.tryMouseReleased(context);
+
+        this.apply(context);
+        IUIElement result;
+
+        try
+        {
+            result = super.childMouseReleasedCaptured(context, child, path, childIndex);
+        }
+        finally
+        {
+            this.unapply(context);
+        }
+
+        return result == null && scrollReleased ? this : result;
+    }
+
+    @Override
+    protected boolean subMouseReleased(UIContext context)
+    {
+        return this.scroll.tryMouseReleased(context);
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.scroll.cancelDragging(context.mouseButton);
+        super.subMouseCanceled(context);
     }
 
     @Override

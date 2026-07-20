@@ -658,24 +658,34 @@ public class UIReplaysEditor extends UIElement {
             )
                     .target(this.filmPanel.editArea)
                     .editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
-            this.keyframeEditor.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
-            this.keyframeEditor.setUndoId("replay_keyframe_editor");
-            this.keyframeEditor.setTimelineVisible(this.timelineVisible);
-            this.keyframeEditor.setPropertiesVisible(this.propertiesVisible);
+            UIKeyframeEditor editor = this.keyframeEditor;
+            UIKeyframes view = editor.view;
+            Replay replayForEditor = this.replay;
+
+            editor.relative(this).x(CATEGORY_BAR_WIDTH).y(0).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
+            editor.setUndoId("replay_keyframe_editor");
+            editor.setTimelineVisible(this.timelineVisible);
+            editor.setPropertiesVisible(this.propertiesVisible);
 
             /* Reset */
             if (lastEditor != null) {
-                this.keyframeEditor.view.copyViewport(lastEditor);
+                view.copyViewport(lastEditor);
             }
 
-            this.keyframeEditor.view.rulerRenderer(context ->
-                    renderRuler(context, this.keyframeEditor.view, this.filmPanel.cameraEditor, this.film.camera, 0)
+            view.rulerRenderer(context ->
+                    renderRuler(context, view, this.filmPanel.cameraEditor, this.film.camera, 0)
             );
-            this.keyframeEditor.view.duration(() -> this.film.camera.calculateDuration());
-            this.keyframeEditor.view.context(menu -> {
-                if (this.replay.form.get() instanceof ModelForm modelForm) {
+            view.duration(() -> this.film.camera.calculateDuration());
+            view.context(menu -> {
+                /* The old view can render for one frame after the replay is removed.  Do not
+                 * let a delayed context-menu callback read the replacement editor state. */
+                if (this.keyframeEditor != editor || this.replay != replayForEditor || replayForEditor == null) {
+                    return;
+                }
+
+                if (replayForEditor.form.get() instanceof ModelForm modelForm) {
                     int mouseY = this.getContext().mouseY;
-                    UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(mouseY);
+                    UIKeyframeSheet sheet = view.getGraph().getSheet(mouseY);
 
                     if (sheet != null
                             && sheet.channel.getFactory() == KeyframeFactories.POSE
@@ -686,13 +696,17 @@ public class UIReplaysEditor extends UIElement {
                             if (model != null) {
                                 UIOverlay.addOverlay(
                                         this.getContext(),
-                                        new UIAnimationToPoseOverlayPanel(
+                                                new UIAnimationToPoseOverlayPanel(
                                                 (animationKey, onlyKeyframes, length, step) -> {
+                                                    if (this.keyframeEditor != editor || this.replay != replayForEditor) {
+                                                        return;
+                                                    }
+
                                                     int current = this.filmPanel.getCursor();
                                                     IEntity entity = this.filmPanel.getController().getCurrentEntity();
 
                                                     UIReplaysEditorUtils.animationToPoseKeyframes(
-                                                            this.keyframeEditor,
+                                                            editor,
                                                             sheet,
                                                             modelForm,
                                                             entity,
@@ -726,7 +740,11 @@ public class UIReplaysEditor extends UIElement {
                     if (isPoseTrack && sheet.selection.hasAny() && limbTracksOn) {
                         ModelForm poseModelForm = sheetForm instanceof ModelForm m ? m : modelForm;
                         menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () -> {
-                            UIReplaysEditorUtils.posesToLimbTracks(this.replay, sheet, poseModelForm);
+                            if (this.keyframeEditor != editor || this.replay != replayForEditor) {
+                                return;
+                            }
+
+                            UIReplaysEditorUtils.posesToLimbTracks(replayForEditor, sheet, poseModelForm);
 
                             sheet.selection.removeSelected();
                             this.updateChannelsList();
@@ -737,17 +755,21 @@ public class UIReplaysEditor extends UIElement {
 
                     if (!controllers.isEmpty()) {
                         menu.action(Icons.CLOSE, UIKeys.FILM_REPLAY_CONTEXT_CLEAR_IK, () -> {
-                            UIReplaysEditorUtils.clearIKTracks(this.replay, modelForm);
+                            if (this.keyframeEditor != editor || this.replay != replayForEditor) {
+                                return;
+                            }
+
+                            UIReplaysEditorUtils.clearIKTracks(replayForEditor, modelForm);
                             this.updateChannelsList();
                         });
                     }
                 }
 
-                if (this.keyframeEditor.view.getGraph() instanceof UIKeyframeDopeSheet) {
+                if (view.getGraph() instanceof UIKeyframeDopeSheet) {
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () -> {
                         Set<String> disabledSet = BBSSettings.disabledSheets.get();
                         Map<String, Integer> keyToColor = new HashMap<>();
-                        for (UIKeyframeSheet sheet : this.keyframeEditor.view.getGraph().getSheets()) {
+                        for (UIKeyframeSheet sheet : view.getGraph().getSheets()) {
                             keyToColor.put(getSheetFilterKey(sheet), sheet.color);
                         }
                         UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(
@@ -767,16 +789,16 @@ public class UIReplaysEditor extends UIElement {
             });
 
             for (UIKeyframeSheet sheet : sheets) {
-                this.keyframeEditor.view.addSheet(sheet);
+                view.addSheet(sheet);
             }
 
             Set<String> expandedPoseIds = this.expandedPoseTabsByReplay.getOrDefault(
                 this.replay == null ? "" : this.replay.getId(),
                 Collections.emptySet()
             );
-            this.keyframeEditor.view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
+            view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
 
-            this.add(this.keyframeEditor);
+            this.add(editor);
             /* Category bar and its bottom toggle stay on top of the timeline. */
             if (this.iconBar.getParent() != null) {
                 this.iconBar.removeFromParent();
@@ -1198,18 +1220,20 @@ public class UIReplaysEditor extends UIElement {
 
         if (this.filmPanel.isFlying() && inside) {
             if (context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
-                this.filmPanel.getController().orbit.start(context);
+                long generation = this.filmPanel.getController().orbit.startGesture(context);
 
-                return true;
+                return generation != 0L;
             }
             if (context.mouseButton == 2) {
                 if (this.filmPanel.getController().orbit.enabled) {
-                    this.filmPanel.getController().orbit.start(context);
-                } else {
-                    this.filmPanel.dashboard.orbit.start(2, context.mouseX, context.mouseY);
-                }
+                    long generation = this.filmPanel.getController().orbit.startGesture(context);
 
-                return true;
+                    return generation != 0L;
+                } else {
+                    long generation = this.filmPanel.dashboard.orbitUI.startGesture(context);
+
+                    return generation != 0L;
+                }
             }
         }
 
@@ -1218,23 +1242,17 @@ public class UIReplaysEditor extends UIElement {
         }
 
         if (inside && context.mouseButton == 2 && this.filmPanel.getController().orbit.enabled) {
-            this.filmPanel.getController().orbit.start(context);
-
-            return true;
-        }
-
-        if (inside && context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
             long generation = this.filmPanel.getController().orbit.startGesture(context);
 
-            if (generation != 0L) {
-                this.pendingPick = stencil != null && stencil.hasPicked() ? stencil.getPicked() : null;
-                this.pendingPickGeneration = generation;
-            }
-
-            return true;
+            return generation != 0L;
         }
 
         if (stencil != null && stencil.hasPicked()) {
+            if (inside && context.mouseButton == 0
+                    && this.filmPanel.getController().startViewportGizmo(context)) {
+                return true;
+            }
+
             Pair<Form, String> pair = stencil.getPicked();
 
             if (pair != null && (context.mouseButton < 2 || (context.mouseButton == 2 && Window.isCtrlPressed()))) {
@@ -1308,6 +1326,17 @@ public class UIReplaysEditor extends UIElement {
 
                 return true;
             }
+        }
+
+        if (inside && context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
+            long generation = this.filmPanel.getController().orbit.startGesture(context);
+
+            if (generation != 0L) {
+                this.pendingPick = stencil != null && stencil.hasPicked() ? stencil.getPicked() : null;
+                this.pendingPickGeneration = generation;
+            }
+
+            return generation != 0L;
         }
 
         return false;

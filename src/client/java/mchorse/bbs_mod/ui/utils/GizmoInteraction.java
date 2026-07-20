@@ -40,6 +40,12 @@ public class GizmoInteraction
         return this.sphereHovered;
     }
 
+    /** Return the generation which owns the current viewport gesture, or zero. */
+    public long gestureGeneration()
+    {
+        return this.gestureGeneration;
+    }
+
     public boolean mouseClicked(UIContext context)
     {
         return this.mouseClickedHandle(context) || this.mouseClickedSphere(context);
@@ -184,15 +190,69 @@ public class GizmoInteraction
 
     public void stop()
     {
-        if (this.gizmoActive)
+        this.cancel();
+    }
+
+    /**
+     * Cancel a viewport lifecycle gesture. Unlike {@link #mouseReleased}, this
+     * rolls the transform back and never commits the preview values.
+     */
+    public void cancel()
+    {
+        long generation = this.gestureGeneration;
+        boolean cancelTransform = this.gizmoActive;
+
+        /* Retire the owner before invoking rejectChanges(). A reject callback
+         * may synchronously start a replacement gesture; that replacement must
+         * acquire a fresh generation and survive this cancellation. */
+        this.gestureOwnership.cancel();
+
+        if (this.gestureGeneration == generation)
         {
-            Gizmo.INSTANCE.stop();
             this.gizmoActive = false;
+            this.gestureGeneration = 0L;
+            this.clearPending();
+            this.sphereHovered = false;
+            Gizmo.INSTANCE.setSphereHovered(false);
         }
 
-        this.gestureOwnership.cancel();
-        this.gestureGeneration = 0L;
-        this.clearPending();
+        if (cancelTransform)
+        {
+            Gizmo.INSTANCE.cancel();
+        }
+    }
+
+    /**
+     * Cancel only the gesture owned by the initiating button and generation.
+     * A cancellation for another button or a stale generation is ignored.
+     */
+    public boolean cancel(int button, long generation)
+    {
+        if (!this.gestureOwnership.release(button, generation))
+        {
+            return false;
+        }
+
+        boolean currentGeneration = this.gestureGeneration == generation;
+        boolean cancelTransform = currentGeneration && this.gizmoActive;
+
+        /* Clear this generation before rejecting the transform so a callback
+         * can install a new owner without being mistaken for stale state. */
+        if (currentGeneration)
+        {
+            this.gizmoActive = false;
+            this.gestureGeneration = 0L;
+            this.clearPending();
+            this.sphereHovered = false;
+            Gizmo.INSTANCE.setSphereHovered(false);
+        }
+
+        if (cancelTransform)
+        {
+            Gizmo.INSTANCE.cancel();
+        }
+
+        return true;
     }
 
     private boolean startGizmo(UIContext context, int index)

@@ -423,6 +423,17 @@ public class UISliderTrackpad extends UIElement
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (this.dragOwnership.isOwnedBy(context.mouseButton, this.dragGeneration))
+        {
+            this.cancelDragging();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     protected boolean subMouseScrolled(UIContext context)
     {
         if (this.isDragging() && context.mouseWheel != 0D)

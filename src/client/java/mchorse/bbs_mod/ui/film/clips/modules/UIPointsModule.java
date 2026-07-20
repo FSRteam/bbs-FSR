@@ -186,6 +186,14 @@ public class UIPointsModule extends UIAbstractModule
         return super.subMouseReleased(context);
     }
 
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.scroll.cancelDragging(context.mouseButton);
+
+        super.subMouseCanceled(context);
+    }
+
     /**
      * Draw the module
      *

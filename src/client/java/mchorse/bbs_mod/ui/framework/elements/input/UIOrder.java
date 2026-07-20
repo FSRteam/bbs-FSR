@@ -220,6 +220,23 @@ public class UIOrder extends UIElement
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (this.dragging != -1 && context.mouseButton == 0)
+        {
+            this.dragging = -1;
+            this.grabOffset = 0;
+
+            if (this.value != null && this.order != null)
+            {
+                this.syncFromValue();
+            }
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     public void render(UIContext context)
     {
         FontRenderer font = context.batcher.getFont();

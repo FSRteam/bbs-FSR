@@ -27,8 +27,9 @@ public final class BBSUiRemoteHeldState
 
     /**
      * Replace the held snapshot without changing its ownership token. This is
-     * used while one admitted input batch advances through its ordered events;
-     * a stale callback cannot overwrite a newer owner or session.
+     * used while one admitted input batch advances through its ordered events
+     * and while the same owner continues with a later state batch; a stale
+     * callback cannot overwrite a newer owner or session.
      */
     static synchronized boolean replace(long leaseId, long sessionId, BBSUiRemoteInputState state)
     {

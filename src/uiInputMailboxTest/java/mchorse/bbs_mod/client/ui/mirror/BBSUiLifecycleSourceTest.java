@@ -76,7 +76,8 @@ public final class BBSUiLifecycleSourceTest
             "model-block stencil/ray coordinates do not follow the active input owner");
         check(canvas.contains("beginOwnedDrag(context, dragButton)")
                 && canvas.contains("retireOwnedDrag(context.mouseButton)")
-                && orbit.contains("dragOwnership.release(context.mouseButton)"),
+                && orbit.contains("dragOwnership.release(mouseButton, generation)")
+                && orbit.contains("stopGesture(context.mouseButton, this.dragGeneration)"),
             "canvas/orbit gestures still end on an unrelated mouse-button release");
         check(pixels.contains("this.beginOwnedDrag(context, 0)")
                 && pixels.contains("if (!this.isDragOwnedBy(context.mouseButton))")

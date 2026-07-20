@@ -501,6 +501,14 @@ public class Textbox
         }
     }
 
+    public void mouseCanceled(int button)
+    {
+        if (button == 0)
+        {
+            this.holding = false;
+        }
+    }
+
     private int getIndexAt(int x)
     {
         x -= this.area.x;

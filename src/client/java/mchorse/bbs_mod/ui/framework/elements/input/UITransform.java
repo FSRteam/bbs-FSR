@@ -656,6 +656,17 @@ public abstract class UITransform extends UIElement
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (context.mouseButton == 1)
+        {
+            this.uniformDrag = false;
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     protected boolean subKeyPressed(UIContext context)
     {
         if (this.sx.isDragging() || this.sy.isDragging() || this.sz.isDragging())

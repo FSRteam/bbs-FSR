@@ -1122,6 +1122,23 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.horizontal.cancelDragging(context.mouseButton);
+        this.vertical.cancelDragging(context.mouseButton);
+
+        long generation = this.dragGeneration;
+
+        if (this.dragOwnership.release(context.mouseButton, generation))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = 0;
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     public boolean subKeyPressed(UIContext context)
     {
         if (!this.focused)

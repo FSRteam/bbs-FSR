@@ -43,6 +43,7 @@ public final class BBSUiModifierTimelineTest
         runIsolated(BBSUiModifierTimelineTest::physicalModifierReleaseOrderWinsOverStaleMasks);
         runIsolated(BBSUiModifierTimelineTest::disconnectResetConvergesMultiHeldState);
         runIsolated(BBSUiModifierTimelineTest::dispatchExceptionReleasesTemporaryState);
+        runIsolated(BBSUiModifierTimelineTest::dispatchReleaseExceptionDoesNotDuplicateTerminal);
         runIsolated(BBSUiModifierTimelineTest::reentrantClearStopsOldBatch);
     }
 
@@ -397,6 +398,42 @@ public final class BBSUiModifierTimelineTest
             "temporary mouse state was cleared before exception cleanup finished");
         check(onePositiveLease(target.observations), "exception cleanup escaped the admitted batch lease");
         check(!BBSUiRemoteHeldState.isActive(), "dispatch exception left the temporary lease active");
+    }
+
+    private static void dispatchReleaseExceptionDoesNotDuplicateTerminal()
+    {
+        RecordingTarget target = install();
+        BBSAddonDescriptor addon = descriptor("modifier-release-exception");
+        BBSUiRemoteInputState held = state(
+            20D,
+            21D,
+            0,
+            Set.of(GLFW.GLFW_KEY_A),
+            0
+        );
+
+        check(completed(BBSUiInputDispatcher.submit(addon, batch(addon, 1L, held, List.of(
+            new BBSUiKeyEvent(GLFW.GLFW_KEY_A, 0, BBSUiInputAction.PRESS, 0)
+        ))), "release-exception press").applied(),
+            "release-exception test did not establish its held key");
+
+        target.observations.clear();
+        target.throwOnObservation = 1;
+        target.thrown = false;
+
+        BBSUiInputResult result = completed(BBSUiInputDispatcher.submit(addon, batch(
+            addon,
+            2L,
+            state(22D, 23D, 0, Set.of(), 0),
+            List.of(new BBSUiKeyEvent(GLFW.GLFW_KEY_A, 0, BBSUiInputAction.RELEASE, 0))
+        )), "throwing release batch");
+
+        check(result.status() == BBSUiInputStatus.REJECTED,
+            "throwing release did not reject its batch");
+        check(target.count("key-release:" + GLFW.GLFW_KEY_A) == 1,
+            "throwing release was delivered again during ownership cleanup");
+        check(!BBSUiRemoteHeldState.isActive(),
+            "throwing release retained its remote held-state lease");
     }
 
     private static void reentrantClearStopsOldBatch()

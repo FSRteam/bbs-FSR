@@ -859,7 +859,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
                 if (this.callback != null)
                 {
-                    this.callback.accept(this.getCurrent());
+                    context.menu.runWithPreservedMouseCapture(this, () -> this.callback.accept(this.getCurrent()));
 
                     return true;
                 }
@@ -917,6 +917,26 @@ public class UIReplayList extends UIList<ReplayListEntry>
         }
 
         return super.subMouseReleased(context) || handled;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.scroll.cancelDragging(context.mouseButton);
+
+        if (this.replayDragOwnership.isOwnedBy(context.mouseButton, this.replayDragGeneration))
+        {
+            this.cancelReplayDrag();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    private void cancelReplayDrag()
+    {
+        this.replayDragOwnership.cancel();
+        this.replayDragGeneration = 0L;
+        this.dragging = -1;
     }
 
     /** Drag a replay row onto a category header to assign that category. */

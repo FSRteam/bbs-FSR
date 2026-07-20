@@ -48,6 +48,18 @@ public class UIAudioEditor extends UIElement
     private int dragging = -2;
     private int lastX;
 
+    private boolean gestureSnapshotActive;
+    private List<ColorCode> gestureSnapshotCodes;
+    private float[] gestureSnapshotStarts;
+    private float[] gestureSnapshotEnds;
+    private int[] gestureSnapshotColors;
+    private ColorCode gestureSnapshotCurrent;
+    private Link gestureSnapshotAudio;
+    private SoundPlayer gestureSnapshotPlayer;
+    private double gestureSnapshotScaleShift;
+    private boolean gestureSnapshotPlayback;
+    private float gestureSnapshotPlaybackPosition;
+
     private ColorCode dragged;
     private ColorCode current;
 
@@ -302,6 +314,7 @@ public class UIAudioEditor extends UIElement
 
         try
         {
+            this.captureGestureSnapshot();
             starter.run();
             started = true;
 
@@ -311,10 +324,12 @@ public class UIAudioEditor extends UIElement
         {
             if (!started && this.gestureOwnership.release(button, generation))
             {
+                this.restoreGestureSnapshot();
                 this.gestureGeneration = 0L;
                 this.dragged = null;
                 this.navigating = false;
                 this.dragging = -2;
+                this.clearGestureSnapshot();
             }
         }
     }
@@ -333,8 +348,104 @@ public class UIAudioEditor extends UIElement
         this.dragged = null;
         this.navigating = false;
         this.dragging = -2;
+        this.clearGestureSnapshot();
 
         return super.subMouseReleased(context);
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        long generation = this.gestureGeneration;
+
+        if (this.gestureOwnership.release(context.mouseButton, generation))
+        {
+            this.restoreGestureSnapshot();
+            this.gestureGeneration = 0L;
+            this.dragged = null;
+            this.navigating = false;
+            this.dragging = -2;
+            this.clearGestureSnapshot();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    private void captureGestureSnapshot()
+    {
+        this.gestureSnapshotActive = this.colorCodes != null && this.scale != null;
+
+        if (!this.gestureSnapshotActive)
+        {
+            return;
+        }
+
+        int size = this.colorCodes.size();
+
+        this.gestureSnapshotCodes = new ArrayList<>(this.colorCodes);
+        this.gestureSnapshotStarts = new float[size];
+        this.gestureSnapshotEnds = new float[size];
+        this.gestureSnapshotColors = new int[size];
+
+        for (int i = 0; i < size; i++)
+        {
+            ColorCode code = this.colorCodes.get(i);
+
+            this.gestureSnapshotStarts[i] = code.start;
+            this.gestureSnapshotEnds[i] = code.end;
+            this.gestureSnapshotColors[i] = code.color;
+        }
+
+        this.gestureSnapshotCurrent = this.current;
+        this.gestureSnapshotAudio = this.audio;
+        this.gestureSnapshotPlayer = this.player;
+        this.gestureSnapshotScaleShift = this.scale.getShift();
+        this.gestureSnapshotPlayback = this.player != null;
+
+        if (this.gestureSnapshotPlayback)
+        {
+            this.gestureSnapshotPlaybackPosition = this.player.getPlaybackPosition();
+        }
+    }
+
+    private void restoreGestureSnapshot()
+    {
+        if (!this.gestureSnapshotActive || this.audio != this.gestureSnapshotAudio || this.player != this.gestureSnapshotPlayer)
+        {
+            return;
+        }
+
+        for (int i = 0; i < this.gestureSnapshotCodes.size(); i++)
+        {
+            ColorCode code = this.gestureSnapshotCodes.get(i);
+
+            code.start = this.gestureSnapshotStarts[i];
+            code.end = this.gestureSnapshotEnds[i];
+            code.color = this.gestureSnapshotColors[i];
+        }
+
+        this.colorCodes.clear();
+        this.colorCodes.addAll(this.gestureSnapshotCodes);
+        this.scale.setShift(this.gestureSnapshotScaleShift);
+        this.setCurrent(this.gestureSnapshotCurrent);
+
+        if (this.gestureSnapshotPlayback && this.player != null)
+        {
+            this.player.setPlaybackPosition(this.gestureSnapshotPlaybackPosition);
+        }
+    }
+
+    private void clearGestureSnapshot()
+    {
+        this.gestureSnapshotActive = false;
+        this.gestureSnapshotCodes = null;
+        this.gestureSnapshotStarts = null;
+        this.gestureSnapshotEnds = null;
+        this.gestureSnapshotColors = null;
+        this.gestureSnapshotCurrent = null;
+        this.gestureSnapshotAudio = null;
+        this.gestureSnapshotPlayer = null;
+        this.gestureSnapshotPlayback = false;
     }
 
     @Override

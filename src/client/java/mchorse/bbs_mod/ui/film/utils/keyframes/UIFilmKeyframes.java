@@ -66,9 +66,30 @@ public class UIFilmKeyframes extends UIKeyframes
 
         Keyframe keyframe = this.getGraph().getSelected();
 
-        if (keyframe != null)
+        this.seekToKeyframe(keyframe);
+    }
+
+    @Override
+    protected void onKeyframePicked(Keyframe keyframe)
+    {
+        this.seekToKeyframe(keyframe);
+    }
+
+    /**
+     * Convert a keyframe's clip-local tick into the shared film cursor.  Replay
+     * editors opt into {@link #absolute()}, while camera clip editors retain
+     * their clip start offset.
+     */
+    static int resolveCursorTick(float tick, long clipOffset)
+    {
+        return Math.max(0, (int) (tick + clipOffset));
+    }
+
+    private void seekToKeyframe(Keyframe keyframe)
+    {
+        if (this.editor != null && keyframe != null)
         {
-            this.editor.setCursor((int) keyframe.getTick());
+            this.editor.setCursor(resolveCursorTick(keyframe.getTick(), this.getClipOffset()));
         }
     }
 

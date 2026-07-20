@@ -409,10 +409,37 @@ public class UIFilmPreview extends UIElement
 
         if (area.isInside(context))
         {
-            return this.panel.replayEditor.clickViewport(context, area);
+            boolean[] handled = {false};
+
+            context.menu.runWithPreservedMouseCapture(
+                this,
+                () -> handled[0] = this.panel.replayEditor.clickViewport(context, area)
+            );
+
+            return handled[0];
         }
 
         return super.subMouseClicked(context);
+    }
+
+    @Override
+    protected boolean subMouseReleased(UIContext context)
+    {
+        boolean handled = this.panel.getController().releaseViewportGesture(context);
+
+        return handled || super.subMouseReleased(context);
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        /* The preview owns the captured press in the UI tree, while orbit and
+         * gizmo state live on the sibling controller. Cancellation must reach
+         * that controller without synthesizing a committing release. The
+         * controller's generation checks make the root-wide second traversal
+         * idempotent. */
+        this.panel.getController().cancelViewportGesture(context);
+        super.subMouseCanceled(context);
     }
 
     @Override

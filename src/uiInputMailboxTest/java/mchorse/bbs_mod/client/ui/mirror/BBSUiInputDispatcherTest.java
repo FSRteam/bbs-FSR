@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
+import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
@@ -923,6 +924,11 @@ public final class BBSUiInputDispatcherTest
             restoreMinecraft = installHeadlessMinecraftInstance();
             UIContext context = new UIContext(null);
             UITrackpad trackpad = new UITrackpad();
+            AtomicInteger trackpadDragEnds = new AtomicInteger();
+
+            trackpad.getEvents().register(UITrackpadDragEndEvent.class, (event) ->
+                trackpadDragEnds.incrementAndGet()
+            );
 
             trackpad.area.set(0, 0, 100, 20);
             trackpad.setValue(5D);
@@ -938,12 +944,28 @@ public final class BBSUiInputDispatcherTest
             check(trackpad.mouseReleased(context) == null && trackpad.isDragging(),
                 "UITrackpad right release consumed or ended a left-owned drag");
 
+            context.setMouse(50, 10, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            trackpad.mouseCanceled(context);
+            check(!trackpad.isDragging(),
+                "UITrackpad lifecycle cancellation retained its drag");
+            check(trackpadDragEnds.get() == 0,
+                "UITrackpad lifecycle cancellation emitted a normal drag-end commit");
+            context.setMouseWheel(200, 200, 1D, 0D);
+            check(trackpad.mouseScrolled(context) == null,
+                "UITrackpad retained global wheel capture after lifecycle cancellation");
+
+            context.setMouse(50, 10, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            check(trackpad.mouseClicked(context) == trackpad && trackpad.isDragging(),
+                "UITrackpad could not reacquire after lifecycle cancellation");
+
             trackpad.setValue(8D);
             context.setKeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, GLFW.GLFW_PRESS);
             check(trackpad.keyPressed(context) == trackpad && !trackpad.isDragging(),
                 "UITrackpad explicit Escape cancellation did not end its drag");
             check(trackpad.getValue() == 5D,
                 "UITrackpad explicit cancellation did not restore its starting value");
+            check(trackpadDragEnds.get() == 0,
+                "UITrackpad Escape cancellation emitted a normal drag-end commit");
 
             context.setMouse(50, 10, GLFW.GLFW_MOUSE_BUTTON_LEFT);
             check(trackpad.mouseClicked(context) == trackpad && trackpad.isDragging(),
@@ -954,6 +976,8 @@ public final class BBSUiInputDispatcherTest
             context.setMouse(50, 10, GLFW.GLFW_MOUSE_BUTTON_LEFT);
             check(trackpad.mouseReleased(context) == trackpad && !trackpad.isDragging(),
                 "UITrackpad owning left release did not finish its drag");
+            check(trackpadDragEnds.get() == 1,
+                "UITrackpad physical release did not emit exactly one drag-end commit");
 
             UISliderTrackpad slider = new UISliderTrackpad();
 
@@ -971,6 +995,18 @@ public final class BBSUiInputDispatcherTest
                 "UISliderTrackpad right press cancelled a left-owned drag");
             check(slider.mouseReleased(context) == null && slider.isDragging(),
                 "UISliderTrackpad right release consumed or ended a left-owned drag");
+
+            context.setMouse(50, 10, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            slider.mouseCanceled(context);
+            check(!slider.isDragging(),
+                "UISliderTrackpad lifecycle cancellation retained its drag");
+            context.setMouseWheel(200, 200, 1D, 0D);
+            check(slider.mouseScrolled(context) == null,
+                "UISliderTrackpad retained global wheel capture after lifecycle cancellation");
+
+            context.setMouse(50, 10, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            check(slider.mouseClicked(context) == slider && slider.isDragging(),
+                "UISliderTrackpad could not reacquire after lifecycle cancellation");
 
             slider.setValue(8D);
             context.setKeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, GLFW.GLFW_PRESS);
@@ -1071,11 +1107,18 @@ public final class BBSUiInputDispatcherTest
         try
         {
             assertDeferredBlockingOverlayCapture();
+            assertNestedWheelDispatchRetainsOuterOwnerContext();
+            assertReleaseStaysWithPressOwnerAcrossInterception();
+            assertParentOwnerBypassesChildReleaseInterception();
+            assertCapturedReleaseIgnoresVisibilityAndEnabledState();
+            assertScrollViewScrollbarReleaseAndCancellation();
+            assertThrowingCapturedReleaseCancelsOwner();
             assertMouseBarrierAdmissionFence();
             assertNormalReleaseReentrantCapture();
             assertLifecycleInvalidationRejectsReentrantCapture();
             assertLifecycleInvalidationReleasesAllCapturedButtons();
             assertFailedMultiButtonReleaseContinues();
+            assertPreservedSiblingHierarchyCapture();
             assertOrderedHierarchyMutationCapture();
             assertFailedMouseDispatchDropsQueuedMutation();
             assertCanvasCaptureLifecycle();
@@ -1133,6 +1176,266 @@ public final class BBSUiInputDispatcherTest
             "owner could not reacquire after the blocking overlay closed");
         check(menu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT) && !draggable.isDragging(),
             "reacquired owner did not finish through the normal ancestor chain");
+    }
+
+    private static void assertReleaseStaysWithPressOwnerAcrossInterception()
+    {
+        TestMenu menu = new TestMenu();
+        HeadlessScrollView scroll = new HeadlessScrollView(20);
+        RecordingDraggable draggable = new RecordingDraggable();
+        AtomicInteger interceptorReleaseVisits = new AtomicInteger();
+        UIElement interceptor = new UIElement()
+        {
+            @Override
+            protected boolean subMouseReleased(UIContext context)
+            {
+                interceptorReleaseVisits.incrementAndGet();
+
+                return true;
+            }
+        };
+
+        scroll.area.set(0, 0, 100, 100);
+        scroll.xy(0, 0).wh(100, 100);
+        draggable.area.set(0, 20, 20, 20);
+        draggable.xy(0, 20).wh(20, 20);
+        interceptor.area.set(0, 0, 100, 100);
+        interceptor.xy(0, 0).wh(100, 100);
+        scroll.add(draggable);
+        menu.main.add(scroll);
+        menu.overlay.add(interceptor);
+        menu.getRoot().moveToFront(menu.overlay);
+
+        check(menu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT) && draggable.isDragging(),
+            "release-interception regression did not acquire the initiating drag");
+
+        check(menu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && !draggable.isDragging()
+                && draggable.releases == 1
+                && draggable.releaseVisits == 1
+                && draggable.releaseY == 25
+                && interceptorReleaseVisits.get() == 0,
+            "release skipped the press owner's captured ancestor path");
+    }
+
+    private static void assertParentOwnerBypassesChildReleaseInterception()
+    {
+        TestMenu menu = new TestMenu();
+        AtomicInteger parentReleases = new AtomicInteger();
+        AtomicInteger childReleases = new AtomicInteger();
+        UIElement parent = new UIElement()
+        {
+            @Override
+            protected boolean subMouseClicked(UIContext context)
+            {
+                return this.area.isInside(context);
+            }
+
+            @Override
+            protected boolean subMouseReleased(UIContext context)
+            {
+                parentReleases.incrementAndGet();
+
+                return true;
+            }
+        };
+        UIElement child = new UIElement()
+        {
+            @Override
+            protected boolean subMouseReleased(UIContext context)
+            {
+                childReleases.incrementAndGet();
+
+                return true;
+            }
+        };
+
+        parent.area.set(0, 0, 100, 100);
+        child.area.set(0, 0, 100, 100);
+        parent.add(child);
+        menu.main.add(parent);
+
+        check(menu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT),
+            "parent-owner regression did not acquire its press");
+        check(menu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && parentReleases.get() == 1 && childReleases.get() == 0,
+            "captured parent release was intercepted by one of its children");
+    }
+
+    private static void assertNestedWheelDispatchRetainsOuterOwnerContext()
+    {
+        TestMenu menu = new TestMenu();
+        AtomicInteger visits = new AtomicInteger();
+        AtomicBoolean outerContextRestored = new AtomicBoolean();
+        UIElement wheelOwner = new UIElement()
+        {
+            @Override
+            protected boolean subMouseScrolled(UIContext context)
+            {
+                int visit = visits.incrementAndGet();
+
+                if (visit == 1)
+                {
+                    check(context.mouseX == 5 && context.mouseY == 6
+                            && context.mouseWheelHorizontal == -0.5D && context.mouseWheel == 1.5D,
+                        "outer wheel owner received the wrong coordinates or axes");
+
+                    check(menu.mouseScrolled(15, 16, 2.5D, -3.5D),
+                        "nested wheel owner did not consume its event");
+                    outerContextRestored.set(context.mouseX == 5 && context.mouseY == 6
+                        && context.mouseWheelHorizontal == -0.5D && context.mouseWheel == 1.5D);
+                }
+                else
+                {
+                    check(visit == 2 && context.mouseX == 15 && context.mouseY == 16
+                            && context.mouseWheelHorizontal == 2.5D && context.mouseWheel == -3.5D,
+                        "nested wheel owner inherited the outer event state");
+                }
+
+                return true;
+            }
+        };
+
+        wheelOwner.area.set(0, 0, 100, 100);
+        menu.main.add(wheelOwner);
+
+        check(menu.mouseScrolled(5, 6, -0.5D, 1.5D)
+                && visits.get() == 2 && outerContextRestored.get(),
+            "nested wheel dispatch did not preserve one event owner/context per generation");
+    }
+
+    private static void assertCapturedReleaseIgnoresVisibilityAndEnabledState()
+    {
+        TestMenu menu = new TestMenu();
+        UIElement parent = new UIElement();
+        RecordingDraggable draggable = new RecordingDraggable();
+
+        parent.area.set(0, 0, 100, 100);
+        draggable.area.set(0, 0, 20, 20);
+        parent.add(draggable);
+        menu.main.add(parent);
+
+        check(menu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT) && draggable.isDragging(),
+            "visibility capture regression did not acquire the initiating drag");
+        draggable.setVisible(false);
+        check(menu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && !draggable.isDragging() && draggable.releases == 1,
+            "captured owner did not receive release after becoming invisible");
+
+        draggable.setVisible(true);
+        check(menu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT) && draggable.isDragging(),
+            "disabled capture regression did not reacquire the initiating drag");
+        parent.setEnabled(false);
+        check(menu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && !draggable.isDragging() && draggable.releases == 2,
+            "captured owner did not receive release after an ancestor was disabled");
+    }
+
+    private static void assertScrollViewScrollbarReleaseAndCancellation()
+    {
+        TestMenu menu = new TestMenu();
+        HeadlessScrollView scrollView = new HeadlessScrollView(0);
+
+        scrollView.area.set(0, 0, 100, 100);
+        scrollView.xy(0, 0).wh(100, 100);
+        scrollView.scroll = new HeadlessScroll(scrollView.area, 10);
+        scrollView.scroll.setSize(20);
+        menu.main.add(scrollView);
+
+        check(menu.mouseClicked(99, 50, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && scrollView.scroll.dragging,
+            "scrollbar press did not establish a captured scroll drag");
+        check(menu.mouseReleased(99, 50, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && !scrollView.scroll.dragging,
+            "captured scrollbar release did not clear scroll dragging");
+
+        check(menu.mouseClicked(99, 50, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && scrollView.scroll.dragging,
+            "scrollbar could not reacquire after release");
+        check(menu.mouseCanceled(99, 50, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && !scrollView.scroll.dragging,
+            "scrollbar cancellation did not clear scroll dragging");
+    }
+
+    private static void assertThrowingCapturedReleaseCancelsOwner()
+    {
+        TestMenu menu = new TestMenu();
+        AtomicBoolean dragging = new AtomicBoolean();
+        AtomicBoolean throwRelease = new AtomicBoolean(true);
+        AtomicInteger cancels = new AtomicInteger();
+        MouseGestureOwnership ownership = new MouseGestureOwnership();
+        long[] generation = {0L};
+        UIElement owner = new UIElement()
+        {
+            @Override
+            protected boolean subMouseClicked(UIContext context)
+            {
+                if (!this.area.isInside(context))
+                {
+                    return false;
+                }
+
+                generation[0] = ownership.acquireToken(context.mouseButton);
+                dragging.set(generation[0] != 0L);
+
+                return dragging.get();
+            }
+
+            @Override
+            protected boolean subMouseReleased(UIContext context)
+            {
+                if (!ownership.isOwnedBy(context.mouseButton, generation[0]))
+                {
+                    return false;
+                }
+
+                if (throwRelease.getAndSet(false))
+                {
+                    throw new IllegalStateException("expected captured release failure");
+                }
+
+                ownership.release(context.mouseButton, generation[0]);
+                generation[0] = 0L;
+                dragging.set(false);
+
+                return true;
+            }
+
+            @Override
+            protected void subMouseCanceled(UIContext context)
+            {
+                if (ownership.release(context.mouseButton, generation[0]))
+                {
+                    generation[0] = 0L;
+                    dragging.set(false);
+                    cancels.incrementAndGet();
+                }
+            }
+        };
+
+        owner.area.set(0, 0, 20, 20);
+        menu.main.add(owner);
+
+        check(menu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT) && dragging.get(),
+            "throwing-release test did not acquire its press owner");
+
+        try
+        {
+            menu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            throw new AssertionError("throwing captured release did not propagate its failure");
+        }
+        catch (IllegalStateException exception)
+        {
+            check("expected captured release failure".equals(exception.getMessage()),
+                "throwing captured release propagated the wrong failure");
+        }
+
+        check(!dragging.get() && cancels.get() == 1 && !ownership.isActive(),
+            "throwing captured release left its old owner active");
+        check(menu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && menu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && !dragging.get(),
+            "owner could not reacquire after throwing release cleanup");
     }
 
     private static void assertNormalReleaseReentrantCapture()
@@ -1431,6 +1734,81 @@ public final class BBSUiInputDispatcherTest
             "ordered remove/readd left the moved child with a ghost parent");
         check(!oldParent.getChildren().contains(moved) && newParent.getChildren().contains(moved),
             "ordered remove/readd did not move the child exactly once");
+    }
+
+    private static void assertPreservedSiblingHierarchyCapture()
+    {
+        TestMenu releaseMenu = new TestMenu();
+        UIElement releaseContainer = new UIElement();
+        UIElement oldSibling = new UIElement();
+        UIElement newSibling = new UIElement();
+        RecordingDraggable releaseOwner = new RecordingDraggable();
+        AtomicInteger releaseCommits = new AtomicInteger();
+
+        releaseContainer.area.set(0, 0, 100, 100);
+        oldSibling.area.set(30, 0, 20, 20);
+        newSibling.area.set(30, 0, 20, 20);
+        releaseOwner.area.set(0, 0, 20, 20);
+        releaseOwner.dragEnd(releaseCommits::incrementAndGet);
+        releaseContainer.add(oldSibling, releaseOwner);
+        releaseMenu.main.add(releaseContainer);
+        releaseOwner.onPress = () -> releaseMenu.runWithPreservedMouseCapture(releaseOwner, () ->
+        {
+            oldSibling.removeFromParent();
+            releaseContainer.add(newSibling);
+        });
+
+        check(releaseMenu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT),
+            "preserved sibling-refresh press was not consumed");
+        check(releaseOwner.isDragging() && releaseOwner.cancels == 0
+                && oldSibling.getParent() == null && newSibling.getParent() == releaseContainer,
+            "sibling hierarchy refresh canceled or detached its preserved press owner");
+        check(releaseCommits.get() == 0,
+            "sibling hierarchy refresh committed before the physical release");
+        check(releaseMenu.mouseReleased(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT)
+                && !releaseOwner.isDragging()
+                && releaseOwner.releases == 1
+                && releaseOwner.cancels == 0
+                && releaseCommits.get() == 1,
+            "preserved press owner did not commit exactly once on physical release");
+
+        TestMenu cancelMenu = new TestMenu();
+        RecordingDraggable cancelOwner = new RecordingDraggable();
+        AtomicInteger cancelCommits = new AtomicInteger();
+
+        cancelOwner.area.set(0, 0, 20, 20);
+        cancelOwner.dragEnd(cancelCommits::incrementAndGet);
+        cancelMenu.main.add(cancelOwner);
+
+        check(cancelMenu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT),
+            "cancellation regression did not acquire its press owner");
+        cancelMenu.invalidateInputState();
+        check(!cancelOwner.isDragging()
+                && cancelOwner.cancels == 1
+                && cancelOwner.releases == 0
+                && cancelCommits.get() == 0,
+            "lifecycle cancellation committed a preserved gesture");
+
+        TestMenu removalMenu = new TestMenu();
+        RecordingDraggable removedOwner = new RecordingDraggable();
+        AtomicInteger removalCommits = new AtomicInteger();
+
+        removedOwner.area.set(0, 0, 20, 20);
+        removedOwner.dragEnd(removalCommits::incrementAndGet);
+        removalMenu.main.add(removedOwner);
+        removedOwner.onPress = () -> removalMenu.runWithPreservedMouseCapture(
+            removedOwner,
+            removedOwner::removeFromParent
+        );
+
+        check(removalMenu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT),
+            "preserved owner-removal press was not consumed");
+        check(removedOwner.getParent() == null
+                && !removedOwner.isDragging()
+                && removedOwner.cancels == 1
+                && removedOwner.releases == 0
+                && removalCommits.get() == 0,
+            "preserve scope retained or committed an owner that was actually removed");
     }
 
     private static void assertContextMenuIntentOrdering()

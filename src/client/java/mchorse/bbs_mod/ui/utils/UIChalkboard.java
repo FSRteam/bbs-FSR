@@ -110,6 +110,17 @@ public class UIChalkboard extends UIElement
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (context.mouseButton == 0)
+        {
+            this.drawing = false;
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     public void resize()
     {
         super.resize();

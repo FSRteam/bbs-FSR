@@ -178,6 +178,14 @@ public class UITextbox extends UIBaseTextbox implements ITextColoring
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.textbox.mouseCanceled(context.mouseButton);
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     public boolean subKeyPressed(UIContext context)
     {
         if (this.isFocused())

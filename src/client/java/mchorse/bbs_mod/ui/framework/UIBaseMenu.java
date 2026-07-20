@@ -19,6 +19,7 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -71,6 +72,12 @@ public abstract class UIBaseMenu
     private boolean invalidateAfterMouseRelease;
     private boolean mouseBarrierAdmissionFence;
     private final Deque<MouseBarrierAction> mouseBarrierActions = new ArrayDeque<>();
+    /**
+     * Owners explicitly allowed to survive a sibling-only hierarchy refresh.
+     * The scope is captured onto each queued mutation; it is deliberately not
+     * consulted by blocking/lifecycle barriers.
+     */
+    private final Deque<IUIElement> preservedMouseCaptureOwners = new ArrayDeque<>();
     private int rootMouseX;
     private int rootMouseY;
 
@@ -183,15 +190,50 @@ public abstract class UIBaseMenu
 
         try
         {
-            boolean handled = this.dispatchMouseThroughRoot(mouseX, mouseY, mouseButton, false, false);
+            IUIElement owner = this.dispatchMouseThroughRootElement(
+                mouseX,
+                mouseY,
+                mouseButton,
+                false,
+                false,
+                this.currentInputDispatchLifecycleGeneration()
+            );
+
+            if (capture != null)
+            {
+                capture.owner = owner;
+                capture.releasePath = this.findMouseReleasePath(owner);
+            }
 
             this.drainMouseBarrierActions();
 
-            return handled;
+            return owner != null;
         }
         catch (RuntimeException | Error exception)
         {
+            long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
             this.removeMouseCapture(capture);
+
+            if (capture != null && !this.mouseCaptures.containsKey(mouseButton))
+            {
+                try
+                {
+                    this.dispatchMouseCancellationThroughRoot(
+                        mouseX,
+                        mouseY,
+                        mouseButton,
+                        false,
+                        lifecycleGeneration
+                    );
+                }
+                catch (RuntimeException | Error cancellationException)
+                {
+                    if (cancellationException != exception)
+                    {
+                        exception.addSuppressed(cancellationException);
+                    }
+                }
+            }
 
             this.discardMouseBarrierActions();
 
@@ -241,11 +283,16 @@ public abstract class UIBaseMenu
             return true;
         }
 
+        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
+
         this.removeMouseCapture(capture);
 
         try
         {
-            boolean handled = this.dispatchMouseThroughRoot(mouseX, mouseY, mouseButton, true, false);
+            IUIElement owner = capture.owner;
+            boolean handled = owner == null
+                ? this.dispatchMouseThroughRoot(mouseX, mouseY, mouseButton, true, false)
+                : this.dispatchMouseToCapturedPath(capture.releasePath, mouseX, mouseY, mouseButton, false) != null;
 
             this.drainMouseBarrierActions();
 
@@ -253,7 +300,31 @@ public abstract class UIBaseMenu
         }
         catch (RuntimeException | Error exception)
         {
-            this.removeMouseCapture(capture);
+            /* A release owner can throw before retiring its local drag state.
+             * If no reentrant replacement captured this button, deliver the
+             * non-committing terminal so the old owner cannot remain stuck.
+             * A replacement capture wins and must never be canceled here. */
+            if (!this.mouseCaptures.containsKey(mouseButton))
+            {
+                try
+                {
+                    this.dispatchMouseCancellationThroughRoot(
+                        mouseX,
+                        mouseY,
+                        mouseButton,
+                        false,
+                        lifecycleGeneration
+                    );
+                }
+                catch (RuntimeException | Error cancellationException)
+                {
+                    if (cancellationException != exception)
+                    {
+                        exception.addSuppressed(cancellationException);
+                    }
+                }
+            }
+
             this.discardMouseBarrierActions();
 
             throw exception;
@@ -356,18 +427,72 @@ public abstract class UIBaseMenu
             mutation,
             this.snapshotMouseCaptures(),
             lifecycleGeneration,
-            false
+            false,
+            null,
+            List.of()
         ));
         this.mouseBarrierAdmissionFence = true;
         this.drainMouseBarrierActions();
     }
 
-    /** Queue structural edits in call order and relayout once after owner cancellation. */
+    /**
+     * Run a narrowly scoped sibling refresh while retaining one initiating
+     * press owner. Any hierarchy mutation that removes that owner (or an
+     * ancestor containing it) still cancels the capture.
+     */
+    public void runWithPreservedMouseCapture(IUIElement owner, Runnable mutation)
+    {
+        if (owner == null)
+        {
+            throw new IllegalArgumentException("Preserved mouse capture owner cannot be null");
+        }
+        if (mutation == null)
+        {
+            throw new IllegalArgumentException("Preserved mouse capture mutation cannot be null");
+        }
+
+        this.preservedMouseCaptureOwners.push(owner);
+
+        try
+        {
+            mutation.run();
+        }
+        finally
+        {
+            this.preservedMouseCaptureOwners.pop();
+        }
+    }
+
+    /**
+     * Queue structural edits in call order and relayout once after owner cancellation.
+     *
+     * Keep this overload for callers compiled against the pre-capture API.
+     */
     public void runAfterHierarchyMutation(Runnable mutation)
+    {
+        this.runAfterHierarchyMutation(mutation, new IUIElement[0]);
+    }
+
+    /** Queue structural edits in call order and relayout once after owner cancellation. */
+    public void runAfterHierarchyMutation(Runnable mutation, IUIElement... detachedRoots)
     {
         if (mutation == null)
         {
             throw new IllegalArgumentException("Hierarchy mutation cannot be null");
+        }
+
+        List<IUIElement> detached = List.of();
+
+        if (detachedRoots != null && detachedRoots.length > 0)
+        {
+            List<IUIElement> copiedRoots = new ArrayList<>(detachedRoots.length);
+
+            for (IUIElement detachedRoot : detachedRoots)
+            {
+                copiedRoots.add(detachedRoot);
+            }
+
+            detached = List.copyOf(copiedRoots);
         }
 
         long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
@@ -388,7 +513,9 @@ public abstract class UIBaseMenu
             mutation,
             this.snapshotMouseCaptures(),
             lifecycleGeneration,
-            true
+            true,
+            this.preservedMouseCaptureOwners.peek(),
+            detached
         ));
         this.mouseBarrierAdmissionFence = true;
         this.drainMouseBarrierActions();
@@ -418,7 +545,9 @@ public abstract class UIBaseMenu
             mutation,
             this.snapshotMouseCaptures(),
             lifecycleGeneration,
-            false
+            false,
+            null,
+            List.of()
         ));
         this.mouseBarrierAdmissionFence = true;
         this.drainMouseBarrierActions();
@@ -449,7 +578,12 @@ public abstract class UIBaseMenu
                         continue;
                     }
 
-                    this.cancelCapturedMouseGesturesNow(action.captures, action.lifecycleGeneration);
+                    this.cancelCapturedMouseGesturesNow(
+                        action.captures,
+                        action.lifecycleGeneration,
+                        action.preservedOwner,
+                        action.detachedRoots
+                    );
 
                     if (action.lifecycleGeneration != this.inputLifecycleGeneration)
                     {
@@ -515,11 +649,26 @@ public abstract class UIBaseMenu
 
     private void cancelCapturedMouseGesturesNow(List<MouseCapture> captures, long lifecycleGeneration)
     {
+        this.cancelCapturedMouseGesturesNow(captures, lifecycleGeneration, null, List.of());
+    }
+
+    private void cancelCapturedMouseGesturesNow(
+        List<MouseCapture> captures,
+        long lifecycleGeneration,
+        IUIElement preservedOwner,
+        List<IUIElement> detachedRoots
+    )
+    {
         Throwable failure = null;
 
         for (MouseCapture capture : captures)
         {
             if (this.mouseCaptures.get(capture.button) != capture)
+            {
+                continue;
+            }
+
+            if (this.shouldPreserveMouseCapture(capture, preservedOwner, detachedRoots))
             {
                 continue;
             }
@@ -558,6 +707,49 @@ public abstract class UIBaseMenu
         {
             throw error;
         }
+    }
+
+    private boolean shouldPreserveMouseCapture(
+        MouseCapture capture,
+        IUIElement preservedOwner,
+        List<IUIElement> detachedRoots
+    )
+    {
+        if (preservedOwner == null || capture.owner != preservedOwner)
+        {
+            return false;
+        }
+
+        for (IUIElement detachedRoot : detachedRoots)
+        {
+            if (this.containsElement(detachedRoot, preservedOwner))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean containsElement(IUIElement root, IUIElement target)
+    {
+        if (root == target)
+        {
+            return true;
+        }
+
+        if (root instanceof UIElement element)
+        {
+            for (IUIElement child : element.getChildren())
+            {
+                if (this.containsElement(child, target))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** Drop every input token and deferred mutation owned by a detached screen. */
@@ -697,14 +889,101 @@ public abstract class UIBaseMenu
         boolean restoreMouse
     )
     {
-        return this.dispatchMouseThroughRoot(
+        return this.dispatchMouseThroughRootElement(
             mouseX,
             mouseY,
             mouseButton,
             release,
             restoreMouse,
             this.currentInputDispatchLifecycleGeneration()
-        );
+        ) != null;
+    }
+
+    private IUIElement dispatchMouseToCapturedPath(
+        List<IUIElement> path,
+        int mouseX,
+        int mouseY,
+        int mouseButton,
+        boolean restoreMouse
+    )
+    {
+        int previousMouseX = this.context.mouseX;
+        int previousMouseY = this.context.mouseY;
+        int previousMouseButton = this.context.mouseButton;
+        UIViewportStack previousViewportStack = this.context.viewportStack;
+        boolean nested = this.mouseDispatchDepth > 0;
+        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
+
+        this.context.viewportStack = new UIViewportStack();
+        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
+        this.mouseDispatchDepth += 1;
+
+        try
+        {
+            this.context.setMouse(mouseX, mouseY, mouseButton);
+            this.context.pushViewport(this.viewport);
+
+            try
+            {
+                return path == null || path.isEmpty()
+                    ? null
+                    : path.get(0).mouseReleasedCaptured(this.context, path, 0);
+            }
+            finally
+            {
+                this.context.popViewport();
+            }
+        }
+        finally
+        {
+            this.mouseDispatchDepth -= 1;
+            this.inputDispatchLifecycleGenerations.pop();
+            this.context.viewportStack = previousViewportStack;
+
+            if (restoreMouse || nested)
+            {
+                this.context.mouseX = previousMouseX;
+                this.context.mouseY = previousMouseY;
+                this.context.mouseButton = previousMouseButton;
+            }
+        }
+    }
+
+    private List<IUIElement> findMouseReleasePath(IUIElement owner)
+    {
+        if (owner == null)
+        {
+            return List.of();
+        }
+
+        List<IUIElement> path = new ArrayList<>();
+
+        return this.findMouseReleasePath(this.root, owner, path) ? List.copyOf(path) : List.of(owner);
+    }
+
+    private boolean findMouseReleasePath(IUIElement current, IUIElement owner, List<IUIElement> path)
+    {
+        path.add(current);
+
+        if (current == owner)
+        {
+            return true;
+        }
+
+        if (current instanceof UIElement element)
+        {
+            for (IUIElement child : element.getChildren())
+            {
+                if (this.findMouseReleasePath(child, owner, path))
+                {
+                    return true;
+                }
+            }
+        }
+
+        path.remove(path.size() - 1);
+
+        return false;
     }
 
     private void dispatchMouseCancellationThroughRoot(
@@ -754,7 +1033,7 @@ public abstract class UIBaseMenu
         }
     }
 
-    private boolean dispatchMouseThroughRoot(
+    private IUIElement dispatchMouseThroughRootElement(
         int mouseX,
         int mouseY,
         int mouseButton,
@@ -779,7 +1058,7 @@ public abstract class UIBaseMenu
 
             if (!this.root.isEnabled())
             {
-                return false;
+                return null;
             }
 
             this.context.pushViewport(this.viewport);
@@ -790,7 +1069,7 @@ public abstract class UIBaseMenu
                     ? this.root.mouseReleased(this.context)
                     : this.root.mouseClicked(this.context);
 
-                return element != null;
+                return element;
             }
             finally
             {
@@ -1113,14 +1392,27 @@ public abstract class UIBaseMenu
         }
     }
 
-    private record MouseCapture(int button, long generation)
-    {}
+    private static final class MouseCapture
+    {
+        private final int button;
+        private final long generation;
+        private IUIElement owner;
+        private List<IUIElement> releasePath = List.of();
+
+        private MouseCapture(int button, long generation)
+        {
+            this.button = button;
+            this.generation = generation;
+        }
+    }
 
     private record MouseBarrierAction(
         Runnable mutation,
         List<MouseCapture> captures,
         long lifecycleGeneration,
-        boolean resizeHierarchy
+        boolean resizeHierarchy,
+        IUIElement preservedOwner,
+        List<IUIElement> detachedRoots
     )
     {}
 }

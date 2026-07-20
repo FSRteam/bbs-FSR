@@ -457,6 +457,20 @@ public class UIColorPicker extends UIElement
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        long generation = this.dragGeneration;
+
+        if (this.dragOwnership.release(context.mouseButton, generation))
+        {
+            this.dragGeneration = 0L;
+            this.dragging = -1;
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     protected boolean subKeyPressed(UIContext context)
     {
         if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))

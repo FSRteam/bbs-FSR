@@ -92,6 +92,11 @@ public class UIKeyframes extends UIElement
     private Supplier<Integer> duration;
 
     private SheetCache cache;
+    private Map<UIKeyframeSheet, List<Integer>> gestureSelection;
+    private Keyframe gestureSelected;
+    private boolean deferPickCallback;
+    private boolean hasDeferredPick;
+    private Keyframe deferredPick;
 
     private UICopyPasteController copyPasteController;
 
@@ -759,6 +764,73 @@ public class UIKeyframes extends UIElement
         this.cache = new SheetCache(this.currentGraph.getSheets());
     }
 
+    /**
+     * Restore the keyframe data captured at the start of the current editing
+     * gesture.  Dragging deliberately mutates channels without notifications;
+     * cancellation must put those transient mutations back without creating an
+     * undo entry or broadcasting a second edit.
+     */
+    private void restoreKeyframes()
+    {
+        if (this.cache == null)
+        {
+            return;
+        }
+
+        for (Pair<BaseType, UIKeyframeSheet> pair : this.cache.data)
+        {
+            UIKeyframeSheet sheet = pair.b;
+
+            this.restoreSheetKeyframes(sheet, pair.a);
+            sheet.selection.clear();
+
+            List<Integer> selected = this.cache.selection.get(sheet);
+
+            if (selected != null)
+            {
+                for (Integer index : selected)
+                {
+                    if (index != null && index >= 0 && index < sheet.channel.getKeyframes().size())
+                    {
+                        sheet.selection.add(index);
+                    }
+                }
+            }
+        }
+
+        this.cache = null;
+    }
+
+    private void restoreSheetKeyframes(UIKeyframeSheet sheet, BaseType data)
+    {
+        if (data != null && data.isMap())
+        {
+            ListType cached = data.asMap().getList("keyframes");
+            List<?> current = sheet.channel.getKeyframes();
+
+            if (cached.size() == current.size())
+            {
+                /* Keep the mounted property editor bound to the same keyframe. */
+                for (int i = 0; i < current.size(); i++)
+                {
+                    Keyframe target = (Keyframe) current.get(i);
+                    Keyframe restored = new Keyframe(target.getId(), target.getFactory());
+
+                    restored.fromData(cached.get(i));
+                    target.lx_m = null;
+                    target.ly_m = null;
+                    target.rx_m = null;
+                    target.ry_m = null;
+                    target.copy(restored);
+                }
+
+                return;
+            }
+        }
+
+        sheet.channel.fromData(data);
+    }
+
     public void submitKeyframes()
     {
         /* Cache selection indices */
@@ -1023,10 +1095,43 @@ public class UIKeyframes extends UIElement
     {
         this.getGraph().onCallback(keyframe);
 
+        if (this.deferPickCallback)
+        {
+            this.hasDeferredPick = true;
+            this.deferredPick = keyframe;
+        }
+        else
+        {
+            this.notifyKeyframePicked(keyframe);
+        }
+    }
+
+    private void notifyKeyframePicked(Keyframe keyframe)
+    {
         if (this.callback != null)
         {
             this.callback.accept(keyframe);
         }
+    }
+
+    private void flushDeferredPick()
+    {
+        boolean notify = this.hasDeferredPick;
+        Keyframe keyframe = this.deferredPick;
+
+        this.discardDeferredPick();
+
+        if (notify)
+        {
+            this.notifyKeyframePicked(keyframe);
+        }
+    }
+
+    private void discardDeferredPick()
+    {
+        this.deferPickCallback = false;
+        this.hasDeferredPick = false;
+        this.deferredPick = null;
     }
 
     /* Graphing */
@@ -1157,7 +1262,7 @@ public class UIKeyframes extends UIElement
         {
             if (this.editingOwnership.isActive())
             {
-                return context.mouseButton != 1;
+                this.cancelEditingGesture(context);
             }
 
             this.lastX = this.originalX = context.mouseX;
@@ -1213,6 +1318,11 @@ public class UIKeyframes extends UIElement
         }
 
         this.editingGeneration = generation;
+        this.gestureSelection = null;
+        this.gestureSelected = null;
+        this.deferPickCallback = button == 0;
+        this.hasDeferredPick = false;
+        this.deferredPick = null;
 
         return true;
     }
@@ -1229,6 +1339,9 @@ public class UIKeyframes extends UIElement
         this.selecting = false;
         this.dragging = -1;
         this.draggingData = null;
+        this.cache = null;
+        this.discardDeferredPick();
+        this.restoreGestureSelection();
     }
 
     private void removeOrCreateKeyframe(UIContext context)
@@ -1263,9 +1376,13 @@ public class UIKeyframes extends UIElement
 
     private void pickOrStartSelectingKeyframes(UIContext context)
     {
+        this.gestureSelected = this.currentGraph.getSelected();
+        this.gestureSelection = this.captureGestureSelection();
+
         /* Picking keyframe or initiating selection */
         Pair<Keyframe, KeyframeType> pair = this.currentGraph.findKeyframe(context.mouseX, context.mouseY);
         Keyframe found = pair == null ? null : pair.a;
+        Keyframe picked = found;
         boolean shift = Window.isShiftPressed();
 
         if (shift && found == null)
@@ -1287,11 +1404,13 @@ public class UIKeyframes extends UIElement
             found = this.currentGraph.getSelected();
 
             this.pickKeyframe(found);
+            this.onKeyframePicked(picked);
         }
         else if (!this.selecting)
         {
             this.currentGraph.clearSelection();
             this.pickKeyframe(null);
+            this.moveNoKeyframes(context);
         }
 
         if (!this.selecting)
@@ -1335,6 +1454,8 @@ public class UIKeyframes extends UIElement
         this.selecting = false;
         this.dragging = -1;
         this.draggingData = null;
+        this.gestureSelection = null;
+        this.gestureSelected = null;
 
         failure = runEditingReleaseStep(failure, () -> this.currentGraph.mouseReleased(context));
 
@@ -1363,9 +1484,94 @@ public class UIKeyframes extends UIElement
             failure = appendEditingReleaseFailure(failure, exception);
         }
 
+        failure = runEditingReleaseStep(failure, this::flushDeferredPick);
+
         rethrowEditingReleaseFailure(failure);
 
         return handled;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (this.editingOwnership.isOwnedBy(context.mouseButton, this.editingGeneration))
+        {
+            this.cancelEditingGesture(context);
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    private void cancelEditingGesture(UIContext context)
+    {
+        boolean wasDragging = this.dragging > 0;
+
+        this.editingOwnership.cancel();
+        this.editingGeneration = 0L;
+        this.navigating = false;
+        this.selecting = false;
+        this.dragging = -1;
+        this.draggingData = null;
+
+        Throwable failure = null;
+
+        if (wasDragging)
+        {
+            failure = runEditingReleaseStep(failure, this::restoreKeyframes);
+        }
+        else
+        {
+            this.cache = null;
+        }
+
+        failure = runEditingReleaseStep(failure, this::restoreGestureSelection);
+        failure = runEditingReleaseStep(failure, () -> this.currentGraph.mouseReleased(context));
+        this.discardDeferredPick();
+
+        rethrowEditingReleaseFailure(failure);
+    }
+
+    private Map<UIKeyframeSheet, List<Integer>> captureGestureSelection()
+    {
+        Map<UIKeyframeSheet, List<Integer>> selection = new HashMap<>();
+
+        for (UIKeyframeSheet sheet : this.currentGraph.getSheets())
+        {
+            selection.put(sheet, new ArrayList<>(sheet.selection.getIndices()));
+        }
+
+        return selection;
+    }
+
+    private void restoreGestureSelection()
+    {
+        Map<UIKeyframeSheet, List<Integer>> selection = this.gestureSelection;
+        Keyframe selected = this.gestureSelected;
+
+        this.gestureSelection = null;
+        this.gestureSelected = null;
+
+        if (selection == null)
+        {
+            return;
+        }
+
+        for (Map.Entry<UIKeyframeSheet, List<Integer>> entry : selection.entrySet())
+        {
+            UIKeyframeSheet sheet = entry.getKey();
+
+            sheet.selection.clear();
+
+            for (Integer index : entry.getValue())
+            {
+                if (index != null && index >= 0 && index < sheet.channel.getKeyframes().size())
+                {
+                    sheet.selection.add(index);
+                }
+            }
+        }
+
+        this.currentGraph.onCallback(selected);
     }
 
     private static Throwable runEditingReleaseStep(Throwable failure, Runnable step)
@@ -1539,7 +1745,8 @@ public class UIKeyframes extends UIElement
         {
             this.dragging = 1;
         }
-        else if (this.dragging == 1)
+
+        if (this.dragging == 1)
         {
             if (this.currentGraph.getSelected() != null)
             {
@@ -1556,6 +1763,14 @@ public class UIKeyframes extends UIElement
     }
 
     protected void moveNoKeyframes(UIContext context)
+    {}
+
+    /**
+     * Called after a regular left-click picks a keyframe.  Timeline-specific
+     * editors can use this to seek their shared playhead while the base editor
+     * keeps its property-selection behavior unchanged.
+     */
+    protected void onKeyframePicked(Keyframe keyframe)
     {}
 
     /**
@@ -1653,6 +1868,7 @@ public class UIKeyframes extends UIElement
     private static class SheetCache
     {
         public List<Pair<BaseType, UIKeyframeSheet>> data = new ArrayList<>();
+        public Map<UIKeyframeSheet, List<Integer>> selection = new HashMap<>();
 
         public SheetCache(Collection<UIKeyframeSheet> sheets)
         {
@@ -1661,6 +1877,7 @@ public class UIKeyframes extends UIElement
                 if (sheet.selection.hasAny())
                 {
                     this.data.add(new Pair<>(sheet.channel.toData(), sheet));
+                    this.selection.put(sheet, new ArrayList<>(sheet.selection.getIndices()));
                 }
             }
         }

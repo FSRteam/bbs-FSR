@@ -749,6 +749,12 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return super.subMouseClicked(context);
     }
 
+    /** Start a preview-owned Gizmo press through the controller's ownership state. */
+    public boolean startViewportGizmo(UIContext context)
+    {
+        return this.canShowGizmo() && this.gizmo.mouseClickedHandle(context);
+    }
+
     @Override
     public StencilFormFramebuffer getGizmoStencil()
     {
@@ -793,7 +799,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void stopGizmoInteraction()
     {
-        this.gizmo.stop();
+        this.gizmo.cancel();
     }
 
     public void resetOrbit()
@@ -820,12 +826,25 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
     }
 
+    /**
+     * Finish a viewport gesture whose press was dispatched by the sibling
+     * Film preview. Captured release routing cannot discover this controller
+     * again, so the preview forwards the terminal event here explicitly.
+     */
+    public boolean releaseViewportGesture(UIContext context)
+    {
+        return this.subMouseReleased(context);
+    }
+
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
         boolean controlling = this.canControl();
         long orbitGeneration = this.orbit.gestureGeneration();
         boolean orbitDragged = this.orbit.wasDragged();
+        long dashboardOrbitGeneration = this.panel.isFlying() && context.mouseButton == 2
+            ? this.panel.dashboard.orbitUI.gestureGeneration()
+            : 0L;
         boolean consumed = false;
         boolean orbitReleased = false;
         boolean inherited = false;
@@ -858,7 +877,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             if (this.panel.isFlying() && context.mouseButton == 2)
             {
-                this.panel.dashboard.orbit.release();
+                this.panel.dashboard.orbitUI.stopGesture(context.mouseButton, dashboardOrbitGeneration);
             }
         }
         catch (RuntimeException | Error exception)
@@ -883,10 +902,33 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return controlling || consumed || orbitReleased || inherited;
     }
 
+    /** Cancel a sibling-owned viewport gesture without committing its deferred pick. */
+    public void cancelViewportGesture(UIContext context)
+    {
+        long gizmoGeneration = this.gizmo.gestureGeneration();
+        long orbitGeneration = this.orbit.gestureGeneration();
+        long dashboardOrbitGeneration = this.panel.isFlying() && context.mouseButton == 2
+            ? this.panel.dashboard.orbitUI.gestureGeneration()
+            : 0L;
+
+        if (this.orbit.stop(context.mouseButton, orbitGeneration)
+            && this.panel.replayEditor != null)
+        {
+            this.panel.replayEditor.cancelViewportPick(orbitGeneration);
+        }
+
+        if (this.panel.isFlying() && context.mouseButton == 2)
+        {
+            this.panel.dashboard.orbitUI.stopGesture(context.mouseButton, dashboardOrbitGeneration);
+        }
+
+        this.gizmo.cancel(context.mouseButton, gizmoGeneration);
+    }
+
     @Override
     protected void subMouseCanceled(UIContext context)
     {
-        this.gizmo.stop();
+        this.cancelViewportGesture(context);
         super.subMouseCanceled(context);
     }
 

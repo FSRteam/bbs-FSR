@@ -198,14 +198,58 @@ public final class UIWrapperGestureOwnershipTest
     private static void assertClipsKeepLeftScrubUntilLeftRelease()
     {
         String source = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIClips.java");
+        int click = source.indexOf("private boolean handleLeftClick(UIContext context");
+        int release = source.indexOf("public boolean subMouseReleased(UIContext context)", click);
+        String clickHandler = source.substring(click, release);
+        int capture = clickHandler.indexOf("this.captureGestureState();");
+        int firstPick = clickHandler.indexOf("context.menu.runWithPreservedMouseCapture");
 
         check(source.contains("this.gestureGeneration = this.gestureOwnership.acquireToken(button)")
                 || source.contains("long generation = this.gestureOwnership.acquireToken(button)"),
             "UIClips does not acquire an initiating-button generation");
+        check(clickHandler.contains(
+                "context.menu.runWithPreservedMouseCapture(this, () -> this.delegate.pickClip(last))")
+                && clickHandler.contains(
+                    "context.menu.runWithPreservedMouseCapture(this, () -> this.delegate.pickClip(clip))"),
+            "UIClips selection rebuild does not preserve its first-press drag owner");
+        check(capture >= 0 && firstPick > capture,
+            "UIClips does not snapshot its previous selection before the first-press callback");
+        int snapshotMethod = source.indexOf("private void captureGestureState()");
+        int restoreMethod = source.indexOf("private void restoreGestureState()", snapshotMethod);
+        String snapshotPath = source.substring(snapshotMethod, restoreMethod);
+        check(snapshotPath.contains("for (Clip clip : this.clips.get())")
+                && snapshotPath.contains("new ClipGestureSnapshot(clip, clip.toData().copy())")
+                && source.indexOf("this.captureGestureState();", click)
+                    < source.indexOf("context.menu.runWithPreservedMouseCapture", click),
+            "UIClips does not snapshot the complete pre-callback clip state");
+        check(source.contains("if (this.area.isInside(context) && this.gestureOwnership.isActive())")
+                && source.contains("return true;"),
+            "UIClips can cancel and roll back its active owner on an unrelated press");
         check(source.contains("if (!this.gestureOwnership.release(context.mouseButton, generation))")
                 && source.indexOf("this.gestureGeneration = 0L;")
-                    < source.indexOf("this.pickLastSelectedClip();", source.indexOf("public boolean subMouseReleased")),
+                    < source.indexOf("this.pickLastSelectedClip();", release),
             "UIClips release is not button/generation scoped before its selection callback");
+        int cancel = source.indexOf("private void cancelGesture()");
+        int restore = source.indexOf("private void restoreGestureState()", cancel);
+        int finish = source.indexOf("private void finishGesture(boolean finishSelection)");
+        int finishGuard = source.indexOf("if (finishSelection && wasSelecting)", finish);
+        int finishPick = source.indexOf("this.pickLastSelectedClip();", finish);
+        String cancelPath = source.substring(cancel, finish);
+        String releasePath = source.substring(release, cancel);
+        check(cancelPath.indexOf("this.restoreGestureState();")
+                    < cancelPath.indexOf("this.finishGesture(false);")
+                && restore > cancel,
+            "UIClips cancellation clears gesture state before rolling it back");
+        check(cancelPath.contains("snapshot.clip().fromData(snapshot.data().copy());")
+                && cancelPath.contains("this.delegate.pickClip(this.gestureClip);")
+                && cancelPath.contains("for (Clip clip : this.gestureSelection)"),
+            "UIClips cancellation does not restore clip data, property target, and selection");
+        check(releasePath.contains("this.finishGesture(true);")
+                && !releasePath.contains("this.restoreGestureState();"),
+            "UIClips physical release unexpectedly rolls back committed drag edits");
+        check(source.contains("this.finishGesture(false);")
+                && finish >= 0 && finishGuard > finish && finishPick > finishGuard,
+            "UIClips cancellation can still commit its pending selection");
     }
 
     private static void assertReplayListCommitsOnlyOnLeftRelease()
@@ -220,8 +264,21 @@ public final class UIWrapperGestureOwnershipTest
         check(source.contains("this.replayDragOwnership.acquireToken(context.mouseButton)")
                 && release >= 0 && retire > release,
             "UIReplayList does not scope sort release to its initiating button generation");
+        check(source.contains(
+                "context.menu.runWithPreservedMouseCapture(this, () -> this.callback.accept(this.getCurrent()))"),
+            "UIReplayList selection rebuild does not preserve its first-press drag owner");
         check(snapshot > retire && clear > snapshot && swap > clear,
             "UIReplayList does not retire the old drag before its drop/swap callback");
+        int cancelDrag = source.indexOf("private void cancelReplayDrag()");
+        int cancelEnd = source.indexOf("/** Drag a replay row", cancelDrag);
+        String cancelBody = cancelDrag >= 0 && cancelEnd > cancelDrag
+            ? source.substring(cancelDrag, cancelEnd)
+            : "";
+        check(cancelBody.contains("this.replayDragOwnership.cancel();")
+                && cancelBody.contains("this.dragging = -1;")
+                && !cancelBody.contains("handleSwap")
+                && !cancelBody.contains("dropReplaysOntoCategory"),
+            "UIReplayList cancellation does not retire its drag without dropping or swapping");
     }
 
     private static Object field(Object target, String name) throws ReflectiveOperationException

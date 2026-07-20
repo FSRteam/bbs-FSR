@@ -477,12 +477,50 @@ public class Gizmo
     {
         this.index = -1;
 
-        if (this.currentTransform != null)
-        {
-            this.currentTransform.acceptChanges();
-        }
+        UIPropTransform transform = this.currentTransform;
 
-        this.currentTransform = null;
+        try
+        {
+            if (transform != null)
+            {
+                transform.acceptChanges();
+            }
+        }
+        finally
+        {
+            if (this.currentTransform == transform)
+            {
+                this.currentTransform = null;
+            }
+        }
+    }
+
+    /**
+     * Abort the active transform without committing its preview values.
+     * Lifecycle cancellation (screen changes, focus loss, or input handoff)
+     * must use this path; a physical mouse release uses {@link #stop()} and
+     * commits instead.
+     */
+    public void cancel()
+    {
+        this.index = -1;
+
+        UIPropTransform transform = this.currentTransform;
+
+        try
+        {
+            if (transform != null)
+            {
+                transform.rejectChanges();
+            }
+        }
+        finally
+        {
+            if (this.currentTransform == transform)
+            {
+                this.currentTransform = null;
+            }
+        }
     }
 
     public void render(PoseStack stack)

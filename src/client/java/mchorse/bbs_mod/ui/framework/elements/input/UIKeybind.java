@@ -182,6 +182,21 @@ public class UIKeybind extends UIElement
     }
 
     @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        long generation = this.mouseGeneration;
+
+        if (this.mouseOwnership.release(context.mouseButton, generation))
+        {
+            this.mouseGeneration = 0L;
+            this.first = false;
+            this.reading = false;
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    @Override
     public boolean subKeyPressed(UIContext context)
     {
         if (this.reading)

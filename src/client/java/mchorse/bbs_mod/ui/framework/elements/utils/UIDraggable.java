@@ -136,6 +136,8 @@ public class UIDraggable extends UIElement
             return super.subMouseReleased(context);
         }
 
+        this.referenceMouse = null;
+
         if (this.dragEndCallback != null)
         {
             this.dragEndCallback.run();
@@ -158,7 +160,15 @@ public class UIDraggable extends UIElement
     {
         super.render(context);
 
-        if (this.enabled.get())
+        boolean enabled = this.enabled.get();
+
+        if (!enabled && this.isDragging())
+        {
+            this.dragOwnership.release(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            this.referenceMouse = null;
+        }
+
+        if (enabled)
         {
             if (this.isDragging())
             {
@@ -200,10 +210,15 @@ public class UIDraggable extends UIElement
                 }
             }
 
-            this.callback.accept(context);
-
-            context.mouseX = mouseX;
-            context.mouseY = mouseY;
+            try
+            {
+                this.callback.accept(context);
+            }
+            finally
+            {
+                context.mouseX = mouseX;
+                context.mouseY = mouseY;
+            }
         }
     }
 }

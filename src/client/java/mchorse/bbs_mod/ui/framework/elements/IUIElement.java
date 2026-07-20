@@ -3,6 +3,8 @@ package mchorse.bbs_mod.ui.framework.elements;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Area;
 
+import java.util.List;
+
 public interface IUIElement
 {
     /**
@@ -34,6 +36,14 @@ public interface IUIElement
      * Mouse was released
      */
     public IUIElement mouseReleased(UIContext context);
+
+    /** Release through the exact ancestor path that owned the initiating press. */
+    public default IUIElement mouseReleasedCaptured(UIContext context, List<IUIElement> path, int index)
+    {
+        return index >= 0 && index < path.size() && path.get(index) == this && index == path.size() - 1
+            ? this.mouseReleased(context)
+            : null;
+    }
 
     /**
      * An owned mouse gesture was canceled without a physical button release.

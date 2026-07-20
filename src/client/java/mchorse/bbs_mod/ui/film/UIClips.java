@@ -80,6 +80,10 @@ public class UIClips extends UIElement
     private boolean scrolling;
     private final MouseGestureOwnership gestureOwnership = new MouseGestureOwnership();
     private long gestureGeneration;
+    private boolean rollbackGesture;
+    private List<Clip> gestureSelection = Collections.emptyList();
+    private Clip gestureClip;
+    private Clips gestureClips;
     private int lastX;
     private int lastY;
     private int initialX;
@@ -110,6 +114,7 @@ public class UIClips extends UIElement
     private List<Clip> otherClips = Collections.emptyList();
     private Set<Integer> snappingPoints = new TreeSet<>();
     private List<Vector3i> grabbedData = new ArrayList<>();
+    private List<ClipGestureSnapshot> grabbedSnapshots = new ArrayList<>();
 
     private UICopyPasteController copyPasteController;
 
@@ -1198,7 +1203,12 @@ public class UIClips extends UIElement
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
-        if (this.area.isInside(context) && (this.gestureOwnership.isActive() || this.vertical.dragging))
+        if (this.area.isInside(context) && this.gestureOwnership.isActive())
+        {
+            return true;
+        }
+
+        if (this.area.isInside(context) && this.vertical.dragging)
         {
             return true;
         }
@@ -1240,6 +1250,8 @@ public class UIClips extends UIElement
             return true;
         }
 
+        this.captureGestureState();
+
         if (!this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
             int tick = (int) Math.floor(this.scale.from(mouseX));
@@ -1259,12 +1271,12 @@ public class UIClips extends UIElement
 
                         if (last != original)
                         {
-                            this.delegate.pickClip(last);
+                            context.menu.runWithPreservedMouseCapture(this, () -> this.delegate.pickClip(last));
                         }
                     }
                     else
                     {
-                        this.delegate.pickClip(clip);
+                        context.menu.runWithPreservedMouseCapture(this, () -> this.delegate.pickClip(clip));
                         this.setSelected(clip);
                     }
                 }
@@ -1528,6 +1540,101 @@ public class UIClips extends UIElement
             return super.subMouseReleased(context) || handled;
         }
 
+        this.finishGesture(true);
+
+        return true;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.vertical.cancelDragging(context.mouseButton);
+
+        if (this.gestureOwnership.isOwnedBy(context.mouseButton, this.gestureGeneration))
+        {
+            this.cancelGesture();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    private void cancelGesture()
+    {
+        this.gestureOwnership.cancel();
+
+        try
+        {
+            this.restoreGestureState();
+        }
+        finally
+        {
+            this.finishGesture(false);
+        }
+    }
+
+    private void captureGestureState()
+    {
+        this.rollbackGesture = true;
+        this.gestureSelection = new ArrayList<>(this.getClipsFromSelection());
+        this.gestureClip = this.delegate.getClip();
+        this.gestureClips = this.clips;
+        this.grabbedSnapshots.clear();
+
+        if (this.clips != null)
+        {
+            for (Clip clip : this.clips.get())
+            {
+                this.grabbedSnapshots.add(new ClipGestureSnapshot(clip, clip.toData().copy()));
+            }
+        }
+    }
+
+    private void restoreGestureState()
+    {
+        if (!this.rollbackGesture)
+        {
+            return;
+        }
+
+        /* Prevent a delegate refresh during cancellation from recursively
+         * trying to restore the same gesture. */
+        this.rollbackGesture = false;
+
+        boolean sameClipList = this.clips == this.gestureClips;
+
+        if (!sameClipList)
+        {
+            return;
+        }
+
+        for (ClipGestureSnapshot snapshot : this.grabbedSnapshots)
+        {
+            snapshot.clip().fromData(snapshot.data().copy());
+        }
+
+        if (sameClipList && this.delegate.getClip() != this.gestureClip)
+        {
+            this.delegate.pickClip(this.gestureClip);
+        }
+
+        if (sameClipList && this.clips != null)
+        {
+            this.clearSelection();
+
+            for (Clip clip : this.gestureSelection)
+            {
+                this.addSelected(clip);
+            }
+        }
+
+        if (sameClipList && !this.grabbedSnapshots.isEmpty())
+        {
+            this.delegate.fillData();
+        }
+    }
+
+    private void finishGesture(boolean finishSelection)
+    {
         boolean wasSelecting = this.selecting;
 
         this.gestureGeneration = 0L;
@@ -1542,13 +1649,16 @@ public class UIClips extends UIElement
         this.otherClips = Collections.emptyList();
         this.snappingPoints.clear();
         this.grabbedData.clear();
+        this.grabbedSnapshots.clear();
+        this.gestureSelection = Collections.emptyList();
+        this.gestureClip = null;
+        this.gestureClips = null;
+        this.rollbackGesture = false;
 
-        if (wasSelecting)
+        if (finishSelection && wasSelecting)
         {
             this.pickLastSelectedClip();
         }
-
-        return true;
     }
 
     @Override
@@ -1638,7 +1748,16 @@ public class UIClips extends UIElement
         else if (this.grabMode == 1) this.dragLeftEdge(others, dx, dy);
         else if (this.grabMode == 2) this.dragRightEdge(others, dx, dy);
 
-        this.delegate.fillData();
+        UIContext context = this.getContext();
+
+        if (context == null)
+        {
+            this.delegate.fillData();
+        }
+        else
+        {
+            context.menu.runWithPreservedMouseCapture(this, this.delegate::fillData);
+        }
     }
 
     private void moveClips(List<Clip> others, int dx, int dy)
@@ -2134,4 +2253,7 @@ public class UIClips extends UIElement
     {
         public void apply(List<Clip> others, List<Clip> grabbedClips, List<Vector3i> grabbedData, int dx, int dy);
     }
+
+    private record ClipGestureSnapshot(Clip clip, BaseType data)
+    {}
 }

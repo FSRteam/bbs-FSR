@@ -19,6 +19,7 @@ import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.KeyframeNavigationTest;
+import mchorse.bbs_mod.ui.film.utils.keyframes.KeyframeInteractionTest;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.factory.MapFactory;
 import net.minecraft.SharedConstants;
@@ -48,6 +49,7 @@ public final class ReplayIndexRemappingTest
             testFilmReferenceTransaction();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
+            KeyframeInteractionTest.run();
 
             System.out.println("Replay/keyframe consistency tests passed");
         }

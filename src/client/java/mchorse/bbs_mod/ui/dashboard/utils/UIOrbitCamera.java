@@ -12,6 +12,7 @@ public class UIOrbitCamera implements IUIElement
 {
     public OrbitCamera orbit = new OrbitCamera();
     private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
     private boolean control;
     private boolean enabled = true;
 
@@ -29,8 +30,7 @@ public class UIOrbitCamera implements IUIElement
     {
         if (!control)
         {
-            this.dragOwnership.cancel();
-            this.orbit.release();
+            this.cancelGesture();
         }
 
         this.control = control;
@@ -40,8 +40,7 @@ public class UIOrbitCamera implements IUIElement
     {
         if (!enabled)
         {
-            this.dragOwnership.cancel();
-            this.orbit.release();
+            this.cancelGesture();
         }
 
         this.enabled = enabled;
@@ -50,22 +49,90 @@ public class UIOrbitCamera implements IUIElement
     @Override
     public IUIElement mouseClicked(UIContext context)
     {
-        int i = this.orbit.canStart(context);
+        return this.startGesture(context) == 0L ? null : this;
+    }
 
-        if (i >= 0 && this.dragOwnership.acquire(context.mouseButton))
+    /** Start a dashboard orbit from a caller which is not itself in the UI tree. */
+    public long startGesture(UIContext context)
+    {
+        if (!this.enabled)
         {
-            this.orbit.start(i, context.mouseX, context.mouseY);
-
-            return this;
+            return 0L;
         }
 
-        return null;
+        int mode = this.orbit.canStart(context);
+
+        if (mode < 0)
+        {
+            return 0L;
+        }
+
+        long generation = this.dragOwnership.acquireToken(context.mouseButton);
+
+        if (generation == 0L)
+        {
+            return 0L;
+        }
+
+        this.dragGeneration = generation;
+
+        try
+        {
+            this.orbit.start(mode, context.mouseX, context.mouseY);
+
+            return generation;
+        }
+        catch (RuntimeException | Error exception)
+        {
+            if (this.dragOwnership.release(context.mouseButton, generation))
+            {
+                this.dragGeneration = 0L;
+                this.orbit.release();
+            }
+
+            throw exception;
+        }
+    }
+
+    public long gestureGeneration()
+    {
+        return this.dragGeneration;
+    }
+
+    public boolean stopGesture(int mouseButton)
+    {
+        return this.stopGesture(mouseButton, this.dragGeneration);
+    }
+
+    public boolean stopGesture(int mouseButton, long generation)
+    {
+        if (!this.dragOwnership.release(mouseButton, generation))
+        {
+            return false;
+        }
+
+        if (this.dragGeneration == generation)
+        {
+            this.dragGeneration = 0L;
+        }
+
+        this.orbit.release();
+
+        return true;
+    }
+
+    /** Cancel the current gesture without invoking any release-side action. */
+    public void cancelGesture()
+    {
+        this.dragOwnership.cancel();
+        this.dragGeneration = 0L;
+        this.orbit.release();
     }
 
     @Override
     public IUIElement mouseScrolled(UIContext context)
     {
-        if (!this.control)
+        if (!this.control || !this.enabled)
         {
             return null;
         }
@@ -76,29 +143,19 @@ public class UIOrbitCamera implements IUIElement
     @Override
     public IUIElement mouseReleased(UIContext context)
     {
-        if (!this.dragOwnership.release(context.mouseButton))
-        {
-            return null;
-        }
-
-        this.orbit.release();
-
-        return this;
+        return this.stopGesture(context.mouseButton, this.dragGeneration) ? this : null;
     }
 
     @Override
     public void mouseCanceled(UIContext context)
     {
-        if (this.dragOwnership.release(context.mouseButton))
-        {
-            this.orbit.release();
-        }
+        this.stopGesture(context.mouseButton, this.dragGeneration);
     }
 
     @Override
     public void render(UIContext context)
     {
-        if (!this.control)
+        if (!this.control && !this.dragOwnership.isActive())
         {
             this.orbit.cache(context.mouseX, context.mouseY);
 

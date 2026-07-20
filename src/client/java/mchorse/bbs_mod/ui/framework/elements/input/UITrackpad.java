@@ -515,6 +515,17 @@ public class UITrackpad extends UIBaseTextbox
         return wasDragging || super.subMouseReleased(context);
     }
 
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (this.dragOwnership.isOwnedBy(context.mouseButton, this.dragGeneration))
+        {
+            this.cancelDragging();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
     private boolean cancelDragging()
     {
         if (!this.isDragging())
@@ -528,8 +539,15 @@ public class UITrackpad extends UIBaseTextbox
         this.dragGeneration = 0L;
         this.wasInside = false;
         this.shiftX = 0;
-        this.setValueAndNotify(this.lastValue);
-        this.getEvents().emit(new UITrackpadDragEndEvent(this));
+
+        if (this.delayedInput)
+        {
+            this.setValue(this.lastValue);
+        }
+        else
+        {
+            this.setValueAndNotify(this.lastValue);
+        }
 
         return true;
     }

@@ -1,13 +1,19 @@
 package mchorse.bbs_mod.client.ui.mirror;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.framework.elements.input.UIOrder;
+import mchorse.bbs_mod.ui.framework.elements.input.UITransform;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.film.clips.modules.UIPointsModule;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIClickable;
 import mchorse.bbs_mod.ui.framework.elements.context.UISimpleContextMenu;
+import mchorse.bbs_mod.ui.framework.elements.input.UIKeybind;
 import mchorse.bbs_mod.ui.framework.elements.input.color.UIColorPicker;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.framework.elements.input.text.utils.Textbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.particles.utils.UICurve;
@@ -15,6 +21,7 @@ import mchorse.bbs_mod.ui.particles.utils.UIGradientEditor;
 import mchorse.bbs_mod.ui.utility.audio.UIAudioEditor;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scroll;
+import mchorse.bbs_mod.ui.utils.UIChalkboard;
 import mchorse.bbs_mod.ui.utils.context.ContextAction;
 import sun.misc.Unsafe;
 
@@ -49,6 +56,8 @@ public final class UISecondaryGestureOwnershipRuntimeTest
         assertAudioKeepsScrubUntilLeftRelease();
         assertTextareaKeepsSelectionUntilLeftRelease();
         assertColorPickerRejectsRightDragAndKeepsLeftOwner();
+        assertIndependentGestureCancellationClearsWithoutCommit();
+        assertLegacyMouseStateCancellationClearsWithoutCommit();
         assertListCommitsOnlyOnLeftRelease();
         assertContextMenuRunsOnlyForOwnerRelease();
         assertContextMenuCancellationDoesNotRunDestructiveAction();
@@ -196,6 +205,147 @@ public final class UISecondaryGestureOwnershipRuntimeTest
         release(UIColorPicker.class, picker, context, LEFT);
         check(intField(picker, "dragging") == -1 && !ownership.isActive(),
             "color picker did not end a left drag on matching release");
+    }
+
+    private static void assertIndependentGestureCancellationClearsWithoutCommit()
+    {
+        UIContext context = new UIContext(null);
+
+        UICurve curve = allocate(UICurve.class);
+        MouseGestureOwnership curveOwnership = arm(curve, "gestureOwnership", "gestureGeneration", LEFT);
+
+        setBoolean(curve, "dragging", true);
+        setBoolean(curve, "moving", true);
+        setBoolean(curve, "panning", true);
+        setBoolean(curve, "chainDraggingCPOut", true);
+        setBoolean(curve, "chainDraggingCPIn", true);
+        cancel(UICurve.class, curve, context, LEFT);
+        check(!curveOwnership.isActive() && longField(curve, "gestureGeneration") == 0L
+                && !booleanField(curve, "dragging") && !booleanField(curve, "moving")
+                && !booleanField(curve, "panning") && !booleanField(curve, "chainDraggingCPOut")
+                && !booleanField(curve, "chainDraggingCPIn"),
+            "curve cancellation retained gesture ownership or editing state");
+
+        UIGradientEditor gradient = allocate(UIGradientEditor.class);
+        MouseGestureOwnership gradientOwnership = arm(gradient, "dragOwnership", "dragGeneration", LEFT);
+        TestParticleSection section = allocate(TestParticleSection.class);
+
+        section.editor = gradient;
+        setField(gradient, "section", section);
+        setInt(gradient, "dragging", 1);
+        cancel(UIGradientEditor.class, gradient, context, LEFT);
+        check(!gradientOwnership.isActive() && longField(gradient, "dragGeneration") == 0L
+                && intField(gradient, "dragging") == -1 && section.dirtyCount == 0,
+            "gradient cancellation committed or retained its drag");
+
+        UIAudioEditor audio = allocate(UIAudioEditor.class);
+        MouseGestureOwnership audioOwnership = arm(audio, "gestureOwnership", "gestureGeneration", MIDDLE);
+
+        setBoolean(audio, "navigating", true);
+        setInt(audio, "dragging", -1);
+        cancel(UIAudioEditor.class, audio, context, MIDDLE);
+        check(!audioOwnership.isActive() && longField(audio, "gestureGeneration") == 0L
+                && !booleanField(audio, "navigating") && intField(audio, "dragging") == -2,
+            "audio cancellation retained navigation or drag state");
+
+        UITextarea<?> textarea = allocate(UITextarea.class);
+        MouseGestureOwnership textareaOwnership = arm(textarea, "dragOwnership", "dragGeneration", LEFT);
+
+        textarea.horizontal = new Scroll(new Area());
+        textarea.vertical = new Scroll(new Area());
+        textarea.horizontal.beginDragging(LEFT);
+        textarea.vertical.beginDragging(LEFT);
+        setInt(textarea, "dragging", 2);
+        cancel(UITextarea.class, textarea, context, LEFT);
+        check(!textareaOwnership.isActive() && longField(textarea, "dragGeneration") == 0L
+                && intField(textarea, "dragging") == 0
+                && !textarea.horizontal.dragging && !textarea.vertical.dragging,
+            "textarea cancellation retained selection or scrollbar drag state");
+
+        UIColorPicker picker = allocate(UIColorPicker.class);
+        MouseGestureOwnership pickerOwnership = arm(picker, "dragOwnership", "dragGeneration", LEFT);
+
+        setInt(picker, "dragging", 1);
+        cancel(UIColorPicker.class, picker, context, LEFT);
+        check(!pickerOwnership.isActive() && longField(picker, "dragGeneration") == 0L
+                && intField(picker, "dragging") == -1,
+            "color picker cancellation retained its slider drag");
+
+        int[] callbacks = {0};
+        UIKeybind keybind = new UIKeybind((combo) -> callbacks[0] += 1).mouse();
+        MouseGestureOwnership keybindOwnership = arm(keybind, "mouseOwnership", "mouseGeneration", LEFT);
+
+        keybind.reading = true;
+        setBoolean(keybind, "first", true);
+        cancel(UIKeybind.class, keybind, context, LEFT);
+        check(!keybindOwnership.isActive() && longField(keybind, "mouseGeneration") == 0L
+                && !keybind.reading && !booleanField(keybind, "first") && callbacks[0] == 0,
+            "keybind cancellation committed or retained its capture state");
+
+        UIPointsModule points = allocate(UIPointsModule.class);
+        Scroll pointsScroll = new Scroll(new Area());
+
+        points.scroll = pointsScroll;
+        pointsScroll.beginDragging(MIDDLE);
+        cancel(UIPointsModule.class, points, context, MIDDLE);
+        check(!pointsScroll.dragging,
+            "points module cancellation retained its scrolling gesture");
+    }
+
+    private static void assertLegacyMouseStateCancellationClearsWithoutCommit()
+    {
+        UIContext context = new UIContext(null);
+
+        UIChalkboard chalkboard = allocate(UIChalkboard.class);
+
+        setBoolean(chalkboard, "drawing", true);
+        cancel(UIChalkboard.class, chalkboard, context, RIGHT);
+        check(booleanField(chalkboard, "drawing"),
+            "chalkboard cleared a left drawing on foreign-button cancellation");
+        cancel(UIChalkboard.class, chalkboard, context, LEFT);
+        check(!booleanField(chalkboard, "drawing"),
+            "chalkboard retained drawing after matching cancellation");
+
+        UIOrder order = allocate(UIOrder.class);
+
+        setInt(order, "dragging", 2);
+        cancel(UIOrder.class, order, context, RIGHT);
+        check(intField(order, "dragging") == 2,
+            "order cleared a left reorder on foreign-button cancellation");
+        cancel(UIOrder.class, order, context, LEFT);
+        check(intField(order, "dragging") == -1,
+            "order retained reorder state after matching cancellation");
+
+        TestTransform transform = allocate(TestTransform.class);
+
+        setBoolean(transform, "uniformDrag", true);
+        cancel(UITransform.class, transform, context, LEFT);
+        check(booleanField(transform, "uniformDrag"),
+            "transform cleared uniform drag on foreign-button cancellation");
+        cancel(UITransform.class, transform, context, RIGHT);
+        check(!booleanField(transform, "uniformDrag"),
+            "transform retained uniform drag after matching cancellation");
+
+        Textbox textbox = new Textbox(null);
+
+        setBoolean(textbox, "holding", true);
+        textbox.mouseCanceled(RIGHT);
+        check(booleanField(textbox, "holding"),
+            "textbox cleared a left selection on foreign-button cancellation");
+        textbox.mouseCanceled(LEFT);
+        check(!booleanField(textbox, "holding"),
+            "textbox retained selection holding after matching cancellation");
+
+        UITextbox textboxElement = allocate(UITextbox.class);
+
+        setField(textboxElement, "textbox", textbox);
+        setBoolean(textbox, "holding", true);
+        cancel(UITextbox.class, textboxElement, context, RIGHT);
+        check(booleanField(textbox, "holding"),
+            "UITextbox cleared a left selection on foreign-button cancellation");
+        cancel(UITextbox.class, textboxElement, context, LEFT);
+        check(!booleanField(textbox, "holding"),
+            "UITextbox retained selection holding after matching cancellation");
     }
 
     private static void assertListCommitsOnlyOnLeftRelease()
@@ -410,6 +560,23 @@ public final class UISecondaryGestureOwnershipRuntimeTest
         }
     }
 
+    private static void cancel(Class<?> owner, Object target, UIContext context, int button)
+    {
+        context.setMouse(context.mouseX, context.mouseY, button);
+
+        try
+        {
+            Method method = owner.getDeclaredMethod("subMouseCanceled", UIContext.class);
+
+            method.setAccessible(true);
+            method.invoke(target, context);
+        }
+        catch (ReflectiveOperationException exception)
+        {
+            throw new AssertionError("Could not invoke " + owner.getSimpleName() + " cancellation", exception);
+        }
+    }
+
     private static boolean invokeBoolean(Class<?> owner, Object target, String name, UIContext context)
     {
         try
@@ -599,6 +766,25 @@ public final class UISecondaryGestureOwnershipRuntimeTest
                 throw new ExceptionInInitializerError(exception);
             }
         }
+    }
+
+    private static final class TestTransform extends UITransform
+    {
+        @Override
+        public void setT(mchorse.bbs_mod.utils.Axis axis, double x, double y, double z)
+        {}
+
+        @Override
+        public void setS(mchorse.bbs_mod.utils.Axis axis, double x, double y, double z)
+        {}
+
+        @Override
+        public void setR(mchorse.bbs_mod.utils.Axis axis, double x, double y, double z)
+        {}
+
+        @Override
+        public void setR2(mchorse.bbs_mod.utils.Axis axis, double x, double y, double z)
+        {}
     }
 
     private static final class TestParticleSection extends UIParticleSchemeSection

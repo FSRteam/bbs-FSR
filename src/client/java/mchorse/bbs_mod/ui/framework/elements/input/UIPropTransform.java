@@ -67,6 +67,7 @@ public class UIPropTransform extends UITransform
     private boolean local;
 
     private UITransformHandler handler;
+    private boolean gesturePollOnly;
 
     private Supplier<GizmoDrag> hotkeyDragSupplier;
     private final Gizmo.DragContext gizmoDragContext = new Gizmo.DragContext();
@@ -1721,6 +1722,11 @@ public class UIPropTransform extends UITransform
             }
         }
 
+        if (this.gesturePollOnly)
+        {
+            return;
+        }
+
         super.render(context);
 
         if (this.editing)
@@ -1741,6 +1747,21 @@ public class UIPropTransform extends UITransform
                 context.batcher.textCard(numericLabel, nx, ny, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
                 context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, Colors.WHITE, Colors.A50);
             }
+        }
+    }
+
+    /** Poll an active modal transform even when its property panel is hidden or clipped. */
+    private void pollGesture(UIContext context)
+    {
+        this.gesturePollOnly = true;
+
+        try
+        {
+            this.render(context);
+        }
+        finally
+        {
+            this.gesturePollOnly = false;
         }
     }
 
@@ -3105,6 +3126,13 @@ public class UIPropTransform extends UITransform
         public UITransformHandler(UIPropTransform transform)
         {
             this.transform = transform;
+            this.noCulling();
+        }
+
+        @Override
+        public void render(UIContext context)
+        {
+            this.transform.pollGesture(context);
         }
 
         @Override

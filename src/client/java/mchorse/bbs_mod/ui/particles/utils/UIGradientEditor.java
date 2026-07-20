@@ -17,6 +17,9 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class UIGradientEditor extends UIElement
 {
     private UIParticleSchemeSection section;
@@ -29,6 +32,11 @@ public class UIGradientEditor extends UIElement
     private long dragGeneration;
     private int dragging = -1;
     private int lastX;
+    private boolean dragSnapshotActive;
+    private Gradient dragSnapshotGradient;
+    private Gradient.ColorStop dragSnapshotCurrent;
+    private List<Gradient.ColorStop> dragSnapshotOrder;
+    private List<Float> dragSnapshotPositions;
 
     private Area a = new Area();
     private Area b = new Area();
@@ -170,6 +178,7 @@ public class UIGradientEditor extends UIElement
 
                     try
                     {
+                        this.captureDragSnapshot();
                         this.dragging = 0;
                         this.lastX = context.mouseX;
                         this.fillStop(stop);
@@ -183,6 +192,7 @@ public class UIGradientEditor extends UIElement
                         {
                             this.dragGeneration = 0L;
                             this.dragging = -1;
+                            this.clearDragSnapshot();
                         }
                     }
                 }
@@ -208,6 +218,7 @@ public class UIGradientEditor extends UIElement
 
         this.dragGeneration = 0L;
         this.dragging = -1;
+        this.clearDragSnapshot();
 
         if (wasDragging)
         {
@@ -215,6 +226,73 @@ public class UIGradientEditor extends UIElement
         }
 
         return super.subMouseReleased(context);
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        long generation = this.dragGeneration;
+
+        if (this.dragOwnership.release(context.mouseButton, generation))
+        {
+            this.restoreDragSnapshot();
+            this.dragGeneration = 0L;
+            this.dragging = -1;
+            this.clearDragSnapshot();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    private void captureDragSnapshot()
+    {
+        this.dragSnapshotActive = this.gradient != null;
+        this.dragSnapshotGradient = this.gradient;
+
+        if (!this.dragSnapshotActive)
+        {
+            return;
+        }
+
+        this.dragSnapshotCurrent = this.current;
+        this.dragSnapshotOrder = new ArrayList<>(this.gradient.stops);
+        this.dragSnapshotPositions = new ArrayList<>(this.gradient.stops.size());
+
+        for (Gradient.ColorStop stop : this.gradient.stops)
+        {
+            this.dragSnapshotPositions.add(stop.stop);
+        }
+    }
+
+    private void restoreDragSnapshot()
+    {
+        if (!this.dragSnapshotActive || this.gradient == null || this.gradient != this.dragSnapshotGradient)
+        {
+            return;
+        }
+
+        for (int i = 0; i < this.dragSnapshotOrder.size(); i++)
+        {
+            this.dragSnapshotOrder.get(i).stop = this.dragSnapshotPositions.get(i);
+        }
+
+        this.gradient.stops.clear();
+        this.gradient.stops.addAll(this.dragSnapshotOrder);
+        this.current = this.dragSnapshotCurrent;
+
+        if (this.current != null)
+        {
+            this.color.setColor(this.fillColor(this.current.color).getARGBColor());
+        }
+    }
+
+    private void clearDragSnapshot()
+    {
+        this.dragSnapshotActive = false;
+        this.dragSnapshotGradient = null;
+        this.dragSnapshotCurrent = null;
+        this.dragSnapshotOrder = null;
+        this.dragSnapshotPositions = null;
     }
 
     @Override

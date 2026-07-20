@@ -11,7 +11,9 @@ public final class OrbitFilmGestureOwnershipTest
 {
     private static final String ORBIT = "src/client/java/mchorse/bbs_mod/ui/film/controller/OrbitFilmCameraController.java";
     private static final String CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
+    private static final String PREVIEW = "src/client/java/mchorse/bbs_mod/ui/film/UIFilmPreview.java";
     private static final String REPLAYS = "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditor.java";
+    private static final String DASHBOARD_ORBIT = "src/client/java/mchorse/bbs_mod/ui/dashboard/utils/UIOrbitCamera.java";
 
     private OrbitFilmGestureOwnershipTest()
     {}
@@ -27,6 +29,7 @@ public final class OrbitFilmGestureOwnershipTest
         assertOrbitUsesButtonAndGenerationOwnership();
         assertPendingPickUsesTheOrbitGeneration();
         assertReleaseAndModeChangesRetireTheExactOrbit();
+        assertPreviewForwardsTerminalToTheSiblingController();
     }
 
     private static void assertInterleavedButtonsKeepTheOriginalOrbitOwner()
@@ -106,6 +109,32 @@ public final class OrbitFilmGestureOwnershipTest
         check(pov.contains("this.cancelOrbitGesture();")
                 && source.contains("this.panel.replayEditor.cancelViewportPick(generation);"),
             "camera mode/reset can leave an old deferred viewport pick armed");
+    }
+
+    private static void assertPreviewForwardsTerminalToTheSiblingController()
+    {
+        String preview = readSource(PREVIEW);
+        String controller = readSource(CONTROLLER);
+        String replays = readSource(REPLAYS);
+        String dashboardOrbit = readSource(DASHBOARD_ORBIT);
+        String cancel = method(
+            controller,
+            "public void cancelViewportGesture(UIContext context)",
+            "protected void subMouseCanceled(UIContext context)"
+        );
+
+        check(preview.contains("releaseViewportGesture(context)")
+                && preview.contains("cancelViewportGesture(context)"),
+            "Film preview does not forward its captured terminal to the sibling controller");
+        check(controller.contains("public boolean releaseViewportGesture(UIContext context)")
+                && cancel.contains("this.orbit.stop(context.mouseButton, orbitGeneration)")
+                && cancel.contains("cancelViewportPick(orbitGeneration)")
+                && !cancel.contains("releaseViewport(context"),
+            "Film viewport cancellation can commit or ignores the initiating orbit owner");
+        check(replays.contains("dashboard.orbitUI.startGesture(context)")
+                && !replays.contains("dashboard.orbit.start(2")
+                && dashboardOrbit.contains("dragOwnership.acquireToken(context.mouseButton)"),
+            "Film flight fallback bypasses dashboard orbit gesture ownership");
     }
 
     private static String method(String source, String startToken, String endToken)

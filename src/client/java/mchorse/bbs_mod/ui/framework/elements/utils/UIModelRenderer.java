@@ -142,6 +142,11 @@ public abstract class UIModelRenderer extends UIElement
             this.rotateVector(this.plane);
 
             this.cachedPlaneIntersection = this.calculateOnPlane(context);
+
+            /* The renderer owns the press even though the drag is updated from
+             * render().  Returning false here used to make the root re-hit-test
+             * the release, so moving outside the viewport left this state live. */
+            return true;
         }
 
         return false;
@@ -160,6 +165,8 @@ public abstract class UIModelRenderer extends UIElement
             }
 
             this.distance.setX(this.distance.getX() + x);
+
+            return true;
         }
 
         return super.subMouseScrolled(context);
@@ -172,6 +179,8 @@ public abstract class UIModelRenderer extends UIElement
         {
             this.dragGeneration = 0L;
             this.dragging = 0;
+
+            return true;
         }
 
         return super.subMouseReleased(context);

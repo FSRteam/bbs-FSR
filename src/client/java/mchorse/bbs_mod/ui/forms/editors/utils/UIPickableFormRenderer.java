@@ -144,7 +144,14 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.gizmoInteraction.mouseClicked(context))
+        boolean[] gizmoHandled = {false};
+
+        context.menu.runWithPreservedMouseCapture(
+            this,
+            () -> gizmoHandled[0] = this.gizmoInteraction.mouseClicked(context)
+        );
+
+        if (gizmoHandled[0])
         {
             return true;
         }
@@ -168,7 +175,9 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     @Override
     protected void subMouseCanceled(UIContext context)
     {
-        this.gizmoInteraction.stop();
+        long generation = this.gizmoInteraction.gestureGeneration();
+
+        this.gizmoInteraction.cancel(context.mouseButton, generation);
         super.subMouseCanceled(context);
     }
 
