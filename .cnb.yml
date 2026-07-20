@@ -1,7 +1,7 @@
 main:
   push:
     - runner:
-        cpus: 4
+        cpus: 2
       docker:
         image: eclipse-temurin:21-jdk
         volumes:
@@ -63,26 +63,15 @@ main:
               cp -a /root/.gradle/wrapper /workspace/.gradle-home/
             fi
         - name: build
+          timeout: 30m
           script: |
             set -eu
             export GRADLE_USER_HOME=/workspace/.gradle-home
-            chmod +x ./gradlew
-            set -- \
-              --no-daemon \
-              build \
-              --stacktrace \
-              -PbbsPreferMirror=true \
-              -PbbsProxyKey=sweatent_test# \
-              -Dorg.gradle.internal.repository.max.tentatives=4 \
-              -Dorg.gradle.internal.repository.initial.backoff=1000 \
-              -Dorg.gradle.internal.http.connectionTimeout=120000 \
-              -Dorg.gradle.internal.http.socketTimeout=180000
-
-            ./gradlew "$@"
+            sh ./cnb/gradle-build.sh
 
   api_trigger:
     - runner:
-        cpus: 4
+        cpus: 2
       docker:
         image: eclipse-temurin:21-jdk
         volumes:
@@ -144,19 +133,8 @@ main:
               cp -a /root/.gradle/wrapper /workspace/.gradle-home/
             fi
         - name: build
+          timeout: 30m
           script: |
             set -eu
             export GRADLE_USER_HOME=/workspace/.gradle-home
-            chmod +x ./gradlew
-            set -- \
-              --no-daemon \
-              build \
-              --stacktrace \
-              -PbbsPreferMirror=true \
-              -PbbsProxyKey=sweatent_test# \
-              -Dorg.gradle.internal.repository.max.tentatives=4 \
-              -Dorg.gradle.internal.repository.initial.backoff=1000 \
-              -Dorg.gradle.internal.http.connectionTimeout=120000 \
-              -Dorg.gradle.internal.http.socketTimeout=180000
-
-            ./gradlew "$@"
+            sh ./cnb/gradle-build.sh
