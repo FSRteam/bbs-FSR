@@ -81,6 +81,13 @@ public final class OrbitFilmGestureOwnershipTest
             "public void cancelViewportPick(long generation)"
         );
         String click = method(source, "public boolean clickViewport(UIContext context, Area area)", "public void close()");
+        String replayUtils = readSource("src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditorUtils.java");
+        String startFilmGizmo = method(replayUtils, "public static boolean startFilmGizmo(", "public static void configureFilmHotkeyDrag(");
+        String gizmo = readSource("src/client/java/mchorse/bbs_mod/ui/utils/GizmoInteraction.java");
+        String gizmoClick = method(gizmo, "public boolean mouseClickedHandle(UIContext context)", "public boolean mouseClickedSphere(UIContext context)");
+        String gizmoRelease = method(gizmo, "public boolean mouseReleased(UIContext context)", "public void update(UIContext context)");
+        String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
+        String transformDisable = method(transform, "private void disable()", "public void acceptChanges()");
 
         check(source.contains("private long pendingPickGeneration;"),
             "deferred Film viewport pick has no orbit generation");
@@ -91,6 +98,17 @@ public final class OrbitFilmGestureOwnershipTest
         check(click.indexOf("long generation = this.filmPanel.getController().orbit.startGesture(context);")
                 < click.indexOf("this.pendingPickGeneration = generation;"),
             "viewport pick is armed before the Film orbit owns the press");
+        check(click.contains("this.filmPanel.getController().startViewportGizmo(context)")
+                && !click.contains("UIReplaysEditorUtils.startFilmGizmo(")
+                && startFilmGizmo.contains("context.mouseButton != 0")
+                && click.contains("UIReplaysEditorUtils.pickFormWithOffers(context, pair, this::pickFormBone)"),
+            "Film viewport bypasses generation-owned Gizmo startup or drops form/bone picking");
+        check(gizmoClick.contains("if (context.mouseButton != 0)")
+                && gizmoRelease.contains("context.mouseButton == this.pendingButton")
+                && gizmoRelease.contains("this.retireGesture(context.mouseButton, generation)")
+                && gizmoRelease.contains("Gizmo.INSTANCE.stop()")
+                && transformDisable.contains("this.handler.removeFromParent()"),
+            "Gizmo button ownership or transform-handler cleanup is not wired for wheel recovery");
     }
 
     private static void assertReleaseAndModeChangesRetireTheExactOrbit()

@@ -602,7 +602,17 @@ public class ServerNetwork
 
                 try
                 {
-                    Form form = BBSMod.getForms().fromData(data);
+                    /* FormArchitect owns the serialized type key ("id"). Keep an
+                     * empty map as the explicit demorph request, but reject a
+                     * non-empty payload whose form id is unknown. */
+                    if (!data.isEmpty() && !BBSMod.getForms().has(data))
+                    {
+                        LOGGER.warn("[BBS-SEM] topic=net.player_form phase=apply result=drop reason=unknown_form player={}",
+                            player.getGameProfile().getName());
+                        return;
+                    }
+
+                    Form form = data.isEmpty() ? null : BBSMod.getForms().fromData(data);
                     Form copy = FormUtils.copy(form);
 
                     Morph.getMorph(player).setForm(copy);

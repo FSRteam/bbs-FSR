@@ -21,6 +21,7 @@ import mchorse.bbs_mod.events.EventBus;
 import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import mchorse.bbs_mod.network.compat.AddonBrokerDiagnosticLimiterTest;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
+import mchorse.bbs_mod.test.ExpectedErrorLogCapture;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
@@ -38,20 +39,38 @@ public final class BBSAddonLifecycleTest
 
     public static void main(String[] args)
     {
-        duplicateFailureCannotReplaceWinner();
-        retainedRegistrationFacadeIsClosed();
-        linkageErrorsAreIsolated();
-        clientDiagnosticsAttachWithoutChangingWinner();
-        crossProtocolFirstWins();
-        failedLegacyAttemptDoesNotFailWinner();
-        legacySupplierDiagnosticsAndAtomicBridge();
-        exactApiVersionAdmission();
-        frozenCompatibilityConstantsStayStable();
-        brokerSingleFrameLimitsStayWithinFrozenPayloads();
-        clientBrokerDeliveryRequiresDispatcher();
-        AddonBrokerDiagnosticLimiterTest.run();
+        try (ExpectedErrorLogCapture capture = ExpectedErrorLogCapture.install(
+            "addon lifecycle", 9, (event) ->
+            {
+                String message = event.getMessage().getFormattedMessage();
+                Throwable error = event.getThrown();
+                String cause = error == null ? "" : error.getMessage();
+                boolean expectedMessage = message.startsWith("[bbs-addon-api2] failed ")
+                    || message.startsWith("[bbs-addon] failed ")
+                    || message.startsWith("[BBS-SEM] topic=net.addon_broker")
+                        && message.contains(" result=error ");
+                return expectedMessage && error instanceof NoClassDefFoundError
+                    && (cause.startsWith("missing ")
+                        || cause.startsWith("bridge failure ")
+                        || cause.startsWith("deterministic "));
+            }, "bbs-addon-api2", BBSAddonCollector.class.getName(), "bbs-network"))
+        {
+            duplicateFailureCannotReplaceWinner();
+            retainedRegistrationFacadeIsClosed();
+            linkageErrorsAreIsolated();
+            clientDiagnosticsAttachWithoutChangingWinner();
+            crossProtocolFirstWins();
+            failedLegacyAttemptDoesNotFailWinner();
+            legacySupplierDiagnosticsAndAtomicBridge();
+            exactApiVersionAdmission();
+            frozenCompatibilityConstantsStayStable();
+            brokerSingleFrameLimitsStayWithinFrozenPayloads();
+            clientBrokerDeliveryRequiresDispatcher();
+            AddonBrokerDiagnosticLimiterTest.run();
+            capture.assertExpectedErrors();
+        }
 
-        System.out.println("BBSAddonLifecycleTest: all tests passed");
+        System.out.println("BBSAddonLifecycleTest: all tests passed; captured 9 expected failure diagnostics");
     }
 
     private static void duplicateFailureCannotReplaceWinner()

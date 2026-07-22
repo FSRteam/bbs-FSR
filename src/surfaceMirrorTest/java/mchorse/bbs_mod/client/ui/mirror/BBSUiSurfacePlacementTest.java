@@ -17,6 +17,7 @@ import mchorse.bbs_mod.api.client.ui.BBSUiVertex;
 import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceRegistry;
 import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceRuntime;
 import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceLifecycleTest;
+import mchorse.bbs_mod.test.ExpectedErrorLogCapture;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -38,7 +39,18 @@ public final class BBSUiSurfacePlacementTest
         assertRecorderTeardownFailureIsolation();
         assertRecorderOpenFailureCleanup();
         assertRecorderOpenFailurePreservesReplacement();
-        BBSRenderSurfaceLifecycleTest.run();
+        try (ExpectedErrorLogCapture capture = ExpectedErrorLogCapture.install(
+            "render surface", 1, (event) ->
+            {
+                String message = event.getMessage().getFormattedMessage();
+                Throwable error = event.getThrown();
+                return message.contains("surface-throwing-demand-test")
+                    && error != null && "expected demand failure".equals(error.getMessage());
+            }, "bbs-client-render-surface"))
+        {
+            BBSRenderSurfaceLifecycleTest.run();
+            capture.assertExpectedErrors();
+        }
 
         List<BBSUiSessionInfo> opened = new ArrayList<>();
         List<BBSUiFrame> frames = new ArrayList<>();
@@ -181,7 +193,7 @@ public final class BBSUiSurfacePlacementTest
             awaitMirrorCallbacks("surface placement cleanup callbacks did not drain");
         }
 
-        System.out.println("BBSUiSurfacePlacementTest: all tests passed");
+        System.out.println("BBSUiSurfacePlacementTest: all tests passed; captured 1 expected failure diagnostic");
     }
 
     private static void assertRecorderTeardownFailureIsolation()

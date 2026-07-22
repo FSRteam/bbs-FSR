@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.client.compat;
 
+import mchorse.bbs_mod.test.ExpectedErrorLogCapture;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,16 +16,29 @@ public final class ClientStructuralRegistrationWindowTest
 
     public static void main(String[] args)
     {
-        NetworkCompatClientDescriptorTest.runAll();
-        UIFilmPanelCompatibilityDescriptorTest.runAll();
-        CameraControllerResetTest.runAll();
-        acceptsBeforeEventAndRejectsLateCalls();
-        closesBeforeInvokingNeoForgeRegistrations();
-        isolatesRegistrationFailures();
-        keepsSnapshotsImmutable();
-        productionFacadeAndNeoForgeEventsStayWired();
+        try (ExpectedErrorLogCapture capture = ExpectedErrorLogCapture.install(
+            "client registration", 2, (event) ->
+            {
+                String message = event.getMessage().getFormattedMessage();
+                Throwable error = event.getThrown();
+                String cause = error == null ? "" : error.getMessage();
+                return message.startsWith("[bbs-client-api] key binding registration failed for '")
+                    && ("deterministic registration exception".equals(cause)
+                        || "deterministic registration linkage failure".equals(cause));
+            }, "bbs-client-api"))
+        {
+            NetworkCompatClientDescriptorTest.runAll();
+            UIFilmPanelCompatibilityDescriptorTest.runAll();
+            CameraControllerResetTest.runAll();
+            acceptsBeforeEventAndRejectsLateCalls();
+            closesBeforeInvokingNeoForgeRegistrations();
+            isolatesRegistrationFailures();
+            keepsSnapshotsImmutable();
+            productionFacadeAndNeoForgeEventsStayWired();
+            capture.assertExpectedErrors();
+        }
 
-        System.out.println("ClientStructuralRegistrationWindowTest: all tests passed");
+        System.out.println("ClientStructuralRegistrationWindowTest: all tests passed; captured 2 expected failure diagnostics");
     }
 
     private static void acceptsBeforeEventAndRejectsLateCalls()

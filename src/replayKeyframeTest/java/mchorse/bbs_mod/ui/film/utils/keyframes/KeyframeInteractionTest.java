@@ -16,6 +16,9 @@ public final class KeyframeInteractionTest
     private static final Path CLIPS = Path.of(
         "src/client/java/mchorse/bbs_mod/ui/film/UIClips.java"
     );
+    private static final Path KEYFRAME_EDITOR = Path.of(
+        "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/UIKeyframeEditor.java"
+    );
 
     private KeyframeInteractionTest()
     {}
@@ -42,6 +45,7 @@ public final class KeyframeInteractionTest
         String keyframes = compact(read(root.resolve(KEYFRAMES)));
         String filmKeyframes = compact(read(root.resolve(FILM_KEYFRAMES)));
         String clips = compact(read(root.resolve(CLIPS)));
+        String keyframeEditor = compact(read(root.resolve(KEYFRAME_EDITOR)));
         String pickGesture = section(
             keyframes,
             "privatevoidpickOrStartSelectingKeyframes(UIContextcontext)",
@@ -130,6 +134,36 @@ public final class KeyframeInteractionTest
             "film keyframe view does not seek when a keyframe is picked");
         check(clips.contains("this.scrubbing=true;this.delegate.setCursor(this.fromGraphX(mouseX));"),
             "camera clips timeline no longer seeks on its initial click");
+
+        String replacement = section(
+            keyframeEditor,
+            "privatevoidpickKeyframe(Keyframekeyframe)",
+            "privatevoidreplaceEditor("
+        );
+        String commit = section(
+            keyframeEditor,
+            "privatevoidreplaceEditor(",
+            "publicvoidsetTimelineVisible(booleanvisible)"
+        );
+
+        check(keyframeEditor.contains("privatelongeditorGeneration;"),
+            "keyframe editor does not retain a replacement generation");
+        check(!replacement.contains("previous.removeFromParent()")
+                && !replacement.contains("this.add(replacement)"),
+            "pickKeyframe still performs an unpaired deferred remove/add");
+        assertOrdered(commit,
+            "if(previous!=null&&previous.getParent()==this){this.remove(previous);}",
+            "if(generation!=this.editorGeneration||this.editor!=replacement){return;}",
+            "for(UIKeyframeFactorymounted:newArrayList<>(this.getChildren(UIKeyframeFactory.class)))",
+            "if(mounted!=replacement&&mounted.getParent()==this){this.remove(mounted);}",
+            "if(replacement!=null&&replacement.getParent()!=this){this.add(replacement);}",
+            "this.target.resize();",
+            "this.resize();",
+            "replacement.restoreScroll();",
+            "context.menu.runAfterHierarchyMutation"
+        );
+        check(commit.contains("generation==this.editorGeneration&&this.editor==replacement"),
+            "stale replacement callback can restore a newer property panel");
     }
 
     private static Path findProjectRoot()

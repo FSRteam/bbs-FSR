@@ -718,7 +718,7 @@ public class UIReplaysEditorUtils
 
     public static boolean startFilmGizmo(UIFilmPanel panel, UIContext context, int stencilIndex, float gizmoTransition)
     {
-        if (panel == null || panel.isFlying())
+        if (panel == null || panel.isFlying() || context.mouseButton != 0)
         {
             return false;
         }

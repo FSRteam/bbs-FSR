@@ -8,7 +8,6 @@ import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.IViewport;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.IViewportStack;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIViewportStack;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.renderers.InputRenderer;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -17,13 +16,6 @@ import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Base class for GUI screens using this framework
@@ -61,25 +53,6 @@ public abstract class UIBaseMenu
     public UIElement overlay;
     public UIContext context;
     public Area viewport = new Area();
-
-    private MouseCapture mouseCapture;
-    private final Map<Integer, MouseCapture> mouseCaptures = new LinkedHashMap<>();
-    private long nextMouseCaptureGeneration;
-    private long inputLifecycleGeneration = 1L;
-    private final Deque<Long> inputDispatchLifecycleGenerations = new ArrayDeque<>();
-    private int mouseDispatchDepth;
-    private boolean releasingCapturedMouseGestures;
-    private boolean invalidateAfterMouseRelease;
-    private boolean mouseBarrierAdmissionFence;
-    private final Deque<MouseBarrierAction> mouseBarrierActions = new ArrayDeque<>();
-    /**
-     * Owners explicitly allowed to survive a sibling-only hierarchy refresh.
-     * The scope is captured onto each queued mutation; it is deliberately not
-     * consulted by blocking/lifecycle barriers.
-     */
-    private final Deque<IUIElement> preservedMouseCaptureOwners = new ArrayDeque<>();
-    private int rootMouseX;
-    private int rootMouseY;
 
     public int width;
     public int height;
@@ -170,521 +143,137 @@ public abstract class UIBaseMenu
 
     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton)
     {
-        this.rememberRootMouse(mouseX, mouseY);
+        boolean result = false;
 
-        if (!this.isInputDispatchLifecycleCurrent()
-            || this.releasingCapturedMouseGestures || this.mouseBarrierAdmissionFence
-            || this.mouseCaptures.containsKey(mouseButton))
+        this.context.setMouse(mouseX, mouseY, mouseButton);
+
+        if (this.root.isEnabled())
         {
-            return true;
+            this.context.pushViewport(this.viewport);
+
+            IUIElement element = this.root.mouseClicked(this.context);
+
+            this.context.popViewport();
+
+            result = element != null;
         }
 
-        MouseCapture capture = null;
-
-        if (mouseButton >= 0 && mouseButton <= GLFW.GLFW_MOUSE_BUTTON_LAST)
-        {
-            capture = new MouseCapture(mouseButton, this.advanceMouseCaptureGeneration());
-            this.mouseCaptures.put(mouseButton, capture);
-            this.updateMouseCaptureAlias();
-        }
-
-        try
-        {
-            IUIElement owner = this.dispatchMouseThroughRootElement(
-                mouseX,
-                mouseY,
-                mouseButton,
-                false,
-                false,
-                this.currentInputDispatchLifecycleGeneration()
-            );
-
-            if (capture != null)
-            {
-                capture.owner = owner;
-                capture.releasePath = this.findMouseReleasePath(owner);
-            }
-
-            this.drainMouseBarrierActions();
-
-            return owner != null;
-        }
-        catch (RuntimeException | Error exception)
-        {
-            long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-            this.removeMouseCapture(capture);
-
-            if (capture != null && !this.mouseCaptures.containsKey(mouseButton))
-            {
-                try
-                {
-                    this.dispatchMouseCancellationThroughRoot(
-                        mouseX,
-                        mouseY,
-                        mouseButton,
-                        false,
-                        lifecycleGeneration
-                    );
-                }
-                catch (RuntimeException | Error cancellationException)
-                {
-                    if (cancellationException != exception)
-                    {
-                        exception.addSuppressed(cancellationException);
-                    }
-                }
-            }
-
-            this.discardMouseBarrierActions();
-
-            throw exception;
-        }
+        return result;
     }
 
     public boolean mouseScrolled(int x, int y, double h, double v)
     {
-        this.rememberRootMouse(x, y);
+        boolean result = false;
 
-        if (!this.isInputDispatchLifecycleCurrent()
-            || this.releasingCapturedMouseGestures || this.mouseBarrierAdmissionFence)
+        this.context.setMouseWheel(x, y, v, h);
+
+        if (this.root.isEnabled())
         {
-            return true;
+            this.context.pushViewport(this.viewport);
+
+            IUIElement element = this.root.mouseScrolled(this.context);
+
+            this.context.popViewport();
+
+            result = element != null;
         }
 
-        try
-        {
-            boolean handled = this.dispatchMouseScrolledThroughRoot(x, y, h, v);
-
-            this.drainMouseBarrierActions();
-
-            return handled;
-        }
-        catch (RuntimeException | Error exception)
-        {
-            this.discardMouseBarrierActions();
-
-            throw exception;
-        }
+        return result;
     }
 
     public boolean mouseReleased(int mouseX, int mouseY, int mouseButton)
     {
-        this.rememberRootMouse(mouseX, mouseY);
+        boolean result = false;
 
-        if (this.releasingCapturedMouseGestures || this.mouseBarrierAdmissionFence)
+        this.context.setMouse(mouseX, mouseY, mouseButton);
+
+        if (this.root.isEnabled())
         {
-            return true;
+            this.context.pushViewport(this.viewport);
+
+            IUIElement element = this.root.mouseReleased(this.context);
+
+            this.context.popViewport();
+
+            result = element != null;
         }
 
-        MouseCapture capture = this.mouseCaptures.get(mouseButton);
-
-        if (capture == null)
-        {
-            return true;
-        }
-
-        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-
-        this.removeMouseCapture(capture);
-
-        try
-        {
-            IUIElement owner = capture.owner;
-            boolean handled = owner == null
-                ? this.dispatchMouseThroughRoot(mouseX, mouseY, mouseButton, true, false)
-                : this.dispatchMouseToCapturedPath(capture.releasePath, mouseX, mouseY, mouseButton, false) != null;
-
-            this.drainMouseBarrierActions();
-
-            return handled;
-        }
-        catch (RuntimeException | Error exception)
-        {
-            /* A release owner can throw before retiring its local drag state.
-             * If no reentrant replacement captured this button, deliver the
-             * non-committing terminal so the old owner cannot remain stuck.
-             * A replacement capture wins and must never be canceled here. */
-            if (!this.mouseCaptures.containsKey(mouseButton))
-            {
-                try
-                {
-                    this.dispatchMouseCancellationThroughRoot(
-                        mouseX,
-                        mouseY,
-                        mouseButton,
-                        false,
-                        lifecycleGeneration
-                    );
-                }
-                catch (RuntimeException | Error cancellationException)
-                {
-                    if (cancellationException != exception)
-                    {
-                        exception.addSuppressed(cancellationException);
-                    }
-                }
-            }
-
-            this.discardMouseBarrierActions();
-
-            throw exception;
-        }
+        return result;
     }
 
-    /** Cancel one captured button without synthesizing a physical release. */
+    /**
+     * Deliver a non-committing cancellation for one button (remote disconnect,
+     * screen teardown). Widgets roll their gesture state back instead of
+     * committing it.
+     */
     public boolean mouseCanceled(int mouseX, int mouseY, int mouseButton)
     {
-        this.rememberRootMouse(mouseX, mouseY);
+        this.context.setMouse(mouseX, mouseY, mouseButton);
 
-        if (this.releasingCapturedMouseGestures)
-        {
-            return true;
-        }
-
-        MouseCapture capture = this.mouseCaptures.get(mouseButton);
-
-        if (capture == null)
-        {
-            return true;
-        }
-
-        this.removeMouseCapture(capture);
+        this.context.pushViewport(this.viewport);
 
         try
         {
-            this.dispatchMouseCancellationThroughRoot(
-                mouseX,
-                mouseY,
-                mouseButton,
-                false,
-                this.currentInputDispatchLifecycleGeneration()
-            );
-            this.drainMouseBarrierActions();
-
-            return true;
+            this.root.mouseCanceled(this.context);
         }
-        catch (RuntimeException | Error exception)
+        finally
         {
-            this.discardMouseBarrierActions();
-
-            throw exception;
+            this.context.popViewport();
         }
+
+        return true;
     }
 
-    /**
-     * Release the initiating button before a blocking overlay/context menu or
-     * hierarchy mutation. Dispatch still follows the normal root/viewport
-     * path. Admission stays fenced until every queued mutation is complete.
-     */
+    /* Compatibility shims for the removed central mouse-capture machinery.
+     * Dispatch is direct again; per-widget MouseGestureOwnership still keeps
+     * one button per gesture. */
+
     public void releaseCapturedMouseGestures()
-    {
-        this.cancelCapturedMouseGestures();
-    }
+    {}
 
-    /** Cancel every currently captured button without committing release actions. */
     public void cancelCapturedMouseGestures()
-    {
-        if (this.mouseCaptures.isEmpty())
-        {
-            return;
-        }
+    {}
 
-        this.runAfterCapturedMouseCancellation(() -> {});
-    }
-
-    /**
-     * Run a blocking UI or hierarchy mutation only after the current mouse
-     * dispatch has fully unwound and the initiating button has been released.
-     */
     public void runAfterCapturedMouseRelease(Runnable mutation)
     {
-        this.runAfterCapturedMouseCancellation(mutation);
+        mutation.run();
     }
 
-    /** Run a blocking mutation after canceling every captured mouse gesture. */
     public void runAfterCapturedMouseCancellation(Runnable mutation)
     {
-        if (mutation == null)
-        {
-            throw new IllegalArgumentException("Mouse barrier mutation cannot be null");
-        }
-
-        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-
-        if (lifecycleGeneration != this.inputLifecycleGeneration)
-        {
-            return;
-        }
-
-        if (this.mouseCaptures.isEmpty() && this.mouseDispatchDepth == 0)
-        {
-            this.runInInputDispatchLifecycle(lifecycleGeneration, mutation);
-
-            return;
-        }
-
-        this.mouseBarrierActions.addLast(new MouseBarrierAction(
-            mutation,
-            this.snapshotMouseCaptures(),
-            lifecycleGeneration,
-            false,
-            null,
-            List.of()
-        ));
-        this.mouseBarrierAdmissionFence = true;
-        this.drainMouseBarrierActions();
+        mutation.run();
     }
 
-    /**
-     * Run a narrowly scoped sibling refresh while retaining one initiating
-     * press owner. Any hierarchy mutation that removes that owner (or an
-     * ancestor containing it) still cancels the capture.
-     */
     public void runWithPreservedMouseCapture(IUIElement owner, Runnable mutation)
     {
-        if (owner == null)
-        {
-            throw new IllegalArgumentException("Preserved mouse capture owner cannot be null");
-        }
-        if (mutation == null)
-        {
-            throw new IllegalArgumentException("Preserved mouse capture mutation cannot be null");
-        }
-
-        this.preservedMouseCaptureOwners.push(owner);
-
-        try
-        {
-            mutation.run();
-        }
-        finally
-        {
-            this.preservedMouseCaptureOwners.pop();
-        }
+        mutation.run();
     }
 
-    /**
-     * Queue structural edits in call order and relayout once after owner cancellation.
-     *
-     * Keep this overload for callers compiled against the pre-capture API.
-     */
     public void runAfterHierarchyMutation(Runnable mutation)
     {
-        this.runAfterHierarchyMutation(mutation, new IUIElement[0]);
+        mutation.run();
     }
 
-    /** Queue structural edits in call order and relayout once after owner cancellation. */
     public void runAfterHierarchyMutation(Runnable mutation, IUIElement... detachedRoots)
     {
-        if (mutation == null)
-        {
-            throw new IllegalArgumentException("Hierarchy mutation cannot be null");
-        }
-
-        List<IUIElement> detached = List.of();
-
-        if (detachedRoots != null && detachedRoots.length > 0)
-        {
-            List<IUIElement> copiedRoots = new ArrayList<>(detachedRoots.length);
-
-            for (IUIElement detachedRoot : detachedRoots)
-            {
-                copiedRoots.add(detachedRoot);
-            }
-
-            detached = List.copyOf(copiedRoots);
-        }
-
-        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-
-        if (lifecycleGeneration != this.inputLifecycleGeneration)
-        {
-            return;
-        }
-
-        if (this.mouseCaptures.isEmpty() && this.mouseDispatchDepth == 0)
-        {
-            this.runInInputDispatchLifecycle(lifecycleGeneration, mutation);
-
-            return;
-        }
-
-        this.mouseBarrierActions.addLast(new MouseBarrierAction(
-            mutation,
-            this.snapshotMouseCaptures(),
-            lifecycleGeneration,
-            true,
-            this.preservedMouseCaptureOwners.peek(),
-            detached
-        ));
-        this.mouseBarrierAdmissionFence = true;
-        this.drainMouseBarrierActions();
+        mutation.run();
     }
 
-    /**
-     * Reissue removal-only cleanup after {@link #invalidateInputState()} moved
-     * the screen to a new lifecycle while the old dispatch is still unwinding.
-     */
     void runAfterHierarchyCleanup(Runnable mutation)
     {
-        if (mutation == null)
-        {
-            throw new IllegalArgumentException("Hierarchy cleanup cannot be null");
-        }
-
-        long lifecycleGeneration = this.inputLifecycleGeneration;
-
-        if (this.mouseCaptures.isEmpty() && this.mouseDispatchDepth == 0)
-        {
-            this.runInInputDispatchLifecycle(lifecycleGeneration, mutation);
-
-            return;
-        }
-
-        this.mouseBarrierActions.addLast(new MouseBarrierAction(
-            mutation,
-            this.snapshotMouseCaptures(),
-            lifecycleGeneration,
-            false,
-            null,
-            List.of()
-        ));
-        this.mouseBarrierAdmissionFence = true;
-        this.drainMouseBarrierActions();
+        mutation.run();
     }
 
-    private void drainMouseBarrierActions()
-    {
-        if (this.mouseDispatchDepth > 0 || this.releasingCapturedMouseGestures || this.mouseBarrierActions.isEmpty())
-        {
-            return;
-        }
-
-        this.releasingCapturedMouseGestures = true;
-
-        try
-        {
-            boolean resizeHierarchy = false;
-            long resizeLifecycleGeneration = 0L;
-
-            while (true)
-            {
-                while (!this.mouseBarrierActions.isEmpty())
-                {
-                    MouseBarrierAction action = this.mouseBarrierActions.removeFirst();
-
-                    if (action.lifecycleGeneration != this.inputLifecycleGeneration)
-                    {
-                        continue;
-                    }
-
-                    this.cancelCapturedMouseGesturesNow(
-                        action.captures,
-                        action.lifecycleGeneration,
-                        action.preservedOwner,
-                        action.detachedRoots
-                    );
-
-                    if (action.lifecycleGeneration != this.inputLifecycleGeneration)
-                    {
-                        continue;
-                    }
-
-                    this.runInInputDispatchLifecycle(action.lifecycleGeneration, action.mutation);
-
-                    if (action.lifecycleGeneration != this.inputLifecycleGeneration)
-                    {
-                        continue;
-                    }
-
-                    if (action.resizeHierarchy)
-                    {
-                        resizeHierarchy = true;
-                        resizeLifecycleGeneration = action.lifecycleGeneration;
-                    }
-                }
-
-                if (!resizeHierarchy)
-                {
-                    break;
-                }
-
-                long lifecycleGeneration = resizeLifecycleGeneration;
-
-                resizeHierarchy = false;
-                resizeLifecycleGeneration = 0L;
-
-                if (lifecycleGeneration == this.inputLifecycleGeneration)
-                {
-                    this.runInInputDispatchLifecycle(lifecycleGeneration, this.root::resize);
-                }
-            }
-
-            this.mouseBarrierAdmissionFence = false;
-        }
-        catch (RuntimeException | Error exception)
-        {
-            this.discardMouseBarrierActions();
-
-            throw exception;
-        }
-        finally
-        {
-            if (this.invalidateAfterMouseRelease)
-            {
-                this.mouseCaptures.clear();
-                this.updateMouseCaptureAlias();
-                this.invalidateAfterMouseRelease = false;
-            }
-
-            this.releasingCapturedMouseGestures = false;
-        }
-    }
-
-    private void discardMouseBarrierActions()
-    {
-        this.mouseBarrierActions.clear();
-        this.mouseBarrierAdmissionFence = false;
-    }
-
-    private void cancelCapturedMouseGesturesNow(List<MouseCapture> captures, long lifecycleGeneration)
-    {
-        this.cancelCapturedMouseGesturesNow(captures, lifecycleGeneration, null, List.of());
-    }
-
-    private void cancelCapturedMouseGesturesNow(
-        List<MouseCapture> captures,
-        long lifecycleGeneration,
-        IUIElement preservedOwner,
-        List<IUIElement> detachedRoots
-    )
+    /** Cancel in-flight widget gestures and stale context menus on screen teardown. */
+    public void invalidateInputState()
     {
         Throwable failure = null;
 
-        for (MouseCapture capture : captures)
+        for (int button = 0; button <= GLFW.GLFW_MOUSE_BUTTON_LAST; button++)
         {
-            if (this.mouseCaptures.get(capture.button) != capture)
-            {
-                continue;
-            }
-
-            if (this.shouldPreserveMouseCapture(capture, preservedOwner, detachedRoots))
-            {
-                continue;
-            }
-
-            this.removeMouseCapture(capture);
-            this.advanceMouseCaptureGeneration();
-
             try
             {
-                this.dispatchMouseCancellationThroughRoot(
-                    this.rootMouseX,
-                    this.rootMouseY,
-                    capture.button,
-                    true,
-                    lifecycleGeneration
-                );
+                this.mouseCanceled(this.context.mouseX, this.context.mouseY, button);
             }
             catch (RuntimeException | Error exception)
             {
@@ -699,100 +288,6 @@ public abstract class UIBaseMenu
             }
         }
 
-        if (failure instanceof RuntimeException exception)
-        {
-            throw exception;
-        }
-        if (failure instanceof Error error)
-        {
-            throw error;
-        }
-    }
-
-    private boolean shouldPreserveMouseCapture(
-        MouseCapture capture,
-        IUIElement preservedOwner,
-        List<IUIElement> detachedRoots
-    )
-    {
-        if (preservedOwner == null || capture.owner != preservedOwner)
-        {
-            return false;
-        }
-
-        for (IUIElement detachedRoot : detachedRoots)
-        {
-            if (this.containsElement(detachedRoot, preservedOwner))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private boolean containsElement(IUIElement root, IUIElement target)
-    {
-        if (root == target)
-        {
-            return true;
-        }
-
-        if (root instanceof UIElement element)
-        {
-            for (IUIElement child : element.getChildren())
-            {
-                if (this.containsElement(child, target))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /** Drop every input token and deferred mutation owned by a detached screen. */
-    public void invalidateInputState()
-    {
-        Throwable failure = null;
-        boolean cancelingHere = !this.releasingCapturedMouseGestures && !this.mouseCaptures.isEmpty();
-
-        if (cancelingHere)
-        {
-            this.releasingCapturedMouseGestures = true;
-
-            try
-            {
-                this.cancelCapturedMouseGesturesNow(
-                    this.snapshotMouseCaptures(),
-                    this.currentInputDispatchLifecycleGeneration()
-                );
-            }
-            catch (RuntimeException | Error exception)
-            {
-                failure = exception;
-            }
-            finally
-            {
-                this.releasingCapturedMouseGestures = false;
-            }
-        }
-
-        this.inputLifecycleGeneration = this.inputLifecycleGeneration == Long.MAX_VALUE
-            ? 1L
-            : this.inputLifecycleGeneration + 1L;
-        this.advanceMouseCaptureGeneration();
-        if (this.releasingCapturedMouseGestures)
-        {
-            this.invalidateAfterMouseRelease = true;
-        }
-        else
-        {
-            this.mouseCaptures.clear();
-            this.updateMouseCaptureAlias();
-        }
-        this.discardMouseBarrierActions();
         try
         {
             this.context.invalidateContextMenus();
@@ -819,447 +314,44 @@ public abstract class UIBaseMenu
         }
     }
 
-    private List<MouseCapture> snapshotMouseCaptures()
-    {
-        return List.copyOf(this.mouseCaptures.values());
-    }
-
-    private void removeMouseCapture(MouseCapture capture)
-    {
-        if (capture != null && this.mouseCaptures.get(capture.button) == capture)
-        {
-            this.mouseCaptures.remove(capture.button);
-            this.updateMouseCaptureAlias();
-        }
-    }
-
-    private void updateMouseCaptureAlias()
-    {
-        this.mouseCapture = this.mouseCaptures.isEmpty()
-            ? null
-            : this.mouseCaptures.values().iterator().next();
-    }
-
-    private void rememberRootMouse(int mouseX, int mouseY)
-    {
-        this.rootMouseX = mouseX;
-        this.rootMouseY = mouseY;
-    }
-
-    private long advanceMouseCaptureGeneration()
-    {
-        this.nextMouseCaptureGeneration = this.nextMouseCaptureGeneration == Long.MAX_VALUE
-            ? 1L
-            : this.nextMouseCaptureGeneration + 1L;
-
-        return this.nextMouseCaptureGeneration;
-    }
-
-    private long currentInputDispatchLifecycleGeneration()
-    {
-        return this.inputDispatchLifecycleGenerations.isEmpty()
-            ? this.inputLifecycleGeneration
-            : this.inputDispatchLifecycleGenerations.peek();
-    }
-
-    private boolean isInputDispatchLifecycleCurrent()
-    {
-        return this.currentInputDispatchLifecycleGeneration() == this.inputLifecycleGeneration;
-    }
-
-    private void runInInputDispatchLifecycle(long lifecycleGeneration, Runnable action)
-    {
-        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-
-        try
-        {
-            action.run();
-        }
-        finally
-        {
-            this.inputDispatchLifecycleGenerations.pop();
-        }
-    }
-
-    private boolean dispatchMouseThroughRoot(
-        int mouseX,
-        int mouseY,
-        int mouseButton,
-        boolean release,
-        boolean restoreMouse
-    )
-    {
-        return this.dispatchMouseThroughRootElement(
-            mouseX,
-            mouseY,
-            mouseButton,
-            release,
-            restoreMouse,
-            this.currentInputDispatchLifecycleGeneration()
-        ) != null;
-    }
-
-    private IUIElement dispatchMouseToCapturedPath(
-        List<IUIElement> path,
-        int mouseX,
-        int mouseY,
-        int mouseButton,
-        boolean restoreMouse
-    )
-    {
-        int previousMouseX = this.context.mouseX;
-        int previousMouseY = this.context.mouseY;
-        int previousMouseButton = this.context.mouseButton;
-        UIViewportStack previousViewportStack = this.context.viewportStack;
-        boolean nested = this.mouseDispatchDepth > 0;
-        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-
-        this.context.viewportStack = new UIViewportStack();
-        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-        this.mouseDispatchDepth += 1;
-
-        try
-        {
-            this.context.setMouse(mouseX, mouseY, mouseButton);
-            this.context.pushViewport(this.viewport);
-
-            try
-            {
-                return path == null || path.isEmpty()
-                    ? null
-                    : path.get(0).mouseReleasedCaptured(this.context, path, 0);
-            }
-            finally
-            {
-                this.context.popViewport();
-            }
-        }
-        finally
-        {
-            this.mouseDispatchDepth -= 1;
-            this.inputDispatchLifecycleGenerations.pop();
-            this.context.viewportStack = previousViewportStack;
-
-            if (restoreMouse || nested)
-            {
-                this.context.mouseX = previousMouseX;
-                this.context.mouseY = previousMouseY;
-                this.context.mouseButton = previousMouseButton;
-            }
-        }
-    }
-
-    private List<IUIElement> findMouseReleasePath(IUIElement owner)
-    {
-        if (owner == null)
-        {
-            return List.of();
-        }
-
-        List<IUIElement> path = new ArrayList<>();
-
-        return this.findMouseReleasePath(this.root, owner, path) ? List.copyOf(path) : List.of(owner);
-    }
-
-    private boolean findMouseReleasePath(IUIElement current, IUIElement owner, List<IUIElement> path)
-    {
-        path.add(current);
-
-        if (current == owner)
-        {
-            return true;
-        }
-
-        if (current instanceof UIElement element)
-        {
-            for (IUIElement child : element.getChildren())
-            {
-                if (this.findMouseReleasePath(child, owner, path))
-                {
-                    return true;
-                }
-            }
-        }
-
-        path.remove(path.size() - 1);
-
-        return false;
-    }
-
-    private void dispatchMouseCancellationThroughRoot(
-        int mouseX,
-        int mouseY,
-        int mouseButton,
-        boolean restoreMouse,
-        long lifecycleGeneration
-    )
-    {
-        int previousMouseX = this.context.mouseX;
-        int previousMouseY = this.context.mouseY;
-        int previousMouseButton = this.context.mouseButton;
-        UIViewportStack previousViewportStack = this.context.viewportStack;
-        boolean nested = this.mouseDispatchDepth > 0;
-
-        this.context.viewportStack = new UIViewportStack();
-        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-        this.mouseDispatchDepth += 1;
-
-        try
-        {
-            this.context.setMouse(mouseX, mouseY, mouseButton);
-            this.context.pushViewport(this.viewport);
-
-            try
-            {
-                this.root.mouseCanceled(this.context);
-            }
-            finally
-            {
-                this.context.popViewport();
-            }
-        }
-        finally
-        {
-            this.mouseDispatchDepth -= 1;
-            this.inputDispatchLifecycleGenerations.pop();
-            this.context.viewportStack = previousViewportStack;
-
-            if (restoreMouse || nested)
-            {
-                this.context.mouseX = previousMouseX;
-                this.context.mouseY = previousMouseY;
-                this.context.mouseButton = previousMouseButton;
-            }
-        }
-    }
-
-    private IUIElement dispatchMouseThroughRootElement(
-        int mouseX,
-        int mouseY,
-        int mouseButton,
-        boolean release,
-        boolean restoreMouse,
-        long lifecycleGeneration
-    )
-    {
-        int previousMouseX = this.context.mouseX;
-        int previousMouseY = this.context.mouseY;
-        int previousMouseButton = this.context.mouseButton;
-        UIViewportStack previousViewportStack = this.context.viewportStack;
-        boolean nested = this.mouseDispatchDepth > 0;
-
-        this.context.viewportStack = new UIViewportStack();
-        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-        this.mouseDispatchDepth += 1;
-
-        try
-        {
-            this.context.setMouse(mouseX, mouseY, mouseButton);
-
-            if (!this.root.isEnabled())
-            {
-                return null;
-            }
-
-            this.context.pushViewport(this.viewport);
-
-            try
-            {
-                IUIElement element = release
-                    ? this.root.mouseReleased(this.context)
-                    : this.root.mouseClicked(this.context);
-
-                return element;
-            }
-            finally
-            {
-                this.context.popViewport();
-            }
-        }
-        finally
-        {
-            this.mouseDispatchDepth -= 1;
-            this.inputDispatchLifecycleGenerations.pop();
-            this.context.viewportStack = previousViewportStack;
-
-            if (restoreMouse || nested)
-            {
-                this.context.mouseX = previousMouseX;
-                this.context.mouseY = previousMouseY;
-                this.context.mouseButton = previousMouseButton;
-            }
-        }
-    }
-
-    private boolean dispatchMouseScrolledThroughRoot(int mouseX, int mouseY, double horizontal, double vertical)
-    {
-        int previousMouseX = this.context.mouseX;
-        int previousMouseY = this.context.mouseY;
-        double previousMouseWheel = this.context.mouseWheel;
-        double previousMouseWheelHorizontal = this.context.mouseWheelHorizontal;
-        UIViewportStack previousViewportStack = this.context.viewportStack;
-        boolean nested = this.mouseDispatchDepth > 0;
-        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-
-        this.context.viewportStack = new UIViewportStack();
-        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-        this.mouseDispatchDepth += 1;
-
-        try
-        {
-            this.context.setMouseWheel(mouseX, mouseY, vertical, horizontal);
-
-            if (!this.root.isEnabled())
-            {
-                return false;
-            }
-
-            this.context.pushViewport(this.viewport);
-
-            try
-            {
-                return this.root.mouseScrolled(this.context) != null;
-            }
-            finally
-            {
-                this.context.popViewport();
-            }
-        }
-        finally
-        {
-            this.mouseDispatchDepth -= 1;
-            this.inputDispatchLifecycleGenerations.pop();
-            this.context.viewportStack = previousViewportStack;
-
-            if (nested)
-            {
-                this.context.mouseX = previousMouseX;
-                this.context.mouseY = previousMouseY;
-                this.context.mouseWheel = previousMouseWheel;
-                this.context.mouseWheelHorizontal = previousMouseWheelHorizontal;
-            }
-        }
-    }
-
     public boolean handleKey(int key, int scanCode, int action, int mods)
     {
-        if ((!this.isInputDispatchLifecycleCurrent()
-            || this.releasingCapturedMouseGestures || this.mouseBarrierAdmissionFence)
-            && action != GLFW.GLFW_RELEASE)
-        {
-            return true;
-        }
         if (!this.root.isEnabled() && action != GLFW.GLFW_RELEASE)
         {
             return false;
         }
 
-        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-
-        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-        this.mouseDispatchDepth += 1;
-        boolean completed = false;
-
-        try
+        if (action == GLFW.GLFW_PRESS)
         {
-            if (action == GLFW.GLFW_PRESS)
-            {
-                inputRenderer.keyPressed(this.context, key);
-            }
-
-            this.context.setKeyEvent(key, scanCode, action);
-
-            IUIElement element = this.root.keyPressed(this.context);
-
-            if (this.root.isEnabled() && element != null)
-            {
-                completed = true;
-
-                return true;
-            }
-
-            if (this.context.isPressed(GLFW.GLFW_KEY_ESCAPE))
-            {
-                this.closeMenu();
-                completed = true;
-
-                return true;
-            }
-
-            completed = true;
-
-            return false;
+            inputRenderer.keyPressed(this.context, key);
         }
-        catch (RuntimeException | Error exception)
+
+        this.context.setKeyEvent(key, scanCode, action);
+
+        IUIElement element = this.root.keyPressed(this.context);
+
+        if (this.root.isEnabled() && element != null)
         {
-            this.discardMouseBarrierActions();
-
-            throw exception;
+            return true;
         }
-        finally
+
+        if (this.context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
-            this.mouseDispatchDepth -= 1;
+            this.closeMenu();
 
-            try
-            {
-                if (completed)
-                {
-                    this.drainMouseBarrierActions();
-                }
-            }
-            finally
-            {
-                this.inputDispatchLifecycleGenerations.pop();
-            }
+            return true;
         }
+
+        return false;
     }
 
     public void handleTextInput(int key)
     {
-        if (!this.isInputDispatchLifecycleCurrent()
-            || this.releasingCapturedMouseGestures || this.mouseBarrierAdmissionFence)
+        this.context.setKeyTyped((char) key);
+
+        if (this.root.isEnabled())
         {
-            return;
-        }
-
-        long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
-
-        this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-        this.mouseDispatchDepth += 1;
-        boolean completed = false;
-
-        try
-        {
-            this.context.setKeyTyped((char) key);
-
-            if (this.root.isEnabled())
-            {
-                this.root.textInput(this.context);
-            }
-
-            completed = true;
-        }
-        catch (RuntimeException | Error exception)
-        {
-            this.discardMouseBarrierActions();
-
-            throw exception;
-        }
-        finally
-        {
-            this.mouseDispatchDepth -= 1;
-
-            try
-            {
-                if (completed)
-                {
-                    this.drainMouseBarrierActions();
-                }
-            }
-            finally
-            {
-                this.inputDispatchLifecycleGenerations.pop();
-            }
+            this.root.textInput(this.context);
         }
     }
 
@@ -1285,7 +377,6 @@ public abstract class UIBaseMenu
     {
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
-        this.rememberRootMouse(mouseX, mouseY);
         this.context.resetMatrix();
         this.context.setMouse(mouseX, mouseY);
         this.context.resetCursor();
@@ -1295,50 +386,11 @@ public abstract class UIBaseMenu
         if (this.root.isVisible())
         {
             this.context.reset();
-            long lifecycleGeneration = this.currentInputDispatchLifecycleGeneration();
+            this.context.pushViewport(this.viewport);
 
-            this.inputDispatchLifecycleGenerations.push(lifecycleGeneration);
-            this.mouseDispatchDepth += 1;
-            boolean rendered = false;
+            this.root.render(this.context);
 
-            try
-            {
-                this.context.pushViewport(this.viewport);
-
-                try
-                {
-                    this.root.render(this.context);
-                }
-                finally
-                {
-                    this.context.popViewport();
-                }
-
-                rendered = true;
-            }
-            catch (RuntimeException | Error exception)
-            {
-                this.discardMouseBarrierActions();
-
-                throw exception;
-            }
-            finally
-            {
-                this.mouseDispatchDepth -= 1;
-
-                try
-                {
-                    if (rendered)
-                    {
-                        this.drainMouseBarrierActions();
-                    }
-                }
-                finally
-                {
-                    this.inputDispatchLifecycleGenerations.pop();
-                }
-            }
-
+            this.context.popViewport();
             this.context.postRender();
         }
 
@@ -1391,28 +443,4 @@ public abstract class UIBaseMenu
             stack.popViewport();
         }
     }
-
-    private static final class MouseCapture
-    {
-        private final int button;
-        private final long generation;
-        private IUIElement owner;
-        private List<IUIElement> releasePath = List.of();
-
-        private MouseCapture(int button, long generation)
-        {
-            this.button = button;
-            this.generation = generation;
-        }
-    }
-
-    private record MouseBarrierAction(
-        Runnable mutation,
-        List<MouseCapture> captures,
-        long lifecycleGeneration,
-        boolean resizeHierarchy,
-        IUIElement preservedOwner,
-        List<IUIElement> detachedRoots
-    )
-    {}
 }

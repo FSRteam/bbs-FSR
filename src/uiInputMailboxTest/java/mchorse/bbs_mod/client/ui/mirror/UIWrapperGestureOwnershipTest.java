@@ -234,8 +234,18 @@ public final class UIWrapperGestureOwnershipTest
         int finish = source.indexOf("private void finishGesture(boolean finishSelection)");
         int finishGuard = source.indexOf("if (finishSelection && wasSelecting)", finish);
         int finishPick = source.indexOf("this.pickLastSelectedClip();", finish);
+        int finishEnd = source.indexOf("protected boolean subKeyPressed(UIContext context)", finish);
+        int setClipData = source.indexOf("private void setClipData(Clip clip, int newTick, int newLayer, int newDuration)");
+        int setClipDataEnd = source.indexOf("private void captureSelection(Area area)", setClipData);
+        int dragClips = source.indexOf("private void dragClips(int mouseX, int mouseY)");
+        int dragClipsEnd = source.indexOf("private void moveClips(List<Clip> others, int dx, int dy)", dragClips);
         String cancelPath = source.substring(cancel, finish);
         String releasePath = source.substring(release, cancel);
+        String finishPath = source.substring(finish, finishEnd);
+        String setClipDataPath = source.substring(setClipData, setClipDataEnd);
+        String dragClipsPath = source.substring(dragClips, dragClipsEnd);
+        int releaseOwnerRetire = releasePath.indexOf("this.gestureOwnership.release(context.mouseButton, generation)");
+        int releaseFinish = releasePath.indexOf("this.finishGesture(true);");
         check(cancelPath.indexOf("this.restoreGestureState();")
                     < cancelPath.indexOf("this.finishGesture(false);")
                 && restore > cancel,
@@ -247,9 +257,28 @@ public final class UIWrapperGestureOwnershipTest
         check(releasePath.contains("this.finishGesture(true);")
                 && !releasePath.contains("this.restoreGestureState();"),
             "UIClips physical release unexpectedly rolls back committed drag edits");
+        check(setClipDataPath.contains("clip.tick.set(newTick);")
+                && setClipDataPath.contains("clip.duration.set(newDuration);")
+                && setClipDataPath.contains("clip.layer.set(newLayer);")
+                && releaseOwnerRetire >= 0 && releaseFinish > releaseOwnerRetire,
+            "UIClips physical release does not commit the final tick, duration, and layer before retiring the owner");
+        check(dragClipsPath.contains("context.menu.runWithPreservedMouseCapture(this, this.delegate::fillData)"),
+            "UIClips drag refresh can cancel its press owner while rebuilding the clip property hierarchy");
+        check(finishPath.contains("this.gestureGeneration = 0L;")
+                && finishPath.contains("this.grabbing = false;")
+                && finishPath.contains("this.scrubbing = false;")
+                && finishPath.contains("this.scrolling = false;")
+                && finishPath.contains("this.selecting = false;"),
+            "UIClips terminal path leaves a gesture generation or drag mode active");
         check(source.contains("this.finishGesture(false);")
                 && finish >= 0 && finishGuard > finish && finishPick > finishGuard,
             "UIClips cancellation can still commit its pending selection");
+        check(cancelPath.indexOf("this.gestureOwnership.cancel();")
+                    < cancelPath.indexOf("this.restoreGestureState();")
+                && finishPath.contains("this.gestureSelection = Collections.emptyList();")
+                && finishPath.contains("this.gestureClip = null;")
+                && finishPath.contains("this.gestureClips = null;"),
+            "UIClips cancellation or terminal cleanup can retain stale selection ownership");
     }
 
     private static void assertReplayListCommitsOnlyOnLeftRelease()

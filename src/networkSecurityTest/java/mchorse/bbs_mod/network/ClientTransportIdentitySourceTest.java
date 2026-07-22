@@ -299,6 +299,9 @@ final class ClientTransportIdentitySourceTest
         String cameraRemoval = section(cameraController,
             "public List<ICameraController> removeAll",
             "public ICameraController remove(ICameraController controller)");
+        String cameraReset = section(cameraController,
+            "public void reset()",
+            "private Throwable shutdownController");
 
         check(events.contains("NeoForge.EVENT_BUS.addListener(BBSClientNeoEvents::onPlayerClone)"),
             "NeoForge ClientPlayerNetworkEvent.Clone listener is not registered");
@@ -323,18 +326,24 @@ final class ClientTransportIdentitySourceTest
             "Iterator<ICameraController> it = this.controllers.iterator()",
             "it.remove()",
             "removed.add(controller)",
+            "this.shutdownController(controller)",
             "this.updateCurrent()",
             "return removed");
         check(bbsClient.contains("cameraController.removeAll(PlayCameraController.class)"),
             "Clone lifecycle does not remove every queued Film playback camera");
         assertOrdered(cameraLifecycle,
             "cameraController.removeAll(PlayCameraController.class)",
-            "play.getContext().shutdown()",
             "cameraController.reset()");
+        check(!cameraLifecycle.contains("play.getContext().shutdown()"),
+            "Client lifecycle still duplicates playback shutdown owned by CameraController");
         check(bbsClient.contains("resetCameraControllersForLifecycle(\"disconnect\")"),
             "disconnect does not share the lifecycle-owned full camera cleanup");
-        check(cameraController.contains("public void reset() { this.controllers.clear(); this.current = null; }"),
-            "camera reset can resurrect a stale controller after the next add/updateCurrent call");
+        assertOrdered(cameraReset,
+            "for (ICameraController controller : new ArrayList<>(this.controllers))",
+            "this.shutdownController(controller)",
+            "this.controllers.clear()",
+            "this.current = null",
+            "rethrowFailure(failure)");
 
         String c5 = section(client,
             "private static void handleStopFilmPacket",

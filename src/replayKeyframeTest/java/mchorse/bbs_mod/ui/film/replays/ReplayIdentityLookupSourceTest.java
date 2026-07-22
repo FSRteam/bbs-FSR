@@ -77,8 +77,67 @@ public final class ReplayIdentityLookupSourceTest
             "UIReplaysEditor does not bind delayed callbacks to a stable editor/view/replay snapshot");
         check(!replayEditor.contains("renderRuler(context,this.keyframeEditor.view,"),
             "UIReplaysEditor ruler callback still dereferences the mutable keyframe editor");
-        check(occurrences(replayEditor, "this.keyframeEditor!=editor||this.replay!=replayForEditor") >= 3,
+        check(occurrences(replayEditor, "this.keyframeEditor!=editor||this.replay!=replayForEditor") >= 6,
             "UIReplaysEditor does not fence every delayed replay-mutating callback");
+
+        String filterAction = "if(view.getGraph()instanceofUIKeyframeDopeSheet){menu.action(Icons.FILTER,UIKeys.FILM_REPLAY_FILTER_SHEETS,()->{";
+        String filterFence = "if(this.keyframeEditor!=editor||this.replay!=replayForEditor||replayForEditor==null){return;}";
+        String disabledRead = "Set<String>disabledSet=BBSSettings.disabledSheets.get();";
+        String filterClose = "panel.onClose(e->{";
+        String disabledWrite = "BBSSettings.disabledSheets.set(disabledSet);this.updateChannelsList();";
+        int filterStart = replayEditor.indexOf(filterAction);
+        int filterActionFence = replayEditor.indexOf(filterFence, filterStart);
+        int disabledReadIndex = replayEditor.indexOf(disabledRead, filterStart);
+        int filterCloseIndex = replayEditor.indexOf(filterClose, disabledReadIndex);
+        int filterCloseFence = replayEditor.indexOf(filterFence, filterCloseIndex);
+        int disabledWriteIndex = replayEditor.indexOf(disabledWrite, filterCloseFence);
+
+        check(filterStart >= 0
+                && filterActionFence > filterStart
+                && disabledReadIndex > filterActionFence
+                && filterCloseIndex > disabledReadIndex
+                && filterCloseFence > filterCloseIndex
+                && disabledWriteIndex > filterCloseFence,
+            "UIReplaysEditor FILTER callbacks do not fence stale editor/replay state before read/write");
+
+        String updateChannels = section(
+            replayEditor,
+            "publicvoidupdateChannelsList()",
+            "/**All-tracksview"
+        );
+        String replacement = section(
+            replayEditor,
+            "privatevoidreplaceKeyframeEditor(",
+            "/**All-tracksview"
+        );
+
+        check(updateChannels.contains("UIKeyframeEditorpreviousEditor=this.keyframeEditor;")
+                && updateChannels.contains("this.keyframeEditorGeneration")
+                && updateChannels.contains("booleanresetView=lastEditor==null||this.keyframeEditorResetPending;")
+                && updateChannels.contains("this.keyframeEditor=null;"),
+            "UIReplaysEditor rebuild does not snapshot and invalidate the previous editor generation");
+        check(updateChannels.contains("this.keyframeEditorResetPending=false;")
+                && updateChannels.contains("this.keyframeEditorResetPending=resetView;"),
+            "UIReplaysEditor rebuild does not propagate and clear the pending initial viewport reset");
+        check(updateChannels.contains("this.replaceKeyframeEditor(previousEditor,null,editorGeneration,false);")
+                && updateChannels.contains("this.replaceKeyframeEditor(previousEditor,editor,editorGeneration,resetView);"),
+            "UIReplaysEditor does not route both empty and populated rebuilds through the atomic replacement");
+        check(!updateChannels.contains("this.keyframeEditor.removeFromParent()")
+                && !updateChannels.contains("this.add(editor);")
+                && !updateChannels.contains("if(editor!=null&&lastEditor==null){editor.view.resetView();}"),
+            "UIReplaysEditor still performs an unpaired deferred remove/add during rebuild");
+        assertOrdered(replacement,
+            "if(previous!=null&&previous.getParent()==this){this.remove(previous);}",
+            "if(generation!=this.keyframeEditorGeneration||this.keyframeEditor!=replacement){return;}",
+            "for(UIKeyframeEditormounted:newArrayList<>(this.getChildren(UIKeyframeEditor.class)))",
+            "if(mounted!=replacement&&mounted.getParent()==this){this.remove(mounted);}",
+            "if(replacement!=null&&replacement.getParent()!=this){this.add(replacement);}",
+            "this.iconBar.removeFromParent();",
+            "this.allToggle.removeFromParent();",
+            "this.resize();",
+            "if(replacement!=null&&resetView){replacement.view.resetView();if(generation==this.keyframeEditorGeneration&&this.keyframeEditor==replacement){this.keyframeEditorResetPending=false;}}",
+            "context.menu.runAfterHierarchyMutation"
+        );
     }
 
     private static Path findProjectRoot()
@@ -129,6 +188,29 @@ public final class ReplayIdentityLookupSourceTest
         }
 
         return count;
+    }
+
+    private static void assertOrdered(String source, String... markers)
+    {
+        int previous = -1;
+
+        for (String marker : markers)
+        {
+            int index = source.indexOf(marker);
+
+            check(index > previous, "missing or out-of-order source marker: " + marker);
+            previous = index;
+        }
+    }
+
+    private static String section(String source, String start, String end)
+    {
+        int begin = source.indexOf(start);
+        int finish = begin < 0 ? -1 : source.indexOf(end, begin + start.length());
+
+        check(begin >= 0 && finish > begin, "missing source section: " + start);
+
+        return source.substring(begin, finish);
     }
 
     private static void check(boolean condition, String message)

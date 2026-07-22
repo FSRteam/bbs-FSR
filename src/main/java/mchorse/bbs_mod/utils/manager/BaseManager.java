@@ -63,11 +63,23 @@ public abstract class BaseManager <T extends ValueGroup> extends FolderManager<T
     {
         File file = this.getFile(id);
 
+        if (file == null || data == null)
+        {
+            return false;
+        }
+
         try
         {
+            File parent = file.getParentFile();
+
+            if (parent == null || (!parent.exists() && !parent.mkdirs()))
+            {
+                return false;
+            }
+
             if (this.backUps)
             {
-                String path = file.getParentFile().getAbsolutePath();
+                String path = parent.getAbsolutePath();
                 Date date = new Date();
                 String backupFileName = new SimpleDateFormat("yyyy_MM_dd_HH").format(date);
 

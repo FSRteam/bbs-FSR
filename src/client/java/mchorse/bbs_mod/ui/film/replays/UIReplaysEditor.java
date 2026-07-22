@@ -111,6 +111,13 @@ public class UIReplaysEditor extends UIElement {
     private boolean settingReplay;
     private Pair<Form, String> pendingPick;
     private long pendingPickGeneration;
+    /**
+     * Monotonically identifies the latest keyframe-editor rebuild.  Hierarchy
+     * mutations are deferred while a mouse dispatch is active, so the field
+     * can temporarily point at an editor which is not mounted yet.
+     */
+    private long keyframeEditorGeneration;
+    private boolean keyframeEditorResetPending;
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
@@ -590,14 +597,20 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void updateChannelsList() {
-        UIKeyframes lastEditor = this.keyframeEditor != null ? this.keyframeEditor.view : null;
+        UIKeyframeEditor previousEditor = this.keyframeEditor;
+        UIKeyframes lastEditor = previousEditor != null ? previousEditor.view : null;
+        boolean resetView = lastEditor == null || this.keyframeEditorResetPending;
+        long editorGeneration = this.keyframeEditorGeneration == Long.MAX_VALUE
+                ? 1L
+                : this.keyframeEditorGeneration + 1L;
 
-        if (this.keyframeEditor != null) {
-            this.keyframeEditor.removeFromParent();
-            this.keyframeEditor = null;
-        }
+        this.keyframeEditorGeneration = editorGeneration;
+        this.keyframeEditor = null;
+        this.keyframeEditorResetPending = false;
 
         if (this.replay == null) {
+            this.replaceKeyframeEditor(previousEditor, null, editorGeneration, false);
+
             return;
         }
 
@@ -658,6 +671,7 @@ public class UIReplaysEditor extends UIElement {
             )
                     .target(this.filmPanel.editArea)
                     .editPanelTopOffset(this.filmPanel::getEditPanelTopOffsetPx);
+            this.keyframeEditorResetPending = resetView;
             UIKeyframeEditor editor = this.keyframeEditor;
             UIKeyframes view = editor.view;
             Replay replayForEditor = this.replay;
@@ -767,6 +781,10 @@ public class UIReplaysEditor extends UIElement {
 
                 if (view.getGraph() instanceof UIKeyframeDopeSheet) {
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () -> {
+                        if (this.keyframeEditor != editor || this.replay != replayForEditor || replayForEditor == null) {
+                            return;
+                        }
+
                         Set<String> disabledSet = BBSSettings.disabledSheets.get();
                         Map<String, Integer> keyToColor = new HashMap<>();
                         for (UIKeyframeSheet sheet : view.getGraph().getSheets()) {
@@ -781,6 +799,10 @@ public class UIReplaysEditor extends UIElement {
                         UIOverlay.addOverlay(this.getContext(), panel, 240, 0.9F);
 
                         panel.onClose(e -> {
+                            if (this.keyframeEditor != editor || this.replay != replayForEditor || replayForEditor == null) {
+                                return;
+                            }
+
                             BBSSettings.disabledSheets.set(disabledSet);
                             this.updateChannelsList();
                         });
@@ -798,21 +820,67 @@ public class UIReplaysEditor extends UIElement {
             );
             view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
 
-            this.add(editor);
-            /* Category bar and its bottom toggle stay on top of the timeline. */
-            if (this.iconBar.getParent() != null) {
-                this.iconBar.removeFromParent();
-            }
-            if (this.allToggle.getParent() != null) {
-                this.allToggle.removeFromParent();
-            }
-            this.add(this.iconBar, this.allToggle);
         }
 
-        this.resize();
+        UIKeyframeEditor editor = this.keyframeEditor;
 
-        if (this.keyframeEditor != null && lastEditor == null) {
-            this.keyframeEditor.view.resetView();
+        this.replaceKeyframeEditor(previousEditor, editor, editorGeneration, resetView);
+    }
+
+    private void replaceKeyframeEditor(
+            UIKeyframeEditor previous,
+            UIKeyframeEditor replacement,
+            long generation,
+            boolean resetView
+    ) {
+        Runnable mutation = () -> {
+            if (previous != null && previous.getParent() == this) {
+                this.remove(previous);
+            }
+
+            if (generation != this.keyframeEditorGeneration || this.keyframeEditor != replacement) {
+                return;
+            }
+
+            for (UIKeyframeEditor mounted : new ArrayList<>(this.getChildren(UIKeyframeEditor.class))) {
+                if (mounted != replacement && mounted.getParent() == this) {
+                    this.remove(mounted);
+                }
+            }
+
+            if (replacement != null && replacement.getParent() != this) {
+                this.add(replacement);
+            }
+
+            if (replacement != null) {
+                /* Category bar and its bottom toggle stay on top of the timeline. */
+                if (this.iconBar.getParent() != null) {
+                    this.iconBar.removeFromParent();
+                }
+                if (this.allToggle.getParent() != null) {
+                    this.allToggle.removeFromParent();
+                }
+                this.add(this.iconBar, this.allToggle);
+            }
+
+            this.resize();
+
+            if (replacement != null && resetView) {
+                replacement.view.resetView();
+
+                if (generation == this.keyframeEditorGeneration && this.keyframeEditor == replacement) {
+                    this.keyframeEditorResetPending = false;
+                }
+            }
+        };
+        UIContext context = this.getContext();
+
+        if (context == null) {
+            mutation.run();
+        } else if (previous == null) {
+            context.menu.runAfterHierarchyMutation(mutation);
+        } else {
+            context.menu.runAfterHierarchyMutation(mutation, previous);
         }
     }
 
@@ -1258,15 +1326,6 @@ public class UIReplaysEditor extends UIElement {
             if (pair != null && (context.mouseButton < 2 || (context.mouseButton == 2 && Window.isCtrlPressed()))) {
                 if (!this.isVisible()) {
                     this.filmPanel.showPanel(this);
-                }
-
-                if (UIReplaysEditorUtils.startFilmGizmo(
-                        this.filmPanel,
-                        context,
-                        stencil.getIndex(),
-                        context.getTransition()
-                )) {
-                    return true;
                 }
 
                 if (UIReplaysEditorUtils.pickFormWithOffers(context, pair, this::pickFormBone)) {

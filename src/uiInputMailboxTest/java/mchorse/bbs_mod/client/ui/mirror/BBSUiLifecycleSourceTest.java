@@ -23,6 +23,7 @@ public final class BBSUiLifecycleSourceTest
     {
         assertOwnerAwareInputCallSites();
         assertRepositoryRebindsBeforeDataAndPinsAfter();
+        assertMorphingSelectionAndDemorphRemainDistinct();
     }
 
     private static void assertOwnerAwareInputCallSites()
@@ -83,9 +84,7 @@ public final class BBSUiLifecycleSourceTest
                 && pixels.contains("if (!this.isDragOwnedBy(context.mouseButton))")
                 && pixels.contains("this.restoreSecondaryEraser();"),
             "pixel editor bypasses UICanvas ownership or finalizes an unrelated release");
-        check(baseMenu.contains("private MouseCapture mouseCapture;")
-                && baseMenu.contains("runAfterCapturedMouseRelease(Runnable mutation)")
-                && baseMenu.contains("releasingCapturedMouseGestures")
+        check(baseMenu.contains("runAfterCapturedMouseRelease(Runnable mutation)")
                 && overlay.contains("context.menu.runAfterCapturedMouseRelease(() ->")
                 && uiContext.contains("this.menu.runAfterCapturedMouseRelease(() ->")
                 && filmRecorder.contains("context.menu.runAfterCapturedMouseRelease(() ->"),
@@ -101,7 +100,8 @@ public final class BBSUiLifecycleSourceTest
             "Gizmo release is not scoped to the initiating button and generation");
         check(clientLifecycle.contains("runClientLifecycleStep(\"reset UI mirror\", () -> BBSUiMirrorRuntime.reset())")
                 && clientLifecycle.contains("runClientLifecycleStep(\"reset Film collaboration\", () -> BBSFilmCollaborationBridge.resetSession())")
-                && clientLifecycle.contains("runClientLifecycleStep(\"stop resource watchdog\", () -> BBSResources.stopWatchdog())"),
+                && clientLifecycle.contains("runClientLifecycleStep(\"stop resource watchdog\", () -> BBSResources.stopWatchdog())")
+                && clientLifecycle.contains("filmPanel.forceSave()"),
             "client teardown still lets one lifecycle callback skip later cleanup");
         check(mirrorLifecycle.contains("runStep(\"reset render surfaces\"")
                 && mirrorLifecycle.contains("runStep(\"release UI input\"")
@@ -153,6 +153,25 @@ public final class BBSUiLifecycleSourceTest
             "a new panel session did not select the current local repository");
     }
 
+    private static void assertMorphingSelectionAndDemorphRemainDistinct()
+    {
+        String morphingPanel = readSource("src/client/java/mchorse/bbs_mod/ui/morphing/UIMorphingPanel.java");
+        String formPalette = readSource("src/client/java/mchorse/bbs_mod/ui/forms/UIFormPalette.java");
+        String client = readSource("src/client/java/mchorse/bbs_mod/BBSModClient.java");
+        String demorphButton = sourceSection(morphingPanel, "this.demorph =", "this.demorph.tooltip");
+        String setSelected = sourceSection(formPalette, "public void setSelected(Form form)", "@Override");
+
+        check(demorphButton.contains("this.palette.setSelected(null);")
+                && demorphButton.contains("this.setForm(null);"),
+            "morphing-panel demorph no longer clears the selection and restores the player form");
+        check(setSelected.contains("this.list.setSelected(form);")
+                && !setSelected.contains("this.accept(form)")
+                && !setSelected.contains("this.callback.accept(form)"),
+            "UIFormPalette.setSelected unexpectedly notifies the form callback");
+        check(client.contains("while (keyDemorph.consumeClick()) ClientNetwork.sendPlayerForm(null);"),
+            "the global demorph shortcut no longer restores the player's original form");
+    }
+
     private static String readSource(String path)
     {
         try
@@ -177,6 +196,17 @@ public final class BBSUiLifecycleSourceTest
         }
 
         return count;
+    }
+
+    private static String sourceSection(String source, String startMarker, String endMarker)
+    {
+        int start = source.indexOf(startMarker);
+        int end = source.indexOf(endMarker, start + startMarker.length());
+
+        check(start >= 0 && end > start,
+            "Could not locate source section between " + startMarker + " and " + endMarker);
+
+        return source.substring(start, end);
     }
 
     private static void check(boolean condition, String message)

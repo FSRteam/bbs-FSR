@@ -6,6 +6,7 @@ import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
@@ -18,6 +19,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -35,6 +37,8 @@ public class UIKeyframeEditor extends UIElement
 
     private UIElement target;
     private Supplier<Integer> editPanelTopOffsetPx;
+    /** Monotonically identifies the latest deferred property-panel replacement. */
+    private long editorGeneration;
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
 
@@ -75,40 +79,116 @@ public class UIKeyframeEditor extends UIElement
 
     private void pickKeyframe(Keyframe keyframe)
     {
-        UIKeyframeFactory.saveScroll(this.editor);
+        UIKeyframeFactory previous = this.editor;
 
-        if (this.editor != null)
+        /* A replacement can be known to this field before the hierarchy
+         * barrier has mounted it.  Saving only a physically mounted panel
+         * keeps an intermediate A -> B -> C pick from overwriting A's scroll
+         * position with B's not-yet-laid-out viewport. */
+        if (previous != null && previous.getParent() == this)
         {
-            this.editor.removeFromParent();
-            this.editor = null;
+            UIKeyframeFactory.saveScroll(previous);
         }
+
+        long generation = this.editorGeneration == Long.MAX_VALUE
+            ? 1L
+            : this.editorGeneration + 1L;
+
+        this.editorGeneration = generation;
+        this.editor = null;
+
+        UIKeyframeFactory replacement = null;
 
         if (keyframe != null)
         {
-            this.editor = UIKeyframeFactory.createPanel(keyframe, this.view);
+            replacement = UIKeyframeFactory.createPanel(keyframe, this.view);
+            this.editor = replacement;
 
-            if (this.target != null)
+            if (replacement != null && this.target != null)
             {
                 int top = this.getEditPanelTopOffsetPx();
-                this.editor.relative(this.target).x(0).y(0, top).w(1F).h(1F, -top);
-
-                this.target.resize();
+                replacement.relative(this.target).x(0).y(0, top).w(1F).h(1F, -top);
             }
-            else
+            else if (replacement != null)
             {
-                this.editor.relative(this).x(1F, -140).w(140).h(1F);
+                replacement.relative(this).x(1F, -140).w(140).h(1F);
             }
-
-            this.add(this.editor);
-            this.editor.setVisible(this.propertiesVisible);
-            this.resize();
         }
 
-        this.resize();
+        this.replaceEditor(previous, replacement, generation);
+    }
 
-        if (this.editor != null)
+    /** Commit one latest-wins property-panel replacement after input dispatch. */
+    private void replaceEditor(
+            UIKeyframeFactory previous,
+            UIKeyframeFactory replacement,
+            long generation
+    )
+    {
+        Runnable mutation = () ->
         {
-            this.editor.restoreScroll();
+            /* Release the old physical attachment before admitting the new
+             * generation.  The identity fence below makes older queued
+             * replacements unable to add/layout/restore a stale panel. */
+            if (previous != null && previous.getParent() == this)
+            {
+                this.remove(previous);
+            }
+
+            if (generation != this.editorGeneration || this.editor != replacement)
+            {
+                return;
+            }
+
+            /* A prior generation may have been queued before its add ran.
+             * Remove every directly mounted factory so the latest generation
+             * is the only property panel left in this editor. */
+            for (UIKeyframeFactory mounted : new ArrayList<>(this.getChildren(UIKeyframeFactory.class)))
+            {
+                if (mounted != replacement && mounted.getParent() == this)
+                {
+                    this.remove(mounted);
+                }
+            }
+
+            if (replacement != null && replacement.getParent() != this)
+            {
+                this.add(replacement);
+            }
+
+            if (replacement != null)
+            {
+                replacement.setVisible(this.propertiesVisible);
+
+                if (this.target != null)
+                {
+                    this.target.resize();
+                }
+            }
+
+            this.resize();
+
+            if (replacement != null
+                && generation == this.editorGeneration
+                && this.editor == replacement)
+            {
+                replacement.restoreScroll();
+            }
+        };
+
+        UIContext context = this.getContext();
+
+        if (context == null)
+        {
+            mutation.run();
+        }
+        else if (previous == null)
+        {
+            context.menu.runAfterHierarchyMutation(mutation);
+        }
+        else
+        {
+            context.menu.runAfterHierarchyMutation(mutation, previous);
         }
     }
 

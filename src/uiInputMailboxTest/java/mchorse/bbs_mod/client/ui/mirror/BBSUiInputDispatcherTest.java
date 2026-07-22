@@ -10,6 +10,7 @@ import mchorse.bbs_mod.api.client.ui.BBSUiInputResult;
 import mchorse.bbs_mod.api.client.ui.BBSUiInputStatus;
 import mchorse.bbs_mod.api.client.ui.BBSUiKeyEvent;
 import mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState;
+import mchorse.bbs_mod.test.ExpectedErrorLogCapture;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
@@ -59,7 +60,22 @@ public final class BBSUiInputDispatcherTest
 
         try
         {
-            runAll();
+            try (ExpectedErrorLogCapture capture = ExpectedErrorLogCapture.install(
+                "UI input", 3, (event) ->
+                {
+                    String message = event.getMessage().getFormattedMessage();
+                    Throwable error = event.getThrown();
+                    String cause = error == null ? "" : error.getMessage();
+                    return message.startsWith("[bbs-client-ui-input] input batch failed for addon '")
+                        && ("input target failure".equals(cause)
+                            || "modifier timeline test dispatch failure".equals(cause));
+                }, "bbs-client-ui-input"))
+            {
+                runAll();
+                capture.assertExpectedErrors();
+            }
+
+            System.out.println("BBSUiInputDispatcherTest: all tests passed; captured 3 expected failure diagnostics");
         }
         finally
         {
@@ -191,7 +207,8 @@ public final class BBSUiInputDispatcherTest
         assertMouseGestureButtonOwnership();
         assertTrackpadButtonInterleaving();
         assertDisabledRootBlocksNonTerminalKeyboardInput();
-        assertFrameworkMouseCaptureAcrossBlockingOverlay();
+        /* Central mouse-capture barrier machinery was removed from UIBaseMenu
+         * (it deadlocked live gestures); its test group is retired with it. */
         UIElementRemovalOwnershipTest.runAll();
         UIWrapperGestureOwnershipTest.runAll();
         UISecondaryGestureOwnershipTest.runAll();
@@ -205,7 +222,6 @@ public final class BBSUiInputDispatcherTest
         BBSUiLifecycleSourceTest.runAll();
         BBSUiOpenDispatcherTest.runAll();
 
-        System.out.println("BBSUiInputDispatcherTest: all tests passed");
     }
 
     private static void assertDisabledRootBlocksNonTerminalKeyboardInput()
@@ -1752,11 +1768,11 @@ public final class BBSUiInputDispatcherTest
         releaseOwner.dragEnd(releaseCommits::incrementAndGet);
         releaseContainer.add(oldSibling, releaseOwner);
         releaseMenu.main.add(releaseContainer);
-        releaseOwner.onPress = () -> releaseMenu.runWithPreservedMouseCapture(releaseOwner, () ->
+        releaseOwner.onPress = () ->
         {
             oldSibling.removeFromParent();
             releaseContainer.add(newSibling);
-        });
+        };
 
         check(releaseMenu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT),
             "preserved sibling-refresh press was not consumed");
@@ -1796,10 +1812,7 @@ public final class BBSUiInputDispatcherTest
         removedOwner.area.set(0, 0, 20, 20);
         removedOwner.dragEnd(removalCommits::incrementAndGet);
         removalMenu.main.add(removedOwner);
-        removedOwner.onPress = () -> removalMenu.runWithPreservedMouseCapture(
-            removedOwner,
-            removedOwner::removeFromParent
-        );
+        removedOwner.onPress = removedOwner::removeFromParent;
 
         check(removalMenu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT),
             "preserved owner-removal press was not consumed");
@@ -1809,6 +1822,28 @@ public final class BBSUiInputDispatcherTest
                 && removedOwner.releases == 0
                 && removalCommits.get() == 0,
             "preserve scope retained or committed an owner that was actually removed");
+
+        TestMenu ancestorRemovalMenu = new TestMenu();
+        UIElement removedAncestor = new UIElement();
+        RecordingDraggable descendantOwner = new RecordingDraggable();
+        AtomicInteger ancestorRemovalCommits = new AtomicInteger();
+
+        removedAncestor.area.set(0, 0, 40, 40);
+        descendantOwner.area.set(0, 0, 20, 20);
+        descendantOwner.dragEnd(ancestorRemovalCommits::incrementAndGet);
+        removedAncestor.add(descendantOwner);
+        ancestorRemovalMenu.main.add(removedAncestor);
+        descendantOwner.onPress = removedAncestor::removeFromParent;
+
+        check(ancestorRemovalMenu.mouseClicked(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT),
+            "ancestor-removal press was not consumed");
+        check(removedAncestor.getParent() == null
+                && descendantOwner.getParent() == removedAncestor
+                && !descendantOwner.isDragging()
+                && descendantOwner.cancels == 1
+                && descendantOwner.releases == 0
+                && ancestorRemovalCommits.get() == 0,
+            "ancestor removal retained or committed its descendant capture owner");
     }
 
     private static void assertContextMenuIntentOrdering()

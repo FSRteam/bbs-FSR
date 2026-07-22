@@ -236,11 +236,13 @@ public final class AddonBrokerServerBudgetTest
             "BrokerFrame brokerFrame = readFrame",
             "SERVER_RECEIVERS.get(brokerFrame.id)",
             "if (receiver == null)",
+            "String receiverOwner =",
+            "receiver == null ? hotSelection.owner.pluginId() : receiver.ownerAddonId",
             "SERVER_BUDGET.tryAcquire(",
-            "receiver.ownerAddonId",
+            "receiverOwner,",
             "server.execute(",
             "server.getPlayerList().getPlayer(player.getUUID()) != player",
-            "receiver.receiver.receive");
+            "queuedReceiver.receiver.receive");
         check(source.contains("clearServerConnection(UUID owner, Object connectionIdentity)"),
             "addon broker exposes no exact logout cleanup");
         check(source.contains("expireServerBudgetIdle()") && source.contains("resetServerBudget()"),
@@ -255,8 +257,11 @@ public final class AddonBrokerServerBudgetTest
             "CLIENT_RECEIVERS.get(brokerFrame.id)",
             "if (receiver == null)",
             "if (connectionIdentity == null)",
+            "String receiverOwner =",
+            "receiver == null ? hotSelection.owner.pluginId() : receiver.ownerAddonId",
             "CLIENT_BUDGET.tryAcquire(",
-            "receiver.ownerAddonId",
+            "receiverOwner,",
+            "queuedReceiver.receiver.receive",
             "dispatcher.accept(delivery)");
         check(source.contains("handleClientPayload(frame, null, dispatcher)"),
             "legacy client broker overload does not fail closed without an exact identity");

@@ -16,6 +16,15 @@ On Windows, run:
 .\gradlew.bat --no-daemon build
 ```
 
+The build is test-strict: any failed test or uncaptured `ERROR` diagnostic fails `build`.
+Use the explicit override below only when a package is needed despite test failures:
+
+```powershell
+.\gradlew.bat --no-daemon build -PforceBuild=true
+```
+
+The forced mode does not ignore compilation, resource-processing, or packaging failures.
+
 The built mod is written to `build/libs/`.
 
 The current migration tracks FS `master` at `395f6927`, using FS `1.21.1` at `8b25fbaf` as the Minecraft 1.21.1 API reference. Platform-specific Fabric code is adapted to the existing NeoForge implementation rather than copied directly.

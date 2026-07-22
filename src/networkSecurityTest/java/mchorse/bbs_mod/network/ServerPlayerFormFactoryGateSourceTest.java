@@ -1,5 +1,10 @@
 package mchorse.bbs_mod.network;
 
+import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.FormArchitect;
+import mchorse.bbs_mod.forms.forms.LabelForm;
+import mchorse.bbs_mod.resources.Link;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,6 +28,8 @@ final class ServerPlayerFormFactoryGateSourceTest
 
     static void runAll()
     {
+        testFormArchitectIdentityContract();
+
         try
         {
             String source = Files.readString(findProjectRoot().resolve(SOURCE));
@@ -41,18 +48,38 @@ final class ServerPlayerFormFactoryGateSourceTest
                 "server.execute(",
                 "isCurrentConnection(server, player)",
                 "PermissionUtils.arePanelsAllowed(server, player)",
-                "BBSMod.getForms().fromData(data)",
+                "!data.isEmpty() && !BBSMod.getForms().has(data)",
+                "reason=unknown_form",
+                "data.isEmpty() ? null : BBSMod.getForms().fromData(data)",
                 "FormUtils.copy(form)",
                 "Morph.getMorph(player).setForm(copy)",
                 "sendMorphToTracked(player, form)",
                 "catch (RuntimeException | LinkageError e)");
             check(handler.indexOf("BBSMod.getForms().fromData(data)") > handler.indexOf("server.execute("),
                 "s3 invoked a typed Form factory before the main-thread authority gate");
+            check(!handler.contains("data.has(\"type\")"),
+                "s3 hard-coded the generic factory key instead of using FormArchitect's id contract");
         }
         catch (IOException e)
         {
             throw new AssertionError("could not inspect s3 player-form wiring", e);
         }
+    }
+
+    private static void testFormArchitectIdentityContract()
+    {
+        FormArchitect forms = new FormArchitect();
+        MapType valid = new MapType();
+        MapType genericFactoryKey = new MapType();
+
+        forms.register(Link.bbs("label"), LabelForm.class, null);
+        valid.putString(forms.getTypeKey(), "bbs:label");
+        genericFactoryKey.putString("type", "bbs:label");
+
+        check("id".equals(forms.getTypeKey()), "FormArchitect no longer serializes form identity under id");
+        check(forms.has(valid), "FormArchitect rejected a registered form id");
+        check(!forms.has(new MapType()), "an empty demorph map was accepted as a concrete form");
+        check(!forms.has(genericFactoryKey), "the generic type key was accepted as a form id");
     }
 
     private static Path findProjectRoot()

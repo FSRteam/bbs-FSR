@@ -23,6 +23,7 @@ public final class PlatformResourceConsistencyTest
         assertTrackingRangeUnits();
         assertExternalAssetOwnership();
         assertDefaultEnglishChromaSkyKey();
+        BuildFailureGateSourceTest.runAll();
 
         System.out.println("PlatformResourceConsistencyTest: all tests passed");
     }

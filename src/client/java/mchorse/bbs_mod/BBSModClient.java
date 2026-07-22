@@ -529,6 +529,7 @@ public class BBSModClient
         {
             BBSMod.getAssetsPath("models/player/" + path + "/").mkdirs();
         }
+
     }
 
     public static void registerKeyMappings(Consumer<KeyMapping> register)
@@ -882,10 +883,18 @@ public class BBSModClient
             return;
         }
 
-        /* Keep the remote repository and collaboration owner alive for both
-         * operations, but do not let either failure skip mandatory teardown. */
+        /* Keep the repository owner alive while flushing collaboration, then
+         * force the complete Film snapshot through the BBSfs repository. The
+         * ordinary save path intentionally skips the panel's first-appear
+         * update frame; lifecycle teardown cannot rely on that UI gate. */
         runClientLifecycleStep(lifecycle + " film collaboration flush", () -> filmPanel.flushFilmCollaborationEdits());
-        runClientLifecycleStep(lifecycle + " film save", () -> filmPanel.save());
+        runClientLifecycleStep(lifecycle + " film save", () ->
+        {
+            if (filmPanel.getData() != null)
+            {
+                filmPanel.forceSave();
+            }
+        });
     }
 
     private static UIFilmPanel getFilmPanelForLifecycle(String lifecycle)

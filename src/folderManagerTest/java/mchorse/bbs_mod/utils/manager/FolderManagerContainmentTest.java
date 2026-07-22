@@ -2,6 +2,7 @@ package mchorse.bbs_mod.utils.manager;
 
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.utils.manager.storage.CompressedDataStorage;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,6 +32,7 @@ public final class FolderManagerContainmentTest
             assertAbsoluteTraversalAndRootEdgesRejected(manager, root, sandbox);
             assertSiblingPrefixEscapeRejected(manager, root, sandbox);
             assertExternalSymbolicLinkRejected(manager, root, sandbox);
+            assertNestedBaseManagerSaveCreatesParents(sandbox);
         }
         finally
         {
@@ -38,6 +40,19 @@ public final class FolderManagerContainmentTest
         }
 
         System.out.println("FolderManagerContainmentTest: all tests passed");
+    }
+
+    private static void assertNestedBaseManagerSaveCreatesParents(Path sandbox) throws Exception
+    {
+        Path root = sandbox.resolve("persistent-films");
+        PersistentManager manager = new PersistentManager(root.toFile());
+        MapType data = new MapType();
+        data.putString("marker", "saved");
+
+        check(manager.save("sequences/shot", data), "nested Film save was rejected");
+        check(Files.isRegularFile(root.resolve("sequences/shot.dat")),
+            "nested Film save did not create the parent directory");
+        check(manager.load("sequences/shot") != null, "nested Film save could not be loaded");
     }
 
     private static void assertLegitimateNestedPaths(TestManager manager, Path root) throws Exception
@@ -236,6 +251,28 @@ public final class FolderManagerContainmentTest
         public boolean save(String name, MapType mapType)
         {
             return false;
+        }
+
+        @Override
+        protected String getExtension()
+        {
+            return ".dat";
+        }
+    }
+
+    private static final class PersistentManager extends BaseManager<ValueGroup>
+    {
+        private PersistentManager(File root)
+        {
+            super(() -> root);
+            this.backUps = false;
+            this.storage = new CompressedDataStorage();
+        }
+
+        @Override
+        protected ValueGroup createData(String id, MapType mapType)
+        {
+            return new ValueGroup(id);
         }
 
         @Override
