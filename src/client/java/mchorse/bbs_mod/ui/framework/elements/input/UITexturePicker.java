@@ -957,9 +957,14 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
 
     protected void updateOptions()
     {
-        Texture texture = BBSModClient.getTextures().getTexture(this.current);
-
         this.options.setVisible(this.current != null);
+
+        if (this.current == null)
+        {
+            return;
+        }
+
+        Texture texture = BBSModClient.getTextures().getTexture(this.current);
 
         if (texture != null)
         {
