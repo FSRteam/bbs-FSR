@@ -7,6 +7,10 @@ import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
 import mchorse.bbs_mod.api.network.BBSAddonClientNetworkReceiver;
 import mchorse.bbs_mod.api.network.BBSAddonServerNetworkReceiver;
 import mchorse.bbs_mod.api.registry.BBSRegistrationResult;
+import mchorse.bbs_mod.plugin.runtime.ActivePluginIndex;
+import mchorse.bbs_mod.plugin.runtime.PluginGenerationLease;
+import mchorse.bbs_mod.plugin.runtime.PluginLease;
+import mchorse.bbs_mod.plugin.runtime.PluginOwner;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -15,8 +19,13 @@ import net.minecraft.world.entity.Entity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -55,8 +64,71 @@ public final class AddonPayloadBroker
     private static final AddonBrokerServerBudget CLIENT_BUDGET = AddonBrokerServerBudget.clientDefaults();
     private static final Map<ResourceLocation, ServerBrokerReceiver> SERVER_RECEIVERS = new HashMap<>();
     private static final Map<ResourceLocation, ClientBrokerReceiver> CLIENT_RECEIVERS = new HashMap<>();
+    /*
+     * These maps deliberately do not contain plugin callbacks.  A route is a
+     * host-owned proxy; callbacks live only in the ActivePluginIndex
+     * generation snapshot selected by the route at delivery time.
+     */
+    private static final Map<ResourceLocation, HotServerRoute> HOT_SERVER_ROUTES = new HashMap<>();
+    private static final Map<ResourceLocation, HotClientRoute> HOT_CLIENT_ROUTES = new HashMap<>();
 
     private AddonPayloadBroker() {}
+
+    /**
+     * Starts a staged hot receiver contribution for one plugin generation.
+     * The returned builder is not visible to the broker's fixed payload maps;
+     * publish its immutable {@link HotReceiverSnapshot} through the supplied
+     * {@link ActivePluginIndex} when the generation is ready.
+     */
+    public static HotReceiverSnapshot.Builder stageHotReceivers(
+        PluginOwner owner,
+        ActivePluginIndex<HotReceiverSnapshot> activeIndex
+    )
+    {
+        return HotReceiverSnapshot.builder(owner, activeIndex);
+    }
+
+    /** Alias retained for callers that name the operation after the snapshot. */
+    public static HotReceiverSnapshot.Builder hotReceiverSnapshot(
+        PluginOwner owner,
+        ActivePluginIndex<HotReceiverSnapshot> activeIndex
+    )
+    {
+        return stageHotReceivers(owner, activeIndex);
+    }
+
+    /**
+     * Removes all fixed hot route claims for exactly one plugin generation.
+     * It does not touch legacy Addon API maps or another generation of the same
+     * plugin id.  Repeated calls are harmless.
+     */
+    public static int clearHotOwner(PluginOwner owner)
+    {
+        if (owner == null)
+        {
+            return 0;
+        }
+
+        int removed = 0;
+
+        synchronized (HOT_SERVER_ROUTES)
+        {
+            removed += clearHotOwners(HOT_SERVER_ROUTES, owner);
+        }
+
+        synchronized (HOT_CLIENT_ROUTES)
+        {
+            removed += clearHotOwners(HOT_CLIENT_ROUTES, owner);
+        }
+
+        return removed;
+    }
+
+    /** More explicit alias for lifecycle teardown code. */
+    public static int clearHotReceiverOwner(PluginOwner owner)
+    {
+        return clearHotOwner(owner);
+    }
 
     public static BBSRegistrationResult registerServerReceiver(
         BBSAddonDescriptor descriptor,
@@ -232,7 +304,24 @@ public final class AddonPayloadBroker
             receiver = SERVER_RECEIVERS.get(brokerFrame.id);
         }
 
+        HotServerSelection hotSelection = null;
+
         if (receiver == null)
+        {
+            HotServerRoute route;
+
+            synchronized (HOT_SERVER_ROUTES)
+            {
+                route = HOT_SERVER_ROUTES.get(brokerFrame.id);
+            }
+
+            if (route != null)
+            {
+                hotSelection = route.select(brokerFrame.id);
+            }
+        }
+
+        if (receiver == null && hotSelection == null)
         {
             logServerDiagnostic(player, false, "unbound_subprotocol", brokerFrame.id, "receiver=missing", null);
             return;
@@ -245,17 +334,22 @@ public final class AddonPayloadBroker
             return;
         }
 
+        String receiverOwner = receiver == null ? hotSelection.owner.pluginId() : receiver.ownerAddonId;
+
         if (!SERVER_BUDGET.tryAcquire(
             player.getUUID(),
             player,
-            receiver.ownerAddonId,
+            receiverOwner,
             brokerFrame.bytes.length
         ))
         {
             logServerDiagnostic(player, false, "rate_limited", brokerFrame.id,
-                "addon=" + receiver.ownerAddonId + " body_bytes=" + brokerFrame.bytes.length, null);
+                "addon=" + receiverOwner + " body_bytes=" + brokerFrame.bytes.length, null);
             return;
         }
+
+        ServerBrokerReceiver queuedReceiver = receiver;
+        HotServerSelection queuedHotSelection = hotSelection;
 
         try
         {
@@ -271,7 +365,14 @@ public final class AddonPayloadBroker
 
                 try
                 {
-                    receiver.receiver.receive(server, player, brokerFrame.id, wrapBytes(brokerFrame.bytes));
+                    if (queuedReceiver != null)
+                    {
+                        queuedReceiver.receiver.receive(server, player, brokerFrame.id, wrapBytes(brokerFrame.bytes));
+                    }
+                    else
+                    {
+                        queuedHotSelection.deliver(server, player, brokerFrame);
+                    }
                 }
                 catch (Exception | LinkageError e)
                 {
@@ -280,7 +381,7 @@ public final class AddonPayloadBroker
                         true,
                         "receiver_failure",
                         brokerFrame.id,
-                        "addon=" + receiver.ownerAddonId,
+                        "addon=" + receiverOwner,
                         e
                     );
                 }
@@ -293,7 +394,7 @@ public final class AddonPayloadBroker
                 true,
                 "dispatcher_failure",
                 brokerFrame.id,
-                "addon=" + receiver.ownerAddonId,
+                "addon=" + receiverOwner,
                 e
             );
         }
@@ -381,7 +482,24 @@ public final class AddonPayloadBroker
             receiver = CLIENT_RECEIVERS.get(brokerFrame.id);
         }
 
+        HotClientSelection hotSelection = null;
+
         if (receiver == null)
+        {
+            HotClientRoute route;
+
+            synchronized (HOT_CLIENT_ROUTES)
+            {
+                route = HOT_CLIENT_ROUTES.get(brokerFrame.id);
+            }
+
+            if (route != null)
+            {
+                hotSelection = route.select(brokerFrame.id);
+            }
+        }
+
+        if (receiver == null && hotSelection == null)
         {
             logClientDiagnostic(false, "unbound_subprotocol", brokerFrame.id, "receiver=missing", null);
             return;
@@ -403,27 +521,40 @@ public final class AddonPayloadBroker
             return;
         }
 
+        String receiverOwner = receiver == null ? hotSelection.owner.pluginId() : receiver.ownerAddonId;
+
         if (!CLIENT_BUDGET.tryAcquire(
             CLIENT_BUDGET_OWNER,
             connectionIdentity,
-            receiver.ownerAddonId,
+            receiverOwner,
             brokerFrame.bytes.length
         ))
         {
             logClientDiagnostic(false, "rate_limited", brokerFrame.id,
-                "addon=" + receiver.ownerAddonId + " body_bytes=" + brokerFrame.bytes.length, null);
+                "addon=" + receiverOwner + " body_bytes=" + brokerFrame.bytes.length, null);
             return;
         }
+
+        ClientBrokerReceiver queuedReceiver = receiver;
+        HotClientSelection queuedHotSelection = hotSelection;
 
         Runnable delivery = () ->
         {
             try
             {
-                receiver.receiver.receive(brokerFrame.id, wrapBytes(brokerFrame.bytes));
+                if (queuedReceiver != null)
+                {
+                    queuedReceiver.receiver.receive(brokerFrame.id, wrapBytes(brokerFrame.bytes));
+                }
+                else
+                {
+                    queuedHotSelection.deliver(brokerFrame);
+                }
             }
             catch (Exception | LinkageError e)
             {
-                logClientDiagnostic(true, "receiver_failure", brokerFrame.id, "receiver=addon", e);
+                logClientDiagnostic(true, "receiver_failure", brokerFrame.id,
+                    queuedReceiver == null ? "plugin=" + receiverOwner : "receiver=addon", e);
             }
         };
 
@@ -727,9 +858,647 @@ public final class AddonPayloadBroker
             reason);
     }
 
+    public static PluginLease registerHotServerReceiver(
+        HotReceiverSnapshot.Builder staged,
+        ResourceLocation id,
+        BBSAddonServerNetworkReceiver receiver
+    )
+    {
+        return Objects.requireNonNull(staged, "staged").registerServerReceiver(id, receiver);
+    }
+
+    public static PluginLease registerHotClientReceiver(
+        HotReceiverSnapshot.Builder staged,
+        ResourceLocation id,
+        BBSAddonClientNetworkReceiver receiver
+    )
+    {
+        return Objects.requireNonNull(staged, "staged").registerClientReceiver(id, receiver);
+    }
+
+    private static PluginLease claimHotServerRoute(
+        PluginOwner owner,
+        ActivePluginIndex<HotReceiverSnapshot> activeIndex,
+        ResourceLocation id
+    )
+    {
+        validateHotAccess(owner, activeIndex, id);
+
+        synchronized (SERVER_RECEIVERS)
+        {
+            ServerBrokerReceiver legacy = SERVER_RECEIVERS.get(id);
+
+            if (legacy != null)
+            {
+                throw new IllegalStateException(
+                    "duplicate addon network message id " + id + " kept by " + legacy.ownerAddonId
+                );
+            }
+        }
+
+        HotServerRoute route;
+
+        synchronized (HOT_SERVER_ROUTES)
+        {
+            route = HOT_SERVER_ROUTES.get(id);
+
+            if (route == null)
+            {
+                route = new HotServerRoute(owner.pluginId(), activeIndex);
+                HOT_SERVER_ROUTES.put(id, route);
+            }
+            else if (!route.matches(owner.pluginId(), activeIndex))
+            {
+                throw new IllegalStateException(
+                    "duplicate hot addon network message id " + id + " kept by " + route.pluginId()
+                );
+            }
+
+            if (!route.claim(owner))
+            {
+                throw new IllegalStateException("duplicate hot server receiver for " + owner + " and " + id);
+            }
+        }
+
+        HotServerRoute claimedRoute = route;
+
+        return PluginLease.of(owner, "server broker route " + id,
+            () -> releaseHotServerRoute(id, claimedRoute, owner));
+    }
+
+    private static PluginLease claimHotClientRoute(
+        PluginOwner owner,
+        ActivePluginIndex<HotReceiverSnapshot> activeIndex,
+        ResourceLocation id
+    )
+    {
+        validateHotAccess(owner, activeIndex, id);
+
+        synchronized (CLIENT_RECEIVERS)
+        {
+            ClientBrokerReceiver legacy = CLIENT_RECEIVERS.get(id);
+
+            if (legacy != null)
+            {
+                throw new IllegalStateException(
+                    "duplicate addon network message id " + id + " kept by " + legacy.ownerAddonId
+                );
+            }
+        }
+
+        HotClientRoute route;
+
+        synchronized (HOT_CLIENT_ROUTES)
+        {
+            route = HOT_CLIENT_ROUTES.get(id);
+
+            if (route == null)
+            {
+                route = new HotClientRoute(owner.pluginId(), activeIndex);
+                HOT_CLIENT_ROUTES.put(id, route);
+            }
+            else if (!route.matches(owner.pluginId(), activeIndex))
+            {
+                throw new IllegalStateException(
+                    "duplicate hot addon network message id " + id + " kept by " + route.pluginId()
+                );
+            }
+
+            if (!route.claim(owner))
+            {
+                throw new IllegalStateException("duplicate hot client receiver for " + owner + " and " + id);
+            }
+        }
+
+        HotClientRoute claimedRoute = route;
+
+        return PluginLease.of(owner, "client broker route " + id,
+            () -> releaseHotClientRoute(id, claimedRoute, owner));
+    }
+
+    private static void releaseHotServerRoute(ResourceLocation id, HotServerRoute route, PluginOwner owner)
+    {
+        synchronized (HOT_SERVER_ROUTES)
+        {
+            if (HOT_SERVER_ROUTES.get(id) != route)
+            {
+                return;
+            }
+
+            route.release(owner);
+
+            if (route.isEmpty())
+            {
+                HOT_SERVER_ROUTES.remove(id, route);
+            }
+        }
+    }
+
+    private static void releaseHotClientRoute(ResourceLocation id, HotClientRoute route, PluginOwner owner)
+    {
+        synchronized (HOT_CLIENT_ROUTES)
+        {
+            if (HOT_CLIENT_ROUTES.get(id) != route)
+            {
+                return;
+            }
+
+            route.release(owner);
+
+            if (route.isEmpty())
+            {
+                HOT_CLIENT_ROUTES.remove(id, route);
+            }
+        }
+    }
+
+    private static <R extends HotRoute> int clearHotOwners(Map<ResourceLocation, R> routes, PluginOwner owner)
+    {
+        int removed = 0;
+        var iterator = routes.entrySet().iterator();
+
+        while (iterator.hasNext())
+        {
+            R route = iterator.next().getValue();
+
+            if (route.release(owner))
+            {
+                removed += 1;
+            }
+
+            if (route.isEmpty())
+            {
+                iterator.remove();
+            }
+        }
+
+        return removed;
+    }
+
+    private static void validateHotAccess(
+        PluginOwner owner,
+        ActivePluginIndex<HotReceiverSnapshot> activeIndex,
+        ResourceLocation id
+    )
+    {
+        Objects.requireNonNull(owner, "owner");
+        Objects.requireNonNull(activeIndex, "activeIndex");
+
+        if (id == null)
+        {
+            throw new IllegalArgumentException("hot plugin network message id is null");
+        }
+
+        if (BBSMod.MOD_ID.equals(id.getNamespace()))
+        {
+            throw new IllegalArgumentException(
+                "hot plugin broker namespace '" + BBSMod.MOD_ID + "' is reserved by BBS core"
+            );
+        }
+
+        if (!owner.pluginId().equals(id.getNamespace()))
+        {
+            throw new IllegalArgumentException(
+                "hot plugin network message namespace '" + id.getNamespace()
+                    + "' does not match plugin id '" + owner.pluginId() + "'"
+            );
+        }
+
+        if (id.toString().length() > MAX_MESSAGE_ID_LENGTH)
+        {
+            throw new IllegalArgumentException(
+                "hot plugin network message id is longer than " + MAX_MESSAGE_ID_LENGTH + " characters"
+            );
+        }
+    }
+
     private static String stringId(ResourceLocation id)
     {
         return id == null ? "<null>" : id.toString();
+    }
+
+    /** Immutable generation-owned receiver table used by hot route proxies. */
+    public static final class HotReceiverSnapshot
+    {
+        private final PluginOwner owner;
+        private final Map<ResourceLocation, BBSAddonServerNetworkReceiver> serverReceivers;
+        private final Map<ResourceLocation, BBSAddonClientNetworkReceiver> clientReceivers;
+
+        private HotReceiverSnapshot(
+            PluginOwner owner,
+            Map<ResourceLocation, BBSAddonServerNetworkReceiver> serverReceivers,
+            Map<ResourceLocation, BBSAddonClientNetworkReceiver> clientReceivers
+        )
+        {
+            this.owner = Objects.requireNonNull(owner, "owner");
+            this.serverReceivers = Collections.unmodifiableMap(new LinkedHashMap<>(serverReceivers));
+            this.clientReceivers = Collections.unmodifiableMap(new LinkedHashMap<>(clientReceivers));
+        }
+
+        public static Builder builder(
+            PluginOwner owner,
+            ActivePluginIndex<HotReceiverSnapshot> activeIndex
+        )
+        {
+            return new Builder(owner, activeIndex);
+        }
+
+        public PluginOwner owner()
+        {
+            return this.owner;
+        }
+
+        public int serverReceiverCount()
+        {
+            return this.serverReceivers.size();
+        }
+
+        public int clientReceiverCount()
+        {
+            return this.clientReceivers.size();
+        }
+
+        public BBSAddonServerNetworkReceiver serverReceiver(ResourceLocation id)
+        {
+            return this.serverReceivers.get(id);
+        }
+
+        public BBSAddonClientNetworkReceiver clientReceiver(ResourceLocation id)
+        {
+            return this.clientReceivers.get(id);
+        }
+
+        /** Mutable only during prepare; {@link #build()} seals registration. */
+        public static final class Builder implements AutoCloseable
+        {
+            private final PluginOwner owner;
+            private final ActivePluginIndex<HotReceiverSnapshot> activeIndex;
+            private final Map<ResourceLocation, BBSAddonServerNetworkReceiver> serverReceivers =
+                new LinkedHashMap<>();
+            private final Map<ResourceLocation, BBSAddonClientNetworkReceiver> clientReceivers =
+                new LinkedHashMap<>();
+            private final java.util.List<PluginLease> registrations = new java.util.ArrayList<>();
+            private HotReceiverSnapshot snapshot;
+            private boolean closed;
+
+            private Builder(PluginOwner owner, ActivePluginIndex<HotReceiverSnapshot> activeIndex)
+            {
+                this.owner = Objects.requireNonNull(owner, "owner");
+                this.activeIndex = Objects.requireNonNull(activeIndex, "activeIndex");
+            }
+
+            public PluginOwner owner()
+            {
+                return this.owner;
+            }
+
+            public ActivePluginIndex<HotReceiverSnapshot> activeIndex()
+            {
+                return this.activeIndex;
+            }
+
+            public synchronized PluginLease registerServerReceiver(
+                ResourceLocation id,
+                BBSAddonServerNetworkReceiver receiver
+            )
+            {
+                this.ensureAccepting();
+
+                if (receiver == null)
+                {
+                    throw new IllegalArgumentException("hot plugin server network receiver is null");
+                }
+
+                if (this.serverReceivers.containsKey(id))
+                {
+                    throw new IllegalStateException("duplicate hot server receiver id " + stringId(id));
+                }
+
+                PluginLease route = claimHotServerRoute(this.owner, this.activeIndex, id);
+                this.serverReceivers.put(id, receiver);
+                PluginLease registration = PluginLease.of(this.owner, "staged server broker receiver " + id, () ->
+                {
+                    route.close();
+
+                    synchronized (Builder.this)
+                    {
+                        if (Builder.this.snapshot == null)
+                        {
+                            Builder.this.serverReceivers.remove(id, receiver);
+                        }
+                    }
+                });
+                this.registrations.add(registration);
+
+                return registration;
+            }
+
+            public synchronized PluginLease registerClientReceiver(
+                ResourceLocation id,
+                BBSAddonClientNetworkReceiver receiver
+            )
+            {
+                this.ensureAccepting();
+
+                if (receiver == null)
+                {
+                    throw new IllegalArgumentException("hot plugin client network receiver is null");
+                }
+
+                if (this.clientReceivers.containsKey(id))
+                {
+                    throw new IllegalStateException("duplicate hot client receiver id " + stringId(id));
+                }
+
+                PluginLease route = claimHotClientRoute(this.owner, this.activeIndex, id);
+                this.clientReceivers.put(id, receiver);
+                PluginLease registration = PluginLease.of(this.owner, "staged client broker receiver " + id, () ->
+                {
+                    route.close();
+
+                    synchronized (Builder.this)
+                    {
+                        if (Builder.this.snapshot == null)
+                        {
+                            Builder.this.clientReceivers.remove(id, receiver);
+                        }
+                    }
+                });
+                this.registrations.add(registration);
+
+                return registration;
+            }
+
+            public synchronized HotReceiverSnapshot build()
+            {
+                if (this.closed)
+                {
+                    throw new IllegalStateException("hot receiver builder is closed for " + this.owner);
+                }
+
+                if (this.snapshot == null)
+                {
+                    this.snapshot = new HotReceiverSnapshot(
+                        this.owner,
+                        this.serverReceivers,
+                        this.clientReceivers
+                    );
+                    this.serverReceivers.clear();
+                    this.clientReceivers.clear();
+                }
+
+                return this.snapshot;
+            }
+
+            @Override
+            public void close()
+            {
+                java.util.List<PluginLease> snapshot;
+
+                synchronized (this)
+                {
+                    if (this.closed)
+                    {
+                        return;
+                    }
+
+                    this.closed = true;
+                    snapshot = new java.util.ArrayList<>(this.registrations);
+                    this.registrations.clear();
+                    this.serverReceivers.clear();
+                    this.clientReceivers.clear();
+                }
+
+                Throwable failure = null;
+
+                for (int index = snapshot.size() - 1; index >= 0; index -= 1)
+                {
+                    try
+                    {
+                        snapshot.get(index).close();
+                    }
+                    catch (Throwable throwable)
+                    {
+                        if (failure == null)
+                        {
+                            failure = throwable;
+                        }
+                        else if (failure != throwable)
+                        {
+                            failure.addSuppressed(throwable);
+                        }
+                    }
+                }
+
+                rethrowCloseFailure(failure);
+            }
+
+            private void ensureAccepting()
+            {
+                if (this.closed)
+                {
+                    throw new IllegalStateException("hot receiver builder is closed for " + this.owner);
+                }
+
+                if (this.snapshot != null)
+                {
+                    throw new IllegalStateException("hot receiver snapshot is already sealed for " + this.owner);
+                }
+            }
+        }
+    }
+
+    private abstract static class HotRoute
+    {
+        private final String pluginId;
+        private final ActivePluginIndex<HotReceiverSnapshot> activeIndex;
+        private final Set<PluginOwner> owners = new HashSet<>();
+
+        private HotRoute(String pluginId, ActivePluginIndex<HotReceiverSnapshot> activeIndex)
+        {
+            this.pluginId = Objects.requireNonNull(pluginId, "pluginId");
+            this.activeIndex = Objects.requireNonNull(activeIndex, "activeIndex");
+        }
+
+        final boolean matches(String pluginId, ActivePluginIndex<HotReceiverSnapshot> activeIndex)
+        {
+            return this.pluginId.equals(pluginId) && this.activeIndex == activeIndex;
+        }
+
+        final synchronized boolean claim(PluginOwner owner)
+        {
+            return this.owners.add(owner);
+        }
+
+        final synchronized boolean release(PluginOwner owner)
+        {
+            return this.owners.remove(owner);
+        }
+
+        final synchronized boolean isEmpty()
+        {
+            return this.owners.isEmpty();
+        }
+
+        final synchronized PluginGenerationLease<HotReceiverSnapshot> acquireCurrent()
+        {
+            PluginGenerationLease<HotReceiverSnapshot> lease = this.activeIndex.acquire(this.pluginId);
+
+            if (lease == null || !this.owners.contains(lease.owner()))
+            {
+                if (lease != null)
+                {
+                    lease.close();
+                }
+
+                return null;
+            }
+
+            return lease;
+        }
+
+        final synchronized PluginGenerationLease<HotReceiverSnapshot> acquire(PluginOwner owner)
+        {
+            if (!this.owners.contains(owner))
+            {
+                return null;
+            }
+
+            return this.activeIndex.acquire(owner);
+        }
+
+        final String pluginId()
+        {
+            return this.pluginId;
+        }
+    }
+
+    private static final class HotServerRoute extends HotRoute
+    {
+        private HotServerRoute(String pluginId, ActivePluginIndex<HotReceiverSnapshot> activeIndex)
+        {
+            super(pluginId, activeIndex);
+        }
+
+        private HotServerSelection select(ResourceLocation id)
+        {
+            PluginGenerationLease<HotReceiverSnapshot> lease = this.acquireCurrent();
+
+            if (lease == null)
+            {
+                return null;
+            }
+
+            try (lease)
+            {
+                HotReceiverSnapshot snapshot = lease.contributions();
+
+                return snapshot != null
+                    && lease.owner().equals(snapshot.owner)
+                    && snapshot.serverReceiver(id) != null
+                        ? new HotServerSelection(this, lease.owner())
+                        : null;
+            }
+        }
+    }
+
+    private static final class HotClientRoute extends HotRoute
+    {
+        private HotClientRoute(String pluginId, ActivePluginIndex<HotReceiverSnapshot> activeIndex)
+        {
+            super(pluginId, activeIndex);
+        }
+
+        private HotClientSelection select(ResourceLocation id)
+        {
+            PluginGenerationLease<HotReceiverSnapshot> lease = this.acquireCurrent();
+
+            if (lease == null)
+            {
+                return null;
+            }
+
+            try (lease)
+            {
+                HotReceiverSnapshot snapshot = lease.contributions();
+
+                return snapshot != null
+                    && lease.owner().equals(snapshot.owner)
+                    && snapshot.clientReceiver(id) != null
+                        ? new HotClientSelection(this, lease.owner())
+                        : null;
+            }
+        }
+    }
+
+    private record HotServerSelection(HotServerRoute route, PluginOwner owner)
+    {
+        private void deliver(MinecraftServer server, ServerPlayer player, BrokerFrame frame)
+        {
+            PluginGenerationLease<HotReceiverSnapshot> lease = this.route.acquire(this.owner);
+
+            if (lease == null)
+            {
+                return;
+            }
+
+            try (lease)
+            {
+                HotReceiverSnapshot snapshot = lease.contributions();
+                BBSAddonServerNetworkReceiver receiver = snapshot == null
+                    ? null
+                    : snapshot.serverReceiver(frame.id);
+
+                if (snapshot != null && this.owner.equals(snapshot.owner) && receiver != null)
+                {
+                    receiver.receive(server, player, frame.id, wrapBytes(frame.bytes));
+                }
+            }
+        }
+    }
+
+    private record HotClientSelection(HotClientRoute route, PluginOwner owner)
+    {
+        private void deliver(BrokerFrame frame)
+        {
+            PluginGenerationLease<HotReceiverSnapshot> lease = this.route.acquire(this.owner);
+
+            if (lease == null)
+            {
+                return;
+            }
+
+            try (lease)
+            {
+                HotReceiverSnapshot snapshot = lease.contributions();
+                BBSAddonClientNetworkReceiver receiver = snapshot == null
+                    ? null
+                    : snapshot.clientReceiver(frame.id);
+
+                if (snapshot != null && this.owner.equals(snapshot.owner) && receiver != null)
+                {
+                    receiver.receive(frame.id, wrapBytes(frame.bytes));
+                }
+            }
+        }
+    }
+
+    private static void rethrowCloseFailure(Throwable failure)
+    {
+        if (failure instanceof RuntimeException runtimeException)
+        {
+            throw runtimeException;
+        }
+
+        if (failure instanceof Error error)
+        {
+            throw error;
+        }
+
+        if (failure != null)
+        {
+            throw new IllegalStateException("Failed to close hot broker registrations", failure);
+        }
     }
 
     private record BrokerFrame(ResourceLocation id, byte[] bytes) {}

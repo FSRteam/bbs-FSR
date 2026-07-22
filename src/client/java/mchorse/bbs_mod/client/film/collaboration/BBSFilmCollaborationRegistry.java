@@ -17,18 +17,30 @@ import mchorse.bbs_mod.api.client.film.BBSFilmSession;
 import mchorse.bbs_mod.api.client.film.BBSFilmSnapshotApplyRequest;
 import mchorse.bbs_mod.api.client.film.BBSFilmSnapshotResult;
 import mchorse.bbs_mod.api.registry.BBSRegistrationResult;
+import mchorse.bbs_mod.plugin.runtime.PluginGenerationFence;
+import mchorse.bbs_mod.plugin.runtime.PluginOwner;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public final class BBSFilmCollaborationRegistry
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-film-collaboration");
     private static final Map<String, SubscriptionImpl> SUBSCRIPTIONS = new ConcurrentHashMap<>();
+    /**
+     * Stable host-owned routes for the additive hot-plugin path. A route can
+     * hold more than one staged generation while a replacement is prepared;
+     * dispatch selects the newest generation whose fence is still open.
+     */
+    private static final Map<String, HotRoute> HOT_ROUTES = new ConcurrentHashMap<>();
 
     private BBSFilmCollaborationRegistry()
     {}
@@ -70,9 +82,70 @@ public final class BBSFilmCollaborationRegistry
         return subscription;
     }
 
+    /**
+     * Register one generation-owned Film collaboration route for a hot
+     * plugin. Unlike the legacy Addon registration window, this path permits
+     * a newer generation to stage beside its incumbent. The route only
+     * becomes dispatchable once its generation fence is ACTIVE.
+     */
+    public static BBSFilmCollaborationSubscription subscribe(
+        PluginOwner owner,
+        PluginGenerationFence fence,
+        BBSFilmCollaborationListener listener
+    )
+    {
+        String pluginId = owner == null ? "<unknown>" : owner.pluginId();
+
+        if (owner == null)
+        {
+            return new InactiveSubscription(BBSRegistrationResult.rejected(pluginId, "plugin owner is null"));
+        }
+
+        if (fence == null)
+        {
+            return new InactiveSubscription(BBSRegistrationResult.rejected(pluginId, "plugin generation fence is null"));
+        }
+
+        if (!owner.equals(fence.owner()))
+        {
+            return new InactiveSubscription(BBSRegistrationResult.rejected(pluginId, "plugin owner does not match generation fence"));
+        }
+
+        if (listener == null)
+        {
+            return new InactiveSubscription(BBSRegistrationResult.rejected(pluginId, "Film collaboration listener is null"));
+        }
+
+        HotRoute route;
+        HotSubscription subscription;
+        boolean accepted;
+
+        synchronized (HOT_ROUTES)
+        {
+            route = HOT_ROUTES.computeIfAbsent(pluginId, HotRoute::new);
+            subscription = new HotSubscription(route, owner, fence, listener);
+            accepted = route.add(subscription);
+        }
+
+        if (!accepted)
+        {
+            return new InactiveSubscription(BBSRegistrationResult.duplicate(pluginId, owner.toString()));
+        }
+
+        subscription.registration = BBSRegistrationResult.accepted(pluginId);
+        BBSFilmSession session = BBSFilmCollaborationBridge.currentSession();
+
+        if (session != null)
+        {
+            executeOnClient(() -> route.invoke(subscription, (candidate) -> notifyOpened(candidate, session)));
+        }
+
+        return subscription;
+    }
+
     public static CompletableFuture<BBSFilmSnapshotResult> requestSnapshot(BBSAddonDescriptor descriptor, long sessionId)
     {
-        SubscriptionImpl owner = authorizedSubscription(descriptor);
+        RouteSubscription owner = authorizedSubscription(descriptor);
 
         if (owner == null)
         {
@@ -91,7 +164,7 @@ public final class BBSFilmCollaborationRegistry
 
     public static CompletableFuture<BBSFilmApplyResult> applyMutations(BBSAddonDescriptor descriptor, BBSFilmMutationBatch batch)
     {
-        SubscriptionImpl owner = authorizedSubscription(descriptor);
+        RouteSubscription owner = authorizedSubscription(descriptor);
 
         if (owner == null)
         {
@@ -110,7 +183,7 @@ public final class BBSFilmCollaborationRegistry
 
     public static CompletableFuture<BBSFilmApplyResult> applySnapshot(BBSAddonDescriptor descriptor, BBSFilmSnapshotApplyRequest request)
     {
-        SubscriptionImpl owner = authorizedSubscription(descriptor);
+        RouteSubscription owner = authorizedSubscription(descriptor);
 
         if (owner == null)
         {
@@ -132,7 +205,7 @@ public final class BBSFilmCollaborationRegistry
         BBSFilmServerSequenceObserveRequest request
     )
     {
-        SubscriptionImpl owner = authorizedSubscription(descriptor);
+        RouteSubscription owner = authorizedSubscription(descriptor);
 
         if (owner == null)
         {
@@ -151,7 +224,7 @@ public final class BBSFilmCollaborationRegistry
 
     public static CompletableFuture<BBSFilmPresenceResult> applyPresence(BBSAddonDescriptor descriptor, BBSFilmRemotePresence remote)
     {
-        SubscriptionImpl owner = authorizedSubscription(descriptor);
+        RouteSubscription owner = authorizedSubscription(descriptor);
 
         if (owner == null)
         {
@@ -170,7 +243,7 @@ public final class BBSFilmCollaborationRegistry
 
     public static CompletableFuture<BBSFilmPresenceResult> clearPresence(BBSAddonDescriptor descriptor, BBSFilmPresenceClearRequest request)
     {
-        SubscriptionImpl owner = authorizedSubscription(descriptor);
+        RouteSubscription owner = authorizedSubscription(descriptor);
 
         if (owner == null)
         {
@@ -189,7 +262,7 @@ public final class BBSFilmCollaborationRegistry
 
     public static CompletableFuture<BBSFilmPresenceResult> clearAllPresence(BBSAddonDescriptor descriptor, long sessionId)
     {
-        SubscriptionImpl owner = authorizedSubscription(descriptor);
+        RouteSubscription owner = authorizedSubscription(descriptor);
 
         if (owner == null)
         {
@@ -206,6 +279,121 @@ public final class BBSFilmCollaborationRegistry
         return future;
     }
 
+    public static CompletableFuture<BBSFilmSnapshotResult> requestSnapshot(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        long sessionId
+    )
+    {
+        return executeHot(
+            pluginOwner,
+            fence,
+            new BBSFilmSnapshotResult(
+                BBSFilmCollaborationStatus.NOT_REGISTERED,
+                null,
+                "plugin is not registered for Film collaboration"
+            ),
+            new BBSFilmSnapshotResult(BBSFilmCollaborationStatus.CLOSED, null, "Minecraft client executor is unavailable"),
+            (future, owner) -> completeSnapshot(future, owner, sessionId)
+        );
+    }
+
+    public static CompletableFuture<BBSFilmApplyResult> applyMutations(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        BBSFilmMutationBatch batch
+    )
+    {
+        long sessionId = batch == null ? 0 : batch.sessionId();
+
+        return executeHot(
+            pluginOwner,
+            fence,
+            failedApply(BBSFilmCollaborationStatus.NOT_REGISTERED, sessionId, "plugin is not registered for Film collaboration"),
+            failedApply(BBSFilmCollaborationStatus.CLOSED, sessionId, "Minecraft client executor is unavailable"),
+            (future, owner) -> completeApply(future, owner, batch)
+        );
+    }
+
+    public static CompletableFuture<BBSFilmApplyResult> applySnapshot(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        BBSFilmSnapshotApplyRequest request
+    )
+    {
+        long sessionId = request == null ? 0 : request.sessionId();
+
+        return executeHot(
+            pluginOwner,
+            fence,
+            failedApply(BBSFilmCollaborationStatus.NOT_REGISTERED, sessionId, "plugin is not registered for Film collaboration"),
+            failedApply(BBSFilmCollaborationStatus.CLOSED, sessionId, "Minecraft client executor is unavailable"),
+            (future, owner) -> completeSnapshotApply(future, owner, request)
+        );
+    }
+
+    public static CompletableFuture<BBSFilmApplyResult> observeServerSequence(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        BBSFilmServerSequenceObserveRequest request
+    )
+    {
+        long sessionId = request == null ? 0 : request.sessionId();
+
+        return executeHot(
+            pluginOwner,
+            fence,
+            failedApply(BBSFilmCollaborationStatus.NOT_REGISTERED, sessionId, "plugin is not registered for Film collaboration"),
+            failedApply(BBSFilmCollaborationStatus.CLOSED, sessionId, "Minecraft client executor is unavailable"),
+            (future, owner) -> completeServerSequenceObserve(future, owner, request)
+        );
+    }
+
+    public static CompletableFuture<BBSFilmPresenceResult> applyPresence(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        BBSFilmRemotePresence remote
+    )
+    {
+        return executeHot(
+            pluginOwner,
+            fence,
+            failedPresence(BBSFilmCollaborationStatus.NOT_REGISTERED, remote, "plugin is not registered for Film collaboration"),
+            failedPresence(BBSFilmCollaborationStatus.CLOSED, remote, "Minecraft client executor is unavailable"),
+            (future, owner) -> completePresenceApply(future, owner, remote)
+        );
+    }
+
+    public static CompletableFuture<BBSFilmPresenceResult> clearPresence(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        BBSFilmPresenceClearRequest request
+    )
+    {
+        return executeHot(
+            pluginOwner,
+            fence,
+            failedPresence(BBSFilmCollaborationStatus.NOT_REGISTERED, request, "plugin is not registered for Film collaboration"),
+            failedPresence(BBSFilmCollaborationStatus.CLOSED, request, "Minecraft client executor is unavailable"),
+            (future, owner) -> completePresenceClear(future, owner, request)
+        );
+    }
+
+    public static CompletableFuture<BBSFilmPresenceResult> clearAllPresence(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        long sessionId
+    )
+    {
+        return executeHot(
+            pluginOwner,
+            fence,
+            failedPresence(BBSFilmCollaborationStatus.NOT_REGISTERED, sessionId, "plugin is not registered for Film collaboration"),
+            failedPresence(BBSFilmCollaborationStatus.CLOSED, sessionId, "Minecraft client executor is unavailable"),
+            (future, owner) -> completePresenceClearAll(future, owner, sessionId)
+        );
+    }
+
     static void publishSessionOpened(BBSFilmSession session)
     {
         for (SubscriptionImpl subscription : SUBSCRIPTIONS.values())
@@ -215,11 +403,21 @@ public final class BBSFilmCollaborationRegistry
                 notifyOpened(subscription, session);
             }
         }
+
+        for (HotRoute route : HOT_ROUTES.values())
+        {
+            route.invokeCurrent((subscription) -> notifyOpened(subscription, session));
+        }
     }
 
     static boolean hasSubscriptions()
     {
-        return !SUBSCRIPTIONS.isEmpty();
+        if (!SUBSCRIPTIONS.isEmpty())
+        {
+            return true;
+        }
+
+        return HOT_ROUTES.values().stream().anyMatch(HotRoute::active);
     }
 
     static void publishLocalMutations(BBSFilmMutationBatch batch)
@@ -239,6 +437,11 @@ public final class BBSFilmCollaborationRegistry
             {
                 LOGGER.error("[bbs-film-collaboration] mutation listener failed for addon '{}'", subscription.addonId, e);
             }
+        }
+
+        for (HotRoute route : HOT_ROUTES.values())
+        {
+            route.invokeCurrent((subscription) -> subscription.listener.onLocalMutations(batch));
         }
     }
 
@@ -260,6 +463,11 @@ public final class BBSFilmCollaborationRegistry
                 LOGGER.error("[bbs-film-collaboration] checkpoint listener failed for addon '{}'", subscription.addonId, e);
             }
         }
+
+        for (HotRoute route : HOT_ROUTES.values())
+        {
+            route.invokeCurrent((subscription) -> subscription.listener.onCheckpointRequired(checkpoint));
+        }
     }
 
     static void publishPresence(BBSFilmPresence presence)
@@ -280,6 +488,11 @@ public final class BBSFilmCollaborationRegistry
                 LOGGER.error("[bbs-film-collaboration] presence listener failed for addon '{}'", subscription.addonId, e);
             }
         }
+
+        for (HotRoute route : HOT_ROUTES.values())
+        {
+            route.invokeCurrent((subscription) -> subscription.listener.onPresence(presence));
+        }
     }
 
     static void publishSessionClosed(long sessionId)
@@ -290,6 +503,11 @@ public final class BBSFilmCollaborationRegistry
             {
                 notifyClosed(subscription, sessionId);
             }
+        }
+
+        for (HotRoute route : HOT_ROUTES.values())
+        {
+            route.invokeCurrent((subscription) -> notifyClosed(subscription, sessionId));
         }
     }
 
@@ -311,9 +529,14 @@ public final class BBSFilmCollaborationRegistry
                 LOGGER.error("[bbs-film-collaboration] closing listener failed for addon '{}'", subscription.addonId, e);
             }
         }
+
+        for (HotRoute route : HOT_ROUTES.values())
+        {
+            route.invokeCurrent((subscription) -> subscription.listener.onSessionClosing(session));
+        }
     }
 
-    private static void completeSnapshot(CompletableFuture<BBSFilmSnapshotResult> future, SubscriptionImpl owner, long sessionId)
+    private static void completeSnapshot(CompletableFuture<BBSFilmSnapshotResult> future, RouteSubscription owner, long sessionId)
     {
         if (!isCurrent(owner))
         {
@@ -323,7 +546,7 @@ public final class BBSFilmCollaborationRegistry
 
         try
         {
-            future.complete(BBSFilmCollaborationBridge.requestSnapshot(sessionId));
+            future.complete(BBSFilmCollaborationBridge.requestSnapshot(owner.owner(), sessionId));
         }
         catch (Exception | LinkageError e)
         {
@@ -332,7 +555,7 @@ public final class BBSFilmCollaborationRegistry
         }
     }
 
-    private static void completeApply(CompletableFuture<BBSFilmApplyResult> future, SubscriptionImpl owner, BBSFilmMutationBatch batch)
+    private static void completeApply(CompletableFuture<BBSFilmApplyResult> future, RouteSubscription owner, BBSFilmMutationBatch batch)
     {
         if (!isCurrent(owner))
         {
@@ -342,7 +565,7 @@ public final class BBSFilmCollaborationRegistry
 
         try
         {
-            future.complete(BBSFilmCollaborationBridge.applyRemote(owner.addonId, batch));
+            future.complete(BBSFilmCollaborationBridge.applyRemote(owner.addonId(), owner.owner(), batch));
         }
         catch (Exception | LinkageError e)
         {
@@ -351,7 +574,7 @@ public final class BBSFilmCollaborationRegistry
         }
     }
 
-    private static void completeSnapshotApply(CompletableFuture<BBSFilmApplyResult> future, SubscriptionImpl owner, BBSFilmSnapshotApplyRequest request)
+    private static void completeSnapshotApply(CompletableFuture<BBSFilmApplyResult> future, RouteSubscription owner, BBSFilmSnapshotApplyRequest request)
     {
         if (!isCurrent(owner))
         {
@@ -361,7 +584,7 @@ public final class BBSFilmCollaborationRegistry
 
         try
         {
-            future.complete(BBSFilmCollaborationBridge.applySnapshot(owner.addonId, request));
+            future.complete(BBSFilmCollaborationBridge.applySnapshot(owner.addonId(), owner.owner(), request));
         }
         catch (Exception | LinkageError e)
         {
@@ -372,7 +595,7 @@ public final class BBSFilmCollaborationRegistry
 
     private static void completeServerSequenceObserve(
         CompletableFuture<BBSFilmApplyResult> future,
-        SubscriptionImpl owner,
+        RouteSubscription owner,
         BBSFilmServerSequenceObserveRequest request
     )
     {
@@ -384,7 +607,7 @@ public final class BBSFilmCollaborationRegistry
 
         try
         {
-            future.complete(BBSFilmCollaborationBridge.observeServerSequence(owner.addonId, request));
+            future.complete(BBSFilmCollaborationBridge.observeServerSequence(owner.addonId(), owner.owner(), request));
         }
         catch (Exception | LinkageError e)
         {
@@ -395,7 +618,7 @@ public final class BBSFilmCollaborationRegistry
 
     private static void completePresenceApply(
         CompletableFuture<BBSFilmPresenceResult> future,
-        SubscriptionImpl owner,
+        RouteSubscription owner,
         BBSFilmRemotePresence remote
     )
     {
@@ -407,7 +630,7 @@ public final class BBSFilmCollaborationRegistry
 
         try
         {
-            future.complete(BBSFilmCollaborationBridge.applyRemotePresence(owner.addonId, remote));
+            future.complete(BBSFilmCollaborationBridge.applyRemotePresence(owner.addonId(), owner.owner(), remote));
         }
         catch (Exception | LinkageError e)
         {
@@ -418,7 +641,7 @@ public final class BBSFilmCollaborationRegistry
 
     private static void completePresenceClear(
         CompletableFuture<BBSFilmPresenceResult> future,
-        SubscriptionImpl owner,
+        RouteSubscription owner,
         BBSFilmPresenceClearRequest request
     )
     {
@@ -430,7 +653,7 @@ public final class BBSFilmCollaborationRegistry
 
         try
         {
-            future.complete(BBSFilmCollaborationBridge.clearRemotePresence(owner.addonId, request));
+            future.complete(BBSFilmCollaborationBridge.clearRemotePresence(owner.addonId(), owner.owner(), request));
         }
         catch (Exception | LinkageError e)
         {
@@ -441,7 +664,7 @@ public final class BBSFilmCollaborationRegistry
 
     private static void completePresenceClearAll(
         CompletableFuture<BBSFilmPresenceResult> future,
-        SubscriptionImpl owner,
+        RouteSubscription owner,
         long sessionId
     )
     {
@@ -453,7 +676,7 @@ public final class BBSFilmCollaborationRegistry
 
         try
         {
-            future.complete(BBSFilmCollaborationBridge.clearAddonPresence(owner.addonId, sessionId));
+            future.complete(BBSFilmCollaborationBridge.clearAddonPresence(owner.addonId(), owner.owner(), sessionId));
         }
         catch (Exception | LinkageError e)
         {
@@ -462,27 +685,27 @@ public final class BBSFilmCollaborationRegistry
         }
     }
 
-    private static void notifyOpened(SubscriptionImpl subscription, BBSFilmSession session)
+    private static void notifyOpened(RouteSubscription subscription, BBSFilmSession session)
     {
         try
         {
-            subscription.listener.onSessionOpened(session);
+            subscription.listener().onSessionOpened(session);
         }
         catch (Exception | LinkageError e)
         {
-            LOGGER.error("[bbs-film-collaboration] open listener failed for addon '{}'", subscription.addonId, e);
+            LOGGER.error("[bbs-film-collaboration] open listener failed for owner '{}'", subscription.identity(), e);
         }
     }
 
-    private static void notifyClosed(SubscriptionImpl subscription, long sessionId)
+    private static void notifyClosed(RouteSubscription subscription, long sessionId)
     {
         try
         {
-            subscription.listener.onSessionClosed(sessionId);
+            subscription.listener().onSessionClosed(sessionId);
         }
         catch (Exception | LinkageError e)
         {
-            LOGGER.error("[bbs-film-collaboration] close listener failed for addon '{}'", subscription.addonId, e);
+            LOGGER.error("[bbs-film-collaboration] close listener failed for owner '{}'", subscription.identity(), e);
         }
     }
 
@@ -525,9 +748,47 @@ public final class BBSFilmCollaborationRegistry
         return subscription != null && subscription.active() ? subscription : null;
     }
 
-    private static boolean isCurrent(SubscriptionImpl subscription)
+    private static RouteSubscription authorizedSubscription(PluginOwner owner, PluginGenerationFence fence)
     {
-        return subscription.active() && SUBSCRIPTIONS.get(subscription.addonId) == subscription;
+        if (owner == null || fence == null || !owner.equals(fence.owner()))
+        {
+            return null;
+        }
+
+        HotRoute route = HOT_ROUTES.get(owner.pluginId());
+        HotSubscription subscription = route == null ? null : route.get(owner);
+
+        return subscription != null && subscription.fence == fence && subscription.active() ? subscription : null;
+    }
+
+    private static <T> CompletableFuture<T> executeHot(
+        PluginOwner pluginOwner,
+        PluginGenerationFence fence,
+        T notRegistered,
+        T executorUnavailable,
+        BiConsumer<CompletableFuture<T>, RouteSubscription> operation
+    )
+    {
+        RouteSubscription owner = authorizedSubscription(pluginOwner, fence);
+
+        if (owner == null)
+        {
+            return CompletableFuture.completedFuture(notRegistered);
+        }
+
+        CompletableFuture<T> future = new CompletableFuture<>();
+
+        if (!executeOnClient(() -> operation.accept(future, owner)))
+        {
+            future.complete(executorUnavailable);
+        }
+
+        return future;
+    }
+
+    private static boolean isCurrent(RouteSubscription subscription)
+    {
+        return subscription != null && subscription.current();
     }
 
     private static BBSFilmApplyResult failedApply(BBSFilmCollaborationStatus status, long sessionId, String message)
@@ -579,6 +840,11 @@ public final class BBSFilmCollaborationRegistry
         {
             Minecraft minecraft = Minecraft.getInstance();
 
+            if (minecraft == null)
+            {
+                return false;
+            }
+
             if (minecraft.isSameThread())
             {
                 runnable.run();
@@ -597,7 +863,25 @@ public final class BBSFilmCollaborationRegistry
         }
     }
 
-    private static final class SubscriptionImpl implements BBSFilmCollaborationSubscription
+    private interface RouteSubscription
+    {
+        String addonId();
+
+        PluginOwner owner();
+
+        BBSFilmCollaborationListener listener();
+
+        boolean current();
+
+        default String identity()
+        {
+            PluginOwner owner = this.owner();
+
+            return owner == null ? this.addonId() : owner.toString();
+        }
+    }
+
+    private static final class SubscriptionImpl implements BBSFilmCollaborationSubscription, RouteSubscription
     {
         private final String addonId;
         private final BBSFilmCollaborationListener listener;
@@ -623,6 +907,30 @@ public final class BBSFilmCollaborationRegistry
         }
 
         @Override
+        public String addonId()
+        {
+            return this.addonId;
+        }
+
+        @Override
+        public PluginOwner owner()
+        {
+            return null;
+        }
+
+        @Override
+        public BBSFilmCollaborationListener listener()
+        {
+            return this.listener;
+        }
+
+        @Override
+        public boolean current()
+        {
+            return this.active && SUBSCRIPTIONS.get(this.addonId) == this;
+        }
+
+        @Override
         public void close()
         {
             if (!this.active)
@@ -642,6 +950,184 @@ public final class BBSFilmCollaborationRegistry
                     notifyClosed(this, session.sessionId());
                 }
             });
+        }
+    }
+
+    private static final class HotRoute
+    {
+        private final String pluginId;
+        private final Map<Long, HotSubscription> generations = new ConcurrentHashMap<>();
+
+        private HotRoute(String pluginId)
+        {
+            this.pluginId = pluginId;
+        }
+
+        private boolean add(HotSubscription subscription)
+        {
+            return this.generations.putIfAbsent(subscription.owner.generation(), subscription) == null;
+        }
+
+        private HotSubscription get(PluginOwner owner)
+        {
+            HotSubscription subscription = this.generations.get(owner.generation());
+
+            return subscription != null && subscription.owner.equals(owner) ? subscription : null;
+        }
+
+        private boolean active()
+        {
+            return this.current() != null;
+        }
+
+        private boolean isCurrent(HotSubscription subscription)
+        {
+            return subscription != null && this.current() == subscription;
+        }
+
+        private HotSubscription current()
+        {
+            HotSubscription selected = null;
+
+            for (HotSubscription candidate : this.generations.values())
+            {
+                if (!candidate.dispatchable())
+                {
+                    continue;
+                }
+
+                if (selected == null || candidate.owner.generation() > selected.owner.generation())
+                {
+                    selected = candidate;
+                }
+            }
+
+            return selected;
+        }
+
+        private void invokeCurrent(Consumer<HotSubscription> callback)
+        {
+            this.invoke(this.current(), callback);
+        }
+
+        private void invoke(HotSubscription subscription, Consumer<HotSubscription> callback)
+        {
+            Objects.requireNonNull(callback, "callback");
+
+            if (!this.isCurrent(subscription))
+            {
+                return;
+            }
+
+            var lease = subscription.fence.acquire();
+
+            if (lease == null)
+            {
+                return;
+            }
+
+            try (lease)
+            {
+                if (!this.isCurrent(subscription))
+                {
+                    return;
+                }
+
+                callback.accept(subscription);
+            }
+            catch (Exception | LinkageError e)
+            {
+                LOGGER.error("[bbs-film-collaboration] hot listener failed for owner '{}'", subscription.owner, e);
+            }
+        }
+
+        private void remove(HotSubscription subscription)
+        {
+            synchronized (HOT_ROUTES)
+            {
+                this.generations.remove(subscription.owner.generation(), subscription);
+
+                if (this.generations.isEmpty())
+                {
+                    HOT_ROUTES.remove(this.pluginId, this);
+                }
+            }
+        }
+    }
+
+    private static final class HotSubscription implements BBSFilmCollaborationSubscription, RouteSubscription
+    {
+        private final HotRoute route;
+        private final PluginOwner owner;
+        private final PluginGenerationFence fence;
+        private final BBSFilmCollaborationListener listener;
+        private volatile BBSRegistrationResult registration;
+        private final AtomicBoolean closed = new AtomicBoolean();
+
+        private HotSubscription(
+            HotRoute route,
+            PluginOwner owner,
+            PluginGenerationFence fence,
+            BBSFilmCollaborationListener listener
+        )
+        {
+            this.route = route;
+            this.owner = owner;
+            this.fence = fence;
+            this.listener = listener;
+        }
+
+        @Override
+        public BBSRegistrationResult registration()
+        {
+            return this.registration;
+        }
+
+        @Override
+        public boolean active()
+        {
+            return this.current();
+        }
+
+        @Override
+        public String addonId()
+        {
+            return this.owner.pluginId();
+        }
+
+        @Override
+        public PluginOwner owner()
+        {
+            return this.owner;
+        }
+
+        @Override
+        public BBSFilmCollaborationListener listener()
+        {
+            return this.listener;
+        }
+
+        @Override
+        public boolean current()
+        {
+            return this.dispatchable() && this.route.isCurrent(this);
+        }
+
+        private boolean dispatchable()
+        {
+            return !this.closed.get() && this.fence.isOpen();
+        }
+
+        @Override
+        public void close()
+        {
+            if (!this.closed.compareAndSet(false, true))
+            {
+                return;
+            }
+
+            this.route.remove(this);
+            executeOnClient(() -> BBSFilmCollaborationBridge.clearAddonPresence(this.addonId(), this.owner));
         }
     }
 

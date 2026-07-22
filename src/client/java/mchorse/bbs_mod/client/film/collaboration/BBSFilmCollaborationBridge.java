@@ -38,6 +38,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.plugin.runtime.PluginOwner;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -398,6 +399,11 @@ public final class BBSFilmCollaborationBridge
 
     static BBSFilmPresenceResult applyRemotePresence(String addonId, BBSFilmRemotePresence remote)
     {
+        return applyRemotePresence(addonId, null, remote);
+    }
+
+    static BBSFilmPresenceResult applyRemotePresence(String addonId, PluginOwner owner, BBSFilmRemotePresence remote)
+    {
         if (remote == null)
         {
             return presenceResult(null, BBSFilmCollaborationStatus.INVALID_REQUEST, "remote presence is null");
@@ -418,7 +424,7 @@ public final class BBSFilmCollaborationBridge
             return failure;
         }
 
-        PresenceKey key = new PresenceKey(addonId, remote.participantId());
+        PresenceKey key = new PresenceKey(new CollaborationOwner(addonId, owner), remote.participantId());
         long lastPresenceSeq = state.presenceWatermarks.getOrDefault(key, -1L);
 
         boolean acceptedWatermark = state.clearedPresence.contains(key)
@@ -444,6 +450,11 @@ public final class BBSFilmCollaborationBridge
 
     static BBSFilmPresenceResult clearRemotePresence(String addonId, BBSFilmPresenceClearRequest request)
     {
+        return clearRemotePresence(addonId, null, request);
+    }
+
+    static BBSFilmPresenceResult clearRemotePresence(String addonId, PluginOwner owner, BBSFilmPresenceClearRequest request)
+    {
         if (request == null)
         {
             return presenceResult(null, BBSFilmCollaborationStatus.INVALID_REQUEST, "presence clear request is null");
@@ -464,7 +475,7 @@ public final class BBSFilmCollaborationBridge
             return failure;
         }
 
-        PresenceKey key = new PresenceKey(addonId, request.participantId());
+        PresenceKey key = new PresenceKey(new CollaborationOwner(addonId, owner), request.participantId());
         long lastPresenceSeq = state.presenceWatermarks.getOrDefault(key, -1L);
 
         if (!BBSFilmPresenceSequence.accepts(lastPresenceSeq, request.serverSeq()))
@@ -486,16 +497,27 @@ public final class BBSFilmCollaborationBridge
 
     static void clearAddonPresence(String addonId)
     {
+        clearAddonPresence(addonId, null);
+    }
+
+    static void clearAddonPresence(String addonId, PluginOwner owner)
+    {
         SessionState state = current;
 
         if (state != null)
         {
-            clearAddonPresence(state, addonId);
-            state.serverSequences.remove(addonId);
+            CollaborationOwner route = new CollaborationOwner(addonId, owner);
+            clearAddonPresence(state, route);
+            state.serverSequences.remove(route);
         }
     }
 
     static BBSFilmPresenceResult clearAddonPresence(String addonId, long sessionId)
+    {
+        return clearAddonPresence(addonId, null, sessionId);
+    }
+
+    static BBSFilmPresenceResult clearAddonPresence(String addonId, PluginOwner owner, long sessionId)
     {
         SessionState state = current;
 
@@ -516,16 +538,16 @@ public final class BBSFilmCollaborationBridge
             return presenceResult(state, BBSFilmCollaborationStatus.SESSION_MISMATCH, "Film session changed");
         }
 
-        clearAddonPresence(state, addonId);
+        clearAddonPresence(state, new CollaborationOwner(addonId, owner));
 
         return presenceResult(state, BBSFilmCollaborationStatus.OK, "");
     }
 
-    private static void clearAddonPresence(SessionState state, String addonId)
+    private static void clearAddonPresence(SessionState state, CollaborationOwner owner)
     {
-        state.remotePresence.keySet().removeIf((key) -> key.addonId.equals(addonId));
-        state.presenceWatermarks.keySet().removeIf((key) -> key.addonId.equals(addonId));
-        state.clearedPresence.removeIf((key) -> key.addonId.equals(addonId));
+        state.remotePresence.keySet().removeIf((key) -> key.owner.equals(owner));
+        state.presenceWatermarks.keySet().removeIf((key) -> key.owner.equals(owner));
+        state.clearedPresence.removeIf((key) -> key.owner.equals(owner));
     }
 
     private static BBSFilmEditorKind editorKind(UIFilmPanel panel)
@@ -874,6 +896,11 @@ public final class BBSFilmCollaborationBridge
 
     static BBSFilmSnapshotResult requestSnapshot(long sessionId)
     {
+        return requestSnapshot(null, sessionId);
+    }
+
+    static BBSFilmSnapshotResult requestSnapshot(PluginOwner owner, long sessionId)
+    {
         SessionState state = current;
 
         if (state == null)
@@ -915,6 +942,11 @@ public final class BBSFilmCollaborationBridge
 
     static BBSFilmApplyResult applyRemote(String addonId, BBSFilmMutationBatch batch)
     {
+        return applyRemote(addonId, null, batch);
+    }
+
+    static BBSFilmApplyResult applyRemote(String addonId, PluginOwner owner, BBSFilmMutationBatch batch)
+    {
         SessionState state = current;
 
         if (state != null)
@@ -926,7 +958,8 @@ public final class BBSFilmCollaborationBridge
             state = current;
         }
 
-        BBSFilmApplyResult sessionFailure = validateSession(state, addonId, batch == null ? 0 : batch.sessionId(), batch == null ? -1 : batch.baseRevision(), batch == null ? -1 : batch.serverSeq());
+        CollaborationOwner route = new CollaborationOwner(addonId, owner);
+        BBSFilmApplyResult sessionFailure = validateSession(state, route, batch == null ? 0 : batch.sessionId(), batch == null ? -1 : batch.baseRevision(), batch == null ? -1 : batch.serverSeq());
 
         if (sessionFailure != null)
         {
@@ -1060,13 +1093,18 @@ public final class BBSFilmCollaborationBridge
 
         state.revision = BBSFilmCoreRevision.next(state.revision);
         clearPresenceForRevisionChange(state);
-        state.serverSequences.put(addonId, batch.serverSeq());
+        state.serverSequences.put(route, batch.serverSeq());
         state.panel.refreshFilmCollaboration(refresh, false, invalidateUndo, paths);
 
         return result(state, BBSFilmCollaborationStatus.OK, decoded.size(), batch.serverSeq(), "");
     }
 
     static BBSFilmApplyResult applySnapshot(String addonId, BBSFilmSnapshotApplyRequest request)
+    {
+        return applySnapshot(addonId, null, request);
+    }
+
+    static BBSFilmApplyResult applySnapshot(String addonId, PluginOwner owner, BBSFilmSnapshotApplyRequest request)
     {
         SessionState state = current;
 
@@ -1076,7 +1114,8 @@ public final class BBSFilmCollaborationBridge
             state = current;
         }
 
-        BBSFilmApplyResult sessionFailure = validateSnapshotSession(state, addonId, request == null ? 0 : request.sessionId(), request == null ? -1 : request.expectedRevision(), request == null ? -1 : request.serverSeq());
+        CollaborationOwner route = new CollaborationOwner(addonId, owner);
+        BBSFilmApplyResult sessionFailure = validateSnapshotSession(state, route, request == null ? 0 : request.sessionId(), request == null ? -1 : request.expectedRevision(), request == null ? -1 : request.serverSeq());
 
         if (sessionFailure != null)
         {
@@ -1144,13 +1183,18 @@ public final class BBSFilmCollaborationBridge
         state.remotePresence.clear();
         state.presenceWatermarks.clear();
         state.clearedPresence.clear();
-        state.serverSequences.put(addonId, request.serverSeq());
+        state.serverSequences.put(route, request.serverSeq());
         state.panel.refreshFilmCollaboration(BBSFilmRefreshHint.STRUCTURE, true, true, List.of());
 
         return result(state, BBSFilmCollaborationStatus.OK, 1, request.serverSeq(), "");
     }
 
     static BBSFilmApplyResult observeServerSequence(String addonId, BBSFilmServerSequenceObserveRequest request)
+    {
+        return observeServerSequence(addonId, null, request);
+    }
+
+    static BBSFilmApplyResult observeServerSequence(String addonId, PluginOwner owner, BBSFilmServerSequenceObserveRequest request)
     {
         SessionState state = current;
 
@@ -1160,9 +1204,10 @@ public final class BBSFilmCollaborationBridge
             state = current;
         }
 
+        CollaborationOwner route = new CollaborationOwner(addonId, owner);
         BBSFilmApplyResult sessionFailure = validateSession(
             state,
-            addonId,
+            route,
             request == null ? 0 : request.sessionId(),
             request == null ? -1 : request.expectedRevision(),
             request == null ? -1 : request.serverSeq()
@@ -1173,7 +1218,7 @@ public final class BBSFilmCollaborationBridge
             return sessionFailure;
         }
 
-        state.serverSequences.put(addonId, request.serverSeq());
+        state.serverSequences.put(route, request.serverSeq());
 
         return result(state, BBSFilmCollaborationStatus.OK, 0, request.serverSeq(), "");
     }
@@ -1626,7 +1671,7 @@ public final class BBSFilmCollaborationBridge
         }
     }
 
-    private static BBSFilmApplyResult validateSession(SessionState state, String addonId, long sessionId, long expectedRevision, long serverSeq)
+    private static BBSFilmApplyResult validateSession(SessionState state, CollaborationOwner owner, long sessionId, long expectedRevision, long serverSeq)
     {
         BBSFilmApplyResult failure = validateSessionIdentity(state, sessionId, expectedRevision, serverSeq);
 
@@ -1635,7 +1680,7 @@ public final class BBSFilmCollaborationBridge
             return failure;
         }
 
-        if (!BBSFilmServerSequence.accepts(state.serverSequences.getOrDefault(addonId, -1L), serverSeq))
+        if (!BBSFilmServerSequence.accepts(state.serverSequences.getOrDefault(owner, -1L), serverSeq))
         {
             return result(state, BBSFilmCollaborationStatus.RESYNC_REQUIRED, 0, serverSeq, "server sequence is stale, duplicated or has a gap");
         }
@@ -1643,7 +1688,7 @@ public final class BBSFilmCollaborationBridge
         return null;
     }
 
-    private static BBSFilmApplyResult validateSnapshotSession(SessionState state, String addonId, long sessionId, long expectedRevision, long serverSeq)
+    private static BBSFilmApplyResult validateSnapshotSession(SessionState state, CollaborationOwner owner, long sessionId, long expectedRevision, long serverSeq)
     {
         BBSFilmApplyResult failure = validateSessionIdentity(state, sessionId, expectedRevision, serverSeq);
 
@@ -1652,7 +1697,7 @@ public final class BBSFilmCollaborationBridge
             return failure;
         }
 
-        if (!BBSFilmServerSequence.acceptsSnapshot(state.serverSequences.getOrDefault(addonId, -1L), serverSeq))
+        if (!BBSFilmServerSequence.acceptsSnapshot(state.serverSequences.getOrDefault(owner, -1L), serverSeq))
         {
             return result(state, BBSFilmCollaborationStatus.RESYNC_REQUIRED, 0, serverSeq, "snapshot server sequence is stale");
         }
@@ -1848,7 +1893,23 @@ public final class BBSFilmCollaborationBridge
     private record DecodedMutation(BaseValue target, BaseType value, BBSFilmRefreshHint refreshHint)
     {}
 
-    private record PresenceKey(String addonId, String participantId)
+    private record CollaborationOwner(String addonId, PluginOwner pluginOwner)
+    {
+        private CollaborationOwner
+        {
+            if (addonId == null || addonId.isBlank())
+            {
+                throw new IllegalArgumentException("Film collaboration owner id is required");
+            }
+
+            if (pluginOwner != null && !pluginOwner.samePlugin(addonId))
+            {
+                throw new IllegalArgumentException("Film collaboration owner id does not match plugin owner");
+            }
+        }
+    }
+
+    private record PresenceKey(CollaborationOwner owner, String participantId)
     {}
 
     private record RowProjection(int y, int height)
@@ -1966,7 +2027,7 @@ public final class BBSFilmCollaborationBridge
         private final String documentId;
         private volatile long revision;
         private long localOpId;
-        private final Map<String, Long> serverSequences = new LinkedHashMap<>();
+        private final Map<CollaborationOwner, Long> serverSequences = new LinkedHashMap<>();
         private int remoteApplyDepth;
         private final BBSFilmLocalBatchBuffer<BaseValue> pendingLocal = new BBSFilmLocalBatchBuffer<>(MAX_MUTATIONS, LOCAL_COALESCE_INTERVAL_NANOS);
         private BBSFilmPresence lastPresence;

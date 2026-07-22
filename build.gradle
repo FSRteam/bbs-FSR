@@ -153,6 +153,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    pluginHotReloadTest {
+        java.srcDirs = ['src/pluginHotReloadTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
 }
 
 configurations {
@@ -189,6 +195,8 @@ configurations {
     ikPhysicsTestRuntimeOnly.extendsFrom clientRuntimeOnly
     clientRegistrationTestImplementation.extendsFrom clientImplementation
     clientRegistrationTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    pluginHotReloadTestImplementation.extendsFrom clientImplementation
+    pluginHotReloadTestRuntimeOnly.extendsFrom clientRuntimeOnly
 }
 
 java {
@@ -354,8 +362,16 @@ tasks.register('testBinaryCompatibility', JavaExec) {
     mainClass = 'mchorse.bbs_mod.client.compat.LegacyPublicDescriptorCompatibilityTest'
 }
 
+tasks.register('testPluginHotReload', JavaExec) {
+    group = 'verification'
+    description = 'Runs the isolated FSR hot-plugin classloader feasibility gate.'
+    dependsOn tasks.named('clientClasses'), tasks.named('pluginHotReloadTestClasses')
+    classpath = sourceSets.pluginHotReloadTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.plugin.PluginHotReloadTestSuite'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('testVideoExportUtils'), tasks.named('testPlatformResourceConsistency'), tasks.named('testFolderManagerContainment'), tasks.named('testInteractionActions'), tasks.named('testNetworkSecurity'), tasks.named('testAddonLifecycle'), tasks.named('testClientStructuralRegistration'), tasks.named('testBinaryCompatibility'), tasks.named('testFilmCollaborationApi'), tasks.named('testUiSurfacePlacement'), tasks.named('testUiInputMailbox'), tasks.named('testUiMirrorDemand'), tasks.named('testReplayKeyframeConsistency'), tasks.named('testFilmEditorMigration'), tasks.named('testParticleRuntimeConsistency'), tasks.named('testIkPhysicsConsistency')
+    dependsOn tasks.named('testPluginHotReload'), tasks.named('testVideoExportUtils'), tasks.named('testPlatformResourceConsistency'), tasks.named('testFolderManagerContainment'), tasks.named('testInteractionActions'), tasks.named('testNetworkSecurity'), tasks.named('testAddonLifecycle'), tasks.named('testClientStructuralRegistration'), tasks.named('testBinaryCompatibility'), tasks.named('testFilmCollaborationApi'), tasks.named('testUiSurfacePlacement'), tasks.named('testUiInputMailbox'), tasks.named('testUiMirrorDemand'), tasks.named('testReplayKeyframeConsistency'), tasks.named('testFilmEditorMigration'), tasks.named('testParticleRuntimeConsistency'), tasks.named('testIkPhysicsConsistency')
 }
 
 tasks.named("cacheVersionExtractedServer${minecraft_version}") {

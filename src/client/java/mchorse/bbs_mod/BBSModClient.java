@@ -756,6 +756,7 @@ public class BBSModClient
         {
             saveFilmPanelForLifecycle(filmPanel, "client stopping");
             runClientLifecycleStep("notify addon client stopping", () -> ClientApiCompat.emitClientStopping(Minecraft.getInstance()));
+            runClientLifecycleStep("stop hot plugin runtime", BBSMod::stopHotPluginRuntime);
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
             runClientLifecycleStep("shutdown UI mirror", () -> BBSUiMirrorRuntime.shutdown());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
@@ -879,6 +880,7 @@ public class BBSModClient
 
         originalFramebufferScale = window.getWidth() / (float) Math.max(window.getScreenWidth(), 1);
         ClientApiCompat.emitClientStarted(Minecraft.getInstance());
+        BBSMod.startHotPluginRuntime();
     }
 
     private static void ensureKeyMappingsCreated()

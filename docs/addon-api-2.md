@@ -453,6 +453,14 @@ v1 时序安全规则：
 - v1 supplier 的 `Exception` / `LinkageError` 会隔离为 phase/source diagnostic；null supplier 明确 warning + skipped diagnostic，不会静默消失。
 - 如果 addon 需要运行期能力，应迁移到 API 2.0 的 runtime-safe facade，而不是依赖 late v1 注册。
 
+## NeoForge Addon 与 FSR Hot Plugin 的边界
+
+API 2.0 addon 仍由 NeoForge 在启动期发现和初始化。它的 registration window、first-wins addon identity、冻结的 payload channels 和结构性 client registrations 都是启动期合同；替换 addon JAR 不能在运行中卸载它。
+
+FSR Hot Plugin Runtime 是另一条 additive SPI，使用 `BBSPlugin`、`BBSPluginContext` 和 `META-INF/bbs-plugin.json`。把 JAR 放入 `config/bbs/plugins/` 可以触发运行期安装、同 id generation replacement 和删除卸载，具体格式和 side/capability 限制见 [`hot-plugin-runtime.md`](hot-plugin-runtime.md)。现有 NeoForge addon 不会因为实现 API 2.0 而自动变成 hot plugin，也不会共享热插件的 classloader 或生命周期。
+
+只有通过 host-owned hot SPI 的事件、broker、资源和 client subscriptions 才在 hot contract 内。Forms、clips、particles、Minecraft registries、Mixins、access transformers、coremods 和 native libraries 仍要求重启；hot plugins 是完全信任的 JVM 代码，不是安全沙箱。
+
 ## 诊断
 
 运行时可读取：

@@ -4,27 +4,94 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AssetProvider
 {
-    private Map<String, List<ISourcePack>> sourcePacks = new HashMap<>();
+    private final Map<String, List<ISourcePack>> sourcePacks = new ConcurrentHashMap<>();
 
     public void registerFirst(ISourcePack pack)
     {
-        this.sourcePacks.computeIfAbsent(pack.getPrefix(), (k) -> new ArrayList<>()).add(0, pack);
+        if (pack == null)
+        {
+            return;
+        }
+
+        this.sourcePacks.computeIfAbsent(pack.getPrefix(), (k) -> new CopyOnWriteArrayList<>()).add(0, pack);
     }
 
     public void register(ISourcePack pack)
     {
-        this.sourcePacks.computeIfAbsent(pack.getPrefix(), (k) -> new ArrayList<>()).add(pack);
+        if (pack == null)
+        {
+            return;
+        }
+
+        this.sourcePacks.computeIfAbsent(pack.getPrefix(), (k) -> new CopyOnWriteArrayList<>()).add(pack);
+    }
+
+    /**
+     * Registers one source pack with an idempotent removal handle. The handle
+     * removes only the exact instance it registered, which lets a hot plugin
+     * replace its generation without disturbing another pack using the same
+     * source prefix.
+     */
+    public AutoCloseable registerCloseable(ISourcePack pack)
+    {
+        return this.registerWithHandle(pack, false);
+    }
+
+    /** Registers a source pack at the front of its prefix with a close handle. */
+    public AutoCloseable registerFirstCloseable(ISourcePack pack)
+    {
+        return this.registerWithHandle(pack, true);
+    }
+
+    private AutoCloseable registerWithHandle(ISourcePack pack, boolean first)
+    {
+        if (first)
+        {
+            this.registerFirst(pack);
+        }
+        else
+        {
+            this.register(pack);
+        }
+
+        if (pack == null)
+        {
+            return () -> {};
+        }
+
+        AtomicBoolean closed = new AtomicBoolean();
+
+        return () ->
+        {
+            if (!closed.compareAndSet(false, true))
+            {
+                return;
+            }
+
+            List<ISourcePack> packs = this.sourcePacks.get(pack.getPrefix());
+
+            if (packs != null)
+            {
+                packs.remove(pack);
+
+                if (packs.isEmpty())
+                {
+                    this.sourcePacks.remove(pack.getPrefix(), packs);
+                }
+            }
+        };
     }
 
     public Collection<String> getSourceKeys()

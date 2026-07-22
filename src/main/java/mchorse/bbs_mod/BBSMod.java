@@ -95,6 +95,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.resources.packs.DynamicSourcePack;
 import mchorse.bbs_mod.resources.packs.ExternalAssetsSourcePack;
 import mchorse.bbs_mod.resources.packs.InternalAssetsSourcePack;
+import mchorse.bbs_mod.plugin.manager.BBSPluginManager;
 import mchorse.bbs_mod.settings.Settings;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.SettingsManager;
@@ -166,9 +167,12 @@ public class BBSMod
     private final BBSAddonCollector addonCollector;
     private final BBSAddonBridge addonBridge;
     private final BBSAddonManager addonManager;
+    private final BBSAddonIdentityRegistry addonIdentities;
+    private BBSPluginManager pluginManager;
     private static final List<PendingAddonRegistration> pendingAddonRegistrations = new ArrayList<>();
     private static volatile BBSAddonCollector activeAddonCollector;
     private static volatile BBSAddonManager activeAddonManager;
+    private static volatile BBSPluginManager activePluginManager;
     private static boolean drainingAddonRegistrations;
 
     private static ActionManager actions;
@@ -424,11 +428,11 @@ public class BBSMod
     public BBSMod()
     {
         this.modBus = ModLoadingContext.get().getActiveContainer().getEventBus();
-        BBSAddonIdentityRegistry addonIdentities = new BBSAddonIdentityRegistry();
+        this.addonIdentities = new BBSAddonIdentityRegistry();
 
-        this.addonCollector = new BBSAddonCollector(addonIdentities);
+        this.addonCollector = new BBSAddonCollector(this.addonIdentities);
         this.addonBridge = new BBSAddonBridge(this.addonCollector);
-        this.addonManager = new BBSAddonManager(() -> LoaderAccessHolder.get(), addonIdentities);
+        this.addonManager = new BBSAddonManager(() -> LoaderAccessHolder.get(), this.addonIdentities);
         LoaderAccessHolder.set(new NeoForgeLoaderAccess(() -> new ArrayList<>(this.addonCollector.getAddons())));
         bindAddonSystems(this.addonCollector, this.addonManager);
 
@@ -609,6 +613,20 @@ public class BBSMod
         this.addonManager.runCommonSetup();
 
         ServerNetwork.setup();
+
+        this.pluginManager = new BBSPluginManager(
+            gameFolder.toPath(),
+            FMLEnvironment.dist == Dist.CLIENT,
+            (pluginId) -> this.addonIdentities.owner(pluginId) != null,
+            events,
+            provider
+        );
+        activePluginManager = this.pluginManager;
+
+        if (FMLEnvironment.dist != Dist.CLIENT)
+        {
+            this.pluginManager.start();
+        }
     }
 
     private void onServerStarted(ServerStartedEvent event)
@@ -618,11 +636,21 @@ public class BBSMod
 
     private void onServerStopped(ServerStoppedEvent event)
     {
+        if (FMLEnvironment.dist != Dist.CLIENT)
+        {
+            stopHotPluginRuntime();
+        }
+
         resetServerRuntimeState(event.getServer());
     }
 
     private void onServerStopping(ServerStoppingEvent event)
     {
+        if (FMLEnvironment.dist != Dist.CLIENT)
+        {
+            stopHotPluginRuntime();
+        }
+
         resetServerRuntimeState(event.getServer());
     }
 
@@ -781,6 +809,37 @@ public class BBSMod
         BBSAddonManager manager = activeAddonManager;
 
         return manager == null ? Collections.emptyList() : manager.diagnostics();
+    }
+
+    public static List<BBSPluginManager.PluginStatus> getPluginDiagnostics()
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        return manager == null ? Collections.emptyList() : manager.diagnostics();
+    }
+
+    /** Called after physical-client services are ready; dedicated starts during common setup. */
+    public static void startHotPluginRuntime()
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        if (manager != null)
+        {
+            manager.start();
+        }
+    }
+
+    public static void stopHotPluginRuntime()
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        if (manager == null)
+        {
+            return;
+        }
+
+        manager.close();
+        activePluginManager = null;
     }
 
     /** Common-only bridge used by the physical client registration adapter. */
