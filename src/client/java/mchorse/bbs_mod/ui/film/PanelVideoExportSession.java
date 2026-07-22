@@ -3,11 +3,13 @@ package mchorse.bbs_mod.ui.film;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.audio.AudioRenderer;
+import mchorse.bbs_mod.audio.AudioRenderResult;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.VideoExportSession;
+import mchorse.bbs_mod.film.VideoExportRequest;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
@@ -17,7 +19,10 @@ import mchorse.bbs_mod.utils.clips.Clips;
 import org.joml.Vector2i;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 
 /** Video export session for the film panel's preview texture. */
 public class PanelVideoExportSession extends VideoExportSession
@@ -32,6 +37,8 @@ public class PanelVideoExportSession extends VideoExportSession
     private boolean restorePaused;
     private boolean setupStarted;
     private boolean setupCompleted;
+    private List<AudioClip> sessionAudioClips = List.of();
+    private int sessionAudioDuration;
 
     public PanelVideoExportSession(UIFilmRecorder ui, UIFilmPanel editor)
     {
@@ -51,32 +58,21 @@ public class PanelVideoExportSession extends VideoExportSession
     @Override
     protected boolean prepare()
     {
-        try
+        Clips camera = this.editor.getData().camera;
+        this.sessionAudioDuration = camera.calculateDuration();
+
+        if (this.getExportRequest().filmAudio())
         {
-            if (BBSSettings.videoSettings.audio.get())
+            List<AudioClip> copies = new ArrayList<>();
+            for (AudioClip clip : camera.getClips(AudioClip.class))
             {
-                Clips camera = this.editor.getData().camera;
-                List<AudioClip> audioClips = camera.getClips(AudioClip.class);
-
-                File file = this.createTemporaryAudio();
-                Vector2i range = BBSSettings.editorLoop.get() ? this.editor.getLoopingRange() : new Vector2i();
-
-                if (AudioRenderer.renderAudio(file, audioClips, camera.calculateDuration(), 48000, TimeUtils.toSeconds(range.x), TimeUtils.toSeconds(range.y)))
-                {
-                    this.attachTemporaryAudio(file);
-                }
-                else
-                {
-                    this.deleteTemporaryAudio();
-                }
+                copies.add((AudioClip) clip.copy());
             }
+            this.sessionAudioClips = List.copyOf(copies);
         }
-        catch (Exception e)
+        else
         {
-            this.deleteTemporaryAudio();
-            UIOverlay.addOverlay(this.editor.getContext(), new UIMessageOverlayPanel(UIKeys.GENERAL_ERROR, IKey.constant(e.getMessage())));
-
-            return false;
+            this.sessionAudioClips = List.of();
         }
 
         this.restorePaused = this.editor.getController().isPaused();
@@ -84,14 +80,52 @@ public class PanelVideoExportSession extends VideoExportSession
         this.setupStarted = false;
         this.setupCompleted = false;
 
-        int min = this.editor.cameraEditor.clips.loopMin;
-        int max = this.editor.cameraEditor.clips.loopMax;
+        return true;
+    }
+
+    @Override
+    protected VideoExportRequest createExportRequest(int width, int height) throws Exception
+    {
         boolean looping = BBSSettings.editorLoop.get();
 
-        this.start = looping ? Math.min(min, max) : 0;
-        this.end = looping && min != max ? Math.max(min, max) : this.duration;
+        if (looping
+            && this.editor.cameraEditor.clips.loopMin != this.editor.cameraEditor.clips.loopMax)
+        {
+            int min = this.editor.cameraEditor.clips.loopMin;
+            int max = this.editor.cameraEditor.clips.loopMax;
+            this.start = Math.max(0, Math.min(min, max));
+            this.end = Math.min(this.duration, Math.max(min, max));
+        }
+        else
+        {
+            this.start = 0;
+            this.end = this.duration;
+        }
 
-        return true;
+        if (this.end <= this.start)
+        {
+            throw new IllegalArgumentException("Video export range is empty");
+        }
+
+        boolean filmAudio = BBSSettings.videoSettings.audio.get();
+        boolean minecraftAudio = BBSSettings.videoExportMinecraftSounds != null
+            && BBSSettings.videoExportMinecraftSounds.get();
+
+        Film film = this.editor.getData();
+        return this.createOwnedRequest(film == null ? "" : film.getId(), this.start, this.end,
+            false, filmAudio, minecraftAudio);
+    }
+
+    @Override
+    protected AudioRenderResult renderFilmAudio(VideoExportRequest request, File output,
+                                                BooleanSupplier cancelled,
+                                                BiConsumer<Long, Long> progress)
+    {
+        return AudioRenderer.renderAudioResult(output, this.sessionAudioClips,
+            this.sessionAudioDuration, request.sampleRate(),
+            TimeUtils.toSeconds((float) request.sourceStart()),
+            TimeUtils.toSeconds((float) request.sourceEnd()),
+            request.layout(), cancelled, progress);
     }
 
     @Override
@@ -124,45 +158,7 @@ public class PanelVideoExportSession extends VideoExportSession
             film == null ? 0 : film.camera.calculateDuration()
         );
 
-        return uniqueName(BBSRendering.getVideoFolder(), base);
-    }
-
-    private static String uniqueName(File folder, String base)
-    {
-        String candidate = base;
-
-        for (int i = 1; nameTaken(folder, candidate); i++)
-        {
-            candidate = base + " (" + i + ")";
-        }
-
-        return candidate;
-    }
-
-    private static boolean nameTaken(File folder, String base)
-    {
-        File[] files = folder.listFiles();
-
-        if (files == null)
-        {
-            return false;
-        }
-
-        String prefix = (base + ".").toLowerCase(java.util.Locale.ROOT);
-
-        for (File file : files)
-        {
-            String name = file.getName().toLowerCase(java.util.Locale.ROOT);
-
-            /* WAV/log/tmp files are side products of this export, not a prior video
-             * occupying the requested base name. */
-            if (name.startsWith(prefix) && !isExportArtifact(name.substring(prefix.length())))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return base;
     }
 
     @Override
@@ -229,7 +225,23 @@ public class PanelVideoExportSession extends VideoExportSession
             {
                 this.setupStarted = false;
                 this.setupCompleted = false;
+                this.sessionAudioClips = List.of();
+                this.sessionAudioDuration = 0;
             }
         );
+    }
+
+    @Override
+    protected void onTerminalResult(mchorse.bbs_mod.film.VideoExportResult result)
+    {
+        if (result.kind() == mchorse.bbs_mod.film.VideoExportResult.Kind.DEGRADED
+            || (result.kind() != mchorse.bbs_mod.film.VideoExportResult.Kind.SUCCESS
+                && result.kind() != mchorse.bbs_mod.film.VideoExportResult.Kind.CANCELLED))
+        {
+            String message = result.message() == null || result.message().isBlank()
+                ? result.kind().name() : result.message();
+            UIOverlay.addOverlay(this.editor.getContext(),
+                new UIMessageOverlayPanel(UIKeys.GENERAL_ERROR, IKey.constant(message)));
+        }
     }
 }

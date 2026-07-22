@@ -1,6 +1,87 @@
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import org.gradle.api.credentials.HttpHeaderCredentials
 import org.gradle.authentication.http.HttpHeaderAuthentication
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
+import java.nio.charset.StandardCharsets
+import java.util.Locale
+
+/** Detect uncaptured ERROR diagnostics emitted by a JavaExec-backed test. */
+class BbsTestErrorOutputStream extends OutputStream {
+    private final OutputStream delegate
+    private final ByteArrayOutputStream line = new ByteArrayOutputStream()
+    private boolean error
+    private String firstErrorLine
+
+    BbsTestErrorOutputStream(OutputStream delegate) {
+        this.delegate = delegate
+    }
+
+    @Override
+    synchronized void write(int value) throws IOException {
+        delegate.write(value)
+        this.accept(value)
+    }
+
+    @Override
+    synchronized void write(byte[] bytes, int offset, int length) throws IOException {
+        delegate.write(bytes, offset, length)
+
+        for (int i = offset; i < offset + length; i += 1) {
+            this.accept(bytes[i] & 0xff)
+        }
+    }
+
+    @Override
+    synchronized void flush() throws IOException {
+        delegate.flush()
+    }
+
+    @Override
+    synchronized void close() throws IOException {
+        this.finish()
+        delegate.flush()
+    }
+
+    synchronized boolean hasError() {
+        this.finish()
+        return error
+    }
+
+    synchronized String firstErrorLine() {
+        this.finish()
+        return firstErrorLine
+    }
+
+    private void accept(int value) {
+        if (value == '\n' || value == '\r') {
+            this.inspectLine()
+            line.reset()
+        } else {
+            line.write(value)
+        }
+    }
+
+    private void finish() {
+        if (line.size() > 0) {
+            this.inspectLine()
+            line.reset()
+        }
+    }
+
+    private void inspectLine() {
+        String value = line.toString(StandardCharsets.UTF_8)
+        String upper = value.toUpperCase(Locale.ROOT)
+
+        if (upper.contains('/ERROR]') || upper.contains('[ERROR]') || upper.trim().startsWith('ERROR ')) {
+            error = true
+
+            if (firstErrorLine == null) {
+                firstErrorLine = value.trim()
+            }
+        }
+    }
+}
 
 plugins {
     id 'net.neoforged.gradle.userdev' version '7.1.21'
@@ -16,6 +97,14 @@ def bbsNeoMirrorUrl = findProperty("bbsNeoMirrorUrl")?.toString() ?: "https://cd
 def bbsProxyKey = findProperty("bbsProxyKey")?.toString() ?: (System.getenv("BBS_PROXY_KEY") ?: "")
 def neoForgedOfficial = 'https://maven.neoforged.net/releases'
 def neoForgedMirror = bbsNeoMirrorUrl
+String forceBuildProperty = providers.gradleProperty('forceBuild').orNull
+
+if (forceBuildProperty != null
+    && !['true', 'false'].contains(forceBuildProperty.toLowerCase(Locale.ROOT))) {
+    throw new GradleException("forceBuild must be true or false; use -PforceBuild=true only for an explicit forced build")
+}
+
+boolean forceBuild = 'true'.equalsIgnoreCase(forceBuildProperty)
 
 def applyBbsProxyHeaderAuth = { MavenArtifactRepository repository, String repositoryUrl ->
     if (!repositoryUrl.contains("cdnneo.sweatent.top") || bbsProxyKey.isEmpty()) {
@@ -94,7 +183,7 @@ sourceSets {
         runtimeClasspath += output + compileClasspath
     }
     addonLifecycleTest {
-        java.srcDirs = ['src/addonLifecycleTest/java']
+        java.srcDirs = ['src/addonLifecycleTest/java', 'src/testSupport/java']
         resources.srcDirs = []
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output
@@ -106,13 +195,13 @@ sourceSets {
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
     surfaceMirrorTest {
-        java.srcDirs = ['src/surfaceMirrorTest/java']
+        java.srcDirs = ['src/surfaceMirrorTest/java', 'src/testSupport/java']
         resources.srcDirs = []
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
     uiInputMailboxTest {
-        java.srcDirs = ['src/uiInputMailboxTest/java']
+        java.srcDirs = ['src/uiInputMailboxTest/java', 'src/testSupport/java']
         resources.srcDirs = []
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
@@ -148,7 +237,25 @@ sourceSets {
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
     clientRegistrationTest {
-        java.srcDirs = ['src/clientRegistrationTest/java']
+        java.srcDirs = ['src/clientRegistrationTest/java', 'src/testSupport/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    audioFormatTest {
+        java.srcDirs = ['src/audioFormatTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+    audioLifecycleTest {
+        java.srcDirs = ['src/audioLifecycleTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+    audioVerificationTest {
+        java.srcDirs = ['src/audioVerificationTest/java']
         resources.srcDirs = []
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
@@ -195,6 +302,12 @@ configurations {
     ikPhysicsTestRuntimeOnly.extendsFrom clientRuntimeOnly
     clientRegistrationTestImplementation.extendsFrom clientImplementation
     clientRegistrationTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    audioFormatTestImplementation.extendsFrom implementation
+    audioFormatTestRuntimeOnly.extendsFrom runtimeOnly
+    audioLifecycleTestImplementation.extendsFrom clientImplementation
+    audioLifecycleTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    audioVerificationTestImplementation.extendsFrom clientImplementation
+    audioVerificationTestRuntimeOnly.extendsFrom clientRuntimeOnly
     pluginHotReloadTestImplementation.extendsFrom clientImplementation
     pluginHotReloadTestRuntimeOnly.extendsFrom clientRuntimeOnly
 }
@@ -205,7 +318,7 @@ java {
 }
 
 repositories {
-    maven { url "https://bmclapi2.bangbang93.com/maven" }
+    maven { url = "https://bmclapi2.bangbang93.com/maven" }
 
     mavenCentral()
     if (bbsPreferMirror) {
@@ -362,6 +475,41 @@ tasks.register('testBinaryCompatibility', JavaExec) {
     mainClass = 'mchorse.bbs_mod.client.compat.LegacyPublicDescriptorCompatibilityTest'
 }
 
+tasks.register('testAudioFormat', JavaExec) {
+    dependsOn tasks.named('compileJava'), tasks.named('audioFormatTestClasses')
+    classpath = sourceSets.audioFormatTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.audio.AudioFormatContractTest'
+}
+
+tasks.register('testAudioLifecycle', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('audioLifecycleTestClasses')
+    classpath = sourceSets.audioLifecycleTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.audio.AudioLifecycleTest'
+}
+
+tasks.register('testAudioVerification', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('audioVerificationTestClasses')
+    classpath = sourceSets.audioVerificationTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.audio.AudioVerificationContractTest'
+    systemProperty 'requireMediaTools', 'false'
+    if (project.hasProperty('ffmpegPath')) systemProperty 'ffmpegPath', project.property('ffmpegPath')
+    if (project.hasProperty('ffprobePath')) systemProperty 'ffprobePath', project.property('ffprobePath')
+}
+
+tasks.register('testAudioMediaIntegration', JavaExec) {
+    group = 'verification'
+    description = 'Runs the strict audio media capability gate with FFmpeg and ffprobe required.'
+    dependsOn tasks.named('clientClasses'), tasks.named('audioVerificationTestClasses')
+    classpath = sourceSets.audioVerificationTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.audio.AudioMediaIntegrationTest'
+    systemProperty 'requireMediaTools', project.findProperty('requireMediaTools') ?: 'false'
+    if (project.hasProperty('audioVerificationPerformance')) {
+        systemProperty 'audioVerificationPerformance', project.property('audioVerificationPerformance')
+    }
+    if (project.hasProperty('ffmpegPath')) systemProperty 'ffmpegPath', project.property('ffmpegPath')
+    if (project.hasProperty('ffprobePath')) systemProperty 'ffprobePath', project.property('ffprobePath')
+}
+
 tasks.register('testPluginHotReload', JavaExec) {
     group = 'verification'
     description = 'Runs the isolated FSR hot-plugin classloader feasibility gate.'
@@ -370,8 +518,87 @@ tasks.register('testPluginHotReload', JavaExec) {
     mainClass = 'mchorse.bbs_mod.plugin.PluginHotReloadTestSuite'
 }
 
+def bbsVerificationTaskNames = [
+    'testPluginHotReload',
+    'testAudioFormat',
+    'testAudioLifecycle',
+    'testAudioVerification',
+    'testVideoExportUtils',
+    'testPlatformResourceConsistency',
+    'testFolderManagerContainment',
+    'testInteractionActions',
+    'testNetworkSecurity',
+    'testAddonLifecycle',
+    'testClientStructuralRegistration',
+    'testBinaryCompatibility',
+    'testFilmCollaborationApi',
+    'testUiSurfacePlacement',
+    'testUiInputMailbox',
+    'testUiMirrorDemand',
+    'testReplayKeyframeConsistency',
+    'testFilmEditorMigration',
+    'testParticleRuntimeConsistency',
+    'testIkPhysicsConsistency'
+]
+
+bbsVerificationTaskNames.each { taskName ->
+    tasks.named(taskName, JavaExec).configure {
+        /* JavaExec exits are strict by default. A forced build is the only
+         * opt-in path that lets packaging continue after a test failure. */
+        ignoreExitValue = forceBuild
+
+        doFirst {
+            def stdoutScanner = new BbsTestErrorOutputStream(System.out)
+            def stderrScanner = new BbsTestErrorOutputStream(System.err)
+
+            standardOutput = stdoutScanner
+            errorOutput = stderrScanner
+            extensions.extraProperties.set('bbsStdoutScanner', stdoutScanner)
+            extensions.extraProperties.set('bbsStderrScanner', stderrScanner)
+
+            if (forceBuild) {
+                logger.warn("[BBS-BUILD] forceBuild=true: test failures in ${path} will not fail the build")
+            }
+        }
+
+        doLast {
+            def stdoutScanner = extensions.extraProperties.get('bbsStdoutScanner') as BbsTestErrorOutputStream
+            def stderrScanner = extensions.extraProperties.get('bbsStderrScanner') as BbsTestErrorOutputStream
+            boolean testLoggedError = stdoutScanner.hasError() || stderrScanner.hasError()
+
+            if (testLoggedError) {
+                String diagnostic = stdoutScanner.firstErrorLine() ?: stderrScanner.firstErrorLine() ?: 'ERROR diagnostic'
+
+                if (!forceBuild) {
+                    throw new GradleException("${path} emitted an uncaptured ERROR diagnostic: ${diagnostic}")
+                }
+
+                logger.warn("[BBS-BUILD] forceBuild=true ignored test ERROR diagnostic from ${path}: ${diagnostic}")
+            }
+        }
+    }
+}
+
+tasks.withType(JavaExec).matching { it.name.startsWith('test') }.configureEach {
+    /* Gradle captures test output, so no interactive JLine terminal exists. */
+    systemProperty 'terminal.jline', 'false'
+}
+
+tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+    systemProperty 'terminal.jline', 'false'
+    ignoreFailures = forceBuild
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('testPluginHotReload'), tasks.named('testVideoExportUtils'), tasks.named('testPlatformResourceConsistency'), tasks.named('testFolderManagerContainment'), tasks.named('testInteractionActions'), tasks.named('testNetworkSecurity'), tasks.named('testAddonLifecycle'), tasks.named('testClientStructuralRegistration'), tasks.named('testBinaryCompatibility'), tasks.named('testFilmCollaborationApi'), tasks.named('testUiSurfacePlacement'), tasks.named('testUiInputMailbox'), tasks.named('testUiMirrorDemand'), tasks.named('testReplayKeyframeConsistency'), tasks.named('testFilmEditorMigration'), tasks.named('testParticleRuntimeConsistency'), tasks.named('testIkPhysicsConsistency')
+    dependsOn bbsVerificationTaskNames.collect { tasks.named(it) }
+}
+
+tasks.named('build') {
+    doFirst {
+        if (forceBuild) {
+            logger.warn('[BBS-BUILD] forced build enabled; compile, resource, and packaging failures remain fatal')
+        }
+    }
 }
 
 tasks.named("cacheVersionExtractedServer${minecraft_version}") {
@@ -381,6 +608,7 @@ tasks.named("cacheVersionExtractedServer${minecraft_version}") {
 }
 
 tasks.named('jar') {
+    archiveFileName = "${archives_base_name}.jar"
     from sourceSets.client.output
 }
 

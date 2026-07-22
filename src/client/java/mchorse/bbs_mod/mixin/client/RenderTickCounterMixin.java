@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.mixin.client;
 
 import mchorse.bbs_mod.BBSModClient;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import net.minecraft.client.DeltaTracker;
@@ -33,6 +32,14 @@ public class RenderTickCounterMixin
 
         if (videoRecorder != null && videoRecorder.isRecording())
         {
+            double captureFrameRate = videoRecorder.getCaptureFrameRate();
+            int heldFrameLimit = Math.max(1, videoRecorder.getCapturedHeldFrames());
+
+            if (!Double.isFinite(captureFrameRate) || captureFrameRate <= 0D)
+            {
+                captureFrameRate = BBSRendering.getVideoFrameRate();
+            }
+
             if (videoRecorder.getCounter() == 0)
             {
                 this.deltaTicks = 0F;
@@ -41,9 +48,9 @@ public class RenderTickCounterMixin
 
             if (this.heldFrames == 0)
             {
-                if (BBSSettings.videoLimitFrameRate.get())
+                if (videoRecorder.isCaptureFrameRateLimited())
                 {
-                    long frameInterval = (long) (1000F / BBSRendering.getVideoFrameRate());
+                    long frameInterval = Math.max(1L, (long) (1000F / captureFrameRate));
 
                     if (timeMillis - this.lastFrameTime < frameInterval)
                     {
@@ -58,7 +65,7 @@ public class RenderTickCounterMixin
                 }
 
                 this.lastMs = timeMillis;
-                this.deltaTickResidual += 20F / (float) BBSRendering.getVideoFrameRate();
+                this.deltaTickResidual += 20F / (float) captureFrameRate;
 
                 int ticks = (int) this.deltaTickResidual;
 
@@ -79,7 +86,7 @@ public class RenderTickCounterMixin
 
             this.heldFrames += 1;
 
-            if (this.heldFrames >= BBSSettings.videoSettings.heldFrames.get())
+            if (this.heldFrames >= heldFrameLimit)
             {
                 this.heldFrames = 0;
             }

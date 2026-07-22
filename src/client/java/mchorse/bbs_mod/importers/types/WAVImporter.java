@@ -1,16 +1,39 @@
 package mchorse.bbs_mod.importers.types;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.audio.AudioImportPolicy;
 import mchorse.bbs_mod.importers.ImporterContext;
 import mchorse.bbs_mod.importers.ImporterUtils;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.utils.FFMpegUtils;
 
 import java.io.File;
 
 public class WAVImporter implements IImporter
 {
+    private final AudioImportPolicy policy;
+
+    public WAVImporter()
+    {
+        this(AudioImportPolicy.SOURCE);
+    }
+
+    public WAVImporter(AudioImportPolicy policy)
+    {
+        this.policy = policy == null ? AudioImportPolicy.SOURCE : policy;
+    }
+
+    public AudioImportPolicy policy()
+    {
+        return this.policy;
+    }
+
+    @Override
+    public boolean requiresFFmpeg()
+    {
+        return this.policy != AudioImportPolicy.SOURCE;
+    }
+
     @Override
     public IKey getName()
     {
@@ -32,13 +55,17 @@ public class WAVImporter implements IImporter
     @Override
     public void importFiles(ImporterContext context)
     {
-        for (File file : context.files)
+        ImportOutcome outcome = this.importFilesOutcome(context);
+        if (!outcome.success())
         {
-            String name = file.getName();
-            File destination = context.getDestination(this);
-
-            /* Force the audio to be mono */
-            FFMpegUtils.execute(destination, "-y", "-i", file.getAbsolutePath(), "-ac", "1", ImporterUtils.getName(destination, name));
+            throw new IllegalStateException(outcome.message());
         }
+    }
+
+    @Override
+    public ImportOutcome importFilesOutcome(ImporterContext context)
+    {
+        return AudioImporterSupport.importFiles(context, this.policy, true, false,
+            context.getDestination(this));
     }
 }

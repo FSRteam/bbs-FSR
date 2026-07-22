@@ -35,6 +35,7 @@ public class RunnerCameraController extends CameraWorkCameraController
     public void setPlaying(boolean playing)
     {
         this.context.playing = playing;
+        mchorse.bbs_mod.camera.clips.misc.AudioClientClip.manageSounds(this.context);
 
         if (this.callback != null)
         {

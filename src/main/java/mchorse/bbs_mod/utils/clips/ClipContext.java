@@ -6,6 +6,10 @@ import java.util.function.Predicate;
 
 public abstract class ClipContext <T extends Clip, E>
 {
+    /** Stable identity for client-side resources owned by this transport context. */
+    private Object playbackOwner = new Object();
+    private long playbackGeneration;
+
     /**
      * Tick since the beginning of the camera profile.
      */
@@ -52,6 +56,25 @@ public abstract class ClipContext <T extends Clip, E>
     public double velocity;
 
     public final ClipData clipData = new ClipData();
+
+    public synchronized Object getPlaybackOwner()
+    {
+        return this.playbackOwner;
+    }
+
+    /** Replace the owner when a controller's work is replaced, fencing queued callbacks. */
+    public synchronized Object resetPlaybackOwner()
+    {
+        this.playbackGeneration++;
+        this.playbackOwner = new Object();
+
+        return this.playbackOwner;
+    }
+
+    public synchronized long getPlaybackGeneration()
+    {
+        return this.playbackGeneration;
+    }
 
     public ClipContext setup(int ticks, float transition)
     {

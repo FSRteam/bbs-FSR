@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioCacheManager;
 import mchorse.bbs_mod.audio.AudioReader;
+import mchorse.bbs_mod.audio.AudioDecodeException;
 import mchorse.bbs_mod.audio.ColorCode;
 import mchorse.bbs_mod.audio.SoundLikeManager;
 import mchorse.bbs_mod.audio.SoundLikeManager.LikedSound;
@@ -24,6 +25,8 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIVanillaSoundList;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -39,6 +42,7 @@ import java.util.function.Consumer;
 public class UISoundOverlayPanel extends UIStringOverlayPanel
 {
     private static final int PLAYER_HEIGHT = 24;
+    private static final Logger LOGGER = LoggerFactory.getLogger(UISoundOverlayPanel.class);
 
     public UIAudioPlayer player;
 
@@ -445,9 +449,23 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
                 }
             }
         }
+        catch (AudioDecodeException e)
+        {
+            LOGGER.warn("Sound preview cannot decode {}: {}", audio, e.getMessage());
+
+            if (this.context != null)
+            {
+                this.context.notifyError(UIKeys.GENERAL_ERROR);
+            }
+        }
         catch (Exception e)
         {
-            e.printStackTrace();
+            LOGGER.error("Failed to preview sound {}", audio, e);
+
+            if (this.context != null)
+            {
+                this.context.notifyError(UIKeys.GENERAL_ERROR);
+            }
         }
 
         this.updateListSelections();

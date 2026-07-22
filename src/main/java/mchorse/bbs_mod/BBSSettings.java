@@ -18,6 +18,7 @@ import mchorse.bbs_mod.settings.values.ui.ValuePhysicsDebug;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
+import mchorse.bbs_mod.settings.values.ui.ValueExportChannelLayout;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -29,7 +30,9 @@ public class BBSSettings {
 
 	public static final String DEFAULT_FFMPEG_ARGUMENTS = ValueVideoSettings.DEFAULT_FFMPEG_ARGUMENTS;
 	public static final String DEFAULT_AUDIO_FFMPEG_ARGUMENTS = ValueVideoSettings.DEFAULT_AUDIO_FFMPEG_ARGUMENTS;
-	public static final String DEFAULT_MUX_FFMPEG_ARGUMENTS = "-y -i %VIDEO% -i %AUDIO_TRACK% -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -shortest %NAME%.mp4";
+	public static final String DEFAULT_MUX_FFMPEG_ARGUMENTS = mchorse.bbs_mod.utils.VideoExportAudioProfile.DEFAULT_MUX_ARGUMENTS;
+	private static final String LEGACY_MUX_FFMPEG_ARGUMENTS =
+		"-y -i %VIDEO% -i %AUDIO_TRACK% -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -shortest %NAME%.mp4";
 
 	public static ValueColors favoriteColors;
 	public static ValueColors recentColors;
@@ -106,6 +109,8 @@ public class BBSSettings {
 	public static ValueString videoExportPath;
 	public static ValueString videoExportFilenameFormat;
 	public static ValueBoolean videoExportAudio;
+	/** Persisted stable channel-layout id; invalid/legacy values normalize to mono. */
+	public static ValueString videoAudioLayout;
 	public static ValueBoolean videoExportMinecraftSounds;
 	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
@@ -415,6 +420,22 @@ public class BBSSettings {
 		videoMigrated |= migrateLegacyValue(settings, video, "arguments");
 		videoMigrated |= migrateLegacyValue(settings, video, "arguments_audio");
 
+		/* Upgrade only the exact built-in templates.  A user-authored template
+		 * remains theirs and is rejected explicitly if it cannot satisfy the new
+		 * delivery contract. */
+		if (video.has("arguments_audio")
+			&& ValueVideoSettings.LEGACY_AUDIO_FFMPEG_ARGUMENTS.equals(video.getString("arguments_audio")))
+		{
+			video.putString("arguments_audio", DEFAULT_AUDIO_FFMPEG_ARGUMENTS);
+			videoMigrated = true;
+		}
+
+		if (video.has("arguments_mux") && LEGACY_MUX_FFMPEG_ARGUMENTS.equals(video.getString("arguments_mux")))
+		{
+			video.putString("arguments_mux", DEFAULT_MUX_FFMPEG_ARGUMENTS);
+			videoMigrated = true;
+		}
+
 		if (videoMigrated) {
 			root.put("video", video);
 		}
@@ -559,6 +580,8 @@ public class BBSSettings {
 		videoExportPath = builder.getString("export_path", "");
 		videoExportFilenameFormat = builder.getString("filename_format", "{datetime}");
 		videoExportAudio = builder.getBoolean("audio", false);
+		videoAudioLayout = new ValueExportChannelLayout("audio_channel_layout");
+		builder.register(videoAudioLayout);
 		videoExportMinecraftSounds = builder.getBoolean("minecraft_sounds", false);
 		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
@@ -582,7 +605,8 @@ public class BBSSettings {
 			videoDelay,
 			videoExportPath,
 			videoOpenFolderAfterExport,
-			videoPlaySoundAfterExport
+			videoPlaySoundAfterExport,
+			videoAudioLayout
 		);
 
 		/* Camera editor */

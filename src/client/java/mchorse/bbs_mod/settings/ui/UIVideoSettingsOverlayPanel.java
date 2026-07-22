@@ -1,9 +1,13 @@
 package mchorse.bbs_mod.settings.ui;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
+import mchorse.bbs_mod.audio.ChannelLayout;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
@@ -19,6 +23,9 @@ public class UIVideoSettingsOverlayPanel extends UIOverlayPanel
     private UITextbox arguments;
     private UITextbox argumentsAudio;
     private UIToggle audio;
+    private UIButton audioMono;
+    private UIButton audioStereo;
+    private UIElement audioLayout;
     private UIIcon flip;
     private UITrackpad width;
     private UITrackpad height;
@@ -40,6 +47,11 @@ public class UIVideoSettingsOverlayPanel extends UIOverlayPanel
         this.argumentsAudio = new UITextbox(1024, (s) -> this.value.argumentsAudio.set(s));
         this.audio = new UIToggle(UIKeys.VIDEO_SETTINGS_AUDIO, (b) -> this.value.audio.set(b.getValue()));
         this.audio.tooltip(UIKeys.VIDEO_SETTINGS_AUDIO_TOOLTIP);
+        this.audioMono = new UIButton(UIKeys.VIDEO_SETTINGS_AUDIO_CHANNELS_MONO,
+            (b) -> this.setAudioLayout(ChannelLayout.MONO));
+        this.audioStereo = new UIButton(UIKeys.VIDEO_SETTINGS_AUDIO_CHANNELS_STEREO,
+            (b) -> this.setAudioLayout(ChannelLayout.STEREO));
+        this.audioLayout = UI.row(this.audioMono, this.audioStereo);
         this.flip = new UIIcon(Icons.REFRESH, (b) ->
         {
             int w = this.value.width.get();
@@ -77,7 +89,10 @@ public class UIVideoSettingsOverlayPanel extends UIOverlayPanel
             UI.label(UIKeys.VIDEO_SETTINGS_ARGS),
             this.arguments,
             UI.label(UIKeys.VIDEO_SETTINGS_AUDIO_ARGS),
-            this.argumentsAudio, this.audio,
+            this.argumentsAudio,
+            this.audio,
+            UI.label(UIKeys.VIDEO_SETTINGS_AUDIO_CHANNELS).marginTop(6),
+            this.audioLayout,
             this.openFolderAfterExport,
             this.playSoundAfterExport,
             UI.label(UIKeys.VIDEO_SETTINGS_RESOLUTION).marginTop(6),
@@ -127,6 +142,12 @@ public class UIVideoSettingsOverlayPanel extends UIOverlayPanel
         this.arguments.setText(this.value.arguments.get());
         this.argumentsAudio.setText(this.value.argumentsAudio.get());
         this.audio.setValue(this.value.audio.get());
+        ChannelLayout layout = this.resolvedLayout();
+        int selectedColor = BBSSettings.primaryColor.get();
+        int unselectedColor = BBSSettings.raisedSurface();
+
+        this.audioMono.color(layout == ChannelLayout.MONO ? selectedColor : unselectedColor);
+        this.audioStereo.color(layout == ChannelLayout.STEREO ? selectedColor : unselectedColor);
         this.width.setValue(this.value.width.get());
         this.height.setValue(this.value.height.get());
         this.frameRate.setValue(this.value.frameRate.get());
@@ -136,5 +157,21 @@ public class UIVideoSettingsOverlayPanel extends UIOverlayPanel
         this.path.setText(this.value.path.get());
         this.openFolderAfterExport.setValue(this.value.openFolderAfterExport.get());
         this.playSoundAfterExport.setValue(this.value.playSoundAfterExport.get());
+    }
+
+    private ChannelLayout resolvedLayout()
+    {
+        if (this.value.audioLayout instanceof mchorse.bbs_mod.settings.values.ui.ValueExportChannelLayout layout)
+        {
+            return layout.getResolved();
+        }
+
+        return ChannelLayout.normalizeExport(this.value.audioLayout.get());
+    }
+
+    private void setAudioLayout(ChannelLayout layout)
+    {
+        this.value.audioLayout.set(layout.id());
+        this.fill();
     }
 }

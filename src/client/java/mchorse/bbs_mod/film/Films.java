@@ -5,7 +5,6 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioRenderer;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
-import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
@@ -72,7 +71,7 @@ public class Films
 
         if (withCamera && !film.hasFirstPerson())
         {
-            PlayCameraController controller = new PlayCameraController(film.camera);
+            PlayCameraController controller = new PlayCameraController(film.getId(), film.camera);
 
             controller.getContext().entities.putAll(filmController.getEntities());
             BBSModClient.getCameraController().add(controller);
@@ -109,18 +108,9 @@ public class Films
     public static void stopFilm(String filmId)
     {
         Film film = BBSModClient.getFilms().remove(filmId);
-        ICameraController current = BBSModClient.getCameraController().getCurrent();
-
-        if (film != null && current instanceof PlayCameraController play)
-        {
-            if (play.getContext().clips == film.camera)
-            {
-                if (BBSModClient.getCameraController().remove(play) instanceof RunnerCameraController controller)
-                {
-                    controller.getContext().shutdown();
-                }
-            }
-        }
+        BBSModClient.getCameraController().removeMatching(controller ->
+            controller instanceof PlayCameraController play
+                && play.isForFilm(filmId, film == null ? null : film.camera));
     }
 
     /* Instance API */

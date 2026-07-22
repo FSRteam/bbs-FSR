@@ -1,11 +1,10 @@
 package mchorse.bbs_mod.importers.types;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.audio.AudioImportPolicy;
 import mchorse.bbs_mod.importers.ImporterContext;
 import mchorse.bbs_mod.importers.ImporterUtils;
 import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.utils.FFMpegUtils;
-import mchorse.bbs_mod.utils.StringUtils;
 
 import java.io.File;
 
@@ -13,11 +12,23 @@ public class ToWAVImporter implements IImporter
 {
     private final IKey name;
     private final String[] extensions;
+    private final AudioImportPolicy policy;
 
     public ToWAVImporter(IKey name, String... extensions)
     {
+        this(name, AudioImportPolicy.SOURCE, extensions);
+    }
+
+    public ToWAVImporter(IKey name, AudioImportPolicy policy, String... extensions)
+    {
         this.name = name;
         this.extensions = extensions;
+        this.policy = policy == null ? AudioImportPolicy.SOURCE : policy;
+    }
+
+    public AudioImportPolicy policy()
+    {
+        return this.policy;
     }
 
     @Override
@@ -41,13 +52,17 @@ public class ToWAVImporter implements IImporter
     @Override
     public void importFiles(ImporterContext context)
     {
-        for (File file : context.files)
+        ImportOutcome outcome = this.importFilesOutcome(context);
+        if (!outcome.success())
         {
-            String name = StringUtils.removeExtension(file.getName()) + ".wav";
-            File destination = context.getDestination(this);
-
-            /* Force the audio to be mono */
-            FFMpegUtils.execute(destination, "-y", "-i", file.getAbsolutePath(), "-ac", "1", ImporterUtils.getName(destination, name));
+            throw new IllegalStateException(outcome.message());
         }
+    }
+
+    @Override
+    public ImportOutcome importFilesOutcome(ImporterContext context)
+    {
+        return AudioImporterSupport.importFiles(context, this.policy, false, true,
+            context.getDestination(this));
     }
 }

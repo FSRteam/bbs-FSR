@@ -17,4 +17,8 @@ public interface ICameraController
 
     public default void update()
     {}
+
+    /** Release controller-owned resources when it leaves the camera stack. */
+    public default void shutdown()
+    {}
 }

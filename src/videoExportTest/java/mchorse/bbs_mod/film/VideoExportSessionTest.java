@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.film;
 
+import mchorse.bbs_mod.audio.ChannelLayout;
+import mchorse.bbs_mod.utils.VideoExportAudioProfile;
 import mchorse.bbs_mod.utils.VideoExportProcess;
 import mchorse.bbs_mod.utils.VideoRecorder;
 
@@ -7,6 +9,12 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -19,6 +27,8 @@ public final class VideoExportSessionTest
     public static void runAll() throws Exception
     {
         assertRejectedWorldStartCleanupCannotTogglePlayback();
+        assertWorldExportKeyOwnership();
+        assertEarlyWorldExportToggleCancellationIsTyped();
         assertPrepareFailureNotifiesOnce();
         assertImmediateAndDelayedStartFailureMatch();
         assertRuntimeRecorderFailureWins();
@@ -36,6 +46,9 @@ public final class VideoExportSessionTest
         assertListenerFailureCannotWedgeSession();
         assertListenerCanReenterStableSession();
         assertImmediateFailureListenerCanReenter();
+        assertQueuedOwnedCancellationDeliversOnce();
+        assertRunningOwnedCancellationWaitsForWorker();
+        assertOwnedTerminalFailuresAreIsolated();
     }
 
     private static void assertRejectedWorldStartCleanupCannotTogglePlayback() throws Exception
@@ -51,6 +64,106 @@ public final class VideoExportSessionTest
             "rejected or lost remote start cleanup does not use the explicit idempotent STOP action");
         assertFalse(stop.contains("sendToggleFilm"),
             "rejected or lost remote start cleanup can still toggle an absent film into playback");
+    }
+
+    private static void assertWorldExportKeyOwnership() throws Exception
+    {
+        Path source = Path.of("src/client/java/mchorse/bbs_mod/BBSModClient.java");
+        String client = Files.readString(source).replace("\r\n", "\n");
+        String key = sourceSection(client, "private static void keyRecordVideo(Minecraft mc)", "private static KeyMapping createKey");
+
+        assertTrue(key.contains("VideoExportRequest activeRequest = worldExportSession.getActiveExportRequest()"),
+            "F4 does not read the immutable active request fence");
+        assertFalse(key.contains("worldExportSession.getFilmId()"),
+            "F4 ownership still depends on mutable Film state");
+        String f4Fence = sourceSection(key, "VideoExportRequest activeRequest", "if (worldExportSession.isRecording())");
+        assertTrue(f4Fence.contains("activeRequest == null")
+                && f4Fence.contains("!activeRequest.openEnd()")
+                && f4Fence.contains("!activeRequest.sourceId().isEmpty()"),
+            "F4 does not reject a closed or unidentified export before stop");
+        assertTrue(key.contains("if (worldExportSession.isRecording())"),
+            "F4 does not distinguish an active recording from warm-up");
+        assertTrue(key.contains("worldExportSession.stop();"),
+            "F4 active recording does not use the completing stop path");
+        assertTrue(key.contains("worldExportSession.cancel();"),
+            "F4 warm-up cancellation path was removed");
+
+        int stop = key.indexOf("worldExportSession.stop();");
+        int cancel = key.indexOf("worldExportSession.cancel();");
+
+        assertTrue(stop >= 0 && cancel >= 0 && stop < cancel,
+            "F4 completion branch is not ordered before warm-up cancellation");
+
+        String f6 = sourceSection(client, "private static void keyPlayFilmAndRecord()",
+            "private static void keyPauseFilm");
+        assertTrue(f6.contains("VideoExportRequest activeRequest = worldExportSession.getActiveExportRequest()"),
+            "F6 does not read the immutable active request fence");
+        assertFalse(f6.contains("worldExportSession.getFilmId()"),
+            "F6 ownership still depends on mutable Film state");
+        assertTrue(f6.contains("activeRequest != null")
+                && f6.contains("!activeRequest.openEnd()")
+                && f6.contains("Objects.equals(filmId, activeRequest.sourceId())"),
+            "F6 can cancel an unrelated or open-ended export");
+
+        int f6Cancel = f6.indexOf("worldExportSession.cancel();");
+        int f6Fence = f6.indexOf("if (activeRequest != null");
+        assertTrue(f6Fence >= 0 && f6Cancel > f6Fence,
+            "F6 cancellation is not behind its owner fence");
+    }
+
+    private static void assertEarlyWorldExportToggleCancellationIsTyped() throws Exception
+    {
+        assertEarlyOwnedCancellation("F4", true, "");
+        assertEarlyOwnedCancellation("F6", false, "film-id");
+    }
+
+    private static void assertEarlyOwnedCancellation(String command, boolean openEnd,
+                                                      String sourceId) throws Exception
+    {
+        Path root = Files.createTempDirectory("bbs-export-" + command.toLowerCase() + "-warmup-");
+        OwnedTestSession session = new OwnedTestSession(root, true, false);
+        AtomicInteger legacy = new AtomicInteger();
+        AtomicInteger typed = new AtomicInteger();
+
+        try
+        {
+            session.setFinishedListener(aborted ->
+            {
+                assertTrue(aborted, command + " warm-up toggle was reported as success");
+                legacy.incrementAndGet();
+            });
+            session.setFinishedResultListener(result ->
+            {
+                assertEquals(VideoExportResult.Kind.CANCELLED, result.kind());
+                assertEquals(VideoExportResult.Stage.CANCELLED, result.stage());
+                typed.incrementAndGet();
+            });
+
+            assertTrue(session.startOwned(false, openEnd, sourceId),
+                command + " did not enter its warm-up ownership window");
+            assertTrue(session.isWarmingUp(), command + " warm-up was not observable");
+            assertEquals(openEnd, session.getActiveExportRequest().openEnd());
+            assertEquals(sourceId, session.getActiveExportRequest().sourceId());
+
+            session.cancel();
+
+            assertEquals(VideoExportResult.Kind.CANCELLED, session.getLastExportResult().kind());
+            assertEquals(VideoExportSession.Result.CANCELLED, session.getLastResult());
+            assertEquals(0, session.recorder.completeCount);
+            assertEquals(1, session.recorder.cancelCount);
+            assertEquals(0, session.recorder.announceCount);
+            assertEquals(1, legacy.get());
+            assertEquals(1, typed.get());
+            assertEquals(1, session.teardownCount);
+            assertFalse(session.isExporting(), command + " warm-up cancellation left the session active");
+            assertFalse(Files.exists(session.artifacts.workDirectory()),
+                command + " warm-up cancellation left owned artifacts behind");
+        }
+        finally
+        {
+            session.close();
+            deleteTree(root);
+        }
     }
 
     private static String sourceSection(String source, String start, String end)
@@ -462,6 +575,130 @@ public final class VideoExportSessionTest
         session.cancel();
     }
 
+    private static void assertQueuedOwnedCancellationDeliversOnce() throws Exception
+    {
+        Path root = Files.createTempDirectory("bbs-export-queued-cancel-");
+        OwnedTestSession session = new OwnedTestSession(root, true, false);
+        AtomicInteger legacy = new AtomicInteger();
+        AtomicInteger typed = new AtomicInteger();
+        AtomicInteger persistent = new AtomicInteger();
+
+        try
+        {
+            session.setFinishedListener(aborted ->
+            {
+                assertTrue(aborted, "queued cancellation was reported as success");
+                legacy.incrementAndGet();
+            });
+            session.setFinishedResultListener(result ->
+            {
+                assertEquals(VideoExportResult.Kind.CANCELLED, result.kind());
+                typed.incrementAndGet();
+            });
+            session.addFinishedResultListener(result -> persistent.incrementAndGet());
+
+            assertTrue(session.startOwned(), "owned session did not start");
+            session.stop();
+            assertTrue(session.isExporting(), "stop did not enter postprocess");
+            session.cancel();
+            session.drainUntilTerminal();
+            session.cancel();
+
+            assertEquals(1, legacy.get());
+            assertEquals(1, typed.get());
+            assertEquals(1, persistent.get());
+            assertEquals(VideoExportResult.Kind.CANCELLED, session.getLastExportResult().kind());
+            assertEquals(1, session.teardownCount);
+            assertFalse(session.isExporting(), "queued cancellation left the session active");
+            assertFalse(Files.exists(session.artifacts.workDirectory()),
+                "queued cancellation left the owned work directory behind");
+        }
+        finally
+        {
+            session.close();
+            deleteTree(root);
+        }
+    }
+
+    private static void assertRunningOwnedCancellationWaitsForWorker() throws Exception
+    {
+        Path root = Files.createTempDirectory("bbs-export-running-cancel-");
+        OwnedTestSession session = new OwnedTestSession(root, false, true);
+        AtomicInteger callbacks = new AtomicInteger();
+
+        try
+        {
+            session.addFinishedResultListener(result -> callbacks.incrementAndGet());
+            assertTrue(session.startOwned(), "running owned session did not start");
+            session.stop();
+            assertTrue(session.claimed.await(5L, TimeUnit.SECONDS),
+                "postprocess worker never claimed execution");
+
+            session.cancel();
+            session.drainCallbacks();
+            assertEquals(0, callbacks.get());
+            assertTrue(session.isExporting(), "running cancellation completed before worker exit");
+
+            session.release.countDown();
+            session.drainUntilTerminal();
+            assertEquals(1, callbacks.get());
+            assertEquals(VideoExportResult.Kind.CANCELLED, session.getLastExportResult().kind());
+            assertEquals(1, session.teardownCount);
+        }
+        finally
+        {
+            session.release.countDown();
+            session.close();
+            deleteTree(root);
+        }
+    }
+
+    private static void assertOwnedTerminalFailuresAreIsolated() throws Exception
+    {
+        Path root = Files.createTempDirectory("bbs-export-terminal-isolation-");
+        OwnedTestSession session = new OwnedTestSession(root, false, false);
+        AtomicInteger legacy = new AtomicInteger();
+        AtomicInteger typed = new AtomicInteger();
+        AtomicInteger persistent = new AtomicInteger();
+
+        try
+        {
+            session.throwFromTerminalHook = true;
+            session.recorder.throwFromAnnouncement = true;
+            session.setFinishedListener(aborted ->
+            {
+                assertFalse(aborted, "success was changed by an observer exception");
+                legacy.incrementAndGet();
+            });
+            session.setFinishedResultListener(result ->
+            {
+                assertTrue(result.isSuccess(), "typed callback lost successful result");
+                typed.incrementAndGet();
+            });
+            session.addFinishedResultListener(result ->
+            {
+                throw new IllegalStateException("persistent observer failure");
+            });
+            session.addFinishedResultListener(result -> persistent.incrementAndGet());
+
+            assertTrue(session.startOwned(), "owned terminal isolation session did not start");
+            session.stop();
+            session.drainUntilTerminal();
+
+            assertEquals(1, legacy.get());
+            assertEquals(1, typed.get());
+            assertEquals(1, persistent.get());
+            assertEquals(1, session.terminalHookCount);
+            assertEquals(1, session.recorder.announceCount);
+            assertEquals(VideoExportResult.Kind.SUCCESS, session.getLastExportResult().kind());
+        }
+        finally
+        {
+            session.close();
+            deleteTree(root);
+        }
+    }
+
     private static class TestSession extends VideoExportSession
     {
         private final FakeVideoRecorder recorder;
@@ -579,6 +816,303 @@ public final class VideoExportSessionTest
         }
     }
 
+    /** Owned-pipeline fixture with deterministic worker ownership controls. */
+    private static final class OwnedTestSession extends VideoExportSession implements AutoCloseable
+    {
+        private final Path root;
+        private final boolean queueWorker;
+        private final boolean blockWorker;
+        private final OwnedVideoRecorder recorder = new OwnedVideoRecorder();
+        private final ConcurrentLinkedQueue<Runnable> clientCallbacks = new ConcurrentLinkedQueue<>();
+        private final ExecutorService executor = Executors.newSingleThreadExecutor();
+        private final CountDownLatch claimed = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+        private VideoExportArtifacts artifacts;
+        private int teardownCount;
+        private int terminalHookCount;
+        private boolean throwFromTerminalHook;
+        private boolean ready = true;
+        private boolean openEnd;
+        private String sourceId = "owned";
+
+        private OwnedTestSession(Path root, boolean queueWorker, boolean blockWorker)
+        {
+            this.root = root;
+            this.queueWorker = queueWorker;
+            this.blockWorker = blockWorker;
+        }
+
+        private boolean startOwned()
+        {
+            return this.startOwned(true, false, "owned");
+        }
+
+        private boolean startOwned(boolean ready, boolean openEnd, String sourceId)
+        {
+            this.ready = ready;
+            this.openEnd = openEnd;
+            this.sourceId = sourceId;
+
+            return this.begin(1, 16, 16, 0L);
+        }
+
+        @Override
+        protected VideoRecorder getRecorder()
+        {
+            return this.recorder;
+        }
+
+        @Override
+        protected VideoExportRequest createExportRequest(int width, int height) throws Exception
+        {
+            this.artifacts = VideoExportArtifacts.allocate(this.root, "owned");
+            return new VideoExportRequest(this.artifacts.sessionId(), 1L, 0D, this.openEnd ? 0D : 1D, this.openEnd,
+                24D, VideoExportAudioProfile.SAMPLE_RATE, 0, ChannelLayout.MONO,
+                false, false, this.artifacts, this.sourceId, 24D, 1, false,
+                width, height, VideoExportAudioProfile.DEFAULT_VIDEO_ARGUMENTS,
+                VideoExportAudioProfile.DEFAULT_MUX_ARGUMENTS, false);
+        }
+
+        @Override
+        protected boolean prepare()
+        {
+            return true;
+        }
+
+        @Override
+        protected void applyExportTarget()
+        {}
+
+        @Override
+        protected boolean isWarmupReady()
+        {
+            return this.ready;
+        }
+
+        @Override
+        protected void onRecordingStarted()
+        {}
+
+        @Override
+        protected boolean isFinished()
+        {
+            return false;
+        }
+
+        @Override
+        protected void teardown(boolean aborted)
+        {
+            this.teardownCount += 1;
+        }
+
+        @Override
+        protected java.util.concurrent.Future<?> submitPostprocess(Runnable runnable)
+        {
+            if (this.queueWorker)
+            {
+                return new FutureTask<>(runnable, null);
+            }
+
+            return this.executor.submit(runnable);
+        }
+
+        @Override
+        protected void onPostprocessExecutionClaimed() throws Exception
+        {
+            if (this.blockWorker)
+            {
+                this.claimed.countDown();
+                if (!this.release.await(5L, TimeUnit.SECONDS))
+                {
+                    throw new IllegalStateException("test worker release timed out");
+                }
+            }
+        }
+
+        @Override
+        protected void postToClient(Runnable runnable)
+        {
+            this.clientCallbacks.add(runnable);
+        }
+
+        @Override
+        protected void onTerminalResult(VideoExportResult result)
+        {
+            this.terminalHookCount += 1;
+            if (this.throwFromTerminalHook)
+            {
+                throw new IllegalStateException("test terminal hook failure");
+            }
+        }
+
+        private void drainCallbacks()
+        {
+            Runnable callback;
+            while ((callback = this.clientCallbacks.poll()) != null)
+            {
+                callback.run();
+            }
+        }
+
+        private void drainUntilTerminal() throws Exception
+        {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L);
+            while (this.getLastExportResult() == null)
+            {
+                this.drainCallbacks();
+                if (System.nanoTime() >= deadline)
+                {
+                    throw new AssertionError("owned export did not deliver a terminal result");
+                }
+                Thread.sleep(1L);
+            }
+            this.drainCallbacks();
+        }
+
+        @Override
+        public void close()
+        {
+            this.release.countDown();
+            this.executor.shutdownNow();
+        }
+    }
+
+    private static final class OwnedVideoRecorder extends VideoRecorder
+    {
+        private boolean recording;
+        private boolean outputProducerStarted;
+        private File outputFile;
+        private int counter;
+        private VideoExportProcess.Outcome outcome = VideoExportProcess.Outcome.IDLE;
+        private Throwable failure;
+        private int completeCount;
+        private int cancelCount;
+        private int announceCount;
+        private boolean throwFromAnnouncement;
+
+        @Override
+        public boolean isRecording()
+        {
+            return this.recording;
+        }
+
+        @Override
+        public boolean didStartOutputProducer()
+        {
+            return this.outputProducerStarted;
+        }
+
+        @Override
+        public File getOutputFile()
+        {
+            return this.outputFile;
+        }
+
+        @Override
+        public int getCounter()
+        {
+            return this.counter;
+        }
+
+        @Override
+        public VideoExportProcess.Outcome getOutcome()
+        {
+            return this.outcome;
+        }
+
+        @Override
+        public Throwable getFailure()
+        {
+            return this.failure;
+        }
+
+        @Override
+        public boolean tryStartRecording(String movieName, File audioFile, File outputFile, File logFile,
+                                         ChannelLayout layout, double frameRate, int motionBlurPasses,
+                                         int heldFrames, boolean limitFrameRate, String arguments,
+                                         boolean logEnabled, int textureId, int width, int height)
+        {
+            try
+            {
+                Files.writeString(outputFile.toPath(), "owned-video");
+            }
+            catch (Exception e)
+            {
+                this.failure = e;
+                this.outcome = VideoExportProcess.Outcome.FAILED;
+                return false;
+            }
+
+            this.outputFile = outputFile;
+            this.outputProducerStarted = true;
+            this.recording = true;
+            this.counter = 1;
+            this.failure = null;
+            this.outcome = VideoExportProcess.Outcome.RUNNING;
+            return true;
+        }
+
+        @Override
+        public boolean checkRecordingHealth()
+        {
+            return this.recording && this.outcome == VideoExportProcess.Outcome.RUNNING;
+        }
+
+        @Override
+        public VideoExportProcess.Outcome completeRecording()
+        {
+            this.completeCount += 1;
+            this.recording = false;
+            this.outcome = VideoExportProcess.Outcome.SUCCEEDED;
+            return this.outcome;
+        }
+
+        @Override
+        public VideoExportProcess.Outcome cancelRecording()
+        {
+            this.cancelCount += 1;
+            this.recording = false;
+            this.outcome = VideoExportProcess.Outcome.CANCELLED;
+            return this.outcome;
+        }
+
+        @Override
+        public VideoExportProcess.Outcome failRecording(Throwable cause)
+        {
+            this.recording = false;
+            this.failure = cause;
+            this.outcome = VideoExportProcess.Outcome.FAILED;
+            return this.outcome;
+        }
+
+        @Override
+        public boolean acceptPublishedOutput(File expectedRaw, File published)
+        {
+            if (expectedRaw == null || published == null || !published.isFile())
+            {
+                return false;
+            }
+
+            if (this.outputFile == null || !this.outputFile.equals(expectedRaw))
+            {
+                return false;
+            }
+
+            this.outputFile = published;
+            return true;
+        }
+
+        @Override
+        public void announceSuccessfulCompletion()
+        {
+            this.announceCount += 1;
+            if (this.throwFromAnnouncement)
+            {
+                throw new IllegalStateException("test recorder announcement failure");
+            }
+        }
+    }
+
     private static class FakeVideoRecorder extends VideoRecorder
     {
         private boolean recording;
@@ -685,6 +1219,38 @@ public final class VideoExportSessionTest
     private static void assertFalse(boolean value, String message)
     {
         assertTrue(!value, message);
+    }
+
+    private static void deleteTree(Path root) throws Exception
+    {
+        if (root == null || !Files.exists(root))
+        {
+            return;
+        }
+
+        try (var paths = Files.walk(root))
+        {
+            paths.sorted((left, right) -> Integer.compare(right.getNameCount(), left.getNameCount()))
+                .forEach(path ->
+                {
+                    try
+                    {
+                        Files.deleteIfExists(path);
+                    }
+                    catch (Exception e)
+                    {
+                        throw new RuntimeException(e);
+                    }
+                });
+        }
+        catch (RuntimeException e)
+        {
+            if (e.getCause() instanceof Exception exception)
+            {
+                throw exception;
+            }
+            throw e;
+        }
     }
 
     private static void assertEquals(Object expected, Object actual)

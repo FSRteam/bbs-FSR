@@ -6,16 +6,22 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.audio.AudioRenderer;
+import mchorse.bbs_mod.audio.AudioRenderResult;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.utils.WorldExportWindowSession;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.clips.Clip;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 
 /**
  * Live-world video export used by F4 and by F6 when a film is played at the
@@ -36,10 +42,53 @@ public class WorldVideoExportSession extends VideoExportSession
     private boolean filmPlaybackRemote;
     private long filmControllerDeadlineMs;
     private long exportFrameGeneration;
+    private List<AudioClip> sessionAudioClips = List.of();
+    private int sessionAudioDuration;
+    private volatile WorldVideoExportSnapshot activeSnapshot;
+    private volatile boolean snapshotStarted;
+    private boolean snapshotFinished;
+    private final Object worldListenerLock = new Object();
+    private final CopyOnWriteArrayList<WorldVideoExportListener> worldExportListeners = new CopyOnWriteArrayList<>();
 
     public String getFilmId()
     {
         return this.filmId;
+    }
+
+    /** Add a persistent world-export observer without replacing any listener. */
+    public boolean addWorldVideoExportListener(WorldVideoExportListener listener)
+    {
+        if (listener == null)
+        {
+            return false;
+        }
+
+        synchronized (this.worldListenerLock)
+        {
+            if (!this.worldExportListeners.addIfAbsent(listener))
+            {
+                return false;
+            }
+
+            /* A listener registered while a generation is already active still
+             * receives its immutable start fence before its terminal callback.
+             * Holding the same lock as terminal delivery preserves that order. */
+            WorldVideoExportSnapshot snapshot = this.activeSnapshot;
+            if (snapshot != null && this.snapshotStarted && !this.snapshotFinished)
+            {
+                this.notifyWorldStarted(listener, snapshot);
+            }
+        }
+
+        return true;
+    }
+
+    public boolean removeWorldVideoExportListener(WorldVideoExportListener listener)
+    {
+        synchronized (this.worldListenerLock)
+        {
+            return listener != null && this.worldExportListeners.remove(listener);
+        }
     }
 
     /** Pass {@code null}/{@code null} for F4, or a film id and its data for F6. */
@@ -47,8 +96,7 @@ public class WorldVideoExportSession extends VideoExportSession
     {
         if ((filmId == null) != (film == null)
             || this.isExporting()
-            || (filmId != null && BBSModClient.getFilms().has(filmId))
-            || !this.reserveRecorder())
+            || (filmId != null && BBSModClient.getFilms().has(filmId)))
         {
             return false;
         }
@@ -64,14 +112,20 @@ public class WorldVideoExportSession extends VideoExportSession
             this.filmControllerSeen = false;
             this.filmPlaybackRequested = false;
             this.filmPlaybackRemote = false;
+            synchronized (this.worldListenerLock)
+            {
+                this.activeSnapshot = null;
+                this.snapshotStarted = false;
+                this.snapshotFinished = false;
+            }
             /* Audio preparation can be slow. Start the controller timeout only
              * after the play request has actually been issued. */
             this.filmControllerDeadlineMs = 0L;
 
-            this.applyWindowSize(size);
             this.exportFrameGeneration = BBSRendering.getExportFrameGeneration();
 
             long delayMs = (long) (Math.max(0F, BBSSettings.videoSettings.delay.get()) * 1000F);
+            long expectedGeneration = this.getNextExportGeneration();
             boolean started = this.begin(BBSRendering.getTexture().id, size.width, size.height, delayMs);
 
             if (!started)
@@ -86,7 +140,15 @@ public class WorldVideoExportSession extends VideoExportSession
                 return false;
             }
 
-            if (filmId != null)
+            WorldVideoExportSnapshot snapshot = this.activeSnapshot;
+            if (snapshot == null || snapshot.generation() != expectedGeneration)
+            {
+                /* A deferred terminal listener may already own the next
+                 * generation on this reusable session. */
+                return false;
+            }
+
+            if (this.isExporting() && this.activeSnapshot == snapshot && filmId != null)
             {
                 this.startFilmPlayback();
                 this.filmControllerDeadlineMs = System.currentTimeMillis() + FILM_CONTROLLER_TIMEOUT_MS;
@@ -114,39 +176,73 @@ public class WorldVideoExportSession extends VideoExportSession
     @Override
     protected boolean prepare()
     {
-        /* F6 can mux the film's audio track; F4 deliberately has no Film and remains silent. */
-        if (this.film != null && BBSSettings.videoSettings.audio.get())
-        {
-            try
-            {
-                Clips camera = this.film.camera;
-                List<AudioClip> audioClips = camera.getClips(AudioClip.class);
-                File file = this.createTemporaryAudio();
+        /* Source values and deep copies are captured by onOwnedExportStarted
+         * before any external listener can mutate the Film. */
+        return this.activeSnapshot != null;
+    }
 
-                if (AudioRenderer.renderAudio(file, audioClips, camera.calculateDuration(), 48000, 0, 0))
-                {
-                    this.attachTemporaryAudio(file);
-                }
-                else
-                {
-                    this.deleteTemporaryAudio();
-                }
-            }
-            catch (Exception e)
-            {
-                /* Audio is best-effort: keep the world export running without a track. */
-                this.deleteTemporaryAudio();
-                LOGGER.warn("Failed to render F6 film audio; continuing video export without audio", e);
-            }
+    @Override
+    protected void onOwnedExportStarted(VideoExportRequest request)
+    {
+        if (this.film != null)
+        {
+            this.sessionAudioDuration = this.film.camera.calculateDuration();
+            this.sessionAudioClips = copyAudioClips(this.film.camera);
+        }
+        else
+        {
+            this.sessionAudioDuration = 0;
+            this.sessionAudioClips = List.of();
         }
 
-        return true;
+        WorldVideoExportSnapshot snapshot = this.createSnapshot(request,
+            this.film == null ? null : this.film.camera);
+
+        synchronized (this.worldListenerLock)
+        {
+            this.activeSnapshot = snapshot;
+            this.snapshotStarted = snapshot != null;
+            this.snapshotFinished = false;
+            if (snapshot != null)
+            {
+                this.notifyWorldStarted(snapshot);
+            }
+        }
+    }
+
+    @Override
+    protected VideoExportRequest createExportRequest(int width, int height) throws Exception
+    {
+        boolean filmAudio = this.film != null && BBSSettings.videoSettings.audio.get();
+        boolean minecraftAudio = BBSSettings.videoExportMinecraftSounds != null
+            && BBSSettings.videoExportMinecraftSounds.get();
+
+        if (this.film == null)
+        {
+            return this.createOwnedRequest("", 0D, 0D, true, false, minecraftAudio);
+        }
+
+        int duration = this.film.camera.calculateDuration();
+        if (duration <= 0) throw new IllegalArgumentException("Film export range is empty");
+        return this.createOwnedRequest(this.filmId, 0D, duration, false, filmAudio, minecraftAudio);
+    }
+
+    @Override
+    protected AudioRenderResult renderFilmAudio(VideoExportRequest request, File output,
+                                                BooleanSupplier cancelled,
+                                                BiConsumer<Long, Long> progress)
+    {
+        return AudioRenderer.renderAudioResult(output, this.sessionAudioClips,
+            this.sessionAudioDuration, request.sampleRate(),
+            (float) (request.sourceStart() / 20D), (float) (request.sourceEnd() / 20D),
+            request.layout(), cancelled, progress);
     }
 
     @Override
     protected void applyExportTarget()
     {
         /* Warm-up also uses the export target so the first captured frame is settled. */
+        this.applyWindowSize(new VideoSize(this.width, this.height));
         BBSRendering.setCustomSize(true, this.width, this.height);
     }
 
@@ -183,9 +279,17 @@ public class WorldVideoExportSession extends VideoExportSession
             controller.togglePause();
         }
 
+        /* The controller may have advanced one tick while the world render
+         * target warmed up.  Rewind both local and remote playback to the
+         * request origin before the first captured frame. */
+        if (controller instanceof WorldFilmController worldController)
+        {
+            worldController.tick = 0;
+        }
+
         if (ClientNetwork.isIsBBSModOnServer())
         {
-            ClientNetwork.sendActionState(this.filmId, ActionState.PAUSE, controller.getTick());
+            ClientNetwork.sendActionState(this.filmId, ActionState.PAUSE, 0);
         }
 
         this.firstTickPaused = true;
@@ -203,7 +307,7 @@ public class WorldVideoExportSession extends VideoExportSession
 
             if (controller != null)
             {
-                tick = Math.max(controller.getTick(), 0);
+                tick = 0;
 
                 if (controller.paused)
                 {
@@ -286,6 +390,128 @@ public class WorldVideoExportSession extends VideoExportSession
         this.filmPlaybackRemote = false;
         this.filmControllerDeadlineMs = 0L;
         this.exportFrameGeneration = 0L;
+        this.sessionAudioClips = List.of();
+        this.sessionAudioDuration = 0;
+    }
+
+    private static List<AudioClip> copyAudioClips(Clips camera)
+    {
+        List<AudioClip> copies = new ArrayList<>();
+
+        for (Clip clip : camera.get())
+        {
+            if (clip instanceof AudioClip audioClip && audioClip.enabled.get())
+            {
+                copies.add((AudioClip) audioClip.copy());
+            }
+        }
+
+        return List.copyOf(copies);
+    }
+
+    WorldVideoExportSnapshot createSnapshot(VideoExportRequest request, Clips camera)
+    {
+        if (request == null)
+        {
+            return null;
+        }
+
+        List<WorldVideoExportSnapshot.AudioClipSnapshot> clips = new ArrayList<>();
+        if (camera != null)
+        {
+            List<Clip> source = camera.get();
+            for (int index = 0; index < source.size(); index++)
+            {
+                Clip clip = source.get(index);
+                if (!(clip instanceof AudioClip audioClip) || !audioClip.enabled.get())
+                {
+                    continue;
+                }
+
+                String identity = audioClip.getId();
+                if (identity == null || identity.isEmpty())
+                {
+                    identity = String.valueOf(index);
+                }
+
+                clips.add(new WorldVideoExportSnapshot.AudioClipSnapshot(index, identity,
+                    audioClip.audio.get(), audioClip.tick.get(), audioClip.duration.get(),
+                    audioClip.offset.get(), audioClip.volume.get()));
+            }
+        }
+
+        WorldVideoExportSnapshot.Kind kind = this.film == null
+            ? WorldVideoExportSnapshot.Kind.LIVE_WORLD_F4
+            : WorldVideoExportSnapshot.Kind.FILM_F6;
+
+        return new WorldVideoExportSnapshot(request.sessionId(), request.generation(), kind,
+            request.sourceId(), request.sourceStart(), request.sourceEnd(), request.openEnd(),
+            request.layout(), this.filmId == null ? "" : this.filmId, clips,
+            request.width(), request.height(), request.captureFrameRate(),
+            request.outputFrameRate(), request.motionBlurPasses());
+    }
+
+    private void notifyWorldStarted(WorldVideoExportSnapshot snapshot)
+    {
+        for (WorldVideoExportListener listener : this.worldExportListeners)
+        {
+            this.notifyWorldStarted(listener, snapshot);
+        }
+    }
+
+    private void notifyWorldStarted(WorldVideoExportListener listener, WorldVideoExportSnapshot snapshot)
+    {
+        try
+        {
+            listener.onStarted(snapshot);
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.warn("World video export start listener failed", e);
+        }
+    }
+
+    private void notifyWorldFinished(WorldVideoExportSnapshot snapshot, VideoExportResult result)
+    {
+        synchronized (this.worldListenerLock)
+        {
+            this.snapshotFinished = true;
+            for (WorldVideoExportListener listener : this.worldExportListeners)
+            {
+                try
+                {
+                    listener.onFinished(snapshot, result);
+                }
+                catch (Exception | LinkageError e)
+                {
+                    LOGGER.warn("World video export finish listener failed", e);
+                }
+            }
+        }
+    }
+
+    @Override
+    protected void onTerminalResult(VideoExportResult result)
+    {
+        synchronized (this.worldListenerLock)
+        {
+            WorldVideoExportSnapshot snapshot = this.activeSnapshot;
+            if (snapshot != null && this.snapshotStarted
+                && result != null && snapshot.sessionId().equals(result.sessionId())
+                && snapshot.generation() == result.generation())
+            {
+                this.notifyWorldFinished(snapshot, result);
+
+                /* A listener may synchronously start the next generation. Never
+                 * clear that new generation's snapshot during this callback. */
+                if (this.activeSnapshot == snapshot)
+                {
+                    this.activeSnapshot = null;
+                    this.snapshotStarted = false;
+                    this.snapshotFinished = false;
+                }
+            }
+        }
     }
 
     private void startFilmPlayback()

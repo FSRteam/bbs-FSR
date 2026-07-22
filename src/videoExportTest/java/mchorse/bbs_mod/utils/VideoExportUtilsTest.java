@@ -1,7 +1,25 @@
 package mchorse.bbs_mod.utils;
 
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.audio.AudioRendererMixerFocusedTest;
+import mchorse.bbs_mod.audio.ChannelLayout;
 import mchorse.bbs_mod.client.ExportResolutionActionGateTest;
+import mchorse.bbs_mod.film.VideoExportAudioNormalizerTest;
+import mchorse.bbs_mod.film.VideoExportLifecycleContractTest;
+import mchorse.bbs_mod.film.VideoExportSession;
 import mchorse.bbs_mod.film.VideoExportSessionTest;
+import mchorse.bbs_mod.film.AudioExportLifecycleTest;
+import mchorse.bbs_mod.film.VideoExportArtifactIdentityTest;
+import mchorse.bbs_mod.importers.types.AudioImporterSupportTest;
+import mchorse.bbs_mod.settings.values.core.ValueString;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 
 import java.io.File;
 import java.io.ByteArrayInputStream;
@@ -15,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /** Executable regression checks for argument, path, process, and owned-resource lifecycles. */
@@ -31,6 +50,7 @@ public class VideoExportUtilsTest
         assertUnclosedQuoteRejected();
         assertReplacementDoesNotCascade();
         assertFrameBufferSizeValidation();
+        assertReservedLayoutAdaptersReject();
         assertInstallRootResolution();
         assertTemporaryAudioCleanup();
         assertFailedTemporaryCleanupReported();
@@ -46,8 +66,130 @@ public class VideoExportUtilsTest
         assertHangingHealthProbeTerminated();
         assertInterruptedProbeRestoresInterrupt();
         assertProcessWaitUsesBoundedSemanticDiagnostics();
+        VideoMuxerTeardownContractTest.runAll();
+        VideoExportAudioNormalizerTest.runAll();
+        AudioRendererMixerFocusedTest.runAll();
+        AudioImporterSupportTest.runAll();
         ExportResolutionActionGateTest.runAll();
-        VideoExportSessionTest.runAll();
+        VideoExportArtifactIdentityTest.runAll();
+        try (ExpectedErrorLogCapture capture = ExpectedErrorLogCapture.install())
+        {
+            AudioExportLifecycleTest.runAll();
+            VideoExportLifecycleContractTest.runAll();
+            VideoExportSessionTest.runAll();
+            capture.assertExpectedErrors();
+        }
+
+        System.out.println("VideoExportUtilsTest passed; captured 16 expected failure diagnostics");
+    }
+
+    /** Keeps deliberate failure-path diagnostics executable without leaking ERROR lines into a passing build. */
+    private static final class ExpectedErrorLogCapture extends AbstractAppender implements AutoCloseable
+    {
+        private static final int EXPECTED_ERROR_COUNT = 16;
+        private final Logger logger;
+        private final Level previousLevel;
+        private final boolean previousAdditive;
+        private final Map<String, Appender> previousAppenders;
+        private final List<LogEvent> events = new CopyOnWriteArrayList<>();
+
+        private ExpectedErrorLogCapture(Logger logger)
+        {
+            super("video-export-expected-errors", null, PatternLayout.createDefaultLayout(),
+                false, Property.EMPTY_ARRAY);
+            this.logger = logger;
+            this.previousLevel = logger.getLevel();
+            this.previousAdditive = logger.isAdditive();
+            this.previousAppenders = Map.copyOf(logger.getAppenders());
+            this.start();
+
+            for (Appender appender : this.previousAppenders.values())
+            {
+                logger.removeAppender(appender);
+            }
+
+            logger.setAdditive(false);
+            logger.addAppender(this);
+            logger.setLevel(Level.ALL);
+        }
+
+        private static ExpectedErrorLogCapture install()
+        {
+            return new ExpectedErrorLogCapture((Logger) LogManager.getLogger(VideoExportSession.class));
+        }
+
+        @Override
+        public void append(LogEvent event)
+        {
+            this.events.add(event.toImmutable());
+        }
+
+        private void assertExpectedErrors()
+        {
+            List<LogEvent> errors = this.events.stream()
+                .filter((event) -> event.getLevel().isMoreSpecificThan(Level.ERROR))
+                .toList();
+
+            if (errors.size() != EXPECTED_ERROR_COUNT)
+            {
+                throw new AssertionError("Expected " + EXPECTED_ERROR_COUNT
+                    + " captured video-export errors, got " + errors.size() + ": "
+                    + describe(errors));
+            }
+
+            List<LogEvent> unexpected = errors.stream()
+                .filter((event) -> !isExpectedError(event))
+                .toList();
+
+            if (!unexpected.isEmpty())
+            {
+                throw new AssertionError("Unexpected video-export error diagnostics: "
+                    + describe(unexpected));
+            }
+        }
+
+        private static boolean isExpectedError(LogEvent event)
+        {
+            String message = event.getMessage().getFormattedMessage();
+            Throwable error = event.getThrown();
+            String cause = error == null || error.getMessage() == null ? "" : error.getMessage();
+            boolean expectedMessage = message.startsWith("Video export ")
+                || message.equals("Video export failed")
+                || message.equals("Failed to prepare video export")
+                || message.equals("Failed to tear down video export session")
+                || message.equals("Failed to reset video export session")
+                || message.equals("Video export completion listener failed")
+                || message.equals("Persistent video export completion listener failed");
+            boolean expectedCause = cause.startsWith("fixture ")
+                || cause.startsWith("fake ")
+                || cause.startsWith("Failed to delete temporary export audio ")
+                || cause.equals("persistent observer failure");
+
+            return expectedMessage && expectedCause;
+        }
+
+        private static String describe(List<LogEvent> events)
+        {
+            return events.stream()
+                .map((event) -> event.getMessage().getFormattedMessage() + " -> "
+                    + (event.getThrown() == null ? "no cause" : event.getThrown().getMessage()))
+                .toList().toString();
+        }
+
+        @Override
+        public void close()
+        {
+            this.logger.removeAppender(this);
+
+            for (Appender appender : this.previousAppenders.values())
+            {
+                this.logger.addAppender(appender);
+            }
+
+            this.logger.setAdditive(this.previousAdditive);
+            this.logger.setLevel(this.previousLevel);
+            this.stop();
+        }
     }
 
     private static void assertFilmName(String name)
@@ -148,6 +290,121 @@ public class VideoExportUtilsTest
         }
 
         throw new AssertionError("Invalid video dimensions were accepted: " + width + "x" + height);
+    }
+
+    private static void assertReservedLayoutAdaptersReject() throws Exception
+    {
+        Path root = Files.createTempDirectory("bbs-layout-adapter-test-");
+        Path video = Files.write(root.resolve("video.mp4"), new byte[] {1});
+        Path audio = Files.write(root.resolve("audio.wav"), new byte[] {1});
+        ValueString previousLayout = BBSSettings.videoAudioLayout;
+
+        try
+        {
+            for (ChannelLayout layout : List.of(ChannelLayout.MONO, ChannelLayout.STEREO))
+            {
+                Path output = root.resolve(layout.id() + ".mp4");
+                VideoMuxer.MuxResult accepted = VideoMuxer.mux(video.toFile(), audio.toFile(),
+                    output, null, layout, VideoMuxer.DEFAULT_ARGUMENTS, () -> true, false);
+
+                assertEquals(VideoMuxer.Status.CANCELLED, accepted.status());
+                assertMissing(output, "accepted layout published a cancelled mux");
+            }
+
+            Path typedOutput = root.resolve("typed-5.1.mp4");
+            VideoMuxer.MuxResult typed = VideoMuxer.mux(video.toFile(), audio.toFile(),
+                typedOutput, null, ChannelLayout.SURROUND_5_1,
+                VideoMuxer.DEFAULT_ARGUMENTS, () -> false, false);
+
+            assertEquals(VideoMuxer.Status.PREPARATION_FAILED, typed.status());
+            assertUnsupportedLayout(typed.cause(), "typed mux");
+            assertMissing(typedOutput, "typed 5.1 mux published output");
+
+            File legacyExplicit = VideoMuxer.mux(video.toFile(), audio.toFile(),
+                "legacy-explicit-5.1", VideoMuxer.DEFAULT_ARGUMENTS, ChannelLayout.SURROUND_5_1);
+
+            if (legacyExplicit != null)
+            {
+                throw new AssertionError("legacy explicit 5.1 mux reported success");
+            }
+
+            ValueString reserved = new ValueString("test_audio_channel_layout", ChannelLayout.MONO.id());
+            reserved.set(ChannelLayout.SURROUND_5_1.id());
+            BBSSettings.videoAudioLayout = reserved;
+
+            File legacySettings = VideoMuxer.mux(video.toFile(), audio.toFile(),
+                "legacy-settings-5.1", VideoMuxer.DEFAULT_ARGUMENTS);
+
+            if (legacySettings != null)
+            {
+                throw new AssertionError("legacy settings 5.1 mux reported success");
+            }
+
+            VideoRecorder settingsRecorder = new VideoRecorder();
+            if (settingsRecorder.tryStartRecording("settings-5.1", audio.toFile(), 0, 1, 1))
+            {
+                throw new AssertionError("legacy settings 5.1 recorder started");
+            }
+
+            assertRecorderRejected(settingsRecorder, "legacy settings recorder");
+
+            VideoRecorder explicitRecorder = new VideoRecorder();
+            Path recorderOutput = root.resolve("recorder-5.1.mp4");
+            if (explicitRecorder.tryStartRecording("explicit-5.1", audio.toFile(),
+                recorderOutput.toFile(), null, ChannelLayout.SURROUND_5_1, 0, 1, 1))
+            {
+                throw new AssertionError("explicit 5.1 recorder started");
+            }
+
+            assertRecorderRejected(explicitRecorder, "explicit recorder");
+            assertMissing(recorderOutput, "explicit 5.1 recorder created output");
+        }
+        finally
+        {
+            BBSSettings.videoAudioLayout = previousLayout;
+            deleteTree(root);
+        }
+    }
+
+    private static void assertRecorderRejected(VideoRecorder recorder, String adapter)
+    {
+        assertEquals(VideoExportProcess.Outcome.FAILED, recorder.getOutcome());
+        assertUnsupportedLayout(recorder.getFailure(), adapter);
+
+        if (recorder.didStartOutputProducer())
+        {
+            throw new AssertionError(adapter + " started an output producer");
+        }
+    }
+
+    private static void assertUnsupportedLayout(Throwable cause, String adapter)
+    {
+        if (!(cause instanceof IllegalArgumentException)
+            || cause.getMessage() == null || !cause.getMessage().contains("SURROUND_5_1"))
+        {
+            throw new AssertionError(adapter + " lost its typed unsupported-layout failure", cause);
+        }
+    }
+
+    private static void assertMissing(Path path, String message)
+    {
+        if (Files.exists(path))
+        {
+            throw new AssertionError(message + ": " + path);
+        }
+    }
+
+    private static void deleteTree(Path root) throws IOException
+    {
+        if (root == null || !Files.exists(root)) return;
+
+        try (java.util.stream.Stream<Path> paths = Files.walk(root))
+        {
+            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList())
+            {
+                Files.deleteIfExists(path);
+            }
+        }
     }
 
     private static void assertInstallRootResolution() throws Exception

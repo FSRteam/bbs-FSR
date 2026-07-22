@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioReader;
+import mchorse.bbs_mod.audio.AudioDecodeException;
 import mchorse.bbs_mod.audio.ColorCode;
 import mchorse.bbs_mod.audio.SoundBuffer;
 import mchorse.bbs_mod.audio.SoundPlayer;
@@ -23,6 +24,8 @@ import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +33,7 @@ import java.util.List;
 public class UIAudioEditor extends UIElement
 {
     private static final Area AREA = new Area();
+    private static final Logger LOGGER = LoggerFactory.getLogger(UIAudioEditor.class);
 
     public UIColor color;
 
@@ -159,15 +163,13 @@ public class UIAudioEditor extends UIElement
 
     public void setup(Link audio)
     {
+        this.delete();
+        this.audio = null;
         this.colorCodes.clear();
         this.setCurrent(null);
 
         if (audio == null)
         {
-            this.audio = null;
-
-            this.delete();
-
             return;
         }
 
@@ -202,31 +204,114 @@ public class UIAudioEditor extends UIElement
 
             this.setCurrent(null);
         }
+        catch (AudioDecodeException e)
+        {
+            this.audio = null;
+
+            try
+            {
+                this.delete();
+            }
+            catch (RuntimeException | Error cleanup)
+            {
+                e.addSuppressed(cleanup);
+            }
+
+            LOGGER.warn("Audio editor cannot decode {}: {}", audio, e.getMessage());
+        }
         catch (Exception e)
         {
-            e.printStackTrace();
+            this.audio = null;
+
+            try
+            {
+                this.delete();
+            }
+            catch (RuntimeException | Error cleanup)
+            {
+                e.addSuppressed(cleanup);
+            }
+
+            LOGGER.error("Failed to load audio editor preview {}", audio, e);
         }
     }
 
     public void delete()
     {
-        if (this.waveform != null)
+        Throwable failure = null;
+        SoundPlayer currentPlayer = this.player;
+        SoundBuffer currentBuffer = this.buffer;
+
+        if (currentPlayer != null)
         {
-            this.waveform.delete();
-            this.waveform = null;
+            try
+            {
+                currentPlayer.delete();
+            }
+            catch (RuntimeException | Error e)
+            {
+                failure = e;
+            }
+
+            if (currentPlayer.isDeleted())
+            {
+                this.player = null;
+            }
         }
 
-        if (this.player != null)
+        boolean detached = currentPlayer == null || currentPlayer.isDeleted()
+            || currentPlayer.getBuffer() != currentBuffer;
+
+        if (currentBuffer != null && detached)
         {
-            this.player.delete();
-            this.player = null;
+            try
+            {
+                currentBuffer.delete();
+            }
+            catch (RuntimeException | Error e)
+            {
+                failure = appendFailure(failure, e);
+            }
+
+            if (currentBuffer.isCleanupComplete())
+            {
+                this.buffer = null;
+                this.waveform = null;
+            }
+        }
+        else if (currentBuffer == null && this.waveform != null)
+        {
+            try
+            {
+                this.waveform.delete();
+                this.waveform = null;
+            }
+            catch (RuntimeException | Error e)
+            {
+                failure = appendFailure(failure, e);
+            }
         }
 
-        if (this.buffer != null)
+        if (failure instanceof RuntimeException runtime)
         {
-            this.buffer.delete();
-            this.buffer = null;
+            throw runtime;
         }
+        else if (failure instanceof Error error)
+        {
+            throw error;
+        }
+    }
+
+    private static Throwable appendFailure(Throwable first, Throwable next)
+    {
+        if (first == null)
+        {
+            return next;
+        }
+
+        first.addSuppressed(next);
+
+        return first;
     }
 
     @Override

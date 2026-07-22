@@ -66,12 +66,8 @@ public class WorldFilmController extends BaseFilmController
         int tick = Math.max(this.tick, 0);
         List<Clip> clips = this.context.clips.getClips(tick);
 
-        if (clips.isEmpty())
-        {
-            return;
-        }
-
         this.context.clipData.clear();
+        this.context.playing = !this.paused;
         this.context.setup(tick, context.tickDelta());
 
         for (Clip clip : clips)
@@ -87,6 +83,9 @@ public class WorldFilmController extends BaseFilmController
     @Override
     public void shutdown()
     {
+        AudioClientClip.releaseSounds(this.context);
         this.context.shutdown();
+        this.context.resetPlaybackOwner();
+        this.context.clipData.clear();
     }
 }

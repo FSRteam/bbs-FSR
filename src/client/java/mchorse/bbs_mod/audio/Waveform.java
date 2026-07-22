@@ -24,13 +24,12 @@ public class Waveform
 
     public void generate(Wave data, List<ColorCode> colorCodes, int pixelsPerSecond, int height)
     {
-        if (data.getBytesPerSample() != 2)
-        {
-            throw new IllegalStateException("Waveform generation doesn't support non 16-bit audio data!");
-        }
+        Wave waveformData = data.getFormat().encoding() == PcmEncoding.PCM_S16_LE
+            ? data
+            : data.convertTo16();
 
-        this.populate(data, pixelsPerSecond, height);
-        this.render(colorCodes, data.getCues());
+        this.populate(waveformData, pixelsPerSecond, height);
+        this.render(colorCodes, waveformData.getCues());
     }
 
     public void render(List<ColorCode> colorCodes, float[] cues)
@@ -155,6 +154,8 @@ public class Waveform
         this.maximum = new float[this.w];
 
         int region = data.getScanRegion(pixelsPerSecond);
+        int frameBytes = data.getFormat().bytesPerFrame();
+        int channels = data.getFormat().channels();
 
         for (int i = 0; i < this.w; i ++)
         {
@@ -163,28 +164,37 @@ public class Waveform
             float average = 0;
             float maximum = 0;
 
-            for (int j = 0; j < region; j += 2 * data.numChannels)
+            for (int j = 0; j + frameBytes <= region; j += frameBytes)
             {
-                if (offset + j + 1 >= data.data.length)
+                if (offset + j + frameBytes > data.data.length)
                 {
                     break;
                 }
 
-                byte a = data.data[offset + j];
-                byte b = data.data[offset + j + 1];
-                float sample = a + (b << 8);
+                float framePeak = 0F;
+                float frameAverage = 0F;
 
-                maximum = Math.max(maximum, Math.abs(sample));
-                average += Math.abs(sample);
+                for (int channel = 0; channel < channels; channel++)
+                {
+                    double sample = PcmSamples.readNormalized(data,
+                        (offset + j) / frameBytes, channel);
+                    float magnitude = (float) Math.abs(sample);
+                    framePeak = Math.max(framePeak, magnitude);
+                    frameAverage += magnitude;
+                }
+
+                maximum = Math.max(maximum, framePeak);
+                average += frameAverage / channels;
                 count++;
             }
 
-            average /= count;
-            average /= 0xffff / 2;
-            maximum /= 0xffff / 2;
+            if (count > 0)
+            {
+                average /= count;
+            }
 
-            this.average[i] = average;
-            this.maximum[i] = maximum;
+            this.average[i] = Math.min(1F, average);
+            this.maximum[i] = Math.min(1F, maximum);
         }
 
         this.duration = data.getDuration();

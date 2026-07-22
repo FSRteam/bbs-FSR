@@ -3,28 +3,69 @@ package mchorse.bbs_mod.audio;
 import mchorse.bbs_mod.utils.MathUtils;
 import org.joml.Vector3f;
 import org.lwjgl.openal.AL10;
-import org.lwjgl.openal.AL11;
 
+import java.util.Objects;
+
+/** One OpenAL source. Film voice identity is managed by SoundManager, never by asset Link. */
 public class SoundPlayer
 {
-    private int source;
+    private int source = -1;
     private SoundBuffer buffer;
+    private final SoundBackend backend;
     private boolean unique;
+    private boolean managed;
 
+    /** Legacy constructor retained for source and binary compatibility. */
     public SoundPlayer(SoundBuffer buffer)
     {
-        this.buffer = buffer;
-        this.source = AL10.alGenSources();
+        this.buffer = Objects.requireNonNull(buffer, "buffer");
+        this.backend = buffer.getBackend();
 
-        AL10.alSourcei(this.source, AL10.AL_BUFFER, buffer.getBuffer());
-        AL10.alSourcef(this.source, AL10.AL_MAX_DISTANCE, 60);
+        if (buffer.isDeleted())
+        {
+            throw new IllegalStateException("Cannot attach a deleted sound buffer");
+        }
 
-        this.setRelative(false);
+        int created = this.backend.createSource();
+
+        if (created <= 0)
+        {
+            throw new IllegalStateException("OpenAL returned an invalid source handle");
+        }
+
+        this.source = created;
+
+        try
+        {
+            this.backend.setSourceBuffer(this.source, buffer.getBuffer());
+            this.backend.setSourceMaxDistance(this.source, 60F);
+            this.setRelative(false);
+        }
+        catch (RuntimeException | Error failure)
+        {
+            try
+            {
+                this.delete();
+            }
+            catch (RuntimeException | Error cleanup)
+            {
+                failure.addSuppressed(cleanup);
+            }
+
+            throw failure;
+        }
     }
 
     public SoundPlayer unique()
     {
         this.unique = true;
+
+        return this;
+    }
+
+    SoundPlayer managed()
+    {
+        this.managed = true;
 
         return this;
     }
@@ -44,31 +85,48 @@ public class SoundPlayer
         return this.unique;
     }
 
+    public boolean isDeleted()
+    {
+        return this.source < 0;
+    }
+
     public boolean canBeRemoved()
     {
-        return !this.unique && this.isStopped();
+        return !this.unique && !this.managed && this.isStopped();
     }
 
     /* Properties */
 
     public void setVolume(float volume)
     {
-        AL10.alSourcef(this.source, AL10.AL_GAIN, volume);
+        if (this.source >= 0)
+        {
+            this.backend.setSourceVolume(this.source, volume);
+        }
     }
 
     public void setPitch(float pitch)
     {
-        AL10.alSourcef(this.source, AL10.AL_PITCH, pitch);
+        if (this.source >= 0)
+        {
+            this.backend.setSourcePitch(this.source, pitch);
+        }
     }
 
     public void setRelative(boolean relative)
     {
-        AL10.alSourcei(this.source, AL10.AL_SOURCE_RELATIVE, relative ? AL10.AL_TRUE : AL10.AL_FALSE);
+        if (this.source >= 0)
+        {
+            this.backend.setSourceRelative(this.source, relative);
+        }
     }
 
     public void setLooping(boolean looping)
     {
-        AL10.alSourcei(this.source, AL10.AL_LOOPING, looping ? AL10.AL_TRUE : AL10.AL_FALSE);
+        if (this.source >= 0)
+        {
+            this.backend.setSourceLooping(this.source, looping);
+        }
     }
 
     public void setPosition(Vector3f vector)
@@ -78,7 +136,10 @@ public class SoundPlayer
 
     public void setPosition(float x, float y, float z)
     {
-        AL10.alSource3f(this.source, AL10.AL_POSITION, x, y, z);
+        if (this.source >= 0)
+        {
+            this.backend.setSourcePosition(this.source, x, y, z);
+        }
     }
 
     public void setVelocity(Vector3f vector)
@@ -88,70 +149,168 @@ public class SoundPlayer
 
     public void setVelocity(float x, float y, float z)
     {
-        AL10.alSource3f(this.source, AL10.AL_VELOCITY, x, y, z);
+        if (this.source >= 0)
+        {
+            this.backend.setSourceVelocity(this.source, x, y, z);
+        }
     }
 
     /* Playback */
 
     public void play()
     {
-        AL10.alSourcePlay(this.source);
+        if (this.source >= 0)
+        {
+            this.backend.playSource(this.source);
+        }
     }
 
     public void pause()
     {
-        AL10.alSourcePause(this.source);
+        if (this.source >= 0)
+        {
+            this.backend.pauseSource(this.source);
+        }
     }
 
     public void stop()
     {
-        AL10.alSourceStop(this.source);
+        if (this.source >= 0)
+        {
+            this.backend.stopSource(this.source);
+        }
     }
 
     public int getSourceState()
     {
-        return AL10.alGetSourcei(this.source, AL10.AL_SOURCE_STATE);
+        if (this.source < 0 || this.backend.isSourceStopped(this.source))
+        {
+            return AL10.AL_STOPPED;
+        }
+
+        if (this.backend.isSourcePlaying(this.source))
+        {
+            return AL10.AL_PLAYING;
+        }
+
+        if (this.backend.isSourcePaused(this.source))
+        {
+            return AL10.AL_PAUSED;
+        }
+
+        return AL10.AL_INITIAL;
     }
 
     public boolean isPlaying()
     {
-        return this.getSourceState() == AL10.AL_PLAYING;
+        return this.source >= 0 && this.backend.isSourcePlaying(this.source);
     }
 
     public boolean isPaused()
     {
-        return this.getSourceState() == AL10.AL_PAUSED;
+        return this.source >= 0 && this.backend.isSourcePaused(this.source);
     }
 
     public boolean isStopped()
     {
-        if (this.source == -1)
-        {
-            return true;
-        }
-
-        int state = this.getSourceState();
-
-        return state == AL10.AL_STOPPED || state == AL10.AL_INITIAL;
+        return this.source < 0 || this.backend.isSourceStopped(this.source);
     }
 
     public float getPlaybackPosition()
     {
-        return AL10.alGetSourcef(this.source, AL11.AL_SEC_OFFSET);
+        return this.source < 0 ? 0F : this.backend.getSourcePosition(this.source);
     }
 
     public void setPlaybackPosition(float seconds)
     {
-        seconds = MathUtils.clamp(seconds, 0, this.buffer.getDuration());
+        SoundBuffer current = this.buffer;
 
-        AL10.alSourcef(this.source, AL11.AL_SEC_OFFSET, seconds);
+        if (this.source < 0 || current == null)
+        {
+            return;
+        }
+
+        seconds = MathUtils.clamp(seconds, 0F, current.getDuration());
+        this.backend.setSourcePositionSeconds(this.source, seconds);
     }
 
+    /** Idempotent teardown in the required source order: stop, detach, delete. */
     public void delete()
     {
-        AL10.alDeleteSources(this.source);
+        int handle = this.source;
 
-        this.source = -1;
-        this.buffer = null;
+        if (handle < 0)
+        {
+            this.buffer = null;
+            return;
+        }
+
+        Throwable failure = null;
+
+        boolean detached = this.buffer == null;
+        boolean deleted = false;
+
+        try
+        {
+            this.backend.stopSource(handle);
+        }
+        catch (RuntimeException | Error e)
+        {
+            failure = e;
+        }
+
+        try
+        {
+            this.backend.setSourceBuffer(handle, 0);
+            detached = true;
+        }
+        catch (RuntimeException | Error e)
+        {
+            failure = appendFailure(failure, e);
+        }
+
+        try
+        {
+            this.backend.deleteSource(handle);
+            deleted = true;
+        }
+        catch (RuntimeException | Error e)
+        {
+            failure = appendFailure(failure, e);
+        }
+        finally
+        {
+            if (detached)
+            {
+                this.buffer = null;
+            }
+
+            if (deleted)
+            {
+                this.source = -1;
+                this.buffer = null;
+            }
+        }
+
+        if (failure instanceof RuntimeException runtime)
+        {
+            throw runtime;
+        }
+        else if (failure instanceof Error error)
+        {
+            throw error;
+        }
+    }
+
+    private static Throwable appendFailure(Throwable first, Throwable next)
+    {
+        if (first == null)
+        {
+            return next;
+        }
+
+        first.addSuppressed(next);
+
+        return first;
     }
 }

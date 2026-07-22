@@ -60,14 +60,85 @@ public class UIAudioPlayer extends UIElement implements IUITreeEventListener
 
     public void delete()
     {
-        if (this.waveform != null) this.waveform.delete();
-        if (this.buffer != null) this.buffer.delete();
-        if (this.player != null) this.player.delete();
+        Throwable failure = null;
+        SoundPlayer currentPlayer = this.player;
+        SoundBuffer currentBuffer = this.buffer;
 
-        this.wave = null;
-        this.waveform = null;
-        this.buffer = null;
-        this.player = null;
+        if (currentPlayer != null)
+        {
+            try
+            {
+                currentPlayer.delete();
+            }
+            catch (RuntimeException | Error e)
+            {
+                failure = e;
+            }
+
+            if (currentPlayer.isDeleted())
+            {
+                this.player = null;
+            }
+        }
+
+        boolean detached = currentPlayer == null || currentPlayer.isDeleted()
+            || currentPlayer.getBuffer() != currentBuffer;
+
+        if (currentBuffer != null && detached)
+        {
+            try
+            {
+                currentBuffer.delete();
+            }
+            catch (RuntimeException | Error e)
+            {
+                failure = appendFailure(failure, e);
+            }
+
+            if (currentBuffer.isCleanupComplete())
+            {
+                this.buffer = null;
+                this.waveform = null;
+            }
+        }
+        else if (currentBuffer == null && this.waveform != null)
+        {
+            try
+            {
+                this.waveform.delete();
+                this.waveform = null;
+            }
+            catch (RuntimeException | Error e)
+            {
+                failure = appendFailure(failure, e);
+            }
+        }
+
+        if (this.buffer == null && this.player == null)
+        {
+            this.wave = null;
+        }
+
+        if (failure instanceof RuntimeException runtime)
+        {
+            throw runtime;
+        }
+        else if (failure instanceof Error error)
+        {
+            throw error;
+        }
+    }
+
+    private static Throwable appendFailure(Throwable first, Throwable next)
+    {
+        if (first == null)
+        {
+            return next;
+        }
+
+        first.addSuppressed(next);
+
+        return first;
     }
 
     public void loadAudio(Wave wave, List<ColorCode> colorCodes)

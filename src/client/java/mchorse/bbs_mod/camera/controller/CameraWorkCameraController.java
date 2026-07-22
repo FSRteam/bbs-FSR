@@ -19,6 +19,13 @@ public abstract class CameraWorkCameraController implements ICameraController
 
     public CameraWorkCameraController setWork(Clips clips)
     {
+        if (this.context.clips != clips)
+        {
+            AudioClientClip.releaseSounds(this.context);
+            this.context.resetPlaybackOwner();
+            this.context.clipData.clear();
+        }
+
         this.context.clips = clips;
 
         return this;
@@ -49,7 +56,10 @@ public abstract class CameraWorkCameraController implements ICameraController
             this.context.apply(clip, this.position);
         }
 
-        AudioClientClip.manageSounds(this.context);
+        if (this.managesAudio())
+        {
+            AudioClientClip.manageSounds(this.context);
+        }
 
         /* After sound management, since applyLast() re-runs context.setup() */
         this.applyEditedClipEnd(ticks);
@@ -70,6 +80,21 @@ public abstract class CameraWorkCameraController implements ICameraController
      */
     protected void applyEditedClipEnd(int ticks)
     {}
+
+    /** Paired film camera controllers render the camera only; the film controller owns audio. */
+    protected boolean managesAudio()
+    {
+        return true;
+    }
+
+    @Override
+    public void shutdown()
+    {
+        AudioClientClip.releaseSounds(this.context);
+        this.context.shutdown();
+        this.context.resetPlaybackOwner();
+        this.context.clipData.clear();
+    }
 
     @Override
     public int getPriority()

@@ -4,6 +4,8 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.film.VideoExportSession;
+import mchorse.bbs_mod.film.VideoExportRequest;
+import mchorse.bbs_mod.film.VideoExportResult;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -39,6 +41,38 @@ public class UIFilmRecorder extends UIElement
     public boolean isExporting()
     {
         return this.session.isExporting();
+    }
+
+    /** Additive typed completion bridge for Premiere and other export consumers. */
+    public void setFinishedResultListener(VideoExportSession.TypedFinishedListener listener)
+    {
+        this.session.setFinishedResultListener(listener);
+    }
+
+    /** Persistent additive completion bridge; unlike the setter this is not one-shot. */
+    public boolean addFinishedResultListener(VideoExportSession.TypedFinishedListener listener)
+    {
+        return this.session.addFinishedResultListener(listener);
+    }
+
+    public boolean removeFinishedResultListener(VideoExportSession.TypedFinishedListener listener)
+    {
+        return this.session.removeFinishedResultListener(listener);
+    }
+
+    public VideoExportSession.Subscription subscribeFinishedResult(VideoExportSession.TypedFinishedListener listener)
+    {
+        return this.session.subscribeFinishedResult(listener);
+    }
+
+    public VideoExportResult getLastExportResult()
+    {
+        return this.session.getLastExportResult();
+    }
+
+    public VideoExportRequest getActiveExportRequest()
+    {
+        return this.session.getActiveExportRequest();
     }
 
     public void setFinishedListener(VideoExportSession.FinishedListener listener)

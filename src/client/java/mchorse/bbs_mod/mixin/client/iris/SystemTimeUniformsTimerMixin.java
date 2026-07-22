@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.mixin.client.iris;
 
 import mchorse.bbs_mod.BBSModClient;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import net.irisshaders.iris.uniforms.SystemTimeUniforms;
@@ -29,7 +28,10 @@ public class SystemTimeUniformsTimerMixin
 
         if (videoRecorder != null && videoRecorder.isRecording())
         {
-            float videoFrameRate = BBSRendering.getVideoFrameRate();
+            double capturedRate = videoRecorder.getCaptureFrameRate();
+            float videoFrameRate = Double.isFinite(capturedRate) && capturedRate > 0D
+                ? (float) capturedRate : BBSRendering.getVideoFrameRate();
+            int heldFrameLimit = Math.max(1, videoRecorder.getCapturedHeldFrames());
 
             if (this.heldFrames == 0)
             {
@@ -39,7 +41,7 @@ public class SystemTimeUniformsTimerMixin
 
             this.heldFrames += 1;
 
-            if (this.heldFrames >= BBSSettings.videoSettings.heldFrames.get())
+            if (this.heldFrames >= heldFrameLimit)
             {
                 this.heldFrames = 0;
             }

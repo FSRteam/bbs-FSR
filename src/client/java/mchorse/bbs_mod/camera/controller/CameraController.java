@@ -7,6 +7,7 @@ import org.joml.Vector3d;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Predicate;
 
 public class CameraController implements ICameraController
 {
@@ -71,22 +72,28 @@ public class CameraController implements ICameraController
 
     public void remove(Class clazz)
     {
+        Throwable failure = null;
         Iterator<ICameraController> it = this.controllers.iterator();
 
         while (it.hasNext())
         {
-            if (it.next().getClass() == clazz)
+            ICameraController controller = it.next();
+
+            if (controller.getClass() == clazz)
             {
                 it.remove();
+                failure = appendFailure(failure, this.shutdownController(controller));
             }
         }
 
         this.updateCurrent();
+        rethrowFailure(failure);
     }
 
     public List<ICameraController> removeAll(Class<? extends ICameraController> clazz)
     {
         List<ICameraController> removed = new ArrayList<>();
+        Throwable failure = null;
         Iterator<ICameraController> it = this.controllers.iterator();
 
         while (it.hasNext())
@@ -97,10 +104,36 @@ public class CameraController implements ICameraController
             {
                 it.remove();
                 removed.add(controller);
+                failure = appendFailure(failure, this.shutdownController(controller));
             }
         }
 
         this.updateCurrent();
+        rethrowFailure(failure);
+
+        return removed;
+    }
+
+    public List<ICameraController> removeMatching(Predicate<? super ICameraController> predicate)
+    {
+        List<ICameraController> removed = new ArrayList<>();
+        Throwable failure = null;
+        Iterator<ICameraController> iterator = this.controllers.iterator();
+
+        while (iterator.hasNext())
+        {
+            ICameraController controller = iterator.next();
+
+            if (predicate.test(controller))
+            {
+                iterator.remove();
+                removed.add(controller);
+                failure = appendFailure(failure, this.shutdownController(controller));
+            }
+        }
+
+        this.updateCurrent();
+        rethrowFailure(failure);
 
         return removed;
     }
@@ -109,6 +142,7 @@ public class CameraController implements ICameraController
     {
         Iterator<ICameraController> it = this.controllers.iterator();
         ICameraController removed = null;
+        Throwable failure = null;
 
         while (it.hasNext())
         {
@@ -119,10 +153,12 @@ public class CameraController implements ICameraController
                 it.remove();
 
                 removed = next;
+                failure = appendFailure(failure, this.shutdownController(next));
             }
         }
 
         this.updateCurrent();
+        rethrowFailure(failure);
 
         return removed;
     }
@@ -165,7 +201,62 @@ public class CameraController implements ICameraController
 
     public void reset()
     {
+        Throwable failure = null;
+
+        for (ICameraController controller : new ArrayList<>(this.controllers))
+        {
+            failure = appendFailure(failure, this.shutdownController(controller));
+        }
+
         this.controllers.clear();
         this.current = null;
+        rethrowFailure(failure);
+    }
+
+    private Throwable shutdownController(ICameraController controller)
+    {
+        try
+        {
+            controller.shutdown();
+
+            return null;
+        }
+        catch (RuntimeException | Error failure)
+        {
+            return failure;
+        }
+    }
+
+    private static Throwable appendFailure(Throwable first, Throwable next)
+    {
+        if (next == null)
+        {
+            return first;
+        }
+
+        if (first == null)
+        {
+            return next;
+        }
+
+        if (first != next)
+        {
+            first.addSuppressed(next);
+        }
+
+        return first;
+    }
+
+    private static void rethrowFailure(Throwable failure)
+    {
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+
+        if (failure instanceof Error error)
+        {
+            throw error;
+        }
     }
 }

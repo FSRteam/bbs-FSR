@@ -6,18 +6,29 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.wav.WaveWriter;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
+import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import org.lwjgl.system.MemoryUtil;
 
 import java.io.File;
+import java.io.BufferedOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 
 public class AudioRenderer
 {
@@ -266,81 +277,576 @@ public class AudioRenderer
 
     public static boolean renderAudio(File file, List<AudioClip> clips, int totalDuration, int sampleRate, float from, float to)
     {
-        float total = totalDuration / 20F;
-        Map<AudioClip, Wave> map = new HashMap<>();
+        /* The legacy UI used [0,0] as its full-range sentinel. Keep that only
+         * at this compatibility boundary; typed requests use a strict range. */
+        float resolvedTo = from == 0F && to == 0F ? totalDuration / 20F : to;
 
-        for (AudioClip clip : clips)
+        return renderAudioResult(file, clips, totalDuration, sampleRate, from, resolvedTo,
+            resolveExportLayout(), () -> false, (completed, total) -> {}).success();
+    }
+
+    /** Render film audio with an explicit output layout and typed terminal result. */
+    public static AudioRenderResult renderAudioResult(File file, List<AudioClip> clips,
+                                                       int totalDuration, int sampleRate,
+                                                       float from, float to,
+                                                       ChannelLayout layout,
+                                                       BooleanSupplier cancelled,
+                                                       BiConsumer<Long, Long> progress)
+    {
+        if (file == null || clips == null || sampleRate <= 0 || totalDuration < 0
+            || cancelled == null || progress == null)
         {
-            if (!clip.enabled.get())
-            {
-                continue;
-            }
-
-            try
-            {
-                Wave wave = AudioReader.read(BBSMod.getProvider(), clip.audio.get());
-
-                map.put(clip, wave);
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, 0,
+                "Invalid audio render request", null);
         }
 
-        if (map.isEmpty())
+        if (layout == null || !layout.supported())
         {
-            return false;
+            return AudioRenderResult.failure(AudioRenderResult.Status.UNSUPPORTED_FORMAT, file, layout, 0,
+                "Unsupported audio output layout", null);
         }
 
-        int byteRate = sampleRate * 2;
-        int totalBytes = (int) Math.ceil(total * byteRate);
-        /* Ensure the buffer size is large enough to hold all
-         * audio data and maintain byte alignment. */
-        byte[] bytes = new byte[totalBytes + (totalBytes % 2)];
-        Wave finalWave = new Wave(1, 1, sampleRate, 16, bytes);
-        ByteBuffer buffer = MemoryUtil.memAlloc(2);
-
-        for (AudioClip clip : clips)
+        if (cancelled.getAsBoolean())
         {
-            try
-            {
-                Wave wave = map.get(clip);
-
-                if (wave != null)
-                {
-                    finalWave.add(buffer, wave,
-                        TimeUtils.toSeconds(clip.tick.get()),
-                        TimeUtils.toSeconds(clip.offset.get()),
-                        TimeUtils.toSeconds(clip.duration.get()),
-                        clip.volume.get()
-                    );
-                }
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
+            return AudioRenderResult.failure(AudioRenderResult.Status.CANCELLED, file, layout, 0,
+                "Audio render cancelled", null);
         }
 
-        MemoryUtil.memFree(buffer);
+        if (!Float.isFinite(from) || !Float.isFinite(to) || from < 0F || to < 0F || from > to)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, 0,
+                "Audio render range is invalid", null);
+        }
+
+        float totalSeconds = totalDuration / 20F;
+        float start = Math.min(totalSeconds, from);
+        float end = Math.min(totalSeconds, to);
+
+        if (end <= start)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.EMPTY, file, layout, 0,
+                "Audio render range is empty", null);
+        }
+
+        double startSeconds = decimalSeconds(start);
+        double endSeconds = decimalSeconds(end);
+        List<PreparedFilmSource> sources = new ArrayList<>();
+        Map<Link, Wave> decoded = new HashMap<>();
 
         try
         {
-            if (from != to && (from >= 0 && to >= 0))
+            for (AudioClip clip : clips)
             {
-                finalWave = finalWave.excerptMono(from, to);
+                if (clip == null || !clip.enabled.get())
+                {
+                    continue;
+                }
+
+                if (cancelled.getAsBoolean())
+                {
+                    return AudioRenderResult.failure(AudioRenderResult.Status.CANCELLED, file, layout, 0,
+                        "Audio render cancelled", null);
+                }
+
+                double clipStart = decimalSeconds(TimeUtils.toSeconds(clip.tick.get()));
+                double sourceOffset = decimalSeconds(TimeUtils.toSeconds(clip.offset.get()));
+                double clipDuration = decimalSeconds(Math.max(0F, TimeUtils.toSeconds(clip.duration.get())));
+                float gain = clip.volume.get();
+
+                if (!Double.isFinite(clipStart) || !Double.isFinite(sourceOffset)
+                    || !Double.isFinite(clipDuration) || !Float.isFinite(gain))
+                {
+                    throw new IllegalArgumentException("Audio clip timing and gain must be finite");
+                }
+
+                double clipEnd = clipStart + clipDuration;
+                if (clipDuration <= 0D || clipEnd <= startSeconds || clipStart >= endSeconds)
+                {
+                    continue;
+                }
+
+                Link audio = clip.audio.get();
+                Wave wave = decoded.get(audio);
+
+                if (wave == null)
+                {
+                    wave = AudioReader.read(BBSMod.getProvider(), audio);
+                    decoded.put(audio, wave);
+                }
+
+                if (cancelled.getAsBoolean())
+                {
+                    return AudioRenderResult.failure(AudioRenderResult.Status.CANCELLED, file, layout, 0,
+                        "Audio render cancelled", null);
+                }
+
+                sources.add(new PreparedFilmSource(wave, clipStart, sourceOffset, clipDuration, gain));
             }
-
-            WaveWriter.write(file, finalWave);
-
-            return true;
+        }
+        catch (UnsupportedAudioFormatException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.UNSUPPORTED_FORMAT, file, layout, 0,
+                e.getMessage(), e);
+        }
+        catch (FileNotFoundException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MISSING_RESOURCE, file, layout, 0,
+                e.getMessage(), e);
+        }
+        catch (AudioDecodeException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, 0,
+                e.getMessage(), e);
         }
         catch (IOException e)
         {
-            e.printStackTrace();
+            return AudioRenderResult.failure(AudioRenderResult.Status.IO_FAILURE, file, layout, 0,
+                e.getMessage(), e);
+        }
+        catch (RuntimeException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, 0,
+                e.getMessage(), e);
         }
 
-        return false;
+        return renderPreparedAudio(file, sources, sampleRate, startSeconds, endSeconds,
+            layout, cancelled, progress);
     }
+
+    static AudioRenderResult renderPreparedAudio(File file, List<PreparedFilmSource> preparedSources,
+                                                  int sampleRate, double start, double end,
+                                                  ChannelLayout layout, BooleanSupplier cancelled,
+                                                  BiConsumer<Long, Long> progress)
+    {
+        if (file == null || preparedSources == null || sampleRate <= 0
+            || cancelled == null || progress == null)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, 0,
+                "Invalid prepared audio render request", null);
+        }
+        if (layout == null || !layout.supported())
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.UNSUPPORTED_FORMAT, file, layout, 0,
+                "Unsupported audio output layout", null);
+        }
+        if (!Double.isFinite(start) || !Double.isFinite(end) || start < 0D || end < start)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, 0,
+                "Audio render range is invalid", null);
+        }
+        if (end == start)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.EMPTY, file, layout, 0,
+                "Audio render range is empty", null);
+        }
+        if (cancelled.getAsBoolean())
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.CANCELLED, file, layout, 0,
+                "Audio render cancelled", null);
+        }
+
+        long frames;
+        try
+        {
+            frames = frameCount(start, end, sampleRate);
+        }
+        catch (ArithmeticException | NumberFormatException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, 0,
+                "Audio frame count overflows", e);
+        }
+
+        if (frames <= 0L)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.EMPTY, file, layout, 0,
+                "Audio render range contains no output frames", null);
+        }
+
+        List<FilmSource> sources = new ArrayList<>();
+
+        try
+        {
+            for (PreparedFilmSource source : preparedSources)
+            {
+                if (cancelled.getAsBoolean())
+                {
+                    return AudioRenderResult.failure(AudioRenderResult.Status.CANCELLED, file, layout,
+                        frames, "Audio render cancelled", null);
+                }
+                if (source == null)
+                {
+                    return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout,
+                        frames, "Prepared audio source is null", null);
+                }
+                if (!Double.isFinite(source.clipStartSeconds())
+                    || !Double.isFinite(source.sourceOffsetSeconds())
+                    || !Double.isFinite(source.clipDurationSeconds())
+                    || source.clipDurationSeconds() < 0D || !Float.isFinite(source.gain()))
+                {
+                    throw new IllegalArgumentException("Prepared audio timing and gain must be finite");
+                }
+                if (source.clipDurationSeconds() == 0D)
+                {
+                    continue;
+                }
+                if (source.wave() == null)
+                {
+                    return AudioRenderResult.failure(AudioRenderResult.Status.MISSING_RESOURCE, file,
+                        layout, frames, "Prepared audio source is missing", null);
+                }
+                double clipEnd = source.clipStartSeconds() + source.clipDurationSeconds();
+                if (clipEnd <= start || source.clipStartSeconds() >= end)
+                {
+                    continue;
+                }
+                if (source.wave().numChannels != 1 && source.wave().numChannels != 2)
+                {
+                    return AudioRenderResult.failure(AudioRenderResult.Status.UNSUPPORTED_FORMAT, file,
+                        layout, frames, "Prepared audio source channel layout is unsupported", null);
+                }
+
+                PcmFormat format;
+
+                try
+                {
+                    format = source.wave().getFormat();
+                }
+                catch (IllegalArgumentException e)
+                {
+                    return AudioRenderResult.failure(AudioRenderResult.Status.UNSUPPORTED_FORMAT, file,
+                        layout, frames, e.getMessage(), e);
+                }
+                long sourceFrames = source.wave().data.length / format.bytesPerFrame();
+                if (sourceFrames == 0L)
+                {
+                    continue;
+                }
+
+                double sourceDuration = sourceFrames / (double) format.sampleRate();
+                double audibleStart = Math.max(start, Math.max(source.clipStartSeconds(),
+                    source.clipStartSeconds() - source.sourceOffsetSeconds()));
+                double audibleEnd = Math.min(end, Math.min(clipEnd,
+                    source.clipStartSeconds() - source.sourceOffsetSeconds() + sourceDuration));
+
+                if (audibleEnd <= audibleStart)
+                {
+                    continue;
+                }
+
+                sources.add(new FilmSource(source.wave(), format, sourceFrames,
+                    source.clipStartSeconds(), source.sourceOffsetSeconds(),
+                    source.clipDurationSeconds(), source.gain()));
+            }
+        }
+        catch (RuntimeException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout,
+                frames, e.getMessage(), e);
+        }
+
+        if (sources.isEmpty())
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.EMPTY, file, layout, frames,
+                "No audio sources intersect the requested window", null);
+        }
+
+        if (cancelled.getAsBoolean())
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.CANCELLED, file, layout, frames,
+                "Audio render cancelled", null);
+        }
+
+        Path target = file.toPath().toAbsolutePath();
+        Path parent = target.getParent();
+        if (parent == null)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.IO_FAILURE, file, layout, 0,
+                "Audio output has no parent directory", null);
+        }
+
+        Path temporary = null;
+        try
+        {
+            Files.createDirectories(parent);
+            if (Files.exists(target)) throw new FileAlreadyExistsException(target.toString());
+            temporary = Files.createTempFile(parent, "." + target.getFileName() + ".", ".wav");
+            PcmFormat outputFormat = new PcmFormat(PcmEncoding.PCM_S16_LE, layout, sampleRate);
+            long bytesPerFrame = outputFormat.bytesPerFrame();
+            long dataLength = Math.multiplyExact(frames, bytesPerFrame);
+            boolean mixed;
+
+            try (BufferedOutputStream stream = new BufferedOutputStream(Files.newOutputStream(temporary)))
+            {
+                WaveWriter.writeHeader(stream, outputFormat, dataLength);
+                mixed = PcmBlockRenderer.render(stream, frames, layout, cancelled, progress,
+                    (blockStart, count, left, right) -> mixFilmBlock(sources, start,
+                        sampleRate, layout, blockStart, count, left, right));
+            }
+
+            if (!mixed)
+            {
+                return AudioRenderResult.failure(AudioRenderResult.Status.EMPTY, file, layout, frames,
+                    "No audio samples intersect the requested window", null);
+            }
+
+            if (cancelled.getAsBoolean())
+            {
+                throw new PcmBlockRenderer.CancelledException();
+            }
+
+            moveWithoutReplace(temporary, target);
+            temporary = null;
+            return AudioRenderResult.success(file, layout, frames);
+        }
+        catch (PcmBlockRenderer.CancelledException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.CANCELLED, file, layout, frames,
+                "Audio render cancelled", e);
+        }
+        catch (IOException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.IO_FAILURE, file, layout, frames,
+                e.getMessage(), e);
+        }
+        catch (RuntimeException e)
+        {
+            return AudioRenderResult.failure(AudioRenderResult.Status.MIX_FAILURE, file, layout, frames,
+                e.getMessage(), e);
+        }
+        finally
+        {
+            if (temporary != null)
+            {
+                try { Files.deleteIfExists(temporary); } catch (IOException ignored) {}
+            }
+        }
+    }
+
+    private static boolean mixFilmBlock(List<FilmSource> sources, double start,
+                                        int sampleRate, ChannelLayout layout,
+                                        long blockStart, int count,
+                                        float[] left, float[] right)
+    {
+        boolean mixed = false;
+
+        for (int i = 0; i < count; i++)
+        {
+            double timeline = start + (blockStart + i) / (double) sampleRate;
+            for (FilmSource source : sources)
+            {
+                double elapsed = timeline - source.clipStart;
+                if (elapsed < 0D || elapsed >= source.clipDuration) continue;
+                double relative = elapsed + source.sourceOffset;
+                double sourcePosition = relative * source.wave.sampleRate;
+                if (sourcePosition < 0D || sourcePosition >= source.sourceFrames) continue;
+
+                mixed = true;
+                float first = (float) sample(source, sourcePosition, 0);
+                float second = source.wave.numChannels == 2
+                    ? (float) sample(source, sourcePosition, 1) : 0F;
+
+                PcmBlockRenderer.accumulate(left, right, i, layout,
+                    source.wave.numChannels, first, second, source.gain);
+            }
+        }
+
+        return mixed;
+    }
+
+    private static double sample(FilmSource source, double position, int channel)
+    {
+        long first = (long) Math.floor(position);
+        if (first < 0 || first >= source.sourceFrames) return 0D;
+        long second = Math.min(first + 1L, source.sourceFrames - 1L);
+        double fraction = position - first;
+        double a = readSample(source, first, channel);
+        double b = readSample(source, second, channel);
+
+        return a + (b - a) * fraction;
+    }
+
+    private static double readSample(FilmSource source, long frame, int channel)
+    {
+        long offset = Math.addExact(Math.multiplyExact(frame, source.format.bytesPerFrame()),
+            Math.multiplyExact((long) channel, source.format.bytesPerSample()));
+
+        return PcmSamples.readNormalized(source.format.encoding(), source.wave.data,
+            Math.toIntExact(offset));
+    }
+
+    private static void moveWithoutReplace(Path source, Path target) throws IOException
+    {
+        if (Files.exists(target)) throw new FileAlreadyExistsException(target.toString());
+        Files.move(source, target);
+    }
+
+    private static ChannelLayout resolveExportLayout()
+    {
+        try
+        {
+            if (BBSSettings.videoAudioLayout != null)
+            {
+                return ChannelLayout.normalizeExport(BBSSettings.videoAudioLayout.get());
+            }
+        }
+        catch (RuntimeException ignored) {}
+
+        return ChannelLayout.MONO;
+    }
+
+    private static long frameCount(double start, double end, int sampleRate)
+    {
+        BigDecimal duration = decimalSeconds(end).subtract(decimalSeconds(start));
+        BigDecimal samples = duration.multiply(BigDecimal.valueOf(sampleRate));
+
+        return samples.setScale(0, RoundingMode.CEILING).longValueExact();
+    }
+
+    private static BigDecimal decimalSeconds(double seconds)
+    {
+        float asFloat = (float) seconds;
+        String value = Double.compare((double) asFloat, seconds) == 0
+            ? Float.toString(asFloat)
+            : Double.toString(seconds);
+
+        return new BigDecimal(value);
+    }
+
+    private static double decimalSeconds(float seconds)
+    {
+        return Double.parseDouble(Float.toString(seconds));
+    }
+
+    record PreparedFilmSource(Wave wave, double clipStartSeconds, double sourceOffsetSeconds,
+                              double clipDurationSeconds, float gain) {}
+
+    private record FilmSource(Wave wave, PcmFormat format, long sourceFrames,
+                              double clipStart, double sourceOffset,
+                              double clipDuration, float gain) {}
+
+    /** Shared bounded accumulation and single master-output boundary. */
+    static final class PcmBlockRenderer
+    {
+        static final int BLOCK_FRAMES = 8192;
+        private static final float CENTER_GAIN = (float) Math.sqrt(0.5D);
+
+        private PcmBlockRenderer()
+        {}
+
+        static boolean render(OutputStream stream, long frames, ChannelLayout layout,
+                              BooleanSupplier cancelled, BiConsumer<Long, Long> progress,
+                              BlockAccumulator accumulator) throws IOException
+        {
+            int channels = layout.channels();
+            float[] left = new float[BLOCK_FRAMES];
+            float[] right = channels == 2 ? new float[BLOCK_FRAMES] : null;
+            byte[] packed = new byte[BLOCK_FRAMES * channels * 2];
+            boolean mixed = false;
+
+            for (long blockStart = 0L; blockStart < frames; blockStart += BLOCK_FRAMES)
+            {
+                checkCancelled(cancelled);
+
+                int count = (int) Math.min(BLOCK_FRAMES, frames - blockStart);
+                Arrays.fill(left, 0, count, 0F);
+                if (right != null) Arrays.fill(right, 0, count, 0F);
+
+                mixed |= accumulator.accumulate(blockStart, count, left, right);
+                checkCancelled(cancelled);
+                pack(packed, left, right, count, channels);
+                stream.write(packed, 0, count * channels * 2);
+                progress.accept(Math.min(frames, blockStart + count), frames);
+            }
+
+            return mixed;
+        }
+
+        static void accumulate(float[] left, float[] right, int destination,
+                               ChannelLayout layout, int sourceChannels,
+                               float first, float second, float gain)
+        {
+            if (sourceChannels == 1)
+            {
+                float sample = first * gain;
+
+                if (layout == ChannelLayout.MONO)
+                {
+                    left[destination] += sample;
+                }
+                else
+                {
+                    float centered = sample * CENTER_GAIN;
+                    left[destination] += centered;
+                    right[destination] += centered;
+                }
+
+                return;
+            }
+
+            if (sourceChannels != 2)
+            {
+                throw new IllegalArgumentException("Unsupported source channel count: " + sourceChannels);
+            }
+
+            float l = first * gain;
+            float r = second * gain;
+
+            if (layout == ChannelLayout.MONO)
+            {
+                left[destination] += (l + r) * 0.5F;
+            }
+            else
+            {
+                left[destination] += l;
+                right[destination] += r;
+            }
+        }
+
+        private static void pack(byte[] packed, float[] left, float[] right,
+                                 int count, int channels)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int offset = i * channels * 2;
+                PcmSamples.writeNormalized(PcmEncoding.PCM_S16_LE, packed, offset, limit(left[i]));
+
+                if (channels == 2)
+                {
+                    PcmSamples.writeNormalized(PcmEncoding.PCM_S16_LE, packed,
+                        offset + 2, limit(right[i]));
+                }
+            }
+        }
+
+        private static float limit(float value)
+        {
+            if (Float.isNaN(value))
+            {
+                throw new IllegalArgumentException("Mixed PCM sample is NaN");
+            }
+
+            return Math.max(-1F, Math.min(1F, value));
+        }
+
+        private static void checkCancelled(BooleanSupplier cancelled) throws CancelledException
+        {
+            if (cancelled.getAsBoolean())
+            {
+                throw new CancelledException();
+            }
+        }
+
+        @FunctionalInterface
+        interface BlockAccumulator
+        {
+            boolean accumulate(long blockStart, int count,
+                               float[] left, float[] right) throws IOException;
+        }
+
+        static final class CancelledException extends IOException
+        {
+            private static final long serialVersionUID = 1L;
+        }
+    }
+
 }

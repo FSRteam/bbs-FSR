@@ -2,6 +2,7 @@ package mchorse.bbs_mod.settings.ui;
 
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.audio.ChannelLayout;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.value.ValueKeyCombo;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
@@ -13,6 +14,7 @@ import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
+import mchorse.bbs_mod.settings.values.ui.ValueExportChannelLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -180,6 +182,22 @@ public class UIValueMap
             UIText credits = new UIText().text(UIKeys.LANGUAGE_CREDITS).updates();
 
             return Arrays.asList(UIValueFactory.column(button, value), credits.marginBottom(8));
+        });
+
+        register(ValueExportChannelLayout.class, (value, ui) ->
+        {
+            UICirculate button = new UICirculate((b) ->
+            {
+                value.set(b.getValue() == 1
+                    ? ChannelLayout.STEREO.id()
+                    : ChannelLayout.MONO.id());
+            });
+            button.addLabel(UIKeys.VIDEO_SETTINGS_AUDIO_CHANNELS_MONO);
+            button.addLabel(UIKeys.VIDEO_SETTINGS_AUDIO_CHANNELS_STEREO);
+            button.setValue(value.getResolved() == ChannelLayout.STEREO ? 1 : 0);
+            button.w(90);
+
+            return Arrays.asList(UIValueFactory.column(button, value));
         });
 
         register(ValueLink.class, (value, ui) ->

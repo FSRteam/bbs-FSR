@@ -188,7 +188,9 @@ public class UIKeys
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_DESCRIPTION = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-description");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_LABEL = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-label");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_SUBLABEL = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-sublabel");
+    public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_COUNTDOWN = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-countdown");
     public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_TITLE = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-title");
+    public static final IKey CAMERA_TIMELINE_CONTEXT_RECORD_MICROPHONE_ERROR = L10n.lang("bbs.ui.camera.timeline.context.record_microphone-error");
     public static final IKey CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS = L10n.lang("bbs.ui.camera.timeline.context.remove_clips");
     public static final IKey CAMERA_TIMELINE_CONTEXT_REORGANIZE = L10n.lang("bbs.ui.camera.timeline.context.reorganize");
     public static final IKey CAMERA_TIMELINE_CONTEXT_SHIFT = L10n.lang("bbs.ui.camera.timeline.context.shift");
@@ -1333,6 +1335,9 @@ public class UIKeys
     public static final IKey VIDEO_SETTINGS_ARGS = L10n.lang("bbs.ui.video_settings.args");
     public static final IKey VIDEO_SETTINGS_AUDIO = L10n.lang("bbs.ui.video_settings.audio");
     public static final IKey VIDEO_SETTINGS_AUDIO_ARGS = L10n.lang("bbs.ui.video_settings.audio_args");
+    public static final IKey VIDEO_SETTINGS_AUDIO_CHANNELS = L10n.lang("bbs.ui.video_settings.audio_channels");
+    public static final IKey VIDEO_SETTINGS_AUDIO_CHANNELS_MONO = L10n.lang("bbs.ui.video_settings.audio_channels.mono");
+    public static final IKey VIDEO_SETTINGS_AUDIO_CHANNELS_STEREO = L10n.lang("bbs.ui.video_settings.audio_channels.stereo");
     public static final IKey VIDEO_SETTINGS_AUDIO_TOOLTIP = L10n.lang("bbs.ui.video_settings.audio-tooltip");
     public static final IKey VIDEO_SETTINGS_EDIT = L10n.lang("bbs.ui.video_settings.edit");
     public static final IKey CONFIG_EDITOR_PREVIEW_MODE_EXPORT = L10n.lang("bbs.config.editor.preview_size_mode.export");

@@ -5,15 +5,23 @@ import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.utils.VideoExportAudioProfile;
 
 public class ValueVideoSettings extends ValueGroup
 {
-    public static final String DEFAULT_FFMPEG_ARGUMENTS = "-f rawvideo -pix_fmt bgr24 -s %WIDTH%x%HEIGHT% -r %FPS% -i - -vf %FILTERS% -c:v libx264 -preset ultrafast -tune zerolatency -qp 18 -pix_fmt yuv420p %NAME%.mp4";
-    public static final String DEFAULT_AUDIO_FFMPEG_ARGUMENTS = "-f rawvideo -pix_fmt bgr24 -s %WIDTH%x%HEIGHT% -r %FPS% -i - -i %AUDIO_TRACK% -vf %FILTERS% -c:v libx264 -preset ultrafast -tune zerolatency -qp 18 -pix_fmt yuv420p -c:a aac -b:a 128k -shortest %NAME%.mp4";
+    public static final String DEFAULT_FFMPEG_ARGUMENTS = VideoExportAudioProfile.DEFAULT_VIDEO_ARGUMENTS;
+    public static final String DEFAULT_AUDIO_FFMPEG_ARGUMENTS = VideoExportAudioProfile.DEFAULT_DIRECT_ARGUMENTS;
+    /** Exact pre-profile default; migrated once at the settings boundary. */
+    public static final String LEGACY_AUDIO_FFMPEG_ARGUMENTS =
+        "-f rawvideo -pix_fmt bgr24 -s %WIDTH%x%HEIGHT% -r %FPS% -i - -i %AUDIO_TRACK% -vf %FILTERS% "
+            + "-c:v libx264 -preset ultrafast -tune zerolatency -qp 18 -pix_fmt yuv420p "
+            + "-c:a aac -b:a 128k -shortest %NAME%.mp4";
 
     public final ValueString arguments;
     public final ValueString argumentsAudio;
     public final ValueBoolean audio;
+    /** Stable persisted id is owned by {@code BBSSettings.videoAudioLayout}. */
+    public final ValueString audioLayout;
     public final ValueInt width;
     public final ValueInt height;
     public final ValueInt frameRate;
@@ -31,6 +39,7 @@ public class ValueVideoSettings extends ValueGroup
             new ValueString("arguments", DEFAULT_FFMPEG_ARGUMENTS),
             new ValueString("arguments_audio", DEFAULT_AUDIO_FFMPEG_ARGUMENTS),
             new ValueBoolean("audio", false),
+            new ValueExportChannelLayout("audioLayout"),
             new ValueInt("width", 1280, 2, 8096),
             new ValueInt("height", 720, 2, 8096),
             new ValueInt("frameRate", 60, 10, 1000),
@@ -64,6 +73,43 @@ public class ValueVideoSettings extends ValueGroup
             arguments,
             argumentsAudio,
             audio,
+            new ValueExportChannelLayout("audioLayout"),
+            width,
+            height,
+            frameRate,
+            motionBlur,
+            heldFrames,
+            delay,
+            path,
+            openFolderAfterExport,
+            playSoundAfterExport,
+            false
+        );
+    }
+
+    /** Additive bridge overload carrying the persisted export layout. */
+    public static ValueVideoSettings bridge(
+        String id,
+        ValueString arguments,
+        ValueString argumentsAudio,
+        ValueBoolean audio,
+        ValueInt width,
+        ValueInt height,
+        ValueInt frameRate,
+        ValueInt motionBlur,
+        ValueInt heldFrames,
+        ValueFloat delay,
+        ValueString path,
+        ValueBoolean openFolderAfterExport,
+        ValueBoolean playSoundAfterExport,
+        ValueString audioLayout)
+    {
+        return new ValueVideoSettings(
+            id,
+            arguments,
+            argumentsAudio,
+            audio,
+            audioLayout,
             width,
             height,
             frameRate,
@@ -82,6 +128,7 @@ public class ValueVideoSettings extends ValueGroup
         ValueString arguments,
         ValueString argumentsAudio,
         ValueBoolean audio,
+        ValueString audioLayout,
         ValueInt width,
         ValueInt height,
         ValueInt frameRate,
@@ -98,6 +145,7 @@ public class ValueVideoSettings extends ValueGroup
         this.arguments = arguments;
         this.argumentsAudio = argumentsAudio;
         this.audio = audio;
+        this.audioLayout = audioLayout == null ? new ValueExportChannelLayout("audioLayout") : audioLayout;
         this.width = width;
         this.height = height;
         this.frameRate = frameRate;
@@ -113,6 +161,7 @@ public class ValueVideoSettings extends ValueGroup
             this.add(this.arguments);
             this.add(this.argumentsAudio);
             this.add(this.audio);
+            this.add(this.audioLayout);
             this.add(this.width);
             this.add(this.height);
             this.add(this.frameRate);
@@ -123,5 +172,16 @@ public class ValueVideoSettings extends ValueGroup
             this.add(this.openFolderAfterExport);
             this.add(this.playSoundAfterExport);
         }
+    }
+
+    /** Snapshot the normalized, supported layout at export start. */
+    public mchorse.bbs_mod.audio.ChannelLayout resolveAudioLayout()
+    {
+        if (this.audioLayout instanceof ValueExportChannelLayout layout)
+        {
+            return layout.getResolved();
+        }
+
+        return mchorse.bbs_mod.audio.ChannelLayout.normalizeExport(this.audioLayout.get());
     }
 }

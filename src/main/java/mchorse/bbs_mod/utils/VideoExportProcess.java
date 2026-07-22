@@ -57,12 +57,48 @@ public final class VideoExportProcess
         return this.outcome == Outcome.RUNNING;
     }
 
-    /** Reset a completed lifecycle before allocating resources for a new export. */
-    public void reset()
+    /**
+     * True while the child process is still alive, including after a timed-out
+     * terminal attempt.  Owners must not be released while this is true.
+     */
+    public synchronized boolean hasLiveProcess()
     {
-        if (this.isRunning())
+        if (this.process == null)
         {
-            throw new IllegalStateException("Cannot reset a running video export process");
+            return false;
+        }
+
+        try
+        {
+            if (this.process.isAlive())
+            {
+                return true;
+            }
+
+            this.process = null;
+            return false;
+        }
+        catch (Exception | LinkageError e)
+        {
+            return true;
+        }
+    }
+
+    /** Preserve non-terminal cleanup diagnostics without changing the outcome. */
+    public synchronized void addDiagnosticFailure(Throwable failure)
+    {
+        if (failure != null)
+        {
+            this.failure = appendFailure(this.failure, failure);
+        }
+    }
+
+    /** Reset a completed lifecycle before allocating resources for a new export. */
+    public synchronized void reset()
+    {
+        if (this.isRunning() || this.hasLiveProcess())
+        {
+            throw new IllegalStateException("Cannot reset a live video export process");
         }
 
         this.process = null;
@@ -88,11 +124,11 @@ public final class VideoExportProcess
         return this.startOwned(process, null);
     }
 
-    private boolean startOwned(Process process, WritableByteChannel channel)
+    private synchronized boolean startOwned(Process process, WritableByteChannel channel)
     {
-        if (this.isRunning())
+        if (this.isRunning() || this.hasLiveProcess())
         {
-            throw new IllegalStateException("Video export process is already running");
+            throw new IllegalStateException("Video export process is already live");
         }
 
         Objects.requireNonNull(process, "process");
@@ -221,7 +257,19 @@ public final class VideoExportProcess
         return this.terminate(Outcome.FAILED, cause);
     }
 
-    private Outcome terminate(Outcome requested, Throwable cause)
+    /** Invalidate a clean process completion when its owned output is absent. */
+    public Outcome failAfterCompletion(Throwable cause)
+    {
+        if (this.outcome == Outcome.SUCCEEDED)
+        {
+            this.outcome = Outcome.FAILED;
+            this.failure = cause == null ? new IOException("Video export output is invalid") : cause;
+        }
+
+        return this.outcome;
+    }
+
+    private synchronized Outcome terminate(Outcome requested, Throwable cause)
     {
         if (!this.isRunning())
         {
@@ -240,7 +288,6 @@ public final class VideoExportProcess
 
         /* Fence re-entrant cleanup before touching the process or channel. */
         this.outcome = requested;
-        this.process = null;
         this.channel = null;
 
         try
@@ -345,6 +392,27 @@ public final class VideoExportProcess
         {
             terminalFailure = appendFailure(terminalFailure, new IOException("Timed out terminating FFmpeg"));
         }
+
+        /* Keep the live child attached to this owner after a timeout.  Clearing
+         * it here would allow a new export to start while the old process can
+         * still write into its private artifact directory. */
+        boolean live = false;
+
+        if (activeProcess != null)
+        {
+            try
+            {
+                live = activeProcess.isAlive();
+            }
+            catch (Exception | LinkageError e)
+            {
+                terminalFailure = appendFailure(terminalFailure, e);
+                /* An unobservable child remains owned conservatively. */
+                live = true;
+            }
+        }
+
+        this.process = live ? activeProcess : null;
 
         if (requested == Outcome.SUCCEEDED)
         {

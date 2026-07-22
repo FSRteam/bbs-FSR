@@ -10,7 +10,6 @@ import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
-import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.compat.ClientApiCompat;
@@ -27,6 +26,10 @@ import mchorse.bbs_mod.events.register.RegisterL10nEvent;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.film.Recorder;
+import mchorse.bbs_mod.film.VideoExportRequest;
+import mchorse.bbs_mod.film.VideoExportResult;
+import mchorse.bbs_mod.film.VideoExportSession;
+import mchorse.bbs_mod.film.WorldVideoExportListener;
 import mchorse.bbs_mod.film.WorldVideoExportSession;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
@@ -54,6 +57,7 @@ import mchorse.bbs_mod.selectors.EntitySelectors;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.audio.UIAudioRecorder;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.model_blocks.UIModelBlockEditorMenu;
@@ -226,6 +230,33 @@ public class BBSModClient
     public static long getVideoExportDelayRemainingMs()
     {
         return worldExportSession.getWarmupRemainingMs();
+    }
+
+    /** Typed F4/F6 completion bridge for Premiere and other integrations. */
+    public static void setWorldVideoExportFinishedResultListener(VideoExportSession.TypedFinishedListener listener)
+    {
+        worldExportSession.setFinishedResultListener(listener);
+    }
+
+    /** Persistent additive F4/F6 lifecycle bridge for integrations. */
+    public static boolean addWorldVideoExportListener(WorldVideoExportListener listener)
+    {
+        return worldExportSession.addWorldVideoExportListener(listener);
+    }
+
+    public static boolean removeWorldVideoExportListener(WorldVideoExportListener listener)
+    {
+        return worldExportSession.removeWorldVideoExportListener(listener);
+    }
+
+    public static VideoExportResult getLastWorldVideoExportResult()
+    {
+        return worldExportSession.getLastExportResult();
+    }
+
+    public static VideoExportSession getWorldVideoExportSession()
+    {
+        return worldExportSession;
     }
 
     /** Returns the dashboard without creating it. Used to avoid creating UI when handling keys (e.g. F6) before user has opened BBS. */
@@ -587,6 +618,7 @@ public class BBSModClient
 
         try
         {
+            runClientLifecycleStep("cancel microphone recording", () -> UIAudioRecorder.cancelActive(filmPanel));
             runClientLifecycleStep("stop disconnect Film recording", () -> stopFilmRecordingForLifecycle(filmPanel, "disconnect"));
             saveFilmPanelForLifecycle(filmPanel, "disconnect");
             runClientLifecycleStep("notify addon disconnect", () -> ClientApiCompat.emitDisconnect(Minecraft.getInstance()));
@@ -605,10 +637,21 @@ public class BBSModClient
         runClientLifecycleStep("replace Film controller", () -> films = new Films());
         runClientLifecycleStep("reset network handshake", () -> ClientNetwork.resetHandshake());
         resetCameraControllersForLifecycle("disconnect");
+        runClientLifecycleStep("release OpenAL audio resources", () ->
+        {
+            if (sounds != null)
+            {
+                sounds.deleteSounds();
+            }
+        });
     }
 
     public static void onClientPlayerClone(Connection connection, LocalPlayer oldPlayer, LocalPlayer newPlayer)
     {
+        UIFilmPanel filmPanel = getFilmPanelForLifecycle("client-player clone");
+
+        runClientLifecycleStep("cancel microphone recording for client-player clone",
+            () -> UIAudioRecorder.cancelActive(filmPanel));
         runClientLifecycleStep("replace exact client network player scope",
             () -> ClientNetwork.onClientPlayerClone(connection, oldPlayer, newPlayer));
         runClientLifecycleStep("reset Film controller state for client-player clone", () ->
@@ -620,30 +663,26 @@ public class BBSModClient
         });
         runClientLifecycleStep("replace Film controller for client-player clone", () -> films = new Films());
         resetCameraControllersForLifecycle("client-player clone");
+        runClientLifecycleStep("release OpenAL audio resources for client-player clone", () ->
+        {
+            if (sounds != null)
+            {
+                sounds.deleteSounds();
+            }
+        });
     }
 
     private static void resetCameraControllersForLifecycle(String lifecycle)
     {
-        List<ICameraController> removed = Collections.emptyList();
-
         try
         {
-            removed = cameraController.removeAll(PlayCameraController.class);
+            cameraController.removeAll(PlayCameraController.class);
         }
         catch (RuntimeException | Error exception)
         {
             LOGGER.error("[bbs-client] failed to remove Film playback cameras during {}; continuing lifecycle teardown",
                 lifecycle,
                 exception);
-        }
-
-        for (ICameraController controller : removed)
-        {
-            if (controller instanceof PlayCameraController play)
-            {
-                runClientLifecycleStep(lifecycle + " shutdown Film playback camera",
-                    () -> play.getContext().shutdown());
-            }
         }
 
         runClientLifecycleStep(lifecycle + " clear camera controllers", () -> cameraController.reset());
@@ -754,6 +793,7 @@ public class BBSModClient
 
         try
         {
+            runClientLifecycleStep("cancel microphone recording", () -> UIAudioRecorder.cancelActive(filmPanel));
             saveFilmPanelForLifecycle(filmPanel, "client stopping");
             runClientLifecycleStep("notify addon client stopping", () -> ClientApiCompat.emitClientStopping(Minecraft.getInstance()));
             runClientLifecycleStep("stop hot plugin runtime", BBSMod::stopHotPluginRuntime);
@@ -766,6 +806,16 @@ public class BBSModClient
             dashboard = null;
             runClientLifecycleStep("stop resource watchdog", () -> BBSResources.stopWatchdog());
         }
+
+        runClientLifecycleStep("reset Film controller state", () -> films.reset());
+        resetCameraControllersForLifecycle("client stopping");
+        runClientLifecycleStep("release OpenAL audio resources", () ->
+        {
+            if (sounds != null)
+            {
+                sounds.deleteSounds();
+            }
+        });
     }
 
     private static void cancelClientExports(UIFilmPanel filmPanel)
@@ -908,7 +958,26 @@ public class BBSModClient
     {
         if (worldExportSession.isExporting())
         {
-            worldExportSession.cancel();
+            VideoExportRequest activeRequest = worldExportSession.getActiveExportRequest();
+
+            /* The immutable request is the command ownership fence. F4 may
+             * never complete a closed F6 Film range as a truncated success. */
+            if (activeRequest == null || !activeRequest.openEnd()
+                || !activeRequest.sourceId().isEmpty())
+            {
+                return;
+            }
+
+            /* A second F4 is a normal end-of-recording request. Keep cancel for
+             * warm-up, where no FFmpeg process exists yet. */
+            if (worldExportSession.isRecording())
+            {
+                worldExportSession.stop();
+            }
+            else
+            {
+                worldExportSession.cancel();
+            }
 
             return;
         }
@@ -987,8 +1056,11 @@ public class BBSModClient
 
         if (worldExportSession.isExporting())
         {
+            VideoExportRequest activeRequest = worldExportSession.getActiveExportRequest();
+
             /* Toggle off only this film's F6 session; ignore unrelated exports. */
-            if (filmId.equals(worldExportSession.getFilmId()))
+            if (activeRequest != null && !activeRequest.openEnd()
+                && Objects.equals(filmId, activeRequest.sourceId()))
             {
                 worldExportSession.cancel();
             }

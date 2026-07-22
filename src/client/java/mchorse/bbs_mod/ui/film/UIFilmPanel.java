@@ -2645,6 +2645,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void close()
     {
+        this.recorder.cancel();
+        UIAudioRecorder.cancelActive(this);
         this.flushFilmCollaborationEdits();
         BBSFilmCollaborationBridge.detach(this);
 
@@ -2673,6 +2675,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void disappear()
     {
+        this.recorder.cancel();
+        UIAudioRecorder.cancelActive(this);
         this.flushFilmCollaborationEdits();
         BBSFilmCollaborationBridge.detach(this);
         super.disappear();
@@ -2690,7 +2694,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private void disableContext()
     {
-        this.runner.getContext().shutdown();
+        UIAudioRecorder.cancelActive(this);
     }
 
     @Override

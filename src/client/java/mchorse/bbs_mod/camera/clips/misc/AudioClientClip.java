@@ -2,25 +2,27 @@ package mchorse.bbs_mod.camera.clips.misc;
 
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.audio.SoundPlayer;
+import mchorse.bbs_mod.audio.SoundManager;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 
+import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class AudioClientClip extends AudioClip
 {
     static final class Playback
     {
+        final Link link;
         final float seconds;
         final float gain;
 
-        Playback(float seconds, float gain)
+        Playback(Link link, float seconds, float gain)
         {
+            this.link = link;
             this.seconds = seconds;
             this.gain = gain;
         }
@@ -31,56 +33,46 @@ public class AudioClientClip extends AudioClip
         super();
     }
 
-    public static Map<Link, Playback> getPlayback(ClipContext context)
+    /** Erased JVM descriptor remains Map getPlayback(ClipContext). Keys now use clip identity. */
+    public static Map<AudioClientClip, Playback> getPlayback(ClipContext context)
     {
-        return context.clipData.get("audio", ConcurrentHashMap::new);
+        return context.clipData.get("audio.voices", IdentityHashMap::new);
     }
 
+    /** Reconcile even when desired is empty so removed/expired/disabled clips cannot linger. */
     public static void manageSounds(ClipContext context)
     {
-        Map<Link, Playback> playback = getPlayback(context);
+        SoundManager sounds = BBSModClient.getSounds();
+
+        if (sounds == null)
+        {
+            return;
+        }
+
+        Map<AudioClientClip, Playback> playback = getPlayback(context);
+        IdentityHashMap<Object, SoundManager.VoiceRequest> desired = new IdentityHashMap<>();
         boolean muteFilmAudioDuringVideoCapture = BBSSettings.videoMuteAudioWhileRender.get()
+            && BBSModClient.getVideoRecorder() != null
             && BBSModClient.getVideoRecorder().isRecording();
 
-        for (Map.Entry<Link, Playback> entry : playback.entrySet())
+        for (Map.Entry<AudioClientClip, Playback> entry : playback.entrySet())
         {
             Playback state = entry.getValue();
-            float tickTime = state.seconds;
-            SoundPlayer player = BBSModClient.getSounds().playUnique(entry.getKey());
+            float gain = muteFilmAudioDuringVideoCapture ? 0F : state.gain;
 
-            if (player == null)
-            {
-                continue;
-            }
+            desired.put(entry.getKey(), new SoundManager.VoiceRequest(state.link, state.seconds, gain));
+        }
 
-            player.setVolume(muteFilmAudioDuringVideoCapture ? 0F : state.gain);
+        sounds.reconcile(context.getPlaybackOwner(), desired, context.playing);
+    }
 
-            if (tickTime < 0 || tickTime >= player.getBuffer().getDuration())
-            {
-                if (player.isPlaying())
-                {
-                    player.pause();
-                }
+    public static void releaseSounds(ClipContext context)
+    {
+        SoundManager sounds = BBSModClient.getSounds();
 
-                continue;
-            }
-
-            float time = player.getPlaybackPosition();
-            float diff = Math.abs(tickTime - time);
-
-            if (context.playing && !player.isPlaying())
-            {
-                player.play();
-            }
-            else if (!context.playing && player.isPlaying())
-            {
-                player.pause();
-            }
-
-            if (diff > 0.05F)
-            {
-                player.setPlaybackPosition(tickTime);
-            }
+        if (sounds != null && context != null)
+        {
+            sounds.releaseOwner(context.getPlaybackOwner());
         }
     }
 
@@ -92,41 +84,24 @@ public class AudioClientClip extends AudioClip
 
     @Override
     public void shutdown(ClipContext context)
-    {
-        Link link = this.audio.get();
-
-        if (link != null)
-        {
-            BBSModClient.getSounds().stop(link);
-        }
-    }
+    {}
 
     @Override
     protected void applyClip(ClipContext context, Position position)
     {
         Link link = this.audio.get();
+        float localTick = context.relativeTick + context.transition;
 
-        if (link != null)
+        if (link == null || localTick < 0F || localTick >= this.duration.get())
         {
-            SoundPlayer player = BBSModClient.getSounds().playUnique(link);
+            return;
+        }
 
-            if (player == null)
-            {
-                return;
-            }
+        float seconds = TimeUtils.toSeconds(this.offset.get()) + localTick / 20F;
 
-            float tickTime = (context.relativeTick + context.transition) / 20F;
-            Map<Link, Playback> playback = getPlayback(context);
-            float gain = this.volume.get();
-
-            if (context.relativeTick >= this.duration.get() || tickTime < 0)
-            {
-                playback.putIfAbsent(link, new Playback(-1F, gain));
-            }
-            else
-            {
-                playback.put(link, new Playback(TimeUtils.toSeconds(this.offset.get()) + tickTime, gain));
-            }
+        if (seconds >= 0F)
+        {
+            getPlayback(context).put(this, new Playback(link, seconds, this.volume.get()));
         }
     }
 

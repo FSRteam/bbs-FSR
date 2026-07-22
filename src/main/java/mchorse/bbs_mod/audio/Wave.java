@@ -4,14 +4,16 @@ import mchorse.bbs_mod.audio.wav.WaveCue;
 import mchorse.bbs_mod.audio.wav.WaveList;
 import mchorse.bbs_mod.utils.MathUtils;
 import org.lwjgl.openal.AL10;
-import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class Wave
 {
+    private static final double CENTER_GAIN = Math.sqrt(0.5D);
+
     public int audioFormat;
     public int numChannels;
     public int sampleRate;
@@ -24,19 +26,17 @@ public class Wave
     public List<WaveList> lists = new ArrayList<>();
     public List<WaveCue> cues = new ArrayList<>();
 
+    public Wave(PcmFormat format, byte[] data)
+    {
+        this(format.waveTag(), format.channels(), format.sampleRate(),
+            Math.toIntExact(format.byteRate()), format.bytesPerFrame(),
+            format.encoding().bitsPerSample(), data);
+    }
+
     public Wave(int audioFormat, int numChannels, int sampleRate, int bitsPerSample, byte[] data)
     {
-        int bytesPerSample = bitsPerSample / 8;
-        int byteRate = sampleRate * numChannels * bytesPerSample;
-        int blockAlign = numChannels * bytesPerSample;
-
-        this.audioFormat = audioFormat;
-        this.numChannels = numChannels;
-        this.sampleRate = sampleRate;
-        this.byteRate = byteRate;
-        this.blockAlign = blockAlign;
-        this.bitsPerSample = bitsPerSample;
-        this.data = data;
+        this(new PcmFormat(PcmEncoding.fromWaveFormat(audioFormat, bitsPerSample),
+            ChannelLayout.fromChannelCount(numChannels), sampleRate), data);
     }
 
     public Wave(int audioFormat, int numChannels, int sampleRate, int byteRate, int blockAlign, int bitsPerSample, byte[] data)
@@ -47,41 +47,95 @@ public class Wave
         this.byteRate = byteRate;
         this.blockAlign = blockAlign;
         this.bitsPerSample = bitsPerSample;
-        this.data = data;
+        this.data = Objects.requireNonNull(data, "data");
+
+        PcmFormat format = new PcmFormat(PcmEncoding.fromWaveFormat(audioFormat, bitsPerSample),
+            ChannelLayout.fromChannelCount(numChannels), sampleRate);
+
+        if (byteRate != format.byteRate())
+        {
+            throw new IllegalArgumentException("Invalid byte rate " + byteRate + ", expected " + format.byteRate());
+        }
+
+        if (blockAlign != format.bytesPerFrame())
+        {
+            throw new IllegalArgumentException("Invalid block alignment " + blockAlign + ", expected " + format.bytesPerFrame());
+        }
+
+        if (data.length % blockAlign != 0)
+        {
+            throw new IllegalArgumentException("PCM data ends with a partial frame");
+        }
+    }
+
+    public PcmFormat getFormat()
+    {
+        PcmFormat format = new PcmFormat(PcmEncoding.fromWaveFormat(this.audioFormat, this.bitsPerSample),
+            ChannelLayout.fromChannelCount(this.numChannels), this.sampleRate);
+
+        if (this.byteRate != format.byteRate())
+        {
+            throw new IllegalStateException("Invalid byte rate " + this.byteRate + ", expected " + format.byteRate());
+        }
+
+        if (this.blockAlign != format.bytesPerFrame())
+        {
+            throw new IllegalStateException("Invalid block alignment " + this.blockAlign + ", expected " + format.bytesPerFrame());
+        }
+
+        if (this.data == null)
+        {
+            throw new IllegalStateException("PCM data is null");
+        }
+
+        if (this.data.length % format.bytesPerFrame() != 0)
+        {
+            throw new IllegalStateException("PCM data ends with a partial frame");
+        }
+
+        return format;
     }
 
     public int getBytesPerSample()
     {
-        return this.bitsPerSample / 8;
+        return this.getFormat().bytesPerSample();
+    }
+
+    public long getFrameCount()
+    {
+        PcmFormat format = this.getFormat();
+
+        return this.data.length / format.bytesPerFrame();
     }
 
     public float getDuration()
     {
-        return this.data.length / (float) this.numChannels / (float) this.getBytesPerSample() / (float) this.sampleRate;
+        return this.getFrameCount() / (float) this.sampleRate;
     }
 
     public int getALFormat()
     {
-        int bytes = this.getBytesPerSample();
+        PcmFormat format = this.getFormat();
+        int bytes = format.bytesPerSample();
 
-        if (bytes == 1)
+        if (format.encoding() == PcmEncoding.PCM_U8)
         {
-            if (this.numChannels == 2)
+            if (format.layout() == ChannelLayout.STEREO)
             {
                 return AL10.AL_FORMAT_STEREO8;
             }
-            else if (this.numChannels == 1)
+            else
             {
                 return AL10.AL_FORMAT_MONO8;
             }
         }
-        else if (bytes == 2)
+        else if (format.encoding() == PcmEncoding.PCM_S16_LE)
         {
-            if (this.numChannels == 2)
+            if (format.layout() == ChannelLayout.STEREO)
             {
                 return AL10.AL_FORMAT_STEREO16;
             }
-            else if (this.numChannels == 1)
+            else
             {
                 return AL10.AL_FORMAT_MONO16;
             }
@@ -97,75 +151,92 @@ public class Wave
 
     public Wave convertTo16()
     {
-        final int bytes = 16 / 8;
+        return this.convert(PcmEncoding.PCM_S16_LE);
+    }
 
-        int c = this.data.length / this.numChannels / this.getBytesPerSample();
-        int byteRate = this.sampleRate * this.numChannels * bytes;
-        byte[] data = new byte[c * this.numChannels * bytes];
-        boolean isFloat = this.getBytesPerSample() == 4;
+    public Wave convert(PcmEncoding targetEncoding)
+    {
+        Objects.requireNonNull(targetEncoding, "targetEncoding");
+        PcmFormat sourceFormat = this.getFormat();
 
-        Wave wave = new Wave(this.audioFormat, this.numChannels, this.sampleRate, byteRate, bytes * this.numChannels, 16, data);
-
-        ByteBuffer sample = MemoryUtil.memAlloc(4);
-        ByteBuffer dataBuffer = MemoryUtil.memAlloc(data.length);
-
-        for (int i = 0; i < c * this.numChannels; i++)
+        if (sourceFormat.encoding() == targetEncoding)
         {
-            sample.clear();
+            return this;
+        }
 
-            for (int j = 0; j < this.getBytesPerSample(); j++)
+        PcmFormat targetFormat = new PcmFormat(targetEncoding, sourceFormat.layout(), sourceFormat.sampleRate());
+        int samples = Math.multiplyExact(Math.toIntExact(this.getFrameCount()), sourceFormat.channels());
+        byte[] converted = new byte[Math.multiplyExact(samples, targetEncoding.bytesPerSample())];
+
+        for (int i = 0; i < samples; i++)
+        {
+            int sourceOffset = i * sourceFormat.bytesPerSample();
+            int targetOffset = i * targetEncoding.bytesPerSample();
+
+            try
             {
-                sample.put(this.data[i * this.getBytesPerSample() + j]);
+                double sample = PcmSamples.readNormalized(sourceFormat.encoding(), this.data, sourceOffset);
+
+                PcmSamples.writeNormalized(targetEncoding, converted, targetOffset, sample);
             }
-
-            if (isFloat)
+            catch (IllegalArgumentException e)
             {
-                sample.flip();
-                float floatValue = sample.getFloat();
+                int frame = i / sourceFormat.channels();
+                int channel = i % sourceFormat.channels();
 
-                /* Bit depth conversion for float */
-                floatValue = Math.max(-1.0f, Math.min(1.0f, floatValue));
-                dataBuffer.putShort((short) (floatValue * Short.MAX_VALUE));
-            }
-            else
-            {
-                sample.put((byte) 0);
-                sample.flip();
-                int intValue = sample.getInt();
-                
-                /* Bit depth conversion for integer */
-                if (this.bitsPerSample == 24)
-                {
-                    double scaledValue = intValue / 8388608.0 * Short.MAX_VALUE;
-
-                    dataBuffer.putShort((short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, (long) scaledValue)));
-                }
-                else if (this.bitsPerSample == 32)
-                {
-                    double scaledValue = intValue / 2147483648.0 * Short.MAX_VALUE;
-
-                    dataBuffer.putShort((short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, (long) scaledValue)));
-                }
-                else
-                {
-                    double maxOriginalValue = Math.pow(2, this.bitsPerSample - 1) - 1;
-                    double scaledValue = intValue / maxOriginalValue * Short.MAX_VALUE;
-
-                    dataBuffer.putShort((short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, (long) scaledValue)));
-                }
+                throw new IllegalArgumentException("Could not convert PCM frame " + frame
+                    + ", channel " + channel + ": " + e.getMessage(), e);
             }
         }
 
-        dataBuffer.flip();
-        dataBuffer.get(data);
+        return this.copyMetadataTo(new Wave(targetFormat, converted));
+    }
 
-        MemoryUtil.memFree(sample);
-        MemoryUtil.memFree(dataBuffer);
+    public Wave convertLayout(ChannelLayout targetLayout)
+    {
+        Objects.requireNonNull(targetLayout, "targetLayout");
 
-        wave.lists = this.lists;
-        wave.cues = this.cues;
+        if (!targetLayout.supported())
+        {
+            throw new IllegalArgumentException("Unsupported channel layout: " + targetLayout.id());
+        }
 
-        return wave;
+        PcmFormat sourceFormat = this.getFormat();
+
+        if (sourceFormat.layout() == targetLayout)
+        {
+            return this;
+        }
+
+        PcmFormat targetFormat = new PcmFormat(sourceFormat.encoding(), targetLayout, sourceFormat.sampleRate());
+        int frames = Math.toIntExact(this.getFrameCount());
+        byte[] converted = new byte[Math.multiplyExact(frames, targetFormat.bytesPerFrame())];
+
+        for (int frame = 0; frame < frames; frame++)
+        {
+            if (targetLayout == ChannelLayout.MONO)
+            {
+                double left = readSample(this, sourceFormat, frame, 0);
+                double right = readSample(this, sourceFormat, frame, 1);
+
+                PcmSamples.writeNormalized(sourceFormat.encoding(), converted,
+                    frame * targetFormat.bytesPerFrame(), (left + right) * 0.5D);
+            }
+            else
+            {
+                /* A file-format conversion duplicates the source channel at
+                 * unity. Export renderers apply their own equal-power output
+                 * matrix when a mono source is placed on a stereo bus. */
+                double sample = readSample(this, sourceFormat, frame, 0);
+                int offset = frame * targetFormat.bytesPerFrame();
+
+                PcmSamples.writeNormalized(sourceFormat.encoding(), converted, offset, sample);
+                PcmSamples.writeNormalized(sourceFormat.encoding(), converted,
+                    offset + targetFormat.bytesPerSample(), sample);
+            }
+        }
+
+        return this.copyMetadataTo(new Wave(targetFormat, converted));
     }
 
     public float[] getCues()
@@ -175,7 +246,10 @@ public class Wave
 
         for (WaveCue cue : this.cues)
         {
-            cues[i] = cue.position / (float) this.sampleRate;
+            /* dwSampleOffset is the sample position in the referenced data
+             * chunk.  dwPosition is only the playlist order position and may
+             * legitimately differ when a cue references a segmented file. */
+            cues[i] = Integer.toUnsignedLong(cue.sampleStart) / (float) this.sampleRate;
 
             i += 1;
         }
@@ -193,291 +267,208 @@ public class Wave
         this.add(buffer, wave, offset, shift, duration, 1F);
     }
 
+    /**
+     * Compatibility one-source mixer. Export rendering uses the block mixer so
+     * accumulation is limited and quantized only once.
+     */
+    @Deprecated
     public void add(ByteBuffer buffer, Wave wave, float offset, float shift, float duration, float gain)
     {
-        int waveStart = this.truncate((int) (shift * wave.byteRate));
-        int start = this.truncate((int) (offset * this.byteRate));
-        int end = this.truncate((int) ((offset + duration) * this.byteRate));
-
-        end = this.truncate(Math.min(end, this.data.length));
-
-        /* Calculate sample rate ratio for conversion */
-        float ratio = (float) wave.sampleRate / (float) this.sampleRate;
-        
-        
-        /* Use linear interpolation for better quality when sample rates differ */
-        boolean useLinearInterpolation = Math.abs(ratio - 1.0f) > 0.01f;
-
-        /* Calculate step size based on channel count and sample rate ratio */
-        int targetStep = this.numChannels * this.getBytesPerSample();
-        int sourceStep = wave.numChannels * wave.getBytesPerSample();
-
-        for (int i = 0; start + i < end; i += targetStep)
+        Objects.requireNonNull(wave, "wave");
+        if (!Float.isFinite(offset) || !Float.isFinite(shift) || !Float.isFinite(duration) || !Float.isFinite(gain))
         {
-            /* Fixed sample position calculation to prevent duration doubling
-             * Account for channel count difference in stereo to mono conversion */
-            float sampleIndex = (i / targetStep) * ratio;
-            float exactPos = waveStart + sampleIndex * sourceStep;
-            int a = this.truncate((int) exactPos);
-            int b = start + i;
-
-            /* Ensure we don't go beyond the source audio data range */
-            int requiredSourceBytes = useLinearInterpolation ? sourceStep * 2 : sourceStep;
-
-            if (a + requiredSourceBytes - 1 >= wave.data.length)
-            {
-                break;
-            }
-
-            /* Ensure we don't go beyond the target audio data range */
-            if (b + targetStep - 1 >= this.data.length)
-            {
-                break;
-            }
-
-            int waveShort;
-            
-            if (useLinearInterpolation)
-            {
-                /* Linear interpolation for better sample rate conversion */
-                waveShort = this.getLinearInterpolatedSample(wave, exactPos);
-            }
-            else
-            {
-                /* Direct sample access when sample rates match
-                 * Handle stereo to mono conversion by averaging channels */
-                if (wave.numChannels == 2 && this.numChannels == 1)
-                {
-                    /* Stereo to mono conversion: average left and right channels */
-                    buffer.position(0);
-                    buffer.put(wave.data[a]);
-                    buffer.put(wave.data[a + 1]);
-
-                    short leftSample = buffer.getShort(0);
-                    
-                    buffer.position(0);
-                    buffer.put(wave.data[a + 2]);
-                    buffer.put(wave.data[a + 3]);
-
-                    short rightSample = buffer.getShort(0);
-                    
-                    waveShort = (leftSample + rightSample) / 2;
-                }
-                else
-                {
-                    /* Direct sample access for same channel configuration */
-                    buffer.position(0);
-                    buffer.put(wave.data[a]);
-                    buffer.put(wave.data[a + 1]);
-                    waveShort = buffer.getShort(0);
-                }
-            }
-
-            buffer.position(0);
-            buffer.put(this.data[b]);
-            buffer.put(this.data[b + 1]);
-
-            int bytesShort = buffer.getShort(0);
-            
-            /* Improved audio mixing algorithm with smart volume normalization
-             * Convert to float for precise calculations */
-            float waveFloat = waveShort / (float) Short.MAX_VALUE * gain;
-            float bytesFloat = bytesShort / (float) Short.MAX_VALUE;
-            
-            /* Calculate sum and check for clipping */
-            float sum = waveFloat + bytesFloat;
-            
-            /* Apply smart normalization only when clipping would occur */
-            float mixedFloat;
-
-            if (sum > 1F || sum < -1F)
-            {
-                /* Dynamic normalization to preserve as much volume as possible */
-                float absSum = Math.abs(sum);
-                float normalizationFactor = 1F / absSum;
-
-                /* Slight headroom */
-                mixedFloat = sum * normalizationFactor * 0.95F;
-            }
-            else
-            {
-                /* No clipping, use direct sum to preserve volume */
-                mixedFloat = sum;
-            }
-            
-            /* Convert back to short */
-            int finalShort = (int) (mixedFloat * Short.MAX_VALUE);
-
-            buffer.putShort(0, (short) MathUtils.clamp(finalShort, Short.MIN_VALUE, Short.MAX_VALUE));
-
-            this.data[b + 1] = buffer.get(1);
-            this.data[b] = buffer.get(0);
-        }
-        
-    }
-    
-    /**
-     * Linear interpolation between samples for high-quality sample rate conversion
-     * Reduces aliasing and preserves high-frequency content better than nearest neighbor
-     * Fixed fraction calculation and stereo to mono handling
-     */
-    private int getLinearInterpolatedSample(Wave wave, float exactPos)
-    {
-        int bytesPerSample = wave.getBytesPerSample();
-        int sourceStep = wave.numChannels * bytesPerSample;
-        
-        /* Calculate base index aligned to sample boundaries */
-        int baseIndex = this.truncate((int) exactPos);
-        /* Fixed fraction calculation to account for actual sample size */
-        float fraction = (exactPos - baseIndex) / sourceStep;
-
-        /* Ensure we have valid sample positions */
-        int requiredBytes = sourceStep * 2; // Need two samples for interpolation
-
-        if (baseIndex + requiredBytes - 1 >= wave.data.length || baseIndex < 0)
-        {
-            /* Return silence if out of bounds */
-            return 0;
+            throw new IllegalArgumentException("Mix parameters must be finite");
         }
 
-        /* Get the two surrounding samples for interpolation */
-        ByteBuffer buffer = MemoryUtil.memAlloc(4);
-        
-        /* First sample (handle stereo to mono conversion if needed) */
-        buffer.position(0);
+        PcmFormat targetFormat = this.getFormat();
+        PcmFormat sourceFormat = wave.getFormat();
+        long targetFrames = this.getFrameCount();
+        long sourceFrames = wave.getFrameCount();
 
-        short sample1;
-
-        if (wave.numChannels == 2 && this.numChannels == 1)
+        /* A non-positive window has no samples, even when its start lies
+         * between two output frames.  Using floor/ceil without this guard
+         * would unexpectedly mix one frame for a zero-length clip. */
+        if (duration <= 0F || targetFrames == 0L || sourceFrames == 0L)
         {
-            /* Stereo to mono: average left and right channels */
-            buffer.put(wave.data[baseIndex]);
-            buffer.put(wave.data[baseIndex + 1]);
-
-            short leftSample1 = buffer.getShort(0);
-            
-            buffer.position(0);
-            buffer.put(wave.data[baseIndex + 2]);
-            buffer.put(wave.data[baseIndex + 3]);
-
-            short rightSample1 = buffer.getShort(0);
-            
-            sample1 = (short) ((leftSample1 + rightSample1) / 2);
+            return;
         }
-        else
+
+        double targetOffset = offset * (double) targetFormat.sampleRate();
+        double targetEnd = ((double) offset + duration) * targetFormat.sampleRate();
+        long startFrame = targetOffset <= 0D ? 0L
+            : targetOffset >= targetFrames ? targetFrames : (long) Math.ceil(targetOffset);
+        long endFrame = targetEnd <= 0D ? 0L
+            : targetEnd >= targetFrames ? targetFrames : (long) Math.ceil(targetEnd);
+
+        if (endFrame <= startFrame)
         {
-            /* Direct sample access */
-            buffer.put(wave.data[baseIndex]);
-            buffer.put(wave.data[baseIndex + 1]);
-
-            sample1 = buffer.getShort(0);
+            return;
         }
-        
-        /* Second sample (handle stereo to mono conversion if needed) */
-        buffer.position(0);
 
-        int nextSampleIndex = baseIndex + sourceStep;
-        short sample2;
+        /* The active interval is half-open.  Ceil the start so a fractional
+         * clip never contributes before its requested onset, even when the
+         * source shift is positive. */
+        double sourcePosition = shift * sourceFormat.sampleRate()
+            + (startFrame - targetOffset) * sourceFormat.sampleRate() / targetFormat.sampleRate();
+        double sourceStep = sourceFormat.sampleRate() / (double) targetFormat.sampleRate();
 
-        if (wave.numChannels == 2 && this.numChannels == 1)
+        for (long targetFrame = startFrame; targetFrame < endFrame && sourcePosition < sourceFrames; targetFrame++, sourcePosition += sourceStep)
         {
-            /* Stereo to mono: average left and right channels */
-            buffer.put(wave.data[nextSampleIndex]);
-            buffer.put(wave.data[nextSampleIndex + 1]);
+            if (sourcePosition < 0D)
+            {
+                continue;
+            }
 
-            short leftSample2 = buffer.getShort(0);
-            
-            buffer.position(0);
-            buffer.put(wave.data[nextSampleIndex + 2]);
-            buffer.put(wave.data[nextSampleIndex + 3]);
+            for (int channel = 0; channel < targetFormat.channels(); channel++)
+            {
+                double source = this.sampleForChannel(wave, sourceFormat, sourceFrames,
+                    sourcePosition, channel, targetFormat.layout());
+                int byteOffset = Math.toIntExact(targetFrame * targetFormat.bytesPerFrame()
+                    + (long) channel * targetFormat.bytesPerSample());
+                double target = PcmSamples.readNormalized(targetFormat.encoding(), this.data, byteOffset);
 
-            short rightSample2 = buffer.getShort(0);
-            
-            sample2 = (short) ((leftSample2 + rightSample2) / 2);
+                PcmSamples.writeNormalized(targetFormat.encoding(), this.data, byteOffset, target + source * gain);
+            }
         }
-        else
-        {
-            /* Direct sample access */
-            buffer.put(wave.data[nextSampleIndex]);
-            buffer.put(wave.data[nextSampleIndex + 1]);
-
-            sample2 = buffer.getShort(0);
-        }
-        
-        MemoryUtil.memFree(buffer);
-        
-        /* Linear interpolation: sample1 + (sample2 - sample1) * fraction */
-        float interpolated = sample1 + (sample2 - sample1) * fraction;
-
-        return (int) MathUtils.clamp(interpolated, Short.MIN_VALUE, Short.MAX_VALUE);
     }
 
-    private int truncate(int offset)
+    private double sampleForChannel(Wave wave, PcmFormat sourceFormat, long sourceFrames,
+                                    double position, int targetChannel, ChannelLayout targetLayout)
     {
-        return offset - offset % 2;
+        if (targetLayout == ChannelLayout.MONO && wave.numChannels == 2)
+        {
+            return (this.interpolate(wave, sourceFormat, sourceFrames, position, 0)
+                + this.interpolate(wave, sourceFormat, sourceFrames, position, 1)) * 0.5D;
+        }
+
+        double sample = this.interpolate(wave, sourceFormat, sourceFrames, position,
+            wave.numChannels == 1 ? 0 : targetChannel);
+
+        return targetLayout == ChannelLayout.STEREO && wave.numChannels == 1
+            ? sample * CENTER_GAIN
+            : sample;
     }
 
-    /**
-     * Creates a mono excerpt (copy) of this Wave in the time range [fromSeconds, toSeconds).
-     * - Clamps out-of-bounds times to [0, duration]
-     * - If the clamped range is empty, returns an empty Wave (same format, empty data)
-     * - Assumes PCM-like layout and mono; does not handle stereo/channel remapping
-     */
-    public Wave excerptMono(float fromSeconds, float toSeconds)
+    private double interpolate(Wave wave, PcmFormat format, long frames, double position, int channel)
     {
+        if (frames <= 0L || !Double.isFinite(position) || position < 0D || position >= frames
+            || channel < 0 || channel >= wave.numChannels)
+        {
+            return 0D;
+        }
+
+        long first = (long) Math.floor(position);
+        long second = Math.min(first + 1L, frames - 1L);
+        double fraction = position - first;
+        double a = readSample(wave, format, first, channel);
+        double b = readSample(wave, format, second, channel);
+
+        return a + (b - a) * fraction;
+    }
+
+    private static double readSample(Wave wave, PcmFormat format, long frame, int channel)
+    {
+        long offset = Math.addExact(Math.multiplyExact(frame, format.bytesPerFrame()),
+            Math.multiplyExact((long) channel, format.bytesPerSample()));
+
+        try
+        {
+            return PcmSamples.readNormalized(format.encoding(), wave.data, Math.toIntExact(offset));
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new IllegalArgumentException("Could not read PCM frame " + frame
+                + ", channel " + channel + ": " + e.getMessage(), e);
+        }
+    }
+
+    /** Creates a channel-preserving copy of the time range [fromSeconds, toSeconds). */
+    public Wave excerpt(float fromSeconds, float toSeconds)
+    {
+        if (!Float.isFinite(fromSeconds) || !Float.isFinite(toSeconds))
+        {
+            throw new IllegalArgumentException("Excerpt bounds must be finite");
+        }
+
         float duration = this.getDuration();
         float from = MathUtils.clamp(fromSeconds, 0F, duration);
         float to = MathUtils.clamp(toSeconds, 0F, duration);
 
         if (to < from)
         {
-            float tmp = from;
+            float swap = from;
 
             from = to;
-            to = tmp;
+            to = swap;
         }
 
-        int bps = this.getBytesPerSample();
+        PcmFormat format = this.getFormat();
+        long frameCount = this.getFrameCount();
+        long startFrame = Math.max(0L, Math.min(frameCount, (long) Math.floor(from * format.sampleRate())));
 
-        if (to <= from || this.data == null || this.data.length == 0 || bps <= 0)
+        if (to <= from)
         {
-            Wave empty = new Wave(this.audioFormat, 1, this.sampleRate, this.byteRate, this.blockAlign, this.bitsPerSample, new byte[0]);
-
-            empty.lists = this.lists;
-            empty.cues = this.cues;
-
-            return empty;
+            return this.copyExcerptMetadata(new Wave(format, new byte[0]), startFrame, startFrame);
         }
 
-        int fromSample = (int) Math.floor(from * this.sampleRate);
-        int toSample = (int) Math.ceil(to * this.sampleRate);
-        int startByte = fromSample * bps;
-        int endByte = toSample * bps;
+        long endFrame = Math.max(0L, Math.min(frameCount, (long) Math.ceil(to * format.sampleRate())));
 
-        startByte = MathUtils.clamp(startByte, 0, this.data.length);
-        endByte = MathUtils.clamp(endByte, 0, this.data.length);
-
-        startByte -= startByte % bps;
-        endByte -= endByte % bps;
-
-        if (endByte <= startByte)
+        if (endFrame <= startFrame)
         {
-            Wave empty = new Wave(this.audioFormat, 1, this.sampleRate, this.byteRate, this.blockAlign, this.bitsPerSample, new byte[0]);
-
-            empty.lists = this.lists;
-            empty.cues = this.cues;
-
-            return empty;
+            return this.copyExcerptMetadata(new Wave(format, new byte[0]), startFrame, endFrame);
         }
 
-        byte[] out = new byte[endByte - startByte];
-        Wave copy = new Wave(this.audioFormat, 1, this.sampleRate, this.sampleRate * bps, bps, this.bitsPerSample, out);
+        int startByte = Math.toIntExact(Math.multiplyExact(startFrame, format.bytesPerFrame()));
+        int endByte = Math.toIntExact(Math.multiplyExact(endFrame, format.bytesPerFrame()));
+        byte[] output = new byte[endByte - startByte];
 
-        System.arraycopy(this.data, startByte, out, 0, out.length);
+        System.arraycopy(this.data, startByte, output, 0, output.length);
 
-        copy.lists = this.lists;
-        copy.cues = this.cues;
+        return this.copyExcerptMetadata(new Wave(format, output), startFrame, endFrame);
+    }
 
-        return copy;
+    /**
+     * Compatibility adapter for callers that explicitly request a mono excerpt.
+     */
+    @Deprecated
+    public Wave excerptMono(float fromSeconds, float toSeconds)
+    {
+        return this.excerpt(fromSeconds, toSeconds).convertLayout(ChannelLayout.MONO);
+    }
+
+    private Wave copyMetadataTo(Wave wave)
+    {
+        wave.lists = this.lists;
+        wave.cues = this.cues;
+
+        return wave;
+    }
+
+    private Wave copyExcerptMetadata(Wave wave, long startFrame, long endFrame)
+    {
+        wave.lists = this.lists;
+        wave.cues = new ArrayList<>();
+
+        for (WaveCue cue : this.cues)
+        {
+            long sampleStart = Integer.toUnsignedLong(cue.sampleStart);
+
+            if (sampleStart < startFrame || sampleStart >= endFrame)
+            {
+                continue;
+            }
+
+            WaveCue copy = new WaveCue();
+            copy.id = cue.id;
+            long position = Integer.toUnsignedLong(cue.position);
+            copy.position = (int) Math.max(0L, position - startFrame);
+            copy.dataChunkID = cue.dataChunkID;
+            copy.chunkStart = cue.chunkStart;
+            copy.blockStart = cue.blockStart;
+            copy.sampleStart = (int) (sampleStart - startFrame);
+            wave.cues.add(copy);
+        }
+
+        return wave;
     }
 }

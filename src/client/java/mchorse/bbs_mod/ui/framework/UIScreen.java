@@ -13,6 +13,8 @@ import mchorse.bbs_mod.importers.IImportPathProvider;
 import mchorse.bbs_mod.importers.ImporterContext;
 import mchorse.bbs_mod.importers.Importers;
 import mchorse.bbs_mod.importers.types.IImporter;
+import mchorse.bbs_mod.importers.types.ImportOutcome;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UIBaseTextbox;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
@@ -771,13 +773,6 @@ public class UIScreen extends Screen implements IFileDropListener
     {
         if (this.menu != null)
         {
-            if (!FFMpegUtils.checkFFMPEG())
-            {
-                this.menu.context.notifyError(UIKeys.IMPORTER_FFMPEG_NOTIFICATION);
-
-                return;
-            }
-
             File directory = null;
             boolean open = true;
 
@@ -811,7 +806,35 @@ public class UIScreen extends Screen implements IFileDropListener
             {
                 if (importer.canImport(context))
                 {
-                    importer.importFiles(context);
+                    if (importer.requiresFFmpeg() && !FFMpegUtils.checkFFMPEG())
+                    {
+                        this.menu.context.notifyError(UIKeys.IMPORTER_FFMPEG_NOTIFICATION);
+
+                        return;
+                    }
+
+                    ImportOutcome outcome;
+
+                    try
+                    {
+                        outcome = importer.importFilesOutcome(context);
+                    }
+                    catch (Exception e)
+                    {
+                        String message = e.getMessage();
+
+                        outcome = ImportOutcome.failure(0,
+                            message == null || message.isBlank() ? e.getClass().getSimpleName() : message);
+                    }
+
+                    if (outcome == null || !outcome.success())
+                    {
+                        this.menu.context.notifyError(outcome == null || outcome.message() == null
+                            ? UIKeys.IMPORTER_FFMPEG_NOTIFICATION
+                            : IKey.raw(outcome.message()));
+
+                        return;
+                    }
 
                     if (open)
                     {
