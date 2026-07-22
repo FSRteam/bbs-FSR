@@ -818,6 +818,70 @@ public class BBSMod
         return manager == null ? Collections.emptyList() : manager.diagnostics();
     }
 
+    public static java.nio.file.Path getPluginDirectory()
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        return manager == null ? null : manager.pluginDirectory();
+    }
+
+    public static boolean isPluginAutoApply()
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        return manager != null && manager.autoApply();
+    }
+
+    public static void setPluginAutoApply(boolean autoApply)
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        if (manager != null)
+        {
+            manager.setAutoApply(autoApply);
+        }
+    }
+
+    public static void rescanPlugins()
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        if (manager != null)
+        {
+            manager.rescan();
+        }
+    }
+
+    public static void reloadPlugin(String pluginId)
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        if (manager != null)
+        {
+            manager.reload(pluginId);
+        }
+    }
+
+    public static void enablePlugin(String pluginId)
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        if (manager != null)
+        {
+            manager.enable(pluginId);
+        }
+    }
+
+    public static void disablePlugin(String pluginId)
+    {
+        BBSPluginManager manager = activePluginManager;
+
+        if (manager != null)
+        {
+            manager.disable(pluginId);
+        }
+    }
+
     /** Called after physical-client services are ready; dedicated starts during common setup. */
     public static void startHotPluginRuntime()
     {

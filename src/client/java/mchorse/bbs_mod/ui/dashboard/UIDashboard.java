@@ -18,6 +18,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.IFlightSupported;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
+import mchorse.bbs_mod.ui.dashboard.plugins.UIPluginsPanel;
 import mchorse.bbs_mod.ui.dashboard.textures.UITextureManagerPanel;
 import mchorse.bbs_mod.ui.dashboard.utils.UIGraphPanel;
 import mchorse.bbs_mod.ui.dashboard.utils.UIOrbitCamera;
@@ -260,6 +261,7 @@ public class UIDashboard extends UIBaseMenu
         this.panels.registerPanel(new UITextureManagerPanel(this), UIKeys.TEXTURES_TOOLTIP, Icons.MATERIAL);
         this.panels.registerPanel(new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND);
         this.panels.registerPanel(new UIGraphPanel(this), UIKeys.GRAPH_TOOLTIP, Icons.GRAPH);
+        this.panels.registerPanel(new UIPluginsPanel(this), UIKeys.PLUGINS_TITLE, Icons.PROCESSOR);
 
         if (LoaderAccessHolder.get().isDevelopmentEnvironment())
         {

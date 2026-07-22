@@ -1379,4 +1379,39 @@ public class UIKeys
 
     public static final KeyCollection C_KEYBIND_CATGORIES = new KeyCollection("keybinds.config.^.title");
     public static final KeyCollection C_KEYBIND_CATGORIES_TOOLTIP = new KeyCollection("keybinds.config.^.tooltip");
+
+    /* Hot plugins panel */
+    public static final IKey PLUGINS_TITLE = L10n.lang("bbs.ui.plugins.title");
+    public static final IKey PLUGINS_RESCAN = L10n.lang("bbs.ui.plugins.rescan");
+    public static final IKey PLUGINS_AUTO_APPLY = L10n.lang("bbs.ui.plugins.auto_apply");
+    public static final IKey PLUGINS_AUTO_APPLY_TOOLTIP = L10n.lang("bbs.ui.plugins.auto_apply_tooltip");
+    public static final IKey PLUGINS_OPEN_FOLDER = L10n.lang("bbs.ui.plugins.open_folder");
+    public static final IKey PLUGINS_INSTALL_BROWSE = L10n.lang("bbs.ui.plugins.install_browse");
+    public static final IKey PLUGINS_INSTALL_INVALID = L10n.lang("bbs.ui.plugins.install_invalid");
+    public static final IKey PLUGINS_EMPTY = L10n.lang("bbs.ui.plugins.empty");
+    public static final IKey PLUGINS_RUNTIME_OFFLINE = L10n.lang("bbs.ui.plugins.runtime_offline");
+    public static final IKey PLUGINS_DETAIL_STATE = L10n.lang("bbs.ui.plugins.detail.state");
+    public static final IKey PLUGINS_DETAIL_KIND = L10n.lang("bbs.ui.plugins.detail.kind");
+    public static final IKey PLUGINS_DETAIL_SIDE = L10n.lang("bbs.ui.plugins.detail.side");
+    public static final IKey PLUGINS_DETAIL_VERSION = L10n.lang("bbs.ui.plugins.detail.version");
+    public static final IKey PLUGINS_DETAIL_API = L10n.lang("bbs.ui.plugins.detail.api");
+    public static final IKey PLUGINS_DETAIL_CAPABILITIES = L10n.lang("bbs.ui.plugins.detail.capabilities");
+    public static final IKey PLUGINS_DETAIL_DEPENDENCIES = L10n.lang("bbs.ui.plugins.detail.dependencies");
+    public static final IKey PLUGINS_DETAIL_GENERATION = L10n.lang("bbs.ui.plugins.detail.generation");
+    public static final IKey PLUGINS_DETAIL_SHA256 = L10n.lang("bbs.ui.plugins.detail.sha256");
+    public static final IKey PLUGINS_DETAIL_LAST_CHANGE = L10n.lang("bbs.ui.plugins.detail.last_change");
+    public static final IKey PLUGINS_DETAIL_LAST_ERROR = L10n.lang("bbs.ui.plugins.detail.last_error");
+    public static final IKey PLUGINS_DETAIL_CHANGELOG = L10n.lang("bbs.ui.plugins.detail.changelog");
+    public static final IKey PLUGINS_DETAIL_INSTALLED_VERSION = L10n.lang("bbs.ui.plugins.detail.installed_version");
+    public static final IKey PLUGINS_DETAIL_NOT_INSTALLED = L10n.lang("bbs.ui.plugins.detail.not_installed");
+    public static final IKey PLUGINS_ACTION_RELOAD = L10n.lang("bbs.ui.plugins.action.reload");
+    public static final IKey PLUGINS_ACTION_ENABLE = L10n.lang("bbs.ui.plugins.action.enable");
+    public static final IKey PLUGINS_ACTION_DISABLE = L10n.lang("bbs.ui.plugins.action.disable");
+    public static final IKey PLUGINS_ACTION_UNINSTALL = L10n.lang("bbs.ui.plugins.action.uninstall");
+    public static final IKey PLUGINS_ACTION_INSTALL = L10n.lang("bbs.ui.plugins.action.install");
+    public static final IKey PLUGINS_ACTION_UPDATE = L10n.lang("bbs.ui.plugins.action.update");
+    public static final IKey PLUGINS_ACTION_REINSTALL = L10n.lang("bbs.ui.plugins.action.reinstall");
+    public static final IKey PLUGINS_INSTALL_FAILED = L10n.lang("bbs.ui.plugins.install_failed");
+    public static final KeyCollection C_PLUGIN_STATE = new KeyCollection("bbs.ui.plugins.state.^")
+        .load(EnumUtils.getKeys(mchorse.bbs_mod.api.plugin.BBSPluginState.class, (state) -> state.name().toLowerCase(java.util.Locale.ROOT)));
 }

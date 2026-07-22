@@ -1049,8 +1049,16 @@ public final class BBSPluginManager implements AutoCloseable
 
         String message = error == null ? code : safeMessage(error);
         String errorType = error == null ? "" : error.getClass().getName();
+        PluginStatus previous = this.statuses.get(pluginId);
+        BBSPluginDescriptor effective = descriptor != null ? descriptor : (previous == null ? null : previous.descriptor());
+
+        if (version.isEmpty() && effective != null)
+        {
+            version = effective.version();
+        }
+
         this.statuses.put(pluginId, new PluginStatus(pluginId, version, generation, hash, state,
-            System.currentTimeMillis(), code, message, errorType));
+            System.currentTimeMillis(), code, message, errorType, effective));
         LOGGER.info("[bbs-plugin] id={} generation={} state={} code={} message={}", pluginId, generation, state, code, message);
     }
 
@@ -1123,12 +1131,12 @@ public final class BBSPluginManager implements AutoCloseable
 
     public record PluginStatus(String pluginId, String version, long generation, String sha256,
                                BBSPluginState state, long lastTransitionMillis, String lastCode,
-                               String lastMessage, String lastErrorType)
+                               String lastMessage, String lastErrorType, BBSPluginDescriptor descriptor)
     {
         private PluginStatus withDiagnostic(BBSPluginDiagnostic diagnostic)
         {
             return new PluginStatus(this.pluginId, this.version, this.generation, this.sha256,
-                this.state, diagnostic.timestampMillis(), diagnostic.code(), diagnostic.message(), diagnostic.errorType());
+                this.state, diagnostic.timestampMillis(), diagnostic.code(), diagnostic.message(), diagnostic.errorType(), this.descriptor);
         }
     }
 
