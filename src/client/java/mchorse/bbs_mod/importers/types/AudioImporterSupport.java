@@ -20,6 +20,8 @@ import java.util.Objects;
 /** Shared, owned-temp publication path for WAV importers. */
 public final class AudioImporterSupport
 {
+    private static final Object PUBLICATION_LOCK = new Object();
+
     private AudioImporterSupport()
     {}
 
@@ -148,24 +150,27 @@ public final class AudioImporterSupport
     private static void publish(OwnedTemporary temporary, Path directory, String outputName)
         throws IOException
     {
-        for (;;)
+        synchronized (PUBLICATION_LOCK)
         {
-            File candidate = collisionSafe(directory, outputName);
-
-            try
+            for (;;)
             {
-                /* The temporary file is a sibling, so the provider can use a
-                 * no-replace rename.  Omitting REPLACE_EXISTING is the
-                 * ownership boundary: a pre-existing destination is never
-                 * touched. */
-                Files.move(temporary.path(), candidate.toPath());
-                temporary.release();
+                File candidate = collisionSafe(directory, outputName);
 
-                return;
-            }
-            catch (FileAlreadyExistsException e)
-            {
-                /* Another importer won this name after collisionSafe(). */
+                try
+                {
+                    /* Linux rename can otherwise replace a target created
+                     * between name selection and move.  Serialize publication
+                     * inside this process and retain the no-replace move for
+                     * collisions from outside the importer. */
+                    Files.move(temporary.path(), candidate.toPath());
+                    temporary.release();
+
+                    return;
+                }
+                catch (FileAlreadyExistsException e)
+                {
+                    /* Another process won this name after collisionSafe(). */
+                }
             }
         }
     }
