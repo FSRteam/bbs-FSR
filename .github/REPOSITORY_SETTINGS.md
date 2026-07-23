@@ -33,5 +33,5 @@
 
 1. 创建一个目标为 `master` 的测试 Pull Request，确认 CI 运行并命中 Gradle 缓存。
 2. 手动运行 Nightly 工作流，确认预发布 JAR 和校验文件生成。
-3. 推送类似 `v2.4.0-beta.1` 的测试预发布标签，确认 GitHub Release 创建成功。
+3. 创建并发布类似 `v2.4.0-beta.1` 的 GitHub 测试预发布，确认工作流将构建产物上传回该 Release。
 4. 下载 Release 资产后运行 `sha256sum -c checksums-sha256.txt` 验证文件完整性。
