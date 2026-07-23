@@ -13,8 +13,65 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gate:
+    name: Check for new commits
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+
+    steps:
+      - name: Compare with latest nightly
+        id: check
+        uses: actions/github-script@v9
+        with:
+          script: |
+            if (context.eventName === "workflow_dispatch") {
+              core.setOutput("should_build", "true");
+              core.notice("Manual dispatch forces a nightly build.");
+              return;
+            }
+
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            const latestNightly = releases.find((release) =>
+              release.prerelease && release.tag_name.startsWith("nightly-")
+            );
+
+            if (!latestNightly) {
+              core.setOutput("should_build", "true");
+              core.notice("No previous nightly release exists.");
+              return;
+            }
+
+            const { data: ref } = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `tags/${latestNightly.tag_name}`
+            });
+            let previousSha = ref.object.sha;
+
+            if (ref.object.type === "tag") {
+              const { data: tag } = await github.rest.git.getTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_sha: previousSha
+              });
+              previousSha = tag.object.sha;
+            }
+
+            const shouldBuild = previousSha !== context.sha;
+            core.setOutput("should_build", String(shouldBuild));
+            core.notice(shouldBuild
+              ? `New commit detected: ${previousSha.slice(0, 7)} -> ${context.sha.slice(0, 7)}`
+              : `Skipping nightly: ${context.sha.slice(0, 7)} was already published.`);
+
   nightly:
     name: Build nightly
+    needs: gate
+    if: ${{ needs.gate.outputs.should_build == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
