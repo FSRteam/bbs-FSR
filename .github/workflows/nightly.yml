@@ -20,16 +20,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
 
+      - name: Restore NeoForge workspace cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            .gradle/caches/minecraft
+            .gradle/configuration/neoForm
+            .gradle/repositories/ng_dummy_ng
+          key: neoforge-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            neoforge-${{ runner.os }}-java21-
+
       - name: Set up Gradle cache
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-cleanup: on-success
 
@@ -58,7 +69,10 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew --no-daemon --console=plain build \
+          ./gradlew --no-daemon --console=plain --build-cache --parallel --max-workers=2 \
+            -Dorg.gradle.caching=true \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
+            build \
             -Pmod_version="${{ steps.nightly.outputs.version }}" \
             -Parchives_base_name="${{ steps.nightly.outputs.artifact_name }}"
 
@@ -72,7 +86,7 @@ jobs:
           ) > build/checksums-sha256.txt
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.nightly.outputs.artifact_name }}
           if-no-files-found: error
