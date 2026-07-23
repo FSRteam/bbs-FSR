@@ -1,0 +1,11 @@
+name: Feature vote
+description: Compare and vote on concrete feature priorities
+title: "[Vote]: "
+body:
+  - type: textarea
+    id: choices
+    attributes:
+      label: Choices
+      description: List the concrete options, tradeoffs, and the decision the vote should inform.
+    validations:
+      required: true

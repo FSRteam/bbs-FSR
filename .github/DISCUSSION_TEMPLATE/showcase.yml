@@ -1,0 +1,11 @@
+name: Showcase
+description: Show a project, film, animation, or workflow made with BBS FS Reborn
+title: "[Showcase]: "
+body:
+  - type: textarea
+    id: showcase
+    attributes:
+      label: Showcase
+      description: Add links, screenshots, or video and describe the relevant setup.
+    validations:
+      required: true

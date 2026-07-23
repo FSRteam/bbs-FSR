@@ -1,0 +1,11 @@
+name: Feature idea
+description: Discuss an early feature idea or proposal
+title: "[Idea]: "
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: Explain the use case and invite feedback before opening a feature Issue.
+    validations:
+      required: true

@@ -1,0 +1,137 @@
+name: Nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    name: Build nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Restore NeoForge workspace cache
+        id: neoforge-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .gradle/caches/minecraft
+            .gradle/configuration/neoForm
+            .gradle/repositories/ng_dummy_ng
+          key: neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-complete
+          restore-keys: |
+            neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-partial-
+            neoforge-official-${{ runner.os }}-java21-
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-cleanup: on-success
+
+      - name: Generate nightly metadata
+        id: nightly
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_version="$(grep -E '^mod_version=' gradle.properties | cut -d= -f2-)"
+          base_name="$(grep -E '^archives_base_name=' gradle.properties | cut -d= -f2-)"
+          stamp="$(date -u '+%Y%m%d.%H%M%S')"
+          short_sha="${GITHUB_SHA::7}"
+          nightly_version="${base_version}-nightly.${stamp}.r${GITHUB_RUN_NUMBER}.a${GITHUB_RUN_ATTEMPT}.${short_sha}"
+          nightly_name="${base_name}-nightly-${stamp//./-}-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}-${short_sha}"
+          tag_name="nightly-${stamp//./-}-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}-${short_sha}"
+
+          {
+            echo "version=${nightly_version}"
+            echo "artifact_name=${nightly_name}"
+            echo "tag_name=${tag_name}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --console=plain --build-cache --parallel --max-workers=2 \
+            -Dorg.gradle.caching=true \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
+            -PbbsPreferMirror=false \
+            -Pneogradle.subsystems.decompiler.maxMemory=4096m \
+            -Pneogradle.subsystems.decompiler.maxThreads=2 \
+            build \
+            -Pmod_version="${{ steps.nightly.outputs.version }}" \
+            -Parchives_base_name="${{ steps.nightly.outputs.artifact_name }}"
+
+      - name: Save complete NeoForge workspace cache
+        if: ${{ success() && steps.neoforge-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .gradle/caches/minecraft
+            .gradle/configuration/neoForm
+            .gradle/repositories/ng_dummy_ng
+          key: neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-complete
+
+      - name: Save partial NeoForge workspace cache after failure
+        if: ${{ failure() && steps.neoforge-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .gradle/caches/minecraft
+            .gradle/configuration/neoForm
+            .gradle/repositories/ng_dummy_ng
+          key: neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-partial-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd build/libs
+            sha256sum *.jar
+          ) > build/checksums-sha256.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.nightly.outputs.artifact_name }}
+          if-no-files-found: error
+          path: |
+            build/libs/*.jar
+            build/checksums-sha256.txt
+
+      - name: Create nightly release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.nightly.outputs.tag_name }}
+          name: Nightly ${{ steps.nightly.outputs.version }}
+          prerelease: true
+          make_latest: false
+          files: |
+            build/libs/*.jar
+            build/checksums-sha256.txt
+          body: |
+            Automated nightly build.
+
+            Commit: ${{ github.sha }}
+            Version: ${{ steps.nightly.outputs.version }}

@@ -9,6 +9,38 @@ These rules might feel tyrannical, but these rules ensure that the project stays
 * No pure AI code (AI code is allowed as long as you adapted it, understood it, and tested it)!
 * No changes to `gradle` config (i.e. `gradle/`, `gradlew`, `gradlew.bat`, `gradle.properties`, and `build.gradle`)!
 
+## Branches and pull requests
+
+Use one short-lived branch per change:
+
+* `feature/<description>` for new functionality
+* `fix/<description>` for bug fixes
+* `refactor/<description>` for code-only restructuring
+* `docs/<description>` for documentation
+* `chore/<description>` for build and maintenance work
+
+Submit pull requests to `master` and wait for the GitHub Actions checks to pass. Pull
+requests should link an Issue or Discussion, explain the purpose and main changes,
+list the exact test commands and results, and call out client/server, resource,
+compatibility, version, or release-note impact. Add logs, screenshots, or video when
+they are needed to verify the change.
+
+Do not bypass a failing check with `-PforceBuild=true` in CI. That option is only for
+an explicitly documented local investigation.
+
+## Issues and Discussions
+
+Use Issues for reproducible bugs, confirmed features, concrete code tasks, and release
+blockers. Use Discussions for usage questions, ideas and voting, design conversations,
+showcases, and announcements. Bug reports should include the mod version, Minecraft
+version, NeoForge version, operating system, reproduction steps, and relevant logs.
+
+## Releases
+
+Stable releases are created from version tags such as `v2.3.2`; prereleases use a
+suffix such as `v2.4.0-beta.1`. The tag workflow builds the same `build` task used by
+CI, uploads the jar and a SHA-256 checksum file, and creates the GitHub Release.
+
 ## Code style
 
 Here is a sample of code that adheres to all of the code style rules of this project:

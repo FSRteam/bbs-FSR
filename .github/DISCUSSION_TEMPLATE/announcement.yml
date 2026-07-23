@@ -1,0 +1,13 @@
+name: Announcement
+description: Share a project announcement
+title: "[Announcement]: "
+body:
+  - type: markdown
+    attributes:
+      value: Share the audience, date, and relevant links clearly.
+  - type: textarea
+    id: announcement
+    attributes:
+      label: Announcement
+    validations:
+      required: true

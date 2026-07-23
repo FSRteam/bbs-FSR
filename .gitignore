@@ -51,3 +51,6 @@ javac.*.args
 
 # local source archives
 /src*.zip
+
+# local temporary compile/test material
+/temp/

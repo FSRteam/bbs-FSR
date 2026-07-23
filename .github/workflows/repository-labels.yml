@@ -1,0 +1,54 @@
+name: Repository labels
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/repository-labels.yml
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    name: Create or update labels
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sync labels
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const labels = [
+              { name: "bug", color: "d73a4a", description: "Something is not working" },
+              { name: "enhancement", color: "a2eeef", description: "New feature or request" },
+              { name: "documentation", color: "0075ca", description: "Documentation changes" },
+              { name: "build", color: "fbca04", description: "Build and release infrastructure" },
+              { name: "compatibility", color: "5319e7", description: "Minecraft, NeoForge, addon, or platform compatibility" },
+              { name: "needs-info", color: "d876e3", description: "More information is required" },
+              { name: "good first issue", color: "7057ff", description: "Suitable for a first contribution" }
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.updateLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  new_name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label
+                });
+              }
+            }

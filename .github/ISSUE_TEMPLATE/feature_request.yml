@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest a concrete feature for BBS FS Reborn
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use Discussions for early ideas or voting. Use this form when the feature is concrete enough to plan.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What should become possible or easier?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the requested behavior and any alternatives considered.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and scope
+      description: Note client/server, resource, Minecraft, NeoForge, or migration impact.
+    validations:
+      required: true
