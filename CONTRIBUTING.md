@@ -37,9 +37,10 @@ version, NeoForge version, operating system, reproduction steps, and relevant lo
 
 ## Releases
 
-Stable releases are created from version tags such as `v2.3.2`; prereleases use a
-suffix such as `v2.4.0-beta.1`. The tag workflow builds the same `build` task used by
-CI, uploads the jar and a SHA-256 checksum file, and creates the GitHub Release.
+Create and publish a GitHub Release for stable versions such as `v2.3.2`; use a
+prerelease flag and a suffix such as `v2.4.0-beta.1` for testing releases. The release
+workflow builds the tag attached to that published Release, then uploads the jar and a
+SHA-256 checksum file without replacing the Release description.
 
 ## Code style
 
