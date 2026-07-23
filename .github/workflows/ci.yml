@@ -61,6 +61,17 @@ jobs:
             -Pneogradle.subsystems.decompiler.maxThreads=2 \
             build
 
+      - name: Upload pull request test JAR
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: BBS_FSR_PR-${{ github.event.pull_request.number }}-run-${{ github.run_number }}-attempt-${{ github.run_attempt }}
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+
       - name: Save complete NeoForge workspace cache
         if: ${{ success() && steps.neoforge-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
