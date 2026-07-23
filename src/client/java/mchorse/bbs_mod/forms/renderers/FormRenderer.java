@@ -91,7 +91,9 @@ public abstract class FormRenderer <T extends Form>
 
     public final void render(FormRenderingContext context)
     {
-        if (!context.isPicking() && !context.ui)
+        /* The queue is replayed at the world's translucent boundary. Editor and
+         * Film UI previews render after that boundary and must stay immediate. */
+        if (BBSRendering.isRenderingWorld() && !context.isPicking() && !context.ui && !context.modelRenderer)
         {
             FormTranslucentQueue.ensureStarted();
         }

@@ -219,6 +219,7 @@ public class UIDashboard extends UIBaseMenu
         {
             this.panels.open();
             this.setPanel(this.panels.panel);
+            this.copyCurrentEntityCamera();
         }
 
         BBSModClient.getCameraController().add(this.camera);

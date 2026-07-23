@@ -24,6 +24,7 @@ public final class BBSUiLifecycleSourceTest
         assertOwnerAwareInputCallSites();
         assertRepositoryRebindsBeforeDataAndPinsAfter();
         assertMorphingSelectionAndDemorphRemainDistinct();
+        assertDashboardEditorReactivationContracts();
     }
 
     private static void assertOwnerAwareInputCallSites()
@@ -170,6 +171,47 @@ public final class BBSUiLifecycleSourceTest
             "UIFormPalette.setSelected unexpectedly notifies the form callback");
         check(client.contains("while (keyDemorph.consumeClick()) ClientNetwork.sendPlayerForm(null);"),
             "the global demorph shortcut no longer restores the player's original form");
+    }
+
+    private static void assertDashboardEditorReactivationContracts()
+    {
+        String dashboard = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/UIDashboard.java");
+        String panels = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDashboardPanels.java");
+        String modelBlocks = readSource("src/client/java/mchorse/bbs_mod/ui/model_blocks/UIModelBlockPanel.java");
+        String formRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderer.java");
+        String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
+        String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
+        String modelEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIModelForm.java");
+        String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
+        String enableMode = sourceSection(transform, "public void enableMode(int mode)", "private HotkeyTarget currentHotkeyTarget");
+
+        check(panels.contains("private boolean panelAppeared;")
+                && panels.contains("if (this.panel != null && !this.panelAppeared)")
+                && panels.contains("this.panel.disappear();")
+                && panels.contains("this.panelAppeared = false;"),
+            "dashboard close/reopen no longer pairs active-panel disappear/appear ownership");
+        check(dashboard.contains("this.panels.open();")
+                && dashboard.contains("this.copyCurrentEntityCamera();"),
+            "dashboard reopen no longer restores the current world camera before control resumes");
+        check(modelBlocks.contains("ModelBlockEntity editingBlock = this.modelBlock;")
+                && modelBlocks.contains("if (editingBlock.isRemoved())")
+                && modelBlocks.contains("this.closeFormPalettes();")
+                && modelBlocks.contains("List.copyOf(this.getChildren(UIFormPalette.class))"),
+            "model-block form palette can retain or mutate a removed block entity");
+        check(formRenderer.contains("BBSRendering.isRenderingWorld()")
+                && formRenderer.contains("!context.modelRenderer")
+                && formRenderer.contains("FormTranslucentQueue.ensureStarted();"),
+            "UI/model previews can still start the world translucent queue");
+        check(enableMode.contains("this.nextHotkeyTarget(mode, ray)")
+                && !enableMode.contains("enableUniformScale"),
+            "the S hotkey no longer follows the configured X/Y/Z scale cycle");
+        check(formEditor.contains("this.general.hotkeyDrag(() ->")
+                && modelEditor.contains("this.modelPanel.poseEditor.transform.hotkeyDrag(() ->"),
+            "form/model transform hotkeys cannot reach the view and sphere rotation modes");
+        check(bobj.contains("if (this.hasArmatureChanged(matrices))")
+                && bobj.contains("private int[] dominantBones;")
+                && bobj.contains("if (this.pickingPrepared && this.pickingIncrement == stencilMap.increment)"),
+            "animated BOBJ picking repeats CPU skinning or static picking-buffer uploads");
     }
 
     private static String readSource(String path)

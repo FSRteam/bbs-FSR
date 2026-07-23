@@ -24,6 +24,7 @@ public class UIModelForm extends UIForm<ModelForm>
     public UIModelForm()
     {
         this.modelPanel = new UIModelFormPanel(this);
+        this.modelPanel.poseEditor.transform.hotkeyDrag(() -> this.editor == null ? null : this.editor.buildHotkeyDrag(this.modelPanel.poseEditor.transform));
         this.modelPanel.poseEditor.transform.worldTransform(new FormBoneWorldProvider(this));
         this.defaultPanel = this.modelPanel;
 

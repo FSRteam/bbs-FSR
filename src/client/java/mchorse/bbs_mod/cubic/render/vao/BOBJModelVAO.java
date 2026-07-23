@@ -34,6 +34,10 @@ public class BOBJModelVAO
     private float[] tmpNormals;
     private int[] tmpLight;
     private float[] tmpTangents;
+    private int[] dominantBones;
+    private Matrix4f[] uploadedMatrices;
+    private boolean pickingPrepared;
+    private boolean pickingIncrement;
     private int uploadCount;
 
     private final Vector4f sum = new Vector4f();
@@ -72,6 +76,26 @@ public class BOBJModelVAO
         this.tmpNormals = new float[this.data.normData.length];
         this.tmpLight = new int[this.count * 2];
         this.tmpTangents = new float[this.count * 4];
+        this.dominantBones = new int[this.count];
+
+        for (int i = 0; i < this.count; i++)
+        {
+            float maxWeight = -1F;
+            int dominantBone = 0;
+
+            for (int w = 0; w < 4; w++)
+            {
+                float weight = this.data.weightData[i * 4 + w];
+
+                if (weight > maxWeight)
+                {
+                    maxWeight = weight;
+                    dominantBone = Math.max(0, this.data.boneIndexData[i * 4 + w]);
+                }
+            }
+
+            this.dominantBones[i] = dominantBone;
+        }
 
         GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, this.vertexBuffer);
         GL30.glBufferData(GL30.GL_ARRAY_BUFFER, this.data.posData, GL30.GL_DYNAMIC_DRAW);
@@ -143,6 +167,79 @@ public class BOBJModelVAO
 
     public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices)
     {
+        if (this.hasArmatureChanged(matrices))
+        {
+            this.updateGeometry(matrices);
+            this.rememberArmature(matrices);
+            this.uploadCount += 1;
+        }
+
+        if (stencilMap != null)
+        {
+            this.updatePicking(stencilMap);
+        }
+    }
+
+    /**
+     * Normal and picking passes evaluate the same animated pose in one editor frame.
+     * Avoid repeating CPU skinning and tangent generation when the armature is unchanged.
+     */
+    private boolean hasArmatureChanged(Matrix4f[] matrices)
+    {
+        if (matrices == null || this.uploadedMatrices == null || matrices.length != this.uploadedMatrices.length)
+        {
+            return true;
+        }
+
+        for (int i = 0; i < matrices.length; i++)
+        {
+            Matrix4f current = matrices[i];
+            Matrix4f uploaded = this.uploadedMatrices[i];
+
+            if (current == null ? uploaded != null : !current.equals(uploaded))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void rememberArmature(Matrix4f[] matrices)
+    {
+        if (matrices == null)
+        {
+            this.uploadedMatrices = null;
+
+            return;
+        }
+
+        if (this.uploadedMatrices == null || this.uploadedMatrices.length != matrices.length)
+        {
+            this.uploadedMatrices = new Matrix4f[matrices.length];
+        }
+
+        for (int i = 0; i < matrices.length; i++)
+        {
+            Matrix4f matrix = matrices[i];
+
+            if (matrix == null)
+            {
+                this.uploadedMatrices[i] = null;
+            }
+            else if (this.uploadedMatrices[i] == null)
+            {
+                this.uploadedMatrices[i] = new Matrix4f(matrix);
+            }
+            else
+            {
+                this.uploadedMatrices[i].set(matrix);
+            }
+        }
+    }
+
+    private void updateGeometry(Matrix4f[] matrices)
+    {
         this.result.set(0F, 0F, 0F, 0F);
         this.resultNormal.set(0F, 0F, 0F);
 
@@ -154,8 +251,6 @@ public class BOBJModelVAO
         for (int i = 0, c = this.count; i < c; i++)
         {
             int count = 0;
-            float maxWeight = -1;
-            int lightBone = -1;
 
             for (int w = 0; w < 4; w++)
             {
@@ -174,12 +269,6 @@ public class BOBJModelVAO
                     this.resultNormal.add(this.sumNormal.mul(weight));
 
                     count++;
-
-                    if (weight > maxWeight)
-                    {
-                        lightBone = index;
-                        maxWeight = weight;
-                    }
                 }
             }
 
@@ -203,16 +292,9 @@ public class BOBJModelVAO
 
             this.result.set(0F, 0F, 0F, 0F);
             this.resultNormal.set(0F, 0F, 0F);
-
-            if (stencilMap != null)
-            {
-                this.tmpLight[i * 2] = Math.max(0, stencilMap.increment ? lightBone : 0);
-                this.tmpLight[i * 2 + 1] = 0;
-            }
         }
 
         this.processData(newVertices, newNormals, matrices);
-        this.uploadCount += 1;
 
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.vertexBuffer);
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, newVertices, GL15.GL_DYNAMIC_DRAW);
@@ -227,12 +309,26 @@ public class BOBJModelVAO
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.tangentBuffer);
             GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpTangents, GL15.GL_DYNAMIC_DRAW);
         }
+    }
 
-        if (stencilMap != null)
+    private void updatePicking(StencilMap stencilMap)
+    {
+        if (this.pickingPrepared && this.pickingIncrement == stencilMap.increment)
         {
-            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.lightBuffer);
-            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpLight, GL15.GL_DYNAMIC_DRAW);
+            return;
         }
+
+        for (int i = 0; i < this.count; i++)
+        {
+            this.tmpLight[i * 2] = stencilMap.increment ? this.dominantBones[i] : 0;
+            this.tmpLight[i * 2 + 1] = 0;
+        }
+
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.lightBuffer);
+        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, this.tmpLight, GL15.GL_DYNAMIC_DRAW);
+
+        this.pickingPrepared = true;
+        this.pickingIncrement = stencilMap.increment;
     }
 
     protected void processData(float[] newVertices, float[] newNormals, Matrix4f[] matrices)
