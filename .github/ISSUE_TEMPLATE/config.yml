@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Usage questions and feature ideas
+    url: https://github.com/FSRteam/bbs-FSR/discussions
+    about: Use Discussions for questions, ideas, voting, design conversations, and showcases.

@@ -1,0 +1,11 @@
+name: Development discussion
+description: Discuss implementation, architecture, or contribution work
+title: "[Development]: "
+body:
+  - type: textarea
+    id: discussion
+    attributes:
+      label: Discussion
+      description: Include the affected module, constraints, and any prior experiments.
+    validations:
+      required: true

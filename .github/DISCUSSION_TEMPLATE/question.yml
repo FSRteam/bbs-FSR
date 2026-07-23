@@ -1,0 +1,13 @@
+name: Question
+description: Ask for usage or setup help
+title: "[Question]: "
+body:
+  - type: markdown
+    attributes:
+      value: Include your mod version, Minecraft/NeoForge version, operating system, and relevant logs.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
