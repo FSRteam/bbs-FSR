@@ -128,16 +128,35 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         this.pickEdit = new UINestedEdit((editing) ->
         {
-            UIFormPalette palette = UIFormPalette.open(this, editing, this.modelBlock.getProperties().getForm(), (f) ->
+            ModelBlockEntity editingBlock = this.modelBlock;
+
+            if (editingBlock == null || editingBlock.isRemoved())
             {
+                return;
+            }
+
+            UIFormPalette palette = UIFormPalette.open(this, editing, editingBlock.getProperties().getForm(), (f) ->
+            {
+                if (editingBlock.isRemoved())
+                {
+                    this.closeFormPalettes();
+
+                    return;
+                }
+
                 this.pickEdit.setForm(f);
-                this.modelBlock.getProperties().setForm(f);
+                editingBlock.getProperties().setForm(f);
             });
+
+            if (palette == null)
+            {
+                return;
+            }
 
             palette.immersive();
             palette.editor.keys().register(Keys.MODEL_BLOCKS_TOGGLE_RENDERING, () -> toggleRendering = !toggleRendering);
             palette.editor.renderer.full(dashboard.getRoot());
-            palette.editor.renderer.setTarget(this.modelBlock.getEntity());
+            palette.editor.renderer.setTarget(editingBlock.getEntity());
             palette.editor.renderer.setRenderForm(() -> !toggleRendering);
             palette.getEvents().register(UIToggleEditorEvent.class, (e) ->
             {
@@ -152,6 +171,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             });
             palette.getEvents().register(UIRemovedEvent.class, (e) ->
             {
+                this.removeCameraController();
                 this.scrollView.setVisible(true);
             });
 
@@ -506,6 +526,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         super.close();
 
         this.gizmo.cancel();
+        this.closeFormPalettes();
         this.removeCameraController();
 
         for (ModelBlockEntity entity : this.toSave)
@@ -530,6 +551,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
     public void fill(ModelBlockEntity modelBlock, boolean select)
     {
+        if (this.modelBlock != modelBlock)
+        {
+            this.closeFormPalettes();
+        }
+
         if (modelBlock != null)
         {
             this.toSave.add(modelBlock);
@@ -548,6 +574,17 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         {
             this.modelBlocks.setCurrentScroll(modelBlock);
         }
+    }
+
+    private void closeFormPalettes()
+    {
+        for (UIFormPalette palette : List.copyOf(this.getChildren(UIFormPalette.class)))
+        {
+            palette.removeFromParent();
+        }
+
+        this.removeCameraController();
+        this.scrollView.setVisible(true);
     }
 
     private void fillData()

@@ -544,13 +544,6 @@ public class UIPropTransform extends UITransform
         GizmoDrag drag = this.getHotkeyDrag();
         boolean ray = BBSSettings.transformHotkeys3dRay.get() && drag != null;
 
-        if (mode == 1)
-        {
-            this.enableUniformScale(drag, true);
-
-            return;
-        }
-
         HotkeyTarget target = this.nextHotkeyTarget(mode, ray);
 
         if (target == HotkeyTarget.VIEW)
@@ -917,7 +910,7 @@ public class UIPropTransform extends UITransform
         this.enableUniformScale(drag, false);
     }
 
-    /** Start a uniform three-axis scale from the center handle or the S hotkey. */
+    /** Start a uniform three-axis scale from the center gizmo handle. */
     public void enableUniformScale(GizmoDrag drag, boolean hotkeyMode)
     {
         if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.SCALE))

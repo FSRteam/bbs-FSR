@@ -27,6 +27,9 @@ public class UIDashboardPanels extends UIElement
     public UIElement pinned;
     public UIScrollView panelButtons;
 
+    /** Whether the current panel owns its transient screen resources. */
+    private boolean panelAppeared;
+
     /**
      * @deprecated Kept for backward compatibility. Use {@link #renderHighlight(Batcher2D, Area, Direction)}
      * with {@link Direction#BOTTOM}.
@@ -129,10 +132,30 @@ public class UIDashboardPanels extends UIElement
         {
             panel.open();
         }
+
+        if (this.panel != null && !this.panelAppeared)
+        {
+            this.setPanelPlacement(this.panel);
+
+            if (!this.panel.hasParent())
+            {
+                this.prepend(this.panel);
+            }
+
+            this.panel.appear();
+            this.panelAppeared = true;
+            this.panel.resize();
+        }
     }
 
     public void close()
     {
+        if (this.panel != null && this.panelAppeared)
+        {
+            this.panel.disappear();
+            this.panelAppeared = false;
+        }
+
         for (UIDashboardPanel panel : this.panels)
         {
             panel.close();
@@ -169,7 +192,12 @@ public class UIDashboardPanels extends UIElement
 
         if (this.panel != null)
         {
-            this.panel.disappear();
+            if (this.panelAppeared)
+            {
+                this.panel.disappear();
+                this.panelAppeared = false;
+            }
+
             this.panel.removeFromParent();
         }
 
@@ -183,6 +211,7 @@ public class UIDashboardPanels extends UIElement
 
             this.prepend(this.panel);
             this.panel.appear();
+            this.panelAppeared = true;
             this.panel.resize();
         }
     }
