@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Source contract for the strict-test build gate and explicit forced override. */
+/** Source contract for critical Gradle build and development run gates. */
 final class BuildFailureGateSourceTest
 {
     private BuildFailureGateSourceTest()
@@ -22,6 +22,8 @@ final class BuildFailureGateSourceTest
         check(build.contains("dependsOn bbsVerificationTaskNames.collect"), "verification tasks drifted away from the check lifecycle");
         check(build.contains("systemProperty 'terminal.jline', 'false'"),
             "headless test processes may emit terminal capability warnings again");
+        check(build.contains("runs {\n    client {\n        modSource sourceSets.client\n    }\n}"),
+            "development client no longer includes the client source set");
         check(readme.contains("-PforceBuild=true"), "README does not document the only forced-build override");
     }
 
