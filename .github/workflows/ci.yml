@@ -31,15 +31,17 @@ jobs:
           java-version: "21"
 
       - name: Restore NeoForge workspace cache
-        uses: actions/cache@v6
+        id: neoforge-cache
+        uses: actions/cache/restore@v6
         with:
           path: |
             .gradle/caches/minecraft
             .gradle/configuration/neoForm
             .gradle/repositories/ng_dummy_ng
-          key: neoforge-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}
+          key: neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-complete
           restore-keys: |
-            neoforge-${{ runner.os }}-java21-
+            neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-partial-
+            neoforge-official-${{ runner.os }}-java21-
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v6
@@ -54,7 +56,31 @@ jobs:
           ./gradlew --no-daemon --console=plain --build-cache --parallel --max-workers=2 \
             -Dorg.gradle.caching=true \
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
+            -PbbsPreferMirror=false \
+            -Pneogradle.subsystems.decompiler.maxMemory=4096m \
+            -Pneogradle.subsystems.decompiler.maxThreads=2 \
             build
+
+      - name: Save complete NeoForge workspace cache
+        if: ${{ success() && steps.neoforge-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .gradle/caches/minecraft
+            .gradle/configuration/neoForm
+            .gradle/repositories/ng_dummy_ng
+          key: neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-complete
+
+      - name: Save partial NeoForge workspace cache after failure
+        if: ${{ failure() && steps.neoforge-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .gradle/caches/minecraft
+            .gradle/configuration/neoForm
+            .gradle/repositories/ng_dummy_ng
+          key: neoforge-official-${{ runner.os }}-java21-${{ hashFiles('gradle.properties', 'build.gradle', 'settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}-partial-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload failure diagnostics
         if: ${{ failure() }}
