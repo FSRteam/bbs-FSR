@@ -21,7 +21,7 @@ public class UIDataUtils
 
     public static void renderRightClickHere(UIContext context, Area area)
     {
-        int primary = BBSSettings.primaryColor.get();
+        int primary = BBSSettings.accentColorRGB();
         double ticks = context.getTickTransition() % 80D;
         double factor = Math.abs(ticks / 80D * 2 - 1F);
 

@@ -762,7 +762,7 @@ public class UITrackpad extends UIBaseTextbox
         if (this.textbox.isFocused())
         {
             this.textbox.render(context);
-            context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), Colors.opaque(BBSSettings.primaryColor.get()));
+            context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), Colors.opaque(BBSSettings.accentColorRGB()));
         }
         else
         {
@@ -771,7 +771,7 @@ public class UITrackpad extends UIBaseTextbox
             if (dragging)
             {
                 /* Draw filling background */
-                int color = BBSSettings.primaryColor.get();
+                int color = BBSSettings.accentColorRGB();
                 int fx = MathUtils.clamp(context.mouseX, this.area.x + padding, this.area.ex() - padding);
 
                 context.batcher.box(Math.min(fx, this.initialX), this.area.y + padding, Math.max(fx, this.initialX), this.area.ey() - padding, Colors.A100 | color);

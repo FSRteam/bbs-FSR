@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.dashboard.plugins;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.api.plugin.BBSPluginState;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -366,7 +367,7 @@ public class UIPluginDetailOverlayPanel extends UIOverlayPanel
                 ? this.panel.jarInfo.manifest.id()
                 : (this.panel.status == null ? "" : this.panel.status.pluginId());
 
-            context.batcher.textShadow(name, x, this.area.y + 8, Colors.WHITE);
+            context.batcher.textShadow(name, x, this.area.y + 8, BBSSettings.textColor());
             context.batcher.textShadow(id, x, this.area.y + 22, Colors.GRAY);
 
             super.render(context);
@@ -392,7 +393,7 @@ public class UIPluginDetailOverlayPanel extends UIOverlayPanel
             String prefix = this.label.get();
 
             context.batcher.textShadow(prefix, this.area.x, this.area.y + 2, Colors.GRAY);
-            context.batcher.textShadow(this.value, this.area.x + context.batcher.getFont().getWidth(prefix + " ") + 4, this.area.y + 2, Colors.WHITE);
+            context.batcher.textShadow(this.value, this.area.x + context.batcher.getFont().getWidth(prefix + " ") + 4, this.area.y + 2, BBSSettings.textColor());
 
             super.render(context);
         }

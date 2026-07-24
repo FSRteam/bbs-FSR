@@ -44,7 +44,7 @@ public class UIFilmDetailsOverlayPanel extends UIOverlayPanel
         UILabel durationLabel = styleDetailRow(UI.label(L10n.lang("bbs.ui.film.details.duration").format(durationFormatted)));
         this.timeLabel = styleDetailRow(UI.label(L10n.lang("bbs.ui.film.details.time_spent").format(timeFormatted)));
 
-        UILabel descriptionHeading = UI.label(L10n.lang("bbs.ui.film.details.description")).color(Colors.LIGHTER_GRAY);
+        UILabel descriptionHeading = UI.label(L10n.lang("bbs.ui.film.details.description")).color(BBSSettings.mutedTextColor());
 
         /* Description */
         this.description = new UITextarea<>((t) -> this.film.description.set(t));

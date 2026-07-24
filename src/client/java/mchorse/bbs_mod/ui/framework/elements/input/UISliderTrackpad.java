@@ -531,7 +531,7 @@ public class UISliderTrackpad extends UIElement
             this.updateHandleArea();
         }
 
-        int primary = BBSSettings.primaryColor.get();
+        int primary = BBSSettings.accentColorRGB();
         int fillX = MathUtils.clamp(this.getHandleCenter(), this.area.x, this.area.ex());
         int fillColor = Colors.setA(primary, this.dragging ? DRAG_VALUE_ALPHA : VALUE_ALPHA);
         int handleColor = this.dragging ? Colors.WHITE : Colors.setA(Colors.WHITE, this.handleArea.isInside(context) ? HANDLE_HOVER_ALPHA : HANDLE_ALPHA);

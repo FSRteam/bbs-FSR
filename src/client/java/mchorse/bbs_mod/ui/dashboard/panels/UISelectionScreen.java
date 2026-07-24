@@ -745,7 +745,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
     {
         int bg = BBSSettings.raisedSurface();
         int border = BBSSettings.color(BBSSettings.dividerColor(), Colors.A12);
-        int accent = BBSSettings.primaryColor.get();
+        int accent = BBSSettings.accentColorRGB();
 
         context.batcher.dropShadow(area.x, area.y, area.ex(), area.ey(), 14, Colors.A50, 0);
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), bg);

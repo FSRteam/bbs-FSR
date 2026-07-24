@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.clips;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.clips.modifiers.RemapperClip;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
@@ -60,7 +61,7 @@ public class UIRemapperClip extends UIClip<RemapperClip>
     {
         super.fillData();
 
-        this.keyframes.setChannel(this.clip.channel, Colors.ACTIVE);
+        this.keyframes.setChannel(this.clip.channel, BBSSettings.activeColor() & Colors.RGB);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.dashboard.plugins;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.api.plugin.BBSPluginState;
 import mchorse.bbs_mod.plugin.manager.BBSPluginManager;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -236,7 +237,7 @@ public class UIPluginsPanel extends UIDashboardPanel
             String state = UIKeys.C_PLUGIN_STATE.get(element.state()).get();
             int fontHeight = context.batcher.getFont().getHeight();
 
-            context.batcher.textShadow(name + (version.isEmpty() ? "" : " §7" + version), x + 18, middle - fontHeight / 2, hover ? Colors.HIGHLIGHT : Colors.WHITE);
+            context.batcher.textShadow(name + (version.isEmpty() ? "" : " §7" + version), x + 18, middle - fontHeight / 2, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
             context.batcher.textShadow(state, this.area.ex() - 8 - context.batcher.getFont().getWidth(state), middle - fontHeight / 2, color);
         }
 

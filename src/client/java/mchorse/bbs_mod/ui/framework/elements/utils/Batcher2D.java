@@ -11,6 +11,7 @@ import mchorse.bbs_mod.api.client.ui.BBSUiVertex;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiFrameRecorder;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -442,7 +443,7 @@ public class Batcher2D
         x -= icon.w * ax;
         y -= icon.h * ay;
 
-        this.texturedBox(BBSModClient.getTextures().getTexture(icon.texture), color, x, y, icon.w, icon.h, icon.x, icon.y, icon.x + icon.w, icon.y + icon.h, icon.textureW, icon.textureH);
+        this.texturedBox(BBSModClient.getTextures().getTexture(ThemeManager.resolveIconAtlas(icon.texture)), color, x, y, icon.w, icon.h, icon.x, icon.y, icon.x + icon.w, icon.y + icon.h, icon.textureW, icon.textureH);
     }
 
     public void iconArea(Icon icon, float x, float y, float w, float h)
@@ -457,7 +458,7 @@ public class Batcher2D
             color = darkenWhite(color);
         }
 
-        this.texturedArea(BBSModClient.getTextures().getTexture(icon.texture), color, x, y, w, h, icon.x, icon.y, icon.w, icon.h, icon.textureW, icon.textureH);
+        this.texturedArea(BBSModClient.getTextures().getTexture(ThemeManager.resolveIconAtlas(icon.texture)), color, x, y, w, h, icon.x, icon.y, icon.w, icon.h, icon.textureW, icon.textureH);
     }
 
     public void outlinedIcon(Icon icon, float x, float y, float ax, float ay)
@@ -722,12 +723,12 @@ public class Batcher2D
 
     public void text(String label, float x, float y)
     {
-        this.text(label, x, y, Colors.WHITE, false);
+        this.text(label, x, y, BBSSettings.textColor(), false);
     }
 
     public void textShadow(String label, float x, float y)
     {
-        this.text(label, x, y, Colors.WHITE, true);
+        this.text(label, x, y, BBSSettings.textColor(), true);
     }
 
     public void textShadow(String label, float x, float y, int color)
@@ -737,9 +738,13 @@ public class Batcher2D
 
     public void text(String label, float x, float y, int color, boolean shadow)
     {
-        if (BBSSettings.isLightTheme())
+        if (shadow && !BBSSettings.textShadow())
         {
             shadow = false;
+        }
+
+        if (BBSSettings.isLightTheme())
+        {
             color = darkenWhite(color);
         }
 
@@ -810,7 +815,7 @@ public class Batcher2D
 
     public void textCard(String text, float x, float y)
     {
-        this.textCard(text, x, y, Colors.WHITE, Colors.A50);
+        this.textCard(text, x, y, BBSSettings.textColor(), Colors.A50);
     }
 
     /**

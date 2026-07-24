@@ -1331,7 +1331,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             this.dock.refresh();
         }
 
-        int color = BBSSettings.primaryColor.get();
+        int color = BBSSettings.accentColorRGB();
         this.area.render(context.batcher, Colors.mulRGB(color | Colors.A100, 0.2F));
 
         if (this.editor.isVisible() && this.data != null)

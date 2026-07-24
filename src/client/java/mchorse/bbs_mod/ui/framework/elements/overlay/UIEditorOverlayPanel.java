@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.overlay;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
@@ -29,7 +30,7 @@ public abstract class UIEditorOverlayPanel <T> extends UIOverlayPanel
 
             if (!this.list.getList().isEmpty())
             {
-                menu.action(Icons.REMOVE, this.getRemoveLabel(), Colors.NEGATIVE, this::removeItem);
+                menu.action(Icons.REMOVE, this.getRemoveLabel(), BBSSettings.negativeColor() & Colors.RGB, this::removeItem);
             }
         });
 

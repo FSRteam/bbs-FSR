@@ -732,7 +732,7 @@ public class UICurve extends UIElement
         Color color = Colors.COLOR;
         LineBuilder line = new LineBuilder(0.75F);
 
-        color.set(BBSSettings.primaryColor.get(), false);
+        color.set(BBSSettings.accentColorRGB(), false);
 
         if (this.curve.type == ParticleCurveType.BEZIER && c >= 4)
         {
@@ -803,7 +803,7 @@ public class UICurve extends UIElement
                 int x = (int) vector.x;
                 int y = (int) vector.y;
 
-                context.batcher.box(x - 3, y - 3, x + 3, y + 3, this.index == i ? Colors.setA(Colors.ACTIVE, 1F) : Colors.WHITE);
+                context.batcher.box(x - 3, y - 3, x + 3, y + 3, this.index == i ? Colors.setA(BBSSettings.activeColor(), 1F) : Colors.WHITE);
                 context.batcher.box(x - 2, y - 2, x + 2, y + 2, Colors.A100);
             }
         }
@@ -873,14 +873,14 @@ public class UICurve extends UIElement
 
                     /* Diamond: rotated square for control points */
                     int s = 4;
-                    int color = selected ? Colors.setA(Colors.ACTIVE, 1F) : Colors.GRAY;
+                    int color = selected ? Colors.setA(BBSSettings.activeColor(), 1F) : Colors.GRAY;
                     context.batcher.box(x - s, y - 1, x + s, y + 1, color);
                     context.batcher.box(x - 1, y - s, x + 1, y + s, color);
                 }
                 else
                 {
                     /* Endpoints (P0, P3): filled squares */
-                    int color = selected ? Colors.setA(Colors.ACTIVE, 1F) : Colors.WHITE;
+                    int color = selected ? Colors.setA(BBSSettings.activeColor(), 1F) : Colors.WHITE;
                     context.batcher.box(x - 4, y - 4, x + 4, y + 4, color);
                     context.batcher.box(x - 3, y - 3, x + 3, y + 3, Colors.A100);
                 }
@@ -987,7 +987,7 @@ public class UICurve extends UIElement
             int ay = (int) anchor.y;
 
             /* Draw anchor square */
-            int color = selected ? Colors.setA(Colors.ACTIVE, 1F) : Colors.WHITE;
+            int color = selected ? Colors.setA(BBSSettings.activeColor(), 1F) : Colors.WHITE;
             context.batcher.box(ax - 4, ay - 4, ax + 4, ay + 4, color);
             context.batcher.box(ax - 3, ay - 3, ax + 3, ay + 3, Colors.A100);
 
@@ -997,7 +997,7 @@ public class UICurve extends UIElement
                 Vector2d rightAnchor = this.getChainAnchorPos(time, node.rightValue, this.range.x, this.range.y);
                 int rx = (int) rightAnchor.x;
                 int ry = (int) rightAnchor.y;
-                context.batcher.box(rx - 4, ry - 4, rx + 4, ry + 4, selected ? Colors.setA(Colors.ACTIVE, 0.7F) : Colors.setA(Colors.WHITE, 0.7F));
+                context.batcher.box(rx - 4, ry - 4, rx + 4, ry + 4, selected ? Colors.setA(BBSSettings.activeColor(), 0.7F) : Colors.setA(Colors.WHITE, 0.7F));
                 context.batcher.box(rx - 3, ry - 3, rx + 3, ry + 3, Colors.A100);
             }
 
@@ -1015,7 +1015,7 @@ public class UICurve extends UIElement
                 BufferUploader.drawWithShader(builder.buildOrThrow());
 
                 /* Handle endpoint circle */
-                int cpColor = (selected && this.chainDraggingCPIn) ? Colors.setA(Colors.ACTIVE, 1F) : Colors.GRAY;
+                int cpColor = (selected && this.chainDraggingCPIn) ? Colors.setA(BBSSettings.activeColor(), 1F) : Colors.GRAY;
                 context.batcher.box(lx - 3, ly - 3, lx + 3, ly + 3, cpColor);
                 context.batcher.box(lx - 2, ly - 2, lx + 2, ly + 2, Colors.A100);
             }
@@ -1034,7 +1034,7 @@ public class UICurve extends UIElement
                 BufferUploader.drawWithShader(builder.buildOrThrow());
 
                 /* Handle endpoint circle */
-                int cpColor = (selected && this.chainDraggingCPOut) ? Colors.setA(Colors.ACTIVE, 1F) : Colors.GRAY;
+                int cpColor = (selected && this.chainDraggingCPOut) ? Colors.setA(BBSSettings.activeColor(), 1F) : Colors.GRAY;
                 context.batcher.box(rx - 3, ry - 3, rx + 3, ry + 3, cpColor);
                 context.batcher.box(rx - 2, ry - 2, rx + 2, ry + 2, Colors.A100);
             }

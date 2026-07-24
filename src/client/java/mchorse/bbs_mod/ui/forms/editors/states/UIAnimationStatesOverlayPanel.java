@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors.states;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.forms.states.AnimationStates;
@@ -86,7 +87,7 @@ public class UIAnimationStatesOverlayPanel extends UIOverlayPanel
 
             if (!this.list.getList().isEmpty())
             {
-                menu.action(Icons.REMOVE, UIKeys.FORMS_EDITOR_STATES_MANAGER_CONTEXT_REMOVE, Colors.NEGATIVE, this::removeState);
+                menu.action(Icons.REMOVE, UIKeys.FORMS_EDITOR_STATES_MANAGER_CONTEXT_REMOVE, BBSSettings.negativeColor() & Colors.RGB, this::removeState);
             }
         });
         this.list.background();

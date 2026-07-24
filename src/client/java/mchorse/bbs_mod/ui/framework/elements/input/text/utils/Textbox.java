@@ -718,7 +718,7 @@ public class Textbox
 
             if (this.border)
             {
-                int borderColor = this.focused ? 0xff000000 + BBSSettings.primaryColor.get() : 0xffaaaaaa;
+                int borderColor = this.focused ? 0xff000000 + BBSSettings.accentColorRGB() : 0xffaaaaaa;
 
                 context.batcher.outline(this.area.x, this.area.y, this.area.ex(), this.area.ey(), borderColor);
             }
@@ -730,7 +730,9 @@ public class Textbox
         boolean empty = !this.focused && this.text.isEmpty();
         String text = empty ? this.font.limitToWidth(this.placeholder.get(), this.area.w - 5) : this.getWrappedText();
         int length = text.length();
-        int color = empty ? 0xaaaaaa : this.color;
+        /* Colors.WHITE doubles as "follow the theme" for the default text color */
+        int themedColor = this.color == Colors.WHITE ? BBSSettings.textColor() : this.color;
+        int color = empty ? BBSSettings.mutedTextColor() : themedColor;
 
         if (!empty && this.isSelected())
         {

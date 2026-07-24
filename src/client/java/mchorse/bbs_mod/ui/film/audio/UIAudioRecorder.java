@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film.audio;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -685,7 +686,7 @@ public class UIAudioRecorder extends UIElement
         }
 
         float progress = Math.min(1F, (System.currentTimeMillis() - this.holdStart) / (float) HOLD_MS);
-        int color = this.holdButton == 1 ? Colors.NEGATIVE : Colors.POSITIVE;
+        int color = (this.holdButton == 1 ? BBSSettings.negativeColor() : BBSSettings.positiveColor()) & Colors.RGB;
         int cx = context.mouseX;
         int cy = context.mouseY;
         int half = HOLD_SQUARE / 2;

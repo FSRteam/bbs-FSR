@@ -96,7 +96,7 @@ public class UIItemStack extends UIElement
             this.area.render(context.batcher, Colors.A25);
         }
 
-        int border = this.opened ? Colors.A100 | BBSSettings.primaryColor.get() : Colors.LIGHTER_GRAY;
+        int border = this.opened ? Colors.A100 | BBSSettings.accentColorRGB() : Colors.LIGHTER_GRAY;
 
         context.batcher.box(this.area.x, this.area.y, this.area.x + slot, this.area.ey(), border);
         context.batcher.box(this.area.x + 1, this.area.y + 1, this.area.x + slot - 1, this.area.ey() - 1, Colors.A50);
@@ -124,7 +124,7 @@ public class UIItemStack extends UIElement
         }
         else
         {
-            int color = hover ? Colors.HIGHLIGHT : Colors.WHITE;
+            int color = hover ? BBSSettings.highlightColor() : BBSSettings.textColor();
             String name = this.stack.getHoverName().getString();
 
             if (this.stack.getCount() > 1)
@@ -134,7 +134,7 @@ public class UIItemStack extends UIElement
                 name = font.limitToWidth(name, maxW - font.getWidth(suffix));
 
                 context.batcher.textShadow(name, tx, ty, color);
-                context.batcher.textShadow(suffix, tx + font.getWidth(name), ty, Colors.LIGHTER_GRAY);
+                context.batcher.textShadow(suffix, tx + font.getWidth(name), ty, BBSSettings.mutedTextColor());
             }
             else
             {

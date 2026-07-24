@@ -104,7 +104,7 @@ public class UILanguageKey extends UIElement
     @Override
     public void render(UIContext context)
     {
-        int color = Colors.A100 | BBSSettings.primaryColor.get();
+        int color = Colors.A100 | BBSSettings.accentColorRGB();
 
         this.base.area.render(context.batcher, Colors.mulRGB(color, 0.25F));
 
@@ -115,11 +115,11 @@ public class UILanguageKey extends UIElement
 
         if (!this.isStillSame())
         {
-            int checkColor = Colors.A100 | Colors.POSITIVE;
+            int checkColor = BBSSettings.positiveColor();
 
             if (this.panel.hasMarked(this.langKey.key))
             {
-                checkColor = Colors.A100 | Colors.ACTIVE;
+                checkColor = BBSSettings.activeColor();
             }
 
             context.batcher.icon(Icons.CHECKMARK, checkColor, this.key.area.ex() - 10, this.key.area.my(), 0.5F, 0.5F);

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.clips.widgets;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
@@ -147,7 +148,7 @@ public class UIEnvelope extends UIElement
         this.mode.setValue(envelope.mode.get());
         this.fillIntervals();
         this.keyframes.setValue(envelope.keyframes.get());
-        this.channel.setChannel(envelope.channel, Colors.ACTIVE);
+        this.channel.setChannel(envelope.channel, BBSSettings.activeColor() & Colors.RGB);
 
         this.toggleKeyframes(envelope.keyframes.get());
     }

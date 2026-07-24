@@ -683,7 +683,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         int x = this.area.w - w - 5;
         int y = this.area.ey() - font.getHeight() - 5;
 
-        context.batcher.textCard(label, x, y, Colors.WHITE, Colors.A50);
+        context.batcher.textCard(label, x, y, BBSSettings.textColor(), Colors.A50);
         super.render(context);
 
         this.renderGizmoHover(context);

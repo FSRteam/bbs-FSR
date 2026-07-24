@@ -126,7 +126,7 @@ public class UICirculate extends UIClickable<UICirculate>
     @Override
     protected void renderSkin(UIContext context)
     {
-        int color = Colors.A100 | (this.custom ? this.customColor : BBSSettings.primaryColor.get());
+        int color = Colors.A100 | (this.custom ? this.customColor : BBSSettings.accentColorRGB());
 
         if (this.hover)
         {
@@ -140,7 +140,7 @@ public class UICirculate extends UIClickable<UICirculate>
         int x = this.area.mx(font.getWidth(label));
         int y = this.area.my(font.getHeight());
 
-        context.batcher.textShadow(label, x, y, Colors.mulRGB(Colors.WHITE, this.hover ? 0.9F : 1F));
+        context.batcher.textShadow(label, x, y, Colors.mulRGB(BBSSettings.textColor(), this.hover ? 0.9F : 1F));
 
         this.renderLockedArea(context);
     }

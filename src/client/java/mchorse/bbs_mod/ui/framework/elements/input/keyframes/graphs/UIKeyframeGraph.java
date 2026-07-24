@@ -692,7 +692,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             Keyframe prev = j > 0 ? (Keyframe) keyframes.get(j - 1) : null;
             int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
 
-            int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
+            int c = sheet.selection.has(j) ? BBSSettings.activeColor() & Colors.RGB : 0;
             int mx = this.keyframes.toGraphX(frame.getTick());
             int mc = c | Colors.A100;
             IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);
@@ -791,7 +791,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             Keyframe prev = j > 0 ? (Keyframe) keyframes.get(j - 1) : null;
             int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
 
-            int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
+            int c = sheet.selection.has(j) ? BBSSettings.activeColor() & Colors.RGB : 0;
             int mx = this.keyframes.toGraphX(frame.getTick());
             int mc = c | Colors.A100;
             IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);

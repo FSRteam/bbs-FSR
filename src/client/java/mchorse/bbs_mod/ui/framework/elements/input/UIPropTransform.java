@@ -1729,7 +1729,7 @@ public class UIPropTransform extends UITransform
             int x = this.area.mx(font.getWidth(label));
             int y = this.area.my(font.getHeight());
 
-            context.batcher.textCard(label, x, y, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
+            context.batcher.textCard(label, x, y, BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A50));
 
             if (this.numericActive)
             {
@@ -1737,8 +1737,8 @@ public class UIPropTransform extends UITransform
                 int nx = this.area.mx(font.getWidth(numericLabel));
                 int ny = y + font.getHeight() + 8;
 
-                context.batcher.textCard(numericLabel, nx, ny, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
-                context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, Colors.WHITE, Colors.A50);
+                context.batcher.textCard(numericLabel, nx, ny, BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A50));
+                context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, BBSSettings.textColor(), Colors.A50);
             }
         }
     }

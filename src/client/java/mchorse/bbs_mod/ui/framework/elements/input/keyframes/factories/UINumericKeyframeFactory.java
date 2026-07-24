@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
@@ -275,7 +276,7 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
             int x = this.area.mx(font.getWidth(label));
             int y = this.area.my(font.getHeight());
 
-            context.batcher.textCard(label, x, y, Colors.WHITE, Colors.A50);
+            context.batcher.textCard(label, x, y, BBSSettings.textColor(), Colors.A50);
         }
     }
     

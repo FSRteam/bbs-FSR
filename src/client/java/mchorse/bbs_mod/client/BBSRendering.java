@@ -660,7 +660,7 @@ public class BBSRendering
         int iconX = x + 16;
 
         batcher2D.icon(Icons.SPHERE, Colors.RED | Colors.A100, iconX, y, 1F, 0F);
-        batcher2D.textCard(label, iconX + 3, y + 4, Colors.WHITE, Colors.A50);
+        batcher2D.textCard(label, iconX + 3, y + 4, BBSSettings.textColor(), Colors.A50);
     }
 
     public static void renderCoolStuff(IBbsWorldRenderContext worldRenderContext)

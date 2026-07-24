@@ -532,7 +532,7 @@ public class UIFilmPreview extends UIElement
         int resLabelH = context.batcher.getFont().getHeight();
         int resX = area.ex() - 4;
         int resY = area.ey() - resLabelH - 5;
-        context.batcher.textCard(resLabel, resX - resLabelW, resY, Colors.WHITE, Colors.A50);
+        context.batcher.textCard(resLabel, resX - resLabelW, resY, BBSSettings.textColor(), Colors.A50);
 
         this.panel.getController().renderHUD(context, area);
 

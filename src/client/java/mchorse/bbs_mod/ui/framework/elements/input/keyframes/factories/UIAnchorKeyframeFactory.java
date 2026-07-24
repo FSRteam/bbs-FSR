@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -43,7 +44,7 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
 
         context.replaceContextMenu((menu) ->
         {
-            menu.action(Icons.CLOSE, UIKeys.GENERAL_NONE, Colors.NEGATIVE, () -> callback.accept(-1));
+            menu.action(Icons.CLOSE, UIKeys.GENERAL_NONE, BBSSettings.negativeColor() & Colors.RGB, () -> callback.accept(-1));
 
             for (int i = 0; i < entities.size(); i++)
             {

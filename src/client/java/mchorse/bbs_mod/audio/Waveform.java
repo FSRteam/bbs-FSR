@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.audio;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -71,7 +72,7 @@ public class Waveform
 
                 if (this.hasCue(cues, time))
                 {
-                    pixels.drawRect(j, 0, 1, this.h, Colors.ACTIVE | Colors.A75);
+                    pixels.drawRect(j, 0, 1, this.h, (BBSSettings.activeColor() & Colors.RGB) | Colors.A75);
                 }
 
                 if (avgHeight > 0)

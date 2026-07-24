@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -66,7 +67,7 @@ public abstract class FormRenderer <T extends Form>
 
             int w = font.getWidth(name);
 
-            context.batcher.textCard(name, (x2 + x1 - w) / 2, y1 + 6, Colors.WHITE, Colors.ACTIVE | Colors.A50);
+            context.batcher.textCard(name, (x2 + x1 - w) / 2, y1 + 6, BBSSettings.textColor(), (BBSSettings.activeColor() & Colors.RGB) | Colors.A50);
         }
 
         int keybind = this.form.hotkey.get();
@@ -78,7 +79,7 @@ public abstract class FormRenderer <T extends Form>
 
             int w = font.getWidth(name);
 
-            context.batcher.textCard(name, (x2 + x1 - w) / 2, y2 - 6 - font.getHeight(), Colors.WHITE, Colors.A50);
+            context.batcher.textCard(name, (x2 + x1 - w) / 2, y2 - 6 - font.getHeight(), BBSSettings.textColor(), Colors.A50);
         }
     }
 

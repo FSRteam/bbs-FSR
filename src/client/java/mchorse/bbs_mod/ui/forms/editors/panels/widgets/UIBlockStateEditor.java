@@ -95,7 +95,7 @@ public class UIBlockStateEditor extends UIElement
             this.area.render(context.batcher, Colors.A25);
         }
 
-        int border = this.opened ? Colors.A100 | BBSSettings.primaryColor.get() : Colors.LIGHTER_GRAY;
+        int border = this.opened ? Colors.A100 | BBSSettings.accentColorRGB() : Colors.LIGHTER_GRAY;
 
         context.batcher.box(this.area.x, this.area.y, this.area.x + slot, this.area.ey(), border);
         context.batcher.box(this.area.x + 1, this.area.y + 1, this.area.x + slot - 1, this.area.ey() - 1, Colors.A50);
@@ -119,7 +119,7 @@ public class UIBlockStateEditor extends UIElement
         int ty = this.area.y + (this.area.h - font.getHeight()) / 2;
         int maxW = this.area.ex() - tx - 4;
         String label = empty ? UIKeys.FORMS_EDITORS_BLOCK_EMPTY.get() : this.blockState.getBlock().getName().getString();
-        int color = empty ? Colors.GRAY : (hover ? Colors.HIGHLIGHT : Colors.WHITE);
+        int color = empty ? Colors.GRAY : (hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
 
         context.batcher.textShadow(font.limitToWidth(label, maxW), tx, ty, color);
 
