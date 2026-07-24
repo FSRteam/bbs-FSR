@@ -4,6 +4,9 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
+import mchorse.bbs_mod.ui.themes.UIThemeMotion;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -38,10 +41,16 @@ public class Scroll
     private double scroll;
 
     /**
-     * Whether this scroll area gets dragged 
+     * Whether this scroll area gets dragged
      */
     public boolean dragging;
     private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+
+    /* Scrollbar idle fade (render-only) */
+    private static final long SCROLLBAR_IDLE_DELAY_MS = 800;
+
+    private final UITween scrollbarFade = new UITween(1F);
+    private long lastActivityMs = System.currentTimeMillis();
 
     /**
      * Speed of how fast shit's scrolling  
@@ -238,11 +247,12 @@ public class Scroll
     }
 
     /**
-     * Scroll to the position in the scroll area 
+     * Scroll to the position in the scroll area
      */
     public void scrollTo(double x)
     {
         this.targetScroll = x;
+        this.lastActivityMs = System.currentTimeMillis();
 
         this.clamp();
     }
@@ -623,10 +633,50 @@ public class Scroll
         }
     }
 
+    private float updateScrollbarFade(Area scrollbarArea, int mouseX, int mouseY)
+    {
+        UIThemeMotion spec = UIMotions.scrollbar();
+
+        if (UIMotions.duration(spec) <= 0)
+        {
+            this.scrollbarFade.snap(1F);
+
+            return 1F;
+        }
+
+        boolean active = this.dragging
+            || System.currentTimeMillis() - this.lastActivityMs < SCROLLBAR_IDLE_DELAY_MS
+            || scrollbarArea.isInside(mouseX, mouseY);
+
+        if (active)
+        {
+            /* Show instantly so an invisible handle never confuses hovering */
+            this.scrollbarFade.snap(1F);
+        }
+        else
+        {
+            this.scrollbarFade.to(0F, spec);
+        }
+
+        return this.scrollbarFade.update();
+    }
+
     /**
      * This method is responsible for render a scroll bar
      */
     public void renderScrollbar(Batcher2D batcher)
+    {
+        this.renderScrollbar(batcher, Integer.MIN_VALUE, Integer.MIN_VALUE);
+    }
+
+    /**
+     * Render the scroll bar with mouse awareness: with scrollbar motion
+     * enabled, an idle handle fades out and hovering it (or any scrolling
+     * activity) brings it back instantly. Fading is render-only — dragging
+     * and hit testing keep working on the handle's geometry even while it
+     * is invisible.
+     */
+    public void renderScrollbar(Batcher2D batcher, int mouseX, int mouseY)
     {
         if (!this.hasScrollbar())
         {
@@ -634,13 +684,24 @@ public class Scroll
         }
 
         int side = this.direction.getSide(this.area);
-        int shadow = Colors.mulRGB(Colors.A50 | BBSSettings.primaryColor.get(), 0.75F);
+        int shadow = Colors.mulRGB(Colors.A50 | BBSSettings.accentColorRGB(), 0.75F);
 
         if (this.scrollbar)
         {
             Area scrollbar = this.getScrollbarArea();
+            float alpha = this.updateScrollbarFade(scrollbar, mouseX, mouseY);
 
-            bar(batcher, scrollbar.x, scrollbar.y, scrollbar.ex(), scrollbar.ey(), this.dragging ? HANDLE_ACTIVE_COLOR : HANDLE_COLOR);
+            if (alpha > 0F)
+            {
+                int handle = this.dragging ? HANDLE_ACTIVE_COLOR : HANDLE_COLOR;
+
+                if (alpha < 1F)
+                {
+                    handle = Colors.mulA(handle, alpha);
+                }
+
+                bar(batcher, scrollbar.x, scrollbar.y, scrollbar.ex(), scrollbar.ey(), handle);
+            }
         }
         else if (this.direction == ScrollDirection.VERTICAL)
         {

@@ -705,7 +705,7 @@ public abstract class UIList <T> extends UIElement
 
         context.batcher.clip(this.area, context);
         this.renderList(context);
-        this.scroll.renderScrollbar(context.batcher);
+        this.scroll.renderScrollbar(context.batcher, context.mouseX, context.mouseY);
         context.batcher.unclip(context);
 
         this.renderLockedArea(context);
@@ -801,7 +801,7 @@ public abstract class UIList <T> extends UIElement
     {
         if (selected)
         {
-            context.batcher.box(x, y, x + this.area.w, y + this.scroll.scrollItemSize, Colors.A50 | BBSSettings.primaryColor.get());
+            context.batcher.box(x, y, x + this.area.w, y + this.scroll.scrollItemSize, Colors.A50 | BBSSettings.accentColorRGB());
         }
 
         this.renderElementPart(context, element, i, x, y, hover, selected);
@@ -812,7 +812,7 @@ public abstract class UIList <T> extends UIElement
      */
     protected void renderElementPart(UIContext context, T element, int i, int x, int y, boolean hover, boolean selected)
     {
-        context.batcher.textShadow(this.elementToString(context, i, element), x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? Colors.HIGHLIGHT : Colors.WHITE);
+        context.batcher.textShadow(this.elementToString(context, i, element), x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
     }
 
     /**

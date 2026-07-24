@@ -2,6 +2,8 @@ package mchorse.bbs_mod.ui.framework.elements.buttons;
 
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.function.Consumer;
@@ -17,7 +19,9 @@ public class UIIcon extends UIClickable<UIIcon>
     public int activeColor = Colors.LIGHTEST_GRAY;
 
     public int disabledColor = 0x80404040;
-    
+
+    private final UITween hoverTween = new UITween();
+
     private boolean active;
 
     public UIIcon(Icon icon, Consumer<UIIcon> callback)
@@ -116,7 +120,7 @@ public class UIIcon extends UIClickable<UIIcon>
     {
         Icon icon = this.getIcon();
         int color;
-        
+
         if (this.isEnabled())
         {
             if (this.active)
@@ -125,7 +129,18 @@ public class UIIcon extends UIClickable<UIIcon>
             }
             else
             {
-                color = this.hover ? this.hoverColor : this.iconColor;
+                this.hoverTween.to(this.hover ? 1F : 0F, UIMotions.hover());
+
+                float hoverFactor = this.hoverTween.update();
+
+                if (this.hoverTween.isSettled())
+                {
+                    color = this.hover ? this.hoverColor : this.iconColor;
+                }
+                else
+                {
+                    color = Colors.lerp(this.iconColor, this.hoverColor, hoverFactor);
+                }
             }
         }
         else

@@ -1,9 +1,12 @@
 package mchorse.bbs_mod.ui.framework.elements.overlay;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.ui.utils.resizers.Flex;
 import mchorse.bbs_mod.utils.colors.Colors;
 import org.joml.Vector2i;
@@ -17,6 +20,8 @@ public class UIOverlay extends UIElement
     private static final Map<String, Vector2i> offsets = new HashMap<>();
 
     private int background = Colors.A50;
+
+    private final UITween appear = new UITween();
 
     public static UIOverlay addOverlay(UIContext context, UIOverlayPanel panel)
     {
@@ -184,11 +189,41 @@ public class UIOverlay extends UIElement
     @Override
     public void render(UIContext context)
     {
-        if (Colors.getA(this.background) > 0F)
+        /* Appear animation is render-only: hit testing, focus and lifecycle
+         * always use the final layout from frame one */
+        this.appear.to(1F, UIMotions.overlay());
+
+        float factor = this.appear.update();
+
+        if (this.appear.isSettled())
         {
-            this.area.render(context.batcher, this.background);
+            if (Colors.getA(this.background) > 0F)
+            {
+                this.area.render(context.batcher, this.background);
+            }
+
+            super.render(context);
+
+            return;
         }
 
+        if (Colors.getA(this.background) > 0F)
+        {
+            this.area.render(context.batcher, Colors.mulA(this.background, factor));
+        }
+
+        PoseStack pose = context.batcher.getContext().pose();
+        float scale = 0.95F + 0.05F * factor;
+        float cx = this.area.mx();
+        float cy = this.area.my();
+
+        pose.pushPose();
+        pose.translate(cx, cy, 0F);
+        pose.scale(scale, scale, 1F);
+        pose.translate(-cx, -cy, 0F);
+
         super.render(context);
+
+        pose.popPose();
     }
 }

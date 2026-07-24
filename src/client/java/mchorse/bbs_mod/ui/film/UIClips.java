@@ -129,7 +129,7 @@ public class UIClips extends UIElement
         /* Draw the marker */
         FontRenderer font = context.batcher.getFont();
         int width = font.getWidth(label) + 3;
-        int color = BBSSettings.primaryColor.get();
+        int color = BBSSettings.accentColorRGB();
 
         context.batcher.box(x, area.y, x + 1, area.ey(), color | Colors.A100);
 
@@ -140,7 +140,7 @@ public class UIClips extends UIElement
         }
 
         /* Draw the tick label */
-        context.batcher.textCard(label, x + 3, area.ey() - 2 - font.getHeight(), Colors.WHITE, Colors.setA(color, 0.78F), 2);
+        context.batcher.textCard(label, x + 3, area.ey() - 2 - font.getHeight(), BBSSettings.textColor(), Colors.setA(color, 0.78F), 2);
     }
 
     public UIClips(IUIClipsDelegate delegate, IFactory<Clip, ClipFactoryData> factory)
@@ -189,7 +189,7 @@ public class UIClips extends UIElement
 
             if (hasSelected)
             {
-                menu.action(Icons.REMOVE, UIKeys.CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS, Colors.NEGATIVE, this::removeSelected);
+                menu.action(Icons.REMOVE, UIKeys.CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS, BBSSettings.negativeColor() & Colors.RGB, this::removeSelected);
             }
         });
 
@@ -2132,7 +2132,7 @@ public class UIClips extends UIElement
         batcher.unclip(context);
         batcher.clip(this.vertical.area, context);
 
-        this.vertical.renderScrollbar(batcher);
+        this.vertical.renderScrollbar(batcher, context.mouseX, context.mouseY);
 
         batcher.unclip(context);
     }

@@ -12,6 +12,8 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
 
@@ -29,6 +31,8 @@ public class UIDashboardPanels extends UIElement
 
     /** Whether the current panel owns its transient screen resources. */
     private boolean panelAppeared;
+
+    private final UITween switchVeil = new UITween();
 
     /**
      * @deprecated Kept for backward compatibility. Use {@link #renderHighlight(Batcher2D, Area, Direction)}
@@ -56,7 +60,7 @@ public class UIDashboardPanels extends UIElement
      */
     public static void renderHighlight(Batcher2D batcher, Area area, Direction direction)
     {
-        int color = BBSSettings.primaryColor.get();
+        int color = BBSSettings.accentColorRGB();
         int bar = Colors.A100 | color;
         int near = Colors.A75 | color;
         int far = color;
@@ -213,6 +217,14 @@ public class UIDashboardPanels extends UIElement
             this.panel.appear();
             this.panelAppeared = true;
             this.panel.resize();
+
+            /* Render-only switch veil: a base surface wash fading out over
+             * the fresh panel; input goes through from frame one */
+            if (lastPanel != null)
+            {
+                this.switchVeil.snap(1F);
+                this.switchVeil.to(0F, UIMotions.panelSwitch());
+            }
         }
     }
 
@@ -240,6 +252,20 @@ public class UIDashboardPanels extends UIElement
 
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
         context.batcher.box(a.ex() + 2, a.y + 3, a.ex() + 3, a.ey() - 3, BBSSettings.color(BBSSettings.dividerColor(), Colors.A50));
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        super.render(context);
+
+        /* Panel switch veil (render-only): fades out over the fresh panel */
+        float veil = this.switchVeil.update();
+
+        if (veil > 0F && this.panel != null)
+        {
+            this.panel.area.render(context.batcher, Colors.setA(BBSSettings.baseSurface(), veil));
+        }
     }
 
     public static class PanelEvent extends UIEvent<UIDashboardPanels>
