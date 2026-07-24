@@ -24,6 +24,7 @@ import mchorse.bbs_mod.ui.dashboard.textures.UITextureManagerPanel;
 import mchorse.bbs_mod.ui.dashboard.utils.UIGraphPanel;
 import mchorse.bbs_mod.ui.dashboard.utils.UIOrbitCamera;
 import mchorse.bbs_mod.ui.dashboard.utils.UIOrbitCameraKeys;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIRenderingContext;
@@ -360,6 +361,11 @@ public class UIDashboard extends UIBaseMenu
     {
         Link background = BBSSettings.backgroundImage.get();
         int color = BBSSettings.backgroundColor.get();
+
+        if (background == null)
+        {
+            background = ThemeManager.current().background;
+        }
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();

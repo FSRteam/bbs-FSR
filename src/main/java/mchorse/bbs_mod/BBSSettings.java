@@ -20,6 +20,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
 import mchorse.bbs_mod.settings.values.ui.ValueExportChannelLayout;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.IInterp;
@@ -44,8 +45,10 @@ public class BBSSettings {
 	public static ValueBoolean enableTrackpadIncrements;
 	public static ValueBoolean enableTrackpadScrolling;
 	public static ValueFloat userIntefaceScale;
-	public static ValueInt tooltipStyle;
-	public static ValueInt theme;
+	public static ValueString themeId;
+	public static ValueBoolean accentFollowsTheme;
+	public static ValueBoolean motionEnabled;
+	public static ValueFloat motionSpeed;
 	public static ValueFloat fov;
 	public static ValueBoolean hsvColorPicker;
 	public static ValueBoolean forceQwerty;
@@ -193,44 +196,46 @@ public class BBSSettings {
 	public static ValueString cdnUrl;
 	public static ValueString cdnToken;
 
-	private static final int LIGHT_THEME = 0;
-	private static final int DARK_THEME = 1;
-	private static final int DEFAULT_THEME = DARK_THEME;
 	private static final float DEFAULT_BACKGROUND_BRIGHTNESS = 1F;
 	private static final float MIN_BACKGROUND_BRIGHTNESS = 0.5F;
 	private static final float MAX_BACKGROUND_BRIGHTNESS = 1.5F;
 	private static final float IDENTITY_BRIGHTNESS = 1F;
 	private static final float BRIGHTNESS_EPSILON = 0.001F;
 	private static final int DEFAULT_PRIMARY_COLOR = 0xff3242;
-	private static final int LIGHT_CHROME_SURFACE = 0xffe6e9ef;
-	private static final int DARK_CHROME_SURFACE = 0xff111316;
-	private static final int LIGHT_BASE_SURFACE = 0xfff1f4f8;
-	private static final int DARK_BASE_SURFACE = 0xff171a1f;
-	private static final int LIGHT_RAISED_SURFACE = 0xfff8fafd;
-	private static final int DARK_RAISED_SURFACE = 0xff1d2127;
-	private static final int LIGHT_DEEP_SURFACE = 0xffdee4ed;
-	private static final int DARK_DEEP_SURFACE = 0xff0f1217;
-	private static final int LIGHT_DIVIDER_COLOR = 0xffc2cbd8;
-	private static final int DARK_DIVIDER_COLOR = 0xff30353d;
+	/** Legacy int values of the removed "theme" setting, kept for migration. */
+	private static final int LEGACY_LIGHT_THEME = 0;
 
 	public static int primaryColor() {
 		return primaryColor(Colors.A50);
 	}
 
 	public static int primaryColor(int alpha) {
-		return withAlpha(primaryColor.get(), alpha);
+		return withAlpha(primaryColorBase(), alpha);
+	}
+
+	/**
+	 * The effective accent color: the theme's accent while "accent follows
+	 * theme" is enabled, the user-picked color otherwise.
+	 */
+	private static int primaryColorBase() {
+		if (accentFollowsTheme == null || accentFollowsTheme.get()) {
+			return ThemeManager.current().accentPrimary;
+		}
+
+		return primaryColor == null ? DEFAULT_PRIMARY_COLOR : primaryColor.get();
+	}
+
+	/** RGB-only accent (no alpha), safe to compose with {@code | Colors.Axx}. */
+	public static int accentColorRGB() {
+		return primaryColorBase() & Colors.RGB;
 	}
 
 	public static boolean isLightTheme() {
-		return theme != null && theme.get() == LIGHT_THEME;
+		return ThemeManager.current().light;
 	}
 
 	private static int withAlpha(int color, int alpha) {
 		return (color & Colors.RGB) | alpha;
-	}
-
-	private static int getThemeColor(int lightColor, int darkColor) {
-		return isLightTheme() ? lightColor : darkColor;
 	}
 
 	private static float getBackgroundBrightnessFactor() {
@@ -269,28 +274,60 @@ public class BBSSettings {
 		return a | (r << 16) | (g << 8) | b;
 	}
 
-	private static int getThemeSurface(int lightColor, int darkColor) {
-		return applyBackgroundBrightness(getThemeColor(lightColor, darkColor));
-	}
-
 	public static int chromeSurface() {
-		return getThemeSurface(LIGHT_CHROME_SURFACE, DARK_CHROME_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceChrome);
 	}
 
 	public static int baseSurface() {
-		return getThemeSurface(LIGHT_BASE_SURFACE, DARK_BASE_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceBase);
 	}
 
 	public static int raisedSurface() {
-		return getThemeSurface(LIGHT_RAISED_SURFACE, DARK_RAISED_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceRaised);
 	}
 
 	public static int deepSurface() {
-		return getThemeSurface(LIGHT_DEEP_SURFACE, DARK_DEEP_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceDeep);
 	}
 
 	public static int dividerColor() {
-		return getThemeColor(LIGHT_DIVIDER_COLOR, DARK_DIVIDER_COLOR);
+		return ThemeManager.current().surfaceDivider;
+	}
+
+	public static int textColor() {
+		return ThemeManager.current().textPrimary;
+	}
+
+	public static int mutedTextColor() {
+		return ThemeManager.current().textMuted;
+	}
+
+	public static int positiveColor() {
+		return ThemeManager.current().statePositive;
+	}
+
+	public static int negativeColor() {
+		return ThemeManager.current().stateNegative;
+	}
+
+	public static int warningColor() {
+		return ThemeManager.current().stateWarning;
+	}
+
+	public static int activeColor() {
+		return ThemeManager.current().stateActive;
+	}
+
+	public static int highlightColor() {
+		return ThemeManager.current().stateHighlight;
+	}
+
+	public static int cursorColor() {
+		return ThemeManager.current().stateCursor;
+	}
+
+	public static boolean textShadow() {
+		return ThemeManager.current().textShadow;
 	}
 
 	public static int color(int color, int alpha) {
@@ -309,11 +346,11 @@ public class BBSSettings {
 	}
 
 	public static int panelShadowOpaqueColor() {
-		return Colors.A25 | primaryColor.get();
+		return Colors.A25 | (primaryColorBase() & Colors.RGB);
 	}
 
 	public static int panelShadowTransparentColor() {
-		return Colors.setA(primaryColor.get(), 0F);
+		return Colors.setA(primaryColorBase(), 0F);
 	}
 
 	public static int getDefaultDuration() {
@@ -377,6 +414,25 @@ public class BBSSettings {
 		personalizationMigrated |= migrateLegacyValue(appearance, personalization, "tooltip_style", "theme");
 		personalizationMigrated |= migrateLegacyValue(appearance, personalization, "track_width");
 		personalizationMigrated |= migrateLegacyValue(appearance, personalization, "keyframe_default_shape");
+
+		if (personalization.has("theme") && !root.getMap("skins").has("theme_id")) {
+			MapType skins = root.getMap("skins");
+
+			skins.putString("theme_id", personalization.getInt("theme") == LEGACY_LIGHT_THEME ? "light" : "dark");
+			root.put("skins", skins);
+			personalization.remove("theme");
+			personalizationMigrated = true;
+		}
+
+		if (personalization.has("primary_color") && !root.getMap("skins").has("accent_follows_theme")) {
+			if ((personalization.getInt("primary_color") & Colors.RGB) != DEFAULT_PRIMARY_COLOR) {
+				MapType skins = root.getMap("skins");
+
+				skins.putBool("accent_follows_theme", false);
+				root.put("skins", skins);
+				personalizationMigrated = true;
+			}
+		}
 
 		if (personalizationMigrated) {
 			root.put("personalization", personalization);
@@ -483,8 +539,6 @@ public class BBSSettings {
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
 		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F);
-		tooltipStyle = builder.getInt("tooltip_style", DEFAULT_THEME);
-		tooltipStyle.invisible();
 		fov = builder.getFloat("fov", 40, 0, 180);
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
@@ -509,9 +563,14 @@ public class BBSSettings {
 		interfaceShadows = builder.getBoolean("interface_shadows", true);
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
 		stencilHighlightColor = builder.getInt("stencil_highlight_color", 0x2EFFFFFF).colorAlpha();
-		theme = builder.getInt("theme", DEFAULT_THEME);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10);
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
+
+		builder.category("skins", Icons.BRUSH);
+		themeId = builder.getString("theme_id", ThemeManager.DEFAULT_THEME_ID);
+		accentFollowsTheme = builder.getBoolean("accent_follows_theme", true);
+		motionEnabled = builder.getBoolean("motion_enabled", true);
+		motionSpeed = builder.getFloat("motion_speed", 1F, 0.5F, 2F);
 
 		builder.category("transformation", Icons.SCALE);
 		gizmos = builder.getBoolean("gizmos", true);

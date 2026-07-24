@@ -1,0 +1,50 @@
+{
+    "format": 1,
+    "name": "Dark",
+    "author": "BBS",
+    "description": "Built-in dark theme",
+    "variant": "dark",
+    "colors": {
+        "surface": {
+            "chrome": "#111316",
+            "base": "#171A1F",
+            "raised": "#1D2127",
+            "deep": "#0F1217",
+            "divider": "#30353D"
+        },
+        "accent": {
+            "primary": "#FF3242"
+        },
+        "text": {
+            "primary": "#FFFFFF",
+            "muted": "#AAAAAA"
+        },
+        "state": {
+            "positive": "#59D940",
+            "negative": "#FF4059",
+            "warning": "#FFBB00",
+            "active": "#0088FF",
+            "highlight": "#DDDDFF",
+            "cursor": "#57F52A"
+        }
+    },
+    "style": {
+        "text_shadow": true,
+        "bevel": true,
+        "panel_shadow": true
+    },
+    "textures": {
+        "icons": null,
+        "background": null
+    },
+    "motion": {
+        "enabled": true,
+        "speed": 1.0,
+        "overlay": { "enabled": true, "duration": 120, "easing": "sine_out" },
+        "panel_switch": { "enabled": true, "duration": 100, "easing": "sine_inout" },
+        "hover": { "enabled": true, "duration": 80, "easing": "sine_out" },
+        "notification": { "enabled": true, "duration": 150, "easing": "back_out" },
+        "context_menu": { "enabled": true, "duration": 100, "easing": "quad_out" },
+        "scrollbar": { "enabled": true, "duration": 200, "easing": "sine_inout" }
+    }
+}

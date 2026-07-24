@@ -164,6 +164,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
+    themeCoreTest {
+        java.srcDirs = ['src/themeCoreTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath
+    }
     folderManagerTest {
         java.srcDirs = ['src/folderManagerTest/java']
         resources.srcDirs = []
@@ -276,6 +282,8 @@ configurations {
     videoExportTestRuntimeOnly.extendsFrom clientRuntimeOnly
     platformResourceTestImplementation.extendsFrom implementation
     platformResourceTestRuntimeOnly.extendsFrom runtimeOnly
+    themeCoreTestImplementation.extendsFrom clientImplementation
+    themeCoreTestRuntimeOnly.extendsFrom clientRuntimeOnly
     folderManagerTestImplementation.extendsFrom implementation
     folderManagerTestRuntimeOnly.extendsFrom runtimeOnly
     interactionActionTestImplementation.extendsFrom implementation
@@ -389,6 +397,18 @@ tasks.register('testPlatformResourceConsistency', JavaExec) {
     dependsOn tasks.named('compileJava'), tasks.named('platformResourceTestClasses')
     classpath = sourceSets.platformResourceTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.compat.PlatformResourceConsistencyTest'
+}
+
+tasks.register('testThemeCore', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('themeCoreTestClasses')
+    classpath = sourceSets.themeCoreTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.ui.themes.ThemeCoreTest'
+}
+
+tasks.register('testUiMotions', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('themeCoreTestClasses')
+    classpath = sourceSets.themeCoreTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.ui.themes.UIMotionsTest'
 }
 
 tasks.register('testFolderManagerContainment', JavaExec) {
@@ -525,6 +545,8 @@ def bbsVerificationTaskNames = [
     'testAudioVerification',
     'testVideoExportUtils',
     'testPlatformResourceConsistency',
+    'testThemeCore',
+    'testUiMotions',
     'testFolderManagerContainment',
     'testInteractionActions',
     'testNetworkSecurity',

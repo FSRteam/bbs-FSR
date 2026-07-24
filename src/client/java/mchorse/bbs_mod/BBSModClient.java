@@ -442,16 +442,6 @@ public class BBSModClient
             }
         });
 
-        BBSSettings.theme.modes(
-            UIKeys.ENGINE_THEME_LIGHT,
-            UIKeys.ENGINE_THEME_DARK
-        );
-
-        BBSSettings.tooltipStyle.modes(
-            UIKeys.ENGINE_TOOLTIP_STYLE_LIGHT,
-            UIKeys.ENGINE_TOOLTIP_STYLE_DARK
-        );
-
         BBSSettings.keystrokeMode.modes(
             UIKeys.ENGINE_KEYSTROKES_POSITION_AUTO,
             UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_LEFT,
