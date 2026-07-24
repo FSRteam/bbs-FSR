@@ -99,7 +99,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
             color.set(context.color);
             color.mul(set);
 
-            if (!context.isPicking())
+            if (context.canDeferWorldTranslucency())
             {
                 Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
                 FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));

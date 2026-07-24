@@ -575,15 +575,21 @@ public class UIFilmController extends UIElement implements GizmoViewport
     {
         if (groups != null && groups.contains("outside"))
         {
-            Minecraft.getInstance().setScreen(null);
-
+            Film film = this.panel.getData();
             Replay replay = this.panel.replayEditor.getReplay();
-            int index = CollectionUtils.getIndex(this.panel.getData().replays.getList(), replay);
+            int index = film == null ? -1 : CollectionUtils.getIndex(film.replays.getList(), replay);
+            int cursor = this.panel.getCursor();
 
-            if (index >= 0)
+            if (film == null || index < 0)
             {
-                BBSModClient.getFilms().startRecording(this.panel.getData(), index, this.panel.getCursor());
+                return;
             }
+
+            /* Closing the dashboard synchronously tears down the Film panel. Keep
+             * every recording input before that boundary; the world recorder must
+             * never reach back into a panel which has already disappeared. */
+            Minecraft.getInstance().setScreen(null);
+            BBSModClient.getFilms().startRecording(film, index, cursor);
 
             return;
         }
@@ -1428,7 +1434,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
                     label = UIKeys.FILM_GROUPS_EXTRA_2.get();
                 }
 
-                context.batcher.textCard(label, area.x + 5, area.ey() - 5 - font.getHeight(), Colors.WHITE, BBSSettings.primaryColor(Colors.A100));
+                context.batcher.textCard(label, area.x + 5, area.ey() - 5 - font.getHeight(), BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A100));
 
                 int ww = (int) (Math.min(area.w, area.h) * 0.75F);
                 int hh = ww;
@@ -1454,11 +1460,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 if (this.recordingCountdown <= 0)
                 {
-                    context.batcher.textCard(UIKeys.FILM_CONTROLLER_TICKS.format(this.getTick()).get(), x + 3, y + 4, Colors.WHITE, Colors.A50);
+                    context.batcher.textCard(UIKeys.FILM_CONTROLLER_TICKS.format(this.getTick()).get(), x + 3, y + 4, BBSSettings.textColor(), Colors.A50);
                 }
                 else
                 {
-                    context.batcher.textCard(String.valueOf(this.recordingCountdown / 20F), x + 3, y + 4, Colors.WHITE, Colors.A50);
+                    context.batcher.textCard(String.valueOf(this.recordingCountdown / 20F), x + 3, y + 4, BBSSettings.textColor(), Colors.A50);
                 }
             }
         }
@@ -1478,7 +1484,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
             String label = UIKeys.FILM_CONTROLLER_SPEED.format(this.panel.dashboard.orbit.speed.getValue()).get();
             int w = font.getWidth(label);
 
-            context.batcher.textCard(label, x - w, y, Colors.WHITE, Colors.A50);
+            context.batcher.textCard(label, x - w, y, BBSSettings.textColor(), Colors.A50);
 
             y += font.getHeight() + 7;
         }
@@ -1490,7 +1496,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
             String label = replay.getName();
             int w = font.getWidth(label);
 
-            context.batcher.textCard(label, x - w, y, Colors.WHITE, Colors.A50);
+            context.batcher.textCard(label, x - w, y, BBSSettings.textColor(), Colors.A50);
 
             Form form = replay.form.get();
 

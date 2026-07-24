@@ -89,7 +89,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         MatrixStackUtils.scaleStack(context.stack, scale, -scale, scale);
 
-        boolean grouped = !context.isPicking() && FormTranslucentQueue.isActive();
+        boolean grouped = context.canDeferWorldTranslucency() && FormTranslucentQueue.isActive();
         if (grouped)
         {
             Vector3f origin = new Matrix4f(RenderSystem.getModelViewMatrix())

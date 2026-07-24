@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -198,6 +199,22 @@ public class FormRenderingContext
     public boolean isPicking()
     {
         return this.stencilMap != null;
+    }
+
+    /**
+     * Whether this render call belongs to the world translucent stage. The
+     * deferred queue is global for a frame, therefore render type alone is
+     * insufficient: editor, framebuffer and stencil previews can run while a
+     * world queue is still active.
+     */
+    public boolean canDeferWorldTranslucency()
+    {
+        return BBSRendering.isRenderingWorld()
+            && this.renderSpace != null
+            && this.renderSpace.isWorld()
+            && !this.isPicking()
+            && !this.ui
+            && !this.modelRenderer;
     }
 
     public int getPickingIndex()

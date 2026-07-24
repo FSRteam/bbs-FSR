@@ -305,6 +305,7 @@ public class ClientNetwork
 
             dashboard.setPanel(panel);
             panel.fill((ModelBlockEntity) entity, true);
+            dashboard.focusModelBlock((ModelBlockEntity) entity);
         });
     }
 

@@ -83,7 +83,7 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
         );
 
         this.renderModel(shader, context.stack, context.overlay, context.light, context.color,
-            context.getTransition(), !context.isPicking());
+            context.getTransition(), context.canDeferWorldTranslucency());
     }
 
     private void renderModel(Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light,
