@@ -1390,6 +1390,17 @@ public class UIKeys
     public static final IKey PLUGINS_INSTALL_INVALID = L10n.lang("bbs.ui.plugins.install_invalid");
     public static final IKey PLUGINS_EMPTY = L10n.lang("bbs.ui.plugins.empty");
     public static final IKey PLUGINS_RUNTIME_OFFLINE = L10n.lang("bbs.ui.plugins.runtime_offline");
+
+    /* Skins (theme picker) */
+    public static final IKey SKINS_PICK_TITLE = L10n.lang("bbs.ui.skins.pick_title");
+    public static final IKey SKINS_SELECT = L10n.lang("bbs.ui.skins.select");
+    public static final IKey SKINS_RELOAD = L10n.lang("bbs.ui.skins.reload");
+    public static final IKey SKINS_OPEN_FOLDER = L10n.lang("bbs.ui.skins.open_folder");
+    public static final IKey SKINS_EXPORT = L10n.lang("bbs.ui.skins.export_template");
+    public static final IKey SKINS_SOURCE_BUILTIN = L10n.lang("bbs.ui.skins.source_builtin");
+    public static final IKey SKINS_SOURCE_EXTERNAL = L10n.lang("bbs.ui.skins.source_external");
+    public static final IKey SKINS_EXPORTED = L10n.lang("bbs.ui.skins.exported");
+    public static final IKey SKINS_BROKEN = L10n.lang("bbs.ui.skins.broken");
     public static final IKey PLUGINS_DETAIL_STATE = L10n.lang("bbs.ui.plugins.detail.state");
     public static final IKey PLUGINS_DETAIL_KIND = L10n.lang("bbs.ui.plugins.detail.kind");
     public static final IKey PLUGINS_DETAIL_SIDE = L10n.lang("bbs.ui.plugins.detail.side");

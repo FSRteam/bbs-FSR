@@ -18,6 +18,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -341,7 +342,7 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
             FontRenderer font = context.batcher.getFont();
             String label = font.limitToWidth(this.label.get(), this.area.w - 28);
 
-            context.batcher.text(label, this.area.x + 23, this.area.my(font.getHeight()), Colors.WHITE, true);
+            context.batcher.text(label, this.area.x + 23, this.area.my(font.getHeight()), BBSSettings.textColor(), true);
         }
     }
 
@@ -356,6 +357,21 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
             this.label = L10n.lang(UIValueFactory.getCategoryTitleKey(category));
 
             this.h(18);
+
+            if (category.getId().equals("skins"))
+            {
+                UIIcon actions = new UIIcon(Icons.MORE, (b) -> b.getContext().replaceContextMenu((menu) ->
+                {
+                    menu.action(Icons.REFRESH, UIKeys.SKINS_RELOAD, ThemeManager::reload);
+                    menu.action(Icons.FOLDER, UIKeys.SKINS_OPEN_FOLDER, UIThemeOverlayPanel::openThemesFolder);
+                    menu.action(Icons.DOWNLOAD, UIKeys.SKINS_EXPORT, () -> UIThemeOverlayPanel.exportTemplate(b.getContext()));
+                }));
+
+                actions.tooltip(UIKeys.SKINS_PICK_TITLE, Direction.LEFT);
+                actions.relative(this).x(1F, -18).y(0.5F, -9).wh(18, 18);
+
+                this.add(actions);
+            }
 
             if (category.getId().equals("video"))
             {
@@ -388,7 +404,7 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
                 x += 20;
             }
 
-            context.batcher.text(this.label.get(), x, this.area.my(font.getHeight()) - 1, Colors.WHITE, true);
+            context.batcher.text(this.label.get(), x, this.area.my(font.getHeight()) - 1, BBSSettings.textColor(), true);
             context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), BBSSettings.dividerColor());
 
             super.render(context);
