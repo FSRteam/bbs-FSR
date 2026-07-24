@@ -801,7 +801,16 @@ public abstract class UIList <T> extends UIElement
     {
         if (selected)
         {
-            context.batcher.box(x, y, x + this.area.w, y + this.scroll.scrollItemSize, Colors.A50 | BBSSettings.accentColorRGB());
+            int radius = BBSSettings.cornerPanel();
+
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(x, y, this.area.w, this.scroll.scrollItemSize, radius, Colors.A50 | BBSSettings.accentColorRGB());
+            }
+            else
+            {
+                context.batcher.box(x, y, x + this.area.w, y + this.scroll.scrollItemSize, Colors.A50 | BBSSettings.accentColorRGB());
+            }
         }
 
         this.renderElementPart(context, element, i, x, y, hover, selected);

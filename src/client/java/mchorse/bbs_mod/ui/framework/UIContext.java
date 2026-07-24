@@ -499,10 +499,27 @@ public class UIContext implements IViewportStack
         this.contextMenu = null;
         this.advanceContextMenuIntentGeneration();
 
-        if (previous != null)
+        if (previous == null)
+        {
+            return;
+        }
+
+        if (previous.beginExit())
+        {
+            /* The menu removes itself once the exit animation settles; keep
+             * it tracked so screen teardown can still hard-remove it */
+            this.pendingContextMenuRemovals.add(previous);
+        }
+        else
         {
             this.queueContextMenuRemoval(previous);
         }
+    }
+
+    /** Called by an exiting context menu once its reverse animation settled. */
+    public void removeExitedContextMenu(UIContextMenu menu)
+    {
+        this.removePendingContextMenu(menu);
     }
 
     /** Reissue cleanup-only intents after a screen lifecycle invalidated old barriers. */

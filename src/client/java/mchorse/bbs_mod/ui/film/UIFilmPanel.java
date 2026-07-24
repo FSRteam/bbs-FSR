@@ -69,7 +69,12 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
+import mchorse.bbs_mod.ui.themes.UIThemeMotion;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.interps.IInterp;
+import mchorse.bbs_mod.utils.interps.Interpolations;
+import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -199,6 +204,269 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private String dropTargetPanelId;
     private int dropTargetZone = DROP_ZONE_CENTER;
     private final List<Integer> draggedSplitterIndices = new ArrayList<>();
+
+    /* Panel layout transition (theme motion `layout`): from/to snapshots of
+     * normalized stack bounds, interpolated back into flex each frame with a
+     * real resize() so rendering and hit testing always agree */
+    private final Map<String, PanelBoundsSnapshot> layoutTransitionFromBounds = new HashMap<>();
+    private final Map<String, PanelBoundsSnapshot> layoutTransitionToBounds = new HashMap<>();
+    private boolean layoutTransitioning;
+    private boolean layoutTransitionCapturePending;
+    private long layoutTransitionStartMs;
+    private int layoutTransitionDurationMs;
+
+    private static class PanelBoundsSnapshot
+    {
+        public float x;
+        public float y;
+        public float w;
+        public float h;
+        public int topOffsetPx;
+
+        public void set(float x, float y, float w, float h, int topOffsetPx)
+        {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.topOffsetPx = topOffsetPx;
+        }
+    }
+
+    private int getLayoutTransitionDurationMs()
+    {
+        return UIMotions.duration(UIMotions.layout());
+    }
+
+    private void beginLayoutTransitionCapture()
+    {
+        this.layoutTransitionCapturePending = false;
+
+        if (this.getLayoutTransitionDurationMs() <= 0 || this.editor == null || this.editor.area.w <= 0 || this.editor.area.h <= 0)
+        {
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+
+            return;
+        }
+
+        if (this.layoutTransitioning)
+        {
+            this.captureInterpolatedLayoutBoundsAsFrom();
+        }
+        else
+        {
+            this.captureLayoutBoundsSnapshot(this.layoutTransitionFromBounds);
+        }
+
+        this.layoutTransitionCapturePending = true;
+    }
+
+    private void endLayoutTransitionCapture()
+    {
+        if (!this.layoutTransitionCapturePending)
+        {
+            return;
+        }
+
+        this.layoutTransitionCapturePending = false;
+
+        int durationMs = this.getLayoutTransitionDurationMs();
+
+        if (durationMs <= 0)
+        {
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+
+            return;
+        }
+
+        this.captureLayoutBoundsSnapshot(this.layoutTransitionToBounds);
+
+        boolean anyAnimatable = false;
+
+        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
+        {
+            PanelBoundsSnapshot from = entry.getValue();
+            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(entry.getKey());
+
+            if (to == null)
+            {
+                continue;
+            }
+
+            if (Math.abs(from.x - to.x) > 5e-4F || Math.abs(from.y - to.y) > 5e-4F
+                || Math.abs(from.w - to.w) > 5e-4F || Math.abs(from.h - to.h) > 5e-4F
+                || from.topOffsetPx != to.topOffsetPx)
+            {
+                anyAnimatable = true;
+
+                break;
+            }
+        }
+
+        if (!anyAnimatable)
+        {
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+
+            return;
+        }
+
+        this.layoutTransitionStartMs = System.currentTimeMillis();
+        this.layoutTransitionDurationMs = durationMs;
+        this.layoutTransitioning = true;
+    }
+
+    private void captureLayoutBoundsSnapshot(Map<String, PanelBoundsSnapshot> out)
+    {
+        out.clear();
+
+        for (Map.Entry<String, DockStackInfo> entry : this.dockStackByPanelId.entrySet())
+        {
+            DockStackInfo info = entry.getValue();
+            int topOffset = info.isStacked() ? DOCK_STACK_TABS_HEIGHT_PX : 0;
+            PanelBoundsSnapshot snap = new PanelBoundsSnapshot();
+
+            snap.set(info.x, info.y, info.w, info.h, topOffset);
+            out.put(entry.getKey(), snap);
+        }
+    }
+
+    private float layoutTransitionEased(long now)
+    {
+        float t = (now - this.layoutTransitionStartMs) / (float) Math.max(1, this.layoutTransitionDurationMs);
+
+        t = MathUtils.clamp(t, 0F, 1F);
+
+        UIThemeMotion spec = UIMotions.layout();
+        IInterp easing = spec == null || spec.easing == null ? Interpolations.EXP_OUT : spec.easing;
+
+        return easing.interpolate(0F, 1F, t);
+    }
+
+    /** Interrupted transition: freeze the current interpolated state as the new from. */
+    private void captureInterpolatedLayoutBoundsAsFrom()
+    {
+        float eased = this.layoutTransitionEased(System.currentTimeMillis());
+        Map<String, PanelBoundsSnapshot> blended = new HashMap<>();
+
+        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
+        {
+            String id = entry.getKey();
+            PanelBoundsSnapshot from = entry.getValue();
+            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(id);
+
+            if (to == null)
+            {
+                continue;
+            }
+
+            PanelBoundsSnapshot snap = new PanelBoundsSnapshot();
+
+            snap.set(
+                Lerps.lerp(from.x, to.x, eased),
+                Lerps.lerp(from.y, to.y, eased),
+                Lerps.lerp(from.w, to.w, eased),
+                Lerps.lerp(from.h, to.h, eased),
+                Math.round(Lerps.lerp(from.topOffsetPx, to.topOffsetPx, eased))
+            );
+            blended.put(id, snap);
+        }
+
+        this.layoutTransitionFromBounds.clear();
+        this.layoutTransitionFromBounds.putAll(blended);
+    }
+
+    /**
+     * While transitioning, write interpolated bounds back into the panels'
+     * flex and do a real resize(), so hit testing follows the animation.
+     * Settled: zero-touch, the exact target layout stays in place.
+     */
+    private void advanceLayoutTransition()
+    {
+        if (!this.layoutTransitioning)
+        {
+            return;
+        }
+
+        if (this.editor == null || this.editor.area.w <= 0 || this.editor.area.h <= 0)
+        {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        float t = MathUtils.clamp((now - this.layoutTransitionStartMs) / (float) Math.max(1, this.layoutTransitionDurationMs), 0F, 1F);
+        float eased = this.layoutTransitionEased(now);
+        float[] preview = this.layoutTransitionPreviewRect();
+        boolean anyApplied = false;
+
+        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
+        {
+            String id = entry.getKey();
+            PanelBoundsSnapshot from = entry.getValue();
+            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(id);
+            UIElement panel = this.panelById.get(id);
+            DockStackInfo targetInfo = this.dockStackByPanelId.get(id);
+
+            if (to == null || panel == null || targetInfo == null)
+            {
+                continue;
+            }
+
+            float x = Lerps.lerp(from.x, to.x, eased);
+            float y = Lerps.lerp(from.y, to.y, eased);
+            float w = Lerps.lerp(from.w, to.w, eased);
+            float h = Lerps.lerp(from.h, to.h, eased);
+            int topOffset = Math.round(Lerps.lerp(from.topOffsetPx, to.topOffsetPx, eased));
+            int[] g = panel == this.preview ? new int[4] : this.panelGutter(targetInfo, preview);
+
+            panel.relative(this.editor)
+                .x(x, g[0])
+                .y(y, topOffset + g[1])
+                .w(w, -g[0] - g[2])
+                .h(h, -topOffset - g[1] - g[3]);
+
+            UIDraggable dragHandle = this.dragHandlesById.get(id);
+
+            if (dragHandle != null && dragHandle.isVisible())
+            {
+                float tabsOffset = topOffset > 0 ? (float) topOffset / Math.max(1, this.editor.area.h) : 0F;
+
+                dragHandle.relative(this.editor)
+                    .x(x, g[0])
+                    .y(y + tabsOffset + DRAG_HANDLE_TOP_OFFSET_NORM, g[1])
+                    .w(w, -g[0] - g[2])
+                    .h(DRAG_HANDLE_HEIGHT_NORM);
+            }
+
+            anyApplied = true;
+        }
+
+        if (anyApplied)
+        {
+            this.editor.resize();
+        }
+
+        if (t >= 1F)
+        {
+            /* eased(1) == 1, so the last write already equals the exact
+             * target flex from applyPanelBoundsFromStacks; just stop */
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+        }
+    }
+
+    private float[] layoutTransitionPreviewRect()
+    {
+        DockStackInfo info = this.dockStackByPanelId.get(PANEL_PREVIEW_ID);
+
+        return info == null ? null : new float[] {info.x, info.y, info.w, info.h};
+    }
 
     private static class DockStackInfo
     {
@@ -872,8 +1140,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (next != root)
         {
+            this.beginLayoutTransitionCapture();
             this.setCurrentFilmLayoutRoot(next);
             this.setupEditorFlex(true);
+            this.endLayoutTransitionCapture();
         }
     }
 
@@ -972,8 +1242,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         EditorLayoutNode root = EditorLayoutNode.fromData(layoutData);
         if (root != null)
         {
+            this.beginLayoutTransitionCapture();
             this.setCurrentFilmLayoutRoot(root);
             this.setupEditorFlex(true);
+            this.endLayoutTransitionCapture();
         }
     }
 
@@ -1568,8 +1840,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (newRoot != null && newRoot != root)
         {
+            this.beginLayoutTransitionCapture();
             this.setCurrentFilmLayoutRoot(newRoot);
             this.setupEditorFlex(true);
+            this.endLayoutTransitionCapture();
         }
     }
 
@@ -2187,6 +2461,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.clearPanelDragState();
         this.clearSplitterDragState();
+        this.beginLayoutTransitionCapture();
         this.selectedMainEditorPanel = element;
 
         if (previousRoot != this.getCurrentFilmLayoutRoot())
@@ -2206,6 +2481,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.toggleFlight();
         }
+
+        this.endLayoutTransitionCapture();
     }
 
     private void captureTimelineViewport(UIElement panel)
@@ -3147,6 +3424,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.updateLogic(context);
+        this.advanceLayoutTransition();
 
         this.area.render(context.batcher, BBSSettings.baseSurface());
 

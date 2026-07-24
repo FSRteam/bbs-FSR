@@ -330,6 +330,18 @@ public class BBSSettings {
 		return ThemeManager.current().textShadow;
 	}
 
+	public static int cornerChrome() {
+		return ThemeManager.current().cornerChrome;
+	}
+
+	public static int cornerPanel() {
+		return ThemeManager.current().cornerPanel;
+	}
+
+	public static int cornerWidget() {
+		return ThemeManager.current().cornerWidget;
+	}
+
 	public static int color(int color, int alpha) {
 		return withAlpha(color, alpha);
 	}

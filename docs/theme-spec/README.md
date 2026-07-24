@@ -1,10 +1,13 @@
 # FSR UI 主题包规范(theme-spec)v1
 
 FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色、样式开关、
-贴图(图标 atlas / 背景图)与 UI 动画(每个接入点的开关/时长/缓动)。
+圆角半径、贴图(图标 atlas / 背景图 / 装饰贴花)与 UI 动画(每个接入点的
+开关/时长或弹簧/缓动/轨道编排)。
 本文是主题包格式的**唯一规范**;`example-theme/` 是可直接拷贝使用的完整样例。
 
-> 实现状态:已实现(2026-07-24)。运行时:`mchorse.bbs_mod.ui.themes`(ThemeParser/ThemeManager);
+> 实现状态:v1 已实现(2026-07-24),v2 视觉与动效扩展已实现(2026-07-25:圆角、
+> 弹簧动力学、退场动画、track 编排、装饰贴花、背景模式)。运行时:
+> `mchorse.bbs_mod.ui.themes`(ThemeParser/ThemeManager);
 > 对拍测试:`src/themeCoreTest`(`./gradlew testThemeCore`,含本规范样例包解析与内置主题逐字节校验)。
 > 实现与规范冲突时,修其一并在 Trellis 任务文档记录。
 
@@ -86,13 +89,40 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 | `style.text_shadow` | bool | `true` | 普通 UI 文字是否带阴影 |
 | `style.bevel` | bool | `true` | 按钮等是否画 bevel(立体斜边);关闭则纯平 |
 | `style.panel_shadow` | bool | `true` | 面板边缘阴影(带强调色的辉光阴影) |
+| `style.corner_radius.chrome` | int | `0` | 弹层/右键菜单等"界面镶边"级圆角半径,0-16;0 = 直角(与旧版逐位一致) |
+| `style.corner_radius.panel` | int | `0` | 卡片/列表选中态等面板级圆角半径 |
+| `style.corner_radius.widget` | int | `0` | 按钮/输入框/开关等控件级圆角半径 |
+
+> 圆角用 mask 贴图抗锯齿绘制;半径 <0.5 自动走旧直角路径。`widget` 半径 >0 时
+> UIToggle 会切换为 macOS 风格圆形滑块开关。
 
 ### 4.5 textures —— 贴图覆盖
 
 | key | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `textures.icons` | string/null | `null` | 图标 atlas 覆盖,`assets:` 链接,如 `"assets:themes/<id>/icons.png"`。null=用默认。atlas 规格见 `example-theme/textures/README.md`(256×256,16×16 网格) |
-| `textures.background` | string/null | `null` | 默认仪表盘背景图;用户在设置里显式选择的背景优先于主题 |
+| `textures.background` | string/null | `null` | 根界面背景图(仪表盘 + 独立 UI 屏通用铺底);用户在设置里显式选择的背景优先于主题 |
+| `textures.background_mode` | string | `"stretch"` | 背景铺底模式:`stretch` 拉伸 / `cover` 等比裁切铺满 / `tile` 平铺 |
+| `textures.background_dim` | float | `0` | 背景上的暗化蒙层强度,0-1;画在背景之上、贴花与 UI 之下 |
+
+### 4.5.1 decorations —— 装饰贴花
+
+顶层可选 `decorations` 数组(最多 16 项),每项:
+
+```json
+{ "texture": "assets:themes/<id>/decal.png", "anchor": "bottom_left",
+  "offset": [12, -12], "scale": 1.5, "opacity": 0.9 }
+```
+
+| key | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `texture` | string | 必填 | 贴图链接;缺失文件的项在加载时丢弃并 warn |
+| `anchor` | string | `"top_left"` | 九宫锚位:`top_left/top/top_right/left/center/right/bottom_left/bottom/bottom_right`;未知锚位丢弃该项 |
+| `offset` | [int,int] | `[0,0]` | 相对锚位的像素偏移 |
+| `scale` | float | `1` | 贴图缩放,0.05-8 |
+| `opacity` | float | `1` | 不透明度 0-1 |
+
+贴花画在背景(及暗化蒙层)之后、主 UI 之前,**永不参与点击判定**。
 
 贴图文件放主题文件夹内,链接写 `assets:themes/<id>/<文件名>`。
 更狠的全局玩法(不走 theme.json):把文件放 `config/bbs/assets/<同内置路径>` 可覆盖
@@ -107,18 +137,48 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 | `motion.enabled` | bool | `true` | 主题级动画总开关(用户设置里还有一个用户级总开关,两者都开才有动画) |
 | `motion.speed` | float | `1.0` | 主题级速度倍率,与用户设置的速度倍率相乘;有效时长 = duration ÷ 总倍率 |
 
-六个接入点,每个都是 `{ "enabled": bool, "duration": int毫秒, "easing": "缓动名" }`:
+六个 v1 接入点 + 四个 v2 接入点,每个条目的通用结构:
+
+```json
+{ "enabled": true,
+  "type": "ease",  "duration": 120, "easing": "sine_out",      ← ease 模式
+  "type": "spring", "response": 0.35, "damping": 0.8,          ← spring 模式(二选一)
+  "preset": "scale", "tracks": { "y": { "from": 8 } },         ← 可选轨道编排
+  "scale": 1.05 }                                              ← 仅 hover_scale/press 使用
+```
+
+- `type`:`"ease"`(默认,固定时长 + 缓动)或 `"spring"`(弹簧动力学,打断时速度连续)。
+- spring 参数:`response` 自然周期秒(0.05-3,越小越快),`damping` 阻尼比(0.1-2;
+  <1 会过冲回弹,1 临界,>1 迟滞)。spring 模式忽略 `duration/easing`。
+- 坏值逐 key 回退默认并 warn,不会崩溃。
 
 | key | 默认 | 动画内容 |
 |---|---|---|
-| `motion.overlay` | `{true, 120, "sine_out"}` | 弹层/浮窗打开关闭:淡入 + 轻微缩放 |
+| `motion.overlay` | `{true, 120, "sine_out"}` | 弹层/浮窗打开与**关闭**(退场反向播放同一编排) |
 | `motion.panel_switch` | `{true, 100, "sine_inout"}` | 仪表盘面板切换:表面色纱罩淡出 |
 | `motion.hover` | `{true, 80, "sine_out"}` | 按钮/图标/开关悬浮色渐变 |
 | `motion.notification` | `{true, 150, "back_out"}` | 通知滑入滑出 |
-| `motion.context_menu` | `{true, 100, "quad_out"}` | 右键菜单展开淡入 |
+| `motion.context_menu` | `{true, 100, "quad_out"}` | 右键菜单展开与关闭(退场反向) |
 | `motion.scrollbar` | `{true, 200, "sine_inout"}` | 滚动条静止后淡出、活动恢复 |
+| `motion.scroll_smooth` | `{true}` | 平滑滚动(视觉值指数趋近逻辑值;命中判定始终用逻辑值) |
+| `motion.hover_scale` | `{false, scale 1}` | 悬浮时控件轻微放大(围绕中心);`scale` 指定倍率如 1.06 |
+| `motion.press` | `{false, scale 1}` | 按下压缩、松开回弹;`scale` 指定按下倍率如 0.94 |
+| `motion.layout` | `{false}` | 面板布局变更时 bounds 从旧位置动画到新位置(渲染与命中始终一致) |
 
-动画只影响绘制,不影响点击判定与操作时序;关闭 = 与无动画的旧版行为完全一致。
+### 4.6.1 preset / tracks —— 轨道编排(overlay、context_menu)
+
+`overlay` 与 `context_menu` 条目支持在固定属性集 `alpha/scale/x/y` 上编排进出场:
+每条 track 只给 `from` 起点(终点恒为静止态:alpha 1、scale 1、偏移 0),退场自动反向。
+
+- `preset` 快捷方式:`"scale"`(v1 默认观感:缩放+淡入)、`"slide_right"`、`"slide_up"`、`"fade"`。
+- `tracks` 显式覆盖 preset 对应属性:`{"alpha":{"from":0},"scale":{"from":0.9},"x":{"from":24},"y":{"from":8}}`
+  (alpha 0-1,scale 0.1-3,x/y 像素 -200~200)。
+- 应用顺序固定:translate(x,y) → scale(围绕锚点)→ alpha。
+- 两个 key 都不写 = 该接入点内置变换,与 v1 完全一致。
+
+动画只影响绘制,不影响点击判定与操作时序(唯一例外:弹层/右键菜单退场期间
+元素仍在渲染,但语义上已关闭——立即失去命中与键盘输入,下层界面即刻可交互)。
+关闭 = 与无动画的旧版行为完全一致。
 
 ### 4.7 缓动名表(easing 可用值)
 

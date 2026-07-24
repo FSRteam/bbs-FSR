@@ -714,13 +714,31 @@ public class Textbox
 
         if (this.background)
         {
-            this.area.render(context.batcher, BBSSettings.inputSurface());
+            int radius = BBSSettings.cornerWidget();
 
-            if (this.border)
+            if (radius > 0)
             {
-                int borderColor = this.focused ? 0xff000000 + BBSSettings.accentColorRGB() : 0xffaaaaaa;
+                if (this.border)
+                {
+                    int borderColor = this.focused ? 0xff000000 + BBSSettings.accentColorRGB() : BBSSettings.dividerColor();
 
-                context.batcher.outline(this.area.x, this.area.y, this.area.ex(), this.area.ey(), borderColor);
+                    context.batcher.roundedFrame(this.area.x, this.area.y, this.area.w, this.area.h, radius, 1F, borderColor, BBSSettings.inputSurface());
+                }
+                else
+                {
+                    context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.inputSurface());
+                }
+            }
+            else
+            {
+                this.area.render(context.batcher, BBSSettings.inputSurface());
+
+                if (this.border)
+                {
+                    int borderColor = this.focused ? 0xff000000 + BBSSettings.accentColorRGB() : 0xffaaaaaa;
+
+                    context.batcher.outline(this.area.x, this.area.y, this.area.ex(), this.area.ey(), borderColor);
+                }
             }
 
             x = this.area.x + 4;

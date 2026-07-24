@@ -13,7 +13,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -124,6 +126,7 @@ public class ThemeManager
         ids.add("light");
         ids.add("example");
         ids.add("amber");
+        ids.add("strawberry");
 
         try
         {
@@ -266,8 +269,24 @@ public class ThemeManager
     {
         boolean badIcons = theme.iconsAtlas != null && !hasAsset(theme.iconsAtlas);
         boolean badBackground = theme.background != null && !hasAsset(theme.background);
+        List<UIThemeDecoration> decorations = null;
 
-        if (!badIcons && !badBackground)
+        for (UIThemeDecoration decoration : theme.decorations)
+        {
+            if (!hasAsset(decoration.texture))
+            {
+                LOGGER.warn("Theme \"{}\": decoration texture {} is missing, dropping it", theme.id, decoration.texture);
+
+                if (decorations == null)
+                {
+                    decorations = new ArrayList<>(theme.decorations);
+                }
+
+                decorations.remove(decoration);
+            }
+        }
+
+        if (!badIcons && !badBackground && decorations == null)
         {
             return theme;
         }
@@ -286,6 +305,11 @@ public class ThemeManager
             LOGGER.warn("Theme \"{}\": background texture {} is missing, ignoring it", theme.id, theme.background);
 
             builder.background = null;
+        }
+
+        if (decorations != null)
+        {
+            builder.decorations = decorations;
         }
 
         return builder.build();

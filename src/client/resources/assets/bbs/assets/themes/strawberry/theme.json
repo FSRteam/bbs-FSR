@@ -1,0 +1,77 @@
+{
+    "format": 1,
+    "name": "Strawberry",
+    "author": "BBS",
+    "description": "Soft macOS-style light theme: rounded corners, springy motion, strawberry decor",
+    "base": "light",
+    "variant": "light",
+    "colors": {
+        "surface": {
+            "chrome": "#F7E7EC",
+            "base": "#FFF3F6",
+            "raised": "#FFFFFF",
+            "deep": "#F2DCE3",
+            "divider": "#E5C3CE"
+        },
+        "accent": {
+            "primary": "#E4425A"
+        },
+        "text": {
+            "primary": "#4A2B33",
+            "muted": "#A87E8A"
+        },
+        "state": {
+            "positive": "#4CAF6D",
+            "negative": "#E4425A",
+            "warning": "#E8A03E",
+            "active": "#D96C86",
+            "highlight": "#5A3540",
+            "cursor": "#E4425A"
+        }
+    },
+    "style": {
+        "text_shadow": false,
+        "bevel": false,
+        "panel_shadow": true,
+        "corner_radius": {
+            "chrome": 8,
+            "panel": 5,
+            "widget": 4
+        }
+    },
+    "textures": {
+        "background": "assets:themes/strawberry/background.png",
+        "background_mode": "cover",
+        "background_dim": 0.05
+    },
+    "decorations": [
+        {
+            "texture": "assets:themes/strawberry/decal.png",
+            "anchor": "bottom_left",
+            "offset": [12, -12],
+            "scale": 1.5,
+            "opacity": 0.9
+        },
+        {
+            "texture": "assets:themes/strawberry/decal.png",
+            "anchor": "top_right",
+            "offset": [-16, 16],
+            "scale": 0.9,
+            "opacity": 0.75
+        }
+    ],
+    "motion": {
+        "enabled": true,
+        "speed": 1.0,
+        "overlay": { "enabled": true, "type": "spring", "response": 0.35, "damping": 0.78, "preset": "scale", "tracks": { "y": { "from": 10 } } },
+        "panel_switch": { "enabled": true, "duration": 120, "easing": "sine_inout" },
+        "hover": { "enabled": true, "duration": 90, "easing": "sine_out" },
+        "notification": { "enabled": true, "type": "spring", "response": 0.4, "damping": 0.7 },
+        "context_menu": { "enabled": true, "type": "spring", "response": 0.28, "damping": 0.85, "preset": "slide_up" },
+        "scrollbar": { "enabled": true, "duration": 250, "easing": "sine_inout" },
+        "scroll_smooth": { "enabled": true },
+        "hover_scale": { "enabled": true, "duration": 90, "easing": "sine_out", "scale": 1.06 },
+        "press": { "enabled": true, "type": "spring", "response": 0.2, "damping": 0.6, "scale": 0.94 },
+        "layout": { "enabled": true, "type": "spring", "response": 0.3, "damping": 0.9 }
+    }
+}

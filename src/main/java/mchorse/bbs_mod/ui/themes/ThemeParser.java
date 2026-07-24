@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.themes;
 
+import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -157,15 +158,39 @@ public class ThemeParser
         builder.stateCursor = color(id, state, "cursor", fallback.stateCursor);
 
         MapType style = map.getMap("style");
+        MapType cornerRadius = style.getMap("corner_radius");
 
         builder.textShadow = style.getBool("text_shadow", fallback.textShadow);
         builder.bevel = style.getBool("bevel", fallback.bevel);
         builder.panelShadow = style.getBool("panel_shadow", fallback.panelShadow);
+        builder.cornerChrome = cornerRadius(cornerRadius, "chrome", fallback.cornerChrome);
+        builder.cornerPanel = cornerRadius(cornerRadius, "panel", fallback.cornerPanel);
+        builder.cornerWidget = cornerRadius(cornerRadius, "widget", fallback.cornerWidget);
 
         MapType textures = map.getMap("textures");
 
         builder.iconsAtlas = link(textures, "icons", fallback.iconsAtlas);
         builder.background = link(textures, "background", fallback.background);
+        builder.backgroundMode = backgroundMode(id, textures, fallback.backgroundMode);
+
+        if (textures.has("background_dim"))
+        {
+            float dim = textures.getFloat("background_dim", Float.NaN);
+
+            if (Float.isNaN(dim) || Float.isInfinite(dim))
+            {
+                LOGGER.warn("Theme \"{}\": background_dim has an invalid value, keeping {}", id, fallback.backgroundDim);
+            }
+            else
+            {
+                builder.backgroundDim = MathUtils.clamp(dim, 0F, 1F);
+            }
+        }
+
+        if (map.has("decorations"))
+        {
+            builder.decorations = decorations(id, map.getList("decorations"));
+        }
 
         MapType motion = map.getMap("motion");
 
@@ -177,6 +202,10 @@ public class ThemeParser
         builder.notification = motionEntry(id, motion, "notification", fallback.notification);
         builder.contextMenu = motionEntry(id, motion, "context_menu", fallback.contextMenu);
         builder.scrollbar = motionEntry(id, motion, "scrollbar", fallback.scrollbar);
+        builder.scrollSmooth = motionEntry(id, motion, "scroll_smooth", fallback.scrollSmooth);
+        builder.hoverScale = motionEntry(id, motion, "hover_scale", fallback.hoverScale);
+        builder.press = motionEntry(id, motion, "press", fallback.press);
+        builder.layout = motionEntry(id, motion, "layout", fallback.layout);
 
         return builder.build();
     }
@@ -224,6 +253,114 @@ public class ThemeParser
         return raw.isEmpty() ? null : Link.create(raw);
     }
 
+    private static int cornerRadius(MapType map, String key, int fallback)
+    {
+        return MathUtils.clamp(map.getInt(key, fallback), 0, 16);
+    }
+
+    private static UITheme.BackgroundMode backgroundMode(String id, MapType textures, UITheme.BackgroundMode fallback)
+    {
+        if (!textures.has("background_mode"))
+        {
+            return fallback;
+        }
+
+        String raw = textures.getString("background_mode");
+
+        switch (raw)
+        {
+            case "stretch": return UITheme.BackgroundMode.STRETCH;
+            case "cover": return UITheme.BackgroundMode.COVER;
+            case "tile": return UITheme.BackgroundMode.TILE;
+        }
+
+        LOGGER.warn("Theme \"{}\": unknown background_mode \"{}\", keeping {}", id, raw, fallback);
+
+        return fallback;
+    }
+
+    /** Maximum number of decorations a theme may declare. */
+    public static final int MAX_DECORATIONS = 16;
+
+    /**
+     * Parse the decoration list. Broken entries (missing texture, unknown
+     * anchor) are dropped with a warning rather than guessed at; the list is
+     * capped at {@link #MAX_DECORATIONS} entries.
+     */
+    private static List<UIThemeDecoration> decorations(String id, ListType list)
+    {
+        List<UIThemeDecoration> result = new ArrayList<>();
+
+        for (int i = 0; i < list.size(); i++)
+        {
+            if (result.size() >= MAX_DECORATIONS)
+            {
+                LOGGER.warn("Theme \"{}\": more than {} decorations, ignoring the rest", id, MAX_DECORATIONS);
+
+                break;
+            }
+
+            MapType entry = list.getMap(i);
+            String texture = entry.getString("texture", "");
+
+            if (texture.isEmpty())
+            {
+                LOGGER.warn("Theme \"{}\": decoration {} has no texture, dropping it", id, i);
+
+                continue;
+            }
+
+            String anchorRaw = entry.getString("anchor", "top_left");
+            UIThemeDecoration.Anchor anchor = null;
+
+            for (UIThemeDecoration.Anchor candidate : UIThemeDecoration.Anchor.values())
+            {
+                if (candidate.name().toLowerCase().equals(anchorRaw))
+                {
+                    anchor = candidate;
+
+                    break;
+                }
+            }
+
+            if (anchor == null)
+            {
+                LOGGER.warn("Theme \"{}\": decoration {} has unknown anchor \"{}\", dropping it", id, i, anchorRaw);
+
+                continue;
+            }
+
+            ListType offset = entry.getList("offset");
+            int offsetX = offset.size() > 0 ? offset.getInt(0) : 0;
+            int offsetY = offset.size() > 1 ? offset.getInt(1) : 0;
+            float scale = decorationFloat(id, i, entry, "scale", 1F, 0.05F, 8F);
+            float opacity = decorationFloat(id, i, entry, "opacity", 1F, 0F, 1F);
+
+            result.add(new UIThemeDecoration(Link.create(texture), anchor, offsetX, offsetY, scale, opacity));
+        }
+
+        return result;
+    }
+
+    private static float decorationFloat(String id, int index, MapType entry, String key, float defaultValue, float min, float max)
+    {
+        if (!entry.has(key))
+        {
+            return defaultValue;
+        }
+
+        float value = entry.getFloat(key, Float.NaN);
+
+        if (Float.isNaN(value) || Float.isInfinite(value))
+        {
+            LOGGER.warn("Theme \"{}\": decoration {} has invalid {}, falling back to {}", id, index, key, defaultValue);
+
+            return defaultValue;
+        }
+
+        return MathUtils.clamp(value, min, max);
+    }
+
     private static UIThemeMotion motionEntry(String id, MapType motion, String key, UIThemeMotion fallback)
     {
         if (!motion.has(key))
@@ -235,6 +372,9 @@ public class ThemeParser
         boolean enabled = map.getBool("enabled", fallback.enabled);
         int duration = MathUtils.clamp(map.getInt("duration", fallback.duration), 0, 10000);
         IInterp easing = fallback.easing;
+        UIThemeMotion.MotionType type = parseMotionType(id, key, map);
+        float response = UIThemeMotion.DEFAULT_RESPONSE;
+        float damping = UIThemeMotion.DEFAULT_DAMPING;
 
         if (map.has("easing"))
         {
@@ -251,7 +391,119 @@ public class ThemeParser
             easing = found;
         }
 
-        return new UIThemeMotion(enabled, duration, easing);
+        if (type == UIThemeMotion.MotionType.SPRING)
+        {
+            response = springFloat(id, key, map, "response", UIThemeMotion.DEFAULT_RESPONSE, 0.05F, 3F);
+            damping = springFloat(id, key, map, "damping", UIThemeMotion.DEFAULT_DAMPING, 0.1F, 2F);
+        }
+
+        UIThemeMotionTracks tracks = parseTracks(id, key, map);
+        float scale = springFloat(id, key, map, "scale", 1F, 0.25F, 2F);
+
+        return new UIThemeMotion(enabled, duration, easing, type, response, damping, tracks, scale);
+    }
+
+    /**
+     * Parse the optional track orchestration: a {@code preset} shortcut
+     * expanded first, then explicit {@code tracks} entries overriding the
+     * preset per property. Returns null (= the touch point's built-in
+     * transform) when neither key is present.
+     */
+    private static UIThemeMotionTracks parseTracks(String id, String motionKey, MapType map)
+    {
+        UIThemeMotionTracks preset = null;
+
+        if (map.has("preset"))
+        {
+            String raw = map.getString("preset");
+
+            preset = switch (raw)
+            {
+                case "scale" -> UIThemeMotionTracks.PRESET_SCALE;
+                case "slide_right" -> UIThemeMotionTracks.PRESET_SLIDE_RIGHT;
+                case "slide_up" -> UIThemeMotionTracks.PRESET_SLIDE_UP;
+                case "fade" -> UIThemeMotionTracks.PRESET_FADE;
+                default -> null;
+            };
+
+            if (preset == null)
+            {
+                LOGGER.warn("Theme \"{}\": motion \"{}\" uses unknown preset \"{}\", ignoring it", id, motionKey, raw);
+            }
+        }
+
+        if (!map.has("tracks"))
+        {
+            return preset;
+        }
+
+        MapType tracks = map.getMap("tracks");
+        float alphaFrom = trackFrom(id, motionKey, tracks, "alpha", preset == null ? 1F : preset.alphaFrom, 0F, 1F);
+        float scaleFrom = trackFrom(id, motionKey, tracks, "scale", preset == null ? 1F : preset.scaleFrom, 0.1F, 3F);
+        float xFrom = trackFrom(id, motionKey, tracks, "x", preset == null ? 0F : preset.xFrom, -200F, 200F);
+        float yFrom = trackFrom(id, motionKey, tracks, "y", preset == null ? 0F : preset.yFrom, -200F, 200F);
+
+        return new UIThemeMotionTracks(alphaFrom, scaleFrom, xFrom, yFrom);
+    }
+
+    private static float trackFrom(String id, String motionKey, MapType tracks, String key, float fallback, float min, float max)
+    {
+        if (!tracks.has(key))
+        {
+            return fallback;
+        }
+
+        float value = tracks.getMap(key).getFloat("from", Float.NaN);
+
+        if (Float.isNaN(value) || Float.isInfinite(value))
+        {
+            LOGGER.warn("Theme \"{}\": motion \"{}\" track \"{}\" has invalid from value, keeping {}", id, motionKey, key, fallback);
+
+            return fallback;
+        }
+
+        return MathUtils.clamp(value, min, max);
+    }
+
+    private static UIThemeMotion.MotionType parseMotionType(String id, String key, MapType map)
+    {
+        if (!map.has("type"))
+        {
+            return UIThemeMotion.MotionType.EASE;
+        }
+
+        String raw = map.getString("type");
+
+        if ("spring".equals(raw))
+        {
+            return UIThemeMotion.MotionType.SPRING;
+        }
+
+        if (!raw.isEmpty() && !"ease".equals(raw))
+        {
+            LOGGER.warn("Theme \"{}\": motion \"{}\" uses unknown type \"{}\", falling back to ease", id, key, raw);
+        }
+
+        return UIThemeMotion.MotionType.EASE;
+    }
+
+    private static float springFloat(String id, String motionKey, MapType map, String key, float defaultValue, float min, float max)
+    {
+        if (!map.has(key))
+        {
+            return defaultValue;
+        }
+
+        float value = map.getFloat(key, Float.NaN);
+
+        if (Float.isNaN(value) || Float.isInfinite(value))
+        {
+            LOGGER.warn("Theme \"{}\": motion \"{}\" has invalid {} \"{}\", falling back to {}", id, motionKey, key, map.getString(key), defaultValue);
+
+            return defaultValue;
+        }
+
+        return MathUtils.clamp(value, min, max);
     }
 
     /**
@@ -286,9 +538,15 @@ public class ThemeParser
         builder.textShadow = true;
         builder.bevel = true;
         builder.panelShadow = true;
+        builder.cornerChrome = 0;
+        builder.cornerPanel = 0;
+        builder.cornerWidget = 0;
 
         builder.iconsAtlas = null;
         builder.background = null;
+        builder.backgroundMode = UITheme.BackgroundMode.STRETCH;
+        builder.backgroundDim = 0F;
+        builder.decorations = null;
 
         builder.motionEnabled = true;
         builder.motionSpeed = 1F;
@@ -298,6 +556,13 @@ public class ThemeParser
         builder.notification = new UIThemeMotion(true, 150, Interpolations.BACK_OUT);
         builder.contextMenu = new UIThemeMotion(true, 100, Interpolations.QUAD_OUT);
         builder.scrollbar = new UIThemeMotion(true, 200, Interpolations.SINE_INOUT);
+
+        /* v2 coverage entries: smooth scrolling matches the v1 user-setting
+         * behavior, everything else is off by default (bit-identical v1 look) */
+        builder.scrollSmooth = new UIThemeMotion(true, 100, Interpolations.SINE_OUT);
+        builder.hoverScale = new UIThemeMotion(false, 80, Interpolations.SINE_OUT);
+        builder.press = new UIThemeMotion(false, 80, Interpolations.SINE_OUT);
+        builder.layout = new UIThemeMotion(false, 200, Interpolations.SINE_INOUT);
 
         return builder.build();
     }

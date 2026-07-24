@@ -101,7 +101,16 @@ public class UIButton extends UIClickable<UIButton> implements ITextColoring
 
         if (this.background)
         {
-            context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color | Colors.A100, true, false);
+            int radius = BBSSettings.cornerWidget();
+
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, color | Colors.A100);
+            }
+            else
+            {
+                context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color | Colors.A100, true, false);
+            }
         }
 
         FontRenderer font = context.batcher.getFont();

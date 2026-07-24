@@ -4,6 +4,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
+import mchorse.bbs_mod.ui.themes.UIThemeMotion;
+import mchorse.bbs_mod.ui.themes.UIThemeMotionTracks;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
@@ -22,6 +24,12 @@ public class UIOverlay extends UIElement
     private int background = Colors.A50;
 
     private final UITween appear = new UITween();
+
+    /* Exit state: the overlay is semantically closed (no input, no hit
+     * testing, close events already fired), it only lingers for the reverse
+     * animation before the real removal */
+    private boolean closing;
+    private boolean removalQueued;
 
     public static UIOverlay addOverlay(UIContext context, UIOverlayPanel panel)
     {
@@ -134,7 +142,15 @@ public class UIOverlay extends UIElement
 
     public static boolean has(UIContext context)
     {
-        return !context.menu.getRoot().getChildren(UIOverlayPanel.class).isEmpty();
+        for (UIOverlayPanel panel : context.menu.getRoot().getChildren(UIOverlayPanel.class))
+        {
+            if (!(panel.getParent() instanceof UIOverlay) || !((UIOverlay) panel.getParent()).isClosing())
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public UIOverlay()
@@ -154,7 +170,54 @@ public class UIOverlay extends UIElement
         return this.background(0);
     }
 
+    public boolean isClosing()
+    {
+        return this.closing;
+    }
+
     public void closeItself()
+    {
+        if (this.closing)
+        {
+            return;
+        }
+
+        if (UIMotions.duration(UIMotions.overlay()) <= 0)
+        {
+            this.removeNow();
+
+            return;
+        }
+
+        /* Semantic close happens right now: events fire, offsets are saved,
+         * input is dead. Only the pixels stick around for the reverse
+         * animation */
+        this.closing = true;
+        this.setEnabled(false);
+        UIUtils.playClick();
+
+        UIContext context = this.getContext();
+
+        for (UIOverlayPanel element : this.getChildren(UIOverlayPanel.class))
+        {
+            element.onClose();
+
+            /* Save offset */
+            Vector2i offset = new Vector2i(element.getFlex().x.offset, element.getFlex().y.offset);
+
+            offsets.put(element.getClass().getSimpleName(), offset);
+        }
+
+        if (context != null && context.activeElement instanceof UIElement && this.isDescendant((UIElement) context.activeElement))
+        {
+            context.unfocus();
+        }
+
+        this.appear.to(0F, UIMotions.overlay());
+    }
+
+    /** The v1 immediate close path, bit-identical when motion is off. */
+    private void removeNow()
     {
         this.removeFromParent();
         UIUtils.playClick();
@@ -190,10 +253,35 @@ public class UIOverlay extends UIElement
     public void render(UIContext context)
     {
         /* Appear animation is render-only: hit testing, focus and lifecycle
-         * always use the final layout from frame one */
-        this.appear.to(1F, UIMotions.overlay());
+         * always use the final layout from frame one. The exit animation is
+         * the one exception: the overlay is already semantically closed and
+         * only lingers visually until the reverse tween settles */
+        if (!this.closing)
+        {
+            this.appear.to(1F, UIMotions.overlay());
+        }
 
         float factor = this.appear.update();
+
+        if (this.closing && this.appear.isSettled())
+        {
+            if (!this.removalQueued)
+            {
+                this.removalQueued = true;
+
+                context.render.postRunnable(() ->
+                {
+                    this.removeFromParent();
+
+                    for (UIOverlayPanel element : this.getChildren(UIOverlayPanel.class))
+                    {
+                        element.removeFromParent();
+                    }
+                });
+            }
+
+            return;
+        }
 
         if (this.appear.isSettled())
         {
@@ -212,17 +300,35 @@ public class UIOverlay extends UIElement
             this.area.render(context.batcher, Colors.mulA(this.background, factor));
         }
 
+        UIThemeMotion spec = UIMotions.overlay();
+        UIThemeMotionTracks tracks = spec == null ? null : spec.tracks;
         PoseStack pose = context.batcher.getContext().pose();
-        float scale = 0.95F + 0.05F * factor;
+        float scale = tracks == null ? 0.95F + 0.05F * factor : tracks.scaleAt(factor);
         float cx = this.area.mx();
         float cy = this.area.my();
 
         pose.pushPose();
+
+        if (tracks != null)
+        {
+            pose.translate(tracks.xAt(factor), tracks.yAt(factor), 0F);
+        }
+
         pose.translate(cx, cy, 0F);
         pose.scale(scale, scale, 1F);
         pose.translate(-cx, -cy, 0F);
 
+        if (tracks != null)
+        {
+            context.batcher.pushAlpha(tracks.alphaAt(factor));
+        }
+
         super.render(context);
+
+        if (tracks != null)
+        {
+            context.batcher.popAlpha();
+        }
 
         pose.popPose();
     }

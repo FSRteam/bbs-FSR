@@ -34,28 +34,42 @@
         }
     },
 
-    "_doc_style": "样式开关:text_shadow=文字阴影,bevel=按钮立体斜边,panel_shadow=面板辉光阴影",
+    "_doc_style": "样式开关:text_shadow=文字阴影,bevel=按钮立体斜边,panel_shadow=面板辉光阴影;corner_radius 三级圆角半径 0-16,0=直角(旧版观感)",
     "style": {
         "text_shadow": true,
         "bevel": true,
-        "panel_shadow": true
+        "panel_shadow": true,
+        "corner_radius": {
+            "chrome": 0,
+            "panel": 0,
+            "widget": 0
+        }
     },
 
-    "_doc_textures": "icons 指向本主题文件夹内的 atlas 覆盖(assets:themes/<id>/...),null=用默认;background 是仪表盘默认背景图。示例保持 null,玩法见 textures/README.md",
+    "_doc_textures": "icons 指向本主题文件夹内的 atlas 覆盖(assets:themes/<id>/...),null=用默认;background 是根界面背景图(mode: stretch/cover/tile,dim: 0-1 暗化)。示例保持 null,玩法见 textures/README.md",
     "textures": {
         "icons": null,
-        "background": null
+        "background": null,
+        "background_mode": "stretch",
+        "background_dim": 0.0
     },
 
-    "_doc_motion": "每项 = enabled/duration(毫秒)/easing(缓动名,见规范 §4.7);有效时长 = duration ÷ (主题speed × 用户speed);任何一层关掉即无动画",
+    "_doc_decorations": "装饰贴花数组(最多 16 项):{texture, anchor 九宫位, offset, scale, opacity},画在背景之后 UI 之前,永不参与点击。示例留空",
+    "decorations": [],
+
+    "_doc_motion": "每项: enabled + type(ease=duration/easing;spring=response/damping,打断时速度连续) + 可选 preset/tracks 编排(overlay/context_menu)+ scale(仅 hover_scale/press);有效时长 = duration ÷ (主题speed × 用户speed);任何一层关掉即无动画",
     "motion": {
         "enabled": true,
         "speed": 1.0,
-        "overlay":       { "enabled": true, "duration": 120, "easing": "sine_out" },
-        "panel_switch":  { "enabled": true, "duration": 100, "easing": "sine_inout" },
-        "hover":         { "enabled": true, "duration": 80,  "easing": "sine_out" },
-        "notification":  { "enabled": true, "duration": 150, "easing": "back_out" },
-        "context_menu":  { "enabled": true, "duration": 100, "easing": "quad_out" },
-        "scrollbar":     { "enabled": true, "duration": 200, "easing": "sine_inout" }
+        "overlay":       { "enabled": true, "type": "ease", "duration": 120, "easing": "sine_out" },
+        "panel_switch":  { "enabled": true, "type": "ease", "duration": 100, "easing": "sine_inout" },
+        "hover":         { "enabled": true, "type": "ease", "duration": 80,  "easing": "sine_out" },
+        "notification":  { "enabled": true, "type": "ease", "duration": 150, "easing": "back_out" },
+        "context_menu":  { "enabled": true, "type": "ease", "duration": 100, "easing": "quad_out" },
+        "scrollbar":     { "enabled": true, "type": "ease", "duration": 200, "easing": "sine_inout" },
+        "scroll_smooth": { "enabled": true },
+        "hover_scale":   { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
+        "press":         { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
+        "layout":        { "enabled": false, "duration": 200, "easing": "sine_inout" }
     }
 }

@@ -40,7 +40,31 @@ public class UIMotions
 
         float speed = ThemeManager.current().motionSpeed * userSpeed();
 
-        return speed <= 0F ? 0 : Math.round(spec.duration / speed);
+        if (speed <= 0F)
+        {
+            return 0;
+        }
+
+        if (spec.type == UIThemeMotion.MotionType.SPRING)
+        {
+            float response = response(spec);
+
+            return response <= 0F ? 0 : Math.max(1, Math.round(response * 1000F));
+        }
+
+        return Math.round(spec.duration / speed);
+    }
+
+    public static float response(UIThemeMotion spec)
+    {
+        if (spec == null || !spec.enabled || !enabled())
+        {
+            return 0F;
+        }
+
+        float speed = ThemeManager.current().motionSpeed * userSpeed();
+
+        return speed <= 0F ? 0F : spec.response / speed;
     }
 
     private static float userSpeed()
@@ -76,5 +100,25 @@ public class UIMotions
     public static UIThemeMotion scrollbar()
     {
         return ThemeManager.current().scrollbar;
+    }
+
+    public static UIThemeMotion scrollSmooth()
+    {
+        return ThemeManager.current().scrollSmooth;
+    }
+
+    public static UIThemeMotion hoverScale()
+    {
+        return ThemeManager.current().hoverScale;
+    }
+
+    public static UIThemeMotion press()
+    {
+        return ThemeManager.current().press;
+    }
+
+    public static UIThemeMotion layout()
+    {
+        return ThemeManager.current().layout;
     }
 }

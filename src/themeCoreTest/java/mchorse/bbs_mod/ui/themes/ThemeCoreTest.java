@@ -4,10 +4,15 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Interpolations;
+import sun.misc.Unsafe;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -30,13 +35,18 @@ public final class ThemeCoreTest
         testCircularBaseChain();
         testChainDepthLimit();
         testBadValuesFallBack();
+        testSpringMotionParsing();
         testBadJsonAndFormat();
         testUnderscoreKeysIgnored();
         testJsonNullTextureResets();
         testLegacyMigration();
         testBuiltinJsonParity();
+        testBatcherGlobalAlphaStack();
         testSpecExampleTheme();
         testBuiltinPacks();
+        testCornerRadiusParsing();
+        testTracksAndPresetParsing();
+        testDecorAndBackgroundParsing();
 
         System.out.println("ThemeCoreTest: all tests passed");
     }
@@ -51,7 +61,7 @@ public final class ThemeCoreTest
         Path themes = Path.of("src/client/resources/assets/bbs/assets/themes");
         UITheme dark = parseFile("dark", themes.resolve("dark/theme.json"), ThemeParser.defaultDark("dark"));
 
-        for (String id : new String[] {"light", "example", "amber"})
+        for (String id : new String[] {"light", "example", "amber", "strawberry"})
         {
             UITheme theme = parseFile(id, themes.resolve(id + "/theme.json"), dark);
 
@@ -129,6 +139,9 @@ public final class ThemeCoreTest
         assertTrue(!theme.overlay.enabled, "overlay disabled");
         assertEquals(300, theme.overlay.duration, "overlay duration");
         assertEquals(Interpolations.BACK_OUT, theme.overlay.easing, "overlay easing");
+        assertEquals(UIThemeMotion.MotionType.EASE, theme.overlay.type, "overlay motion type defaults to ease");
+        assertEquals(UIThemeMotion.DEFAULT_RESPONSE, theme.overlay.response, "overlay spring response default");
+        assertEquals(UIThemeMotion.DEFAULT_DAMPING, theme.overlay.damping, "overlay spring damping default");
 
         /* Entries absent from the document inherit the fallback */
         assertEquals(150, theme.notification.duration, "notification inherited");
@@ -209,6 +222,39 @@ public final class ThemeCoreTest
         assertEquals(fallback.surfaceChrome, theme.surfaceChrome, "short color keeps fallback");
         assertEquals(Interpolations.SINE_OUT, theme.overlay.easing, "unknown easing becomes sine_out");
         assertEquals(10000, theme.overlay.duration, "duration clamped");
+    }
+
+    private static void testSpringMotionParsing()
+    {
+        MapType map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "motion": {
+                    "overlay": { "type": "spring", "response": 0.45, "damping": 0.6 },
+                    "panel_switch": { "type": "spring", "response": 9.0, "damping": -1.0 },
+                    "hover": { "type": "spring", "response": "fast", "damping": "soft" },
+                    "notification": { "response": 0.8, "damping": 0.5 },
+                    "context_menu": { "type": "warp" }
+                }
+            }
+            """);
+        UITheme theme = ThemeParser.parse("spring", map, ThemeParser.defaultDark("spring"));
+
+        assertEquals(UIThemeMotion.MotionType.SPRING, theme.overlay.type, "spring type parses");
+        assertEquals(0.45F, theme.overlay.response, "spring response parses");
+        assertEquals(0.6F, theme.overlay.damping, "spring damping parses");
+
+        assertEquals(UIThemeMotion.MotionType.SPRING, theme.panelSwitch.type, "spring clamp still keeps spring type");
+        assertEquals(3F, theme.panelSwitch.response, "spring response clamps to max");
+        assertEquals(0.1F, theme.panelSwitch.damping, "spring damping clamps to min");
+
+        assertEquals(UIThemeMotion.DEFAULT_RESPONSE, theme.hover.response, "bad spring response falls back to default");
+        assertEquals(UIThemeMotion.DEFAULT_DAMPING, theme.hover.damping, "bad spring damping falls back to default");
+
+        assertEquals(UIThemeMotion.MotionType.EASE, theme.notification.type, "missing type keeps ease semantics");
+        assertEquals(UIThemeMotion.DEFAULT_RESPONSE, theme.notification.response, "ease entry keeps default spring response");
+        assertEquals(UIThemeMotion.DEFAULT_DAMPING, theme.notification.damping, "ease entry keeps default spring damping");
+        assertEquals(UIThemeMotion.MotionType.EASE, theme.contextMenu.type, "unknown type falls back to ease");
     }
 
     private static void testBadJsonAndFormat()
@@ -320,6 +366,7 @@ public final class ThemeCoreTest
         assertEquals(codeDark.stateCursor, dark.stateCursor, "code default cursor parity");
         assertEquals(codeDark.overlay.duration, dark.overlay.duration, "code default overlay parity");
         assertEquals(codeDark.scrollbar.easing, dark.scrollbar.easing, "code default scrollbar easing parity");
+        assertEquals(codeDark.overlay.type, dark.overlay.type, "code default overlay type parity");
 
         UITheme light = parseFile("light", Path.of("src/client/resources/assets/bbs/assets/themes/light/theme.json"), dark);
 
@@ -354,6 +401,31 @@ public final class ThemeCoreTest
         assertTrue(theme.iconsAtlas == null, "example theme ships no textures");
     }
 
+    private static void testBatcherGlobalAlphaStack() throws Exception
+    {
+        Batcher2D batcher = allocateBatcher();
+        Method applyGlobalAlpha = method(Batcher2D.class, "applyGlobalAlpha", int.class);
+        Method applyTextAlpha = method(Batcher2D.class, "applyTextAlpha", int.class);
+        int color = 0x7f123456;
+
+        assertEquals(color, applyGlobalAlpha.invoke(batcher, color), "alpha stack identity keeps colors bit exact");
+
+        batcher.pushAlpha(0.5F);
+        assertEquals(0.5F, field(Batcher2D.class, "globalAlpha").getFloat(batcher), "first push stores half alpha");
+        assertEquals(Colors.mulA(0xff123456, 0.5F), applyGlobalAlpha.invoke(batcher, 0xff123456), "first push multiplies colors");
+        assertEquals(Colors.mulA(0xffffffff, 0.5F), applyTextAlpha.invoke(batcher, 0x00ffffff), "text alpha treats RGB-only white as opaque before fading");
+
+        batcher.pushAlpha(0.5F);
+        assertEquals(0.25F, field(Batcher2D.class, "globalAlpha").getFloat(batcher), "nested push multiplies alpha");
+        assertEquals(Colors.mulA(0xff123456, 0.25F), applyGlobalAlpha.invoke(batcher, 0xff123456), "nested push compounds color alpha");
+
+        batcher.popAlpha();
+        assertEquals(0.5F, field(Batcher2D.class, "globalAlpha").getFloat(batcher), "first pop restores previous alpha");
+        batcher.popAlpha();
+        assertEquals(1F, field(Batcher2D.class, "globalAlpha").getFloat(batcher), "final pop restores identity alpha");
+        assertEquals(color, applyGlobalAlpha.invoke(batcher, color), "restored identity keeps colors bit exact");
+    }
+
     private static UITheme parseFile(String id, Path path, UITheme fallback) throws Exception
     {
         MapType map = DataToString.mapFromString(Files.readString(path));
@@ -369,6 +441,36 @@ public final class ThemeCoreTest
         return themes::get;
     }
 
+    private static Batcher2D allocateBatcher() throws Exception
+    {
+        Unsafe unsafe = (Unsafe) field(Unsafe.class, "theUnsafe").get(null);
+        Batcher2D batcher = (Batcher2D) unsafe.allocateInstance(Batcher2D.class);
+
+        field(Batcher2D.class, "globalAlpha").setFloat(batcher, 1F);
+        field(Batcher2D.class, "alphaStack").set(batcher, new float[8]);
+        field(Batcher2D.class, "alphaStackSize").setInt(batcher, 0);
+
+        return batcher;
+    }
+
+    private static Field field(Class<?> type, String name) throws Exception
+    {
+        Field field = type.getDeclaredField(name);
+
+        field.setAccessible(true);
+
+        return field;
+    }
+
+    private static Method method(Class<?> type, String name, Class<?>... parameterTypes) throws Exception
+    {
+        Method method = type.getDeclaredMethod(name, parameterTypes);
+
+        method.setAccessible(true);
+
+        return method;
+    }
+
     private static void assertEquals(Object expected, Object actual, String message)
     {
         if (expected == null ? actual != null : !expected.equals(actual))
@@ -378,6 +480,262 @@ public final class ThemeCoreTest
 
             throw new AssertionError(message + ": expected " + expectedText + ", got " + actualText);
         }
+    }
+
+    private static void testCornerRadiusParsing()
+    {
+        /* 1. Default: JSON without corner_radius has all three values as 0 */
+        MapType map = DataToString.mapFromString("{ \"format\": 1 }");
+        UITheme theme = ThemeParser.parse("default", map, ThemeParser.defaultDark("default"));
+
+        assertEquals(0, theme.cornerChrome, "default chrome corner radius");
+        assertEquals(0, theme.cornerPanel, "default panel corner radius");
+        assertEquals(0, theme.cornerWidget, "default widget corner radius");
+
+        /* 2. Legal parsing: chrome/panel/widget with different values */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "style": { "corner_radius": { "chrome": 4, "panel": 8, "widget": 12 } }
+            }
+            """);
+        theme = ThemeParser.parse("mixed", map, ThemeParser.defaultDark("mixed"));
+
+        assertEquals(4, theme.cornerChrome, "chrome corner radius parses");
+        assertEquals(8, theme.cornerPanel, "panel corner radius parses");
+        assertEquals(12, theme.cornerWidget, "widget corner radius parses");
+
+        /* 3. Clamping: negative values clamp to 0, values > 16 clamp to 16 */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "style": { "corner_radius": { "chrome": -5, "panel": 20, "widget": 16 } }
+            }
+            """);
+        theme = ThemeParser.parse("clamped", map, ThemeParser.defaultDark("clamped"));
+
+        assertEquals(0, theme.cornerChrome, "negative chrome clamps to 0");
+        assertEquals(16, theme.cornerPanel, "chrome > 16 clamps to 16");
+        assertEquals(16, theme.cornerWidget, "chrome == 16 stays 16");
+
+        /* 4. Bad values (non-numeric/NaN) fall back */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "style": { "corner_radius": { "chrome": "not-a-number", "panel": null } }
+            }
+            """);
+        UITheme fallback = ThemeParser.defaultDark("fallback");
+        theme = ThemeParser.parse("bad", map, fallback);
+
+        assertEquals(fallback.cornerChrome, theme.cornerChrome, "bad chrome string keeps fallback");
+        assertEquals(fallback.cornerPanel, theme.cornerPanel, "null panel keeps fallback");
+        assertEquals(fallback.cornerWidget, theme.cornerWidget, "missing widget keeps fallback");
+
+        /* 5. Base inheritance: child without corner_radius inherits from base */
+        Map<String, MapType> themes = new HashMap<>();
+
+        themes.put("parent", DataToString.mapFromString("""
+            {
+                "format": 1,
+                "style": { "corner_radius": { "chrome": 6, "panel": 10, "widget": 14 } }
+            }
+            """));
+        themes.put("child", DataToString.mapFromString("""
+            {
+                "format": 1,
+                "base": "parent"
+            }
+            """));
+
+        theme = ThemeParser.resolveChain("child", loader(themes));
+
+        assertEquals(6, theme.cornerChrome, "child inherits chrome from parent");
+        assertEquals(10, theme.cornerPanel, "child inherits panel from parent");
+        assertEquals(14, theme.cornerWidget, "child inherits widget from parent");
+
+        /* 6. Partial override: child overrides some, inherits others from base */
+        themes.put("parent", DataToString.mapFromString("""
+            {
+                "format": 1,
+                "style": { "corner_radius": { "chrome": 3, "panel": 5, "widget": 7 } }
+            }
+            """));
+        themes.put("child2", DataToString.mapFromString("""
+            {
+                "format": 1,
+                "base": "parent",
+                "style": { "corner_radius": { "panel": 15 } }
+            }
+            """));
+
+        theme = ThemeParser.resolveChain("child2", loader(themes));
+
+        assertEquals(3, theme.cornerChrome, "child inherits chrome from parent when not specified");
+        assertEquals(15, theme.cornerPanel, "child overrides panel from parent");
+        assertEquals(7, theme.cornerWidget, "child inherits widget from parent when not specified");
+    }
+
+    private static void testTracksAndPresetParsing()
+    {
+        /* 1. No preset/tracks keys -> null tracks (built-in transform) */
+        MapType map = DataToString.mapFromString("{ \"format\": 1 }");
+        UITheme theme = ThemeParser.parse("plain", map, ThemeParser.defaultDark("plain"));
+
+        assertTrue(theme.overlay.tracks == null, "no tracks keys keeps null tracks");
+        assertEquals(1F, theme.overlay.scale, "default entry scale is 1");
+
+        /* 2. Preset expansion */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "motion": { "overlay": { "preset": "slide_up" } }
+            }
+            """);
+        theme = ThemeParser.parse("preset", map, ThemeParser.defaultDark("preset"));
+
+        assertTrue(theme.overlay.tracks == UIThemeMotionTracks.PRESET_SLIDE_UP, "preset expands to the shared tracks");
+        assertEquals(8F, theme.overlay.tracks.yFrom, "slide_up preset y from");
+        assertEquals(0F, theme.overlay.tracks.alphaFrom, "slide_up preset fades in");
+
+        /* 3. Explicit tracks override the preset per property */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "motion": { "overlay": { "preset": "scale", "tracks": { "y": { "from": 12 }, "scale": { "from": 0.8 } } } }
+            }
+            """);
+        theme = ThemeParser.parse("override", map, ThemeParser.defaultDark("override"));
+
+        assertEquals(12F, theme.overlay.tracks.yFrom, "explicit track overrides preset y");
+        assertEquals(0.8F, theme.overlay.tracks.scaleFrom, "explicit track overrides preset scale");
+        assertEquals(0F, theme.overlay.tracks.alphaFrom, "unwritten track keeps preset alpha");
+        assertEquals(0F, theme.overlay.tracks.xFrom, "unwritten track keeps preset x");
+
+        /* 4. Bad values fall back per key, clamping applies */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "motion": { "overlay": { "preset": "nope", "tracks": { "alpha": { "from": "bad" }, "x": { "from": 9999 } } } }
+            }
+            """);
+        theme = ThemeParser.parse("bad", map, ThemeParser.defaultDark("bad"));
+
+        assertEquals(1F, theme.overlay.tracks.alphaFrom, "bad alpha from falls back to identity");
+        assertEquals(200F, theme.overlay.tracks.xFrom, "x from clamps to 200");
+
+        /* 5. Sampling helpers: factor 0 = from, factor 1 = rest */
+        UIThemeMotionTracks tracks = new UIThemeMotionTracks(0.25F, 0.5F, 24F, -8F);
+
+        assertEquals(0.25F, tracks.alphaAt(0F), "alphaAt(0) is from");
+        assertEquals(1F, tracks.alphaAt(1F), "alphaAt(1) is rest");
+        assertEquals(0.75F, tracks.scaleAt(0.5F), "scaleAt interpolates");
+        assertEquals(24F, tracks.xAt(0F), "xAt(0) is from");
+        assertEquals(0F, tracks.xAt(1F), "xAt(1) is rest");
+        assertEquals(-4F, tracks.yAt(0.5F), "yAt interpolates");
+
+        /* 6. Entry-local scale parses and clamps */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "motion": { "hover_scale": { "enabled": true, "scale": 1.08 }, "press": { "enabled": true, "scale": 99 } }
+            }
+            """);
+        theme = ThemeParser.parse("scaled", map, ThemeParser.defaultDark("scaled"));
+
+        assertTrue(Math.abs(theme.hoverScale.scale - 1.08F) < 0.0001F, "hover_scale scale parses");
+        assertEquals(2F, theme.press.scale, "press scale clamps to 2");
+    }
+
+    private static void testDecorAndBackgroundParsing()
+    {
+        /* 1. Defaults: stretch mode, no dim, no decorations */
+        MapType map = DataToString.mapFromString("{ \"format\": 1 }");
+        UITheme theme = ThemeParser.parse("plain", map, ThemeParser.defaultDark("plain"));
+
+        assertTrue(theme.backgroundMode == UITheme.BackgroundMode.STRETCH, "default background mode is stretch");
+        assertEquals(0F, theme.backgroundDim, "default background dim is 0");
+        assertTrue(theme.decorations.isEmpty(), "default decorations are empty");
+
+        /* 2. Legal parsing */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "textures": { "background_mode": "cover", "background_dim": 0.3 },
+                "decorations": [
+                    { "texture": "assets:themes/t/decal.png", "anchor": "bottom_right", "offset": [-4, 6], "scale": 1.5, "opacity": 0.8 }
+                ]
+            }
+            """);
+        theme = ThemeParser.parse("decor", map, ThemeParser.defaultDark("decor"));
+
+        assertTrue(theme.backgroundMode == UITheme.BackgroundMode.COVER, "background mode cover parses");
+        assertTrue(Math.abs(theme.backgroundDim - 0.3F) < 0.0001F, "background dim parses");
+        assertEquals(1, theme.decorations.size(), "decoration parses");
+
+        UIThemeDecoration decoration = theme.decorations.get(0);
+
+        assertTrue(decoration.anchor == UIThemeDecoration.Anchor.BOTTOM_RIGHT, "decoration anchor parses");
+        assertEquals(-4, decoration.offsetX, "decoration offset x");
+        assertEquals(6, decoration.offsetY, "decoration offset y");
+        assertTrue(Math.abs(decoration.scale - 1.5F) < 0.0001F, "decoration scale");
+        assertTrue(Math.abs(decoration.opacity - 0.8F) < 0.0001F, "decoration opacity");
+
+        /* 3. Bad entries are dropped: missing texture, unknown anchor; bad
+         * mode/dim keep the inherited values */
+        map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "textures": { "background_mode": "diagonal", "background_dim": 5 },
+                "decorations": [
+                    { "anchor": "top_left" },
+                    { "texture": "assets:t.png", "anchor": "somewhere" },
+                    { "texture": "assets:t.png" }
+                ]
+            }
+            """);
+        theme = ThemeParser.parse("bad", map, ThemeParser.defaultDark("bad"));
+
+        assertTrue(theme.backgroundMode == UITheme.BackgroundMode.STRETCH, "unknown background mode keeps fallback");
+        assertEquals(1F, theme.backgroundDim, "background dim clamps to 1");
+        assertEquals(1, theme.decorations.size(), "broken decorations are dropped");
+        assertTrue(theme.decorations.get(0).anchor == UIThemeDecoration.Anchor.TOP_LEFT, "default anchor is top_left");
+
+        /* 4. Cap: more than 16 decorations are truncated */
+        StringBuilder many = new StringBuilder();
+
+        for (int i = 0; i < 20; i++)
+        {
+            if (i > 0)
+            {
+                many.append(",");
+            }
+
+            many.append("{ \"texture\": \"assets:t").append(i).append(".png\" }");
+        }
+
+        map = DataToString.mapFromString("{ \"format\": 1, \"decorations\": [" + many + "] }");
+        theme = ThemeParser.parse("many", map, ThemeParser.defaultDark("many"));
+
+        assertEquals(16, theme.decorations.size(), "decorations cap at 16");
+
+        /* 5. Inheritance: child without decor keys keeps the base's values */
+        Map<String, MapType> themes = new HashMap<>();
+
+        themes.put("parent", DataToString.mapFromString("""
+            {
+                "format": 1,
+                "textures": { "background_mode": "tile", "background_dim": 0.4 },
+                "decorations": [ { "texture": "assets:p.png", "anchor": "center" } ]
+            }
+            """));
+        themes.put("child", DataToString.mapFromString("{ \"format\": 1, \"base\": \"parent\" }"));
+
+        theme = ThemeParser.resolveChain("child", loader(themes));
+
+        assertTrue(theme.backgroundMode == UITheme.BackgroundMode.TILE, "child inherits background mode");
+        assertTrue(Math.abs(theme.backgroundDim - 0.4F) < 0.0001F, "child inherits background dim");
+        assertEquals(1, theme.decorations.size(), "child inherits decorations");
     }
 
     private static void assertTrue(boolean condition, String message)

@@ -161,7 +161,14 @@ public class Scroll
 
     private boolean shouldSmoothScrolling()
     {
-        return BBSSettings.scrollingSmoothness.get() && (this.smoothScrolling == null || this.smoothScrolling.getAsBoolean());
+        if (!BBSSettings.scrollingSmoothness.get() || (this.smoothScrolling != null && !this.smoothScrolling.getAsBoolean()))
+        {
+            return false;
+        }
+
+        UIThemeMotion spec = UIMotions.scrollSmooth();
+
+        return UIMotions.enabled() && spec != null && spec.enabled;
     }
 
     private int getWheelScrollStep()

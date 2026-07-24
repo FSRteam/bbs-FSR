@@ -2,6 +2,9 @@ package mchorse.bbs_mod.ui.themes;
 
 import mchorse.bbs_mod.resources.Link;
 
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Immutable, fully resolved UI theme. Every field is finalized at parse time
  * (including base chain inheritance), so render code only reads plain fields
@@ -37,10 +40,25 @@ public class UITheme
     public final boolean textShadow;
     public final boolean bevel;
     public final boolean panelShadow;
+    public final int cornerChrome;
+    public final int cornerPanel;
+    public final int cornerWidget;
 
     /* Texture overrides, null = use the built-in texture */
     public final Link iconsAtlas;
     public final Link background;
+
+    /* Decor: root backdrop mode, dim veil and anchored stickers */
+    public final BackgroundMode backgroundMode;
+    public final float backgroundDim;
+    public final List<UIThemeDecoration> decorations;
+
+    public enum BackgroundMode
+    {
+        STRETCH,
+        COVER,
+        TILE
+    }
 
     /* Motion */
     public final boolean motionEnabled;
@@ -51,6 +69,10 @@ public class UITheme
     public final UIThemeMotion notification;
     public final UIThemeMotion contextMenu;
     public final UIThemeMotion scrollbar;
+    public final UIThemeMotion scrollSmooth;
+    public final UIThemeMotion hoverScale;
+    public final UIThemeMotion press;
+    public final UIThemeMotion layout;
 
     UITheme(Builder builder)
     {
@@ -78,9 +100,15 @@ public class UITheme
         this.textShadow = builder.textShadow;
         this.bevel = builder.bevel;
         this.panelShadow = builder.panelShadow;
+        this.cornerChrome = builder.cornerChrome;
+        this.cornerPanel = builder.cornerPanel;
+        this.cornerWidget = builder.cornerWidget;
 
         this.iconsAtlas = builder.iconsAtlas;
         this.background = builder.background;
+        this.backgroundMode = builder.backgroundMode;
+        this.backgroundDim = builder.backgroundDim;
+        this.decorations = builder.decorations == null ? Collections.emptyList() : List.copyOf(builder.decorations);
 
         this.motionEnabled = builder.motionEnabled;
         this.motionSpeed = builder.motionSpeed;
@@ -90,6 +118,10 @@ public class UITheme
         this.notification = builder.notification;
         this.contextMenu = builder.contextMenu;
         this.scrollbar = builder.scrollbar;
+        this.scrollSmooth = builder.scrollSmooth;
+        this.hoverScale = builder.hoverScale;
+        this.press = builder.press;
+        this.layout = builder.layout;
     }
 
     public static class Builder
@@ -118,9 +150,15 @@ public class UITheme
         public boolean textShadow;
         public boolean bevel;
         public boolean panelShadow;
+        public int cornerChrome;
+        public int cornerPanel;
+        public int cornerWidget;
 
         public Link iconsAtlas;
         public Link background;
+        public BackgroundMode backgroundMode = BackgroundMode.STRETCH;
+        public float backgroundDim;
+        public List<UIThemeDecoration> decorations;
 
         public boolean motionEnabled;
         public float motionSpeed;
@@ -130,6 +168,10 @@ public class UITheme
         public UIThemeMotion notification;
         public UIThemeMotion contextMenu;
         public UIThemeMotion scrollbar;
+        public UIThemeMotion scrollSmooth;
+        public UIThemeMotion hoverScale;
+        public UIThemeMotion press;
+        public UIThemeMotion layout;
 
         /**
          * @param from theme to copy every field from (inheritance fallback),
@@ -167,9 +209,15 @@ public class UITheme
             this.textShadow = from.textShadow;
             this.bevel = from.bevel;
             this.panelShadow = from.panelShadow;
+            this.cornerChrome = from.cornerChrome;
+            this.cornerPanel = from.cornerPanel;
+            this.cornerWidget = from.cornerWidget;
 
             this.iconsAtlas = from.iconsAtlas;
             this.background = from.background;
+            this.backgroundMode = from.backgroundMode;
+            this.backgroundDim = from.backgroundDim;
+            this.decorations = from.decorations;
 
             this.motionEnabled = from.motionEnabled;
             this.motionSpeed = from.motionSpeed;
@@ -179,6 +227,10 @@ public class UITheme
             this.notification = from.notification;
             this.contextMenu = from.contextMenu;
             this.scrollbar = from.scrollbar;
+            this.scrollSmooth = from.scrollSmooth;
+            this.hoverScale = from.hoverScale;
+            this.press = from.press;
+            this.layout = from.layout;
         }
 
         public UITheme build()

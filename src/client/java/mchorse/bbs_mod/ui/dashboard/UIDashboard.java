@@ -39,6 +39,7 @@ import mchorse.bbs_mod.ui.selectors.UISelectorsOverlayPanel;
 import mchorse.bbs_mod.ui.utility.UIUtilityOverlayPanel;
 import mchorse.bbs_mod.ui.utility.audio.UIAudioEditorPanel;
 import mchorse.bbs_mod.ui.utils.UIChalkboard;
+import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
@@ -367,17 +368,8 @@ public class UIDashboard extends UIBaseMenu
             background = ThemeManager.current().background;
         }
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-
-        if (background == null)
-        {
-            context.batcher.box(0, 0, this.width, this.height, color);
-        }
-        else
-        {
-            context.batcher.texturedBox(context.getTextures().getTexture(background), color, 0, 0, this.width, this.height, 0, 0, this.width, this.height, this.width, this.height);
-        }
+        UIThemeBackdrop.renderBackground(context, background, color, this.width, this.height);
+        UIThemeBackdrop.renderDecorations(context, this.width, this.height);
     }
 
     @Override

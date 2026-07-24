@@ -9,6 +9,9 @@ import mchorse.bbs_mod.ui.framework.elements.IViewport;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.IViewportStack;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
+import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
 import mchorse.bbs_mod.ui.utils.renderers.InputRenderer;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -370,13 +373,25 @@ public abstract class UIBaseMenu
 
     public void renderDefaultBackground()
     {
-        this.context.batcher.box(0, 0, this.width, this.height, Colors.A50);
+        Link background = ThemeManager.current().background;
+
+        if (background != null)
+        {
+            UIThemeBackdrop.renderBackground(this.context.render, background, Colors.A100 | Colors.WHITE, this.width, this.height);
+        }
+        else
+        {
+            this.context.batcher.box(0, 0, this.width, this.height, Colors.A50);
+        }
+
+        UIThemeBackdrop.renderDecorations(this.context.render, this.width, this.height);
     }
 
     public void renderMenu(UIRenderingContext context, int mouseX, int mouseY)
     {
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
+        context.batcher.resetAlpha();
         this.context.resetMatrix();
         this.context.setMouse(mouseX, mouseY);
         this.context.resetCursor();
