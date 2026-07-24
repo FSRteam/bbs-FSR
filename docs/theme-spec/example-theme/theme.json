@@ -1,0 +1,61 @@
+{
+    "_doc": "FSR 主题包样例(规范 v1)。以 '_' 开头的键是注释,加载时被忽略。逐 key 说明见 ../README.md",
+    "format": 1,
+
+    "name": "示例·夜蓝",
+    "author": "FSR",
+    "description": "官方规范样例:靛蓝夜色调,展示全部可配置项",
+    "base": "dark",
+    "variant": "dark",
+
+    "_doc_colors": "颜色支持 #RRGGBB 或 #AARRGGBB。surface 五色决定 80% 观感,注意保持 deep < chrome < base < raised 的明度关系",
+    "colors": {
+        "surface": {
+            "chrome": "#10131A",
+            "base": "#151926",
+            "raised": "#1B2030",
+            "deep": "#0D101A",
+            "divider": "#2C3450"
+        },
+        "accent": {
+            "primary": "#6C8CFF"
+        },
+        "text": {
+            "primary": "#F2F4FF",
+            "muted": "#9AA3C0"
+        },
+        "state": {
+            "positive": "#59D940",
+            "negative": "#FF4059",
+            "warning": "#FFBB00",
+            "active": "#4A7DFF",
+            "highlight": "#DDE4FF",
+            "cursor": "#57F52A"
+        }
+    },
+
+    "_doc_style": "样式开关:text_shadow=文字阴影,bevel=按钮立体斜边,panel_shadow=面板辉光阴影",
+    "style": {
+        "text_shadow": true,
+        "bevel": true,
+        "panel_shadow": true
+    },
+
+    "_doc_textures": "icons 指向本主题文件夹内的 atlas 覆盖(assets:themes/<id>/...),null=用默认;background 是仪表盘默认背景图。示例保持 null,玩法见 textures/README.md",
+    "textures": {
+        "icons": null,
+        "background": null
+    },
+
+    "_doc_motion": "每项 = enabled/duration(毫秒)/easing(缓动名,见规范 §4.7);有效时长 = duration ÷ (主题speed × 用户speed);任何一层关掉即无动画",
+    "motion": {
+        "enabled": true,
+        "speed": 1.0,
+        "overlay":       { "enabled": true, "duration": 120, "easing": "sine_out" },
+        "panel_switch":  { "enabled": true, "duration": 100, "easing": "sine_inout" },
+        "hover":         { "enabled": true, "duration": 80,  "easing": "sine_out" },
+        "notification":  { "enabled": true, "duration": 150, "easing": "back_out" },
+        "context_menu":  { "enabled": true, "duration": 100, "easing": "quad_out" },
+        "scrollbar":     { "enabled": true, "duration": 200, "easing": "sine_inout" }
+    }
+}
