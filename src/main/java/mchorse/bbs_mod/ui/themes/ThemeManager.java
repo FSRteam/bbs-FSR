@@ -147,7 +147,7 @@ public class ThemeManager
                 }
             }
         }
-        catch (Exception e)
+        catch (Exception | LinkageError e)
         {
             LOGGER.warn("Couldn't enumerate themes from asset packs", e);
         }
@@ -167,7 +167,7 @@ public class ThemeManager
                 }
             }
         }
-        catch (Exception e)
+        catch (Exception | LinkageError e)
         {
             LOGGER.warn("Couldn't enumerate external themes", e);
         }
@@ -248,7 +248,9 @@ public class ThemeManager
 
             return null;
         }
-        catch (Exception e)
+        /* LinkageError covers running without a bootstrapped mod runtime
+         * (e.g. plain-JVM tests): resolution falls back to code defaults */
+        catch (Exception | LinkageError e)
         {
             LOGGER.warn("Theme \"{}\": couldn't read {}", id, link, e);
 
@@ -295,7 +297,7 @@ public class ThemeManager
         {
             return in != null;
         }
-        catch (Exception e)
+        catch (Exception | LinkageError e)
         {
             return false;
         }

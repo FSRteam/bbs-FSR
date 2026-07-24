@@ -63,17 +63,22 @@ public final class UIMotionsTest
 
     private static void testTweenProgression()
     {
-        UIThemeMotion spec = new UIThemeMotion(true, 200, Interpolations.LINEAR);
+        /* A huge duration makes every assertion robust against real-world
+         * scheduling delays between to() and the sampled base time: base is
+         * taken AFTER to(), so base >= the tween's internal start, and the
+         * probe offsets dwarf any plausible delay. */
+        UIThemeMotion spec = new UIThemeMotion(true, 100000, Interpolations.LINEAR);
         UITween tween = new UITween();
-        long start = System.currentTimeMillis();
 
         tween.to(1F, spec);
 
+        long base = System.currentTimeMillis();
+
         assertTrue(!tween.isSettled(), "enabled motion animates");
 
-        float early = tween.update(start + 1);
-        float mid = tween.update(start + 100);
-        float done = tween.update(start + 5000);
+        float early = tween.update(base);
+        float mid = tween.update(base + 50000);
+        float done = tween.update(base + 300000);
 
         assertTrue(early <= mid && mid <= done, "tween is monotonic for linear easing");
         assertTrue(mid > 0F && mid < 1F, "tween passes through intermediate values");
@@ -82,8 +87,11 @@ public final class UIMotionsTest
 
         /* Retargeting mid-flight starts from the current value */
         tween.to(0F, spec);
+
+        long retargetBase = System.currentTimeMillis();
+
         assertTrue(!tween.isSettled(), "retarget restarts animation");
-        assertEquals(0F, tween.update(start + 20000), "retarget reaches the exact target");
+        assertEquals(0F, tween.update(retargetBase + 300000), "retarget reaches the exact target");
 
         /* Calling to() with the same target every frame is a no-op */
         tween.to(0F, spec);
