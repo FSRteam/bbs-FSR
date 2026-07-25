@@ -130,7 +130,7 @@ public final class ActionRetirementQueueTest
     {
         try
         {
-            return Files.readString(Path.of(path));
+            return Files.readString(Path.of(path)).replace("\r\n", "\n");
         }
         catch (IOException e)
         {

@@ -1,1 +1,6 @@
 *.bobj binary
+*.java text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+*.cfg text eol=lf
+*.json text eol=lf
