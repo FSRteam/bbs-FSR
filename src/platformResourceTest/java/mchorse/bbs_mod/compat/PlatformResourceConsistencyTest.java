@@ -51,8 +51,8 @@ public final class PlatformResourceConsistencyTest
     private static void assertExternalAssetOwnership() throws Exception
     {
         Path parent = Files.createTempDirectory("bbs-provider-test-").toRealPath();
-        Path root = Files.createDirectory(parent.resolve("assets")).toRealPath();
-        Path sibling = Files.createDirectory(parent.resolve("assets_backup")).toRealPath();
+        Path root = Files.createDirectory(parent.resolve("assets"));
+        Path sibling = Files.createDirectory(parent.resolve("assets_backup"));
         Path nested = Files.createDirectories(root.resolve("models"));
         Path owned = Files.writeString(nested.resolve("actor.json"), "{}");
         Path foreign = Files.writeString(sibling.resolve("actor.json"), "{}");

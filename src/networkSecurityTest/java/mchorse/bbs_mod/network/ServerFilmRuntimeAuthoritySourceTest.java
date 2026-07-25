@@ -25,8 +25,10 @@ final class ServerFilmRuntimeAuthoritySourceTest
     {
         try
         {
-            String source = Files.readString(findProjectRoot().resolve(SOURCE)).replace("\r\n", "\n");
-            String manager = Files.readString(findProjectRoot().resolve(ACTION_MANAGER)).replace("\r\n", "\n");
+            String source = Files.readString(findProjectRoot().resolve(SOURCE))
+                .replace("\r\n", "\n");
+            String manager = Files.readString(findProjectRoot().resolve(ACTION_MANAGER))
+                .replace("\r\n", "\n");
 
             clientReachableLoadsUseRawPreflight(source);
             playbackRejectsBeforeSerialization(source);
