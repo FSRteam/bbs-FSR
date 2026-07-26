@@ -149,6 +149,19 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         panels.put(clazz, supplier);
     }
 
+    public static Supplier<UIForm> getRegisteredPanel(Class<? extends Form> clazz)
+    {
+        return panels.get(clazz);
+    }
+
+    public static void unregisterPluginPanel(Class<? extends Form> clazz, Supplier<UIForm> supplier)
+    {
+        if (panels.get(clazz) == supplier)
+        {
+            panels.remove(clazz);
+        }
+    }
+
     public static UIForm createPanel(Form form)
     {
         if (form == null)

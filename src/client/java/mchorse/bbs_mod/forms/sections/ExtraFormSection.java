@@ -97,6 +97,11 @@ public class ExtraFormSection extends FormSection
         this.extra.addForm(form);
     }
 
+    public void removeForm(Form form)
+    {
+        this.extra.removeForm(form);
+    }
+
     @Override
     public List<FormCategory> getCategories()
     {

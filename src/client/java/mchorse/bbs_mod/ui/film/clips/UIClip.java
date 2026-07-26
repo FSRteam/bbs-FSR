@@ -125,6 +125,20 @@ public abstract class UIClip <T extends Clip> extends UIElement
         FACTORIES.put(clazz, factory);
     }
 
+    public static IUIClipFactory getRegisteredFactory(Class<? extends Clip> clazz)
+    {
+        return FACTORIES.get(clazz);
+    }
+
+    public static void unregisterPluginFactory(Class<? extends Clip> clazz, IUIClipFactory factory)
+    {
+        if (FACTORIES.get(clazz) == factory)
+        {
+            FACTORIES.remove(clazz);
+            SCROLLS.remove(clazz);
+        }
+    }
+
     public static void saveScroll(UIClip editor)
     {
         if (editor != null)

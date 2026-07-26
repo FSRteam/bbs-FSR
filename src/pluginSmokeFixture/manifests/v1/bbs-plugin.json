@@ -1,0 +1,1 @@
+{"schema":1,"kind":"code","id":"bbssmokefixture","version":"1.0.0","commonEntrypoint":"bbssmokefixture.v1.CommonPlugin","clientEntrypoint":"bbssmokefixture.v1.ClientPlugin","api":"[1.0,2.0)","side":"common","capabilities":["forms","clips","particles","key_mappings","entity_renderer","block_entity_renderer"],"dependencies":[],"reload":"hot"}

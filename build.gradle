@@ -272,6 +272,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    pluginSmokeFixture {
+        java.srcDirs = ['src/pluginSmokeFixture/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
 }
 
 configurations {
@@ -318,6 +324,8 @@ configurations {
     audioVerificationTestRuntimeOnly.extendsFrom clientRuntimeOnly
     pluginHotReloadTestImplementation.extendsFrom clientImplementation
     pluginHotReloadTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    pluginSmokeFixtureImplementation.extendsFrom clientImplementation
+    pluginSmokeFixtureRuntimeOnly.extendsFrom clientRuntimeOnly
 }
 
 java {
@@ -536,6 +544,40 @@ tasks.register('testPluginHotReload', JavaExec) {
     dependsOn tasks.named('clientClasses'), tasks.named('pluginHotReloadTestClasses')
     classpath = sourceSets.pluginHotReloadTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.plugin.PluginHotReloadTestSuite'
+}
+
+tasks.register('smokeFixturePluginV1Jar', Jar) {
+    group = 'bbs'
+    description = 'Packages the 1.0 generation of the real on-disk FSR structural-capability smoke fixture plugin.'
+    dependsOn tasks.named('pluginSmokeFixtureClasses')
+    destinationDirectory = layout.buildDirectory.dir('smoke-plugins')
+    archiveFileName = 'bbssmokefixture-1.0.0.jar'
+    from(sourceSets.pluginSmokeFixture.output) {
+        include 'bbssmokefixture/v1/**'
+    }
+    from(file('src/pluginSmokeFixture/manifests/v1/bbs-plugin.json')) {
+        into 'META-INF'
+    }
+}
+
+tasks.register('smokeFixturePluginV2Jar', Jar) {
+    group = 'bbs'
+    description = 'Packages the 2.0 generation of the real on-disk FSR structural-capability smoke fixture plugin.'
+    dependsOn tasks.named('pluginSmokeFixtureClasses')
+    destinationDirectory = layout.buildDirectory.dir('smoke-plugins')
+    archiveFileName = 'bbssmokefixture-2.0.0.jar'
+    from(sourceSets.pluginSmokeFixture.output) {
+        include 'bbssmokefixture/v2/**'
+    }
+    from(file('src/pluginSmokeFixture/manifests/v2/bbs-plugin.json')) {
+        into 'META-INF'
+    }
+}
+
+tasks.register('buildSmokeFixturePlugins') {
+    group = 'bbs'
+    description = 'Builds the real, on-disk 1.0/2.0 FSR structural-capability smoke fixture plugin jars for manual NeoForge client/server smoke testing (see .trellis/tasks/07-23-fsr-plugin-structural-hot-reload).'
+    dependsOn tasks.named('smokeFixturePluginV1Jar'), tasks.named('smokeFixturePluginV2Jar')
 }
 
 def bbsVerificationTaskNames = [

@@ -247,7 +247,7 @@ public class UIPluginsPanel extends UIDashboardPanel
             {
                 case ACTIVE -> 0xff4caf50;
                 case FAILED, INCOMPATIBLE -> 0xffe53935;
-                case RESTART_REQUIRED -> 0xffff9800;
+                case RESTART_REQUIRED, RELOAD_REJECTED_BUSY -> 0xffff9800;
                 case DISABLED, LOGICALLY_UNLOADED -> 0xff9e9e9e;
                 case RELOAD_PENDING, STAGED, PREPARING, DISCOVERED, VALIDATED -> 0xffffeb3b;
                 case DRAINING, UNLOADING -> 0xff64b5f6;

@@ -6,6 +6,7 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.MissingForm;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -41,13 +42,33 @@ public class FormUtils
             return data == null ? null : BBSMod.getForms().fromData(data);
         }
         catch (Exception e)
-        {}
+        {
+            if (data == null)
+            {
+                return null;
+            }
 
-        return null;
+            /* The placeholder is the safety net; if even it can't be built
+             * (e.g. a runtime without bootstrapped settings), fall back to
+             * the pre-placeholder null behavior instead of crashing decode */
+            try
+            {
+                return new MissingForm(data);
+            }
+            catch (Exception | LinkageError x)
+            {
+                return null;
+            }
+        }
     }
 
     public static MapType toData(Form form)
     {
+        if (form instanceof MissingForm missing)
+        {
+            return missing.sourceData();
+        }
+
         return form == null ? null : BBSMod.getForms().toData(form);
     }
 

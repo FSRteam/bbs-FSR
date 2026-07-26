@@ -79,6 +79,7 @@ import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.ParticleForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
 import mchorse.bbs_mod.items.GunItem;
@@ -97,6 +98,7 @@ import mchorse.bbs_mod.resources.packs.DynamicSourcePack;
 import mchorse.bbs_mod.resources.packs.ExternalAssetsSourcePack;
 import mchorse.bbs_mod.resources.packs.InternalAssetsSourcePack;
 import mchorse.bbs_mod.plugin.manager.BBSPluginManager;
+import mchorse.bbs_mod.plugin.manager.PluginParticleComponentClass;
 import mchorse.bbs_mod.settings.Settings;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.SettingsManager;
@@ -150,6 +152,7 @@ import java.io.File;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -562,7 +565,8 @@ public class BBSMod
             .register(Link.bbs("mob"), MobForm.class, null)
             .register(Link.bbs("vanilla_particles"), VanillaParticleForm.class, null)
             .register(Link.bbs("trail"), TrailForm.class, null)
-            .register(Link.bbs("framebuffer"), FramebufferForm.class, null);
+            .register(Link.bbs("framebuffer"), FramebufferForm.class, null)
+            .register(Link.bbs("sound_sphere"), SoundSphereForm.class, null);
 
         LOGGER.info("[bbs-addon] posting RegisterFormsEvent");
         events.post(new RegisterFormsEvent(forms));
@@ -942,11 +946,28 @@ public class BBSMod
         return manager != null && manager.recordClientDiagnostic(descriptor, phase, source, result, error);
     }
 
-    public static Map<String, String> getAddonParticleComponentClasses()
+    public static Map<String, PluginParticleComponentClass> getAddonParticleComponentClasses()
     {
+        Map<String, PluginParticleComponentClass> components = new LinkedHashMap<>();
         BBSAddonManager manager = activeAddonManager;
+        BBSPluginManager pluginManager = activePluginManager;
 
-        return manager == null ? Collections.emptyMap() : manager.particleComponents();
+        if (manager != null)
+        {
+            /* Addon v2 never isolates its classloader, so a null classLoader here
+             * tells ParticleParser to keep resolving these exactly as before. */
+            for (Map.Entry<String, String> entry : manager.particleComponents().entrySet())
+            {
+                components.put(entry.getKey(), new PluginParticleComponentClass(entry.getValue(), null));
+            }
+        }
+
+        if (pluginManager != null)
+        {
+            components.putAll(pluginManager.particleComponents());
+        }
+
+        return components.isEmpty() ? Collections.emptyMap() : Collections.unmodifiableMap(components);
     }
 
     public static void registerAddon(String addonId, Supplier<? extends BBSAddonMod> supplier)

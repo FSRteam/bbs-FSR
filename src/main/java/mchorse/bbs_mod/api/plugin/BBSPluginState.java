@@ -8,6 +8,7 @@ public enum BBSPluginState
     STAGED,
     ACTIVE,
     RELOAD_PENDING,
+    RELOAD_REJECTED_BUSY,
     DRAINING,
     UNLOADING,
     LOGICALLY_UNLOADED,

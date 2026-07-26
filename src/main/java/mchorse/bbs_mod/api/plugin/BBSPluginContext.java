@@ -21,6 +21,18 @@ public interface BBSPluginContext
 
     BBSPluginEventRegistry events();
 
+    BBSPluginFormRegistry forms();
+
+    BBSPluginClipRegistry clips();
+
+    BBSPluginParticleRegistry particles();
+
+    /** Resolve an optional physical-side context without linking client classes on a server. */
+    default <T> T extension(Class<T> extensionType)
+    {
+        throw new IllegalStateException("plugin context extension is unavailable: " + extensionType.getName());
+    }
+
     /** Register a host-owned resource for reverse-order, idempotent cleanup. */
     <T extends AutoCloseable> T own(T resource);
 

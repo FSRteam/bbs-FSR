@@ -5,6 +5,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.math.Operation;
 import mchorse.bbs_mod.math.molang.MolangException;
+import mchorse.bbs_mod.plugin.manager.PluginParticleComponentClass;
 import mchorse.bbs_mod.particles.components.ParticleComponentBase;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceLighting;
@@ -55,8 +56,8 @@ public class ParticleParser
     public static final String PREFIX_BLOCKBUSTER = "blockbuster:";
 
     public Map<String, Class<? extends ParticleComponentBase>> components = new HashMap<>();
-    private final Map<String, String> registeredApi2ComponentClasses = new HashMap<>();
-    private final Map<String, String> failedApi2ComponentClasses = new HashMap<>();
+    private final Map<String, PluginParticleComponentClass> registeredApi2ComponentClasses = new HashMap<>();
+    private final Map<String, PluginParticleComponentClass> failedApi2ComponentClasses = new HashMap<>();
 
     public static boolean isEmpty(BaseType element)
     {
@@ -136,7 +137,7 @@ public class ParticleParser
 
     public synchronized void refreshApi2Components()
     {
-        Map<String, String> addonComponents;
+        Map<String, PluginParticleComponentClass> addonComponents;
 
         try
         {
@@ -149,10 +150,27 @@ public class ParticleParser
             return;
         }
 
-        for (Map.Entry<String, String> entry : addonComponents.entrySet())
+        /* Evict components whose owner unregistered them (plugin teardown/reload) so
+         * the static component table never keeps a stale generation's Class alive. */
+        Set<String> known = new HashSet<>(this.registeredApi2ComponentClasses.keySet());
+        known.addAll(this.failedApi2ComponentClasses.keySet());
+
+        for (String id : known)
+        {
+            if (!addonComponents.containsKey(id))
+            {
+                this.components.remove(id);
+                this.registeredApi2ComponentClasses.remove(id);
+                this.failedApi2ComponentClasses.remove(id);
+                LOGGER.info("[bbs-particles] unregistered API 2.0 particle component '{}'", id);
+            }
+        }
+
+        for (Map.Entry<String, PluginParticleComponentClass> entry : addonComponents.entrySet())
         {
             String id = entry.getKey();
-            String className = entry.getValue();
+            PluginParticleComponentClass descriptor = entry.getValue();
+            String className = descriptor == null ? null : descriptor.className();
 
             if (id == null || id.isBlank() || className == null || className.isBlank())
             {
@@ -164,16 +182,25 @@ public class ParticleParser
             id = id.trim();
             className = className.trim();
 
-            if (className.equals(this.registeredApi2ComponentClasses.get(id)))
+            /* The registering generation's ClassLoader is part of the identity: a
+             * reload can keep the same class name while replacing the loader, and
+             * that must be re-resolved rather than treated as unchanged. */
+            PluginParticleComponentClass normalized = new PluginParticleComponentClass(className, descriptor.classLoader());
+
+            if (normalized.equals(this.registeredApi2ComponentClasses.get(id)))
             {
                 continue;
             }
 
-            boolean previouslyFailed = className.equals(this.failedApi2ComponentClasses.get(id));
+            boolean previouslyFailed = normalized.equals(this.failedApi2ComponentClasses.get(id));
 
             try
             {
-                Class<?> rawClass = Class.forName(className);
+                ClassLoader loader = normalized.classLoader();
+
+                /* A null loader is the Addon v2 bridge, which is not classloader-isolated;
+                 * resolve it exactly as before, via this class's own loader. */
+                Class<?> rawClass = loader == null ? Class.forName(className) : Class.forName(className, true, loader);
 
                 if (!ParticleComponentBase.class.isAssignableFrom(rawClass))
                 {
@@ -184,19 +211,19 @@ public class ParticleParser
                             className);
                     }
 
-                    this.failedApi2ComponentClasses.put(id, className);
+                    this.failedApi2ComponentClasses.put(id, normalized);
 
                     continue;
                 }
 
                 this.components.put(id, rawClass.asSubclass(ParticleComponentBase.class));
-                this.registeredApi2ComponentClasses.put(id, className);
+                this.registeredApi2ComponentClasses.put(id, normalized);
                 this.failedApi2ComponentClasses.remove(id);
                 LOGGER.info("[bbs-particles] registered API 2.0 particle component '{}' ({})", id, className);
             }
             catch (Exception | LinkageError e)
             {
-                this.failedApi2ComponentClasses.put(id, className);
+                this.failedApi2ComponentClasses.put(id, normalized);
 
                 if (!previouslyFailed)
                 {

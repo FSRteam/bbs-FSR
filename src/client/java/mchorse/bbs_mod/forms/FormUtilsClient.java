@@ -104,6 +104,19 @@ public class FormUtilsClient
         map.put(clazz, function);
     }
 
+    public static IFormRendererFactory getRegisteredFactory(Class<? extends Form> clazz)
+    {
+        return map.get(clazz);
+    }
+
+    public static void unregisterPluginRenderer(Class<? extends Form> clazz, IFormRendererFactory factory)
+    {
+        if (map.get(clazz) == factory)
+        {
+            map.remove(clazz);
+        }
+    }
+
     public static Form getCurrentForm()
     {
         return currentForm.isEmpty() ? null : currentForm.peek();

@@ -74,12 +74,19 @@ final class PluginRuntimeGeneration implements AutoCloseable
         return this.eventRoutes;
     }
 
+    PluginStructuralRegistrationWindow structuralRegistrations()
+    {
+        return this.context.structuralRegistrations();
+    }
+
     void prepareAndStart() throws Exception
     {
         for (BBSPlugin entrypoint : this.entrypoints)
         {
             this.invoke(() -> entrypoint.prepare(this.context));
         }
+
+        this.context.sealStructuralRegistrations();
 
         for (BBSPlugin entrypoint : this.entrypoints)
         {
