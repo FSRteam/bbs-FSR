@@ -178,11 +178,16 @@ public final class BBSUiLifecycleSourceTest
         String dashboard = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/UIDashboard.java");
         String panels = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDashboardPanels.java");
         String modelBlocks = readSource("src/client/java/mchorse/bbs_mod/ui/model_blocks/UIModelBlockPanel.java");
+        String filmController = readSource("src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java");
         String formRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderer.java");
+        String formContext = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderingContext.java");
+        String mobRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/MobFormRenderer.java");
+        String itemRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/ItemFormRenderer.java");
+        String modelRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/ModelFormRenderer.java");
+        String clientNetwork = readSource("src/client/java/mchorse/bbs_mod/network/ClientNetwork.java");
         String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
         String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
         String poseFormEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIPoseForm.java");
-        String mobRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/MobFormRenderer.java");
         String renderLayerMixin = readSource("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
         String vertexConsumers = readSource("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
         String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
@@ -193,18 +198,68 @@ public final class BBSUiLifecycleSourceTest
                 && panels.contains("this.panel.disappear();")
                 && panels.contains("this.panelAppeared = false;"),
             "dashboard close/reopen no longer pairs active-panel disappear/appear ownership");
-        check(dashboard.contains("this.panels.open();")
-                && dashboard.contains("this.copyCurrentEntityCamera();"),
-            "dashboard reopen no longer restores the current world camera before control resumes");
+        String dashboardOpen = sourceSection(dashboard, "public void onOpen(UIBaseMenu oldMenu)", "public void onClose(UIBaseMenu nextMenu)");
+        String restorePanelControls = sourceSection(dashboard, "private void restoreCurrentPanelControls()", "protected void closeMenu()");
+        String outsideRecording = sourceSection(filmController, "public void startRecording(List<String> groups)", "public void stopRecording()");
+
+        check(dashboardOpen.contains("this.panels.open();")
+                && dashboardOpen.contains("this.restoreCurrentPanelControls();")
+                && restorePanelControls.contains("this.context.unfocus();")
+                && restorePanelControls.contains("this.orbitUI.cancelGesture();")
+                && restorePanelControls.contains("this.orbitUI.setControl(this.panels.isFlightSupported())")
+                && restorePanelControls.contains("this.copyCurrentEntityCamera();"),
+            "dashboard same-panel reopen no longer restores focus, orbit input and the world camera");
+        check(outsideRecording.indexOf("Film film = this.panel.getData();")
+                < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
+                && outsideRecording.indexOf("int cursor = this.panel.getCursor();")
+                < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
+                && outsideRecording.contains("startRecording(film, index, cursor)"),
+            "external replay recording still reads Film panel state after closing the dashboard");
         check(modelBlocks.contains("ModelBlockEntity editingBlock = this.modelBlock;")
                 && modelBlocks.contains("if (editingBlock.isRemoved())")
                 && modelBlocks.contains("this.closeFormPalettes();")
                 && modelBlocks.contains("List.copyOf(this.getChildren(UIFormPalette.class))"),
             "model-block form palette can retain or mutate a removed block entity");
-        check(formRenderer.contains("BBSRendering.isRenderingWorld()")
-                && formRenderer.contains("!context.modelRenderer")
+        check(formRenderer.contains("context.canDeferWorldTranslucency()")
+                && formContext.contains("BBSRendering.isRenderingWorld()")
+                && formContext.contains("!this.modelRenderer")
                 && formRenderer.contains("FormTranslucentQueue.ensureStarted();"),
             "UI/model previews can still start the world translucent queue");
+        check(formContext.contains("public boolean canDeferWorldTranslucency()")
+                && formContext.contains("BBSRendering.isRenderingWorld()")
+                && formContext.contains("this.renderSpace.isWorld()")
+                && formContext.contains("!this.isPicking()")
+                && formContext.contains("!this.ui")
+                && formContext.contains("!this.modelRenderer")
+                && formRenderer.contains("queueWasActive = FormTranslucentQueue.suspend();")
+                && formRenderer.contains("FormTranslucentQueue.restore(queueWasActive);"),
+            "non-world Form previews can still leak into the deferred translucent queue");
+        check(mobRenderer.contains("this.setupTarget(context, BBSShaders.getPickerModelsProgram());")
+                && mobRenderer.contains("RenderSystem.setShader(BBSShaders::getPickerModelsProgram);")
+                && mobRenderer.contains("Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());")
+                && mobRenderer.contains("RenderSystem.getModelViewMatrix().set(modelView);")
+                && mobRenderer.contains("if (context.canDeferWorldTranslucency())")
+                && mobRenderer.contains("LightTexture.FULL_BLOCK")
+                && itemRenderer.contains("LightTexture.FULL_BLOCK"),
+            "multi-layer Mob picking or preview render-state restoration regressed");
+        String modelBlockPacket = sourceSection(clientNetwork, "private static void handleClientModelBlockPacket", "private static void handlePlayerFormPacket");
+        check(modelBlockPacket.indexOf("panel.fill((ModelBlockEntity) entity, true);")
+                < modelBlockPacket.indexOf("dashboard.focusModelBlock((ModelBlockEntity) entity);")
+                && occurrences(clientNetwork, "dashboard.focusModelBlock(") == 1
+                && dashboard.contains("public void focusModelBlock(ModelBlockEntity modelBlock)"),
+            "model-block right-click no longer focuses its selected target exactly once");
+        check(modelRenderer.contains("context.modelRenderer")
+                && modelRenderer.contains("context.isPicking()")
+                && modelRenderer.contains("this.context == context")
+                && modelRenderer.contains("this.owner == context.simulationOwner")
+                && modelRenderer.contains("this.entity == context.entity")
+                && modelRenderer.contains("this.model == model")
+                && modelRenderer.contains("this.age == getAge(context.entity)")
+                && modelRenderer.contains("this.transition == Float.floatToIntBits(context.getTransition())")
+                && modelRenderer.contains("this.available = false;")
+                && modelRenderer.contains("this.previewPoseSnapshot.capture(context, model);")
+                && modelRenderer.contains("!reusePreviewPose"),
+            "animated preview pose reuse is not one-shot or lacks a strict normal-to-picking key");
         check(enableMode.contains("this.nextHotkeyTarget(mode, ray)")
                 && !enableMode.contains("enableUniformScale"),
             "the S hotkey no longer follows the configured X/Y/Z scale cycle");

@@ -97,7 +97,7 @@ public abstract class FormRenderer <T extends Form>
     {
         /* The queue is replayed at the world's translucent boundary. Editor and
          * Film UI previews render after that boundary and must stay immediate. */
-        if (BBSRendering.isRenderingWorld() && !context.isPicking() && !context.ui && !context.modelRenderer)
+        if (context.canDeferWorldTranslucency())
         {
             FormTranslucentQueue.ensureStarted();
         }
@@ -109,12 +109,21 @@ public abstract class FormRenderer <T extends Form>
 
         int light = context.light;
         PoseStack world = context.world;
+        boolean queueWasActive = false;
         boolean stackPushed = false;
         boolean worldPushed = false;
         boolean statesApplied = false;
 
         try
         {
+            /* A live world queue must never capture preview buffers. Keep this
+             * scope around the whole form so nested body parts obey the same
+             * immediate-render contract. */
+            if (!context.canDeferWorldTranslucency())
+            {
+                queueWasActive = FormTranslucentQueue.suspend();
+            }
+
             statesApplied = true;
             this.form.applyStates(context.transition);
 
@@ -178,6 +187,7 @@ public abstract class FormRenderer <T extends Form>
                 finally
                 {
                     context.light = light;
+                    FormTranslucentQueue.restore(queueWasActive);
 
                     if (statesApplied)
                     {

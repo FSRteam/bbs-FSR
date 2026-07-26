@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
@@ -99,6 +100,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private boolean physicsAppliedThisRender;
     private boolean constraintsAppliedThisRender;
     private boolean renderingArm;
+    private final PreviewPoseSnapshot previewPoseSnapshot = new PreviewPoseSnapshot();
 
     private IEntity entity = new StubEntity();
 
@@ -352,6 +354,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
     private void renderModel(IEntity target, Object simulationOwner, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition, PoseStack world, boolean allowWorldTargetOverrides, boolean allowWorldCollisions)
     {
+        this.renderModel(target, simulationOwner, program, stack, model, light, overlay, color, ui, stencilMap, transition, world, allowWorldTargetOverrides, allowWorldCollisions, true);
+    }
+
+    private void renderModel(IEntity target, Object simulationOwner, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition, PoseStack world, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, boolean solvePose)
+    {
         this.ikAppliedThisRender = false;
         this.physicsAppliedThisRender = false;
         this.constraintsAppliedThisRender = false;
@@ -390,9 +397,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             /* Clamp the FK input first. IK and physics each enforce the same limits internally; applying
              * the generic Euler clamp afterward would clear their composed quaternion orientation. */
-            this.applyConstraintsOnce(model);
-            this.applyIKOnce(model, simulationOwner == null ? target : simulationOwner, baseTransform, allowWorldTargetOverrides);
-            this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
+            if (solvePose)
+            {
+                this.applyConstraintsOnce(model);
+                this.applyIKOnce(model, simulationOwner == null ? target : simulationOwner, baseTransform, allowWorldTargetOverrides);
+                this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
+            }
 
             /* Default texture for materials without their own: the form's texture override, else the
              * model's default. Per-material textures (folder defaults now, animation tracks later)
@@ -784,6 +794,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.animator != null && model != null)
         {
+            boolean reusePreviewPose = this.previewPoseSnapshot.consume(context, model);
             Link link = this.form.texture.get();
             Link texture = link == null ? model.getTexture() : link;
             Color color = this.renderColor.set(context.color, true);
@@ -797,10 +808,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
             }
 
-            model.model.resetPose();
+            if (!reusePreviewPose)
+            {
+                model.model.resetPose();
 
-            this.animator.applyActions(context.entity, model, context.getTransition());
-            model.model.applyPose(this.getPose(this.renderPose));
+                this.animator.applyActions(context.entity, model, context.getTransition());
+                model.model.applyPose(this.getPose(this.renderPose));
+            }
 
             context.stack.mulPose(ROTATE_Y_180);
 
@@ -816,8 +830,190 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 : BBSShaders::getModel;
             Supplier<ShaderInstance> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);
 
-            this.renderModel(context.entity, context.simulationOwner, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world, context.allowWorldTargetOverrides, context.allowWorldCollisions);
+            this.renderModel(context.entity, context.simulationOwner, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world, context.allowWorldTargetOverrides, context.allowWorldCollisions, !reusePreviewPose);
+
+            if (context.modelRenderer && !context.isPicking())
+            {
+                this.previewPoseSnapshot.capture(context, model);
+            }
         }
+        else
+        {
+            this.previewPoseSnapshot.invalidate();
+        }
+    }
+
+    private static class PreviewPoseSnapshot
+    {
+        private final List<ModelGroupPose> groups = new ArrayList<>();
+        private final List<BOBJBonePose> bones = new ArrayList<>();
+        private Object owner;
+        private IEntity entity;
+        private ModelInstance model;
+        private FormRenderingContext context;
+        private int age;
+        private int transition;
+        private boolean available;
+
+        public boolean consume(FormRenderingContext context, ModelInstance model)
+        {
+            boolean matches = this.available
+                && context.modelRenderer
+                && context.isPicking()
+                && this.context == context
+                && this.owner == context.simulationOwner
+                && this.entity == context.entity
+                && this.model == model
+                && this.age == getAge(context.entity)
+                && this.transition == Float.floatToIntBits(context.getTransition());
+
+            this.available = false;
+
+            if (!matches)
+            {
+                return false;
+            }
+
+            for (ModelGroupPose pose : this.groups)
+            {
+                pose.restore();
+            }
+
+            for (BOBJBonePose pose : this.bones)
+            {
+                pose.restore();
+            }
+
+            return true;
+        }
+
+        public void capture(FormRenderingContext context, ModelInstance model)
+        {
+            this.owner = context.simulationOwner;
+            this.entity = context.entity;
+            this.context = context;
+            this.age = getAge(context.entity);
+            this.transition = Float.floatToIntBits(context.getTransition());
+
+            if (this.model != model)
+            {
+                this.model = model;
+                this.groups.clear();
+                this.bones.clear();
+
+                for (ModelGroup group : model.model.getAllGroups())
+                {
+                    this.groups.add(new ModelGroupPose(group));
+                }
+
+                for (BOBJBone bone : model.model.getAllBOBJBones())
+                {
+                    this.bones.add(new BOBJBonePose(bone));
+                }
+            }
+
+            for (ModelGroupPose pose : this.groups)
+            {
+                pose.capture();
+            }
+
+            for (BOBJBonePose pose : this.bones)
+            {
+                pose.capture();
+            }
+
+            this.available = true;
+        }
+
+        public void invalidate()
+        {
+            this.available = false;
+        }
+
+        private static int getAge(IEntity entity)
+        {
+            return entity == null ? Integer.MIN_VALUE : entity.getAge();
+        }
+    }
+
+    private static class ModelGroupPose
+    {
+        private final ModelGroup group;
+        private final mchorse.bbs_mod.utils.pose.Transform current = new mchorse.bbs_mod.utils.pose.Transform();
+        private final Color color = new Color();
+        private final Quaternionf orient = new Quaternionf();
+        private final Vector3f offset = new Vector3f();
+        private float lighting;
+        private boolean hasOrient;
+        private boolean hasOffset;
+
+        public ModelGroupPose(ModelGroup group)
+        {
+            this.group = group;
+        }
+
+        public void capture()
+        {
+            this.current.copy(this.group.current);
+            this.color.copy(this.group.color);
+            this.lighting = this.group.lighting;
+            this.hasOrient = this.group.orient != null;
+            this.hasOffset = this.group.offset != null;
+
+            if (this.hasOrient) this.orient.set(this.group.orient);
+            if (this.hasOffset) this.offset.set(this.group.offset);
+        }
+
+        public void restore()
+        {
+            this.group.current.copy(this.current);
+            this.group.color.copy(this.color);
+            this.group.lighting = this.lighting;
+            this.group.orient = this.hasOrient ? copy(this.group.orient, this.orient) : null;
+            this.group.offset = this.hasOffset ? copy(this.group.offset, this.offset) : null;
+        }
+    }
+
+    private static class BOBJBonePose
+    {
+        private final BOBJBone bone;
+        private final mchorse.bbs_mod.utils.pose.Transform transform = new mchorse.bbs_mod.utils.pose.Transform();
+        private final Quaternionf orient = new Quaternionf();
+        private final Vector3f offset = new Vector3f();
+        private boolean hasOrient;
+        private boolean hasOffset;
+
+        public BOBJBonePose(BOBJBone bone)
+        {
+            this.bone = bone;
+        }
+
+        public void capture()
+        {
+            this.transform.copy(this.bone.transform);
+            this.hasOrient = this.bone.orient != null;
+            this.hasOffset = this.bone.offset != null;
+
+            if (this.hasOrient) this.orient.set(this.bone.orient);
+            if (this.hasOffset) this.offset.set(this.bone.offset);
+        }
+
+        public void restore()
+        {
+            this.bone.transform.copy(this.transform);
+            this.bone.orient = this.hasOrient ? copy(this.bone.orient, this.orient) : null;
+            this.bone.offset = this.hasOffset ? copy(this.bone.offset, this.offset) : null;
+        }
+    }
+
+    private static Quaternionf copy(Quaternionf target, Quaternionf source)
+    {
+        return target == null ? new Quaternionf(source) : target.set(source);
+    }
+
+    private static Vector3f copy(Vector3f target, Vector3f source)
+    {
+        return target == null ? new Vector3f(source) : target.set(source);
     }
 
     @Override

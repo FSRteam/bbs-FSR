@@ -3,6 +3,7 @@ package mchorse.bbs_mod.compat;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.resources.packs.ExternalAssetsSourcePack;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
@@ -49,7 +50,7 @@ public final class PlatformResourceConsistencyTest
 
     private static void assertExternalAssetOwnership() throws Exception
     {
-        Path parent = Files.createTempDirectory("bbs-provider-test-");
+        Path parent = Files.createTempDirectory("bbs-provider-test-").toRealPath();
         Path root = Files.createDirectory(parent.resolve("assets"));
         Path sibling = Files.createDirectory(parent.resolve("assets_backup"));
         Path nested = Files.createDirectories(root.resolve("models"));
@@ -267,10 +268,19 @@ public final class PlatformResourceConsistencyTest
             throw new AssertionError("deleted contained leaf still exists through the provider");
         }
 
-        if (pack.getFile(link) == null
-            || !pack.getFile(link).toPath().toAbsolutePath().normalize().equals(expected.toAbsolutePath().normalize()))
+        File resolvedFile = pack.getFile(link);
+
+        if (resolvedFile == null
+            || !resolvedFile.toPath().toAbsolutePath().normalize().equals(expected.toAbsolutePath().normalize()))
         {
-            throw new AssertionError("deleted contained leaf lost its owned provider path");
+            String resolved = resolvedFile == null ? "null" : resolvedFile.toPath().toAbsolutePath().normalize().toString();
+            String exp = expected.toAbsolutePath().normalize().toString();
+
+            throw new AssertionError(
+                "deleted contained leaf lost its owned provider path\n" +
+                "  resolved: " + resolved + "\n" +
+                "  expected: " + exp
+            );
         }
 
         try (InputStream ignored = pack.getAsset(link))

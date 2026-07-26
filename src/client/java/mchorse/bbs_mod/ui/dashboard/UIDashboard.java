@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.OrbitCamera;
 import mchorse.bbs_mod.camera.controller.OrbitCameraController;
@@ -42,12 +43,16 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.pose.Transform;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 import java.util.List;
 
@@ -79,14 +84,7 @@ public class UIDashboard extends UIBaseMenu
         this.panels = new UIDashboardPanels();
         this.panels.getEvents().register(UIDashboardPanels.PanelEvent.class, (e) ->
         {
-            this.orbitUI.setControl(this.panels.isFlightSupported());
-
-            if (this.panels.panel instanceof IFlightSupported panel)
-            {
-                this.orbit.setFovRoll(panel.supportsRollFOVControl());
-            }
-
-            this.copyCurrentEntityCamera();
+            this.restoreCurrentPanelControls();
         });
         this.panels.full(this.viewport);
         this.registerPanels();
@@ -177,6 +175,32 @@ public class UIDashboard extends UIBaseMenu
         this.camera.setup(BBSModClient.getCameraController().camera, 0F);
     }
 
+    public void focusModelBlock(ModelBlockEntity modelBlock)
+    {
+        if (modelBlock == null || modelBlock.isRemoved())
+        {
+            return;
+        }
+
+        BlockPos pos = modelBlock.getBlockPos();
+        Transform transform = modelBlock.getProperties().getTransform();
+        Vector3d center = new Vector3d(
+            pos.getX() + 0.5D + transform.translate.x,
+            pos.getY() + transform.translate.y,
+            pos.getZ() + 0.5D + transform.translate.z
+        );
+        double distance = MathUtils.clamp(this.orbit.getFinalPosition().distance(center), 2D, 16D);
+        Vector3f look = this.orbit.getLook();
+        Camera focused = new Camera();
+
+        focused.position.set(center).sub(look.x * distance, look.y * distance, look.z * distance);
+        focused.rotation.set(this.orbit.rotation);
+        focused.fov = this.orbit.fov;
+
+        this.orbit.setup(focused);
+        this.camera.setup(BBSModClient.getCameraController().camera, 0F);
+    }
+
     private void cyclePanels()
     {
         List<UIDashboardPanel> panels = this.panels.panels;
@@ -219,7 +243,7 @@ public class UIDashboard extends UIBaseMenu
         {
             this.panels.open();
             this.setPanel(this.panels.panel);
-            this.copyCurrentEntityCamera();
+            this.restoreCurrentPanelControls();
         }
 
         BBSModClient.getCameraController().add(this.camera);
@@ -239,6 +263,21 @@ public class UIDashboard extends UIBaseMenu
         BBSModClient.getCameraController().remove(this.camera);
 
         Minecraft.getInstance().options.setCameraType(this.lastPerspective);
+    }
+
+    /** Restore root-level input which is not owned by the reusable panel node. */
+    private void restoreCurrentPanelControls()
+    {
+        this.context.unfocus();
+        this.orbitUI.cancelGesture();
+        this.orbitUI.setControl(this.panels.isFlightSupported());
+
+        if (this.panels.panel instanceof IFlightSupported panel)
+        {
+            this.orbit.setFovRoll(panel.supportsRollFOVControl());
+        }
+
+        this.copyCurrentEntityCamera();
     }
 
     @Override

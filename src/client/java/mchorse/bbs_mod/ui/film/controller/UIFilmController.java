@@ -575,15 +575,21 @@ public class UIFilmController extends UIElement implements GizmoViewport
     {
         if (groups != null && groups.contains("outside"))
         {
-            Minecraft.getInstance().setScreen(null);
-
+            Film film = this.panel.getData();
             Replay replay = this.panel.replayEditor.getReplay();
-            int index = CollectionUtils.getIndex(this.panel.getData().replays.getList(), replay);
+            int index = film == null ? -1 : CollectionUtils.getIndex(film.replays.getList(), replay);
+            int cursor = this.panel.getCursor();
 
-            if (index >= 0)
+            if (film == null || index < 0)
             {
-                BBSModClient.getFilms().startRecording(this.panel.getData(), index, this.panel.getCursor());
+                return;
             }
+
+            /* Closing the dashboard synchronously tears down the Film panel. Keep
+             * every recording input before that boundary; the world recorder must
+             * never reach back into a panel which has already disappeared. */
+            Minecraft.getInstance().setScreen(null);
+            BBSModClient.getFilms().startRecording(film, index, cursor);
 
             return;
         }

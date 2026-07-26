@@ -285,7 +285,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.mergeOverlays(), this.getColor(0xffffffff)))
             {
-                Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, stack, consumers, LightTexture.FULL_BRIGHT);
+                Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, stack, consumers, LightTexture.FULL_BLOCK);
             }
 
             consumers.draw();
@@ -311,6 +311,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
             int light = context.light;
             BooleanHolder first = new BooleanHolder();
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
 
             if (context.isPicking())
             {
@@ -323,12 +324,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                         first.bool = true;
                     }
 
-                    /* The picker shader must be (re)applied for every layer, not just the
-                     * first one. Entities like the piglin render held items (e.g. the golden
-                     * sword) through Minecraft's own item rendering, which adds extra render
-                     * layers. If those layers aren't forced onto the picker shader, they get
-                     * drawn with vanilla item shaders, leaking GL/shader state that breaks the
-                     * picking of any subsequent entity rendered into the stencil framebuffer. */
+                    /* Piglin equipment and other extra entity layers are emitted
+                     * after the base layer. Reinstall the picker shader for each
+                     * one so vanilla state cannot leak into the stencil pass. */
                     this.setupTarget(context, BBSShaders.getPickerModelsProgram());
                     RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
                 });
@@ -383,7 +381,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                 /* Publishing the form's camera-space origin opts its translucent layers (slime
                  * bodies, ghost textures) into the deferred sorted pass. */
-                if (!context.isPicking())
+                if (context.canDeferWorldTranslucency())
                 {
                     Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
 
@@ -429,6 +427,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             else
             {
                 RenderSystem.enableDepthTest();
+                RenderSystem.getModelViewMatrix().set(modelView);
             }
         }
     }
