@@ -1951,14 +1951,7 @@ public class UIPropTransform extends UITransform
             return;
         }
 
-        Matrix3f jacobian = new Matrix3f(this.drag.translateJacobian);
-
-        if (!isUsableTranslateJacobian(jacobian))
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
+        Matrix3f jacobian = this.resolveTranslateJacobian();
 
         if (this.local)
         {
@@ -2018,16 +2011,7 @@ public class UIPropTransform extends UITransform
         cameraBasis.setColumn(1, up);
         cameraBasis.setColumn(2, forward);
 
-        Matrix3f inverse = new Matrix3f(this.drag.translateJacobian);
-
-        if (!isUsableTranslateJacobian(inverse))
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        inverse.invert();
+        Matrix3f inverse = this.resolveTranslateJacobian().invert();
 
         this.dragTranslateBasis.set(inverse).mul(cameraBasis);
         this.dragScreenInverseJacobian.set(inverse);
@@ -2038,11 +2022,16 @@ public class UIPropTransform extends UITransform
         this.dragHasStart = this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit);
     }
 
-    private static boolean isUsableTranslateJacobian(Matrix3f jacobian)
+    /**
+     * The basis a translate drag maps the cursor through. A sampled Jacobian that came back
+     * unusable &mdash; the film pose track can hand out a flat one when the bone matrix is missing or
+     * when keyframe interpolation flattens the perturbation &mdash; degrades to a rest basis in the
+     * same units rather than cancelling the drag: an approximate handle beats a dead one, and an
+     * ill-conditioned inverse is what used to send the value to six figures.
+     */
+    private Matrix3f resolveTranslateJacobian()
     {
-        float determinant = jacobian.determinant();
-
-        return Float.isFinite(determinant) && Math.abs(determinant) >= 1.0E-8F;
+        return GizmoDrag.resolveTranslateJacobian(this.drag.translateJacobian, this.drag.modelPartTranslate);
     }
 
     private void applyRayTranslate(Vector3d hit)

@@ -20,6 +20,13 @@ public class GizmoDrag
 {
     private static final float PARALLEL_EPSILON = 1.0E-4F;
 
+    /**
+     * Model pixels make a legitimate translate Jacobian roughly {@code det(basis) / 16³} large, so a
+     * plain "almost singular" threshold would reject perfectly usable bone frames. Condition the
+     * matrix on its column lengths instead, which is scale free.
+     */
+    private static final float CONDITION_EPSILON = 1.0E-4F;
+
     public final Matrix4f projection = new Matrix4f();
     public final Matrix4f view = new Matrix4f();
     public final Vector3d cameraOrigin = new Vector3d();
@@ -38,6 +45,8 @@ public class GizmoDrag
     public final Matrix3f rotate2ParentInverse = new Matrix3f();
     public boolean hasRotateParentInverse;
     public boolean hasRotate2ParentInverse;
+    /** The edited translation is in model pixels (a vanilla ModelPart bone) rather than in blocks. */
+    public boolean modelPartTranslate;
     public final Vector3f rotationOffset = new Vector3f();
 
     public GizmoDrag setup(Camera camera, Area viewport, Vector3f gizmoOrigin)
@@ -180,6 +189,13 @@ public class GizmoDrag
         return this;
     }
 
+    public GizmoDrag modelPartTranslate(boolean enabled)
+    {
+        this.modelPartTranslate = enabled;
+
+        return this;
+    }
+
     public GizmoDrag setRotateAxes(Matrix3f axes)
     {
         this.rotateAxes.set(axes);
@@ -279,6 +295,66 @@ public class GizmoDrag
         {
             transform.translate.set(saved);
         }
+    }
+
+    /**
+     * ModelPart translations are expressed in model pixels and are applied before the part's own
+     * rotation. The origin matrix therefore already contains the complete parent-space basis; its
+     * translation is irrelevant and each basis column only needs Minecraft's 1/16 conversion.
+     *
+     * <p>Unlike {@link #computeTranslateJacobian} this needs no perturbation sampling at all, so it
+     * cannot be blurred by keyframe interpolation weights, pose overlays or equipment feature layers
+     * re-entering the render between samples.</p>
+     */
+    public static Matrix3f computeModelPartTranslateJacobian(Matrix4f origin)
+    {
+        return origin.get3x3(new Matrix3f()).scale(1F / 16F);
+    }
+
+    /**
+     * Whether a translate Jacobian can be inverted meaningfully. The test is on the matrix'
+     * condition rather than on its raw determinant: model-pixel frames are legitimately three orders
+     * of magnitude smaller than block-space ones, and a determinant cut-off rejects them wholesale.
+     */
+    public static boolean isUsableTranslateJacobian(Matrix3f jacobian)
+    {
+        float determinant = jacobian.determinant();
+
+        if (!Float.isFinite(determinant))
+        {
+            return false;
+        }
+
+        float volume = 1F;
+
+        for (int i = 0; i < 3; i++)
+        {
+            float length = jacobian.getColumn(i, new Vector3f()).length();
+
+            if (!Float.isFinite(length) || length < 1.0E-8F)
+            {
+                return false;
+            }
+
+            volume *= length;
+        }
+
+        return Math.abs(determinant) >= volume * CONDITION_EPSILON;
+    }
+
+    /**
+     * The translate Jacobian to actually drag with: the sampled one when it is invertible, otherwise
+     * a rest basis in the same units. Falling back keeps a gizmo usable (slightly off, but live)
+     * where bailing out would silently freeze the handle - see {@link #computeModelPartTranslateJacobian}.
+     */
+    public static Matrix3f resolveTranslateJacobian(Matrix3f jacobian, boolean modelPart)
+    {
+        if (jacobian != null && isUsableTranslateJacobian(jacobian))
+        {
+            return new Matrix3f(jacobian);
+        }
+
+        return modelPart ? new Matrix3f().scale(1F / 16F) : new Matrix3f();
     }
 
     public static Matrix3f computeRotateAxes(Transform transform, Supplier<Matrix4f> matrixSampler)

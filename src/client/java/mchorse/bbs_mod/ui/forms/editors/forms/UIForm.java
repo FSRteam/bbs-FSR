@@ -20,6 +20,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -77,6 +78,21 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     public Vector3f getRotationOffset(float transition)
     {
         return this.getRotationOffset(transition, FormUtils.getPath(this.form));
+    }
+
+    /**
+     * Exact translate Jacobian for editors whose values are not block-space (vanilla ModelPart pose
+     * bones), or {@code null} to let the gizmo sample one numerically.
+     */
+    public Matrix3f getTranslateJacobian(UIPropTransform transform, float transition)
+    {
+        return null;
+    }
+
+    /** Whether {@code transform} edits a vanilla ModelPart bone, whose translation is model pixels. */
+    public boolean editsModelPartTranslate(UIPropTransform transform)
+    {
+        return false;
     }
 
     /**

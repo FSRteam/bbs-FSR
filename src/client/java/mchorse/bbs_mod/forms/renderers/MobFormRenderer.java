@@ -16,7 +16,6 @@ import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
-import mchorse.bbs_mod.mixin.client.LivingEntityRendererAccessor;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -35,7 +34,6 @@ import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.client.renderer.LightTexture;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -51,7 +49,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -658,7 +655,17 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             this.prepareRenderLook(source, transition);
 
-            this.renderForMatrixCollection(client, renderer, animationTransition, stack);
+            client.getEntityRenderDispatcher().render(
+                this.entity,
+                0D,
+                0D,
+                0D,
+                0F,
+                animationTransition,
+                stack,
+                EMPTY_VERTEX_CONSUMERS,
+                LightTexture.FULL_BRIGHT
+            );
             context.completeMatrices();
         }
 
@@ -681,41 +688,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             RenderSystem.enableBlend();
         };
-    }
-
-    private void renderForMatrixCollection(Minecraft client, Object renderer, float transition, PoseStack stack)
-    {
-        List<RenderLayer<?, ?>> layers = renderer instanceof LivingEntityRendererAccessor accessor
-            ? accessor.bbs$getLayers()
-            : null;
-        List<RenderLayer<?, ?>> savedLayers = layers == null ? List.of() : new ArrayList<>(layers);
-
-        try
-        {
-            if (layers != null)
-            {
-                layers.clear();
-            }
-
-            client.getEntityRenderDispatcher().render(
-                this.entity,
-                0D,
-                0D,
-                0D,
-                0F,
-                transition,
-                stack,
-                EMPTY_VERTEX_CONSUMERS,
-                LightTexture.FULL_BRIGHT
-            );
-        }
-        finally
-        {
-            if (layers != null)
-            {
-                layers.addAll(savedLayers);
-            }
-        }
     }
 
     @Override

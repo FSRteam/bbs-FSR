@@ -67,6 +67,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.presets.PresetManager;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
@@ -477,16 +478,24 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                 return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
             };
             Vector3f rotationOffset = this.isBodyPartGizmoMode() ? null : this.editor.getRotationOffset(transition);
+            boolean modelPart = !this.isBodyPartGizmoMode() && this.editor.editsModelPartTranslate(transform);
+            Matrix3f translateJacobian = modelPart ? this.editor.getTranslateJacobian(transform, transition) : null;
 
-            drag.setJacobian(GizmoDrag.computeTranslateJacobian(
-                transform.getTransform(),
-                () ->
-                {
-                    Matrix4f origin = this.getOrigin(transition);
+            if (!modelPart)
+            {
+                translateJacobian = GizmoDrag.computeTranslateJacobian(
+                    transform.getTransform(),
+                    () ->
+                    {
+                        Matrix4f origin = this.getOrigin(transition);
 
-                    return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
-                }
-            ));
+                        return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
+                    }
+                );
+            }
+
+            drag.setJacobian(GizmoDrag.resolveTranslateJacobian(translateJacobian, modelPart));
+            drag.modelPartTranslate(modelPart);
             drag.setRotateAxes(GizmoDrag.computeRotateAxes(
                 transform.getTransform(),
                 rotationSampler

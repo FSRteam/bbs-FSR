@@ -3,6 +3,7 @@ package mchorse.bbs_mod.film;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
@@ -30,6 +31,7 @@ import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
+import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -194,7 +196,7 @@ public abstract class BaseFilmController
             if (UIBaseMenu.shouldRenderAxes())
             {
                 if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, formContext, stack);
-                if (context.bone2 != null && context.map == null) renderAxes(context.bone2, context.local2, context.map, form, formContext, stack);
+                if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack);
             }
         }
         finally
@@ -320,6 +322,58 @@ public abstract class BaseFilmController
                 RenderSystem.enableDepthTest();
                 stack.popPose();
             }
+        }
+    }
+
+    /**
+     * Draw the replay's axes-preview bone as plain static axes.
+     *
+     * <p>Deliberately not {@link #renderAxes}: that one snapshots the placement of the gizmo the
+     * user actually drags ({@link Gizmo#captureVisual}), and the preview runs after it in the same
+     * pass, so sharing the method would leave every drag anchored on the preview bone instead.</p>
+     */
+    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack)
+    {
+        String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
+        Form root = FormUtils.getRoot(form);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+            context.entity,
+            context.simulationOwner,
+            context.world == null ? null : new Matrix4f(context.world.last().pose()),
+            context.allowWorldTargetOverrides,
+            context.allowWorldCollisions,
+            context.getTransition()
+        );
+        MatrixCacheEntry entry = map.get(mapKey);
+        Matrix4f matrix = entry == null ? null : (local ? entry.matrix() : entry.origin());
+
+        if (matrix == null)
+        {
+            return;
+        }
+
+        if (local)
+        {
+            matrix = MatrixStackUtils.stripScale(matrix);
+        }
+
+        stack.pushPose();
+        try
+        {
+            MatrixStackUtils.multiply(stack, matrix);
+
+            Vector3f cameraRelative = stack.last().pose().getTranslation(new Vector3f());
+            Matrix4f projection = RenderSystem.getProjectionMatrix();
+            float fov = projection.m33() == 0 ? (float) (2D * Math.atan(1D / projection.m11())) : BBSSettings.getFov();
+            float distanceScale = BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
+
+            stack.scale(distanceScale, distanceScale, distanceScale);
+            Draw.coolerAxes(stack, 0.25F, 0.008F, 0.26F, 0.018F);
+        }
+        finally
+        {
+            RenderSystem.enableDepthTest();
+            stack.popPose();
         }
     }
 

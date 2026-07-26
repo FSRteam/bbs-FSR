@@ -5,6 +5,7 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
@@ -25,6 +26,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
@@ -39,6 +41,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector2i;
@@ -435,17 +438,28 @@ public class UIAnimationStateEditor extends UIElement
                 return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
             };
 
-            drag.setJacobian(GizmoDrag.computeTranslateJacobian(
-                transform.getTransform(),
-                () ->
-                {
-                    this.editor.applyStateForSampling(tick);
+            this.editor.applyStateForSampling(tick);
 
-                    Matrix4f origin = this.getOrigin(transition);
+            boolean mobPoseBone = this.isMobPoseBoneTrack();
+            Matrix3f translateJacobian = mobPoseBone ? this.getMobTranslateJacobian(transition) : null;
 
-                    return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
-                }
-            ));
+            if (!mobPoseBone)
+            {
+                translateJacobian = GizmoDrag.computeTranslateJacobian(
+                    transform.getTransform(),
+                    () ->
+                    {
+                        this.editor.applyStateForSampling(tick);
+
+                        Matrix4f origin = this.getOrigin(transition);
+
+                        return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
+                    }
+                );
+            }
+
+            drag.setJacobian(GizmoDrag.resolveTranslateJacobian(translateJacobian, mobPoseBone));
+            drag.modelPartTranslate(mobPoseBone);
             drag.setRotateAxes(GizmoDrag.computeRotateAxes(
                 transform.getTransform(),
                 rotationSampler
@@ -458,6 +472,34 @@ public class UIAnimationStateEditor extends UIElement
         }
 
         return drag;
+    }
+
+    private Matrix3f getMobTranslateJacobian(float transition)
+    {
+        Matrix4f origin = this.getMatrixEntry(transition).origin();
+
+        return origin == null ? null : GizmoDrag.computeModelPartTranslateJacobian(origin);
+    }
+
+    private boolean isMobPoseBoneTrack()
+    {
+        if (this.keyframeEditor == null || this.keyframeEditor.editor == null)
+        {
+            return false;
+        }
+
+        UIKeyframeSheet sheet = this.keyframeEditor.getSheet(this.keyframeEditor.editor.getKeyframe());
+        Pair<String, Boolean> bone = this.keyframeEditor.getBone();
+        boolean poseBone = sheet != null
+            && bone != null
+            && bone.a != null
+            && !bone.a.isEmpty()
+            && (sheet.isBoneTrack || this.keyframeEditor.editor instanceof UIPoseKeyframeFactory);
+        Form form = sheet == null
+            ? null
+            : (sheet.form != null ? sheet.form : (sheet.property == null ? null : FormUtils.getForm(sheet.property)));
+
+        return poseBone && form instanceof MobForm;
     }
 
     public Matrix4f getOrigin(float transition)

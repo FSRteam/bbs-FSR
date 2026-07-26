@@ -25,6 +25,7 @@ import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
@@ -49,6 +50,7 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.resources.Link;
@@ -63,6 +65,7 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -796,27 +799,17 @@ public class UIReplaysEditorUtils
 
         java.util.function.Supplier<Matrix4f> matrixSampler = () ->
         {
-            Form form = entity.getForm();
-            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
-
-            if (form != null)
-            {
-                replay.properties.applyProperties(form, tick);
-            }
-
-            Matrix4f matrix = BaseFilmController.getGizmoBoneCompositeMatrix(
-                panel.getController().getEntities(),
+            Matrix4f matrix = sampleFilmBoneMatrix(
+                panel,
+                camera,
                 entity,
                 replay,
-                camera.position.x,
-                camera.position.y,
-                camera.position.z,
                 transition,
                 bone.a,
                 true
             );
 
-            return matrix == null ? new Matrix4f() : matrix;
+            return matrix == null ? new Matrix4f() : MatrixStackUtils.stripScale(matrix);
         };
 
         Vector3f rotationOffset = BaseFilmController.getGizmoBoneRotationOffset(entity, transition, bone.a);
@@ -824,10 +817,54 @@ public class UIReplaysEditorUtils
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
         drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
         drag.setRotationParents(transform.getTransform(), rotationOffset, matrixSampler);
-        drag.setJacobian(GizmoDrag.computeTranslateJacobian(
-            transform.getTransform(),
-            () -> matrixSampler.get().getTranslation(new Vector3f())
-        ));
+
+        Matrix3f translateJacobian = null;
+        UIKeyframeSheet sheet = keyframeEditor.editor == null
+            ? null
+            : keyframeEditor.getSheet(keyframeEditor.editor.getKeyframe());
+        boolean poseBone = sheet != null
+            && !bone.a.isEmpty()
+            && (sheet.isBoneTrack || keyframeEditor.editor instanceof UIPoseKeyframeFactory);
+        Form editedForm = sheet == null
+            ? null
+            : (sheet.form != null ? sheet.form : (sheet.property == null ? null : FormUtils.getForm(sheet.property)));
+
+        boolean mobPoseBone = poseBone && editedForm instanceof MobForm;
+
+        if (mobPoseBone)
+        {
+            /* Model pixels: derive the basis straight from the bone's parent frame instead of
+             * perturbing the keyframe. The numeric sampler re-applies the replay properties around
+             * each sample, so a cursor that is not exactly on the edited keyframe shrinks the
+             * perturbation by the interpolation weight - and a basis scaled by w inverts into a
+             * drag amplified by 1/w. Deliberately no numeric fallback here: an unresolved bone
+             * degrades to the rest basis in GizmoDrag#resolveTranslateJacobian, which is merely
+             * axis-aligned, where the numeric one would be flat (dead drag) or tiny (runaway). */
+            Matrix4f origin = sampleFilmBoneMatrix(
+                panel,
+                camera,
+                entity,
+                replay,
+                transition,
+                bone.a,
+                false
+            );
+
+            if (origin != null)
+            {
+                translateJacobian = GizmoDrag.computeModelPartTranslateJacobian(origin);
+            }
+        }
+        else
+        {
+            translateJacobian = GizmoDrag.computeTranslateJacobian(
+                transform.getTransform(),
+                () -> matrixSampler.get().getTranslation(new Vector3f())
+            );
+        }
+
+        drag.setJacobian(GizmoDrag.resolveTranslateJacobian(translateJacobian, mobPoseBone));
+        drag.modelPartTranslate(mobPoseBone);
 
         Form form = entity.getForm();
 
@@ -839,6 +876,37 @@ public class UIReplaysEditorUtils
         }
 
         return drag;
+    }
+
+    private static Matrix4f sampleFilmBoneMatrix(
+        UIFilmPanel panel,
+        Camera camera,
+        IEntity entity,
+        Replay replay,
+        float transition,
+        String bone,
+        boolean useBoneMatrix
+    )
+    {
+        Form form = entity.getForm();
+        float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
+
+        if (form != null)
+        {
+            replay.properties.applyProperties(form, tick);
+        }
+
+        return BaseFilmController.getBoneCompositeMatrix(
+            panel.getController().getEntities(),
+            entity,
+            replay,
+            camera.position.x,
+            camera.position.y,
+            camera.position.z,
+            transition,
+            bone,
+            useBoneMatrix
+        );
     }
 
     private static void buildAnchorGizmoDrag(
