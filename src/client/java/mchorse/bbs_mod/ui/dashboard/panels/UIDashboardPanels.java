@@ -7,6 +7,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.events.UIEvent;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -15,6 +16,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.Direction;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.ArrayList;
@@ -22,6 +24,10 @@ import java.util.List;
 
 public class UIDashboardPanels extends UIElement
 {
+    private static final int TASKBAR_HEIGHT = 20;
+    private static final int REVEAL_STRIP = 16;
+    private static final long REVEAL_HOVER_MS = 350L;
+
     public List<UIDashboardPanel> panels = new ArrayList<>();
     public UIDashboardPanel panel;
 
@@ -33,6 +39,10 @@ public class UIDashboardPanels extends UIElement
     private boolean panelAppeared;
 
     private final UITween switchVeil = new UITween();
+    private final UITween taskbarHide = new UITween();
+    private long taskbarLastPointerOverMs = System.currentTimeMillis();
+    private long revealStripEnteredMs;
+    private int lastDashboardSlide = -1;
 
     /**
      * @deprecated Kept for backward compatibility. Use {@link #renderHighlight(Batcher2D, Area, Direction)}
@@ -60,6 +70,23 @@ public class UIDashboardPanels extends UIElement
      */
     public static void renderHighlight(Batcher2D batcher, Area area, Direction direction)
     {
+        int radius = BBSSettings.cornerWidget();
+
+        if (radius > 0)
+        {
+            int line = BBSSettings.tabActiveLineColor();
+            int fill = BBSSettings.tabActiveGradientColor();
+
+            if (fill == 0)
+            {
+                fill = BBSSettings.primaryColor(Colors.A50);
+            }
+
+            batcher.roundedFrame(area.x, area.y, area.w, area.h, radius, 1F, line, fill);
+
+            return;
+        }
+
         int color = BBSSettings.accentColorRGB();
         int bar = Colors.A100 | color;
         int near = Colors.A75 | color;
@@ -90,7 +117,8 @@ public class UIDashboardPanels extends UIElement
     public UIDashboardPanels()
     {
         this.taskBar = new UIElement();
-        this.taskBar.relative(this).y(1F, -20).w(1F).h(20);
+        this.taskBar.noCulling();
+        this.taskBar.relative(this).y(1F, -TASKBAR_HEIGHT).w(1F).h(TASKBAR_HEIGHT);
         this.pinned = new UIElement();
         this.pinned.relative(this.taskBar).h(20).row(0).resize();
         this.panelButtons = new UIScrollView(ScrollDirection.HORIZONTAL);
@@ -101,9 +129,14 @@ public class UIDashboardPanels extends UIElement
         {
             for (int i = 0, c = this.panels.size(); i < c; i++)
             {
-                if (this.panel == this.panels.get(i))
+                UIIcon button = (UIIcon) this.panelButtons.getChildren().get(i);
+                boolean active = this.panel == this.panels.get(i);
+
+                button.active(active);
+
+                if (active && BBSSettings.cornerWidget() <= 0)
                 {
-                    renderHighlight(context.batcher, ((UIIcon) this.panelButtons.getChildren().get(i)).area, Direction.BOTTOM);
+                    renderHighlight(context.batcher, button.area, Direction.BOTTOM);
                 }
             }
         });
@@ -132,6 +165,8 @@ public class UIDashboardPanels extends UIElement
 
     public void open()
     {
+        this.resetTaskbarAutoHide();
+
         for (UIDashboardPanel panel : this.panels)
         {
             panel.open();
@@ -154,6 +189,8 @@ public class UIDashboardPanels extends UIElement
 
     public void close()
     {
+        this.resetTaskbarAutoHide();
+
         if (this.panel != null && this.panelAppeared)
         {
             this.panel.disappear();
@@ -230,7 +267,12 @@ public class UIDashboardPanels extends UIElement
 
     private void setPanelPlacement(UIDashboardPanel panel)
     {
-        panel.resetFlex().relative(this).w(1F).h(1F, -20);
+        this.setPanelPlacement(panel, Math.max(0, this.lastDashboardSlide));
+    }
+
+    private void setPanelPlacement(UIDashboardPanel panel, int slide)
+    {
+        panel.resetFlex().relative(this).y(0F, slide).w(1F).h(1F, -TASKBAR_HEIGHT);
     }
 
     public UIIcon registerPanel(UIDashboardPanel panel, IKey tooltip, Icon icon)
@@ -257,6 +299,7 @@ public class UIDashboardPanels extends UIElement
     @Override
     public void render(UIContext context)
     {
+        this.updateTaskbarAutoHide(context);
         super.render(context);
 
         /* Panel switch veil (render-only): fades out over the fresh panel */
@@ -266,6 +309,99 @@ public class UIDashboardPanels extends UIElement
         {
             this.panel.area.render(context.batcher, Colors.setA(BBSSettings.baseSurface(), veil));
         }
+    }
+
+    public void resetTaskbarAutoHide()
+    {
+        this.taskbarLastPointerOverMs = System.currentTimeMillis();
+        this.revealStripEnteredMs = 0L;
+        this.taskbarHide.snap(0F);
+        this.applyTaskbarSlide(0);
+    }
+
+    private void updateTaskbarAutoHide(UIContext context)
+    {
+        if (!BBSSettings.dashboardAutoHideTaskbarEnabled())
+        {
+            if (this.taskbarHide.getValue() != 0F || this.lastDashboardSlide != 0)
+            {
+                this.resetTaskbarAutoHide();
+            }
+
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        float target = this.taskbarHide.getTarget();
+
+        if (UIOverlay.has(context))
+        {
+            this.taskbarLastPointerOverMs = now;
+            this.revealStripEnteredMs = 0L;
+            target = 0F;
+        }
+        else
+        {
+            boolean overBar = this.taskBar.area.isInside(context.mouseX, context.mouseY);
+            boolean overReveal = context.mouseX >= this.area.x && context.mouseX < this.area.ex()
+                && context.mouseY >= this.area.ey() - REVEAL_STRIP && context.mouseY < this.area.ey();
+
+            if (overBar)
+            {
+                this.taskbarLastPointerOverMs = now;
+                this.revealStripEnteredMs = 0L;
+                target = 0F;
+            }
+            else if (overReveal)
+            {
+                this.taskbarLastPointerOverMs = now;
+
+                if (this.revealStripEnteredMs == 0L)
+                {
+                    this.revealStripEnteredMs = now;
+                }
+
+                if (now - this.revealStripEnteredMs >= REVEAL_HOVER_MS)
+                {
+                    target = 0F;
+                }
+            }
+            else
+            {
+                this.revealStripEnteredMs = 0L;
+
+                if (now - this.taskbarLastPointerOverMs >= BBSSettings.dashboardTaskbarHideDelayMs())
+                {
+                    target = 1F;
+                }
+            }
+        }
+
+        this.taskbarHide.to(target, UIMotions.taskbarHide());
+
+        float hidden = MathUtils.clamp(this.taskbarHide.update(), 0F, 1F);
+
+        this.applyTaskbarSlide(Math.round(hidden * Math.max(0, this.area.h)));
+    }
+
+    private void applyTaskbarSlide(int slide)
+    {
+        slide = MathUtils.clamp(slide, 0, Math.max(0, this.area.h));
+
+        if (slide == this.lastDashboardSlide)
+        {
+            return;
+        }
+
+        this.lastDashboardSlide = slide;
+        this.taskBar.relative(this).y(1F, -TASKBAR_HEIGHT + slide).w(1F).h(TASKBAR_HEIGHT);
+
+        if (this.panel != null)
+        {
+            this.setPanelPlacement(this.panel, slide);
+        }
+
+        this.resize();
     }
 
     public static class PanelEvent extends UIEvent<UIDashboardPanels>

@@ -11,6 +11,18 @@ public abstract class TooltipStyle
 
     public static TooltipStyle get()
     {
+        int style = BBSSettings.tooltipStyle == null ? 0 : BBSSettings.tooltipStyle.get();
+
+        if (style == 1)
+        {
+            return DARK;
+        }
+
+        if (style == 2)
+        {
+            return LIGHT;
+        }
+
         return BBSSettings.isLightTheme() ? LIGHT : DARK;
     }
 

@@ -455,6 +455,12 @@ public class BBSModClient
             UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL
         );
 
+        BBSSettings.tooltipStyle.modes(
+            UIKeys.ENGINE_TOOLTIP_STYLE_THEME,
+            UIKeys.ENGINE_TOOLTIP_STYLE_DARK,
+            UIKeys.ENGINE_TOOLTIP_STYLE_LIGHT
+        );
+
         BBSSettings.translateHotkeyOrder.labels(
             UIKeys.TRANSFORMS_TARGET_SCREEN,
             UIKeys.GENERAL_X,

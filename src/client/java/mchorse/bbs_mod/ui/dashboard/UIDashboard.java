@@ -119,6 +119,7 @@ public class UIDashboard extends UIBaseMenu
         IKey category = UIKeys.DASHBOARD_CATEGORY;
 
         this.main.keys().register(Keys.CYCLE_PANELS, this::cyclePanels).category(category);
+        this.main.keys().register(Keys.TOGGLE_TASKBAR_AUTO_HIDE, this::toggleTaskbarAutoHide).category(category);
         this.overlay.keys().register(Keys.TOGGLE_VISIBILITY, () ->
         {
             if (this.panels.panel.canToggleVisibility())
@@ -213,6 +214,15 @@ public class UIDashboard extends UIBaseMenu
 
         this.setPanel(panels.get(newIndex));
         UIUtils.playClick();
+    }
+
+    private void toggleTaskbarAutoHide()
+    {
+        boolean enabled = !BBSSettings.dashboardAutoHideTaskbarEnabled();
+
+        BBSSettings.dashboardAutoHideTaskbar.set(enabled);
+        this.panels.resetTaskbarAutoHide();
+        this.context.notifyInfo(enabled ? UIKeys.DASHBOARD_AUTO_HIDE_ENABLED : UIKeys.DASHBOARD_AUTO_HIDE_DISABLED);
     }
 
     public UIDashboardPanels getPanels()

@@ -24,7 +24,9 @@ config/bbs/assets/themes/my-theme/
 
 ### icons.png 规格
 
-- 与内置 atlas 同规格:**256×256**,图标按 **16×16 网格**排布(个别图标占半格/跨格)。
+- atlas 使用 **256×256 逻辑坐标**,图标按 **16×16 逻辑网格**排布(个别图标占半格/跨格)。
+  图片可以是 256×256,也可以是保持相同网格和长宽比的整数倍高分辨率原图;
+  例如内置 Refreshed 主题直接使用其原包 1024×1024 atlas(4 倍物理像素),无需缩放素材。
 - 制作方法:从 mod jar 解出 `assets/bbs/assets/textures/icons.png`
   (源码路径 `new/src/client/resources/assets/bbs/assets/textures/icons.png`),
   在原图上改——**网格位置不能动**,代码按坐标取图,挪位会取错图标。

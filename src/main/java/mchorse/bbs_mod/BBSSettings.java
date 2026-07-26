@@ -49,6 +49,13 @@ public class BBSSettings {
 	public static ValueBoolean accentFollowsTheme;
 	public static ValueBoolean motionEnabled;
 	public static ValueFloat motionSpeed;
+	public static ValueBoolean showTooltips;
+	public static ValueInt tooltipStyle;
+	public static ValueBoolean textEntryOpenAnim;
+	public static ValueBoolean filmEditorLayoutTransitionEnabled;
+	public static ValueBoolean dashboardAutoHideTaskbar;
+	public static ValueInt dashboardTaskbarHideDelay;
+	public static ValueBoolean editorVerticalLinesTimeline;
 	public static ValueFloat fov;
 	public static ValueBoolean hsvColorPicker;
 	public static ValueBoolean forceQwerty;
@@ -326,6 +333,107 @@ public class BBSSettings {
 		return ThemeManager.current().stateCursor;
 	}
 
+	public static int fieldFillColor() {
+		return ThemeManager.current().fieldFill;
+	}
+
+	public static int fieldBorderColor() {
+		return ThemeManager.current().fieldBorder;
+	}
+
+	public static int tabActiveLineColor() {
+		return ThemeManager.current().tabActiveLine;
+	}
+
+	public static int tabActiveGradientColor() {
+		return ThemeManager.current().tabActiveGradient;
+	}
+
+	public static int areaTintColor() {
+		return ThemeManager.current().areaTint;
+	}
+
+	public static int areaTintLightColor() {
+		return ThemeManager.current().areaTintLight;
+	}
+
+	public static int dropFillColor() {
+		return ThemeManager.current().dropFill;
+	}
+
+	public static int dropBorderColor() {
+		return ThemeManager.current().dropBorder;
+	}
+
+	public static int splitterActiveColor() {
+		return ThemeManager.current().splitterActive;
+	}
+
+	public static int splitterIdleColor() {
+		return ThemeManager.current().splitterIdle;
+	}
+
+	public static int shadowMutedColor() {
+		return ThemeManager.current().shadowMuted;
+	}
+
+	public static int trackpadScrubColor() {
+		return ThemeManager.current().trackpadScrub;
+	}
+
+	public static int notificationFillColor() {
+		return ThemeManager.current().notificationFill;
+	}
+
+	public static int notificationTextColor() {
+		return ThemeManager.current().notificationText;
+	}
+
+	public static int selectionFillColor() {
+		return ThemeManager.current().selectionFill;
+	}
+
+	public static int selectionOutlineColor() {
+		return ThemeManager.current().selectionOutline;
+	}
+
+	public static int iconPressedColor() {
+		return ThemeManager.current().iconPressed;
+	}
+
+	public static int iconDisabledColor() {
+		return ThemeManager.current().iconDisabled;
+	}
+
+	public static int scrollbarShadowColor() {
+		return ThemeManager.current().scrollbarShadow;
+	}
+
+	public static boolean showTooltipsEnabled() {
+		return showTooltips == null || showTooltips.get();
+	}
+
+	public static boolean textEntryOpenAnimationEnabled() {
+		return textEntryOpenAnim == null || textEntryOpenAnim.get();
+	}
+
+	public static boolean filmEditorLayoutTransitionEnabled() {
+		return filmEditorLayoutTransitionEnabled == null || filmEditorLayoutTransitionEnabled.get();
+	}
+
+	public static boolean dashboardAutoHideTaskbarEnabled() {
+		return dashboardAutoHideTaskbar != null && dashboardAutoHideTaskbar.get();
+	}
+
+	public static int dashboardTaskbarHideDelayMs() {
+		return dashboardTaskbarHideDelay == null ? 100 : dashboardTaskbarHideDelay.get();
+	}
+
+	public static boolean verticalTimelineLinesEnabled() {
+		return (editorTimelineGrid != null && editorTimelineGrid.get())
+			|| (editorVerticalLinesTimeline != null && editorVerticalLinesTimeline.get());
+	}
+
 	public static boolean textShadow() {
 		return ThemeManager.current().textShadow;
 	}
@@ -583,6 +691,15 @@ public class BBSSettings {
 		accentFollowsTheme = builder.getBoolean("accent_follows_theme", true);
 		motionEnabled = builder.getBoolean("motion_enabled", true);
 		motionSpeed = builder.getFloat("motion_speed", 1F, 0.5F, 2F);
+
+		builder.category("refreshed", Icons.REFRESH);
+		showTooltips = builder.getBoolean("show_tooltips", true);
+		tooltipStyle = builder.getInt("tooltip_style", 0, 0, 2);
+		textEntryOpenAnim = builder.getBoolean("text_entry_open_anim", true);
+		filmEditorLayoutTransitionEnabled = builder.getBoolean("film_editor_layout_transition_enabled", true);
+		dashboardAutoHideTaskbar = builder.getBoolean("dashboard_auto_hide_taskbar", false);
+		dashboardTaskbarHideDelay = builder.getInt("dashboard_taskbar_hide_delay", 100, 100, 15000);
+		editorVerticalLinesTimeline = builder.getBoolean("vertical_lines_timeline", false);
 
 		builder.category("transformation", Icons.SCALE);
 		gizmos = builder.getBoolean("gizmos", true);

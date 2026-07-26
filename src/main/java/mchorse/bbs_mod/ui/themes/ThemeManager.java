@@ -127,6 +127,7 @@ public class ThemeManager
         ids.add("example");
         ids.add("amber");
         ids.add("strawberry");
+        ids.add("refreshed");
 
         try
         {

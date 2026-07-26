@@ -25,7 +25,7 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 
 | 来源 | 位置 | 说明 |
 |---|---|---|
-| 内置 | mod jar 内 `assets/bbs/assets/themes/<id>/` | `dark`、`light` 等随 mod 分发 |
+| 内置 | mod jar 内 `assets/bbs/assets/themes/<id>/` | `dark`、`light`、`refreshed` 等随 mod 分发 |
 | 用户 | `.minecraft/config/bbs/assets/themes/<id>/` | 玩家/作者放这里;**同 id 覆盖内置** |
 
 生效方式:游戏内 `BBS 面板 → 设置(齿轮)→ 皮肤 → 选择主题`。
@@ -82,6 +82,35 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 | `colors.state.highlight` | `#DDDDFF` | 焦点高亮/提示性发光 |
 | `colors.state.cursor` | `#57F52A` | 文本输入光标 |
 
+### 4.3.1 colors 扩展语义色
+
+这些 key 直接放在 `colors` 下。值为 `#00000000` 的默认项表示旧版没有对应视觉，
+消费控件必须保留旧绘制路径；主题可通过非零值显式开启对应效果。
+
+| key | 默认(dark) | 用在哪 |
+|---|---|---|
+| `colors.field_fill` | `#0F1217` | 文本输入框填充 |
+| `colors.field_border` | `#30353D` | 文本输入框边框 |
+| `colors.tab_active_line` | `#FF3242` | 活跃标签下划线 |
+| `colors.tab_active_gradient` | `#00000000` | 活跃标签/图标的可选背景渐变 |
+| `colors.area_tint` | `#00000000` | 区域着色 |
+| `colors.area_tint_light` | `#00000000` | 较亮区域着色 |
+| `colors.drop_fill` | `#00000000` | 拖放目标填充 |
+| `colors.drop_border` | `#00000000` | 拖放目标边框 |
+| `colors.splitter_active` | `#00000000` | 活跃分割条 |
+| `colors.splitter_idle` | `#00000000` | 空闲分割条 |
+| `colors.shadow_muted` | `#00000000` | 柔和阴影 |
+| `colors.trackpad_scrub` | `#00000000` | 轨迹垫擦除反馈 |
+| `colors.notification_fill` | `#00000000` | 通知背景；0 保留旧的类型色背景 |
+| `colors.notification_text` | `#FFFFFF` | 通知文字 |
+| `colors.selection_fill` | `#00000000` | 框选区域填充；0 保留旧绘制 |
+| `colors.selection_outline` | `#00000000` | 框选区域描边；0 保留旧绘制 |
+| `colors.icon_pressed` | `#00000000` | 图标按下态背景；0 保留旧绘制 |
+| `colors.icon_disabled` | `#00000000` | 图标禁用态背景；0 保留旧绘制 |
+| `colors.scrollbar_shadow` | `#00000000` | 滚动条阴影；0 表示不绘制 |
+
+所有扩展色都遵循普通颜色的继承、坏值逐 key 回退和 parse-time 固化规则。
+
 ### 4.4 style —— 样式开关
 
 | key | 类型 | 默认 | 说明 |
@@ -100,7 +129,7 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 
 | key | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `textures.icons` | string/null | `null` | 图标 atlas 覆盖,`assets:` 链接,如 `"assets:themes/<id>/icons.png"`。null=用默认。atlas 规格见 `example-theme/textures/README.md`(256×256,16×16 网格) |
+| `textures.icons` | string/null | `null` | 图标 atlas 覆盖,`assets:` 链接,如 `"assets:themes/<id>/icons.png"`。null=用默认。atlas 规格见 `example-theme/textures/README.md`(逻辑 256×256、16×16 网格,允许整数倍高分辨率原图) |
 | `textures.background` | string/null | `null` | 根界面背景图(仪表盘 + 独立 UI 屏通用铺底);用户在设置里显式选择的背景优先于主题 |
 | `textures.background_mode` | string | `"stretch"` | 背景铺底模式:`stretch` 拉伸 / `cover` 等比裁切铺满 / `tile` 平铺 |
 | `textures.background_dim` | float | `0` | 背景上的暗化蒙层强度,0-1;画在背景之上、贴花与 UI 之下 |
@@ -137,7 +166,7 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 | `motion.enabled` | bool | `true` | 主题级动画总开关(用户设置里还有一个用户级总开关,两者都开才有动画) |
 | `motion.speed` | float | `1.0` | 主题级速度倍率,与用户设置的速度倍率相乘;有效时长 = duration ÷ 总倍率 |
 
-六个 v1 接入点 + 四个 v2 接入点,每个条目的通用结构:
+六个 v1 接入点 + 六个扩展接入点,每个条目的通用结构:
 
 ```json
 { "enabled": true,
@@ -164,6 +193,8 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 | `motion.hover_scale` | `{false, scale 1}` | 悬浮时控件轻微放大(围绕中心);`scale` 指定倍率如 1.06 |
 | `motion.press` | `{false, scale 1}` | 按下压缩、松开回弹;`scale` 指定按下倍率如 0.94 |
 | `motion.layout` | `{false}` | 面板布局变更时 bounds 从旧位置动画到新位置(渲染与命中始终一致) |
+| `motion.toggle` | `{false, 180, "sine_out"}` | 开关滑块位置、轨道色和滑块色的切换反馈 |
+| `motion.taskbar_hide` | `{true, 250, "sine_inout"}` | 活动仪表盘面板与底栏整体自动隐藏/唤回;功能本身还受用户设置开关门控 |
 
 ### 4.6.1 preset / tracks —— 轨道编排(overlay、context_menu)
 

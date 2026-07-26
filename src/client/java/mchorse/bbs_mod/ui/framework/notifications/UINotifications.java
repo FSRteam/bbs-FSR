@@ -60,15 +60,23 @@ public class UINotifications
             int ly = padding;
             int h = padding * 2 + splits.size() * lineHeight - lineMargin;
             int x = (int) Lerps.lerp(context.menu.width, context.menu.width / 2 - w / 2, notification.getFactor(context.getTransition()));
+            int fill = BBSSettings.notificationFillColor();
+
+            if (fill == 0)
+            {
+                fill = Colors.mulRGB(color | Colors.A100, 0.1F);
+            }
 
             context.batcher.dropShadow(x + 3, y + 3, x + w - 3, y + h - 3, 10, Colors.A25 | color, color);
-            context.batcher.box(x + 1, y, x + w - 1, y + h, Colors.mulRGB(color | Colors.A100, 0.1F));
-            context.batcher.box(x, y + 1, x + w, y + h - 1, Colors.mulRGB(color | Colors.A100, 0.1F));
+            context.batcher.box(x + 1, y, x + w - 1, y + h, fill);
+            context.batcher.box(x, y + 1, x + w, y + h - 1, fill);
             context.batcher.outline(x + outlineMargin, y + outlineMargin, x + w - outlineMargin, y + h - outlineMargin, BBSSettings.primaryColor(Colors.A100));
 
             for (String line : splits)
             {
-                context.batcher.textShadow(line, x + padding, y + ly, notification.color);
+                int textColor = notification.color == Colors.WHITE ? BBSSettings.notificationTextColor() : notification.color;
+
+                context.batcher.textShadow(line, x + padding, y + ly, textColor);
 
                 ly += lineHeight;
             }

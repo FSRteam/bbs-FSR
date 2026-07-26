@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.overlay;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
@@ -258,7 +259,7 @@ public class UIOverlay extends UIElement
          * only lingers visually until the reverse tween settles */
         if (!this.closing)
         {
-            this.appear.to(1F, UIMotions.overlay());
+            this.appear.to(1F, BBSSettings.textEntryOpenAnimationEnabled() ? UIMotions.overlay() : null);
         }
 
         float factor = this.appear.update();

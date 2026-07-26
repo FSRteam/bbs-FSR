@@ -105,13 +105,37 @@ public class UIColor extends UIElement
     @Override
     public void render(UIContext context)
     {
-        int padding = 0;
+        int radius = BBSSettings.cornerWidget();
+        int padding = radius > 0 ? 1 : 0;
 
-        this.picker.renderRect(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey());
+        if (radius > 0)
+        {
+            context.batcher.roundedFrame(
+                this.area.x,
+                this.area.y,
+                this.area.w,
+                this.area.h,
+                radius,
+                1F,
+                BBSSettings.fieldBorderColor(),
+                this.picker.color.getARGBColor()
+            );
+        }
+        else
+        {
+            this.picker.renderRect(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey());
+        }
 
         if (this.area.isInside(context))
         {
-            this.area.render(context.batcher, Colors.A12, padding);
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x + padding, this.area.y + padding, this.area.w - padding * 2, this.area.h - padding * 2, Math.max(0, radius - padding), Colors.A12);
+            }
+            else
+            {
+                this.area.render(context.batcher, Colors.A12, padding);
+            }
         }
 
         if (this.label)

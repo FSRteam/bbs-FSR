@@ -49,17 +49,23 @@ public final class UIMotionsTest
         UIThemeMotion hoverScale = UIMotions.hoverScale();
         UIThemeMotion press = UIMotions.press();
         UIThemeMotion layout = UIMotions.layout();
+        UIThemeMotion toggle = UIMotions.toggle();
+        UIThemeMotion taskbarHide = UIMotions.taskbarHide();
 
-        assertTrue(scrollSmooth != null && hoverScale != null && press != null && layout != null, "coverage entries present");
+        assertTrue(scrollSmooth != null && hoverScale != null && press != null && layout != null && toggle != null && taskbarHide != null, "coverage entries present");
         assertTrue(scrollSmooth.enabled, "scroll_smooth enabled by default");
         assertTrue(!hoverScale.enabled, "hover_scale disabled by default");
         assertTrue(!press.enabled, "press disabled by default");
         assertTrue(!layout.enabled, "layout disabled by default");
+        assertTrue(!toggle.enabled, "toggle disabled by default");
+        assertTrue(taskbarHide.enabled, "taskbar_hide enabled by default behind its user setting");
         assertEquals(1F, hoverScale.scale, "hover_scale scale defaults to 1");
         assertEquals(1F, press.scale, "press scale defaults to 1");
         assertEquals(0, UIMotions.duration(hoverScale), "disabled hover_scale has zero duration");
         assertEquals(0, UIMotions.duration(layout), "disabled layout has zero duration");
+        assertEquals(0, UIMotions.duration(toggle), "disabled toggle has zero duration");
         assertTrue(UIMotions.duration(scrollSmooth) > 0, "enabled scroll_smooth has a positive duration");
+        assertTrue(UIMotions.duration(taskbarHide) > 0, "enabled taskbar_hide has a positive duration");
     }
 
     /**

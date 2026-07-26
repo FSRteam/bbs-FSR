@@ -133,7 +133,16 @@ public class UICirculate extends UIClickable<UICirculate>
             color = Colors.mulRGB(color, 0.85F);
         }
 
-        context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
+        int radius = BBSSettings.cornerWidget();
+
+        if (radius > 0)
+        {
+            context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, color);
+        }
+        else
+        {
+            context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
+        }
 
         FontRenderer font = context.batcher.getFont();
         String label = font.limitToWidth(this.label.get(), this.area.w - 4);

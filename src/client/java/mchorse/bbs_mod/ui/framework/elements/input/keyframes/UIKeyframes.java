@@ -34,6 +34,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
+import mchorse.bbs_mod.ui.utils.UISelectionRenderer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
@@ -1681,7 +1682,7 @@ public class UIKeyframes extends UIElement
 
         if (this.selecting)
         {
-            context.batcher.normalizedBox(this.originalX, this.originalY, context.mouseX, context.mouseY, BBSSettings.accentOverlay(Colors.A25));
+            UISelectionRenderer.renderMarquee(context, this.originalX, this.originalY, context.mouseX, context.mouseY);
         }
 
         this.currentGraph.postRender(context);

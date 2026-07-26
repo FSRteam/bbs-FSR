@@ -121,4 +121,14 @@ public class UIMotions
     {
         return ThemeManager.current().layout;
     }
+
+    public static UIThemeMotion toggle()
+    {
+        return ThemeManager.current().toggle;
+    }
+
+    public static UIThemeMotion taskbarHide()
+    {
+        return ThemeManager.current().taskbarHide;
+    }
 }

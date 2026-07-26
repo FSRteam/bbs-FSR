@@ -43,7 +43,6 @@ public class UIDockLayout extends UIElement
     private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
     private static final float DRAG_HANDLE_TOP_OFFSET_NORM = 0.01F;
     private static final int SPLITTER_HANDLE_PX = 14;
-    private static final int SPLITTER_HANDLE_LINE_PX = 1;
     private static final int SPLITTER_LINK_HITBOX_PADDING_PX = 8;
     private static final int DROP_ZONE_CENTER = -1;
     private static final float DROP_EDGE_MARGIN = 0.2F;
@@ -741,30 +740,15 @@ public class UIDockLayout extends UIElement
 
         UIDraggable splitter = this.splitterHandles.get(index);
         EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
-        int lineColor = BBSSettings.primaryColor(Colors.A100);
+        boolean legacyVisible = splitter.isDragging() || this.draggedSplitterIndices.contains(index);
+        boolean active = legacyVisible || splitter.area.isInside(context);
 
         if ((splitter.isDragging() || splitter.area.isInside(context)) && BBSSettings.editorResizablePanels.get())
         {
             context.requestCursor(this.getSplitterCursor(index, context.mouseX, context.mouseY));
         }
 
-        if (!splitter.isDragging() && !this.draggedSplitterIndices.contains(index))
-        {
-            return;
-        }
-
-        if (info.horizontal)
-        {
-            int cy = splitter.area.y + splitter.area.h / 2;
-            int half = SPLITTER_HANDLE_LINE_PX / 2;
-            context.batcher.box(splitter.area.x, cy - half, splitter.area.ex(), cy - half + SPLITTER_HANDLE_LINE_PX, lineColor);
-        }
-        else
-        {
-            int cx = splitter.area.x + splitter.area.w / 2;
-            int half = SPLITTER_HANDLE_LINE_PX / 2;
-            context.batcher.box(cx - half, splitter.area.y, cx - half + SPLITTER_HANDLE_LINE_PX, splitter.area.ey(), lineColor);
-        }
+        UIDockStyleRenderer.renderSplitter(context, splitter.area, info.horizontal, active, legacyVisible);
     }
 
     private int getSplitterCursor(int index, int mouseX, int mouseY)
@@ -1134,10 +1118,8 @@ public class UIDockLayout extends UIElement
     private void renderPanelDragHandle(UIContext context, UIDraggable handle)
     {
         boolean active = handle.area.isInside(context) || handle.isDragging();
-        int color = active ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.6F);
-        int cx = handle.area.mx();
-        int cy = handle.area.y + handle.area.h / 2 + 4;
-        context.batcher.icon(Icons.ALL_DIRECTIONS, color, cx, cy, 0.5F, 0.5F);
+
+        UIDockStyleRenderer.renderPanelDragHandle(context, handle.area, active);
     }
 
     private int computeDropZone(Area area, int mouseX, int mouseY)
@@ -1235,51 +1217,7 @@ public class UIDockLayout extends UIElement
             return;
         }
 
-        Area a = target.area;
-        int border = BBSSettings.primaryColor(Colors.A50);
-        int fill = BBSSettings.primaryColor(Colors.A25);
-
-        if (this.dropTargetZone == DROP_ZONE_CENTER)
-        {
-            this.renderDropZoneRect(context, a, border, fill);
-            return;
-        }
-
-        float m = DROP_EDGE_MARGIN;
-        int strip = 2;
-
-        switch (this.dropTargetZone)
-        {
-            case EditorLayoutNode.EDGE_LEFT:
-                context.batcher.box(a.x, a.y, a.x + (int) (a.w * m), a.ey(), fill);
-                context.batcher.box(a.x + (int) (a.w * m) - strip, a.y, a.x + (int) (a.w * m) + strip, a.ey(), border);
-                break;
-            case EditorLayoutNode.EDGE_RIGHT:
-                context.batcher.box(a.ex() - (int) (a.w * m), a.y, a.ex(), a.ey(), fill);
-                context.batcher.box(a.ex() - (int) (a.w * m) - strip, a.y, a.ex() - (int) (a.w * m) + strip, a.ey(), border);
-                break;
-            case EditorLayoutNode.EDGE_TOP:
-                context.batcher.box(a.x, a.y, a.ex(), a.y + (int) (a.h * m), fill);
-                context.batcher.box(a.x, a.y + (int) (a.h * m) - strip, a.ex(), a.y + (int) (a.h * m) + strip, border);
-                break;
-            case EditorLayoutNode.EDGE_BOTTOM:
-                context.batcher.box(a.x, a.ey() - (int) (a.h * m), a.ex(), a.ey(), fill);
-                context.batcher.box(a.x, a.ey() - (int) (a.h * m) - strip, a.ex(), a.ey() - (int) (a.h * m) + strip, border);
-                break;
-            default:
-                this.renderDropZoneRect(context, a, border, fill);
-                break;
-        }
-    }
-
-    private void renderDropZoneRect(UIContext context, Area a, int border, int fill)
-    {
-        context.batcher.box(a.x, a.y, a.ex(), a.ey(), fill);
-        int t = 2;
-        context.batcher.box(a.x, a.y, a.ex(), a.y + t, border);
-        context.batcher.box(a.x, a.ey() - t, a.ex(), a.ey(), border);
-        context.batcher.box(a.x, a.y, a.x + t, a.ey(), border);
-        context.batcher.box(a.ex() - t, a.y, a.ex(), a.ey(), border);
+        UIDockStyleRenderer.renderDropZone(context, target.area, this.dropTargetZone, DROP_EDGE_MARGIN);
     }
 
     /* Helper types */

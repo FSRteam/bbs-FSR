@@ -695,6 +695,15 @@ public class Scroll
 
         if (this.scrollbar)
         {
+            int scrollbarShadow = BBSSettings.scrollbarShadowColor();
+
+            if (scrollbarShadow != 0)
+            {
+                Area track = this.getScrollArea();
+
+                batcher.box(track.x, track.y, track.ex(), track.ey(), scrollbarShadow);
+            }
+
             Area scrollbar = this.getScrollbarArea();
             float alpha = this.updateScrollbarFade(scrollbar, mouseX, mouseY);
 

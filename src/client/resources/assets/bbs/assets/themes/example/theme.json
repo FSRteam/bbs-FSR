@@ -31,7 +31,26 @@
             "active": "#4A7DFF",
             "highlight": "#DDE4FF",
             "cursor": "#57F52A"
-        }
+        },
+        "field_fill": "#0F1217",
+        "field_border": "#30353D",
+        "tab_active_line": "#FF3242",
+        "tab_active_gradient": "#00000000",
+        "area_tint": "#00000000",
+        "area_tint_light": "#00000000",
+        "drop_fill": "#00000000",
+        "drop_border": "#00000000",
+        "splitter_active": "#00000000",
+        "splitter_idle": "#00000000",
+        "shadow_muted": "#00000000",
+        "trackpad_scrub": "#00000000",
+        "notification_fill": "#00000000",
+        "notification_text": "#FFFFFF",
+        "selection_fill": "#00000000",
+        "selection_outline": "#00000000",
+        "icon_pressed": "#00000000",
+        "icon_disabled": "#00000000",
+        "scrollbar_shadow": "#00000000"
     },
 
     "_doc_style": "样式开关:text_shadow=文字阴影,bevel=按钮立体斜边,panel_shadow=面板辉光阴影;corner_radius 三级圆角半径 0-16,0=直角(旧版观感)",
@@ -70,6 +89,8 @@
         "scroll_smooth": { "enabled": true },
         "hover_scale":   { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
         "press":         { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
-        "layout":        { "enabled": false, "duration": 200, "easing": "sine_inout" }
+        "layout":        { "enabled": false, "duration": 200, "easing": "sine_inout" },
+        "toggle":        { "enabled": false, "duration": 180, "easing": "sine_out" },
+        "taskbar_hide":  { "enabled": true, "duration": 250, "easing": "sine_inout" }
     }
 }

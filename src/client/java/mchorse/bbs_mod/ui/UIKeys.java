@@ -219,6 +219,9 @@ public class UIKeys
     public static final IKey CONTEXT_MENU_KEY_CATEGORY = L10n.lang("bbs.ui.context.key_category");
     public static final IKey DASHBOARD_CATEGORY = L10n.lang("bbs.ui.dashboard.category");
     public static final IKey DASHBOARD_CONTEXT_TOGGLE_VISIBILITY = L10n.lang("bbs.ui.dashboard.context.toggle_visibility");
+    public static final IKey DASHBOARD_KEYS_TOGGLE_AUTO_HIDE = L10n.lang("bbs.ui.dashboard.keys.toggle_auto_hide");
+    public static final IKey DASHBOARD_AUTO_HIDE_ENABLED = L10n.lang("bbs.ui.dashboard.auto_hide_enabled");
+    public static final IKey DASHBOARD_AUTO_HIDE_DISABLED = L10n.lang("bbs.ui.dashboard.auto_hide_disabled");
     public static final IKey DASHBOARD_KEYS_TOGGLE_DEBUG = L10n.lang("bbs.ui.dashboard.keys.toggle_debug");
     public static final IKey DASHBOARD_OPTIFINE_EW_DESCRIPTION = L10n.lang("bbs.ui.dashboard.optifine_ew-description");
     public static final IKey DASHBOARD_OPTIFINE_EW_TITLE = L10n.lang("bbs.ui.dashboard.optifine_ew-title");
@@ -229,6 +232,7 @@ public class UIKeys
     public static final IKey ENGINE_KEYSTROKES_POSITION_TOP_RIGHT = L10n.lang("bbs.keystrokes_position.top_right");
     public static final IKey ENGINE_THEME_DARK = L10n.lang("bbs.theme.dark");
     public static final IKey ENGINE_THEME_LIGHT = L10n.lang("bbs.theme.light");
+    public static final IKey ENGINE_TOOLTIP_STYLE_THEME = L10n.lang("bbs.tooltip_style.theme");
     public static final IKey ENGINE_TOOLTIP_STYLE_DARK = L10n.lang("bbs.tooltip_style.dark");
     public static final IKey ENGINE_TOOLTIP_STYLE_LIGHT = L10n.lang("bbs.tooltip_style.light");
     public static final IKey ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL = L10n.lang("bbs.rotate_3d_sphere_mode.trackball");

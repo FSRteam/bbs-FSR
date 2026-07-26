@@ -259,11 +259,20 @@ public class UIKeybind extends UIElement
         String label = this.combo.keys.isEmpty() ? UIKeys.GENERAL_NONE.get() : this.combo.getKeyCombo();
         FontRenderer font = context.batcher.getFont();
         int w = font.getWidth(label) - 1;
+        int radius = BBSSettings.cornerWidget();
 
         if (this.reading)
         {
-            this.area.render(context.batcher, BBSSettings.inputSurface());
-            this.area.render(context.batcher, BBSSettings.accentOverlay(Colors.A25));
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.inputSurface());
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.accentOverlay(Colors.A25));
+            }
+            else
+            {
+                this.area.render(context.batcher, BBSSettings.inputSurface());
+                this.area.render(context.batcher, BBSSettings.accentOverlay(Colors.A25));
+            }
 
             int x = this.area.mx(w);
             int y = this.area.my() + font.getHeight() - 1;
@@ -274,10 +283,22 @@ public class UIKeybind extends UIElement
         }
         else
         {
-            this.area.render(context.batcher, BBSSettings.inputSurface());
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.inputSurface());
+            }
+            else
+            {
+                this.area.render(context.batcher, BBSSettings.inputSurface());
+            }
         }
 
         context.batcher.textShadow(label, this.area.mx(w), this.area.my() - font.getHeight() / 2);
+
+        if (radius > 0)
+        {
+            this.renderLockedArea(context);
+        }
 
         super.render(context);
     }

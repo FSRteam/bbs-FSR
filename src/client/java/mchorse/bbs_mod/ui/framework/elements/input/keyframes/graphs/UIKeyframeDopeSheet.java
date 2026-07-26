@@ -754,7 +754,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     protected void renderTimelineGrid(UIContext context)
     {
-        if (!BBSSettings.editorTimelineGrid.get())
+        if (!BBSSettings.verticalTimelineLinesEnabled())
         {
             return;
         }

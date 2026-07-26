@@ -158,19 +158,30 @@ public class UIIcon extends UIClickable<UIIcon>
 
     protected int defaultPressedBackgroundColor()
     {
-        return Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.85F);
+        int themed = BBSSettings.iconPressedColor();
+
+        return themed == 0 ? Colors.mulRGB(BBSSettings.primaryColor(Colors.A100), 0.85F) : themed;
     }
 
     protected int defaultActiveBackgroundColor()
     {
-        return BBSSettings.primaryColor(Colors.A100);
+        int themed = BBSSettings.tabActiveGradientColor();
+
+        return themed == 0 ? BBSSettings.primaryColor(Colors.A100) : themed;
+    }
+
+    protected int defaultDisabledBackgroundColor()
+    {
+        int themed = BBSSettings.iconDisabledColor();
+
+        return themed == 0 ? NO_BACKGROUND : themed;
     }
 
     protected int getBackgroundColor()
     {
         if (!this.isEnabled())
         {
-            return this.disabledBackgroundColor;
+            return this.disabledBackgroundColor == NO_BACKGROUND ? this.defaultDisabledBackgroundColor() : this.disabledBackgroundColor;
         }
 
         if (this.active)

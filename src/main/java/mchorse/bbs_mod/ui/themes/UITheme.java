@@ -35,6 +35,25 @@ public class UITheme
     public final int stateActive;
     public final int stateHighlight;
     public final int stateCursor;
+    public final int fieldFill;
+    public final int fieldBorder;
+    public final int tabActiveLine;
+    public final int tabActiveGradient;
+    public final int areaTint;
+    public final int areaTintLight;
+    public final int dropFill;
+    public final int dropBorder;
+    public final int splitterActive;
+    public final int splitterIdle;
+    public final int shadowMuted;
+    public final int trackpadScrub;
+    public final int notificationFill;
+    public final int notificationText;
+    public final int selectionFill;
+    public final int selectionOutline;
+    public final int iconPressed;
+    public final int iconDisabled;
+    public final int scrollbarShadow;
 
     /* Style toggles */
     public final boolean textShadow;
@@ -73,6 +92,8 @@ public class UITheme
     public final UIThemeMotion hoverScale;
     public final UIThemeMotion press;
     public final UIThemeMotion layout;
+    public final UIThemeMotion toggle;
+    public final UIThemeMotion taskbarHide;
 
     UITheme(Builder builder)
     {
@@ -96,6 +117,25 @@ public class UITheme
         this.stateActive = builder.stateActive;
         this.stateHighlight = builder.stateHighlight;
         this.stateCursor = builder.stateCursor;
+        this.fieldFill = builder.fieldFill;
+        this.fieldBorder = builder.fieldBorder;
+        this.tabActiveLine = builder.tabActiveLine;
+        this.tabActiveGradient = builder.tabActiveGradient;
+        this.areaTint = builder.areaTint;
+        this.areaTintLight = builder.areaTintLight;
+        this.dropFill = builder.dropFill;
+        this.dropBorder = builder.dropBorder;
+        this.splitterActive = builder.splitterActive;
+        this.splitterIdle = builder.splitterIdle;
+        this.shadowMuted = builder.shadowMuted;
+        this.trackpadScrub = builder.trackpadScrub;
+        this.notificationFill = builder.notificationFill;
+        this.notificationText = builder.notificationText;
+        this.selectionFill = builder.selectionFill;
+        this.selectionOutline = builder.selectionOutline;
+        this.iconPressed = builder.iconPressed;
+        this.iconDisabled = builder.iconDisabled;
+        this.scrollbarShadow = builder.scrollbarShadow;
 
         this.textShadow = builder.textShadow;
         this.bevel = builder.bevel;
@@ -122,6 +162,8 @@ public class UITheme
         this.hoverScale = builder.hoverScale;
         this.press = builder.press;
         this.layout = builder.layout;
+        this.toggle = builder.toggle;
+        this.taskbarHide = builder.taskbarHide;
     }
 
     public static class Builder
@@ -146,6 +188,25 @@ public class UITheme
         public int stateActive;
         public int stateHighlight;
         public int stateCursor;
+        public int fieldFill;
+        public int fieldBorder;
+        public int tabActiveLine;
+        public int tabActiveGradient;
+        public int areaTint;
+        public int areaTintLight;
+        public int dropFill;
+        public int dropBorder;
+        public int splitterActive;
+        public int splitterIdle;
+        public int shadowMuted;
+        public int trackpadScrub;
+        public int notificationFill;
+        public int notificationText;
+        public int selectionFill;
+        public int selectionOutline;
+        public int iconPressed;
+        public int iconDisabled;
+        public int scrollbarShadow;
 
         public boolean textShadow;
         public boolean bevel;
@@ -172,6 +233,8 @@ public class UITheme
         public UIThemeMotion hoverScale;
         public UIThemeMotion press;
         public UIThemeMotion layout;
+        public UIThemeMotion toggle;
+        public UIThemeMotion taskbarHide;
 
         /**
          * @param from theme to copy every field from (inheritance fallback),
@@ -205,6 +268,25 @@ public class UITheme
             this.stateActive = from.stateActive;
             this.stateHighlight = from.stateHighlight;
             this.stateCursor = from.stateCursor;
+            this.fieldFill = from.fieldFill;
+            this.fieldBorder = from.fieldBorder;
+            this.tabActiveLine = from.tabActiveLine;
+            this.tabActiveGradient = from.tabActiveGradient;
+            this.areaTint = from.areaTint;
+            this.areaTintLight = from.areaTintLight;
+            this.dropFill = from.dropFill;
+            this.dropBorder = from.dropBorder;
+            this.splitterActive = from.splitterActive;
+            this.splitterIdle = from.splitterIdle;
+            this.shadowMuted = from.shadowMuted;
+            this.trackpadScrub = from.trackpadScrub;
+            this.notificationFill = from.notificationFill;
+            this.notificationText = from.notificationText;
+            this.selectionFill = from.selectionFill;
+            this.selectionOutline = from.selectionOutline;
+            this.iconPressed = from.iconPressed;
+            this.iconDisabled = from.iconDisabled;
+            this.scrollbarShadow = from.scrollbarShadow;
 
             this.textShadow = from.textShadow;
             this.bevel = from.bevel;
@@ -231,6 +313,8 @@ public class UITheme
             this.hoverScale = from.hoverScale;
             this.press = from.press;
             this.layout = from.layout;
+            this.toggle = from.toggle;
+            this.taskbarHide = from.taskbarHide;
         }
 
         public UITheme build()

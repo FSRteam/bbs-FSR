@@ -9,11 +9,15 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import sun.misc.Unsafe;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -35,6 +39,7 @@ public final class ThemeCoreTest
         testCircularBaseChain();
         testChainDepthLimit();
         testBadValuesFallBack();
+        testExtendedColorTokens();
         testSpringMotionParsing();
         testBadJsonAndFormat();
         testUnderscoreKeysIgnored();
@@ -61,7 +66,7 @@ public final class ThemeCoreTest
         Path themes = Path.of("src/client/resources/assets/bbs/assets/themes");
         UITheme dark = parseFile("dark", themes.resolve("dark/theme.json"), ThemeParser.defaultDark("dark"));
 
-        for (String id : new String[] {"light", "example", "amber", "strawberry"})
+        for (String id : new String[] {"light", "example", "amber", "strawberry", "refreshed"})
         {
             UITheme theme = parseFile(id, themes.resolve(id + "/theme.json"), dark);
 
@@ -81,6 +86,39 @@ public final class ThemeCoreTest
         assertTrue(amber.accentPrimary != dark.accentPrimary, "amber recolors the accent");
         assertTrue(!amber.bevel && !amber.panelShadow && !amber.textShadow, "amber flattens the style toggles");
         assertTrue(amber.overlay.easing != dark.overlay.easing || amber.overlay.duration != dark.overlay.duration, "amber changes motion");
+
+        UITheme refreshed = parseFile("refreshed", themes.resolve("refreshed/theme.json"), dark);
+
+        assertEquals(0xff0f1114, refreshed.surfaceBase, "refreshed canvas matches source constant");
+        assertEquals(0xff8d6db8, refreshed.accentPrimary, "refreshed accent matches source constant");
+        assertEquals(5, refreshed.cornerWidget, "refreshed widget radius");
+        assertEquals(Link.create("assets:themes/refreshed/icons.png"), refreshed.iconsAtlas, "refreshed overrides the icon atlas");
+
+        Path refreshedIcons = themes.resolve("refreshed/icons.png");
+        BufferedImage iconImage = ImageIO.read(refreshedIcons.toFile());
+
+        assertTrue(iconImage != null, "refreshed icon atlas is readable");
+        assertEquals(1024, iconImage.getWidth(), "refreshed keeps the source high-resolution atlas width");
+        assertEquals(1024, iconImage.getHeight(), "refreshed keeps the source high-resolution atlas height");
+
+        String refreshedIconHash = HexFormat.of().formatHex(
+            MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(refreshedIcons))
+        );
+
+        assertEquals(
+            "41dd95d44b6a7ac467efd34f6a7f4e527f0dd6babd21052447cc0687efe0d657",
+            refreshedIconHash,
+            "refreshed icon atlas matches the Refreshed 2.0 source jar byte for byte"
+        );
+
+        for (UIThemeMotion motion : new UIThemeMotion[] {
+            refreshed.overlay, refreshed.panelSwitch, refreshed.hover, refreshed.notification,
+            refreshed.contextMenu, refreshed.scrollbar, refreshed.scrollSmooth, refreshed.hoverScale,
+            refreshed.press, refreshed.layout, refreshed.toggle, refreshed.taskbarHide
+        })
+        {
+            assertEquals(UIThemeMotion.MotionType.SPRING, motion.type, "refreshed motion entries use spring curves");
+        }
     }
 
     private static void testFullParse()
@@ -224,6 +262,62 @@ public final class ThemeCoreTest
         assertEquals(10000, theme.overlay.duration, "duration clamped");
     }
 
+    private static void testExtendedColorTokens()
+    {
+        MapType map = DataToString.mapFromString("""
+            {
+                "format": 1,
+                "colors": {
+                    "field_fill": "#010101", "field_border": "#020202",
+                    "tab_active_line": "#030303", "tab_active_gradient": "#44040404",
+                    "area_tint": "#050505", "area_tint_light": "#060606",
+                    "drop_fill": "#77070707", "drop_border": "#88080808",
+                    "splitter_active": "#99090909", "splitter_idle": "#220A0A0A",
+                    "shadow_muted": "#0B0B0B", "trackpad_scrub": "#0C0C0C",
+                    "notification_fill": "#DD0D0D0D", "notification_text": "#0E0E0E",
+                    "selection_fill": "#660F0F0F", "selection_outline": "#101010",
+                    "icon_pressed": "#77111111", "icon_disabled": "#33121212",
+                    "scrollbar_shadow": "#88131313"
+                }
+            }
+            """);
+        UITheme theme = ThemeParser.parse("tokens", map, ThemeParser.defaultDark("tokens"));
+
+        assertEquals(0xff010101, theme.fieldFill, "field fill parses");
+        assertEquals(0xff020202, theme.fieldBorder, "field border parses");
+        assertEquals(0xff030303, theme.tabActiveLine, "tab active line parses");
+        assertEquals(0x44040404, theme.tabActiveGradient, "tab active gradient keeps alpha");
+        assertEquals(0xff050505, theme.areaTint, "area tint parses");
+        assertEquals(0xff060606, theme.areaTintLight, "light area tint parses");
+        assertEquals(0x77070707, theme.dropFill, "drop fill keeps alpha");
+        assertEquals(0x88080808, theme.dropBorder, "drop border keeps alpha");
+        assertEquals(0x99090909, theme.splitterActive, "active splitter keeps alpha");
+        assertEquals(0x220a0a0a, theme.splitterIdle, "idle splitter keeps alpha");
+        assertEquals(0xff0b0b0b, theme.shadowMuted, "muted shadow parses");
+        assertEquals(0xff0c0c0c, theme.trackpadScrub, "trackpad scrub parses");
+        assertEquals(0xdd0d0d0d, theme.notificationFill, "notification fill keeps alpha");
+        assertEquals(0xff0e0e0e, theme.notificationText, "notification text parses");
+        assertEquals(0x660f0f0f, theme.selectionFill, "selection fill keeps alpha");
+        assertEquals(0xff101010, theme.selectionOutline, "selection outline parses");
+        assertEquals(0x77111111, theme.iconPressed, "pressed icon keeps alpha");
+        assertEquals(0x33121212, theme.iconDisabled, "disabled icon keeps alpha");
+        assertEquals(0x88131313, theme.scrollbarShadow, "scrollbar shadow keeps alpha");
+
+        UITheme fallback = ThemeParser.defaultDark("fallback");
+        MapType bad = DataToString.mapFromString("{ \"format\": 1, \"colors\": { \"field_fill\": \"bad\", \"scrollbar_shadow\": \"#1\" } }");
+        UITheme badTheme = ThemeParser.parse("bad-tokens", bad, fallback);
+
+        assertEquals(fallback.fieldFill, badTheme.fieldFill, "bad field fill keeps fallback");
+        assertEquals(fallback.scrollbarShadow, badTheme.scrollbarShadow, "bad scrollbar shadow keeps fallback");
+
+        Map<String, MapType> themes = new HashMap<>();
+
+        themes.put("parent", DataToString.mapFromString("{ \"format\": 1, \"colors\": { \"area_tint\": \"#ABCDEF\" } }") );
+        themes.put("child", DataToString.mapFromString("{ \"format\": 1, \"base\": \"parent\" }") );
+
+        assertEquals(0xffabcdef, ThemeParser.resolveChain("child", loader(themes)).areaTint, "extended color inherits through base chain");
+    }
+
     private static void testSpringMotionParsing()
     {
         MapType map = DataToString.mapFromString("""
@@ -234,7 +328,9 @@ public final class ThemeCoreTest
                     "panel_switch": { "type": "spring", "response": 9.0, "damping": -1.0 },
                     "hover": { "type": "spring", "response": "fast", "damping": "soft" },
                     "notification": { "response": 0.8, "damping": 0.5 },
-                    "context_menu": { "type": "warp" }
+                    "context_menu": { "type": "warp" },
+                    "toggle": { "type": "spring", "response": 0.32, "damping": 0.78 },
+                    "taskbar_hide": { "type": "spring", "response": 0.42, "damping": 0.88 }
                 }
             }
             """);
@@ -255,6 +351,8 @@ public final class ThemeCoreTest
         assertEquals(UIThemeMotion.DEFAULT_RESPONSE, theme.notification.response, "ease entry keeps default spring response");
         assertEquals(UIThemeMotion.DEFAULT_DAMPING, theme.notification.damping, "ease entry keeps default spring damping");
         assertEquals(UIThemeMotion.MotionType.EASE, theme.contextMenu.type, "unknown type falls back to ease");
+        assertEquals(UIThemeMotion.MotionType.SPRING, theme.toggle.type, "toggle spring type parses");
+        assertEquals(UIThemeMotion.MotionType.SPRING, theme.taskbarHide.type, "taskbar hide spring type parses");
     }
 
     private static void testBadJsonAndFormat()
@@ -354,6 +452,25 @@ public final class ThemeCoreTest
         assertEquals(0xff0088ff, dark.stateActive, "dark active == Colors.ACTIVE opaque");
         assertEquals(0xffddddff, dark.stateHighlight, "dark highlight == Colors.HIGHLIGHT opaque");
         assertEquals(0xff57f52a, dark.stateCursor, "dark cursor == Colors.CURSOR");
+        assertEquals(0xff0f1217, dark.fieldFill, "dark field fill == input surface");
+        assertEquals(0xff30353d, dark.fieldBorder, "dark field border == divider");
+        assertEquals(0xffff3242, dark.tabActiveLine, "dark tab line == accent");
+        assertEquals(0, dark.tabActiveGradient, "dark tab gradient keeps old path");
+        assertEquals(0, dark.areaTint, "dark area tint keeps old path");
+        assertEquals(0, dark.areaTintLight, "dark light area tint keeps old path");
+        assertEquals(0, dark.dropFill, "dark drop fill keeps old path");
+        assertEquals(0, dark.dropBorder, "dark drop border keeps old path");
+        assertEquals(0, dark.splitterActive, "dark active splitter keeps old path");
+        assertEquals(0, dark.splitterIdle, "dark idle splitter keeps old path");
+        assertEquals(0, dark.shadowMuted, "dark muted shadow keeps old path");
+        assertEquals(0, dark.trackpadScrub, "dark trackpad scrub keeps old path");
+        assertEquals(0, dark.notificationFill, "dark notification fill keeps old path");
+        assertEquals(0xffffffff, dark.notificationText, "dark notification text == Colors.WHITE");
+        assertEquals(0, dark.selectionFill, "dark selection fill keeps old path");
+        assertEquals(0, dark.selectionOutline, "dark selection outline keeps old path");
+        assertEquals(0, dark.iconPressed, "dark pressed icon keeps old path");
+        assertEquals(0, dark.iconDisabled, "dark disabled icon keeps old path");
+        assertEquals(0, dark.scrollbarShadow, "dark scrollbar shadow keeps old path");
         assertTrue(dark.textShadow && dark.bevel && dark.panelShadow, "dark style toggles on");
         assertTrue(dark.iconsAtlas == null && dark.background == null, "dark has no texture overrides");
         assertTrue(dark.motionEnabled, "dark motion enabled");
@@ -364,6 +481,8 @@ public final class ThemeCoreTest
 
         assertEquals(codeDark.surfaceChrome, dark.surfaceChrome, "code default chrome parity");
         assertEquals(codeDark.stateCursor, dark.stateCursor, "code default cursor parity");
+        assertEquals(codeDark.fieldFill, dark.fieldFill, "code default field fill parity");
+        assertEquals(codeDark.scrollbarShadow, dark.scrollbarShadow, "code default scrollbar shadow parity");
         assertEquals(codeDark.overlay.duration, dark.overlay.duration, "code default overlay parity");
         assertEquals(codeDark.scrollbar.easing, dark.scrollbar.easing, "code default scrollbar easing parity");
         assertEquals(codeDark.overlay.type, dark.overlay.type, "code default overlay type parity");

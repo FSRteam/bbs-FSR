@@ -156,6 +156,25 @@ public class ThemeParser
         builder.stateActive = color(id, state, "active", fallback.stateActive);
         builder.stateHighlight = color(id, state, "highlight", fallback.stateHighlight);
         builder.stateCursor = color(id, state, "cursor", fallback.stateCursor);
+        builder.fieldFill = color(id, colors, "field_fill", fallback.fieldFill);
+        builder.fieldBorder = color(id, colors, "field_border", fallback.fieldBorder);
+        builder.tabActiveLine = color(id, colors, "tab_active_line", fallback.tabActiveLine);
+        builder.tabActiveGradient = color(id, colors, "tab_active_gradient", fallback.tabActiveGradient);
+        builder.areaTint = color(id, colors, "area_tint", fallback.areaTint);
+        builder.areaTintLight = color(id, colors, "area_tint_light", fallback.areaTintLight);
+        builder.dropFill = color(id, colors, "drop_fill", fallback.dropFill);
+        builder.dropBorder = color(id, colors, "drop_border", fallback.dropBorder);
+        builder.splitterActive = color(id, colors, "splitter_active", fallback.splitterActive);
+        builder.splitterIdle = color(id, colors, "splitter_idle", fallback.splitterIdle);
+        builder.shadowMuted = color(id, colors, "shadow_muted", fallback.shadowMuted);
+        builder.trackpadScrub = color(id, colors, "trackpad_scrub", fallback.trackpadScrub);
+        builder.notificationFill = color(id, colors, "notification_fill", fallback.notificationFill);
+        builder.notificationText = color(id, colors, "notification_text", fallback.notificationText);
+        builder.selectionFill = color(id, colors, "selection_fill", fallback.selectionFill);
+        builder.selectionOutline = color(id, colors, "selection_outline", fallback.selectionOutline);
+        builder.iconPressed = color(id, colors, "icon_pressed", fallback.iconPressed);
+        builder.iconDisabled = color(id, colors, "icon_disabled", fallback.iconDisabled);
+        builder.scrollbarShadow = color(id, colors, "scrollbar_shadow", fallback.scrollbarShadow);
 
         MapType style = map.getMap("style");
         MapType cornerRadius = style.getMap("corner_radius");
@@ -206,6 +225,8 @@ public class ThemeParser
         builder.hoverScale = motionEntry(id, motion, "hover_scale", fallback.hoverScale);
         builder.press = motionEntry(id, motion, "press", fallback.press);
         builder.layout = motionEntry(id, motion, "layout", fallback.layout);
+        builder.toggle = motionEntry(id, motion, "toggle", fallback.toggle);
+        builder.taskbarHide = motionEntry(id, motion, "taskbar_hide", fallback.taskbarHide);
 
         return builder.build();
     }
@@ -534,6 +555,25 @@ public class ThemeParser
         builder.stateActive = 0xff0088ff;
         builder.stateHighlight = 0xffddddff;
         builder.stateCursor = 0xff57f52a;
+        builder.fieldFill = builder.surfaceDeep;
+        builder.fieldBorder = builder.surfaceDivider;
+        builder.tabActiveLine = builder.accentPrimary;
+        builder.tabActiveGradient = 0;
+        builder.areaTint = 0;
+        builder.areaTintLight = 0;
+        builder.dropFill = 0;
+        builder.dropBorder = 0;
+        builder.splitterActive = 0;
+        builder.splitterIdle = 0;
+        builder.shadowMuted = 0;
+        builder.trackpadScrub = 0;
+        builder.notificationFill = 0;
+        builder.notificationText = builder.textPrimary;
+        builder.selectionFill = 0;
+        builder.selectionOutline = 0;
+        builder.iconPressed = 0;
+        builder.iconDisabled = 0;
+        builder.scrollbarShadow = 0;
 
         builder.textShadow = true;
         builder.bevel = true;
@@ -563,6 +603,8 @@ public class ThemeParser
         builder.hoverScale = new UIThemeMotion(false, 80, Interpolations.SINE_OUT);
         builder.press = new UIThemeMotion(false, 80, Interpolations.SINE_OUT);
         builder.layout = new UIThemeMotion(false, 200, Interpolations.SINE_INOUT);
+        builder.toggle = new UIThemeMotion(false, 180, Interpolations.SINE_OUT);
+        builder.taskbarHide = new UIThemeMotion(true, 250, Interpolations.SINE_INOUT);
 
         return builder.build();
     }

@@ -25,6 +25,32 @@ public final class BBSUiLifecycleSourceTest
         assertRepositoryRebindsBeforeDataAndPinsAfter();
         assertMorphingSelectionAndDemorphRemainDistinct();
         assertDashboardEditorReactivationContracts();
+        assertRefreshedDockAndDashboardContracts();
+    }
+
+    private static void assertRefreshedDockAndDashboardContracts()
+    {
+        String dashboard = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDashboardPanels.java");
+        String dock = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockLayout.java");
+        String film = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
+        String renderer = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockStyleRenderer.java");
+
+        check(dashboard.contains("hidden * Math.max(0, this.area.h)")
+                && dashboard.contains("y(0F, slide).w(1F).h(1F, -TASKBAR_HEIGHT)")
+                && dashboard.contains("this.taskBar.relative(this).y(1F, -TASKBAR_HEIGHT + slide)"),
+            "dashboard auto-hide no longer moves the active panel and taskbar together using root-height coordinates");
+        check(dock.contains("UIDockStyleRenderer.renderPanelDragHandle")
+                && dock.contains("UIDockStyleRenderer.renderSplitter")
+                && dock.contains("UIDockStyleRenderer.renderDropZone")
+                && film.contains("UIDockStyleRenderer.renderPanelDragHandle")
+                && film.contains("UIDockStyleRenderer.renderSplitter")
+                && film.contains("UIDockStyleRenderer.renderDropZone"),
+            "film and reusable dock layouts no longer share all interaction-surface rendering");
+        check(renderer.contains("BBSSettings.areaTintColor()")
+                && renderer.contains("BBSSettings.splitterActiveColor()")
+                && renderer.contains("BBSSettings.dropBorderColor()")
+                && renderer.contains("themedBorder == 0 && themedFill == 0"),
+            "shared dock rendering no longer consumes Refreshed tokens or preserve the legacy zero-token path");
     }
 
     private static void assertOwnerAwareInputCallSites()
