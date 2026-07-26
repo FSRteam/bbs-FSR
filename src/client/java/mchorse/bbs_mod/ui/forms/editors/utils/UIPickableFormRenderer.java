@@ -372,7 +372,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
             if (!pair.b.isEmpty())
             {
-                label += " - " + pair.b;
+                label += " - " + FormUtilsClient.getBoneLabel(pair.a, pair.b);
             }
 
             context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);

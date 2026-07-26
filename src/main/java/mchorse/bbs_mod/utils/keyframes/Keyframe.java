@@ -375,10 +375,21 @@ public class Keyframe <T> extends BaseValue
         }
     }
 
-    public void copyOverExtra(Keyframe<T> a)
+    public void copyOverExtra(Keyframe<?> a)
     {
         this.getInterpolation().copy(a.getInterpolation());
         this.setShape(a.getShape());
-        this.setColor(a.getColor());
+        this.setColor(a.getColor() != null ? a.getColor().copy() : null);
+        this.setDuration(a.getDuration());
+
+        this.lx = a.lx;
+        this.ly = a.ly;
+        this.rx = a.rx;
+        this.ry = a.ry;
+
+        if (a.lx_m != null) this.lx_m = new ArrayList<>(a.lx_m);
+        if (a.ly_m != null) this.ly_m = new ArrayList<>(a.ly_m);
+        if (a.rx_m != null) this.rx_m = new ArrayList<>(a.rx_m);
+        if (a.ry_m != null) this.ry_m = new ArrayList<>(a.ry_m);
     }
 }

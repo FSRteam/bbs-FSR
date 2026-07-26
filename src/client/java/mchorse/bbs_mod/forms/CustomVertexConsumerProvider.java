@@ -25,11 +25,6 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
 
     public static boolean drawLayer(RenderType layer, MeshData meshData)
     {
-        if (runnables != null)
-        {
-            runnables.accept(layer);
-        }
-
         Vector3f origin = FormTranslucentQueue.getSortOrigin();
 
         if (origin == null || !FormTranslucentQueue.isActive() || !isDeferrableTranslucent(layer))
@@ -44,6 +39,14 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
         FormTranslucentQueue.add(new FormTranslucentQueue.RenderLayerCommand(
             layer, buffer, new Matrix4f(RenderSystem.getModelViewMatrix()), new Vector3f(origin), false));
         return true;
+    }
+
+    public static void prepareLayer(RenderType layer)
+    {
+        if (runnables != null)
+        {
+            runnables.accept(layer);
+        }
     }
 
     public static void hijackVertexFormat(Consumer<RenderType> runnable)

@@ -2,13 +2,14 @@ package mchorse.bbs_mod.ui.forms.editors.states.keyframes;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
-import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -34,7 +35,6 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
-import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -45,10 +45,14 @@ import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class UIAnimationStateEditor extends UIElement
 {
@@ -127,10 +131,12 @@ public class UIAnimationStateEditor extends UIElement
     public void setState(AnimationState state)
     {
         UIKeyframes lastEditor = null;
+        Set<String> expandedPoseIds = Collections.emptySet();
 
         if (this.keyframeEditor != null)
         {
             lastEditor = this.keyframeEditor.view;
+            expandedPoseIds = new LinkedHashSet<>(lastEditor.getDopeSheet().getExpandedPoseTabIds());
 
             this.keyframeEditor.removeFromParent();
             this.keyframeEditor = null;
@@ -144,6 +150,8 @@ public class UIAnimationStateEditor extends UIElement
         }
 
         List<UIKeyframeSheet> sheets = new ArrayList<>();
+        Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs = new HashMap<>();
+        Map<UIKeyframeSheet, Integer> poseTabDepths = new HashMap<>();
 
         /* Form properties */
         Form lastForm = null;
@@ -162,7 +170,7 @@ public class UIAnimationStateEditor extends UIElement
                 {
                     if (lastForm != null)
                     {
-                        this.flushForm(sheets, formSheets, lastForm);
+                        this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
                     }
 
                     lastForm = form;
@@ -176,14 +184,20 @@ public class UIAnimationStateEditor extends UIElement
 
         if (lastForm != null)
         {
-            this.flushForm(sheets, formSheets, lastForm);
+            this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
         }
 
         this.keys.clear();
+        Map<String, Integer> keyToColor = new HashMap<>();
+        Map<String, String> keyToLabel = new HashMap<>();
 
         for (UIKeyframeSheet sheet : sheets)
         {
-            this.keys.add(sheet.isBoneTrack ? sheet.title.get() : StringUtils.fileName(sheet.id));
+            String filterKey = UIReplaysEditor.getSheetFilterKey(sheet);
+
+            this.keys.add(filterKey);
+            keyToColor.put(filterKey, sheet.color);
+            keyToLabel.put(filterKey, sheet.title.get());
         }
 
         sheets.removeIf((v) ->
@@ -215,11 +229,21 @@ public class UIAnimationStateEditor extends UIElement
             return false;
         });
 
+        Set<UIKeyframeSheet> kept = new LinkedHashSet<>(sheets);
+
+        poseTabs.entrySet().removeIf((entry) ->
+        {
+            entry.getValue().removeIf((child) -> !kept.contains(child));
+
+            return !kept.contains(entry.getKey()) || entry.getValue().isEmpty();
+        });
+        poseTabDepths.keySet().retainAll(kept);
+
         lastForm = null;
 
         for (UIKeyframeSheet sheet : sheets)
         {
-            Form form = sheet.property == null ? null : FormUtils.getForm(sheet.property);
+            Form form = UIReplaysEditor.getSheetForm(sheet);
 
             if (!Objects.equals(lastForm, form))
             {
@@ -273,7 +297,12 @@ public class UIAnimationStateEditor extends UIElement
                 {
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () ->
                     {
-                        UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(BBSSettings.disabledSheets.get(), this.keys);
+                        UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(
+                            BBSSettings.disabledSheets.get(),
+                            this.keys,
+                            keyToColor,
+                            keyToLabel
+                        );
 
                         UIOverlay.addOverlay(this.getContext(), panel, 240, 0.9F);
 
@@ -291,6 +320,8 @@ public class UIAnimationStateEditor extends UIElement
                 this.keyframeEditor.view.addSheet(sheet);
             }
 
+            this.keyframeEditor.view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
+
             this.addAfter(this.editArea, this.keyframeEditor);
         }
 
@@ -302,15 +333,57 @@ public class UIAnimationStateEditor extends UIElement
         }
     }
 
-    private void flushForm(List<UIKeyframeSheet> sheets, List<UIKeyframeSheet> formSheets, Form form)
+    private void flushForm(
+        List<UIKeyframeSheet> sheets,
+        List<UIKeyframeSheet> formSheets,
+        Form form,
+        Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs,
+        Map<UIKeyframeSheet, Integer> poseTabDepths
+    )
     {
-        sheets.addAll(formSheets);
+        String path = FormUtils.getPath(form);
+        String poseId = path.isEmpty() ? "pose" : path + FormUtils.PATH_SEPARATOR + "pose";
+        UIKeyframeSheet poseSheet = null;
+
+        for (UIKeyframeSheet sheet : formSheets)
+        {
+            if (poseId.equals(sheet.id) && sheet.channel.getFactory() == KeyframeFactories.POSE)
+            {
+                poseSheet = sheet;
+                break;
+            }
+        }
+
+        List<UIKeyframeSheet> orderedFormSheets = new ArrayList<>(formSheets);
         formSheets.clear();
 
-        if (form instanceof ModelForm modelForm)
+        if (form instanceof PoseForm)
         {
-            UIReplaysEditorUtils.addBoneTrackSheets(modelForm, this.state.properties, sheets);
+            List<UIKeyframeSheet> boneSheets = new ArrayList<>();
+            Map<String, Integer> depthBySheetId = new HashMap<>();
+
+            UIReplaysEditorUtils.addBoneTrackSheets(form, this.state.properties, boneSheets, depthBySheetId);
+
+            for (UIKeyframeSheet boneSheet : boneSheets)
+            {
+                poseTabDepths.put(boneSheet, depthBySheetId.getOrDefault(boneSheet.id, 0));
+            }
+
+            if (poseSheet != null && !boneSheets.isEmpty())
+            {
+                poseTabs.put(poseSheet, boneSheets);
+
+                int poseIndex = orderedFormSheets.indexOf(poseSheet);
+
+                orderedFormSheets.addAll(poseIndex < 0 ? orderedFormSheets.size() : poseIndex + 1, boneSheets);
+            }
+            else
+            {
+                orderedFormSheets.addAll(boneSheets);
+            }
         }
+
+        sheets.addAll(orderedFormSheets);
     }
 
     public boolean clickViewport(UIContext context, StencilFormFramebuffer stencil)
@@ -319,35 +392,10 @@ public class UIAnimationStateEditor extends UIElement
         {
             Pair<Form, String> pair = stencil.getPicked();
 
-            if (pair != null && pair.a != null && context.mouseButton < 2)
+            if (pair != null)
             {
-                if (context.mouseButton == 0)
-                {
-                    this.pickFormFromViewport(pair.a, pair.b);
-
-                    return true;
-                }
-                else if (context.mouseButton == 1)
-                {
-                    if (Window.isCtrlPressed())
-                    {
-                        UIReplaysEditorUtils.offerAdjacent(this.getContext(), pair.a, pair.b, (bone) -> UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, pair.a, bone, true));
-
-                        return true;
-                    }
-                    else if (Window.isShiftPressed())
-                    {
-                        UIReplaysEditorUtils.offerHierarchy(this.getContext(), pair.a, pair.b, (bone) -> UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, pair.a, bone, true));
-
-                        return true;
-                    }
-                    else
-                    {
-                        UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, pair.a, pair.b, true);
-
-                        return true;
-                    }
-                }
+                return UIReplaysEditorUtils.pickFormWithOffers(context, pair, (form, bone, insert) ->
+                    UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, insert));
             }
         }
 
@@ -356,7 +404,7 @@ public class UIAnimationStateEditor extends UIElement
 
     public void pickFormFromViewport(Form form, String bone)
     {
-        if (Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), form, bone, (pickedBone) -> this.pickForm(form, pickedBone));
+        if (Window.isAltPressed() && !Window.isCtrlPressed()) UIReplaysEditorUtils.offerAdjacent(this.getContext(), form, bone, (pickedBone) -> this.pickForm(form, pickedBone));
         else if (Window.isShiftPressed()) UIReplaysEditorUtils.offerHierarchy(this.getContext(), form, bone, (pickedBone) -> this.pickForm(form, pickedBone));
         else this.pickForm(form, bone);
     }
@@ -378,6 +426,14 @@ public class UIAnimationStateEditor extends UIElement
         if (drag != null)
         {
             float tick = this.editor.getSamplingTick();
+            Supplier<Matrix4f> rotationSampler = () ->
+            {
+                this.editor.applyStateForSampling(tick);
+
+                Matrix4f origin = this.getOriginMatrix(transition);
+
+                return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
+            };
 
             drag.setJacobian(GizmoDrag.computeTranslateJacobian(
                 transform.getTransform(),
@@ -392,16 +448,12 @@ public class UIAnimationStateEditor extends UIElement
             ));
             drag.setRotateAxes(GizmoDrag.computeRotateAxes(
                 transform.getTransform(),
-                () ->
-                {
-                    this.editor.applyStateForSampling(tick);
-
-                    Matrix4f origin = this.getOriginMatrix(transition);
-
-                    return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
-                }
+                rotationSampler
             ));
+            drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, rotationSampler));
 
+            this.editor.applyStateForSampling(tick);
+            drag.setRotationParents(transform.getTransform(), this.getMatrixEntry(transition).rotationOffset(), rotationSampler);
             this.editor.applyStateForSampling(tick);
         }
 
@@ -420,23 +472,37 @@ public class UIAnimationStateEditor extends UIElement
 
     private Matrix4f getOriginInternal(float transition, boolean forceMatrix)
     {
-        if (this.keyframeEditor == null)
-        {
-            return Matrices.EMPTY_4F;
-        }
-
-        Pair<String, Boolean> bone = this.keyframeEditor.getBone();
+        MatrixCacheEntry entry = this.getMatrixEntry(transition);
+        Pair<String, Boolean> bone = this.keyframeEditor == null ? null : this.keyframeEditor.getBone();
 
         if (bone == null)
         {
             return Matrices.EMPTY_4F;
         }
 
-        Form root = FormUtils.getRoot(this.editor.form);
-        MatrixCache map = this.editor.renderer.collectPreviewMatrices(root, transition);
-        Matrix4f matrix = (!forceMatrix && bone.b) ? map.get(bone.a).origin() : map.get(bone.a).matrix();
+        Matrix4f matrix = (!forceMatrix && bone.b) ? entry.origin() : entry.matrix();
 
         return matrix == null ? Matrices.EMPTY_4F : matrix;
+    }
+
+    private MatrixCacheEntry getMatrixEntry(float transition)
+    {
+        if (this.keyframeEditor == null)
+        {
+            return new MatrixCacheEntry(null, null);
+        }
+
+        Pair<String, Boolean> bone = this.keyframeEditor.getBone();
+
+        if (bone == null)
+        {
+            return new MatrixCacheEntry(null, null);
+        }
+
+        Form root = FormUtils.getRoot(this.editor.form);
+        MatrixCache map = this.editor.renderer.collectPreviewMatrices(root, transition);
+
+        return map.get(bone.a);
     }
 
     @Override

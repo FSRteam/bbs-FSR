@@ -9,147 +9,148 @@ import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.forms.BodyPart;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
+import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Pose;
-import mchorse.bbs_mod.utils.pose.Transform;
+import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.model.EntityModel;
-import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.client.renderer.LightTexture;
-import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.renderer.MultiBufferSource;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.TagParser;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import com.mojang.math.Axis;
+import net.minecraft.nbt.TagParser;
 import org.joml.Matrix4f;
-import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 {
-    private static final Map<Class, Map<String, ModelPart>> parts = new HashMap<>();
-    private static final Map<ModelPart, Transform> cache = new HashMap<>();
-    private static final Quaternionf ROTATE_Y_180 = Axis.YP.rotation(MathUtils.PI);
-    private static Pose currentPose;
-    private static Pose currentPoseOverlay;
-
     public static final GameProfile WIDE = new GameProfile(UUID.fromString("b99a2400-28a8-4288-92dc-924beafbf756"), "McHorseYT");
     public static final GameProfile SLIM = new GameProfile(UUID.fromString("5477bd28-e672-4f87-a209-c03cf75f3606"), "osmiq");
+    private static final VertexConsumer EMPTY_VERTEX_CONSUMER = new EmptyVertexConsumer();
+    private static final MultiBufferSource EMPTY_VERTEX_CONSUMERS = (layer) -> EMPTY_VERTEX_CONSUMER;
+    private static final int PAUSE_SAMPLE_TICK = 0;
+    private static final int PAUSE_SAMPLE_UI = 1;
+    private static final int PAUSE_SAMPLE_PREVIEW = 2;
+    private static final int PAUSE_SAMPLE_WORLD = 3;
 
     private Entity entity;
-
     private String lastId = "";
     private String lastNBT = "";
-    private boolean lastSlim;
+    private MatrixCache bones = new MatrixCache();
+    private List<String> pickedBoneIds = List.of();
 
     public float prevHandSwing;
-    private float prevYawHead;
-    private float prevPitch;
-
-    public static Pose getCurrentPose()
-    {
-        return currentPose;
-    }
-
-    public static Pose getCurrentPoseOverlay()
-    {
-        return currentPoseOverlay;
-    }
-
-    public static Map<Class, Map<String, ModelPart>> getParts()
-    {
-        return parts;
-    }
-
-    public static Map<ModelPart, Transform> getCache()
-    {
-        return cache;
-    }
+    private boolean lastSlim;
+    private boolean animationInitialized;
+    private boolean animationSourceInitialized;
+    private boolean animationPaused;
+    private boolean animationResuming;
+    private boolean pauseRequestPending;
+    private boolean requestedPaused;
+    private boolean runtimePauseActive;
+    private boolean runtimePauseFromTick;
+    private boolean pausedLookCaptured;
+    private boolean pauseCaptureOpen;
+    private float pausedTransition;
+    private float requestTransition;
+    private float requestLookTransition;
+    private float limbPositionOffset;
+    private float pausedHeadYaw;
+    private float pausedPitch;
+    private float resumeTransition;
+    private float resumeStartHeadYaw;
+    private float resumeStartPitch;
+    private float resumeHeadYaw;
+    private float resumePitch;
+    private float lastRenderTransition;
+    private int animationAgeOffset;
+    private int pauseCapturePriority;
+    private int lastRenderPriority;
+    private int lastRenderAge = Integer.MIN_VALUE;
 
     public MobFormRenderer(MobForm form)
     {
         super(form);
+
+        this.animationPaused = this.form.paused.getOriginalValue();
     }
 
     @Override
-    public List<String> getBones()
+    public BoneHierarchy getBoneHierarchy()
     {
         this.ensureEntity();
 
         if (this.entity != null)
         {
-            Map<String, ModelPart> stringModelPartMap = parts.get(this.entity.getClass());
+            Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
 
-            if (stringModelPartMap == null)
-            {
-                stringModelPartMap = new HashMap<>();
-
-                if (Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity) instanceof LivingEntityRenderer renderer)
-                {
-                    EntityModel model = renderer.getModel();
-                    Set<Field> fields = new HashSet<>();
-                    Class aClass = model.getClass();
-
-                    while (aClass != Object.class)
-                    {
-                        for (Field field : aClass.getDeclaredFields())
-                        {
-                            fields.add(field);
-                        }
-
-                        aClass = aClass.getSuperclass();
-                    }
-
-                    for (Field declaredField : fields)
-                    {
-                        if (declaredField.getType().equals(ModelPart.class))
-                        {
-                            try
-                            {
-                                declaredField.setAccessible(true);
-
-                                ModelPart part = (ModelPart) declaredField.get(model);
-
-                                stringModelPartMap.put(declaredField.getName(), part);
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                    }
-                }
-
-                parts.put(this.entity.getClass(), stringModelPartMap);
-            }
-
-            return new ArrayList<>(stringModelPartMap.keySet());
+            return VanillaRendererBones.discover(renderer).getBoneHierarchy();
         }
 
-        return super.getBones();
+        return super.getBoneHierarchy();
+    }
+
+    private Pose mergeOverlays()
+    {
+        Pose overlay = this.form.poseOverlay.get().copy();
+
+        for (ValuePose additional : this.form.additionalOverlays)
+        {
+            Pose additionalPose = additional.get();
+
+            for (Map.Entry<String, PoseTransform> entry : additionalPose.transforms.entrySet())
+            {
+                PoseTransform target = overlay.get(entry.getKey());
+                PoseTransform value = entry.getValue();
+
+                if (value.fix != 0F)
+                {
+                    target.translate.lerp(value.translate, value.fix);
+                    target.scale.lerp(value.scale, value.fix);
+                    target.rotate.lerp(value.rotate, value.fix);
+                    target.rotate2.lerp(value.rotate2, value.fix);
+                }
+                else
+                {
+                    target.translate.add(value.translate);
+                    target.scale.add(value.scale).sub(1F, 1F, 1F);
+                    target.rotate.add(value.rotate);
+                    target.rotate2.add(value.rotate2);
+                }
+            }
+        }
+
+        return overlay;
     }
 
     private void bindTexture()
@@ -174,6 +175,25 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.lastNBT = nbt;
             this.lastSlim = slim;
             this.entity = null;
+            this.bones.clear();
+            this.pickedBoneIds = List.of();
+            this.animationInitialized = false;
+            this.animationSourceInitialized = false;
+            this.animationPaused = this.form.paused.getOriginalValue();
+            this.animationResuming = false;
+            this.pauseRequestPending = false;
+            this.runtimePauseActive = false;
+            this.runtimePauseFromTick = false;
+            this.pausedLookCaptured = false;
+            this.pauseCaptureOpen = false;
+            this.pausedTransition = 0F;
+            this.limbPositionOffset = 0F;
+            this.animationAgeOffset = 0;
+            this.pauseCapturePriority = 0;
+            this.lastRenderTransition = 0F;
+            this.lastRenderPriority = PAUSE_SAMPLE_TICK;
+            this.lastRenderAge = Integer.MIN_VALUE;
+            this.prevHandSwing = 0F;
         }
 
         if (this.entity != null)
@@ -190,12 +210,14 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         catch (Exception e)
         {}
 
-        this.entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)).create(Minecraft.getInstance().level);
-
-        if (this.entity == null && this.form.isPlayer())
+        if (this.form.isPlayer())
         {
             this.entity = new RemotePlayer(Minecraft.getInstance().level, slim ? SLIM : WIDE);
             this.entity.getEntityData().set(PlayerUtils.ProtectedAccess.getModelParts(), (byte) 0b1111111);
+        }
+        else
+        {
+            this.entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)).create(Minecraft.getInstance().level);
         }
 
         if (this.entity != null)
@@ -210,9 +232,10 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         this.ensureEntity();
-
         if (this.entity != null)
         {
+            this.ensureAnimationInitialized(null);
+
             PoseStack stack = context.batcher.getContext().pose();
 
             stack.pushPose();
@@ -231,7 +254,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             if (!this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                stack.mulPose(ROTATE_Y_180);
+                stack.mulPose(Axis.YP.rotation(MathUtils.PI));
             }
 
             stack.last().normal().getScale(Vectors.EMPTY_3F);
@@ -247,10 +270,23 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                     first.bool = true;
                 }
+
+                RenderSystem.enableBlend();
             });
 
             consumers.setUI(true);
-            Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightTexture.FULL_BRIGHT);
+            Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
+
+            float transition = this.getUIAnimationTransition(context.getTransition());
+
+            this.prepareRenderLook(null, context.getTransition());
+            this.recordRenderSample(transition, PAUSE_SAMPLE_UI);
+
+            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.mergeOverlays(), this.getColor(0xffffffff)))
+            {
+                Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, stack, consumers, LightTexture.FULL_BRIGHT);
+            }
+
             consumers.draw();
             consumers.setUI(false);
 
@@ -266,6 +302,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     protected void render3D(FormRenderingContext context)
     {
         this.ensureEntity();
+        this.bones.clear();
+        this.pickedBoneIds = List.of();
 
         if (this.entity != null)
         {
@@ -280,11 +318,18 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                     if (!first.bool)
                     {
                         this.bindTexture();
-                        this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                        RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
 
                         first.bool = true;
                     }
+
+                    /* The picker shader must be (re)applied for every layer, not just the
+                     * first one. Entities like the piglin render held items (e.g. the golden
+                     * sword) through Minecraft's own item rendering, which adds extra render
+                     * layers. If those layers aren't forced onto the picker shader, they get
+                     * drawn with vanilla item shaders, leaking GL/shader state that breaks the
+                     * picking of any subsequent entity rendered into the stencil framebuffer. */
+                    this.setupTarget(context, BBSShaders.getPickerModelsProgram());
+                    RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
                 });
 
                 light = 0;
@@ -299,135 +344,899 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
                         first.bool = true;
                     }
+
+                    RenderSystem.enableBlend();
                 });
             }
 
             context.stack.pushPose();
-
             if (context.world != null)
             {
                 context.world.pushPose();
             }
 
-            try
+            Matrix4f captureBase = new Matrix4f(context.stack.last().pose());
+
+            if (this.form.mobID.get().equals("minecraft:ender_dragon"))
             {
-                if (this.form.mobID.get().equals("minecraft:ender_dragon"))
+                context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+                if (context.world != null)
                 {
-                    context.stack.mulPose(ROTATE_Y_180);
-
-                    if (context.world != null)
-                    {
-                        context.world.mulPose(ROTATE_Y_180);
-                    }
+                    context.world.mulPose(Axis.YP.rotation(MathUtils.PI));
                 }
+            }
 
-                if (this.entity instanceof LivingEntity entity)
-                {
-                    int u = context.overlay & '\uffff';
-                    int v = context.overlay >> 16 & '\uffff';
+            if (this.entity instanceof LivingEntity entity)
+            {
+                int u = context.overlay & '\uffff';
+                int v = context.overlay >> 16 & '\uffff';
 
-                    entity.hurtTime = v != 10 ? 100 : 0;
-                }
+                entity.hurtTime = v != 10 ? 100 : 0;
+            }
 
-                currentPose = this.form.pose.get();
-                currentPoseOverlay = this.form.poseOverlay.get();
+            Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
+            boolean incrementPicking = context.stencilMap != null && context.stencilMap.increment;
+            MobRenderContext mobContext = MobRenderContext.push(
+                renderer,
+                this.form.pose.get(),
+                this.mergeOverlays(),
+                this.getColor(context.color),
+                captureBase,
+                context.isPicking(),
+                incrementPicking
+            );
 
+            try (mobContext)
+            {
+                float transition = this.prepareAnimationRender(context);
+
+                /* Publishing the form's camera-space origin opts its translucent layers (slime
+                 * bodies, ghost textures) into the deferred sorted pass. */
                 if (!context.isPicking())
                 {
                     Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
+
                     FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
                 }
 
-                Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), context.stack, consumers, light);
-                consumers.draw();
+                Minecraft.getInstance().getEntityRenderDispatcher().render(
+                    this.entity,
+                    0D,
+                    0D,
+                    0D,
+                    0F,
+                    transition,
+                    context.stack,
+                    consumers,
+                    light
+                );
+
+                mobContext.completeMatrices();
             }
-            finally
+
+            this.bones = mobContext.getMatrices();
+            this.pickedBoneIds = mobContext.getPickedBoneIds();
+
+            consumers.draw();
+            FormTranslucentQueue.setSortOrigin(null);
+            CustomVertexConsumerProvider.clearRunnables();
+
+            context.stack.popPose();
+
+            if (context.world != null)
             {
-                currentPose = currentPoseOverlay = null;
-                FormTranslucentQueue.setSortOrigin(null);
-                CustomVertexConsumerProvider.clearRunnables();
-                context.stack.popPose();
+                context.world.popPose();
+            }
 
-                if (context.world != null)
-                {
-                    context.world.popPose();
-                }
-
+            /* A MobForm body part can reach this path from either a 2D preview or a world render.
+             * Preserve the caller-owned model-view matrix in both cases and restore only the
+             * depth state required by the active rendering context. */
+            if (context.ui)
+            {
+                RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            }
+            else
+            {
                 RenderSystem.enableDepthTest();
             }
         }
     }
 
+    private float prepareAnimationRender(FormRenderingContext context)
+    {
+        this.ensureAnimationInitialized(context.entity);
+
+        if (!context.isPicking())
+        {
+            this.sampleRenderPause(context.entity, context.getTransition(), this.getPauseSamplePriority(context));
+        }
+
+        float transition = this.getAnimationTransition(context.getTransition());
+
+        this.prepareRenderLook(context.entity, context.getTransition());
+
+        if (!context.isPicking())
+        {
+            int priority = this.getPauseSamplePriority(context);
+            boolean recorded = this.recordRenderSample(transition, priority);
+
+            if (recorded && (this.animationPaused || this.pauseRequestPending))
+            {
+                this.captureCurrentLook();
+            }
+        }
+
+        return transition;
+    }
+
+    private Color getColor(int contextColor)
+    {
+        Color color = new Color().set(contextColor, true);
+
+        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+
+        return color;
+    }
+
     @Override
-    public void tick(IEntity entity)
+    protected void updateStencilMap(FormRenderingContext context)
+    {
+        StencilMap stencilMap = context.stencilMap;
+
+        if (stencilMap == null)
+        {
+            return;
+        }
+
+        stencilMap.addPicking(this.form);
+
+        if (stencilMap.increment)
+        {
+            for (String bone : this.pickedBoneIds)
+            {
+                stencilMap.addPicking(this.form, bone);
+            }
+        }
+    }
+
+    @Override
+    public void renderBodyParts(FormRenderingContext context)
+    {
+        for (BodyPart part : this.form.parts.getAllTyped())
+        {
+            String boneId = this.getBoneHierarchy().resolveId(part.bone.get());
+            Matrix4f matrix = this.bones.get(boneId == null ? part.bone.get() : boneId).matrix();
+
+            context.stack.pushPose();
+            if (context.world != null)
+            {
+                context.world.pushPose();
+            }
+
+            if (matrix != null)
+            {
+                MatrixStackUtils.multiply(context.stack, matrix);
+                if (context.world != null)
+                {
+                    MatrixStackUtils.multiply(context.world, matrix);
+                }
+            }
+
+            this.renderBodyPart(part, context);
+
+            context.stack.popPose();
+            if (context.world != null)
+            {
+                context.world.popPose();
+            }
+        }
+    }
+
+    @Override
+    protected void collectMatricesWithAppliedStates(
+        IEntity entity,
+        Object simulationOwner,
+        Matrix4f semanticBase,
+        boolean allowWorldTargetOverrides,
+        boolean allowWorldCollisions,
+        PoseStack stack,
+        MatrixCache matrices,
+        String prefix,
+        float transition
+    )
+    {
+        MatrixCache bones = this.collectBoneMatrices(entity, transition);
+        Matrix4f matrix = new Matrix4f();
+        Matrix4f origin = new Matrix4f();
+
+        stack.pushPose();
+        this.applyTransforms(stack, true, transition);
+        origin.set(stack.last().pose());
+        stack.popPose();
+
+        stack.pushPose();
+        this.applyTransforms(stack, false, transition);
+        matrix.set(stack.last().pose());
+        matrices.put(prefix, matrix, origin);
+
+        Matrix4f formSemanticBase = null;
+
+        if (semanticBase != null)
+        {
+            formSemanticBase = new Matrix4f(semanticBase);
+            this.applyTransforms(formSemanticBase, transition);
+        }
+
+        for (Map.Entry<String, MatrixCacheEntry> entry : bones.entrySet())
+        {
+            Matrix4f boneMatrix = new Matrix4f(stack.last().pose()).mul(entry.getValue().matrix());
+            Matrix4f boneOrigin = new Matrix4f(stack.last().pose()).mul(entry.getValue().origin());
+
+            matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), boneMatrix, boneOrigin, entry.getValue().rotationOffset());
+        }
+
+        int i = 0;
+
+        for (BodyPart part : this.form.parts.getAllTyped())
+        {
+            Form form = part.getForm();
+
+            if (form != null)
+            {
+                String boneId = this.getBoneHierarchy().resolveId(part.bone.get());
+                Matrix4f boneMatrix = bones.get(boneId == null ? part.bone.get() : boneId).matrix();
+
+                stack.pushPose();
+
+                if (boneMatrix != null)
+                {
+                    MatrixStackUtils.multiply(stack, boneMatrix);
+                }
+
+                MatrixStackUtils.applyTransform(stack, part.transform.get());
+
+                Matrix4f childSemanticBase = formSemanticBase == null ? null : new Matrix4f(formSemanticBase);
+
+                if (childSemanticBase != null)
+                {
+                    if (boneMatrix != null)
+                    {
+                        childSemanticBase.mul(boneMatrix);
+                    }
+
+                    childSemanticBase.mul(part.transform.get().setupMatrix(new Matrix4f()));
+                }
+
+                FormUtilsClient.getRenderer(form).collectMatrices(
+                    part.getRenderEntity(entity),
+                    simulationOwner,
+                    childSemanticBase,
+                    allowWorldTargetOverrides,
+                    allowWorldCollisions,
+                    stack,
+                    matrices,
+                    StringUtils.combinePaths(prefix, String.valueOf(i)),
+                    transition
+                );
+
+                stack.popPose();
+            }
+
+            i += 1;
+        }
+
+        stack.popPose();
+    }
+
+    private MatrixCache collectBoneMatrices(IEntity source, float transition)
+    {
+        this.ensureEntity();
+        this.ensureAnimationInitialized(source);
+
+        if (this.entity == null)
+        {
+            return new MatrixCache();
+        }
+
+        Minecraft client = Minecraft.getInstance();
+        PoseStack stack = new PoseStack();
+        Matrix4f captureBase = new Matrix4f(stack.last().pose());
+
+        if (this.form.mobID.get().equals("minecraft:ender_dragon"))
+        {
+            stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+        }
+
+        Object renderer = client.getEntityRenderDispatcher().getRenderer(this.entity);
+        MobRenderContext context = MobRenderContext.push(
+            renderer,
+            this.form.pose.get(),
+            this.mergeOverlays(),
+            Color.white(),
+            captureBase,
+            false,
+            false
+        );
+
+        try (context)
+        {
+            float animationTransition = this.getAnimationTransition(transition);
+
+            this.prepareRenderLook(source, transition);
+
+            client.getEntityRenderDispatcher().render(
+                this.entity,
+                0D,
+                0D,
+                0D,
+                0F,
+                animationTransition,
+                stack,
+                EMPTY_VERTEX_CONSUMERS,
+                LightTexture.FULL_BRIGHT
+            );
+            context.completeMatrices();
+        }
+
+        return context.getMatrices();
+    }
+
+    @Override
+    public void tick(IEntity source)
     {
         this.ensureEntity();
 
-        if (this.entity != null)
+        if (this.entity == null)
+        {
+            return;
+        }
+
+        boolean initialized = this.animationInitialized;
+
+        this.ensureAnimationInitialized(source);
+
+        boolean finishingResume = this.animationResuming;
+        boolean resuming = this.updatePauseState(source, initialized, finishingResume);
+        boolean paused = this.animationPaused;
+        int ageBeforeTick = this.entity.tickCount;
+        float limbSpeedBeforeTick = this.getLimbSpeed();
+
+        if (!paused && !resuming)
         {
             this.entity.tick();
+        }
 
-            this.entity.xRotO = this.prevPitch;
-            this.entity.yRotO = 0F;
+        this.entity.xRotO = source.getPrevPitch();
 
-            if (this.entity instanceof LivingEntity livingEntity)
+        this.updateLivingAnimation(source, paused, resuming, finishingResume, limbSpeedBeforeTick);
+        this.synchronizeEntity(source, paused, resuming, ageBeforeTick);
+
+        if (resuming)
+        {
+            this.animationSourceInitialized = true;
+        }
+
+        this.lastRenderPriority = PAUSE_SAMPLE_TICK;
+    }
+
+    private boolean updatePauseState(IEntity source, boolean initialized, boolean finishingResume)
+    {
+        float tickTransition = initialized ? 1F : 0F;
+        IEntity pauseSource = source;
+
+        if (initialized && !finishingResume && this.lastRenderAge == this.entity.tickCount)
+        {
+            tickTransition = this.lastRenderTransition;
+            pauseSource = null;
+        }
+
+        this.sampleTickPause(pauseSource, tickTransition);
+        this.animationResuming = false;
+
+        if (!this.pauseRequestPending)
+        {
+            this.pauseCaptureOpen = false;
+
+            return false;
+        }
+
+        boolean resuming = this.animationPaused && !this.requestedPaused;
+
+        if (this.requestedPaused && !this.pausedLookCaptured)
+        {
+            this.capturePausedAnimation(this.requestTransition, this.requestLookTransition, source);
+        }
+
+        this.animationPaused = this.requestedPaused;
+        this.pauseRequestPending = false;
+        this.pauseCaptureOpen = false;
+
+        if (resuming)
+        {
+            this.animationResuming = true;
+            this.resumeTransition = this.pausedTransition;
+            this.resumeStartHeadYaw = this.pausedHeadYaw;
+            this.resumeStartPitch = this.pausedPitch;
+            this.resumeHeadYaw = source.getHeadYaw() - source.getBodyYaw();
+            this.resumePitch = source.getPitch();
+        }
+
+        return resuming;
+    }
+
+    private float getLimbSpeed()
+    {
+        if (this.entity instanceof LivingEntity livingEntity && livingEntity.walkAnimation instanceof LimbAnimatorAccessor animator)
+        {
+            return animator.getSpeed();
+        }
+
+        return 0F;
+    }
+
+    private void updateLivingAnimation(IEntity source, boolean paused, boolean resuming, boolean finishingResume, float limbSpeedBeforeTick)
+    {
+        this.entity.yRotO = 0F;
+
+        if (!(this.entity instanceof LivingEntity livingEntity))
+        {
+            return;
+        }
+
+        livingEntity.yBodyRotO = 0F;
+        livingEntity.yHeadRotO = source.getPrevHeadYaw() - source.getPrevBodyYaw();
+
+        if (paused)
+        {
+            return;
+        }
+
+        /* Limb swing is so ugly */
+        if (livingEntity.walkAnimation instanceof LimbAnimatorAccessor target && source.getLimbAnimator() instanceof LimbAnimatorAccessor sourceAnimator)
+        {
+            if (resuming)
             {
-                livingEntity.yHeadRotO = this.prevYawHead;
-                livingEntity.yBodyRotO = 0F;
+                this.limbPositionOffset = target.getPosition() - sourceAnimator.getPosition();
+            }
+            else
+            {
+                target.setSpeedOld(finishingResume ? limbSpeedBeforeTick : sourceAnimator.getSpeedOld());
+                target.setSpeed(sourceAnimator.getSpeed());
+                target.setPosition(sourceAnimator.getPosition() + this.limbPositionOffset);
+            }
+        }
 
-                /* Limb swing is so ugly */
-                if (livingEntity.walkAnimation instanceof LimbAnimatorAccessor a && entity.getLimbAnimator() instanceof LimbAnimatorAccessor b)
+        this.updateHandSwing(source, livingEntity, resuming);
+    }
+
+    private void updateHandSwing(IEntity source, LivingEntity livingEntity, boolean resuming)
+    {
+        float handSwingProgress = source.getHandSwingProgress(0F);
+
+        if (resuming)
+        {
+            this.prevHandSwing = handSwingProgress;
+
+            return;
+        }
+
+        if (handSwingProgress < this.prevHandSwing)
+        {
+            this.prevHandSwing = 0F;
+        }
+
+        if (handSwingProgress > 0F && this.prevHandSwing == 0F)
+        {
+            livingEntity.swing(InteractionHand.MAIN_HAND);
+        }
+
+        this.prevHandSwing = handSwingProgress;
+    }
+
+    private void synchronizeEntity(IEntity source, boolean paused, boolean resuming, int ageBeforeTick)
+    {
+        this.entity.setYRot(0F);
+        this.entity.setYHeadRot(source.getHeadYaw() - source.getBodyYaw());
+        this.entity.setXRot(source.getPitch());
+        this.entity.setYBodyRot(0F);
+        this.entity.setPos(source.getX(), source.getY(), source.getZ());
+        this.entity.setOnGround(source.isOnGround());
+        this.entity.setShiftKeyDown(source.isSneaking());
+        this.entity.setSprinting(source.isSprinting());
+        this.entity.setPose(source.isSneaking() ? net.minecraft.world.entity.Pose.CROUCHING : net.minecraft.world.entity.Pose.STANDING);
+        if (this.entity instanceof LivingEntity livingEntity)
+        {
+            livingEntity.setItemSlot(EquipmentSlot.MAINHAND, source.getEquipmentStack(EquipmentSlot.MAINHAND));
+            livingEntity.setItemSlot(EquipmentSlot.OFFHAND, source.getEquipmentStack(EquipmentSlot.OFFHAND));
+            livingEntity.setItemSlot(EquipmentSlot.HEAD, source.getEquipmentStack(EquipmentSlot.HEAD));
+            livingEntity.setItemSlot(EquipmentSlot.CHEST, source.getEquipmentStack(EquipmentSlot.CHEST));
+            livingEntity.setItemSlot(EquipmentSlot.LEGS, source.getEquipmentStack(EquipmentSlot.LEGS));
+            livingEntity.setItemSlot(EquipmentSlot.FEET, source.getEquipmentStack(EquipmentSlot.FEET));
+        }
+
+        if (!paused)
+        {
+            if (resuming)
+            {
+                this.animationAgeOffset = ageBeforeTick - source.getAge();
+            }
+            else
+            {
+                this.entity.tickCount = source.getAge() + this.animationAgeOffset;
+            }
+        }
+        else
+        {
+            this.captureCurrentLook();
+        }
+
+        this.entity.noPhysics = true;
+    }
+
+    private void ensureAnimationInitialized(IEntity source)
+    {
+        if (this.entity == null)
+        {
+            return;
+        }
+
+        boolean visualInitialized = this.animationInitialized;
+
+        if (!this.animationInitialized)
+        {
+            this.animationInitialized = true;
+            this.animationAgeOffset = 0;
+        }
+
+        if (source == null || this.animationSourceInitialized)
+        {
+            return;
+        }
+
+        if (visualInitialized && (this.animationPaused || this.form.paused.get()))
+        {
+            return;
+        }
+
+        if (this.entity instanceof LivingEntity livingEntity && livingEntity.walkAnimation instanceof LimbAnimatorAccessor target && source.getLimbAnimator() instanceof LimbAnimatorAccessor sourceAnimator)
+        {
+            target.setSpeedOld(sourceAnimator.getSpeedOld());
+            target.setSpeed(sourceAnimator.getSpeed());
+            target.setPosition(sourceAnimator.getPosition());
+        }
+
+        this.entity.tickCount = source.getAge();
+        this.prevHandSwing = source.getHandSwingProgress(0F);
+        this.animationAgeOffset = 0;
+        this.animationSourceInitialized = true;
+    }
+
+    private void sampleTickPause(IEntity source, float transition)
+    {
+        Boolean runtimePaused = this.form.paused.getRuntimeValue();
+
+        if (runtimePaused != null)
+        {
+            this.runtimePauseActive = true;
+            this.runtimePauseFromTick = true;
+            this.requestAnimationPause(runtimePaused, transition, transition, source, PAUSE_SAMPLE_TICK);
+
+            return;
+        }
+
+        if (this.runtimePauseFromTick)
+        {
+            this.runtimePauseActive = false;
+            this.runtimePauseFromTick = false;
+        }
+
+        if (!this.runtimePauseActive)
+        {
+            boolean paused = this.form.paused.getOriginalValue();
+
+            this.requestAnimationPause(paused, transition, transition, source, PAUSE_SAMPLE_TICK);
+        }
+    }
+
+    private void sampleRenderPause(IEntity source, float transition, int priority)
+    {
+        boolean runtime = this.form.paused.getRuntimeValue() != null;
+        float animationTransition = this.animationResuming
+            ? Mth.lerp(transition, this.resumeTransition, 1F)
+            : transition;
+
+        if (!runtime)
+        {
+            this.runtimePauseFromTick = false;
+        }
+
+        this.runtimePauseActive = runtime;
+        this.requestAnimationPause(this.form.paused.get(), animationTransition, transition, source, priority);
+    }
+
+    private int getPauseSamplePriority(FormRenderingContext context)
+    {
+        if (context.ui || (context.type != FormRenderType.ENTITY && context.type != FormRenderType.MODEL_BLOCK))
+        {
+            return context.type == FormRenderType.PREVIEW ? PAUSE_SAMPLE_PREVIEW : PAUSE_SAMPLE_UI;
+        }
+
+        return PAUSE_SAMPLE_WORLD;
+    }
+
+    private boolean recordRenderSample(float transition, int priority)
+    {
+        if (priority < this.lastRenderPriority)
+        {
+            return false;
+        }
+
+        this.lastRenderTransition = transition;
+        this.lastRenderPriority = priority;
+        this.lastRenderAge = this.entity.tickCount;
+
+        return true;
+    }
+
+    private void requestAnimationPause(boolean paused, float animationTransition, float lookTransition, IEntity source, int priority)
+    {
+        if (this.pauseRequestPending)
+        {
+            if (paused == this.requestedPaused)
+            {
+                if (paused && this.pauseCaptureOpen && priority > this.pauseCapturePriority)
                 {
-                    a.setSpeedOld(b.getSpeedOld());
-                    a.setSpeed(b.getSpeed());
-                    a.setPosition(b.getPosition());
+                    this.requestTransition = animationTransition;
+                    this.requestLookTransition = lookTransition;
+                    this.pauseCapturePriority = priority;
+                    this.capturePausedAnimation(animationTransition, lookTransition, source);
                 }
 
-                /* Arm swing */
-                float handSwingProgress = entity.getHandSwingProgress(0F);
-
-                if (handSwingProgress < this.prevHandSwing)
-                {
-                    this.prevHandSwing = 0;
-                }
-
-                if (handSwingProgress > 0 && this.prevHandSwing == 0)
-                {
-                    livingEntity.swing(entity.getSwingingArm());
-                }
-
-                this.prevHandSwing = handSwingProgress;
+                return;
             }
 
-            this.entity.setYRot(0F);
-            this.entity.setYHeadRot(entity.getHeadYaw() - entity.getBodyYaw());
-            this.entity.setXRot(entity.getPitch());
-            this.entity.setYBodyRot(0F);
+            this.pauseRequestPending = false;
 
-            this.entity.setPos(entity.getX(), entity.getY(), entity.getZ());
-            this.entity.setOnGround(entity.isOnGround());
-            this.entity.setShiftKeyDown(entity.isSneaking());
-            this.entity.setSprinting(entity.isSprinting());
-            this.entity.setPose(entity.isSneaking() ? net.minecraft.world.entity.Pose.CROUCHING : net.minecraft.world.entity.Pose.STANDING);
-            if (this.entity instanceof net.minecraft.world.entity.LivingEntity le)
+            if (!this.animationPaused)
             {
-                le.setItemSlot(EquipmentSlot.MAINHAND, entity.getEquipmentStack(EquipmentSlot.MAINHAND));
-                le.setItemSlot(EquipmentSlot.OFFHAND, entity.getEquipmentStack(EquipmentSlot.OFFHAND));
-                le.setItemSlot(EquipmentSlot.HEAD, entity.getEquipmentStack(EquipmentSlot.HEAD));
-                le.setItemSlot(EquipmentSlot.CHEST, entity.getEquipmentStack(EquipmentSlot.CHEST));
-                le.setItemSlot(EquipmentSlot.LEGS, entity.getEquipmentStack(EquipmentSlot.LEGS));
-                le.setItemSlot(EquipmentSlot.FEET, entity.getEquipmentStack(EquipmentSlot.FEET));
+                this.pausedLookCaptured = false;
+                this.pauseCaptureOpen = false;
+                this.pauseCapturePriority = 0;
             }
-            this.entity.tickCount = entity.getAge();
-            this.entity.noPhysics = true;
 
-            this.prevYawHead = entity.getHeadYaw() - entity.getBodyYaw();
-            this.prevPitch = entity.getPitch();
+            return;
+        }
+
+        if (paused == this.animationPaused)
+        {
+            if (paused && !this.pausedLookCaptured && this.animationInitialized)
+            {
+                this.pauseCaptureOpen = true;
+                this.pauseCapturePriority = priority;
+                this.capturePausedAnimation(animationTransition, lookTransition, source);
+            }
+            else if (paused && this.pauseCaptureOpen && priority > this.pauseCapturePriority)
+            {
+                this.pauseCapturePriority = priority;
+                this.capturePausedAnimation(animationTransition, lookTransition, source);
+            }
+
+            return;
+        }
+
+        this.pauseRequestPending = true;
+        this.requestedPaused = paused;
+        this.requestTransition = animationTransition;
+        this.requestLookTransition = lookTransition;
+        this.pauseCaptureOpen = paused;
+        this.pauseCapturePriority = paused ? priority : 0;
+
+        if (paused && this.animationInitialized)
+        {
+            this.capturePausedAnimation(animationTransition, lookTransition, source);
+        }
+    }
+
+    private float getAnimationTransition(float transition)
+    {
+        if (this.animationPaused || this.pauseRequestPending)
+        {
+            return this.pausedTransition;
+        }
+
+        return this.animationResuming ? Mth.lerp(transition, this.resumeTransition, 1F) : transition;
+    }
+
+    private float getUIAnimationTransition(float transition)
+    {
+        boolean paused = this.form.paused.get();
+        boolean pendingPause = this.pauseRequestPending && this.requestedPaused;
+
+        if (this.runtimePauseActive && !this.runtimePauseFromTick && this.lastRenderPriority <= PAUSE_SAMPLE_UI && this.form.paused.getRuntimeValue() == null)
+        {
+            this.runtimePauseActive = false;
+        }
+
+        if (paused && (!this.pausedLookCaptured || (!this.animationPaused && !pendingPause)))
+        {
+            float pauseTransition = this.lastRenderAge == this.entity.tickCount ? this.lastRenderTransition : transition;
+
+            this.pauseCaptureOpen = true;
+            this.pauseCapturePriority = PAUSE_SAMPLE_UI;
+            this.capturePausedAnimation(pauseTransition, pauseTransition, null);
+        }
+
+        if (paused)
+        {
+            return this.pausedTransition;
+        }
+
+        if (!this.runtimePauseActive && !this.pauseRequestPending && paused != this.animationPaused)
+        {
+            return transition;
+        }
+
+        return this.getAnimationTransition(transition);
+    }
+
+    private void capturePausedAnimation(float animationTransition, float lookTransition, IEntity source)
+    {
+        if (!this.animationInitialized)
+        {
+            return;
+        }
+
+        if (source != null)
+        {
+            this.applyRenderLook(source, lookTransition);
+        }
+
+        this.pausedTransition = animationTransition;
+
+        this.pausedPitch = source == null
+            ? Mth.lerp(lookTransition, this.entity.xRotO, this.entity.getXRot())
+            : this.entity.getXRot();
+        this.pausedHeadYaw = this.entity.getYHeadRot();
+
+        if (source == null && this.entity instanceof LivingEntity livingEntity)
+        {
+            this.pausedHeadYaw = Mth.rotLerp(lookTransition, livingEntity.yHeadRotO, livingEntity.getYHeadRot());
+        }
+
+        this.pausedLookCaptured = true;
+        this.applyPausedLook();
+    }
+
+    private void captureCurrentLook()
+    {
+        this.pausedPitch = this.entity.getXRot();
+        this.pausedHeadYaw = this.entity.getYHeadRot();
+        this.pausedLookCaptured = true;
+    }
+
+    private void applyPausedLook()
+    {
+        this.entity.xRotO = this.pausedPitch;
+        this.entity.setXRot(this.pausedPitch);
+        this.entity.setYHeadRot(this.pausedHeadYaw);
+
+        if (this.entity instanceof LivingEntity livingEntity)
+        {
+            livingEntity.yBodyRotO = 0F;
+            livingEntity.setYBodyRot(0F);
+            livingEntity.yHeadRotO = this.pausedHeadYaw;
+        }
+    }
+
+    private void applyResumeLook(float transition)
+    {
+        float headYaw = Mth.rotLerp(transition, this.resumeStartHeadYaw, this.resumeHeadYaw);
+        float pitch = Mth.lerp(transition, this.resumeStartPitch, this.resumePitch);
+        this.entity.xRotO = pitch;
+        this.entity.setXRot(pitch);
+        this.entity.setYHeadRot(headYaw);
+
+        if (this.entity instanceof LivingEntity livingEntity)
+        {
+            livingEntity.yBodyRotO = 0F;
+            livingEntity.setYBodyRot(0F);
+            livingEntity.yHeadRotO = headYaw;
+        }
+    }
+
+    /**
+     * Resolves look angles once per render from the source entity. Vanilla normally performs this
+     * interpolation inside LivingEntityRenderer, but MobForm keeps body yaw outside that renderer;
+     * synchronizing only tick endpoints would therefore interpolate the already-subtracted angle.
+     * Look remains source-driven while the animation clock is paused.
+     */
+    private void prepareRenderLook(IEntity source, float transition)
+    {
+        if (source != null)
+        {
+            this.applyRenderLook(source, transition);
+
+            return;
+        }
+
+        if (this.animationPaused || this.pauseRequestPending)
+        {
+            if (this.pausedLookCaptured)
+            {
+                this.applyPausedLook();
+            }
+
+            return;
+        }
+
+        if (this.animationResuming)
+        {
+            this.applyResumeLook(transition);
+
+            return;
+        }
+    }
+
+    private void applyRenderLook(IEntity source, float transition)
+    {
+        float interpolatedHeadYaw = Mth.rotLerp(transition, source.getPrevHeadYaw(), source.getHeadYaw());
+        float interpolatedBodyYaw = Mth.rotLerp(transition, source.getPrevBodyYaw(), source.getBodyYaw());
+        float relativeHeadYaw = interpolatedHeadYaw - interpolatedBodyYaw;
+        float interpolatedPitch = Mth.lerp(transition, source.getPrevPitch(), source.getPitch());
+
+        this.entity.xRotO = interpolatedPitch;
+        this.entity.setXRot(interpolatedPitch);
+
+        if (this.entity instanceof LivingEntity livingEntity)
+        {
+            livingEntity.yBodyRotO = 0F;
+            livingEntity.setYBodyRot(0F);
+            livingEntity.yHeadRotO = relativeHeadYaw;
+            livingEntity.setYHeadRot(relativeHeadYaw);
         }
     }
 
     private static class BooleanHolder
     {
         public boolean bool;
+    }
+
+    private static class EmptyVertexConsumer implements VertexConsumer
+    {
+        @Override
+        public VertexConsumer addVertex(float x, float y, float z)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setColor(int red, int green, int blue, int alpha)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv(float u, float v)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv1(int u, int v)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv2(int u, int v)
+        {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setNormal(float x, float y, float z)
+        {
+            return this;
+        }
     }
 }

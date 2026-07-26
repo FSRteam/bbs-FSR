@@ -586,6 +586,29 @@ public abstract class BaseFilmController
         return matrix == null ? null : MatrixStackUtils.stripScale(matrix);
     }
 
+    public static Vector3f getGizmoBoneRotationOffset(IEntity entity, float transition, String bonePath)
+    {
+        if (entity == null || entity.getForm() == null || bonePath == null)
+        {
+            return new Vector3f();
+        }
+
+        String mapKey = bonePath.contains(PerLimbService.POSE_BONES)
+            ? bonePath.replace(PerLimbService.POSE_BONES, "")
+            : bonePath;
+        Form root = FormUtils.getRoot(entity.getForm());
+        FormRenderer<?> renderer = FormUtilsClient.getRenderer(root);
+
+        if (renderer == null)
+        {
+            return new Vector3f();
+        }
+
+        Vector3f offset = renderer.collectMatrices(entity, transition).get(mapKey).rotationOffset();
+
+        return offset == null ? new Vector3f() : new Vector3f(offset);
+    }
+
     /**
      * The same composite as {@link #getGizmoBoneCompositeMatrix} but with the bone's scale kept.
      * The gizmo drops scale on purpose (a gizmo must not inherit it); world-space transform capture

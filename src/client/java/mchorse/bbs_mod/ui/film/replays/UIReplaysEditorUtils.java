@@ -22,9 +22,12 @@ import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.PoseForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -46,7 +49,6 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.resources.Link;
@@ -109,53 +111,48 @@ public class UIReplaysEditorUtils
         });
     }
 
-    public static void addBoneTrackSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    public static void addBoneTrackSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        addBoneTrackSheets(modelForm, properties, out, null);
+        addBoneTrackSheets(form, properties, out, null);
     }
 
-    public static void addBoneTrackSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out, Map<String, Integer> depthBySheetId)
+    public static void addBoneTrackSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out, Map<String, Integer> depthBySheetId)
     {
-        if (!modelForm.boneTracks.get())
+        if (!(form instanceof PoseForm poseForm) || !poseForm.getBoneTracks().get())
         {
             return;
         }
 
-        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
-        if (model == null)
+        if (hierarchy.getBones().isEmpty())
         {
             return;
         }
 
-        IModel iModel = model.model;
-        List<String> bones = iModel.getGroupKeysInHierarchyOrder();
         Map<String, Integer> parentToColor = new HashMap<>();
+        Map<String, String> labels = hierarchy.getLabels(false);
         int[] hueIndex = {0};
 
-        for (String bone : bones)
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
         {
-            if (PoseBones.isHidden(model.getDisabledBones(), bone))
-            {
-                continue;
-            }
-
-            String parent = iModel.getParentGroupKey(bone);
-            int color = parentToColor.computeIfAbsent(parent, (p) ->
+            String colorGroup = bone.layerId() + "\u0000" + (bone.parentId() == null ? "" : bone.parentId());
+            int color = parentToColor.computeIfAbsent(colorGroup, (p) ->
                 Colors.HSVtoRGB((hueIndex[0]++ % BONE_TRACK_HUE_COUNT) / (float) BONE_TRACK_HUE_COUNT, 0.7F, 0.7F).getRGBColor()
             );
 
-            String path = FormUtils.getPath(modelForm);
-            String boneKey = PerLimbService.toPoseBoneKey(path, bone);
-            String title = path.isEmpty() ? bone : path + "/" + bone;
+            String path = FormUtils.getPath(form);
+            String boneKey = PerLimbService.toPoseBoneKey(path, bone.id());
+            String label = labels.getOrDefault(bone.id(), bone.name());
+            String title = path.isEmpty() ? label : path + "/" + label;
             KeyframeChannel channel = properties.registerChannel(boneKey, KeyframeFactories.POSE_TRANSFORM);
             ValueTransform transform = new ValueTransform(boneKey, new PoseTransform());
 
-            out.add(new UIKeyframeSheet(boneKey, IKey.constant(title), color, false, channel, transform, true).form(modelForm));
+            out.add(new UIKeyframeSheet(boneKey, IKey.constant(title), color, false, channel, transform, true).form(form));
 
             if (depthBySheetId != null)
             {
-                depthBySheetId.put(boneKey, getBoneDepth(iModel, bone));
+                depthBySheetId.put(boneKey, bone.depth());
             }
         }
     }
@@ -631,11 +628,12 @@ public class UIReplaysEditorUtils
             addPhysicsControlSheet(modelForm, properties, sheets);
             addWindControlSheet(modelForm, properties, sheets);
             addPhysicsTargetSheets(modelForm, properties, sheets);
-            addBoneTrackSheets(modelForm, properties, sheets);
             addIKControlSheet(modelForm, properties, sheets);
             addIKTargetSheets(modelForm, properties, sheets);
             addPoleTargetSheets(modelForm, properties, sheets);
         }
+
+        addBoneTrackSheets(form, properties, sheets);
 
         return sheets;
     }
@@ -821,7 +819,11 @@ public class UIReplaysEditorUtils
             return matrix == null ? new Matrix4f() : matrix;
         };
 
+        Vector3f rotationOffset = BaseFilmController.getGizmoBoneRotationOffset(entity, transition, bone.a);
+
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
+        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
+        drag.setRotationParents(transform.getTransform(), rotationOffset, matrixSampler);
         drag.setJacobian(GizmoDrag.computeTranslateJacobian(
             transform.getTransform(),
             () -> matrixSampler.get().getTranslation(new Vector3f())
@@ -873,6 +875,8 @@ public class UIReplaysEditorUtils
         };
 
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
+        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
+        drag.setRotationParents(transform.getTransform(), null, matrixSampler);
         drag.setJacobian(GizmoDrag.computeTranslateJacobian(
             transform.getTransform(),
             () -> matrixSampler.get().getTranslation(new Vector3f())
@@ -976,13 +980,25 @@ public class UIReplaysEditorUtils
             return sheet;
         }
 
-        /* Fallback: match by id ignoring case (stencil may return "head", sheet id may be "pose.bones.Head") */
+        UIKeyframeSheet caseInsensitive = null;
+
         for (UIKeyframeSheet s : graph.getSheets())
         {
             if (s.id != null && s.id.equalsIgnoreCase(boneKey))
             {
-                return s;
+                if (caseInsensitive != null)
+                {
+                    caseInsensitive = null;
+                    break;
+                }
+
+                caseInsensitive = s;
             }
+        }
+
+        if (caseInsensitive != null)
+        {
+            return caseInsensitive;
         }
 
         return getActivePoseSheet(keyframeEditor, formPath);
@@ -1171,9 +1187,9 @@ public class UIReplaysEditorUtils
     }
 
     @SuppressWarnings("unchecked")
-    public static void posesToLimbTracks(Replay replay, UIKeyframeSheet poseSheet, ModelForm modelForm)
+    public static void posesToLimbTracks(Replay replay, UIKeyframeSheet poseSheet)
     {
-        if (replay == null || poseSheet == null || modelForm == null)
+        if (replay == null || poseSheet == null)
         {
             return;
         }
@@ -1181,21 +1197,12 @@ public class UIReplaysEditorUtils
         String formPath = poseSheet.id.equals("pose") ? "" : poseSheet.id.substring(0, poseSheet.id.length() - (FormUtils.PATH_SEPARATOR + "pose").length());
         Form form = formPath.isEmpty() ? replay.form.get() : FormUtils.getForm(replay.form.get(), formPath);
 
-        if (!(form instanceof ModelForm targetModelForm))
+        if (!(form instanceof PoseForm))
         {
             return;
         }
 
-        ModelInstance model = ModelFormRenderer.getModel(targetModelForm);
-
-        if (model == null)
-        {
-            return;
-        }
-
-        List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-
-        bones.removeIf((bone) -> PoseBones.isHidden(model.getDisabledBones(), bone));
+        List<String> bones = FormUtilsClient.getBoneHierarchy(form).getBoneIds();
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
@@ -1230,18 +1237,7 @@ public class UIReplaysEditorUtils
                 int index = limbChannel.insert(tick, copy);
                 Keyframe<PoseTransform> limbKf = limbChannel.get(index);
 
-                limbKf.getInterpolation().copy(keyframe.getInterpolation());
-                limbKf.setShape(keyframe.getShape());
-                limbKf.setColor(keyframe.getColor() != null ? keyframe.getColor().copy() : null);
-                limbKf.setDuration(keyframe.getDuration());
-                limbKf.lx = keyframe.lx;
-                limbKf.ly = keyframe.ly;
-                limbKf.rx = keyframe.rx;
-                limbKf.ry = keyframe.ry;
-                limbKf.lx_m = keyframe.lx_m != null ? new ArrayList<>(keyframe.lx_m) : null;
-                limbKf.ly_m = keyframe.ly_m != null ? new ArrayList<>(keyframe.ly_m) : null;
-                limbKf.rx_m = keyframe.rx_m != null ? new ArrayList<>(keyframe.rx_m) : null;
-                limbKf.ry_m = keyframe.ry_m != null ? new ArrayList<>(keyframe.ry_m) : null;
+                limbKf.copyOverExtra(keyframe);
             }
         }
     }
@@ -1286,25 +1282,22 @@ public class UIReplaysEditorUtils
             return;
         }
 
-        if (!bone.isEmpty() && form instanceof ModelForm modelForm)
+        if (!bone.isEmpty())
         {
-            ModelInstance model = ModelFormRenderer.getModel(modelForm);
+            BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
-            if (model == null)
+            if (hierarchy.getBone(bone) == null)
             {
                 return;
             }
 
             context.replaceContextMenu((menu) ->
             {
-                for (String modelGroup : model.model.getAdjacentGroups(bone))
-                {
-                    if (PoseBones.isHidden(model.getDisabledBones(), modelGroup))
-                    {
-                        continue;
-                    }
+                Map<String, String> labels = hierarchy.getLabels(false);
 
-                    menu.action(Icons.LIMB, IKey.constant(modelGroup), () -> consumer.accept(modelGroup));
+                for (BoneHierarchy.Bone adjacent : hierarchy.getAdjacent(bone))
+                {
+                    menu.action(Icons.LIMB, IKey.constant(labels.getOrDefault(adjacent.id(), adjacent.name())), () -> consumer.accept(adjacent.id()));
                 }
 
                 menu.autoKeys();
@@ -1319,25 +1312,24 @@ public class UIReplaysEditorUtils
             return;
         }
 
-        if (!bone.isEmpty() && form instanceof ModelForm modelForm)
+        if (!bone.isEmpty())
         {
-            ModelInstance model = ModelFormRenderer.getModel(modelForm);
+            BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
-            if (model == null)
+            if (hierarchy.getBone(bone) == null)
             {
                 return;
             }
 
             context.replaceContextMenu((menu) ->
             {
-                for (String modelGroup : model.model.getHierarchyGroups(bone))
-                {
-                    if (PoseBones.isHidden(model.getDisabledBones(), modelGroup))
-                    {
-                        continue;
-                    }
+                Map<String, String> labels = hierarchy.getLabels(false);
 
-                    menu.action(Icons.LIMB, IKey.constant(modelGroup), () -> consumer.accept(modelGroup));
+                for (BoneHierarchy.Bone ancestor : hierarchy.getAncestors(bone))
+                {
+                    String label = labels.getOrDefault(ancestor.id(), ancestor.name());
+
+                    menu.action(Icons.LIMB, IKey.constant(label), () -> consumer.accept(ancestor.id()));
                 }
 
                 menu.autoKeys();
