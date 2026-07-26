@@ -574,6 +574,25 @@ public class UIScreen extends Screen implements IFileDropListener
     public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta)
     {}
 
+    /**
+     * Screen rendering hands us the game time delta in ticks, not the 0..1 partial
+     * tick the UI transition is defined as. Feeding that straight through pins every
+     * interpolated element at a constant fraction between two ticks, so animations
+     * only advance once per tick regardless of frame rate. Read the partial tick the
+     * world render path uses instead, so both paths interpolate identically.
+     */
+    private static float resolveTransition(float delta)
+    {
+        try
+        {
+            return Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
+        }
+        catch (Exception ignored)
+        {}
+
+        return delta;
+    }
+
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta)
     {
@@ -605,7 +624,7 @@ public class UIScreen extends Screen implements IFileDropListener
             }
 
             this.context.setContext(context);
-            this.menu.context.setTransition(delta);
+            this.menu.context.setTransition(resolveTransition(delta));
 
             if (recording && BBSRendering.isWorldReplayActive())
             {
