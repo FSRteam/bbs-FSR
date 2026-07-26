@@ -126,6 +126,26 @@ public class Pose implements IMapSerializable
         }
     }
 
+    public static String getMirrorName(String name)
+    {
+        if (name == null)
+        {
+            return null;
+        }
+
+        for (Pair<Pattern, String> pair : patterns)
+        {
+            Matcher matcher = pair.a.matcher(name);
+
+            if (matcher.matches())
+            {
+                return matcher.replaceAll(pair.b);
+            }
+        }
+
+        return name;
+    }
+
     public PoseTransform get(String name)
     {
         PoseTransform transform = this.transforms.get(name);

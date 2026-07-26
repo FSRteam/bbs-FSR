@@ -19,17 +19,13 @@ import java.util.function.Function;
 public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
 {
     private static Consumer<RenderType> runnables;
+    private static Function<RenderType, Runnable> layerPreparations;
 
     private Function<VertexConsumer, VertexConsumer> substitute;
     private boolean ui;
 
     public static boolean drawLayer(RenderType layer, MeshData meshData)
     {
-        if (runnables != null)
-        {
-            runnables.accept(layer);
-        }
-
         Vector3f origin = FormTranslucentQueue.getSortOrigin();
 
         if (origin == null || !FormTranslucentQueue.isActive() || !isDeferrableTranslucent(layer))
@@ -42,18 +38,54 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
         buffer.upload(meshData);
         VertexBuffer.unbind();
         FormTranslucentQueue.add(new FormTranslucentQueue.RenderLayerCommand(
-            layer, buffer, new Matrix4f(RenderSystem.getModelViewMatrix()), new Vector3f(origin), false));
+            layer,
+            buffer,
+            new Matrix4f(RenderSystem.getModelViewMatrix()),
+            new Vector3f(origin),
+            false,
+            captureLayerPreparation(layer)
+        ));
         return true;
+    }
+
+    public static void prepareLayer(RenderType layer)
+    {
+        Runnable preparation = captureLayerPreparation(layer);
+
+        if (preparation != null)
+        {
+            preparation.run();
+        }
     }
 
     public static void hijackVertexFormat(Consumer<RenderType> runnable)
     {
         runnables = runnable;
+        layerPreparations = null;
+    }
+
+    public static void hijackLayerPreparation(Function<RenderType, Runnable> factory)
+    {
+        runnables = null;
+        layerPreparations = factory;
     }
 
     public static void clearRunnables()
     {
         runnables = null;
+        layerPreparations = null;
+    }
+
+    private static Runnable captureLayerPreparation(RenderType layer)
+    {
+        if (layerPreparations != null)
+        {
+            return layerPreparations.apply(layer);
+        }
+
+        Consumer<RenderType> preparation = runnables;
+
+        return preparation == null ? null : () -> preparation.accept(layer);
     }
 
     public CustomVertexConsumerProvider(ByteBufferBuilder fallback, SequencedMap<RenderType, ByteBufferBuilder> layers)

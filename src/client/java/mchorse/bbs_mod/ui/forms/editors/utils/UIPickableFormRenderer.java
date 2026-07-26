@@ -290,13 +290,21 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
             MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
         }
 
+        Gizmo.INSTANCE.setViewport(this.area);
+
         /* Draw axes */
         if (UIBaseMenu.shouldRenderAxes())
         {
             RenderSystem.disableDepthTest();
-            Gizmo.INSTANCE.setViewport(this.area);
             Gizmo.INSTANCE.render(stack);
             RenderSystem.enableDepthTest();
+        }
+        else
+        {
+            /* The F8 toggle only hides the visual: the pick stencil above still runs, so a handle
+             * stays grabbable and its drag basis keeps coming from the captured placement. Capture
+             * it even when nothing is drawn, or the drag runs on a stale frame. */
+            Gizmo.INSTANCE.captureVisual(stack);
         }
 
         stack.popPose();
@@ -372,7 +380,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
             if (!pair.b.isEmpty())
             {
-                label += " - " + pair.b;
+                label += " - " + FormUtilsClient.getBoneLabel(pair.a, pair.b);
             }
 
             context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);

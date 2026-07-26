@@ -3,6 +3,7 @@ package mchorse.bbs_mod.film;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
@@ -30,6 +31,7 @@ import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
+import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -194,7 +196,7 @@ public abstract class BaseFilmController
             if (UIBaseMenu.shouldRenderAxes())
             {
                 if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, formContext, stack);
-                if (context.bone2 != null && context.map == null) renderAxes(context.bone2, context.local2, context.map, form, formContext, stack);
+                if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack);
             }
         }
         finally
@@ -320,6 +322,58 @@ public abstract class BaseFilmController
                 RenderSystem.enableDepthTest();
                 stack.popPose();
             }
+        }
+    }
+
+    /**
+     * Draw the replay's axes-preview bone as plain static axes.
+     *
+     * <p>Deliberately not {@link #renderAxes}: that one snapshots the placement of the gizmo the
+     * user actually drags ({@link Gizmo#captureVisual}), and the preview runs after it in the same
+     * pass, so sharing the method would leave every drag anchored on the preview bone instead.</p>
+     */
+    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack)
+    {
+        String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
+        Form root = FormUtils.getRoot(form);
+        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+            context.entity,
+            context.simulationOwner,
+            context.world == null ? null : new Matrix4f(context.world.last().pose()),
+            context.allowWorldTargetOverrides,
+            context.allowWorldCollisions,
+            context.getTransition()
+        );
+        MatrixCacheEntry entry = map.get(mapKey);
+        Matrix4f matrix = entry == null ? null : (local ? entry.matrix() : entry.origin());
+
+        if (matrix == null)
+        {
+            return;
+        }
+
+        if (local)
+        {
+            matrix = MatrixStackUtils.stripScale(matrix);
+        }
+
+        stack.pushPose();
+        try
+        {
+            MatrixStackUtils.multiply(stack, matrix);
+
+            Vector3f cameraRelative = stack.last().pose().getTranslation(new Vector3f());
+            Matrix4f projection = RenderSystem.getProjectionMatrix();
+            float fov = projection.m33() == 0 ? (float) (2D * Math.atan(1D / projection.m11())) : BBSSettings.getFov();
+            float distanceScale = BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
+
+            stack.scale(distanceScale, distanceScale, distanceScale);
+            Draw.coolerAxes(stack, 0.25F, 0.008F, 0.26F, 0.018F);
+        }
+        finally
+        {
+            RenderSystem.enableDepthTest();
+            stack.popPose();
         }
     }
 
@@ -587,6 +641,29 @@ public abstract class BaseFilmController
     }
 
     /**
+     * The rotation offset of the same bone sample {@link #getGizmoBoneCompositeMatrix} resolves.
+     * Both go through {@link #sampleBonePlacement} on purpose: a gizmo pairs the offset with that
+     * matrix, so sampling them from different placements (or a different simulation owner) lets the
+     * rotation basis disagree with the mesh the user sees.
+     */
+    public static Vector3f getGizmoBoneRotationOffset(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath
+    )
+    {
+        BonePlacement placement = sampleBonePlacement(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath);
+        Vector3f offset = placement == null ? null : placement.entry().rotationOffset();
+
+        return offset == null ? new Vector3f() : new Vector3f(offset);
+    }
+
+    /**
      * The same composite as {@link #getGizmoBoneCompositeMatrix} but with the bone's scale kept.
      * The gizmo drops scale on purpose (a gizmo must not inherit it); world-space transform capture
      * needs the full matrix, so it goes through this variant instead.
@@ -603,6 +680,38 @@ public abstract class BaseFilmController
         boolean useBoneMatrix
     )
     {
+        BonePlacement placement = sampleBonePlacement(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath);
+
+        if (placement == null)
+        {
+            return null;
+        }
+
+        Matrix4f bone = useBoneMatrix ? placement.entry().matrix() : placement.entry().origin();
+
+        if (bone == null)
+        {
+            return null;
+        }
+
+        return new Matrix4f(placement.target()).mul(bone);
+    }
+
+    /**
+     * Resolve the entity's render placement and sample one bone in it. Every film-side bone consumer
+     * shares this so they agree on the placement, the simulation owner and the world-input policy.
+     */
+    private static BonePlacement sampleBonePlacement(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath
+    )
+    {
         if (entity == null || entity.getForm() == null || bonePath == null)
         {
             return null;
@@ -614,7 +723,7 @@ public abstract class BaseFilmController
         double cy = cameraY;
         double cz = cameraZ;
 
-        if (relative && replay != null)
+        if (relative)
         {
             cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
             cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
@@ -640,6 +749,13 @@ public abstract class BaseFilmController
             : bonePath;
 
         Form root = FormUtils.getRoot(form);
+        FormRenderer<?> renderer = FormUtilsClient.getRenderer(root);
+
+        if (renderer == null)
+        {
+            return null;
+        }
+
         Matrix4f semanticBase = relative
             ? new Matrix4f(target)
             : absoluteSemanticMatrix(target, cx, cy, cz);
@@ -647,7 +763,7 @@ public abstract class BaseFilmController
          * renderEntity(). Using the Replay value here creates a second Verlet/IK
          * history, so gizmos and other bone consumers can disagree with the mesh. */
         Object simulationOwner = relative ? relativeSimulationOwner(entity) : entity;
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+        MatrixCache map = renderer.collectMatrices(
             entity,
             simulationOwner,
             semanticBase,
@@ -657,20 +773,12 @@ public abstract class BaseFilmController
         );
         MatrixCacheEntry entry = map.get(mapKey);
 
-        if (entry == null)
-        {
-            return null;
-        }
-
-        Matrix4f bone = useBoneMatrix ? entry.matrix() : entry.origin();
-
-        if (bone == null)
-        {
-            return null;
-        }
-
-        return new Matrix4f(target).mul(bone);
+        return entry == null ? null : new BonePlacement(target, entry);
     }
+
+    /** One bone sampled inside a resolved entity placement. */
+    private record BonePlacement(Matrix4f target, MatrixCacheEntry entry)
+    {}
 
     private static Matrix4f absoluteSemanticMatrix(Matrix4f cameraRelative, double cameraX, double cameraY, double cameraZ)
     {

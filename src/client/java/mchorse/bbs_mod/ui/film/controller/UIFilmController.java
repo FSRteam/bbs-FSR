@@ -1637,7 +1637,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 if (!pair.b.isEmpty())
                 {
-                    label += " - " + pair.b;
+                    label += " - " + FormUtilsClient.getBoneLabel(pair.a, pair.b);
                 }
 
                 context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);
@@ -1649,7 +1649,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
             if (!pair.b.isEmpty())
             {
-                label += " - " + pair.b;
+                label += " - " + FormUtilsClient.getBoneLabel(pair.a, pair.b);
             }
 
             context.batcher.textCard(label, context.mouseX + 12, context.mouseY + 8);

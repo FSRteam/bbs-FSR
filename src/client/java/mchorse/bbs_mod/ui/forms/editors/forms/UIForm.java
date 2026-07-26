@@ -5,6 +5,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -19,7 +20,9 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>>
 {
@@ -72,6 +75,26 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         return this.getOrigin(transition, FormUtils.getPath(this.form), true);
     }
 
+    public Vector3f getRotationOffset(float transition)
+    {
+        return this.getRotationOffset(transition, FormUtils.getPath(this.form));
+    }
+
+    /**
+     * Exact translate Jacobian for editors whose values are not block-space (vanilla ModelPart pose
+     * bones), or {@code null} to let the gizmo sample one numerically.
+     */
+    public Matrix3f getTranslateJacobian(UIPropTransform transform, float transition)
+    {
+        return null;
+    }
+
+    /** Whether {@code transform} edits a vanilla ModelPart bone, whose translation is model pixels. */
+    public boolean editsModelPartTranslate(UIPropTransform transform)
+    {
+        return false;
+    }
+
     /**
      * Origin for the body part gizmo mode: always the edited form's OWN root frame (where the body
      * part actually renders &mdash; attach bone &middot; part transform &middot; form transform),
@@ -86,11 +109,25 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     protected Matrix4f getOrigin(float transition, String path, boolean local)
     {
-        Form root = FormUtils.getRoot(this.form);
-        MatrixCache map = this.editor.renderer.collectPreviewMatrices(root, transition);
-        Matrix4f matrix = local ? map.get(path).matrix() : map.get(path).origin();
+        MatrixCacheEntry entry = this.getMatrixEntry(transition, path);
+        Matrix4f matrix = local ? entry.matrix() : entry.origin();
 
         return matrix == null ? Matrices.EMPTY_4F : matrix;
+    }
+
+    protected Vector3f getRotationOffset(float transition, String path)
+    {
+        Vector3f offset = this.getMatrixEntry(transition, path).rotationOffset();
+
+        return offset == null ? new Vector3f() : new Vector3f(offset);
+    }
+
+    protected MatrixCacheEntry getMatrixEntry(float transition, String path)
+    {
+        Form root = FormUtils.getRoot(this.form);
+        MatrixCache map = this.editor.renderer.collectPreviewMatrices(root, transition);
+
+        return map.get(path);
     }
 
     protected void registerDefaultPanels()
