@@ -1901,5 +1901,13 @@
 	"bbs.ui.plugins.state.disabled": "Disabled",
 	"bbs.ui.plugins.state.incompatible": "Incompatible",
 	"bbs.ui.plugins.state.failed": "Failed",
-	"bbs.ui.plugins.state.restart_required": "Restart required"
+	"bbs.ui.plugins.state.restart_required": "Restart required",
+	"bbs.config.video.encoder_args": "Encoder arguments",
+	"bbs.config.video.encoder_args-comment": "Specify custom FFmpeg arguments here. Change this field at your own risk!",
+	"bbs.ui.block_variant.context.insert_empty": "Insert empty block",
+	"bbs.ui.camera.panels.all": "All",
+	"bbs.ui.camera.panels.keys.title": "Current clip panel",
+	"bbs.ui.film.controller.keys.toggle_orbit": "Toggle view mode",
+	"bbs.ui.film.replay.entity_keyframes": "Open entity keyframes",
+	"bbs.ui.film.replay.form_keyframes": "Open form keyframes"
 }
