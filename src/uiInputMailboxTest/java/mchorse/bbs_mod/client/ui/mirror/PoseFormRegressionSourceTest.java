@@ -26,6 +26,7 @@ public final class PoseFormRegressionSourceTest
     private static final String GIZMO = "src/client/java/mchorse/bbs_mod/ui/utils/Gizmo.java";
     private static final String FILM_CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
     private static final String FILM_BASE = "src/client/java/mchorse/bbs_mod/film/BaseFilmController.java";
+    private static final String FORM_RENDERER = "src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIPickableFormRenderer.java";
 
     private PoseFormRegressionSourceTest()
     {}
@@ -47,8 +48,11 @@ public final class PoseFormRegressionSourceTest
         String gizmo = read(root.resolve(GIZMO));
         String filmController = read(root.resolve(FILM_CONTROLLER));
         String filmBase = read(root.resolve(FILM_BASE));
+        String formRenderer = read(root.resolve(FORM_RENDERER));
 
         gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmBase);
+        hiddenAxesStillRefreshGizmoPlacement(formRenderer);
+        filmBoneConsumersShareOnePlacementSample(filmBase, filmEditor);
         mirrorEditingUsesSelectionDeltas(editor);
         filmPoseEditingUsesSelectionDeltas(poseKeyframe);
         deferredLayersCapturePreparation(provider, queue);
@@ -88,6 +92,48 @@ public final class PoseFormRegressionSourceTest
             "the gizmo visual pass no longer captures placement, leaving nothing to drag against");
         check(filmController.contains("!viewport.isInside(context) || this.controlled != null"),
             "the film pick pass is no longer cursor gated, so this contract no longer applies");
+    }
+
+    /**
+     * The form editor's F8 toggle only hides the gizmo's visual - its pick stencil keeps running, so
+     * a handle stays grabbable. Since the pick pass no longer captures placement, the visual pass has
+     * to capture it even in the frames where it draws nothing, or that drag runs on a stale frame.
+     */
+    private static void hiddenAxesStillRefreshGizmoPlacement(String formRenderer)
+    {
+        String axes = section(formRenderer, "private void renderAxes(UIContext context)", "private void renderFormHitbox");
+
+        assertOrdered(axes,
+            "if (UIBaseMenu.shouldRenderAxes())",
+            "Gizmo.INSTANCE.render(stack)",
+            "else",
+            "Gizmo.INSTANCE.captureVisual(stack)");
+        check(!section(formRenderer, "Gizmo.INSTANCE.renderStencil", "this.stencil.pickGUI")
+                .contains("captureVisual"),
+            "the form editor pick pass captures placement again, reintroducing the cursor dependency");
+    }
+
+    /**
+     * A gizmo pairs a bone's rotation offset with its composite matrix. Sampling them from separate
+     * placements lets the rotation basis disagree with the mesh - for a form with IK or physics bones
+     * a second collectMatrices call also builds a second simulation history.
+     */
+    private static void filmBoneConsumersShareOnePlacementSample(String filmBase, String filmEditor)
+    {
+        assertOrdered(
+            section(filmBase, "public static Vector3f getGizmoBoneRotationOffset", "private static Matrix4f absoluteSemanticMatrix"),
+            "sampleBonePlacement(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath)",
+            "private static BonePlacement sampleBonePlacement",
+            "Object simulationOwner = relative ? relativeSimulationOwner(entity) : entity",
+            "renderer.collectMatrices(");
+        check(!section(filmBase, "public static Vector3f getGizmoBoneRotationOffset", "private static Matrix4f absoluteSemanticMatrix")
+                .contains("collectMatrices(entity, transition)"),
+            "the film bone rotation offset samples through the ownerless collectMatrices overload again");
+        check(filmEditor.contains("sampleFilmBoneRotationOffset(panel, camera, entity, replay, transition, bone.a)"),
+            "the film gizmo drag samples the bone rotation offset outside the shared placement path");
+        check(section(filmEditor, "private static Vector3f sampleFilmBoneRotationOffset", "private static void buildAnchorGizmoDrag")
+                .contains("applyReplayProperties(panel, entity, replay, transition)"),
+            "the film bone rotation offset samples without the replay's animated properties applied");
     }
 
     private static void mirrorEditingUsesSelectionDeltas(String source)

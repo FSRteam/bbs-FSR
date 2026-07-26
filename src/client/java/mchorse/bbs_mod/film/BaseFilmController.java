@@ -640,25 +640,25 @@ public abstract class BaseFilmController
         return matrix == null ? null : MatrixStackUtils.stripScale(matrix);
     }
 
-    public static Vector3f getGizmoBoneRotationOffset(IEntity entity, float transition, String bonePath)
+    /**
+     * The rotation offset of the same bone sample {@link #getGizmoBoneCompositeMatrix} resolves.
+     * Both go through {@link #sampleBonePlacement} on purpose: a gizmo pairs the offset with that
+     * matrix, so sampling them from different placements (or a different simulation owner) lets the
+     * rotation basis disagree with the mesh the user sees.
+     */
+    public static Vector3f getGizmoBoneRotationOffset(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath
+    )
     {
-        if (entity == null || entity.getForm() == null || bonePath == null)
-        {
-            return new Vector3f();
-        }
-
-        String mapKey = bonePath.contains(PerLimbService.POSE_BONES)
-            ? bonePath.replace(PerLimbService.POSE_BONES, "")
-            : bonePath;
-        Form root = FormUtils.getRoot(entity.getForm());
-        FormRenderer<?> renderer = FormUtilsClient.getRenderer(root);
-
-        if (renderer == null)
-        {
-            return new Vector3f();
-        }
-
-        Vector3f offset = renderer.collectMatrices(entity, transition).get(mapKey).rotationOffset();
+        BonePlacement placement = sampleBonePlacement(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath);
+        Vector3f offset = placement == null ? null : placement.entry().rotationOffset();
 
         return offset == null ? new Vector3f() : new Vector3f(offset);
     }
@@ -680,6 +680,38 @@ public abstract class BaseFilmController
         boolean useBoneMatrix
     )
     {
+        BonePlacement placement = sampleBonePlacement(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath);
+
+        if (placement == null)
+        {
+            return null;
+        }
+
+        Matrix4f bone = useBoneMatrix ? placement.entry().matrix() : placement.entry().origin();
+
+        if (bone == null)
+        {
+            return null;
+        }
+
+        return new Matrix4f(placement.target()).mul(bone);
+    }
+
+    /**
+     * Resolve the entity's render placement and sample one bone in it. Every film-side bone consumer
+     * shares this so they agree on the placement, the simulation owner and the world-input policy.
+     */
+    private static BonePlacement sampleBonePlacement(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath
+    )
+    {
         if (entity == null || entity.getForm() == null || bonePath == null)
         {
             return null;
@@ -691,7 +723,7 @@ public abstract class BaseFilmController
         double cy = cameraY;
         double cz = cameraZ;
 
-        if (relative && replay != null)
+        if (relative)
         {
             cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
             cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
@@ -717,6 +749,13 @@ public abstract class BaseFilmController
             : bonePath;
 
         Form root = FormUtils.getRoot(form);
+        FormRenderer<?> renderer = FormUtilsClient.getRenderer(root);
+
+        if (renderer == null)
+        {
+            return null;
+        }
+
         Matrix4f semanticBase = relative
             ? new Matrix4f(target)
             : absoluteSemanticMatrix(target, cx, cy, cz);
@@ -724,7 +763,7 @@ public abstract class BaseFilmController
          * renderEntity(). Using the Replay value here creates a second Verlet/IK
          * history, so gizmos and other bone consumers can disagree with the mesh. */
         Object simulationOwner = relative ? relativeSimulationOwner(entity) : entity;
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+        MatrixCache map = renderer.collectMatrices(
             entity,
             simulationOwner,
             semanticBase,
@@ -734,20 +773,12 @@ public abstract class BaseFilmController
         );
         MatrixCacheEntry entry = map.get(mapKey);
 
-        if (entry == null)
-        {
-            return null;
-        }
-
-        Matrix4f bone = useBoneMatrix ? entry.matrix() : entry.origin();
-
-        if (bone == null)
-        {
-            return null;
-        }
-
-        return new Matrix4f(target).mul(bone);
+        return entry == null ? null : new BonePlacement(target, entry);
     }
+
+    /** One bone sampled inside a resolved entity placement. */
+    private record BonePlacement(Matrix4f target, MatrixCacheEntry entry)
+    {}
 
     private static Matrix4f absoluteSemanticMatrix(Matrix4f cameraRelative, double cameraX, double cameraY, double cameraZ)
     {

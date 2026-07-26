@@ -812,7 +812,7 @@ public class UIReplaysEditorUtils
             return matrix == null ? new Matrix4f() : MatrixStackUtils.stripScale(matrix);
         };
 
-        Vector3f rotationOffset = BaseFilmController.getGizmoBoneRotationOffset(entity, transition, bone.a);
+        Vector3f rotationOffset = sampleFilmBoneRotationOffset(panel, camera, entity, replay, transition, bone.a);
 
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
         drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
@@ -866,6 +866,17 @@ public class UIReplaysEditorUtils
         drag.setJacobian(GizmoDrag.resolveTranslateJacobian(translateJacobian, mobPoseBone));
         drag.modelPartTranslate(mobPoseBone);
 
+        applyReplayProperties(panel, entity, replay, transition);
+
+        return drag;
+    }
+
+    /**
+     * Re-apply the replay's animated properties before a placement sample. Samplers run outside the
+     * render loop, so without this they would see whatever the last render left on the form.
+     */
+    private static void applyReplayProperties(UIFilmPanel panel, IEntity entity, Replay replay, float transition)
+    {
         Form form = entity.getForm();
 
         if (form != null)
@@ -874,8 +885,6 @@ public class UIReplaysEditorUtils
 
             replay.properties.applyProperties(form, tick);
         }
-
-        return drag;
     }
 
     private static Matrix4f sampleFilmBoneMatrix(
@@ -888,13 +897,7 @@ public class UIReplaysEditorUtils
         boolean useBoneMatrix
     )
     {
-        Form form = entity.getForm();
-        float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
-
-        if (form != null)
-        {
-            replay.properties.applyProperties(form, tick);
-        }
+        applyReplayProperties(panel, entity, replay, transition);
 
         return BaseFilmController.getBoneCompositeMatrix(
             panel.getController().getEntities(),
@@ -906,6 +909,29 @@ public class UIReplaysEditorUtils
             transition,
             bone,
             useBoneMatrix
+        );
+    }
+
+    private static Vector3f sampleFilmBoneRotationOffset(
+        UIFilmPanel panel,
+        Camera camera,
+        IEntity entity,
+        Replay replay,
+        float transition,
+        String bone
+    )
+    {
+        applyReplayProperties(panel, entity, replay, transition);
+
+        return BaseFilmController.getGizmoBoneRotationOffset(
+            panel.getController().getEntities(),
+            entity,
+            replay,
+            camera.position.x,
+            camera.position.y,
+            camera.position.z,
+            transition,
+            bone
         );
     }
 
@@ -921,13 +947,7 @@ public class UIReplaysEditorUtils
     {
         java.util.function.Supplier<Matrix4f> matrixSampler = () ->
         {
-            Form form = entity.getForm();
-            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
-
-            if (form != null)
-            {
-                replay.properties.applyProperties(form, tick);
-            }
+            applyReplayProperties(panel, entity, replay, transition);
 
             Matrix4f matrix = BaseFilmController.getGizmoAnchorCompositeMatrix(
                 panel.getController().getEntities(),
@@ -950,14 +970,7 @@ public class UIReplaysEditorUtils
             () -> matrixSampler.get().getTranslation(new Vector3f())
         ));
 
-        Form form = entity.getForm();
-
-        if (form != null)
-        {
-            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
-
-            replay.properties.applyProperties(form, tick);
-        }
+        applyReplayProperties(panel, entity, replay, transition);
     }
 
     /* Picking form and form properties */
