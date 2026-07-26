@@ -35,6 +35,7 @@ public class Textbox
     private boolean background = true;
     private int color = Colors.WHITE;
     private boolean border;
+    private int contentInset;
 
     private boolean holding;
     private int lastX;
@@ -71,6 +72,18 @@ public class Textbox
     public void setBorder(boolean border)
     {
         this.border = border;
+    }
+
+    /** Extra left inset reserved for decorations rendered by the owning UI element. */
+    public void setContentInset(int contentInset)
+    {
+        contentInset = Math.max(0, contentInset);
+
+        if (this.contentInset != contentInset)
+        {
+            this.contentInset = contentInset;
+            this.updateBounds(false);
+        }
     }
 
     /* Component */
@@ -320,8 +333,13 @@ public class Textbox
     {
         int cursor = selection ? this.selection : this.cursor;
         int length = this.text.length();
-        int offset = this.background ? 10 : 0;
+        int offset = this.background ? 10 + this.contentInset : 0;
         int max = this.area.w - offset;
+
+        if (this.contentInset > 0)
+        {
+            max = Math.max(0, max);
+        }
 
         if (this.font.getWidth(this.text) < max)
         {
@@ -515,7 +533,7 @@ public class Textbox
 
         if (this.background)
         {
-            x -= 4;
+            x -= 4 + this.contentInset;
         }
 
         if (x >= 0)
@@ -741,12 +759,19 @@ public class Textbox
                 }
             }
 
-            x = this.area.x + 4;
+            x = this.area.x + 4 + this.contentInset;
             y = this.area.my() - this.font.getHeight() / 2;
         }
 
         boolean empty = !this.focused && this.text.isEmpty();
-        String text = empty ? this.font.limitToWidth(this.placeholder.get(), this.area.w - 5) : this.getWrappedText();
+        int placeholderWidth = this.area.w - 5 - this.contentInset;
+
+        if (this.contentInset > 0)
+        {
+            placeholderWidth = Math.max(0, placeholderWidth);
+        }
+
+        String text = empty ? this.font.limitToWidth(this.placeholder.get(), placeholderWidth) : this.getWrappedText();
         int length = text.length();
         /* Colors.WHITE doubles as "follow the theme" for the default text color */
         int themedColor = this.color == Colors.WHITE ? BBSSettings.textColor() : this.color;

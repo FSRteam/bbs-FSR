@@ -13,14 +13,16 @@ import mchorse.bbs_mod.particles.components.appearance.colors.Solid;
 import mchorse.bbs_mod.particles.components.appearance.colors.Tint;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.particles.utils.UIGradientEditor;
+import mchorse.bbs_mod.ui.particles.utils.UIParticleIcons;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 
@@ -28,7 +30,7 @@ import java.util.Arrays;
 
 public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
 {
-    public UICirculate mode;
+    public UIIcons mode;
     public UIColor color;
     public UITextbox r;
     public UITextbox g;
@@ -51,10 +53,8 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
     {
         super(parent);
 
-        this.mode = new UICirculate((b) -> this.changeMode(b.getValue()));
-        this.mode.addLabel(UIKeys.SNOWSTORM_LIGHTING_SOLID);
-        this.mode.addLabel(UIKeys.SNOWSTORM_LIGHTING_EXPRESSION);
-        this.mode.addLabel(UIKeys.SNOWSTORM_LIGHTING_GRADIENT);
+        this.mode = new UIIcons((b) -> this.changeMode(b.getValue()));
+        UIParticleIcons.addColorModes(this.mode);
 
         this.color = new UIColor((color) ->
         {
@@ -76,6 +76,7 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
             this.editor.markUndoBoundary();
         });
         this.r.placeholder(IKey.constant("R"));
+        this.r.icon(Icons.COLOR).barColor(Colors.RED);
         this.r.tooltip(UIKeys.SNOWSTORM_LIGHTING_RED);
 
         this.g = new UITextbox(10000, (str) ->
@@ -85,6 +86,7 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
             this.editor.markUndoBoundary();
         });
         this.g.placeholder(IKey.constant("G"));
+        this.g.icon(Icons.COLOR).barColor(Colors.GREEN);
         this.g.tooltip(UIKeys.SNOWSTORM_LIGHTING_GREEN);
 
         this.b = new UITextbox(10000, (str) ->
@@ -94,6 +96,7 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
             this.editor.markUndoBoundary();
         });
         this.b.placeholder(IKey.constant("B"));
+        this.b.icon(Icons.COLOR).barColor(Colors.BLUE);
         this.b.tooltip(UIKeys.SNOWSTORM_LIGHTING_BLUE);
 
         this.a = new UITextbox(10000, (str) ->
@@ -103,6 +106,7 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
             this.editor.markUndoBoundary();
         });
         this.a.placeholder(IKey.constant("A"));
+        this.a.icon(Icons.DROP).barColor(Colors.WHITE);
         this.a.tooltip(UIKeys.SNOWSTORM_LIGHTING_ALPHA);
 
         this.lighting = new UIToggle(UIKeys.SNOWSTORM_LIGHTING_LIGHTING, (b) ->
@@ -128,6 +132,7 @@ public class UIParticleSchemeLightingSection extends UIParticleSchemeSection
             this.editor.markUndoBoundary();
         });
         this.gradientInterpolant.placeholder(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT);
+        this.gradientInterpolant.icon(Icons.CURVES);
         this.gradient = this.labeledField(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT, this.gradientInterpolant);
 
         UILabel label = UI.label(UIKeys.SNOWSTORM_MODE, 20).labelAnchor(0, 0.5F);

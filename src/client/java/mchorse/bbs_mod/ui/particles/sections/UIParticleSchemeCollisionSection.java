@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 public class UIParticleSchemeCollisionSection extends UIParticleSchemeComponentSection<ParticleComponentMotionCollision>
 {
@@ -98,6 +99,7 @@ public class UIParticleSchemeCollisionSection extends UIParticleSchemeComponentS
             this.editor.dirty();
         });
         this.expirationDelay.tooltip(UIKeys.SNOWSTORM_COLLISION_EXPIRATION_DELAY);
+        this.expirationDelay.icon(Icons.STOPWATCH);
         this.preserveEnergy = new UIToggle(UIKeys.SNOWSTORM_COLLISION_PRESERVE_ENERGY, (b) ->
         {
             this.component.preserveEnergy = b.getValue();

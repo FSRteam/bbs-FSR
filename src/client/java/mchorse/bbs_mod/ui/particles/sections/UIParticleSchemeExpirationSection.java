@@ -5,15 +5,16 @@ import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentKillPlane;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentParticleLifetime;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
 {
-    public UICirculate mode;
+    public UIIcons mode;
     public UITextbox expression;
 
     public UITrackpad a;
@@ -28,14 +29,14 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
     {
         super(parent);
 
-        this.mode = new UICirculate((b) ->
+        this.mode = new UIIcons((b) ->
         {
             this.lifetime.max = this.mode.getValue() == 1;
             this.updateTooltip();
             this.editor.dirty();
         });
-        this.mode.addLabel(UIKeys.SNOWSTORM_EXPIRATION_EXPRESSION);
-        this.mode.addLabel(UIKeys.SNOWSTORM_EXPIRATION_MAX);
+        this.mode.add(Icons.CODE, UIKeys.SNOWSTORM_EXPIRATION_EXPRESSION);
+        this.mode.add(Icons.STOPWATCH, UIKeys.SNOWSTORM_EXPIRATION_MAX);
 
         this.expression = new UITextbox(10000, (str) ->
         {
@@ -46,6 +47,7 @@ public class UIParticleSchemeExpirationSection extends UIParticleSchemeSection
             }
         });
         this.expression.placeholder(UIKeys.SNOWSTORM_EXPRESSION);
+        this.expression.icon(Icons.SKULL);
         this.expression.tooltip(IKey.EMPTY);
 
         this.a = new UITrackpad((value) ->

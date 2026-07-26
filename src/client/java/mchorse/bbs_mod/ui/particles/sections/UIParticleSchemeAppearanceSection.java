@@ -15,7 +15,7 @@ import mchorse.bbs_mod.particles.components.appearance.colors.Solid;
 import mchorse.bbs_mod.particles.components.appearance.colors.Tint;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -23,19 +23,22 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.particles.utils.UIGradientEditor;
+import mchorse.bbs_mod.ui.particles.utils.UIParticleIcons;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.Arrays;
 
 public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponentSection<ParticleComponentAppearanceBillboard>
 {
-    public UICirculate mode;
+    public UIIcons mode;
     public UILabel modeLabel;
 
-    public UICirculate facingMode;
+    public UIIcons facingMode;
 
-    public UICirculate directionMode;
+    public UIIcons directionMode;
     public UITrackpad speedThreshold;
     public UITextbox customDirX;
     public UITextbox customDirY;
@@ -59,7 +62,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
 
     /* Color & Lighting (integrated from LightingSection) */
     public UIToggle lightingToggle;
-    public UICirculate colorMode;
+    public UIIcons colorMode;
     public UIColor colorPicker;
     public UITextbox colorR;
     public UITextbox colorG;
@@ -81,7 +84,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
     {
         super(parent);
 
-        this.mode = new UICirculate((b) ->
+        this.mode = new UIIcons((b) ->
         {
             int val = this.mode.getValue();
             this.component.flipbook = val == 1;
@@ -89,33 +92,27 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.updateElements();
             this.editor.dirty();
         });
-        this.mode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_REGULAR);
-        this.mode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_ANIMATED);
-        this.mode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_FULL);
+        UIParticleIcons.addTextureModes(this.mode);
         this.modeLabel = UI.label(UIKeys.SNOWSTORM_MODE, 20).labelAnchor(0, 0.5F);
 
         /* Camera facing mode selector */
-        this.facingMode = new UICirculate((b) ->
+        this.facingMode = new UIIcons((b) ->
         {
             this.component.facing = CameraFacing.values()[this.facingMode.getValue()];
             this.updateDirectionVisibility();
             this.editor.dirty();
         });
 
-        for (CameraFacing facing : CameraFacing.values())
-        {
-            this.facingMode.addLabel(IKey.raw(facing.id));
-        }
+        UIParticleIcons.addFacingModes(this.facingMode);
 
         /* Direction sub-controls */
-        this.directionMode = new UICirculate((b) ->
+        this.directionMode = new UIIcons((b) ->
         {
             this.component.directionMode = this.directionMode.getValue() == 0 ? "derive_from_velocity" : "custom";
             this.updateDirectionVisibility();
             this.editor.dirty();
         });
-        this.directionMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_DERIVE);
-        this.directionMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_CUSTOM);
+        UIParticleIcons.addDirectionModes(this.directionMode);
 
         this.speedThreshold = new UITrackpad((v) ->
         {
@@ -132,6 +129,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.customDirX.placeholder(IKey.raw("X"));
+        this.customDirX.icon(Icons.X).barColor(Colors.RED);
 
         this.customDirY = new UITextbox(10000, (str) ->
         {
@@ -142,6 +140,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.customDirY.placeholder(IKey.raw("Y"));
+        this.customDirY.icon(Icons.Y).barColor(Colors.GREEN);
 
         this.customDirZ = new UITextbox(10000, (str) ->
         {
@@ -152,6 +151,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.customDirZ.placeholder(IKey.raw("Z"));
+        this.customDirZ.icon(Icons.Z).barColor(Colors.BLUE);
 
         this.directionFields = new UIElement();
         this.directionFields.column().vertical().stretch();
@@ -169,6 +169,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.sizeW.placeholder(UIKeys.SNOWSTORM_APPEARANCE_WIDTH);
+        this.sizeW.icon(Icons.HORIZONTAL).barColor(Colors.RED);
 
         this.sizeH = new UITextbox(10000, (str) ->
         {
@@ -176,6 +177,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.sizeH.placeholder(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT);
+        this.sizeH.icon(Icons.VERTICAL).barColor(Colors.GREEN);
 
         this.uvX = new UITextbox(10000, (str) ->
         {
@@ -183,6 +185,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.uvX.placeholder(UIKeys.GENERAL_X);
+        this.uvX.icon(Icons.X).barColor(Colors.RED);
         this.uvX.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_X);
 
         this.uvY = new UITextbox(10000, (str) ->
@@ -191,6 +194,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.uvY.placeholder(UIKeys.GENERAL_Y);
+        this.uvY.icon(Icons.Y).barColor(Colors.GREEN);
         this.uvY.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_Y);
 
         this.uvW = new UITextbox(10000, (str) ->
@@ -199,6 +203,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.uvW.placeholder(UIKeys.SNOWSTORM_APPEARANCE_WIDTH);
+        this.uvW.icon(Icons.HORIZONTAL).barColor(Colors.RED);
         this.uvW.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_W);
 
         this.uvH = new UITextbox(10000, (str) ->
@@ -207,6 +212,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.uvH.placeholder(UIKeys.SNOWSTORM_APPEARANCE_HEIGHT);
+        this.uvH.icon(Icons.VERTICAL).barColor(Colors.GREEN);
         this.uvH.tooltip(UIKeys.SNOWSTORM_APPEARANCE_UV_H);
 
         this.stepX = new UITrackpad((value) ->
@@ -233,6 +239,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.max.placeholder(UIKeys.SNOWSTORM_APPEARANCE_FRAMES);
+        this.max.icon(Icons.GALLERY);
         this.max.tooltip(UIKeys.SNOWSTORM_APPEARANCE_MAX);
 
         this.stretch = new UIToggle(UIKeys.SNOWSTORM_APPEARANCE_STRETCH, (b) ->
@@ -271,10 +278,8 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.dirty();
         });
 
-        this.colorMode = new UICirculate((b) -> this.changeColorMode(b.getValue()));
-        this.colorMode.addLabel(UIKeys.SNOWSTORM_LIGHTING_SOLID);
-        this.colorMode.addLabel(UIKeys.SNOWSTORM_LIGHTING_EXPRESSION);
-        this.colorMode.addLabel(UIKeys.SNOWSTORM_LIGHTING_GRADIENT);
+        this.colorMode = new UIIcons((b) -> this.changeColorMode(b.getValue()));
+        UIParticleIcons.addColorModes(this.colorMode);
 
         this.colorPicker = new UIColor((color) ->
         {
@@ -295,6 +300,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.colorR.placeholder(IKey.constant("R"));
+        this.colorR.icon(Icons.COLOR).barColor(Colors.RED);
         this.colorR.tooltip(UIKeys.SNOWSTORM_LIGHTING_RED);
 
         this.colorG = new UITextbox(10000, (str) ->
@@ -304,6 +310,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.colorG.placeholder(IKey.constant("G"));
+        this.colorG.icon(Icons.COLOR).barColor(Colors.GREEN);
         this.colorG.tooltip(UIKeys.SNOWSTORM_LIGHTING_GREEN);
 
         this.colorB = new UITextbox(10000, (str) ->
@@ -313,6 +320,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.colorB.placeholder(IKey.constant("B"));
+        this.colorB.icon(Icons.COLOR).barColor(Colors.BLUE);
         this.colorB.tooltip(UIKeys.SNOWSTORM_LIGHTING_BLUE);
 
         this.colorA = new UITextbox(10000, (str) ->
@@ -322,6 +330,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.colorA.placeholder(IKey.constant("A"));
+        this.colorA.icon(Icons.DROP).barColor(Colors.WHITE);
         this.colorA.tooltip(UIKeys.SNOWSTORM_LIGHTING_ALPHA);
 
         this.colorChannels = new UIElement();
@@ -340,6 +349,7 @@ public class UIParticleSchemeAppearanceSection extends UIParticleSchemeComponent
             this.editor.markUndoBoundary();
         });
         this.gradientInterpolant.placeholder(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT);
+        this.gradientInterpolant.icon(Icons.CURVES);
         this.gradient = this.labeledField(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT, this.gradientInterpolant);
 
         /* Layout: mode → color/lighting → size → UV → facing */

@@ -1,11 +1,14 @@
 package mchorse.bbs_mod.ui.framework.elements.input.text;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.ITextColoring;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.utils.Patterns;
+import mchorse.bbs_mod.utils.colors.Colors;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
@@ -18,12 +21,16 @@ import java.util.function.Predicate;
  */
 public class UITextbox extends UIBaseTextbox implements ITextColoring
 {
+    private static final int ICON_BAR_INSET = 2;
+
     public static final Predicate<String> FILENAME_PREDICATE = (s) -> Patterns.FILENAME.matcher(s).find();
     public static final Predicate<String> PATH_PREDICATE = (s) -> Patterns.PATH.matcher(s).find();
 
     public Consumer<String> callback;
 
     private boolean delayedInput;
+    private Icon leadingIcon;
+    private int iconBarColor;
 
     public UITextbox()
     {
@@ -99,6 +106,21 @@ public class UITextbox extends UIBaseTextbox implements ITextColoring
         return this;
     }
 
+    public UITextbox icon(Icon icon)
+    {
+        this.leadingIcon = icon;
+        this.resize();
+
+        return this;
+    }
+
+    public UITextbox barColor(int color)
+    {
+        this.iconBarColor = color | Colors.A100;
+
+        return this;
+    }
+
     public void setText(String text)
     {
         if (text == null)
@@ -142,6 +164,7 @@ public class UITextbox extends UIBaseTextbox implements ITextColoring
         super.resize();
 
         this.textbox.area.copy(this.area);
+        this.textbox.setContentInset(this.leadingIcon == null ? 0 : this.area.h + 3);
 
         if (!this.textbox.hasBackground())
         {
@@ -227,8 +250,45 @@ public class UITextbox extends UIBaseTextbox implements ITextColoring
     {
         this.textbox.render(context);
 
+        if (this.leadingIcon != null && this.textbox.hasBackground())
+        {
+            this.renderLeadingIcon(context);
+        }
+
         this.renderLockedArea(context);
 
         super.render(context);
+    }
+
+    private void renderLeadingIcon(UIContext context)
+    {
+        int barX = Math.min(this.area.ex() - 1, this.area.x + this.area.h + 2);
+        int fill = BBSSettings.fieldFillColor();
+        int bar = this.iconBarColor == 0 ? BBSSettings.primaryColor(Colors.A100) : this.iconBarColor;
+
+        if (fill == 0)
+        {
+            fill = BBSSettings.chromeSurface();
+        }
+
+        if (barX > this.area.x + 1 && this.area.h > 2)
+        {
+            int radius = BBSSettings.cornerWidget();
+
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x + 1, this.area.y + 1, barX - this.area.x - 1, this.area.h - 2, Math.max(0, radius - 1), fill);
+            }
+            else
+            {
+                context.batcher.box(this.area.x + 1, this.area.y + 1, barX, this.area.ey() - 1, fill);
+            }
+
+            context.batcher.box(barX, this.area.y + ICON_BAR_INSET, barX + 1, this.area.ey() - ICON_BAR_INSET, bar);
+        }
+
+        int iconColor = this.isEnabled() ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.35F);
+
+        context.batcher.icon(this.leadingIcon, iconColor, this.area.x + this.area.h / 2, this.area.my(), 0.5F, 0.5F);
     }
 }

@@ -20,7 +20,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
@@ -28,8 +28,11 @@ import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.particles.utils.UIGradientEditor;
+import mchorse.bbs_mod.ui.particles.utils.UIParticleIcons;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.Arrays;
 
@@ -37,13 +40,13 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
 {
     public UIToggle enabled;
     public UIButton pick;
-    public UICirculate material;
-    public UICirculate textureMode;
+    public UIIcons material;
+    public UIIcons textureMode;
     public UIToggle lit;
-    public UICirculate facingMode;
+    public UIIcons facingMode;
 
     /* Direction sub-controls */
-    public UICirculate directionMode;
+    public UIIcons directionMode;
     public UITrackpad speedThreshold;
     public UITextbox customDirX;
     public UITextbox customDirY;
@@ -66,7 +69,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
     public UIToggle loop;
 
     /* Collision tinting */
-    public UICirculate tintMode;
+    public UIIcons tintMode;
     public UIColor tintColor;
     public UITextbox tR;
     public UITextbox tG;
@@ -104,17 +107,14 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             });
         });
 
-        this.material = new UICirculate((b) ->
+        this.material = new UIIcons((b) ->
         {
             this.component.material = ParticleMaterial.values()[this.material.getValue()];
             this.editor.dirty();
         });
-        this.material.addLabel(UIKeys.SNOWSTORM_GENERAL_PARTICLES_OPAQUE);
-        this.material.addLabel(UIKeys.SNOWSTORM_GENERAL_PARTICLES_ALPHA);
-        this.material.addLabel(UIKeys.SNOWSTORM_GENERAL_PARTICLES_BLEND);
-        this.material.addLabel(UIKeys.SNOWSTORM_GENERAL_PARTICLES_ADD);
+        UIParticleIcons.addMaterialModes(this.material);
 
-        this.textureMode = new UICirculate((b) ->
+        this.textureMode = new UIIcons((b) ->
         {
             int val = this.textureMode.getValue();
             this.component.flipbook = val == 1;
@@ -122,9 +122,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.updateFlipbookVisibility();
             this.editor.dirty();
         });
-        this.textureMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_REGULAR);
-        this.textureMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_ANIMATED);
-        this.textureMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_FULL);
+        UIParticleIcons.addTextureModes(this.textureMode);
 
         this.lit = new UIToggle(UIKeys.SNOWSTORM_COLLISION_APPEARANCE_LIT, (b) ->
         {
@@ -132,27 +130,23 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.dirty();
         });
 
-        this.facingMode = new UICirculate((b) ->
+        this.facingMode = new UIIcons((b) ->
         {
             this.component.facing = CameraFacing.values()[this.facingMode.getValue()];
             this.updateDirectionVisibility();
             this.editor.dirty();
         });
 
-        for (CameraFacing facing : CameraFacing.values())
-        {
-            this.facingMode.addLabel(IKey.raw(facing.id));
-        }
+        UIParticleIcons.addFacingModes(this.facingMode);
 
         /* Direction sub-controls */
-        this.directionMode = new UICirculate((b) ->
+        this.directionMode = new UIIcons((b) ->
         {
             this.component.directionMode = this.directionMode.getValue() == 0 ? "derive_from_velocity" : "custom";
             this.updateDirectionVisibility();
             this.editor.dirty();
         });
-        this.directionMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_DERIVE);
-        this.directionMode.addLabel(UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_CUSTOM);
+        UIParticleIcons.addDirectionModes(this.directionMode);
 
         this.speedThreshold = new UITrackpad((v) ->
         {
@@ -169,6 +163,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.customDirX.placeholder(IKey.raw("X"));
+        this.customDirX.icon(Icons.X).barColor(Colors.RED);
 
         this.customDirY = new UITextbox(10000, (str) ->
         {
@@ -179,6 +174,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.customDirY.placeholder(IKey.raw("Y"));
+        this.customDirY.icon(Icons.Y).barColor(Colors.GREEN);
 
         this.customDirZ = new UITextbox(10000, (str) ->
         {
@@ -189,6 +185,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.customDirZ.placeholder(IKey.raw("Z"));
+        this.customDirZ.icon(Icons.Z).barColor(Colors.BLUE);
 
         this.directionFields = new UIElement();
         this.directionFields.column().vertical().stretch();
@@ -206,12 +203,14 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.dirty();
         });
         this.sizeW.tooltip(IKey.constant("Width"));
+        this.sizeW.icon(Icons.HORIZONTAL).barColor(Colors.RED);
         this.sizeH = new UITextbox(10000, (str) ->
         {
             this.component.sizeH = this.parse(str, this.component.sizeH);
             this.editor.dirty();
         });
         this.sizeH.tooltip(IKey.constant("Height"));
+        this.sizeH.icon(Icons.VERTICAL).barColor(Colors.GREEN);
 
         this.uvX = new UITextbox(10000, (str) ->
         {
@@ -219,24 +218,28 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.dirty();
         });
         this.uvX.tooltip(IKey.constant("UV X"));
+        this.uvX.icon(Icons.X).barColor(Colors.RED);
         this.uvY = new UITextbox(10000, (str) ->
         {
             this.component.uvY = this.parse(str, this.component.uvY);
             this.editor.dirty();
         });
         this.uvY.tooltip(IKey.constant("UV Y"));
+        this.uvY.icon(Icons.Y).barColor(Colors.GREEN);
         this.uvW = new UITextbox(10000, (str) ->
         {
             this.component.uvW = this.parse(str, this.component.uvW);
             this.editor.dirty();
         });
         this.uvW.tooltip(IKey.constant("UV W"));
+        this.uvW.icon(Icons.HORIZONTAL).barColor(Colors.RED);
         this.uvH = new UITextbox(10000, (str) ->
         {
             this.component.uvH = this.parse(str, this.component.uvH);
             this.editor.dirty();
         });
         this.uvH.tooltip(IKey.constant("UV H"));
+        this.uvH.icon(Icons.VERTICAL).barColor(Colors.GREEN);
 
         /* Flipbook controls */
         this.stepX = new UITrackpad((value) ->
@@ -263,6 +266,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.max.placeholder(UIKeys.SNOWSTORM_APPEARANCE_FRAMES);
+        this.max.icon(Icons.GALLERY);
         this.max.tooltip(UIKeys.SNOWSTORM_APPEARANCE_MAX);
         this.stretch = new UIToggle(UIKeys.SNOWSTORM_APPEARANCE_STRETCH, (b) ->
         {
@@ -286,10 +290,8 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
         /* Collision tinting */
         this.tintingEnabled = new UIToggle(UIKeys.SNOWSTORM_COLLISION_TINTING_ENABLED, (b) -> this.editor.dirty());
 
-        this.tintMode = new UICirculate((b) -> this.changeTintMode(b.getValue()));
-        this.tintMode.addLabel(UIKeys.SNOWSTORM_LIGHTING_SOLID);
-        this.tintMode.addLabel(UIKeys.SNOWSTORM_LIGHTING_EXPRESSION);
-        this.tintMode.addLabel(UIKeys.SNOWSTORM_LIGHTING_GRADIENT);
+        this.tintMode = new UIIcons((b) -> this.changeTintMode(b.getValue()));
+        UIParticleIcons.addColorModes(this.tintMode);
 
         this.tintColor = new UIColor((color) ->
         {
@@ -310,6 +312,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.tR.placeholder(IKey.constant("R"));
+        this.tR.icon(Icons.COLOR).barColor(Colors.RED);
         this.tG = new UITextbox(10000, (str) ->
         {
             Solid solid = this.getTintSolid();
@@ -317,6 +320,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.tG.placeholder(IKey.constant("G"));
+        this.tG.icon(Icons.COLOR).barColor(Colors.GREEN);
         this.tB = new UITextbox(10000, (str) ->
         {
             Solid solid = this.getTintSolid();
@@ -324,6 +328,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.tB.placeholder(IKey.constant("B"));
+        this.tB.icon(Icons.COLOR).barColor(Colors.BLUE);
         this.tA = new UITextbox(10000, (str) ->
         {
             Solid solid = this.getTintSolid();
@@ -331,6 +336,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.tA.placeholder(IKey.constant("A"));
+        this.tA.icon(Icons.DROP).barColor(Colors.WHITE);
 
         this.tChannels = new UIElement();
         this.tChannels.column().vertical().stretch().height(20);
@@ -348,6 +354,7 @@ public class UIParticleSchemeCollisionAppearanceSection extends UIParticleScheme
             this.editor.markUndoBoundary();
         });
         this.tGradientInterpolant.placeholder(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT);
+        this.tGradientInterpolant.icon(Icons.CURVES);
         this.tGradient = this.labeledField(UIKeys.SNOWSTORM_LIGHTING_INTERPOLANT, this.tGradientInterpolant);
 
         /* Layout */

@@ -7,9 +7,10 @@ import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateManual;
 import mchorse.bbs_mod.particles.components.rate.ParticleComponentRateSteady;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<ParticleComponentRate>
 {
@@ -31,6 +32,7 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
             }
         });
         this.rate.placeholder(UIKeys.SNOWSTORM_RATE_RATE);
+        this.rate.icon(Icons.SPRAY);
         this.rate.tooltip(UIKeys.SNOWSTORM_RATE_SPAWN_RATE);
 
         this.particles = new UITextbox(10000, (str) ->
@@ -39,6 +41,7 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
             this.editor.markUndoBoundary();
         });
         this.particles.placeholder(UIKeys.SNOWSTORM_RATE_AMOUNT);
+        this.particles.icon(Icons.PARTICLE);
 
         this.rateRow = this.labeledField(UIKeys.SNOWSTORM_RATE_RATE, this.rate);
 
@@ -52,11 +55,11 @@ public class UIParticleSchemeRateSection extends UIParticleSchemeModeSection<Par
     }
 
     @Override
-    protected void fillModes(UICirculate button)
+    protected void fillModes(UIIcons button)
     {
-        button.addLabel(UIKeys.SNOWSTORM_RATE_INSTANT);
-        button.addLabel(UIKeys.SNOWSTORM_RATE_STEADY);
-        button.addLabel(UIKeys.SNOWSTORM_RATE_MANUAL);
+        button.add(Icons.BULLET, UIKeys.SNOWSTORM_RATE_INSTANT);
+        button.add(Icons.TIME, UIKeys.SNOWSTORM_RATE_STEADY);
+        button.add(Icons.EDIT, UIKeys.SNOWSTORM_RATE_MANUAL);
     }
 
     @Override

@@ -8,11 +8,13 @@ import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionDynami
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionParametric;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<ParticleComponentMotion>
 {
@@ -44,6 +46,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.positionSpeed.placeholder(UIKeys.SNOWSTORM_MOTION_POSITION_SPEED);
+        this.positionSpeed.icon(Icons.ALL_DIRECTIONS);
 
         this.positionX = new UITextbox(10000, (str) ->
         {
@@ -60,6 +63,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.positionX.placeholder(UIKeys.GENERAL_X);
+        this.positionX.icon(Icons.X).barColor(Colors.RED);
 
         this.positionY = new UITextbox(10000, (str) ->
         {
@@ -76,6 +80,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.positionY.placeholder(UIKeys.GENERAL_Y);
+        this.positionY.icon(Icons.Y).barColor(Colors.GREEN);
 
         this.positionZ = new UITextbox(10000, (str) ->
         {
@@ -92,6 +97,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.positionZ.placeholder(UIKeys.GENERAL_Z);
+        this.positionZ.icon(Icons.Z).barColor(Colors.BLUE);
 
         this.positionDrag = new UITextbox(10000, (str) ->
         {
@@ -100,6 +106,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.positionDrag.placeholder(UIKeys.SNOWSTORM_MOTION_POSITION_DRAG);
+        this.positionDrag.icon(Icons.REVERSE);
 
         this.rotationAngle = new UITextbox(10000, (str) ->
         {
@@ -107,6 +114,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.rotationAngle.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_ANGLE);
+        this.rotationAngle.icon(Icons.ARC);
 
         this.rotationRate = new UITextbox(10000, (str) ->
         {
@@ -114,6 +122,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.rotationRate.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_SPEED);
+        this.rotationRate.icon(Icons.ORBIT);
 
         this.rotationAcceleration = new UITextbox(10000, (str) ->
         {
@@ -130,6 +139,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.rotationAcceleration.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_ACCELERATION);
+        this.rotationAcceleration.icon(Icons.REFRESH);
 
         this.rotationDrag = new UITextbox(10000, (str) ->
         {
@@ -138,6 +148,7 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
             this.editor.markUndoBoundary();
         });
         this.rotationDrag.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_DRAG);
+        this.rotationDrag.icon(Icons.REVERSE);
 
         this.position = new UIElement();
         this.position.column(UIConstants.MARGIN).vertical().stretch();
@@ -166,10 +177,10 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
     }
 
     @Override
-    protected void fillModes(UICirculate button)
+    protected void fillModes(UIIcons button)
     {
-        button.addLabel(UIKeys.SNOWSTORM_MOTION_DYNAMIC);
-        button.addLabel(UIKeys.SNOWSTORM_MOTION_PARAMETRIC);
+        button.add(Icons.ALL_DIRECTIONS, UIKeys.SNOWSTORM_MOTION_DYNAMIC);
+        button.add(Icons.GRAPH, UIKeys.SNOWSTORM_MOTION_PARAMETRIC);
     }
 
     @Override
