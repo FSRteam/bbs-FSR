@@ -148,17 +148,14 @@ public abstract class UIBaseMenu
     {
         boolean result = false;
 
-        this.context.setMouse(mouseX, mouseY, mouseButton);
-
-        if (this.root.isEnabled())
+        try (UIContext.PointerEventFrame ignored = this.context.beginPointerEvent(mouseX, mouseY, mouseButton))
         {
-            this.context.pushViewport(this.viewport);
+            if (this.root.isEnabled())
+            {
+                IUIElement element = this.dispatchPointer(this.root::mouseClicked);
 
-            IUIElement element = this.root.mouseClicked(this.context);
-
-            this.context.popViewport();
-
-            result = element != null;
+                result = element != null;
+            }
         }
 
         return result;
@@ -168,17 +165,14 @@ public abstract class UIBaseMenu
     {
         boolean result = false;
 
-        this.context.setMouseWheel(x, y, v, h);
-
-        if (this.root.isEnabled())
+        try (UIContext.PointerEventFrame ignored = this.context.beginPointerScrollEvent(x, y, h, v))
         {
-            this.context.pushViewport(this.viewport);
+            if (this.root.isEnabled())
+            {
+                IUIElement element = this.dispatchPointer(this.root::mouseScrolled);
 
-            IUIElement element = this.root.mouseScrolled(this.context);
-
-            this.context.popViewport();
-
-            result = element != null;
+                result = element != null;
+            }
         }
 
         return result;
@@ -188,17 +182,14 @@ public abstract class UIBaseMenu
     {
         boolean result = false;
 
-        this.context.setMouse(mouseX, mouseY, mouseButton);
-
-        if (this.root.isEnabled())
+        try (UIContext.PointerEventFrame ignored = this.context.beginPointerEvent(mouseX, mouseY, mouseButton))
         {
-            this.context.pushViewport(this.viewport);
+            if (this.root.isEnabled())
+            {
+                IUIElement element = this.dispatchPointer(this.root::mouseReleased);
 
-            IUIElement element = this.root.mouseReleased(this.context);
-
-            this.context.popViewport();
-
-            result = element != null;
+                result = element != null;
+            }
         }
 
         return result;
@@ -211,20 +202,56 @@ public abstract class UIBaseMenu
      */
     public boolean mouseCanceled(int mouseX, int mouseY, int mouseButton)
     {
-        this.context.setMouse(mouseX, mouseY, mouseButton);
-
-        this.context.pushViewport(this.viewport);
-
-        try
+        try (UIContext.PointerEventFrame ignored = this.context.beginPointerEvent(mouseX, mouseY, mouseButton))
         {
-            this.root.mouseCanceled(this.context);
-        }
-        finally
-        {
-            this.context.popViewport();
+            this.dispatchPointer((context) ->
+            {
+                this.root.mouseCanceled(context);
+
+                return null;
+            });
         }
 
         return true;
+    }
+
+    private IUIElement dispatchPointer(PointerDispatch dispatch)
+    {
+        this.context.pushViewport(this.viewport);
+        Throwable failure = null;
+
+        try
+        {
+            return dispatch.dispatch(this.context);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = exception;
+
+            throw exception;
+        }
+        finally
+        {
+            try
+            {
+                this.context.popViewport();
+            }
+            catch (RuntimeException | Error cleanupFailure)
+            {
+                if (failure == null)
+                {
+                    throw cleanupFailure;
+                }
+
+                failure.addSuppressed(cleanupFailure);
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface PointerDispatch
+    {
+        IUIElement dispatch(UIContext context);
     }
 
     /* Compatibility shims for the removed central mouse-capture machinery.

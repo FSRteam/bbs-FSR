@@ -64,6 +64,7 @@ public class UIContext implements IViewportStack
     private int cursorShape = GLFW.GLFW_ARROW_CURSOR;
 
     public UIViewportStack viewportStack = new UIViewportStack();
+    private PointerEventFrame activePointerEvent;
 
     public UIContext(UIBaseMenu menu)
     {
@@ -117,6 +118,42 @@ public class UIContext implements IViewportStack
         this.setMouse(mouseX, mouseY);
         this.mouseWheel = mouseWheel;
         this.mouseWheelHorizontal = mouseWheelHorizontal;
+    }
+
+    PointerEventFrame beginPointerEvent(int mouseX, int mouseY, int mouseButton)
+    {
+        PointerEventFrame frame = this.beginPointerEvent();
+
+        this.mouseX = mouseX;
+        this.mouseY = mouseY;
+        this.mouseButton = mouseButton;
+        frame.retainCurrentPointerState();
+
+        return frame;
+    }
+
+    PointerEventFrame beginPointerScrollEvent(int mouseX, int mouseY, double horizontal, double vertical)
+    {
+        PointerEventFrame frame = this.beginPointerEvent();
+
+        this.mouseX = mouseX;
+        this.mouseY = mouseY;
+        this.mouseWheel = vertical;
+        this.mouseWheelHorizontal = horizontal;
+        frame.retainCurrentPointerState();
+
+        return frame;
+    }
+
+    private PointerEventFrame beginPointerEvent()
+    {
+        PointerEventFrame frame = new PointerEventFrame(this.activePointerEvent);
+
+        this.activePointerEvent = frame;
+        this.viewportStack = new UIViewportStack();
+        this.reset();
+
+        return frame;
     }
 
     public void setKeyEvent(int keyCode, int scanCode, int action)
@@ -676,5 +713,76 @@ public class UIContext implements IViewportStack
         this.tick += 1;
 
         this.notifications.update();
+    }
+
+    final class PointerEventFrame implements AutoCloseable
+    {
+        private final PointerEventFrame parent;
+        private final UIViewportStack previousViewportStack;
+        private final int previousMouseX;
+        private final int previousMouseY;
+        private final int previousMouseButton;
+        private final double previousMouseWheel;
+        private final double previousMouseWheelHorizontal;
+        private int retainedMouseX;
+        private int retainedMouseY;
+        private int retainedMouseButton;
+        private double retainedMouseWheel;
+        private double retainedMouseWheelHorizontal;
+        private boolean closed;
+
+        private PointerEventFrame(PointerEventFrame parent)
+        {
+            this.parent = parent;
+            this.previousViewportStack = UIContext.this.viewportStack;
+            this.previousMouseX = UIContext.this.mouseX;
+            this.previousMouseY = UIContext.this.mouseY;
+            this.previousMouseButton = UIContext.this.mouseButton;
+            this.previousMouseWheel = UIContext.this.mouseWheel;
+            this.previousMouseWheelHorizontal = UIContext.this.mouseWheelHorizontal;
+        }
+
+        private void retainCurrentPointerState()
+        {
+            this.retainedMouseX = UIContext.this.mouseX;
+            this.retainedMouseY = UIContext.this.mouseY;
+            this.retainedMouseButton = UIContext.this.mouseButton;
+            this.retainedMouseWheel = UIContext.this.mouseWheel;
+            this.retainedMouseWheelHorizontal = UIContext.this.mouseWheelHorizontal;
+        }
+
+        @Override
+        public void close()
+        {
+            if (this.closed)
+            {
+                return;
+            }
+            if (UIContext.this.activePointerEvent != this)
+            {
+                throw new IllegalStateException("Pointer event frames must close in LIFO order");
+            }
+            if (this.parent == null)
+            {
+                UIContext.this.mouseX = this.retainedMouseX;
+                UIContext.this.mouseY = this.retainedMouseY;
+                UIContext.this.mouseButton = this.retainedMouseButton;
+                UIContext.this.mouseWheel = this.retainedMouseWheel;
+                UIContext.this.mouseWheelHorizontal = this.retainedMouseWheelHorizontal;
+                UIContext.this.viewportStack.reset();
+            }
+            else
+            {
+                UIContext.this.mouseX = this.previousMouseX;
+                UIContext.this.mouseY = this.previousMouseY;
+                UIContext.this.mouseButton = this.previousMouseButton;
+                UIContext.this.mouseWheel = this.previousMouseWheel;
+                UIContext.this.mouseWheelHorizontal = this.previousMouseWheelHorizontal;
+                UIContext.this.viewportStack = this.previousViewportStack;
+            }
+
+            UIContext.this.activePointerEvent = this.parent;
+            this.closed = true;
+        }
     }
 }
