@@ -57,7 +57,8 @@ final class BuildFailureGateSourceTest
     {
         try
         {
-            return Files.readString(path);
+            return Files.readString(path)
+                .replace("\r\n", "\n");
         }
         catch (IOException e)
         {
