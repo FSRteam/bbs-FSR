@@ -23,6 +23,7 @@ import mchorse.bbs_mod.addon.BBSAddonCollector;
 import mchorse.bbs_mod.addon.BBSAddonIdentityRegistry;
 import mchorse.bbs_mod.addon.BBSAddonProtocolSelfCheck;
 import mchorse.bbs_mod.addon.BBSAddonRegisterEvent;
+import mchorse.bbs_mod.addon.FabricAddonEntrypointImporter;
 import mchorse.bbs_mod.addon.demo.BBSAddonDemoBootstrap;
 import mchorse.bbs_mod.addon.v2.BBSAddonManager;
 import mchorse.bbs_mod.api.addon.BBSAddon;
@@ -174,6 +175,7 @@ public class BBSMod
     private static volatile BBSAddonManager activeAddonManager;
     private static volatile BBSPluginManager activePluginManager;
     private static boolean drainingAddonRegistrations;
+    private boolean legacyInitializationStarted;
 
     private static ActionManager actions;
 
@@ -518,6 +520,8 @@ public class BBSMod
     private void onCommonSetup(final FMLCommonSetupEvent event)
     {
         LoaderAccess loader = LoaderAccessHolder.get();
+
+        new FabricAddonEntrypointImporter().importInto(this.addonCollector);
         BBSAddonProtocolSelfCheck.run(loader, this.addonCollector);
         List<BBSAddonMod> addonEntrypoints = loader.getEntrypoints("bbs-addon", BBSAddonMod.class);
         LOGGER.info("[bbs-addon] loader resolved {} registered addon(s)", addonEntrypoints.size());
@@ -609,6 +613,7 @@ public class BBSMod
             .register(Link.bbs("swipe"), SwipeActionClip.class, new ClipFactoryData(Icons.LIMB, Colors.ORANGE));
 
         this.addonManager.runCommonRegistration(settingsFolder, provider, forms, factoryCameraClips, factoryActionClips, events);
+        this.runLegacyInitialization();
         events.post(new RegisterSettingsEvent());
         this.addonManager.runCommonSetup();
 
@@ -628,6 +633,23 @@ public class BBSMod
             this.pluginManager.start();
         }
     }
+
+    private void runLegacyInitialization()
+    {
+        if (this.legacyInitializationStarted)
+        {
+            return;
+        }
+
+        this.legacyInitializationStarted = true;
+        this.onInitialize();
+    }
+
+    /**
+     * Legacy Fabric initialization hook retained for addon Mixin compatibility.
+     */
+    public void onInitialize()
+    {}
 
     private void onServerStarted(ServerStartedEvent event)
     {
