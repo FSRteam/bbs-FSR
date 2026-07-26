@@ -250,7 +250,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             });
 
             consumers.setUI(true);
-            Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightTexture.FULL_BRIGHT);
+            Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, context.getTransition(), stack, consumers, LightTexture.FULL_BLOCK);
             consumers.draw();
             consumers.setUI(false);
 
@@ -272,6 +272,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
             int light = context.light;
             BooleanHolder first = new BooleanHolder();
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
 
             if (context.isPicking())
             {
@@ -280,11 +281,15 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                     if (!first.bool)
                     {
                         this.bindTexture();
-                        this.setupTarget(context, BBSShaders.getPickerModelsProgram());
-                        RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
 
                         first.bool = true;
                     }
+
+                    /* Piglin equipment and other extra entity layers are emitted
+                     * after the base layer. Reinstall the picker shader for each
+                     * one so vanilla state cannot leak into the stencil pass. */
+                    this.setupTarget(context, BBSShaders.getPickerModelsProgram());
+                    RenderSystem.setShader(BBSShaders::getPickerModelsProgram);
                 });
 
                 light = 0;
@@ -332,7 +337,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 currentPose = this.form.pose.get();
                 currentPoseOverlay = this.form.poseOverlay.get();
 
-                if (!context.isPicking())
+                if (context.canDeferWorldTranslucency())
                 {
                     Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
                     FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
@@ -354,6 +359,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 }
 
                 RenderSystem.enableDepthTest();
+                RenderSystem.getModelViewMatrix().set(modelView);
             }
         }
     }

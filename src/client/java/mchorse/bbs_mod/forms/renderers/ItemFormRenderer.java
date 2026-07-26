@@ -46,7 +46,7 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
         consumers.setUI(true);
-        Minecraft.getInstance().getItemRenderer().renderStatic(this.form.stack.get(), this.form.modelTransform.get(), LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, matrices, consumers, Minecraft.getInstance().level, 0);
+        Minecraft.getInstance().getItemRenderer().renderStatic(this.form.stack.get(), this.form.modelTransform.get(), LightTexture.FULL_BLOCK, OverlayTexture.NO_OVERLAY, matrices, consumers, Minecraft.getInstance().level, 0);
         consumers.draw();
         consumers.setUI(false);
         consumers.setSubstitute(null);
@@ -84,7 +84,7 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
             BlockFormRenderer.color.set(context.color);
             BlockFormRenderer.color.mul(set);
 
-            if (!context.isPicking())
+            if (context.canDeferWorldTranslucency())
             {
                 Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
                 FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
