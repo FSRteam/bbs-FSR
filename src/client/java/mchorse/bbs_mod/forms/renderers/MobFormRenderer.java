@@ -344,90 +344,100 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 context.world.pushPose();
             }
 
-            Matrix4f captureBase = new Matrix4f(context.stack.last().pose());
-
-            if (this.form.mobID.get().equals("minecraft:ender_dragon"))
+            /* The sort origin, the layer hijack and both matrix stacks are process-wide state that
+             * every later form in the frame reads. A vanilla entity render can throw (malformed NBT,
+             * a third-party entity renderer), so release them from a finally rather than from the
+             * success path, the same way ModelFormRenderer does. */
+            try
             {
-                context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
-                if (context.world != null)
+                Matrix4f captureBase = new Matrix4f(context.stack.last().pose());
+
+                if (this.form.mobID.get().equals("minecraft:ender_dragon"))
                 {
-                    context.world.mulPose(Axis.YP.rotation(MathUtils.PI));
-                }
-            }
-
-            if (this.entity instanceof LivingEntity entity)
-            {
-                int u = context.overlay & '\uffff';
-                int v = context.overlay >> 16 & '\uffff';
-
-                entity.hurtTime = v != 10 ? 100 : 0;
-            }
-
-            Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
-            boolean incrementPicking = context.stencilMap != null && context.stencilMap.increment;
-            MobRenderContext mobContext = MobRenderContext.push(
-                renderer,
-                this.form.pose.get(),
-                this.mergeOverlays(),
-                this.getColor(context.color),
-                captureBase,
-                context.isPicking(),
-                incrementPicking
-            );
-
-            try (mobContext)
-            {
-                float transition = this.prepareAnimationRender(context);
-
-                /* Publishing the form's camera-space origin opts its translucent layers (slime
-                 * bodies, ghost textures) into the deferred sorted pass. */
-                if (context.canDeferWorldTranslucency())
-                {
-                    Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
-
-                    FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
+                    context.stack.mulPose(Axis.YP.rotation(MathUtils.PI));
+                    if (context.world != null)
+                    {
+                        context.world.mulPose(Axis.YP.rotation(MathUtils.PI));
+                    }
                 }
 
-                Minecraft.getInstance().getEntityRenderDispatcher().render(
-                    this.entity,
-                    0D,
-                    0D,
-                    0D,
-                    0F,
-                    transition,
-                    context.stack,
-                    consumers,
-                    light
+                if (this.entity instanceof LivingEntity entity)
+                {
+                    int u = context.overlay & '\uffff';
+                    int v = context.overlay >> 16 & '\uffff';
+
+                    entity.hurtTime = v != 10 ? 100 : 0;
+                }
+
+                Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
+                boolean incrementPicking = context.stencilMap != null && context.stencilMap.increment;
+                MobRenderContext mobContext = MobRenderContext.push(
+                    renderer,
+                    this.form.pose.get(),
+                    this.mergeOverlays(),
+                    this.getColor(context.color),
+                    captureBase,
+                    context.isPicking(),
+                    incrementPicking
                 );
 
-                mobContext.completeMatrices();
+                try (mobContext)
+                {
+                    float transition = this.prepareAnimationRender(context);
+
+                    /* Publishing the form's camera-space origin opts its translucent layers (slime
+                     * bodies, ghost textures) into the deferred sorted pass. */
+                    if (context.canDeferWorldTranslucency())
+                    {
+                        Vector3f origin = context.stack.last().pose().getTranslation(new Vector3f());
+
+                        FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
+                    }
+
+                    Minecraft.getInstance().getEntityRenderDispatcher().render(
+                        this.entity,
+                        0D,
+                        0D,
+                        0D,
+                        0F,
+                        transition,
+                        context.stack,
+                        consumers,
+                        light
+                    );
+
+                    mobContext.completeMatrices();
+                }
+
+                this.bones = mobContext.getMatrices();
+                this.pickedBoneIds = mobContext.getPickedBoneIds();
+
+                consumers.draw();
             }
-
-            this.bones = mobContext.getMatrices();
-            this.pickedBoneIds = mobContext.getPickedBoneIds();
-
-            consumers.draw();
-            FormTranslucentQueue.setSortOrigin(null);
-            CustomVertexConsumerProvider.clearRunnables();
-
-            context.stack.popPose();
-
-            if (context.world != null)
+            finally
             {
-                context.world.popPose();
-            }
+                FormTranslucentQueue.setSortOrigin(null);
+                CustomVertexConsumerProvider.clearRunnables();
 
-            /* A MobForm body part can reach this path from either a 2D preview or a world render.
-             * Preserve the caller-owned model-view matrix in both cases and restore only the
-             * depth state required by the active rendering context. */
-            if (context.ui)
-            {
-                RenderSystem.depthFunc(GL11.GL_ALWAYS);
-            }
-            else
-            {
-                RenderSystem.enableDepthTest();
-                RenderSystem.getModelViewMatrix().set(modelView);
+                context.stack.popPose();
+
+                if (context.world != null)
+                {
+                    context.world.popPose();
+                }
+
+                /* A MobForm body part can reach this path from either a 2D preview or a world
+                 * render. Preserve the caller-owned model-view matrix in both cases and restore
+                 * only the depth state required by the active rendering context. */
+                if (context.ui)
+                {
+                    RenderSystem.depthFunc(GL11.GL_ALWAYS);
+                }
+                else
+                {
+                    RenderSystem.enableDepthTest();
+                    RenderSystem.getModelViewMatrix().set(modelView);
+                }
             }
         }
     }
