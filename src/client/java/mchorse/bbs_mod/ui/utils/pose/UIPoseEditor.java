@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.UIDeltaPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -24,6 +25,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseManager;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,8 +54,6 @@ public class UIPoseEditor extends UIElement
     protected IModel model;
     protected Map<String, String> flippedParts;
     private BoneHierarchy hierarchy = BoneHierarchy.EMPTY;
-
-    private int suppressPoseSync;
 
     public UIPoseEditor()
     {
@@ -208,16 +208,6 @@ public class UIPoseEditor extends UIElement
     public String getGroup()
     {
         return this.groups.list.getCurrentFirst();
-    }
-
-    private void beginSuppressPoseSync()
-    {
-        this.suppressPoseSync++;
-    }
-
-    private void endSuppressPoseSync()
-    {
-        this.suppressPoseSync--;
     }
 
     protected void pastePose(MapType data)
@@ -459,10 +449,8 @@ public class UIPoseEditor extends UIElement
         return new UIPosePropTransform();
     }
 
-    /**
-     * Applies transform edits from the primary bone to the rest of the multi-selection.
-     */
-    private class UIPosePropTransform extends UIPropTransform
+    /** Applies each channel edit as a delta so selected bones retain their relative poses. */
+    private class UIPosePropTransform extends UIDeltaPropTransform
     {
         UIPosePropTransform()
         {
@@ -470,48 +458,41 @@ public class UIPoseEditor extends UIElement
         }
 
         @Override
-        public void rejectChanges()
+        protected boolean supportsMirror()
         {
-            UIPoseEditor.this.beginSuppressPoseSync();
+            return true;
+        }
 
-            try
+        @Override
+        protected void applyToSelection(Consumer<Transform> consumer)
+        {
+            for (Map.Entry<String, BoneEdit> target : UIPoseEditor.this.resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert()).entrySet())
             {
-                super.rejectChanges();
+                UIPoseEditor.this.applyToBone(target.getValue(), UIPoseEditor.this.pose.get(target.getKey()), consumer);
             }
-            finally
+        }
+
+        @Override
+        protected void reset()
+        {
+            this.preCallback();
+            this.applyToTarget((transform) ->
             {
-                UIPoseEditor.this.endSuppressPoseSync();
-            }
+                transform.translate.set(0F, 0F, 0F);
+                transform.scale.set(1F, 1F, 1F);
+                transform.rotate.set(0F, 0F, 0F);
+                transform.rotate2.set(0F, 0F, 0F);
+            });
+            this.postCallback();
 
-            UIPoseEditor.this.syncPoseTransformToSelection();
-        }
-
-        @Override
-        public void setT(Axis axis, double x, double y, double z)
-        {
-            super.setT(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
-        }
-
-        @Override
-        public void setS(Axis axis, double x, double y, double z)
-        {
-            super.setS(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
-        }
-
-        @Override
-        public void setR(Axis axis, double x, double y, double z)
-        {
-            super.setR(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.syncTargetTransform();
         }
 
         @Override
         public void setR2(Axis axis, double x, double y, double z)
         {
             super.setR2(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.syncTargetTransform();
         }
     }
 
@@ -551,33 +532,116 @@ public class UIPoseEditor extends UIElement
         this.transform.setTransform(poseTransform);
     }
 
-    private void syncPoseTransformToSelection()
+    public Map<String, BoneEdit> resolveBoneEdits(boolean mirror, boolean invert)
     {
-        if (this.suppressPoseSync > 0)
+        Map<String, BoneEdit> edits = new LinkedHashMap<>();
+        List<String> selected = this.groups.list.getCurrent();
+
+        for (int i = 0; i < selected.size(); i++)
         {
-            return;
+            edits.put(selected.get(i), new BoneEdit(false, invert && i % 2 == 1));
         }
 
-        List<String> bones = this.groups.list.getCurrent();
-
-        if (bones.size() <= 1)
+        if (mirror)
         {
-            return;
-        }
-
-        if (!(this.transform.getTransform() instanceof PoseTransform primary))
-        {
-            return;
-        }
-
-        for (String bone : bones)
-        {
-            PoseTransform pt = this.pose.get(bone);
-
-            if (pt != primary)
+            for (String bone : new ArrayList<>(edits.keySet()))
             {
-                pt.copy(primary);
+                String partner = this.mirrorPartner(bone);
+
+                if (partner != null && !edits.containsKey(partner))
+                {
+                    edits.put(partner, new BoneEdit(true, false));
+                }
             }
+        }
+
+        return edits;
+    }
+
+    private String mirrorPartner(String bone)
+    {
+        String partner = null;
+
+        if (this.flippedParts != null && !this.flippedParts.isEmpty())
+        {
+            partner = this.flippedParts.get(bone);
+
+            if (partner == null)
+            {
+                for (Map.Entry<String, String> entry : this.flippedParts.entrySet())
+                {
+                    if (bone.equals(entry.getValue()))
+                    {
+                        partner = entry.getKey();
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (partner == null)
+        {
+            String mirrored = Pose.getMirrorName(bone);
+
+            partner = mirrored.equals(bone) ? null : mirrored;
+        }
+
+        return partner != null && this.groups.list.getList().contains(partner) ? partner : null;
+    }
+
+    public void applyToBone(BoneEdit edit, PoseTransform transform, Consumer<Transform> consumer)
+    {
+        if (edit.mirror)
+        {
+            mirrorTransform(transform);
+        }
+
+        if (edit.invert)
+        {
+            negateRotation(transform);
+        }
+
+        try
+        {
+            consumer.accept(transform);
+        }
+        finally
+        {
+            if (edit.invert)
+            {
+                negateRotation(transform);
+            }
+
+            if (edit.mirror)
+            {
+                mirrorTransform(transform);
+            }
+        }
+    }
+
+    private static void mirrorTransform(Transform transform)
+    {
+        transform.translate.mul(-1F, 1F, 1F);
+        transform.rotate.mul(1F, -1F, -1F);
+        transform.rotate2.mul(1F, -1F, -1F);
+    }
+
+    private static void negateRotation(Transform transform)
+    {
+        transform.rotate.mul(-1F, -1F, -1F);
+        transform.rotate2.mul(-1F, -1F, -1F);
+    }
+
+    public static class BoneEdit
+    {
+        public final boolean mirror;
+        public final boolean invert;
+
+        public BoneEdit(boolean mirror, boolean invert)
+        {
+            this.mirror = mirror;
+            this.invert = invert;
         }
     }
 

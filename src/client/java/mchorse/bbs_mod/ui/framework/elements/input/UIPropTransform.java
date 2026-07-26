@@ -1636,8 +1636,14 @@ public class UIPropTransform extends UITransform
 
                 if (this.useRayDrag())
                 {
-                    this.applyRayDrag(this.fineX(context.mouseX), this.fineY(context.mouseY));
-                    this.setTransform(this.transform);
+                    int mouseX = this.fineX(context.mouseX);
+                    int mouseY = this.fineY(context.mouseY);
+
+                    if (dx != 0 || dy != 0)
+                    {
+                        this.applyRayDrag(mouseX, mouseY);
+                        this.setTransform(this.transform);
+                    }
                 }
                 else if (this.mode == 0 && this.applyGizmoTranslate(dx, dy, factor))
                 {
@@ -1947,6 +1953,13 @@ public class UIPropTransform extends UITransform
 
         Matrix3f jacobian = new Matrix3f(this.drag.translateJacobian);
 
+        if (!isUsableTranslateJacobian(jacobian))
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
         if (this.local)
         {
             Matrix3f rotation = new Matrix3f()
@@ -1958,10 +1971,7 @@ public class UIPropTransform extends UITransform
         }
         else
         {
-            Matrix3f inverse = new Matrix3f(jacobian);
-
-            if (Math.abs(inverse.determinant()) < 1.0E-8F) inverse.identity();
-            else inverse.invert();
+            Matrix3f inverse = new Matrix3f(jacobian).invert();
 
             this.dragTranslateBasis.set(inverse).mul(this.drag.gizmoWorldAxes);
             this.dragWorldBasis.set(this.drag.gizmoWorldAxes);
@@ -2010,8 +2020,14 @@ public class UIPropTransform extends UITransform
 
         Matrix3f inverse = new Matrix3f(this.drag.translateJacobian);
 
-        if (Math.abs(inverse.determinant()) < 1.0E-8F) inverse.identity();
-        else inverse.invert();
+        if (!isUsableTranslateJacobian(inverse))
+        {
+            this.dragHasStart = false;
+
+            return;
+        }
+
+        inverse.invert();
 
         this.dragTranslateBasis.set(inverse).mul(cameraBasis);
         this.dragScreenInverseJacobian.set(inverse);
@@ -2020,6 +2036,13 @@ public class UIPropTransform extends UITransform
 
         this.dragStartTranslate.set(this.transform.translate);
         this.dragHasStart = this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit);
+    }
+
+    private static boolean isUsableTranslateJacobian(Matrix3f jacobian)
+    {
+        float determinant = jacobian.determinant();
+
+        return Float.isFinite(determinant) && Math.abs(determinant) >= 1.0E-8F;
     }
 
     private void applyRayTranslate(Vector3d hit)

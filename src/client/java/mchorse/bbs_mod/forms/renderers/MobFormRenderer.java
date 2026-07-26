@@ -16,6 +16,7 @@ import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
+import mchorse.bbs_mod.mixin.client.LivingEntityRendererAccessor;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -29,10 +30,12 @@ import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.client.renderer.LightTexture;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -48,6 +51,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -212,7 +216,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
         if (this.form.isPlayer())
         {
-            this.entity = new RemotePlayer(Minecraft.getInstance().level, slim ? SLIM : WIDE);
+            this.entity = new MobPlayer(Minecraft.getInstance().level, slim ? SLIM : WIDE);
             this.entity.getEntityData().set(PlayerUtils.ProtectedAccess.getModelParts(), (byte) 0b1111111);
         }
         else
@@ -336,17 +340,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             }
             else
             {
-                CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
-                {
-                    if (!first.bool)
-                    {
-                        this.bindTexture();
-
-                        first.bool = true;
-                    }
-
-                    RenderSystem.enableBlend();
-                });
+                CustomVertexConsumerProvider.hijackLayerPreparation((layer) -> this.createWorldLayerPreparation(first));
             }
 
             context.stack.pushPose();
@@ -664,21 +658,64 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
             this.prepareRenderLook(source, transition);
 
+            this.renderForMatrixCollection(client, renderer, animationTransition, stack);
+            context.completeMatrices();
+        }
+
+        return context.getMatrices();
+    }
+
+    private Runnable createWorldLayerPreparation(BooleanHolder first)
+    {
+        boolean bindTexture = !first.bool;
+        Link texture = bindTexture ? this.form.texture.get() : null;
+
+        first.bool = true;
+
+        return () ->
+        {
+            if (texture != null)
+            {
+                BBSModClient.getTextures().bindTexture(texture);
+            }
+
+            RenderSystem.enableBlend();
+        };
+    }
+
+    private void renderForMatrixCollection(Minecraft client, Object renderer, float transition, PoseStack stack)
+    {
+        List<RenderLayer<?, ?>> layers = renderer instanceof LivingEntityRendererAccessor accessor
+            ? accessor.bbs$getLayers()
+            : null;
+        List<RenderLayer<?, ?>> savedLayers = layers == null ? List.of() : new ArrayList<>(layers);
+
+        try
+        {
+            if (layers != null)
+            {
+                layers.clear();
+            }
+
             client.getEntityRenderDispatcher().render(
                 this.entity,
                 0D,
                 0D,
                 0D,
                 0F,
-                animationTransition,
+                transition,
                 stack,
                 EMPTY_VERTEX_CONSUMERS,
                 LightTexture.FULL_BRIGHT
             );
-            context.completeMatrices();
         }
-
-        return context.getMatrices();
+        finally
+        {
+            if (layers != null)
+            {
+                layers.addAll(savedLayers);
+            }
+        }
     }
 
     @Override
@@ -1199,6 +1236,19 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
     private static class BooleanHolder
     {
         public boolean bool;
+    }
+
+    /** Render-only players must never push the real local player they overlap. */
+    private static class MobPlayer extends RemotePlayer
+    {
+        public MobPlayer(ClientLevel level, GameProfile profile)
+        {
+            super(level, profile);
+        }
+
+        @Override
+        protected void pushEntities()
+        {}
     }
 
     private static class EmptyVertexConsumer implements VertexConsumer

@@ -18,18 +18,16 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
-import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
-import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
-import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
@@ -108,20 +106,14 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
         public static void apply(UIKeyframes editor, Keyframe keyframe, Consumer<Pose> consumer)
         {
-            for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
+            UIReplaysEditorUtils.forEachSelectedKeyframe(editor, keyframe, (selected) ->
             {
-                if (sheet.channel.getFactory() != keyframe.getFactory()) continue;
+                Pose pose = (Pose) selected.getValue();
 
-                for (Keyframe kf : sheet.selection.getSelected())
-                {
-                    if (kf.getValue() instanceof Pose pose)
-                    {
-                        kf.preNotify();
-                        consumer.accept(pose);
-                        kf.postNotify();
-                    }
-                }
-            }
+                selected.preNotify();
+                consumer.accept(pose);
+                selected.postNotify();
+            });
         }
 
         public static void apply(UIKeyframes editor, Keyframe keyframe, String group, Consumer<PoseTransform> consumer)
@@ -144,6 +136,22 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 for (String bone : boneNames)
                 {
                     consumer.accept(pose.get(bone));
+                }
+            });
+        }
+
+        public static void applyBones(UIKeyframes editor, Keyframe keyframe, List<String> boneNames, BiConsumer<String, PoseTransform> consumer)
+        {
+            if (boneNames == null || boneNames.isEmpty())
+            {
+                return;
+            }
+
+            apply(editor, keyframe, (pose) ->
+            {
+                for (String bone : boneNames)
+                {
+                    consumer.accept(bone, pose.get(bone));
                 }
             });
         }
@@ -214,13 +222,94 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
     }
 
-    public static class UIPoseTransforms extends UIPropTransform
+    public static class UIPoseTransforms extends UIKeyframePropTransform
     {
         private UIPoseFactoryEditor editor;
 
         public void setKeyframe(UIPoseFactoryEditor editor)
         {
             this.editor = editor;
+        }
+
+        @Override
+        protected boolean supportsMirror()
+        {
+            return true;
+        }
+
+        @Override
+        protected void applyToSelection(Consumer<Transform> consumer)
+        {
+            Map<String, UIPoseEditor.BoneEdit> targets = this.editor.resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert());
+
+            UIPoseFactoryEditor.applyBones(this.editor.editor, this.editor.keyframe, new ArrayList<>(targets.keySet()),
+                (bone, poseT) -> this.editor.applyToBone(targets.get(bone), poseT, consumer));
+        }
+
+        @Override
+        protected void applyDuringRecording(int tick, Consumer<Transform> consumer)
+        {
+            Map<String, UIPoseEditor.BoneEdit> targets = this.editor.resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert());
+
+            applyRecordingBones(this.editor.editor, this.editor.keyframe, tick, new ArrayList<>(targets.keySet()),
+                (bone, poseT) -> this.editor.applyToBone(targets.get(bone), poseT, consumer));
+        }
+
+        @Override
+        protected Transform getRecordedTransform(int tick)
+        {
+            UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
+            Keyframe<Pose> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick);
+            String bone = this.editor.getGroup();
+
+            if (recorded == null || bone == null)
+            {
+                return null;
+            }
+
+            return recorded.getValue().get(bone);
+        }
+
+        public static void applyRecording(UIKeyframes editor, Keyframe keyframe, int tick, List<String> bones, Consumer<PoseTransform> consumer)
+        {
+            if (bones == null || bones.isEmpty())
+            {
+                return;
+            }
+
+            UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
+            {
+                Pose pose = (Pose) recorded.getValue();
+                recorded.preNotify();
+
+                for (String bone : bones)
+                {
+                    consumer.accept(pose.get(bone));
+                }
+
+                recorded.postNotify();
+            });
+        }
+
+        public static void applyRecordingBones(UIKeyframes editor, Keyframe keyframe, int tick, List<String> bones, BiConsumer<String, PoseTransform> consumer)
+        {
+            if (bones == null || bones.isEmpty())
+            {
+                return;
+            }
+
+            UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
+            {
+                Pose pose = (Pose) recorded.getValue();
+                recorded.preNotify();
+
+                for (String bone : bones)
+                {
+                    consumer.accept(bone, pose.get(bone));
+                }
+
+                recorded.postNotify();
+            });
         }
 
         @Override
@@ -234,98 +323,6 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 poseT.rotate2.set(0F, 0F, 0F);
             });
             this.refillTransform();
-        }
-
-        @Override
-        public void pasteTranslation(Vector3d translation)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.translate.set(translation));
-            this.refillTransform();
-        }
-
-        @Override
-        public void pasteScale(Vector3d scale)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.scale.set(scale));
-            this.refillTransform();
-        }
-
-        @Override
-        public void pasteRotation(Vector3d rotation)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.rotate.set(Vectors.toRad(rotation)));
-            this.refillTransform();
-        }
-
-        @Override
-        public void pasteRotation2(Vector3d rotation)
-        {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) -> poseT.rotate2.set(Vectors.toRad(rotation)));
-            this.refillTransform();
-        }
-
-        @Override
-        public void setT(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = (float) (x - transform.translate.x);
-            float dy = (float) (y - transform.translate.y);
-            float dz = (float) (z - transform.translate.z);
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
-            {
-                poseT.translate.x += dx;
-                poseT.translate.y += dy;
-                poseT.translate.z += dz;
-            });
-        }
-
-        @Override
-        public void setS(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = (float) (x - transform.scale.x);
-            float dy = (float) (y - transform.scale.y);
-            float dz = (float) (z - transform.scale.z);
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
-            {
-                poseT.scale.x += dx;
-                poseT.scale.y += dy;
-                poseT.scale.z += dz;
-            });
-        }
-
-        @Override
-        public void setR(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = MathUtils.toRad((float) x) - transform.rotate.x;
-            float dy = MathUtils.toRad((float) y) - transform.rotate.y;
-            float dz = MathUtils.toRad((float) z) - transform.rotate.z;
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
-            {
-                poseT.rotate.x += dx;
-                poseT.rotate.y += dy;
-                poseT.rotate.z += dz;
-            });
-        }
-
-        @Override
-        public void setR2(Axis axis, double x, double y, double z)
-        {
-            Transform transform = this.getTransform();
-            float dx = MathUtils.toRad((float) x) - transform.rotate2.x;
-            float dy = MathUtils.toRad((float) y) - transform.rotate2.y;
-            float dz = MathUtils.toRad((float) z) - transform.rotate2.z;
-
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (poseT) ->
-            {
-                poseT.rotate2.x += dx;
-                poseT.rotate2.y += dy;
-                poseT.rotate2.z += dz;
-            });
         }
 
         @Override

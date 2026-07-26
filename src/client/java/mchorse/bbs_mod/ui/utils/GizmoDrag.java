@@ -251,20 +251,23 @@ public class GizmoDrag
     public static Matrix3f computeTranslateJacobian(Transform transform, Supplier<Vector3f> worldPositionSampler)
     {
         Vector3f saved = new Vector3f(transform.translate);
+        float epsilon = 1F;
 
         try
         {
-            transform.translate.set(0F, 0F, 0F);
+            /* Sample around the live pose rather than from the rest translation. Feature layers
+             * (notably humanoid equipment and head models) can change their model state based on
+             * the current pose, so a rest-pose sample is not a valid local derivative. */
             Vector3f origin = new Vector3f(worldPositionSampler.get());
 
-            transform.translate.set(1F, 0F, 0F);
-            Vector3f cx = new Vector3f(worldPositionSampler.get()).sub(origin);
+            transform.translate.set(saved.x + epsilon, saved.y, saved.z);
+            Vector3f cx = new Vector3f(worldPositionSampler.get()).sub(origin).div(epsilon);
 
-            transform.translate.set(0F, 1F, 0F);
-            Vector3f cy = new Vector3f(worldPositionSampler.get()).sub(origin);
+            transform.translate.set(saved.x, saved.y + epsilon, saved.z);
+            Vector3f cy = new Vector3f(worldPositionSampler.get()).sub(origin).div(epsilon);
 
-            transform.translate.set(0F, 0F, 1F);
-            Vector3f cz = new Vector3f(worldPositionSampler.get()).sub(origin);
+            transform.translate.set(saved.x, saved.y, saved.z + epsilon);
+            Vector3f cz = new Vector3f(worldPositionSampler.get()).sub(origin).div(epsilon);
 
             return new Matrix3f(
                 cx.x, cx.y, cx.z,
