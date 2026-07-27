@@ -63,6 +63,36 @@ public final class PoseFormRegressionSourceTest
         modelPartJacobianSurvivesConditioning();
         unusableJacobianFallsBackInsteadOfFreezing();
         renderOnlyPlayersCannotPush(renderer);
+        mobRenderReleasesSharedStateOnFailure(renderer);
+    }
+
+    /**
+     * The sort origin, the vertex-provider hijack and both matrix stacks are process-wide state that
+     * every later form in the frame reads. A vanilla entity render can throw - malformed NBT, a
+     * third-party entity renderer - so releasing them only on the success path leaves the rest of
+     * the frame drawing with MobForm's texture binding on an unbalanced stack.
+     */
+    private static void mobRenderReleasesSharedStateOnFailure(String renderer)
+    {
+        String render3D = section(renderer,
+            "protected void render3D(FormRenderingContext context)",
+            "private float prepareAnimationRender");
+
+        assertOrdered(render3D,
+            "context.stack.pushPose()",
+            "try",
+            "getEntityRenderDispatcher().render(",
+            "finally",
+            "FormTranslucentQueue.setSortOrigin(null)",
+            "CustomVertexConsumerProvider.clearRunnables()",
+            "context.stack.popPose()");
+
+        String beforeFinally = render3D.substring(0, render3D.indexOf("finally"));
+
+        check(!beforeFinally.contains("CustomVertexConsumerProvider.clearRunnables()")
+                && !beforeFinally.contains("context.stack.popPose()"),
+            "MobForm world rendering releases the layer hijack or the matrix stack outside its "
+                + "finally, so a throwing entity render leaks them into the rest of the frame");
     }
 
     /**
@@ -206,7 +236,18 @@ public final class PoseFormRegressionSourceTest
             "ray translation writes transform values before the cursor has moved");
         check(propTransform.contains("GizmoDrag.resolveTranslateJacobian(this.drag.translateJacobian, this.drag.modelPartTranslate)"),
             "ray translation no longer routes its basis through the shared degenerate-Jacobian fallback");
-        check(!propTransform.contains("this.dragHasStart = false;\n\n            return;\n        }\n\n        if (this.local)"),
+
+        /* Scoped to the method rather than matched as a multi-line literal: an embedded \n never
+         * matches a CRLF checkout, which made the negated form of this assertion pass on Windows no
+         * matter what the source said. beginRayTranslateScreen keeps its own early exits for a
+         * degenerate view matrix, so only the axis path is asserted here. */
+        String rayTranslate = section(propTransform,
+            "private void beginRayTranslate(int mouseX, int mouseY)",
+            "private void beginRayTranslateScreen(int mouseX, int mouseY)");
+
+        check(rayTranslate.contains("this.resolveTranslateJacobian()"),
+            "axis ray translation no longer resolves its basis through the shared fallback");
+        check(!rayTranslate.contains("this.dragHasStart = false"),
             "a degenerate translate Jacobian silently cancels the drag instead of falling back");
     }
 
