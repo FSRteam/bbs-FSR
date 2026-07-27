@@ -25,10 +25,17 @@ public class SoundPlayer
     /** Legacy constructor retained for source and binary compatibility. */
     public SoundPlayer(SoundBuffer buffer)
     {
+        this(buffer, false);
+    }
+
+    /** Attach the buffer layout appropriate for listener-relative or spatial playback. */
+    public SoundPlayer(SoundBuffer buffer, boolean spatial)
+    {
         this.buffer = Objects.requireNonNull(buffer, "buffer");
         this.backend = buffer.getBackend();
+        int bufferHandle = buffer.getBuffer(spatial);
 
-        if (buffer.isDeleted())
+        if (bufferHandle <= 0)
         {
             throw new IllegalStateException("Cannot attach a deleted sound buffer");
         }
@@ -44,7 +51,7 @@ public class SoundPlayer
 
         try
         {
-            this.backend.setSourceBuffer(this.source, buffer.getBuffer());
+            this.backend.setSourceBuffer(this.source, bufferHandle);
             this.backend.setSourceMaxDistance(this.source, DEFAULT_MAX_DISTANCE);
             this.setRelative(false);
         }

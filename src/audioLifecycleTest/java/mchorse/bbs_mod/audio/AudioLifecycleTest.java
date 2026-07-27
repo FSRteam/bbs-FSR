@@ -66,6 +66,7 @@ public final class AudioLifecycleTest
             captureFailuresAreDistinctAndBounded();
             playbackIdentityAndGlobalCleanup();
             playbackSpatialParametersAndExplicitSeek();
+            playbackSpatialStereoDownmixAndCleanup();
             previewRestartReplacesUniqueOnly();
             playbackCleanupRetriesAndRetiredOwners();
             playbackContextDispatchDefersBackend();
@@ -73,13 +74,13 @@ public final class AudioLifecycleTest
             capture.assertExpectedErrors();
         }
 
-        System.out.println("AudioLifecycleTest: all tests passed; captured 25 expected failure diagnostics");
+        System.out.println("AudioLifecycleTest: all tests passed; captured 26 expected failure diagnostics");
     }
 
     /** Captures deliberate fake-device failures while rejecting unexpected production diagnostics. */
     private static final class ExpectedErrorLogCapture extends AbstractAppender implements AutoCloseable
     {
-        private static final int EXPECTED_ERROR_COUNT = 25;
+        private static final int EXPECTED_ERROR_COUNT = 26;
         private final List<LoggerState> states;
         private final List<LogEvent> events = new CopyOnWriteArrayList<>();
 
@@ -1221,6 +1222,90 @@ public final class AudioLifecycleTest
         backend.assertAllReleasedExactlyOnce("spatial playback parameters");
     }
 
+    private static void playbackSpatialStereoDownmixAndCleanup() throws Exception
+    {
+        Link link = Link.assets("audio/spatial-stereo.wav");
+        int[][] frames = new int[100][2];
+        frames[0][0] = 24576;
+        frames[0][1] = -8192;
+        Wave stereo = new Wave(new PcmFormat(PcmEncoding.PCM_S16_LE, ChannelLayout.STEREO, 10),
+            stereoFrames(frames));
+        MemoryAssetProvider provider = new MemoryAssetProvider();
+        provider.put(link, wav(stereo));
+        FakeSoundBackend backend = new FakeSoundBackend();
+        SoundManager manager = new SoundManager(provider, backend, Runnable::run, () -> true);
+        Object owner = new Object();
+        Object direct = new Object();
+
+        manager.reconcile(owner, new IdentityHashMap<>(Map.of(
+            direct, new SoundManager.VoiceRequest(link, 0.5F, 1F))), true);
+        SoundPlayer listenerRelative = manager.getOwnedVoice(owner, direct);
+        SoundBuffer buffer = listenerRelative.getBuffer();
+        int originalHandle = buffer.getBuffer(false);
+        int spatialHandle = buffer.getBuffer(true);
+
+        check(originalHandle != spatialHandle, "stereo asset owns a distinct mono spatial buffer");
+        check(backend.source(listenerRelative).buffer == originalHandle
+                && backend.buffer(originalHandle).getFormat().layout() == ChannelLayout.STEREO,
+            "listener-relative playback preserves the authored stereo buffer");
+        Wave spatialWave = backend.buffer(spatialHandle);
+        check(spatialWave.getFormat().layout() == ChannelLayout.MONO,
+            "spatial playback variant is mono for OpenAL positioning");
+        check(Math.abs(PcmSamples.readNormalized(spatialWave, 0, 0) - 0.25D) < 0.0001D,
+            "spatial stereo downmix follows the 0.5L plus 0.5R format contract");
+        check(provider.reads(link) == 1 && backend.bufferCreateCalls.get() == 2,
+            "original and spatial buffers share one asset decode");
+
+        int listenerSource = listenerRelative.getSource();
+        SoundManager.VoiceRequest spatialDirect = SoundManager.VoiceRequest.spatial(
+            link, 0.5F, 1F, 2F, 3F, 4F);
+        manager.reconcile(owner, new IdentityHashMap<>(Map.of(direct, spatialDirect)), true);
+        SoundPlayer directPlayer = manager.getOwnedVoice(owner, direct);
+        FakeSoundBackend.Source directSource = backend.source(directPlayer);
+
+        check(directPlayer.getSource() != listenerSource
+                && backend.successfulSourceDeletes(listenerSource) == 1,
+            "changing spatial mode recreates the source before selecting another buffer");
+        check(directSource.buffer == spatialHandle && !directSource.relative,
+            "direct spatial voice attaches the mono positional buffer");
+
+        Object reflection = new Object();
+        SoundManager.VoiceRequest spatialReflection = SoundManager.VoiceRequest.spatial(
+            link, 0.25F, 0.4F, -6F, 1F, 8F);
+        IdentityHashMap<Object, SoundManager.VoiceRequest> spatialVoices = new IdentityHashMap<>();
+        spatialVoices.put(direct, spatialDirect);
+        spatialVoices.put(reflection, spatialReflection);
+        manager.reconcile(owner, spatialVoices, true);
+        FakeSoundBackend.Source reflectedSource = backend.source(manager.getOwnedVoice(owner, reflection));
+
+        check(reflectedSource.buffer == spatialHandle && !reflectedSource.relative,
+            "reflected voice shares the mono positional buffer");
+        check(Math.abs(directSource.x - reflectedSource.x) > 0.001F
+                || Math.abs(directSource.y - reflectedSource.y) > 0.001F
+                || Math.abs(directSource.z - reflectedSource.z) > 0.001F,
+            "direct and reflected voices retain independent world positions");
+        manager.deleteSounds();
+        backend.assertAllReleasedExactlyOnce("stereo spatial playback ownership");
+
+        FakeSoundBackend cleanupBackend = new FakeSoundBackend();
+        SoundManager cleanupManager = new SoundManager(provider, cleanupBackend, Runnable::run, () -> true);
+        SoundBuffer cleanupBuffer = cleanupManager.load(link, false);
+        int cleanupOriginal = cleanupBuffer.getBuffer(false);
+        int cleanupSpatial = cleanupBuffer.getBuffer(true);
+        cleanupBackend.failNextDeleteBuffer = true;
+        cleanupManager.deleteSound(link);
+
+        check(cleanupBuffer.getBuffer(false) == cleanupOriginal
+                && cleanupBuffer.getBuffer(true) < 0
+                && cleanupBackend.successfulBufferDeletes(cleanupSpatial) == 1,
+            "partial stereo-buffer cleanup retains only the failed handle for retry");
+        cleanupManager.deleteSounds();
+        check(cleanupBuffer.isCleanupComplete()
+                && cleanupBackend.successfulBufferDeletes(cleanupOriginal) == 1,
+            "later cleanup retries the remaining stereo-buffer handle");
+        cleanupBackend.assertAllReleasedExactlyOnce("stereo spatial cleanup retry");
+    }
+
     private static void playbackCleanupRetriesAndRetiredOwners() throws Exception
     {
         Link link = Link.assets("audio/retry.wav");
@@ -1999,6 +2084,7 @@ public final class AudioLifecycleTest
     private static final class MemoryAssetProvider extends AssetProvider
     {
         private final Map<Link, byte[]> assets = new HashMap<>();
+        private final Map<Link, Integer> readCounts = new HashMap<>();
 
         private void put(Link link, byte[] bytes)
         {
@@ -2008,6 +2094,7 @@ public final class AudioLifecycleTest
         @Override
         public java.io.InputStream getAsset(Link link) throws IOException
         {
+            this.readCounts.merge(link, 1, Integer::sum);
             byte[] bytes = this.assets.get(link);
 
             if (bytes == null)
@@ -2016,6 +2103,11 @@ public final class AudioLifecycleTest
             }
 
             return new ByteArrayInputStream(bytes);
+        }
+
+        private int reads(Link link)
+        {
+            return this.readCounts.getOrDefault(link, 0);
         }
     }
 

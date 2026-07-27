@@ -397,7 +397,8 @@ public class SoundManager implements IWatchDogListener
 
             ManagedVoice voice = actual.get(clipIdentity);
 
-            if (voice != null && !Objects.equals(voice.link, request.link()))
+            if (voice != null && (!Objects.equals(voice.link, request.link())
+                || voice.spatial != request.spatial()))
             {
                 if (this.releaseVoice(voice))
                 {
@@ -438,10 +439,10 @@ public class SoundManager implements IWatchDogListener
             {
                 try
                 {
-                    SoundPlayer player = new SoundPlayer(buffer).managed();
+                    SoundPlayer player = new SoundPlayer(buffer, request.spatial()).managed();
 
                     player.setRelative(!request.spatial());
-                    voice = new ManagedVoice(request.link(), player);
+                    voice = new ManagedVoice(request.link(), player, request.spatial());
                     actual.put(clipIdentity, voice);
                     this.sounds.add(player);
                 }
@@ -503,9 +504,9 @@ public class SoundManager implements IWatchDogListener
         player.setLooping(request.looping());
         player.setMaxDistance(request.maxDistance());
 
-        /* Re-applied every frame rather than only at creation: a spatial voice
-         * moves, and the same clip identity can flip between spatial and
-         * listener-relative between frames. */
+        /* Re-applied every frame because a spatial voice can move. A change
+         * between spatial and listener-relative playback recreates the source
+         * during reconciliation so it is attached to the correct buffer. */
         player.setRelative(!request.spatial());
 
         if (request.spatial())
@@ -977,12 +978,14 @@ public class SoundManager implements IWatchDogListener
     {
         private final Link link;
         private final SoundPlayer player;
+        private final boolean spatial;
         private float expectedSeconds;
 
-        private ManagedVoice(Link link, SoundPlayer player)
+        private ManagedVoice(Link link, SoundPlayer player, boolean spatial)
         {
             this.link = link;
             this.player = player;
+            this.spatial = spatial;
         }
     }
 }
