@@ -465,6 +465,7 @@ public class UIFilmPreview extends UIElement
         camera.copy(this.panel.getWorldCamera());
         camera.view.set(this.panel.lastView);
         camera.projection.set(this.panel.lastProjection);
+        this.panel.getController().updateSoundGuideDrag(context);
         context.batcher.flush();
 
         if (texture != null)

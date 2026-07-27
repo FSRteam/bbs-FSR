@@ -153,6 +153,12 @@ public class Model implements IMapSerializable, IModel
 
             group.lighting = transform.lighting;
             group.color.copy(transform.color);
+            /* Interpolation snaps glint mode between discrete values, so this is always a
+             * whole number already — the cast just moves it to the renderer's type. */
+            group.glintMode = (int) transform.glintMode;
+            group.glintColor.copy(transform.glintColor);
+            group.glintSpeed = transform.glintSpeed;
+            group.glintTransform.copy(transform.glintTransform);
             group.current.translate.add(transform.translate);
             group.current.scale.add(transform.scale).sub(1, 1, 1);
             group.current.rotate.add(

@@ -162,7 +162,8 @@ public abstract class BaseFilmController
             .cameraRelativeWorld()
             .camera(camera)
             .stencilMap(context.map)
-            .color(context.color);
+            .color(context.color)
+            .timeline(context.timelineProperties, context.timelineTick, context.timelinePlaying);
 
         if (relative)
         {
@@ -772,6 +773,7 @@ public abstract class BaseFilmController
 
     public void createEntities()
     {
+        this.releaseFormPlayback();
         this.entities.clear();
 
         if (this.film == null)
@@ -1017,6 +1019,7 @@ public abstract class BaseFilmController
             int i = entry.getKey();
             IEntity entity = entry.getValue();
             Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
+            Entity anEntity = replay == null ? null : this.getReplayActor(replay);
 
             if (replay != null)
             {
@@ -1025,11 +1028,17 @@ public abstract class BaseFilmController
 
             if (replay == null || !replay.enabled.get())
             {
+                FormUtilsClient.release(entity.getForm());
+                this.clearActorTimeline(anEntity);
+
                 continue;
             }
 
             if (!this.canUpdate(i, replay, entity, UpdateMode.PROPERTIES))
             {
+                FormUtilsClient.release(entity.getForm());
+                this.clearActorTimeline(anEntity);
+
                 continue;
             }
 
@@ -1040,8 +1049,6 @@ public abstract class BaseFilmController
             Form form1 = entity.getForm();
             replay.properties.applyProperties(form1, tick + delta);
             this.applyTargetControls(replay, form1, tick + delta);
-
-            Entity anEntity = this.getReplayActor(replay);
 
             if (anEntity instanceof ActorEntity actor)
             {
@@ -1074,6 +1081,15 @@ public abstract class BaseFilmController
                 player.yHeadRotO = yawHead;
                 player.xRotO = pitch;
                 player.yBodyRotO = yawBody;
+            }
+
+            if (replay.actor.get())
+            {
+                FilmActorTimeline.update(this, anEntity, replay.properties, tick + delta, this.isTimelinePlaying());
+            }
+            else
+            {
+                this.clearActorTimeline(anEntity);
             }
         }
 
@@ -1532,6 +1548,11 @@ public abstract class BaseFilmController
         return this.paused ? 0F : transition;
     }
 
+    protected boolean isTimelinePlaying()
+    {
+        return !this.paused;
+    }
+
     protected boolean canUpdate(int i, Replay replay, IEntity entity, UpdateMode updateMode)
     {
         if (this.paused && (updateMode == UpdateMode.UPDATE))
@@ -1571,8 +1592,10 @@ public abstract class BaseFilmController
         if (!replay.actor.get())
         {
             FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
+            float transition = getTransition(entity, context.tickDelta());
 
-            filmContext.transition = getTransition(entity, context.tickDelta());
+            filmContext.transition = transition;
+            filmContext.timeline(replay.properties, replay.getTick(this.getTick()) + transition, this.isTimelinePlaying());
 
             renderEntity(filmContext);
         }
@@ -1596,7 +1619,44 @@ public abstract class BaseFilmController
     }
 
     public void shutdown()
-    {}
+    {
+        this.releaseFormPlayback();
+    }
+
+    private void releaseFormPlayback()
+    {
+        for (IEntity entity : this.entities.values())
+        {
+            FormUtilsClient.release(entity.getForm());
+        }
+
+        FilmActorTimeline.clearOwner(this, this::releaseActorForm);
+    }
+
+    private void clearActorTimeline(Entity entity)
+    {
+        if (FilmActorTimeline.clear(this, entity))
+        {
+            this.releaseActorForm(entity);
+        }
+    }
+
+    private void releaseActorForm(Entity entity)
+    {
+        if (entity instanceof ActorEntity actor)
+        {
+            FormUtilsClient.release(actor.getForm());
+        }
+        else if (entity instanceof Player player)
+        {
+            Morph morph = Morph.getMorph(player);
+
+            if (morph != null)
+            {
+                FormUtilsClient.release(morph.getForm());
+            }
+        }
+    }
 
     public static enum UpdateMode
     {

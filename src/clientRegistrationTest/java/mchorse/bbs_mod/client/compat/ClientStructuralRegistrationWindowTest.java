@@ -30,6 +30,7 @@ public final class ClientStructuralRegistrationWindowTest
             NetworkCompatClientDescriptorTest.runAll();
             UIFilmPanelCompatibilityDescriptorTest.runAll();
             CameraControllerResetTest.runAll();
+            ModelBlockItemRendererSourceTest.runAll();
             acceptsBeforeEventAndRejectsLateCalls();
             closesBeforeInvokingNeoForgeRegistrations();
             isolatesRegistrationFailures();

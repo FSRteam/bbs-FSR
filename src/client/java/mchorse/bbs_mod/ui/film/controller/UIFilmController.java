@@ -41,6 +41,7 @@ import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.renderers.sound.SoundGuideInteraction;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -424,6 +425,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
             this.toggleControl();
         }
 
+        if (this.editorController != null)
+        {
+            this.editorController.shutdown();
+        }
+
         this.editorController = new FilmEditorController(this.panel.getData(), this);
         this.editorController.createEntities();
 
@@ -431,6 +437,14 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         entities.clear();
         entities.putAll(this.editorController.getEntities());
+    }
+
+    public void shutdown()
+    {
+        if (this.editorController != null)
+        {
+            this.editorController.shutdown();
+        }
     }
 
     public IntObjectMap<IEntity> getEntities()
@@ -761,6 +775,29 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return this.canShowGizmo() && this.gizmo.mouseClickedHandle(context);
     }
 
+    public boolean startViewportSoundGuide(UIContext context)
+    {
+        if (this.panel.isFlying() || this.controlled != null)
+        {
+            return false;
+        }
+
+        return SoundGuideInteraction.tryStartFilm(
+            this,
+            this.stencil,
+            this.panel.getCamera(),
+            this.panel.preview.getViewport(),
+            context,
+            this.panel.replayEditor.getReplay(),
+            this.panel.getCursor()
+        );
+    }
+
+    public void updateSoundGuideDrag(UIContext context)
+    {
+        SoundGuideInteraction.update(this, context);
+    }
+
     @Override
     public StencilFormFramebuffer getGizmoStencil()
     {
@@ -858,7 +895,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         try
         {
-            consumed = this.gizmo.mouseReleased(context);
+            consumed = SoundGuideInteraction.mouseReleased(this, context.mouseButton);
+            consumed = this.gizmo.mouseReleased(context) || consumed;
         }
         catch (RuntimeException | Error exception)
         {
@@ -911,6 +949,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
     /** Cancel a sibling-owned viewport gesture without committing its deferred pick. */
     public void cancelViewportGesture(UIContext context)
     {
+        SoundGuideInteraction.cancel(this, context.mouseButton);
+
         long gizmoGeneration = this.gizmo.gestureGeneration();
         long orbitGeneration = this.orbit.gestureGeneration();
         long dashboardOrbitGeneration = this.panel.isFlying() && context.mouseButton == 2

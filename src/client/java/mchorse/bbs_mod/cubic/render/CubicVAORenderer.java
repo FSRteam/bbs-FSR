@@ -16,6 +16,9 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.LightTexture;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -138,6 +141,56 @@ public class CubicVAORenderer extends CubicCubeRenderer
             }
         }
 
+        this.renderGlint(stack, group, model, groupVaos, light);
+
         return false;
     }
+
+    /**
+     * Draws the bone's geometry a second time through vanilla entity render types, tinted
+     * and animated by the bone's own settings.
+     *
+     * <p>Skipped while picking — the stencil pass encodes bone indices into the buffer,
+     * and an extra draw would corrupt which bone a click resolves to.</p>
+     */
+    private void renderGlint(PoseStack stack, ModelGroup group, Model model, Map<String, ModelVAO> groupVaos, int light)
+    {
+        if (group.glintMode == 0 || this.stencilMap != null)
+        {
+            return;
+        }
+
+        if (group.glintMode == mchorse.bbs_mod.forms.forms.Form.GLINT_EDGE)
+        {
+            this.renderEdgeGlint(stack, group, model, light);
+
+            return;
+        }
+
+        for (ModelVAO vao : groupVaos.values())
+        {
+            GlintRenderState.renderVao(group.glintMode, group.glintSpeed, group.glintColor,
+                group.glintTransform, vao, ModelVAORenderer.captureModelView(stack),
+                new Matrix3f(stack.last().normal()), light, this.overlay);
+        }
+    }
+
+    /** Edge intensity is view-dependent, so bake that one cheap CPU pass per enabled bone. */
+    private void renderEdgeGlint(PoseStack stack, ModelGroup group, Model model, int light)
+    {
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+        CubicGlintCubeRenderer renderer = new CubicGlintCubeRenderer(light, this.overlay, this.shapeKeys,
+            group.glintMode, null);
+
+        renderer.setWelds(this.welds);
+        renderer.renderGroup(builder, stack, group, model);
+
+        MeshData mesh = builder.build();
+
+        if (mesh != null)
+        {
+            GlintRenderState.drawMesh(group.glintMode, group.glintSpeed, group.glintColor, mesh);
+        }
+    }
+
 }

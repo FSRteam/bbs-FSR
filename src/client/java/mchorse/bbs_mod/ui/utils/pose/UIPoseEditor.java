@@ -5,7 +5,9 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
@@ -23,6 +25,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseManager;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,6 +45,11 @@ public class UIPoseEditor extends UIElement
     public UITrackpad fix;
     public UIColor color;
     public UIToggle lighting;
+    public UICirculate glintMode;
+    public UIColor glintColor;
+    public UITrackpad glintSpeed;
+    public UIPropTransform glintTransform;
+    public UISection glintSection;
     public UIPropTransform transform;
 
     private String group = "";
@@ -94,13 +102,68 @@ public class UIPoseEditor extends UIElement
                 this.applyChildren((p) -> this.setLighting(p, this.lighting.getValue()));
             });
         });
+        this.glintMode = new UICirculate((c) -> this.applyGlintModeToSelection(c.getValue()));
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_OFF);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_FULL);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_EDGE);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_VANILLA);
+        this.glintMode.tooltip(UIKeys.POSE_CONTEXT_GLINT_TOOLTIP);
+        this.glintMode.h(UIConstants.CONTROL_HEIGHT);
+        this.glintMode.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setGlintMode(p, this.glintMode.getValue()));
+            });
+        });
+        this.glintColor = new UIColor((c) -> this.applyGlintColorToSelection(c));
+        this.glintColor.withAlpha();
+        this.glintColor.tooltip(UIKeys.POSE_CONTEXT_GLINT_COLOR_TOOLTIP);
+        this.glintColor.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setGlintColor(p, this.glintColor.picker.color.getARGBColor()));
+            });
+        });
+        this.glintSpeed = new UITrackpad((v) -> this.applyGlintSpeedToSelection(v.floatValue()));
+        this.glintSpeed.limit(-4D, 4D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
+        this.glintSpeed.tooltip(UIKeys.POSE_CONTEXT_GLINT_SPEED_TOOLTIP);
+        this.glintSpeed.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setGlintSpeed(p, (float) this.glintSpeed.getValue()));
+            });
+        });
+        this.glintTransform = this.createGlintTransformEditor();
+        this.glintSection = new UISection(UIKeys.POSE_CONTEXT_GLINT_TRANSFORM);
+        this.glintSection.fields.add(
+            UI.row(this.glintMode, this.glintColor),
+            UI.labelRow(UIKeys.POSE_CONTEXT_GLINT_SPEED, this.glintSpeed),
+            this.glintTransform
+        );
+        this.glintSection.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                Transform source = this.glintTransform.getTransform();
+
+                if (source != null)
+                {
+                    this.applyChildren((p) -> this.setGlintTransform(p, source));
+                }
+            });
+        });
         this.transform = this.createTransformEditor();
         this.transform.setModel();
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        this.add(this.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting), this.transform.marginTop(4));
+        this.add(this.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting),
+            this.glintSection,
+            this.transform.marginTop(4));
     }
 
     @Override
@@ -281,6 +344,10 @@ public class UIPoseEditor extends UIElement
 
         this.fix.setVisible(hasBones);
         this.color.setVisible(hasBones);
+        this.glintMode.setVisible(hasBones);
+        this.glintColor.setVisible(hasBones);
+        this.glintSpeed.setVisible(hasBones);
+        this.glintSection.setVisible(hasBones);
         this.transform.setVisible(hasBones);
 
         List<String> list = this.groups.list.getList();
@@ -351,7 +418,12 @@ public class UIPoseEditor extends UIElement
 
     protected UIPropTransform createTransformEditor()
     {
-        return new UIPosePropTransform();
+        return new UIPosePropTransform(this::syncPoseTransformToSelection, true);
+    }
+
+    protected UIPropTransform createGlintTransformEditor()
+    {
+        return new UIPosePropTransform(this::syncGlintTransformToSelection, false);
     }
 
     /**
@@ -359,9 +431,16 @@ public class UIPoseEditor extends UIElement
      */
     private class UIPosePropTransform extends UIPropTransform
     {
-        UIPosePropTransform()
+        private final Runnable sync;
+
+        UIPosePropTransform(Runnable sync, boolean hotkeys)
         {
-            this.enableHotkeys();
+            this.sync = sync;
+
+            if (hotkeys)
+            {
+                this.enableHotkeys();
+            }
         }
 
         @Override
@@ -378,35 +457,35 @@ public class UIPoseEditor extends UIElement
                 UIPoseEditor.this.endSuppressPoseSync();
             }
 
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.sync.run();
         }
 
         @Override
         public void setT(Axis axis, double x, double y, double z)
         {
             super.setT(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.sync.run();
         }
 
         @Override
         public void setS(Axis axis, double x, double y, double z)
         {
             super.setS(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.sync.run();
         }
 
         @Override
         public void setR(Axis axis, double x, double y, double z)
         {
             super.setR(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.sync.run();
         }
 
         @Override
         public void setR2(Axis axis, double x, double y, double z)
         {
             super.setR2(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
+            this.sync.run();
         }
     }
 
@@ -429,6 +508,10 @@ public class UIPoseEditor extends UIElement
             this.fix.setValue(0F);
             this.color.setColor(Colors.WHITE);
             this.lighting.setValue(false);
+            this.glintMode.setValue((int) PoseTransform.GLINT_OFF);
+            this.glintColor.setColor(Colors.WHITE);
+            this.glintSpeed.setValue(PoseTransform.DEFAULT_GLINT_SPEED);
+            this.glintTransform.setTransform(null);
             this.transform.setTransform(null);
 
             return;
@@ -443,6 +526,10 @@ public class UIPoseEditor extends UIElement
         this.fix.setValue(poseTransform.fix);
         this.color.setColor(poseTransform.color.getARGBColor());
         this.lighting.setValue(poseTransform.lighting == 0F);
+        this.glintMode.setValue((int) poseTransform.glintMode);
+        this.glintColor.setColor(poseTransform.glintColor.getARGBColor());
+        this.glintSpeed.setValue(poseTransform.glintSpeed);
+        this.glintTransform.setTransform(poseTransform.glintTransform);
         this.transform.setTransform(poseTransform);
     }
 
@@ -476,6 +563,32 @@ public class UIPoseEditor extends UIElement
         }
     }
 
+    private void syncGlintTransformToSelection()
+    {
+        if (this.suppressPoseSync > 0)
+        {
+            return;
+        }
+
+        List<String> bones = this.groups.list.getCurrent();
+        Transform primary = this.glintTransform.getTransform();
+
+        if (bones.size() <= 1 || primary == null)
+        {
+            return;
+        }
+
+        for (String bone : bones)
+        {
+            Transform target = this.pose.get(bone).glintTransform;
+
+            if (target != primary)
+            {
+                target.copy(primary);
+            }
+        }
+    }
+
     private void forEachSelectedPose(Consumer<PoseTransform> consumer)
     {
         for (String bone : this.groups.list.getCurrent())
@@ -500,6 +613,24 @@ public class UIPoseEditor extends UIElement
     {
         this.forEachSelectedPose((pt) -> this.setLighting(pt, value));
         this.lighting.setValue(value);
+    }
+
+    private void applyGlintModeToSelection(int value)
+    {
+        this.forEachSelectedPose((pt) -> this.setGlintMode(pt, value));
+        this.glintMode.setValue(value);
+    }
+
+    private void applyGlintColorToSelection(int argb)
+    {
+        this.forEachSelectedPose((pt) -> this.setGlintColor(pt, argb));
+        this.glintColor.setColor(argb);
+    }
+
+    private void applyGlintSpeedToSelection(float value)
+    {
+        this.forEachSelectedPose((pt) -> this.setGlintSpeed(pt, value));
+        this.glintSpeed.setValue(value);
     }
 
     private void toggleFix()
@@ -527,5 +658,25 @@ public class UIPoseEditor extends UIElement
     protected void setLighting(PoseTransform poseTransform, boolean value)
     {
         poseTransform.lighting = value ? 0F : 1F;
+    }
+
+    protected void setGlintMode(PoseTransform poseTransform, int value)
+    {
+        poseTransform.glintMode = value;
+    }
+
+    protected void setGlintColor(PoseTransform poseTransform, int value)
+    {
+        poseTransform.glintColor.set(value);
+    }
+
+    protected void setGlintSpeed(PoseTransform poseTransform, float value)
+    {
+        poseTransform.glintSpeed = value;
+    }
+
+    protected void setGlintTransform(PoseTransform poseTransform, Transform value)
+    {
+        poseTransform.glintTransform.copy(value);
     }
 }

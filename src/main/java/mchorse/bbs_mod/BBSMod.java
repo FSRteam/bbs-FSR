@@ -79,6 +79,7 @@ import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.ParticleForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
@@ -566,7 +567,8 @@ public class BBSMod
             .register(Link.bbs("vanilla_particles"), VanillaParticleForm.class, null)
             .register(Link.bbs("trail"), TrailForm.class, null)
             .register(Link.bbs("framebuffer"), FramebufferForm.class, null)
-            .register(Link.bbs("sound_sphere"), SoundSphereForm.class, null);
+            .register(Link.bbs("sound_sphere"), SoundSphereForm.class, null)
+            .register(Link.bbs("sound_cone"), SoundConeForm.class, null);
 
         LOGGER.info("[bbs-addon] posting RegisterFormsEvent");
         events.post(new RegisterFormsEvent(forms));

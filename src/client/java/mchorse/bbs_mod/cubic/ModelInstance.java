@@ -18,6 +18,8 @@ import mchorse.bbs_mod.cubic.model.View;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
 import mchorse.bbs_mod.cubic.render.CubicCubeRenderer;
+import mchorse.bbs_mod.cubic.render.CubicGlintCubeRenderer;
+import mchorse.bbs_mod.cubic.render.GlintRenderState;
 import mchorse.bbs_mod.cubic.render.CubicMatrixRenderer;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.CubicVAOBuilderRenderer;
@@ -38,6 +40,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
+import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.shaders.Uniform;
@@ -526,6 +529,8 @@ public class ModelInstance implements IModelInstance
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
                 this.drawImmediate(builder.buildOrThrow(), shader, stack, null, stencilMap,
                     BBSModClient.getTextures().getLastBound(), color.a);
+
+                this.renderGlintImmediate(stack, model, light, overlay, stencilMap, keys, null);
             }
         }
         else if (this.model instanceof BOBJModel model)
@@ -588,6 +593,73 @@ public class ModelInstance implements IModelInstance
                 }
 
                 stack.popPose();
+            }
+        }
+    }
+
+    /**
+     * Draws the glint of every bone that has one, as a pass over the model following the
+     * model's own render.
+     *
+     * <p>Runs once per glint mode: this path packs the whole model into one buffer and one
+     * draw, so a mode can only be communicated to the shader for the batch as a whole.
+     * Modes with no bones cost nothing. Skipped entirely while picking, where an extra
+     * draw would corrupt the bone the stencil buffer reports.</p>
+     *
+     * <p>Scroll speed is likewise per batch rather than per bone here — the first bone of
+     * each mode sets it. The VAO path, which is what nearly every model takes, keeps speed
+     * per bone; this fallback only runs for models that can't be baked into VAOs.</p>
+     *
+     * @param restrictTo bones to consider, or {@code null} for the whole model. The hybrid
+     *                   path passes the bones that rendered on the CPU, since the rest
+     *                   already drew their glint with their VAO.
+     */
+    private void renderGlintImmediate(PoseStack stack, Model model, int light, int overlay, StencilMap stencilMap, ShapeKeys keys, Set<ModelGroup> restrictTo)
+    {
+        if (stencilMap != null)
+        {
+            return;
+        }
+
+        this.renderGlintPasses(stack, model, light, overlay, keys, restrictTo);
+    }
+
+    private void renderGlintPasses(PoseStack stack, Model model, int light, int overlay, ShapeKeys keys, Set<ModelGroup> restrictTo)
+    {
+        for (int mode = 1; mode <= 3; mode++)
+        {
+            float speed = 0F;
+            Color color = null;
+            boolean any = false;
+
+            for (ModelGroup group : model.getAllGroups())
+            {
+                if (group.glintMode == mode && (restrictTo == null || restrictTo.contains(group)))
+                {
+                    speed = group.glintSpeed;
+                    color = group.glintColor;
+                    any = true;
+
+                    break;
+                }
+            }
+
+            if (!any)
+            {
+                continue;
+            }
+
+            CubicGlintCubeRenderer processor = new CubicGlintCubeRenderer(light, overlay, keys, mode, restrictTo);
+
+            BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+
+            CubicRenderer.processRenderModel(processor, builder, stack, model);
+
+            MeshData mesh = builder.build();
+
+            if (mesh != null)
+            {
+                GlintRenderState.drawMesh(mode, speed, color, mesh);
             }
         }
     }
@@ -698,7 +770,8 @@ public class ModelInstance implements IModelInstance
 
         /* Open the shared CPU buffer only if some group actually renders on the CPU (a visible bending welded
          * bone, or a visible bone with geometry but no VAO) — drawing an empty buffer would fail. */
-        boolean cpuGeometry = this.hasCpuGeometry(model, bindings, weldedGroups);
+        Set<ModelGroup> cpuGroups = this.collectCpuGroups(model, bindings, weldedGroups);
+        boolean cpuGeometry = !cpuGroups.isEmpty();
         BufferBuilder builder = null;
 
         if (cpuGeometry)
@@ -725,12 +798,19 @@ public class ModelInstance implements IModelInstance
             this.drawImmediate(builder.buildOrThrow(), drawShader, stack,
                 explicitWeld ? WELD_NORMAL_MAT : null, stencilMap,
                 BBSModClient.getTextures().getLastBound(), color.a);
+
+            /* Bones that fell back to the CPU never reached the VAO renderer's glint pass,
+             * so they get one here. Restricted to exactly those bones — the rest already
+             * drew their glint alongside their VAO. */
+            this.renderGlintImmediate(stack, model, light, overlay, stencilMap, keys, cpuGroups);
         }
     }
 
-    /** Whether the immediate path will emit anything: a visible bending welded bone, or a visible bone with geometry but no VAO. */
-    private boolean hasCpuGeometry(Model model, List<WeldBinding> bindings, Set<ModelGroup> weldedGroups)
+    /** Bones the immediate path will emit: visible bending welded bones, and visible bones with geometry but no VAO. */
+    private Set<ModelGroup> collectCpuGroups(Model model, List<WeldBinding> bindings, Set<ModelGroup> weldedGroups)
     {
+        Set<ModelGroup> groups = new HashSet<>();
+
         for (ModelGroup group : model.getAllGroups())
         {
             if (!group.visible || (group.cubes.isEmpty() && group.meshes.isEmpty()))
@@ -742,10 +822,10 @@ public class ModelInstance implements IModelInstance
 
             if ((weldedGroups.contains(group) && WeldBinding.hasActiveSeam(bindings, group)) || groupVaos == null || groupVaos.isEmpty())
             {
-                return true;
+                groups.add(group);
             }
         }
 
-        return false;
+        return groups;
     }
 }

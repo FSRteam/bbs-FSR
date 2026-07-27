@@ -25,12 +25,15 @@ import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.ui.film.ICursor;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
@@ -57,6 +60,7 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
+import mchorse.bbs_mod.utils.keyframes.factories.SoundKeyframeFactory;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.utils.pose.Pose;
@@ -645,6 +649,50 @@ public class UIReplaysEditorUtils
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.ANCHOR);
 
         out.add(new UIKeyframeSheet(id, IKey.constant(title), color, false, channel, null).icon(icon).form(modelForm));
+    }
+
+    public static void addSoundSheets(AbstractSoundForm form, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        for (SoundKeyframeValue.Group group : SoundKeyframeValue.Group.values())
+        {
+            String id = SoundKeyframeValue.channelId(form, group);
+            SoundKeyframeFactory factory = switch (group)
+            {
+                case SOUND -> KeyframeFactories.SOUND;
+                case SHAPE -> KeyframeFactories.SOUND_SHAPE;
+                case VISUALIZATION -> KeyframeFactories.SOUND_VISUALIZATION;
+                case FALLOFF -> KeyframeFactories.SOUND_FALLOFF;
+                case REFLECTIONS -> KeyframeFactories.SOUND_REFLECTIONS;
+            };
+            IKey title = switch (group)
+            {
+                case SOUND -> UIKeys.FORMS_EDITORS_SOUND_TITLE;
+                case SHAPE -> UIKeys.FORMS_EDITORS_SOUND_SHAPE;
+                case VISUALIZATION -> UIKeys.FORMS_EDITORS_SOUND_VISUALIZATION;
+                case FALLOFF -> UIKeys.FORMS_EDITORS_SOUND_FALLOFF;
+                case REFLECTIONS -> UIKeys.FORMS_EDITORS_SOUND_REFLECTIONS;
+            };
+            int color = switch (group)
+            {
+                case SOUND -> Colors.CYAN;
+                case SHAPE -> Colors.YELLOW;
+                case VISUALIZATION -> Colors.GREEN;
+                case FALLOFF -> Colors.BLUE;
+                case REFLECTIONS -> Colors.MAGENTA;
+            };
+            Icon icon = switch (group)
+            {
+                case SOUND -> Icons.SOUND;
+                case SHAPE -> Icons.SHAPES;
+                case VISUALIZATION -> Icons.VISIBLE;
+                case FALLOFF -> Icons.FADING;
+                case REFLECTIONS -> Icons.EXCHANGE;
+            };
+            KeyframeChannel<SoundKeyframeValue> channel = properties.registerChannel(id, factory);
+
+            out.add(new UIKeyframeSheet(id, title, color, false, channel, null)
+                .icon(icon).form(form).seed(() -> SoundKeyframeValue.capture(form, group)));
+        }
     }
 
     public static void clearIKTracks(Replay replay, ModelForm modelForm)

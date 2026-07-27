@@ -37,8 +37,8 @@ version, NeoForge version, operating system, reproduction steps, and relevant lo
 
 ## Releases
 
-Create and publish a GitHub Release for stable versions such as `v2.3.2`; use a
-prerelease flag and a suffix such as `v2.4.0-beta.1` for testing releases. The release
+Create and publish a GitHub Release for stable versions such as `v0.0.10`; use a
+prerelease flag and a suffix such as `v0.0.11-beta.1` for testing releases. The release
 workflow builds the tag attached to that published Release, then uploads the jar and a
 SHA-256 checksum file without replacing the Release description.
 

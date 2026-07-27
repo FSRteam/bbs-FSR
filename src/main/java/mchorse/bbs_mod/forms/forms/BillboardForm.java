@@ -52,4 +52,10 @@ public class BillboardForm extends Form
 
         return link == null ? "none" : link.toString();
     }
+
+    @Override
+    public boolean supportsGlint()
+    {
+        return true;
+    }
 }

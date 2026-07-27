@@ -125,6 +125,12 @@ public class FilmEditorController extends BaseFilmController
     }
 
     @Override
+    protected boolean isTimelinePlaying()
+    {
+        return this.controller.isPlaying();
+    }
+
+    @Override
     protected boolean canUpdate(int i, Replay replay, IEntity entity, UpdateMode updateMode)
     {
         return super.canUpdate(i, replay, entity, updateMode)

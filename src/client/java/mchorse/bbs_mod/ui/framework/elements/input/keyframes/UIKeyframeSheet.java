@@ -2,6 +2,9 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes;
 
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
+import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -38,7 +41,7 @@ public class UIKeyframeSheet extends UIKeyframeElement
 
     public UIKeyframeSheet(int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)
     {
-        this(channel.getId(), IKey.constant(property != null ? FormUtils.getForm(property).getTrackName(channel.getId()) : channel.getId()), color, separator, channel, property, false);
+        this(channel.getId(), getTrackTitle(channel, property), color, separator, channel, property, false);
     }
 
     public UIKeyframeSheet(String id, IKey title, int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)
@@ -57,6 +60,60 @@ public class UIKeyframeSheet extends UIKeyframeElement
         this.selection = new KeyframeSelection(channel);
         this.property = property;
         this.isBoneTrack = isBoneTrack;
+    }
+
+    private static IKey getTrackTitle(KeyframeChannel channel, BaseValueBasic property)
+    {
+        if (property == null)
+        {
+            return IKey.constant(channel.getId());
+        }
+
+        Form form = FormUtils.getForm(property);
+        String title = form.getTrackName(channel.getId());
+
+        if (!(form instanceof AbstractSoundForm))
+        {
+            return IKey.constant(title);
+        }
+
+        String key = getSoundTrackKey(form, property.getId());
+
+        if (key == null)
+        {
+            return IKey.constant(title);
+        }
+
+        IKey translated = L10n.lang("bbs.ui.forms.editors.sound." + key);
+        int slash = title.lastIndexOf('/');
+
+        if (slash < 0)
+        {
+            return translated;
+        }
+
+        return IKey.comp(List.of(IKey.constant(title.substring(0, slash + 1)), translated));
+    }
+
+    private static String getSoundTrackKey(Form form, String property)
+    {
+        if (form instanceof SoundConeForm)
+        {
+            if (property.equals("radius")) return "outer_angle";
+            if (property.equals("inner_radius")) return "inner_angle";
+        }
+
+        return switch (property)
+        {
+            case "audio" -> "source";
+            case "falloff" -> "falloff_model";
+            case "reflections" -> "reflections_enabled";
+            case "playing", "volume", "pitch", "looping", "start_offset",
+                 "radius", "ref_distance", "rolloff", "air_absorption",
+                 "reflection_count", "reflection_decay", "show_guide", "guide_color",
+                 "range", "outer_gain" -> property;
+            default -> null;
+        };
     }
 
     public UIKeyframeSheet icon(Icon icon)

@@ -4,6 +4,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.cubic.render.GlintRenderState;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
@@ -42,6 +44,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
     private static final Matrix4f matrix = new Matrix4f();
 
     private final Color renderColor = new Color();
+    private final PoseStack glintStack = new PoseStack();
 
     public BillboardFormRenderer(BillboardForm form)
     {
@@ -68,7 +71,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         this.renderModel(format, GameRenderer::getRendertypeEntityTranslucentShader,
             stack,
             OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, Colors.WHITE,
-            context.getTransition(), false
+            context.getTransition(), false, true
         );
 
         stack.popPose();
@@ -91,11 +94,11 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         );
 
         this.renderModel(format, shader, context.stack, context.overlay, context.light, context.color,
-            context.getTransition(), !context.isPicking());
+            context.getTransition(), !context.isPicking(), !context.isPicking());
     }
 
     private void renderModel(VertexFormat format, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay,
-        int light, int overlayColor, float transition, boolean defer)
+        int light, int overlayColor, float transition, boolean defer, boolean renderGlint)
     {
         Link t = this.form.texture.get();
 
@@ -168,11 +171,11 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             uvQuad.transform(matrix);
         }
 
-        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition, defer);
+        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition, defer, renderGlint);
     }
 
     private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderInstance> shader, PoseStack matrices,
-        int overlay, int light, int overlayColor, float transition, boolean defer)
+        int overlay, int light, int overlayColor, float transition, boolean defer, boolean renderGlint)
     {
         BufferBuilder builder;
         Color color = this.renderColor.set(overlayColor, true);
@@ -198,23 +201,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
 
-        /* Front */
-        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, 1F);
-        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, 1F);
-        this.fill(format, builder, matrix, quad.p1.x, quad.p1.y, color, uvQuad.p1.x, uvQuad.p1.y, overlay, light, normal, 1F);
-
-        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, 1F);
-        this.fill(format, builder, matrix, quad.p4.x, quad.p4.y, color, uvQuad.p4.x, uvQuad.p4.y, overlay, light, normal, 1F);
-        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, 1F);
-
-        /* Back */
-        this.fill(format, builder, matrix, quad.p1.x, quad.p1.y, color, uvQuad.p1.x, uvQuad.p1.y, overlay, light, normal, -1F);
-        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, -1F);
-        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, -1F);
-
-        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, -1F);
-        this.fill(format, builder, matrix, quad.p4.x, quad.p4.y, color, uvQuad.p4.x, uvQuad.p4.y, overlay, light, normal, -1F);
-        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, -1F);
+        this.fillQuad(format, builder, matrix, color, overlay, light, normal);
 
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableBlend();
@@ -243,10 +230,69 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
 
+        if (renderGlint)
+        {
+            this.renderGlint(format, matrix, overlay, light, normal);
+        }
+
         texture.setFilterMipmap(false, false);
 
         gameRenderer.lightTexture().turnOffLightLayer();
         gameRenderer.overlayTexture().teardownOverlayColor();
+    }
+
+    /**
+     * Draws the form's glint over the quad, reusing the same geometry with the glint's own
+     * color and shader.
+     *
+     * <p>Only possible while shading is on: the glint shader reads normals, which the
+     * unshaded vertex format doesn't carry.</p>
+     */
+    private void renderGlint(VertexFormat format, Matrix4f matrix, int overlay, int light, PoseStack.Pose normal)
+    {
+        int mode = this.form.glintMode.get();
+
+        if (mode == Form.GLINT_OFF || format != DefaultVertexFormat.NEW_ENTITY)
+        {
+            return;
+        }
+
+        /* Billboard vertices are transformed on the CPU as they enter the buffer. Compose
+         * the layer transform into that local matrix before emission; applying it in the
+         * shader would rotate camera-relative coordinates around the camera/world origin. */
+        this.glintStack.setIdentity();
+        this.glintStack.last().pose().set(matrix);
+        this.glintStack.last().normal().set(normal.normal());
+        MatrixStackUtils.applyTransform(this.glintStack, this.form.glintTransform.get());
+
+        BufferBuilder glintBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+        Color color = this.form.glintColor.get();
+
+        this.fillQuad(DefaultVertexFormat.NEW_ENTITY, glintBuilder, this.glintStack.last().pose(), color, overlay, light, this.glintStack.last());
+
+        GlintRenderState.drawMesh(mode, this.form.glintSpeed.get(), color, glintBuilder.buildOrThrow());
+    }
+
+    /** Both faces of the billboard, wound so each is visible from its own side. */
+    private void fillQuad(VertexFormat format, VertexConsumer builder, Matrix4f matrix, Color color, int overlay, int light, PoseStack.Pose normal)
+    {
+        /* Front */
+        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, 1F);
+        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, 1F);
+        this.fill(format, builder, matrix, quad.p1.x, quad.p1.y, color, uvQuad.p1.x, uvQuad.p1.y, overlay, light, normal, 1F);
+
+        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, 1F);
+        this.fill(format, builder, matrix, quad.p4.x, quad.p4.y, color, uvQuad.p4.x, uvQuad.p4.y, overlay, light, normal, 1F);
+        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, 1F);
+
+        /* Back */
+        this.fill(format, builder, matrix, quad.p1.x, quad.p1.y, color, uvQuad.p1.x, uvQuad.p1.y, overlay, light, normal, -1F);
+        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, -1F);
+        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, -1F);
+
+        this.fill(format, builder, matrix, quad.p2.x, quad.p2.y, color, uvQuad.p2.x, uvQuad.p2.y, overlay, light, normal, -1F);
+        this.fill(format, builder, matrix, quad.p4.x, quad.p4.y, color, uvQuad.p4.x, uvQuad.p4.y, overlay, light, normal, -1F);
+        this.fill(format, builder, matrix, quad.p3.x, quad.p3.y, color, uvQuad.p3.x, uvQuad.p3.y, overlay, light, normal, -1F);
     }
 
     private void fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, PoseStack.Pose normal, float nz)

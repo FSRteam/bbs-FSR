@@ -272,6 +272,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    soundAcousticsTest {
+        java.srcDirs = ['src/soundAcousticsTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
     pluginSmokeFixture {
         java.srcDirs = ['src/pluginSmokeFixture/java']
         resources.srcDirs = []
@@ -503,6 +509,12 @@ tasks.register('testBinaryCompatibility', JavaExec) {
     mainClass = 'mchorse.bbs_mod.client.compat.LegacyPublicDescriptorCompatibilityTest'
 }
 
+tasks.register('testSoundAcoustics', JavaExec) {
+    dependsOn tasks.named('compileJava'), tasks.named('soundAcousticsTestClasses')
+    classpath = sourceSets.soundAcousticsTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.audio.SoundAcousticsTest'
+}
+
 tasks.register('testAudioFormat', JavaExec) {
     dependsOn tasks.named('compileJava'), tasks.named('audioFormatTestClasses')
     classpath = sourceSets.audioFormatTest.runtimeClasspath
@@ -581,6 +593,7 @@ tasks.register('buildSmokeFixturePlugins') {
 }
 
 def bbsVerificationTaskNames = [
+    'testSoundAcoustics',
     'testPluginHotReload',
     'testAudioFormat',
     'testAudioLifecycle',

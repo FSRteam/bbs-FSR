@@ -3,6 +3,7 @@ package mchorse.bbs_mod.client.renderer.entity;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.cubic.render.vanilla.ArmorRenderer;
 import mchorse.bbs_mod.client.renderer.MorphRenderer;
+import mchorse.bbs_mod.film.FilmActorTimeline;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
@@ -54,9 +55,12 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
 
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
-        MorphRenderer.renderForm(livingEntity.getForm(), new FormRenderingContext()
+        FormRenderingContext context = new FormRenderingContext()
             .set(FormRenderType.ENTITY, livingEntity.getEntity(), matrices, light, overlay, tickDelta)
-            .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
+            .camera(Minecraft.getInstance().gameRenderer.getMainCamera());
+
+        FilmActorTimeline.apply(livingEntity, context);
+        MorphRenderer.renderForm(livingEntity.getForm(), context);
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();
 

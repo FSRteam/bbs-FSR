@@ -267,12 +267,15 @@ public class UIDashboardPanels extends UIElement
 
     private void setPanelPlacement(UIDashboardPanel panel)
     {
-        this.setPanelPlacement(panel, Math.max(0, this.lastDashboardSlide));
+        int slide = MathUtils.clamp(Math.max(0, this.lastDashboardSlide), 0, TASKBAR_HEIGHT);
+
+        this.setPanelPlacement(panel, TASKBAR_HEIGHT - slide);
+        panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT);
     }
 
-    private void setPanelPlacement(UIDashboardPanel panel, int slide)
+    private void setPanelPlacement(UIDashboardPanel panel, int bottomInset)
     {
-        panel.resetFlex().relative(this).y(0F, slide).w(1F).h(1F, -TASKBAR_HEIGHT);
+        panel.resetFlex().relative(this).w(1F).h(1F, -bottomInset);
     }
 
     public UIIcon registerPanel(UIDashboardPanel panel, IKey tooltip, Icon icon)
@@ -342,9 +345,14 @@ public class UIDashboardPanels extends UIElement
         }
         else
         {
-            boolean overBar = this.taskBar.area.isInside(context.mouseX, context.mouseY);
-            boolean overReveal = context.mouseX >= this.area.x && context.mouseX < this.area.ex()
-                && context.mouseY >= this.area.ey() - REVEAL_STRIP && context.mouseY < this.area.ey();
+            boolean overBar = this.taskBar.area.isInside(context.mouseX, context.mouseY)
+                || (this.panel != null && this.panel.isDashboardChromeHovered(context.mouseX, context.mouseY));
+            boolean insideX = context.mouseX >= this.area.x && context.mouseX < this.area.ex();
+            boolean overTopReveal = insideX && context.mouseY >= this.area.y
+                && context.mouseY < this.area.y + REVEAL_STRIP;
+            boolean overBottomReveal = insideX && context.mouseY >= this.area.ey() - REVEAL_STRIP
+                && context.mouseY < this.area.ey();
+            boolean overReveal = overTopReveal || overBottomReveal;
 
             if (overBar)
             {
@@ -381,12 +389,12 @@ public class UIDashboardPanels extends UIElement
 
         float hidden = MathUtils.clamp(this.taskbarHide.update(), 0F, 1F);
 
-        this.applyTaskbarSlide(Math.round(hidden * Math.max(0, this.area.h)));
+        this.applyTaskbarSlide(Math.round(hidden * TASKBAR_HEIGHT));
     }
 
     private void applyTaskbarSlide(int slide)
     {
-        slide = MathUtils.clamp(slide, 0, Math.max(0, this.area.h));
+        slide = MathUtils.clamp(slide, 0, TASKBAR_HEIGHT);
 
         if (slide == this.lastDashboardSlide)
         {
@@ -398,7 +406,8 @@ public class UIDashboardPanels extends UIElement
 
         if (this.panel != null)
         {
-            this.setPanelPlacement(this.panel, slide);
+            this.setPanelPlacement(this.panel, TASKBAR_HEIGHT - slide);
+            this.panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT);
         }
 
         this.resize();

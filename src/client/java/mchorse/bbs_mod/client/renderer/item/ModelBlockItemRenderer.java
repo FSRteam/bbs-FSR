@@ -4,6 +4,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
+import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
@@ -19,28 +22,22 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.Level;
 
 import java.util.HashMap;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.lang.reflect.Method;
 
 public class ModelBlockItemRenderer
 {
     private Map<ItemStack, Item> map = new HashMap<>();
-    private static Method loadWithComponentsMethod;
-    private static Method loadMethod;
-    private static Method readNbtMethod;
-    private static boolean loadWithComponentsResolved;
-    private static boolean loadResolved;
-    private static boolean readNbtResolved;
 
     public void update()
     {
+        Level world = Minecraft.getInstance().level;
         Iterator<Item> it = this.map.values().iterator();
 
         while (it.hasNext())
@@ -53,6 +50,7 @@ public class ModelBlockItemRenderer
             }
 
             item.expiration -= 1;
+            item.syncWorld(world);
             item.entity.getProperties().update(item.formEntity);
             item.formEntity.update();
         }
@@ -116,21 +114,24 @@ public class ModelBlockItemRenderer
 
         if (cached != null)
         {
+            cached.syncWorld(Minecraft.getInstance().level);
+
             return cached;
         }
 
         CustomData blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
         ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ZERO, BBSMod.MODEL_BLOCK.get().defaultBlockState());
-        Item item = new Item(entity);
 
-        this.map.put(stack, item);
-
-        if (blockEntityData == null || blockEntityData.isEmpty())
+        if (blockEntityData == null || blockEntityData.isEmpty()
+            || !applyBlockEntityTag(entity, blockEntityData.copyTag()))
         {
-            return item;
+            return null;
         }
 
-        applyBlockEntityTag(entity, blockEntityData.copyTag());
+        Item item = new Item(entity);
+
+        item.syncWorld(Minecraft.getInstance().level);
+        this.map.put(stack, item);
 
         return item;
     }
@@ -154,6 +155,16 @@ public class ModelBlockItemRenderer
 
             return this.simulationOwners.computeIfAbsent(key, (ignored) -> new Object());
         }
+
+        public void syncWorld(Level world)
+        {
+            this.formEntity.setWorld(world);
+
+            if (world != null && this.entity.getLevel() != world)
+            {
+                this.entity.setLevel(world);
+            }
+        }
     }
 
     private static float getTickDelta()
@@ -168,105 +179,17 @@ public class ModelBlockItemRenderer
         return 0F;
     }
 
-    private static void applyBlockEntityTag(ModelBlockEntity entity, CompoundTag tag)
+    private static boolean applyBlockEntityTag(ModelBlockEntity entity, CompoundTag tag)
     {
-        try
+        BaseType properties = DataStorageUtils.readFromNbtCompound(tag, "Properties");
+
+        if (properties instanceof MapType mapType)
         {
-            HolderLookup.Provider registryAccess = Minecraft.getInstance().level == null ? null : Minecraft.getInstance().level.registryAccess();
+            entity.getProperties().fromData(mapType);
 
-            if (registryAccess != null)
-            {
-                Method method = getLoadWithComponentsMethod(entity.getClass(), registryAccess);
-
-                if (method != null)
-                {
-                    method.invoke(entity, tag, registryAccess);
-                    return;
-                }
-            }
-        }
-        catch (Exception ignored)
-        {}
-
-        try
-        {
-            Method method = getLoadMethod(entity.getClass());
-
-            if (method != null)
-            {
-                method.invoke(entity, tag);
-                return;
-            }
-        }
-        catch (Exception ignored)
-        {}
-
-        try
-        {
-            Method method = getReadNbtMethod(entity.getClass());
-
-            if (method != null)
-            {
-                method.invoke(entity, tag);
-            }
-        }
-        catch (Exception ignored)
-        {}
-    }
-
-    private static Method getLoadWithComponentsMethod(Class<?> clazz, HolderLookup.Provider registryAccess)
-    {
-        if (!loadWithComponentsResolved)
-        {
-            for (Method method : clazz.getMethods())
-            {
-                if (method.getName().equals("loadWithComponents")
-                    && method.getParameterCount() == 2
-                    && method.getParameterTypes()[0] == CompoundTag.class
-                    && method.getParameterTypes()[1].isInstance(registryAccess))
-                {
-                    loadWithComponentsMethod = method;
-                    break;
-                }
-            }
-
-            loadWithComponentsResolved = true;
+            return true;
         }
 
-        return loadWithComponentsMethod;
-    }
-
-    private static Method getLoadMethod(Class<?> clazz)
-    {
-        if (!loadResolved)
-        {
-            try
-            {
-                loadMethod = clazz.getMethod("load", CompoundTag.class);
-            }
-            catch (Exception ignored)
-            {}
-
-            loadResolved = true;
-        }
-
-        return loadMethod;
-    }
-
-    private static Method getReadNbtMethod(Class<?> clazz)
-    {
-        if (!readNbtResolved)
-        {
-            try
-            {
-                readNbtMethod = clazz.getMethod("readNbt", CompoundTag.class);
-            }
-            catch (Exception ignored)
-            {}
-
-            readNbtResolved = true;
-        }
-
-        return readNbtMethod;
+        return false;
     }
 }

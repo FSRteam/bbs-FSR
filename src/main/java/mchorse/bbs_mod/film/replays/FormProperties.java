@@ -4,6 +4,8 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
 import mchorse.bbs_mod.settings.values.base.BaseKeyframeFactoryValue;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -60,6 +62,13 @@ public class FormProperties extends ValueGroup
         if (value instanceof KeyframeChannel channel)
         {
             return channel;
+        }
+
+        SoundKeyframeValue.Group soundGroup = SoundKeyframeValue.groupFromChannel(key);
+
+        if (soundGroup != null && SoundKeyframeValue.formFromChannel(form, key) != null)
+        {
+            return this.registerChannel(key, soundFactory(soundGroup));
         }
 
         if (property != null)
@@ -132,16 +141,40 @@ public class FormProperties extends ValueGroup
 
         float clampedBlend = MathUtils.clamp(blend, 0F, 1F);
         List<KeyframeChannel> poseBoneChannels = new ArrayList<>();
+        List<KeyframeChannel> soundChannels = new ArrayList<>();
 
         for (KeyframeChannel value : this.properties.values())
         {
-            if (!PerLimbService.isPoseBoneChannel(value.getId()))
+            SoundKeyframeValue.Group soundGroup = SoundKeyframeValue.groupFromChannel(value.getId());
+
+            if (soundGroup != null)
             {
-                this.applyProperty(tick, form, value, clampedBlend);
+                soundChannels.add(value);
+
+                AbstractSoundForm sound = SoundKeyframeValue.formFromChannel(form, value.getId());
+
+                if (sound != null)
+                {
+                    /* Retire the previous grouped snapshot before legacy
+                     * channels run. An empty grouped sheet is registered as
+                     * soon as the editor opens; it must not erase an older
+                     * independent track, while deleting the last grouped
+                     * keyframe must still clear its stale runtime values. */
+                    SoundKeyframeValue.clearRuntime(sound, soundGroup);
+                }
             }
-            else
+            else if (PerLimbService.isPoseBoneChannel(value.getId()))
             {
                 poseBoneChannels.add(value);
+            }
+        }
+
+        for (KeyframeChannel value : this.properties.values())
+        {
+            if (SoundKeyframeValue.groupFromChannel(value.getId()) == null
+                && !PerLimbService.isPoseBoneChannel(value.getId()))
+            {
+                this.applyProperty(tick, form, value, clampedBlend);
             }
         }
 
@@ -178,10 +211,29 @@ public class FormProperties extends ValueGroup
         {
             this.applyProperty(tick, form, value, clampedBlend);
         }
+
+        /* Grouped sound channels intentionally run last, so they win
+         * deterministically when an older Film still contains legacy tracks. */
+        for (KeyframeChannel value : soundChannels)
+        {
+            if (!value.isEmpty())
+            {
+                this.applyProperty(tick, form, value, clampedBlend);
+            }
+        }
     }
 
     private void applyProperty(float tick, Form form, KeyframeChannel value, float blend)
     {
+        SoundKeyframeValue.Group soundGroup = SoundKeyframeValue.groupFromChannel(value.getId());
+
+        if (soundGroup != null)
+        {
+            this.applySoundProperty(tick, form, value, soundGroup, blend);
+
+            return;
+        }
+
         PerLimbService.PoseBonePath poseBonePath = PerLimbService.parsePoseBonePath(value.getId());
 
         if (poseBonePath != null)
@@ -263,6 +315,32 @@ public class FormProperties extends ValueGroup
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private void applySoundProperty(float tick, Form root, KeyframeChannel value,
+        SoundKeyframeValue.Group group, float blend)
+    {
+        AbstractSoundForm form = SoundKeyframeValue.formFromChannel(root, value.getId());
+
+        if (form == null)
+        {
+            return;
+        }
+
+        KeyframeSegment<SoundKeyframeValue> segment = value.find(tick);
+
+        if (segment != null)
+        {
+            SoundKeyframeValue current = SoundKeyframeValue.capture(form, group);
+            SoundKeyframeValue interpolated = (SoundKeyframeValue) this.interpolateValue(value, current, segment, blend);
+
+            interpolated.applyRuntime(form, group);
+        }
+        else if (blend >= 1F)
+        {
+            SoundKeyframeValue.clearRuntime(form, group);
+        }
+    }
+
     private Object interpolateValue(KeyframeChannel value, Object current, KeyframeSegment segment, float blend)
     {
         if (blend < 1F)
@@ -297,15 +375,41 @@ public class FormProperties extends ValueGroup
 
         for (KeyframeChannel value : this.properties.values())
         {
+            SoundKeyframeValue.Group group = SoundKeyframeValue.groupFromChannel(value.getId());
+
+            if (group != null)
+            {
+                AbstractSoundForm sound = SoundKeyframeValue.formFromChannel(form, value.getId());
+
+                if (sound != null)
+                {
+                    SoundKeyframeValue.clearRuntime(sound, group);
+                }
+
+                continue;
+            }
+
             BaseValueBasic property = FormUtils.getProperty(form, value.getId());
 
             if (property == null)
             {
-                return;
+                continue;
             }
 
             property.setRuntimeValue(null);
         }
+    }
+
+    private static IKeyframeFactory<SoundKeyframeValue> soundFactory(SoundKeyframeValue.Group group)
+    {
+        return switch (group)
+        {
+            case SOUND -> KeyframeFactories.SOUND;
+            case SHAPE -> KeyframeFactories.SOUND_SHAPE;
+            case VISUALIZATION -> KeyframeFactories.SOUND_VISUALIZATION;
+            case FALLOFF -> KeyframeFactories.SOUND_FALLOFF;
+            case REFLECTIONS -> KeyframeFactories.SOUND_REFLECTIONS;
+        };
     }
 
     public void cleanUp()

@@ -15,6 +15,23 @@ public class PoseTransform extends Transform
     public final Color color = new Color().set(Colors.WHITE);
     public float lighting;
 
+    /* Enchantment glint applied to this bone alone: off, full, edge or vanilla.
+     * Kept as a float so it rides the same keyframe machinery as every other transform
+     * field, but it's a discrete state — interpolation steps between values rather than
+     * sweeping through them, since there's no meaningful "half way to edge glint". */
+    public float glintMode;
+    /* Glint tint, with alpha doubling as the effect's opacity. */
+    public final Color glintColor = new Color().set(Colors.WHITE);
+    public float glintSpeed = DEFAULT_GLINT_SPEED;
+    public final Transform glintTransform = new Transform();
+
+    public static final float GLINT_OFF = 0F;
+    public static final float GLINT_FULL = 1F;
+    public static final float GLINT_EDGE = 2F;
+    public static final float GLINT_VANILLA = 3F;
+
+    public static final float DEFAULT_GLINT_SPEED = 1F;
+
     @Override
     public void identity()
     {
@@ -23,6 +40,11 @@ public class PoseTransform extends Transform
         this.fix = 0F;
         this.color.set(Colors.WHITE);
         this.lighting = 0F;
+
+        this.glintMode = GLINT_OFF;
+        this.glintColor.set(Colors.WHITE);
+        this.glintSpeed = DEFAULT_GLINT_SPEED;
+        this.glintTransform.identity();
     }
 
     @Override
@@ -38,6 +60,18 @@ public class PoseTransform extends Transform
             this.color.a = Lerps.lerp(this.color.a, pose.color.a, a);
 
             this.lighting = Lerps.lerp(this.lighting, pose.lighting, a);
+
+            /* Discrete — snap at the midpoint instead of passing through the modes in
+             * between, which would flash the wrong effect mid-blend. */
+            this.glintMode = a < 0.5F ? this.glintMode : pose.glintMode;
+
+            this.glintColor.r = Lerps.lerp(this.glintColor.r, pose.glintColor.r, a);
+            this.glintColor.g = Lerps.lerp(this.glintColor.g, pose.glintColor.g, a);
+            this.glintColor.b = Lerps.lerp(this.glintColor.b, pose.glintColor.b, a);
+            this.glintColor.a = Lerps.lerp(this.glintColor.a, pose.glintColor.a, a);
+
+            this.glintSpeed = Lerps.lerp(this.glintSpeed, pose.glintSpeed, a);
+            this.glintTransform.lerp(pose.glintTransform, a);
         }
 
         super.lerp(transform, a);
@@ -64,6 +98,20 @@ public class PoseTransform extends Transform
             );
 
             this.lighting = (float) interp.interpolate(IInterp.context.set(preA1.lighting, a1.lighting, b1.lighting, postB1.lighting, x));
+
+            /* Discrete, so the easing curve doesn't apply — the mode simply switches at the
+             * halfway point of the segment. */
+            this.glintMode = x < 0.5F ? a1.glintMode : b1.glintMode;
+
+            this.glintColor.set(
+                (float) MathUtils.clamp(interp.interpolate(IInterp.context.set(preA1.glintColor.r, a1.glintColor.r, b1.glintColor.r, postB1.glintColor.r, x)), 0F, 1F),
+                (float) MathUtils.clamp(interp.interpolate(IInterp.context.set(preA1.glintColor.g, a1.glintColor.g, b1.glintColor.g, postB1.glintColor.g, x)), 0F, 1F),
+                (float) MathUtils.clamp(interp.interpolate(IInterp.context.set(preA1.glintColor.b, a1.glintColor.b, b1.glintColor.b, postB1.glintColor.b, x)), 0F, 1F),
+                (float) MathUtils.clamp(interp.interpolate(IInterp.context.set(preA1.glintColor.a, a1.glintColor.a, b1.glintColor.a, postB1.glintColor.a, x)), 0F, 1F)
+            );
+
+            this.glintSpeed = (float) interp.interpolate(IInterp.context.set(preA1.glintSpeed, a1.glintSpeed, b1.glintSpeed, postB1.glintSpeed, x));
+            this.glintTransform.lerp(preA1.glintTransform, a1.glintTransform, b1.glintTransform, postB1.glintTransform, interp, x);
         }
     }
 
@@ -77,6 +125,10 @@ public class PoseTransform extends Transform
             result = result && this.fix == poseTransform.fix;
             result = result && this.color.equals(poseTransform.color);
             result = result && this.lighting == poseTransform.lighting;
+            result = result && this.glintMode == poseTransform.glintMode;
+            result = result && this.glintColor.equals(poseTransform.glintColor);
+            result = result && this.glintSpeed == poseTransform.glintSpeed;
+            result = result && this.glintTransform.equals(poseTransform.glintTransform);
         }
 
         return result;
@@ -100,6 +152,10 @@ public class PoseTransform extends Transform
             this.fix = poseTransform.fix;
             this.color.copy(poseTransform.color);
             this.lighting = poseTransform.lighting;
+            this.glintMode = poseTransform.glintMode;
+            this.glintColor.copy(poseTransform.glintColor);
+            this.glintSpeed = poseTransform.glintSpeed;
+            this.glintTransform.copy(poseTransform.glintTransform);
         }
 
         super.copy(transform);
@@ -115,6 +171,17 @@ public class PoseTransform extends Transform
             this.fix += pose.fix;
             this.color.mul(pose.color);
             this.lighting += pose.lighting;
+
+            /* Overlays stack additively like lighting does, clamped so the sum stays a
+             * valid mode — effectively the stronger effect wins. */
+            this.glintMode = MathUtils.clamp(this.glintMode + pose.glintMode, GLINT_OFF, GLINT_VANILLA);
+            this.glintColor.mul(pose.glintColor);
+            /* Speed stacks by how far the overlay departs from the resting value, since
+             * that value is 1 rather than 0. Adding it outright would let an overlay that
+             * never touched the glint — every per-bone animation track carries a full
+             * transform — speed the effect up on its own. */
+            this.glintSpeed += pose.glintSpeed - DEFAULT_GLINT_SPEED;
+            this.glintTransform.add(pose.glintTransform);
         }
     }
 
@@ -126,6 +193,10 @@ public class PoseTransform extends Transform
         data.putFloat("fix", this.fix);
         data.putInt("color", this.color.getARGBColor());
         data.putFloat("lighting", this.lighting);
+        data.putFloat("glint", this.glintMode);
+        data.putInt("glint_color", this.glintColor.getARGBColor());
+        data.putFloat("glint_speed", this.glintSpeed);
+        data.put("glint_transform", this.glintTransform.toData());
     }
 
     @Override
@@ -136,6 +207,12 @@ public class PoseTransform extends Transform
         this.fix = data.getFloat("fix");
         this.color.set(data.getInt("color", Colors.WHITE));
         this.lighting = data.getFloat("lighting");
+        this.glintMode = data.getFloat("glint", GLINT_OFF);
+        this.glintColor.set(data.getInt("glint_color", Colors.WHITE));
+        /* Defaults to 1 rather than 0 — a speed of zero would freeze the animation, so
+         * poses saved before glint existed must not read back as stopped. */
+        this.glintSpeed = data.getFloat("glint_speed", DEFAULT_GLINT_SPEED);
+        this.glintTransform.fromData(data.getMap("glint_transform"));
     }
 
     @Override

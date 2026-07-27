@@ -30,6 +30,14 @@ public class ModelGroup implements IMapSerializable
     public Transform initial = new Transform();
     public Transform current = new Transform();
 
+    /* Per-bone enchantment glint, mirrored here from the pose each frame so renderers can
+     * read it alongside color and lighting. Mode matches PoseTransform's GLINT_* values;
+     * the color's alpha carries the effect's opacity. */
+    public int glintMode = 0;
+    public Color glintColor = new Color().set(1F, 1F, 1F, 1F);
+    public float glintSpeed = 1F;
+    public final Transform glintTransform = new Transform();
+
     /* Transient full local orientation for this bone, applied raw in the render matrix IN PLACE OF the
      * euler rotate triple — so layered rotation (IK, plus animation/pose composition) owns the whole
      * orientation without round-tripping through euler and hitting the pole. Null when the bone has no
@@ -53,6 +61,10 @@ public class ModelGroup implements IMapSerializable
     {
         this.lighting = 0F;
         this.color.set(1F, 1F, 1F);
+        this.glintMode = 0;
+        this.glintColor.set(1F, 1F, 1F, 1F);
+        this.glintSpeed = 1F;
+        this.glintTransform.identity();
         this.current.copy(this.initial);
         this.orient = null;
         this.offset = null;

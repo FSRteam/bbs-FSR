@@ -2,6 +2,7 @@ package mchorse.bbs_mod.client.renderer;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.film.FilmActorTimeline;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
@@ -58,9 +59,12 @@ public class MorphRenderer
                 matrixStack.pushPose();
                 matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
 
-                renderForm(morph.getForm(), new FormRenderingContext()
+                FormRenderingContext context = new FormRenderingContext()
                     .set(FormRenderType.ENTITY, morph.entity, matrixStack, i, overlay, g)
-                    .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
+                    .camera(Minecraft.getInstance().gameRenderer.getMainCamera());
+
+                FilmActorTimeline.apply(player, context);
+                renderForm(morph.getForm(), context);
 
                 matrixStack.popPose();
 

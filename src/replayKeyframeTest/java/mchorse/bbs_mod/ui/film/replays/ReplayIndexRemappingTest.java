@@ -8,11 +8,15 @@ import mchorse.bbs_mod.actions.types.EntityInteractionActionClip;
 import mchorse.bbs_mod.actions.values.ActionTarget;
 import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.ReplayIndexRemapper;
 import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
+import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
+import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.forms.values.ValueAnchor;
 import mchorse.bbs_mod.l10n.L10n;
@@ -22,6 +26,8 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.KeyframeNavigationT
 import mchorse.bbs_mod.ui.film.utils.keyframes.KeyframeInteractionTest;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.factory.MapFactory;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.neoforged.fml.loading.LoadingModList;
@@ -47,6 +53,7 @@ public final class ReplayIndexRemappingTest
             testIdentityNotEquality();
             testActionTargetReorderAndDeletion();
             testFilmReferenceTransaction();
+            testGroupedSoundChannelsPreserveLegacyFallback();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
             KeyframeInteractionTest.run();
@@ -283,6 +290,36 @@ public final class ReplayIndexRemappingTest
         assertEquals(0, nestedForm.anchor.get().replay, "surviving nested body-part anchor");
         assertEquals("0", interaction.target.replayId.get(), "surviving film entity target");
         assertEquals(0, camera.selector.get(), "surviving camera selector");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void testGroupedSoundChannelsPreserveLegacyFallback()
+    {
+        SoundSphereForm form = new SoundSphereForm();
+        FormProperties properties = new FormProperties("properties");
+        String legacyId = FormUtils.getPropertyPath(form.radius);
+        KeyframeChannel<Float> legacy = properties.registerChannel(legacyId, KeyframeFactories.FLOAT);
+        String groupedId = SoundKeyframeValue.channelId(form, SoundKeyframeValue.Group.SHAPE);
+        KeyframeChannel<SoundKeyframeValue> grouped = properties.getOrCreate(form, groupedId);
+
+        legacy.insert(0F, 12F);
+        properties.applyProperties(form, 0F);
+        assertEquals(12D, form.radius.get(), "empty grouped sound track preserves a legacy track");
+
+        SoundKeyframeValue shape = SoundKeyframeValue.capture(form, SoundKeyframeValue.Group.SHAPE);
+
+        shape.extent = 24F;
+        grouped.insert(0F, shape);
+        properties.applyProperties(form, 0F);
+        assertEquals(24D, form.radius.get(), "non-empty grouped sound track overrides a legacy track");
+
+        grouped.removeAll();
+        properties.applyProperties(form, 0F);
+        assertEquals(12D, form.radius.get(),
+            "deleting the last grouped sound keyframe restores the legacy track");
+
+        properties.resetProperties(form);
+        assertTrue(form.radius.getRuntimeValue() == null, "sound property reset clears runtime state");
     }
 
     private static List<Object> replayOrder()

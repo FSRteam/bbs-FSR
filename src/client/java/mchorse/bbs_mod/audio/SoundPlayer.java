@@ -9,6 +9,13 @@ import java.util.Objects;
 /** One OpenAL source. Film voice identity is managed by SoundManager, never by asset Link. */
 public class SoundPlayer
 {
+    /**
+     * Distance every source starts with. Sound forms compute their own
+     * attenuation and override this per source; anything else keeps the value
+     * film audio has always used.
+     */
+    public static final float DEFAULT_MAX_DISTANCE = 60F;
+
     private int source = -1;
     private SoundBuffer buffer;
     private final SoundBackend backend;
@@ -38,7 +45,7 @@ public class SoundPlayer
         try
         {
             this.backend.setSourceBuffer(this.source, buffer.getBuffer());
-            this.backend.setSourceMaxDistance(this.source, 60F);
+            this.backend.setSourceMaxDistance(this.source, DEFAULT_MAX_DISTANCE);
             this.setRelative(false);
         }
         catch (RuntimeException | Error failure)
@@ -102,6 +109,19 @@ public class SoundPlayer
         if (this.source >= 0)
         {
             this.backend.setSourceVolume(this.source, volume);
+        }
+    }
+
+    /**
+     * Distance beyond which OpenAL stops attenuating further. Sound forms need
+     * this wider than the default so their own falloff curve, rather than
+     * OpenAL's, decides where the sound dies out.
+     */
+    public void setMaxDistance(float distance)
+    {
+        if (this.source >= 0)
+        {
+            this.backend.setSourceMaxDistance(this.source, distance);
         }
     }
 

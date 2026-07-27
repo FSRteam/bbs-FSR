@@ -162,7 +162,24 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
                 int y2 = this.area.ey();
 
                 context.batcher.box(x1, y1, x2, y2, BBSSettings.deepSurface());
-                FormUtilsClient.renderUI(UIModelEditorPanel.this.form, context, x1, y1, x2, y2);
+
+                if (FormUtilsClient.getRenderer(UIModelEditorPanel.this.form) instanceof ModelFormRenderer modelRenderer)
+                {
+                    modelRenderer.renderPreviewThumbnail(
+                        context,
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        UIModelEditorPanel.this.renderer,
+                        UIModelEditorPanel.this.renderer.getEntity()
+                    );
+                }
+                else
+                {
+                    FormUtilsClient.renderUI(UIModelEditorPanel.this.form, context, x1, y1, x2, y2);
+                }
+
                 context.batcher.outline(x1, y1, x2, y2, Colors.setA(Colors.WHITE, 0.2F));
 
                 super.render(context);

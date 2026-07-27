@@ -2,6 +2,7 @@ package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -31,6 +32,9 @@ public class FormRenderingContext
     public boolean ui;
     public int color;
     public boolean modelRenderer;
+    public FormProperties timelineProperties;
+    public float timelineTick;
+    public boolean timelinePlaying;
 
     private final Quaternionf cameraRotation = new Quaternionf();
 
@@ -54,6 +58,9 @@ public class FormRenderingContext
         this.ui = false;
         this.color = 0xffffffff;
         this.modelRenderer = false;
+        this.timelineProperties = null;
+        this.timelineTick = Float.NaN;
+        this.timelinePlaying = false;
 
         if (entity != null && (this.type == FormRenderType.ENTITY || this.type == FormRenderType.MODEL_BLOCK))
         {
@@ -187,6 +194,16 @@ public class FormRenderingContext
     public FormRenderingContext simulationOwner(Object owner)
     {
         this.simulationOwner = owner == null ? this.entity : owner;
+
+        return this;
+    }
+
+    /** Attach the Film timeline state after its form properties were evaluated. */
+    public FormRenderingContext timeline(FormProperties properties, float tick, boolean playing)
+    {
+        this.timelineProperties = properties;
+        this.timelineTick = tick;
+        this.timelinePlaying = playing;
 
         return this;
     }

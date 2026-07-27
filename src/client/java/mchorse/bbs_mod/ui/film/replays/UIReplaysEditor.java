@@ -31,6 +31,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.L10n;
@@ -1125,6 +1126,11 @@ public class UIReplaysEditor extends UIElement {
         formSheets.clear();
 
         if ((this.showAllTracks() || this.category == ReplayCategory.MODEL)
+                && form instanceof AbstractSoundForm soundForm) {
+            UIReplaysEditorUtils.addSoundSheets(soundForm, this.replay.properties, orderedFormSheets);
+        }
+
+        if ((this.showAllTracks() || this.category == ReplayCategory.MODEL)
                 && form instanceof ModelForm modelForm) {
             List<UIKeyframeSheet> materialSheets = new ArrayList<>();
             UIReplaysEditorUtils.addMaterialTextureSheets(modelForm, this.replay.properties, materialSheets);
@@ -1316,6 +1322,11 @@ public class UIReplaysEditor extends UIElement {
         }
 
         if (stencil != null && stencil.hasPicked()) {
+            if (inside && context.mouseButton == 0
+                    && this.filmPanel.getController().startViewportSoundGuide(context)) {
+                return true;
+            }
+
             if (inside && context.mouseButton == 0
                     && this.filmPanel.getController().startViewportGizmo(context)) {
                 return true;

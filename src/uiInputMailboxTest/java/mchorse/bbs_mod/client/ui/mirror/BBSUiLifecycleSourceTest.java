@@ -31,14 +31,20 @@ public final class BBSUiLifecycleSourceTest
     private static void assertRefreshedDockAndDashboardContracts()
     {
         String dashboard = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDashboardPanels.java");
+        String dataPanel = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDataDashboardPanel.java");
         String dock = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockLayout.java");
         String film = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
         String renderer = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockStyleRenderer.java");
 
-        check(dashboard.contains("hidden * Math.max(0, this.area.h)")
-                && dashboard.contains("y(0F, slide).w(1F).h(1F, -TASKBAR_HEIGHT)")
-                && dashboard.contains("this.taskBar.relative(this).y(1F, -TASKBAR_HEIGHT + slide)"),
-            "dashboard auto-hide no longer moves the active panel and taskbar together using root-height coordinates");
+        check(dashboard.contains("hidden * TASKBAR_HEIGHT")
+                && dashboard.contains("this.setPanelPlacement(this.panel, TASKBAR_HEIGHT - slide)")
+                && dashboard.contains("this.panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT)")
+                && dashboard.contains("this.panel.isDashboardChromeHovered(context.mouseX, context.mouseY)")
+                && dashboard.contains("overTopReveal || overBottomReveal")
+                && !dashboard.contains("y(0F, slide).w(1F).h(1F, -TASKBAR_HEIGHT)")
+                && dataPanel.contains("this.tabBar.relative(this).y(-tabsSlide)")
+                && dataPanel.contains("int contentTop = tabsHeight - tabsSlide"),
+            "dashboard auto-hide must slide only the bottom taskbar and top data-panel chrome, never the active panel itself");
         check(dock.contains("UIDockStyleRenderer.renderPanelDragHandle")
                 && dock.contains("UIDockStyleRenderer.renderSplitter")
                 && dock.contains("UIDockStyleRenderer.renderDropZone")
@@ -210,6 +216,8 @@ public final class BBSUiLifecycleSourceTest
         String mobRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/MobFormRenderer.java");
         String itemRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/ItemFormRenderer.java");
         String modelRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/ModelFormRenderer.java");
+        String uiModelRenderer = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/utils/UIModelRenderer.java");
+        String modelEditorPanel = readSource("src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelEditorPanel.java");
         String clientNetwork = readSource("src/client/java/mchorse/bbs_mod/network/ClientNetwork.java");
         String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
         String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
@@ -266,12 +274,21 @@ public final class BBSUiLifecycleSourceTest
                 && mobRenderer.contains("LightTexture.FULL_BLOCK")
                 && itemRenderer.contains("LightTexture.FULL_BLOCK"),
             "multi-layer Mob picking or preview render-state restoration regressed");
+        check(formRenderer.contains("RenderSystem.setupLevelDiffuseLighting(UI_LIGHT_A, UI_LIGHT_B);")
+                && formRenderer.contains("new Vector3f(0F, 1F, -0.2F).normalize()")
+                && formRenderer.contains("new Vector3f(-0.85F, 0.85F, 1F).normalize()")
+                && uiModelRenderer.contains("this.lightMatrix.set(this.camera.view);")
+                && uiModelRenderer.contains("this.lightMatrix.transform(this.lightA);")
+                && uiModelRenderer.contains("this.lightMatrix.transform(this.lightB);"),
+            "form-list or 3D-preview diffuse lighting no longer matches the BBSFS camera-space contract");
         String modelBlockPacket = sourceSection(clientNetwork, "private static void handleClientModelBlockPacket", "private static void handlePlayerFormPacket");
         check(modelBlockPacket.indexOf("panel.fill((ModelBlockEntity) entity, true);")
                 < modelBlockPacket.indexOf("dashboard.focusModelBlock((ModelBlockEntity) entity);")
                 && occurrences(clientNetwork, "dashboard.focusModelBlock(") == 1
                 && dashboard.contains("public void focusModelBlock(ModelBlockEntity modelBlock)"),
             "model-block right-click no longer focuses its selected target exactly once");
+        String matrixPoseReuse = sourceSection(modelRenderer, "public boolean restoreForMatrices(", "public void capture(");
+        String thumbnailPoseReuse = sourceSection(modelRenderer, "public void renderPreviewThumbnail(", "private void renderInUI(");
         check(modelRenderer.contains("context.modelRenderer")
                 && modelRenderer.contains("context.isPicking()")
                 && modelRenderer.contains("this.context == context")
@@ -282,8 +299,17 @@ public final class BBSUiLifecycleSourceTest
                 && modelRenderer.contains("this.transition == Float.floatToIntBits(context.getTransition())")
                 && modelRenderer.contains("this.available = false;")
                 && modelRenderer.contains("this.previewPoseSnapshot.capture(context, model);")
+                && modelRenderer.contains("this.previewPoseSnapshot.restoreForMatrices(")
+                && modelRenderer.contains("public void renderPreviewThumbnail(")
+                && modelEditorPanel.contains("modelRenderer.renderPreviewThumbnail(")
+                && matrixPoseReuse.contains("this.semanticBase.equals(semanticBase)")
+                && matrixPoseReuse.contains("this.allowWorldTargetOverrides == allowWorldTargetOverrides")
+                && matrixPoseReuse.contains("this.allowWorldCollisions == allowWorldCollisions")
+                && !matrixPoseReuse.contains("this.available = false;")
+                && thumbnailPoseReuse.contains("this.beginRenderUI();")
+                && thumbnailPoseReuse.contains("this.finishRenderUI(context, x1, y1, x2, y2);")
                 && modelRenderer.contains("!reusePreviewPose"),
-            "animated preview pose reuse is not one-shot or lacks a strict normal-to-picking key");
+            "animated preview pose reuse no longer covers picking, matrix sampling and the model-editor thumbnail");
         check(enableMode.contains("this.nextHotkeyTarget(mode, ray)")
                 && !enableMode.contains("enableUniformScale"),
             "the S hotkey no longer follows the configured X/Y/Z scale cycle");

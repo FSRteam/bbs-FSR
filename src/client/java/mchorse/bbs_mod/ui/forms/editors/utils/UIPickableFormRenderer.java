@@ -10,6 +10,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.forms.renderers.sound.SoundGuideInteraction;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
@@ -144,6 +145,19 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        boolean[] soundGuideHandled = {false};
+
+        context.menu.runWithPreservedMouseCapture(
+            this,
+            () -> soundGuideHandled[0] = SoundGuideInteraction.tryStartPreview(
+                this, this.stencil, this.camera, this.area, context)
+        );
+
+        if (soundGuideHandled[0])
+        {
+            return true;
+        }
+
         boolean[] gizmoHandled = {false};
 
         context.menu.runWithPreservedMouseCapture(
@@ -167,7 +181,9 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        boolean handled = this.gizmoInteraction.mouseReleased(context);
+        boolean handled = SoundGuideInteraction.mouseReleased(this, context.mouseButton);
+
+        handled = this.gizmoInteraction.mouseReleased(context) || handled;
 
         return super.subMouseReleased(context) || handled;
     }
@@ -175,6 +191,8 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     @Override
     protected void subMouseCanceled(UIContext context)
     {
+        SoundGuideInteraction.cancel(this, context.mouseButton);
+
         long generation = this.gizmoInteraction.gestureGeneration();
 
         this.gizmoInteraction.cancel(context.mouseButton, generation);
@@ -331,6 +349,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     public void render(UIContext context)
     {
         super.render(context);
+        SoundGuideInteraction.update(this, context);
         this.gizmoInteraction.update(context);
         this.gizmoInteraction.renderSphereHighlight(context);
         this.gizmoInteraction.renderReadout(context);

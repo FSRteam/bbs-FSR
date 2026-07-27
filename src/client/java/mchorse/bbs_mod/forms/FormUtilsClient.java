@@ -5,7 +5,10 @@ import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.ItemForm;
 import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -20,6 +23,8 @@ import mchorse.bbs_mod.forms.renderers.ExtrudedFormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.forms.renderers.FramebufferFormRenderer;
+import mchorse.bbs_mod.forms.renderers.sound.SoundConeFormRenderer;
+import mchorse.bbs_mod.forms.renderers.sound.SoundSphereFormRenderer;
 import mchorse.bbs_mod.forms.renderers.ItemFormRenderer;
 import mchorse.bbs_mod.forms.renderers.LabelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.MobFormRenderer;
@@ -87,6 +92,8 @@ public class FormUtilsClient
         register(VanillaParticleForm.class, VanillaParticleFormRenderer::new);
         register(TrailForm.class, TrailFormRenderer::new);
         register(FramebufferForm.class, FramebufferFormRenderer::new);
+        register(SoundSphereForm.class, SoundSphereFormRenderer::new);
+        register(SoundConeForm.class, SoundConeFormRenderer::new);
     }
 
     private static void assignBufferBuilder(Map<RenderType, ByteBufferBuilder> builderStorage, RenderType layer)
@@ -146,6 +153,25 @@ public class FormUtilsClient
         }
 
         return null;
+    }
+
+    /** Release renderer resources without creating renderers for untouched forms. */
+    public static void release(Form form)
+    {
+        if (form == null)
+        {
+            return;
+        }
+
+        for (BodyPart part : form.parts.getAllTyped())
+        {
+            release(part.getForm());
+        }
+
+        if (form.getRenderer() instanceof FormRenderer renderer)
+        {
+            renderer.release();
+        }
     }
 
     public static void renderUI(Form form, UIContext context, int x1, int y1, int x2, int y2)

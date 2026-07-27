@@ -142,6 +142,7 @@ public class BBSSettings {
 	public static ValueBoolean editorRuleOfThirds;
 	public static ValueBoolean editorCenterLines;
 	public static ValueBoolean editorCrosshair;
+	public static ValueBoolean editorShowAllSoundGuides;
 	public static ValueBoolean editorSeconds;
 	public static ValueBoolean editorTimelineGrid;
 	public static ValueString keyframeDefaultInterpolation;
@@ -808,6 +809,7 @@ public class BBSSettings {
 		editorRuleOfThirds = builder.getBoolean("rule_of_thirds", false);
 		editorCenterLines = builder.getBoolean("center_lines", false);
 		editorCrosshair = builder.getBoolean("crosshair", false);
+		editorShowAllSoundGuides = builder.getBoolean("show_all_sound_guides", false);
 		editorSeconds = builder.getBoolean("seconds", false);
 		editorTimelineGrid = builder.getBoolean("timeline_grid", false);
 		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());

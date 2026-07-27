@@ -83,6 +83,7 @@ public class WorldFilmController extends BaseFilmController
     @Override
     public void shutdown()
     {
+        super.shutdown();
         AudioClientClip.releaseSounds(this.context);
         this.context.shutdown();
         this.context.resetPlaybackOwner();

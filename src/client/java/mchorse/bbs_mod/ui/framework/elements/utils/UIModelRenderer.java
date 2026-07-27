@@ -63,6 +63,9 @@ public abstract class UIModelRenderer extends UIElement
 
     private long tick;
     private Matrix4f transform = new Matrix4f();
+    private final Vector3f lightA = new Vector3f();
+    private final Vector3f lightB = new Vector3f();
+    private final Matrix3f lightMatrix = new Matrix3f();
 
     public UIModelRenderer()
     {
@@ -261,10 +264,13 @@ public abstract class UIModelRenderer extends UIElement
         stack.translate(-this.camera.position.x, -this.camera.position.y, -this.camera.position.z);
         MatrixStackUtils.multiply(stack, this.transform);
 
-        RenderSystem.setupLevelDiffuseLighting(
-            new Vector3f(0, 0.85F, -1).normalize(),
-            new Vector3f(0, 0.85F, 1).normalize()
-        );
+        this.lightA.set(0F, 0.85F, -1F).normalize();
+        this.lightB.set(0F, 0.85F, 1F).normalize();
+        this.lightMatrix.set(this.camera.view);
+        this.lightMatrix.transform(this.lightA);
+        this.lightMatrix.transform(this.lightB);
+
+        RenderSystem.setupLevelDiffuseLighting(this.lightA, this.lightB);
 
         if (this.grid)
         {

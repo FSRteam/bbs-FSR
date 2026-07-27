@@ -11,6 +11,8 @@ import mchorse.bbs_mod.forms.forms.BodyPartManager;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
+import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.ItemForm;
 import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -34,6 +36,8 @@ import mchorse.bbs_mod.ui.forms.editors.forms.UIBlockForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIExtrudedForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIFramebufferForm;
+import mchorse.bbs_mod.ui.forms.editors.forms.UISoundConeForm;
+import mchorse.bbs_mod.ui.forms.editors.forms.UISoundSphereForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIItemForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UILabelForm;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIMobForm;
@@ -142,6 +146,8 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         register(VanillaParticleForm.class, UIVanillaParticleForm::new);
         register(TrailForm.class, UITrailForm::new);
         register(FramebufferForm.class, UIFramebufferForm::new);
+        register(SoundSphereForm.class, UISoundSphereForm::new);
+        register(SoundConeForm.class, UISoundConeForm::new);
     }
 
     public static void register(Class clazz, Supplier<UIForm> supplier)

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
@@ -34,6 +35,9 @@ import java.util.function.Supplier;
 
 public abstract class FormRenderer <T extends Form>
 {
+    private static final Vector3f UI_LIGHT_A = new Vector3f(0F, 1F, -0.2F).normalize();
+    private static final Vector3f UI_LIGHT_B = new Vector3f(-0.85F, 0.85F, 1F).normalize();
+
     protected T form;
     private final Transform combinedTransform = new Transform();
     private final Matrix4f transformMatrix = new Matrix4f();
@@ -48,6 +52,10 @@ public abstract class FormRenderer <T extends Form>
         return this.form;
     }
 
+    /** Release renderer-owned runtime resources before this form is discarded. */
+    public void release()
+    {}
+
     public List<String> getBones()
     {
         return Collections.emptyList();
@@ -55,7 +63,20 @@ public abstract class FormRenderer <T extends Form>
 
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)
     {
+        this.beginRenderUI();
         this.renderInUI(context, x1, y1, x2, y2);
+        this.finishRenderUI(context, x1, y1, x2, y2);
+    }
+
+    protected final void beginRenderUI()
+    {
+        /* Match BBSFS' form-list lighting instead of inheriting whichever
+         * diffuse-light state the previously rendered UI element left behind. */
+        RenderSystem.setupLevelDiffuseLighting(UI_LIGHT_A, UI_LIGHT_B);
+    }
+
+    protected final void finishRenderUI(UIContext context, int x1, int y1, int x2, int y2)
+    {
         BBSFormPreviewCapture.include(context, x1, y1, x2, y2);
 
         FontRenderer font = context.batcher.getFont();
