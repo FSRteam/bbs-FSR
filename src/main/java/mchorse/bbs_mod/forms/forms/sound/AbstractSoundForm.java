@@ -36,7 +36,7 @@ public abstract class AbstractSoundForm extends Form
      * and reverse playback need no special handling.
      */
     public final ValueBoolean playing = new ValueBoolean("playing", false);
-    public final ValueFloat volume = new ValueFloat("volume", 1F, 0F, 2F);
+    public final ValueFloat volume = new ValueFloat("volume", 1F, 0F, Float.POSITIVE_INFINITY);
     public final ValueFloat pitch = new ValueFloat("pitch", 1F, 0.1F, 4F);
     public final ValueBoolean looping = new ValueBoolean("looping", false);
     /** Offset into the clip, in seconds, where playback begins. */

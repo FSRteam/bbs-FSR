@@ -6,6 +6,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.EntityInteractionActionClip;
 import mchorse.bbs_mod.actions.values.ActionTarget;
+import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.FormProperties;
@@ -54,6 +55,7 @@ public final class ReplayIndexRemappingTest
             testActionTargetReorderAndDeletion();
             testFilmReferenceTransaction();
             testGroupedSoundChannelsPreserveLegacyFallback();
+            testBbsVolumeFieldsHaveNoFiniteUpperLimit();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
             KeyframeInteractionTest.run();
@@ -320,6 +322,33 @@ public final class ReplayIndexRemappingTest
 
         properties.resetProperties(form);
         assertTrue(form.radius.getRuntimeValue() == null, "sound property reset clears runtime state");
+    }
+
+    private static void testBbsVolumeFieldsHaveNoFiniteUpperLimit()
+    {
+        float amplified = 4096F;
+        AudioClip clip = new AudioClip();
+        SoundSphereForm form = new SoundSphereForm();
+
+        clip.volume.set(amplified);
+        form.volume.set(amplified);
+
+        assertEquals(amplified, clip.volume.get(), "film audio volume keeps values above the legacy cap");
+        assertEquals(amplified, form.volume.get(), "sound form volume keeps values above the legacy cap");
+        assertTrue(!Float.isFinite(clip.volume.getMax()), "film audio volume has no finite upper limit");
+        assertTrue(!Float.isFinite(form.volume.getMax()), "sound form volume has no finite upper limit");
+
+        SoundKeyframeValue sound = SoundKeyframeValue.capture(form, SoundKeyframeValue.Group.SOUND);
+
+        sound.volume = amplified * 2F;
+        sound.applyRuntime(form, SoundKeyframeValue.Group.SOUND);
+        assertEquals(sound.volume, form.volume.get(), "grouped sound keyframes keep amplified volume");
+
+        clip.volume.set(-1F);
+        form.volume.setRuntimeValue(null);
+        form.volume.set(-1F);
+        assertEquals(0D, clip.volume.get(), "film audio volume remains non-negative");
+        assertEquals(0D, form.volume.get(), "sound form volume remains non-negative");
     }
 
     private static List<Object> replayOrder()
