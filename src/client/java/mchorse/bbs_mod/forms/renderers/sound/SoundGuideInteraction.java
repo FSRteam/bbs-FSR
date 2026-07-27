@@ -48,10 +48,7 @@ public final class SoundGuideInteraction
     public static final String HANDLE_CONE_INNER = "$sound_cone_inner";
 
     private static final float EPSILON = 1E-5F;
-    private static final long FILM_MARK_TTL_MS = 300L;
-
     private static final WeakIdentityMap<AbstractSoundForm, Matrix4f> GUIDE_MATRICES = new WeakIdentityMap<>();
-    private static final WeakIdentityMap<Form, Long> FILM_SELECTED = new WeakIdentityMap<>();
 
     private static WeakReference<UIAbstractSoundFormPanel<?>> formPanel = new WeakReference<>(null);
     private static WeakReference<UISoundKeyframeFactory> keyframePanel = new WeakReference<>(null);
@@ -104,11 +101,6 @@ public final class SoundGuideInteraction
                 && context.stencilMap.increment
                 && isReplayEditorActive();
 
-            if (filmPick)
-            {
-                markFilmSelected(form);
-            }
-
             if ((previewPick || filmPick) && form.showGuide.get())
             {
                 captureGuideMatrix(form, context.stack.last().pose());
@@ -121,7 +113,7 @@ public final class SoundGuideInteraction
         boolean preview = context.modelRenderer;
         boolean world = !context.ui
             && (context.type == FormRenderType.ENTITY || context.type == FormRenderType.MODEL_BLOCK)
-            && (showAllGuides() || isFilmSelected(form));
+            && (!isReplayEditorActive() || showAllGuides() || isFilmSelected(context, form));
 
         if (form.showGuide.get() && (preview || world))
         {
@@ -689,27 +681,30 @@ public final class SoundGuideInteraction
             || HANDLE_CONE_INNER.equals(id);
     }
 
-    public static void markFilmSelected(Form form)
+    private static boolean isFilmSelected(FormRenderingContext context, Form form)
     {
-        Form root = FormUtils.getRoot(form);
+        UIFilmPanel film = filmPanel();
 
-        if (root != null)
-        {
-            FILM_SELECTED.put(root, System.currentTimeMillis());
-        }
-    }
-
-    public static boolean isFilmSelected(Form form)
-    {
-        if (!isReplayEditorActive())
+        if (film == null || film.replayEditor == null)
         {
             return false;
         }
 
-        Form root = FormUtils.getRoot(form);
-        Long marked = root == null ? null : FILM_SELECTED.get(root);
+        Replay selected = film.replayEditor.getReplay();
 
-        return marked != null && System.currentTimeMillis() - marked < FILM_MARK_TTL_MS;
+        if (selected == null)
+        {
+            return false;
+        }
+
+        if (context.timelineProperties != null)
+        {
+            return context.timelineProperties == selected.properties;
+        }
+
+        Form selectedForm = selected.form.get();
+
+        return selectedForm != null && FormUtils.getRoot(form) == FormUtils.getRoot(selectedForm);
     }
 
     public static boolean isReplayEditorActive()

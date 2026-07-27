@@ -27,6 +27,29 @@ public final class ReplayIdentityLookupSourceTest
     {
         verifiesIdentityLookupContract();
         verifiesReplayUiCallSites();
+        verifiesSoundGuideVisibilityOwnership();
+    }
+
+    private static void verifiesSoundGuideVisibilityOwnership()
+    {
+        Path project = findProjectRoot();
+        String interaction = compact(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/forms/renderers/sound/SoundGuideInteraction.java"
+        )));
+        String renderer = compact(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/forms/renderers/sound/SoundGuideRenderer.java"
+        )));
+
+        check(!interaction.contains("FILM_MARK_TTL_MS") && !interaction.contains("FILM_SELECTED"),
+            "sound guide visibility still expires with hover/picking time");
+        check(interaction.contains("context.timelineProperties==selected.properties"),
+            "Film sound guides are not owned by the selected Replay timeline");
+        check(interaction.contains("&&(!isReplayEditorActive()||showAllGuides()||isFilmSelected(context,form));"),
+            "world sound guides do not honor show_guide outside the Film editor");
+        check(interaction.contains("if((previewPick||filmPick)&&form.showGuide.get())"),
+            "sound guide picking no longer covers preview and Film handles");
+        check(renderer.contains("if(!form.showGuide.get()||isCapturing()){return;}"),
+            "sound guides are no longer excluded from capture/export");
     }
 
     private static void verifiesIdentityLookupContract()
@@ -174,6 +197,11 @@ public final class ReplayIdentityLookupSourceTest
         {
             throw new AssertionError("could not read " + path, e);
         }
+    }
+
+    private static String compact(String source)
+    {
+        return source.replaceAll("\\s+", "");
     }
 
     private static int occurrences(String source, String value)
