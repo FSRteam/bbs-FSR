@@ -8,6 +8,8 @@ import mchorse.bbs_mod.actions.types.EntityInteractionActionClip;
 import mchorse.bbs_mod.actions.values.ActionTarget;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.ReplayIndexRemapper;
@@ -27,8 +29,10 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.KeyframeNavigationT
 import mchorse.bbs_mod.ui.film.utils.keyframes.KeyframeInteractionTest;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.factory.MapFactory;
+import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
+import mchorse.bbs_mod.utils.keyframes.factories.SoundKeyframeFactory;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.neoforged.fml.loading.LoadingModList;
@@ -55,6 +59,7 @@ public final class ReplayIndexRemappingTest
             testActionTargetReorderAndDeletion();
             testFilmReferenceTransaction();
             testGroupedSoundChannelsPreserveLegacyFallback();
+            testGroupedSoundLoopIntervalLifecycle();
             testBbsVolumeFieldsHaveNoFiniteUpperLimit();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
@@ -349,6 +354,100 @@ public final class ReplayIndexRemappingTest
         form.volume.set(-1F);
         assertEquals(0D, clip.volume.get(), "film audio volume remains non-negative");
         assertEquals(0D, form.volume.get(), "sound form volume remains non-negative");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void testGroupedSoundLoopIntervalLifecycle()
+    {
+        SoundSphereForm form = new SoundSphereForm();
+
+        assertEquals(0D, form.loopInterval.get(), "sound form loop interval defaults to seamless looping");
+        assertEquals(0D, form.loopInterval.getMin(), "sound form loop interval remains non-negative");
+        assertTrue(!Float.isFinite(form.loopInterval.getMax()),
+            "sound form loop interval has no finite upper limit");
+        assertTrue(form.get("loop_interval") == form.loopInterval,
+            "sound form loop interval is absent from the persisted value tree");
+
+        form.loopInterval.set(2.5F);
+        BaseType persistedInterval = form.loopInterval.toData();
+        SoundSphereForm restored = new SoundSphereForm();
+
+        restored.loopInterval.fromData(persistedInterval);
+        assertEquals(2.5D, restored.loopInterval.get(), "sound form persistence loses the loop interval");
+
+        SoundKeyframeValue snapshot = SoundKeyframeValue.capture(restored, SoundKeyframeValue.Group.SOUND);
+
+        assertEquals(2.5D, snapshot.loopInterval, "grouped sound snapshot loses the loop interval");
+
+        SoundKeyframeFactory factory = new SoundKeyframeFactory(SoundKeyframeValue.Group.SOUND);
+        SoundKeyframeValue copied = factory.copy(snapshot);
+
+        assertTrue(copied != snapshot, "grouped sound copy aliases the source snapshot");
+        assertEquals(2.5D, copied.loopInterval, "grouped sound copy loses the loop interval");
+
+        BaseType encoded = factory.toData(snapshot);
+        MapType encodedMap = encoded.asMap();
+        SoundKeyframeValue decoded = factory.fromData(encoded);
+        SoundKeyframeValue legacyDecoded = factory.fromData(new MapType());
+
+        assertTrue(encodedMap.has("loop_interval"), "grouped sound serialization omits the loop interval");
+        assertEquals(2.5D, encodedMap.getFloat("loop_interval"),
+            "grouped sound serialization writes the wrong loop interval");
+        assertEquals(2.5D, decoded.loopInterval, "grouped sound serialization round-trip loses the loop interval");
+        assertEquals(0D, legacyDecoded.loopInterval,
+            "grouped sound snapshots without loop_interval no longer preserve seamless looping");
+
+        SoundKeyframeValue start = snapshot.copy();
+        SoundKeyframeValue end = snapshot.copy();
+
+        start.loopInterval = 2F;
+        end.loopInterval = 6F;
+
+        SoundKeyframeValue interpolated = factory.interpolate(
+            start, start, end, end, Interpolations.LINEAR, 0.25F).copy();
+
+        assertEquals(3D, interpolated.loopInterval, "grouped sound loop interval does not interpolate");
+
+        form.loopInterval.set(0.75F);
+        snapshot.loopInterval = 4F;
+        snapshot.applyRuntime(form, SoundKeyframeValue.Group.SOUND);
+        assertEquals(4D, form.loopInterval.get(), "grouped sound runtime application loses the loop interval");
+
+        SoundKeyframeValue.clearRuntime(form, SoundKeyframeValue.Group.SOUND);
+        assertTrue(form.loopInterval.getRuntimeValue() == null,
+            "grouped sound runtime clear leaves the loop interval overridden");
+        assertEquals(0.75D, form.loopInterval.get(),
+            "grouped sound runtime clear does not restore the persisted loop interval");
+
+        FormProperties properties = new FormProperties("properties");
+        String legacyId = FormUtils.getPropertyPath(form.loopInterval);
+        KeyframeChannel<Float> legacy = properties.registerChannel(legacyId, KeyframeFactories.FLOAT);
+        String groupedId = SoundKeyframeValue.channelId(form, SoundKeyframeValue.Group.SOUND);
+        KeyframeChannel<SoundKeyframeValue> grouped = properties.getOrCreate(form, groupedId);
+
+        legacy.insert(0F, 1.25F);
+        properties.applyProperties(form, 0F);
+        assertEquals(1.25D, form.loopInterval.get(),
+            "empty grouped sound track does not fall back to the legacy loop interval");
+
+        SoundKeyframeValue groupedValue = SoundKeyframeValue.capture(form, SoundKeyframeValue.Group.SOUND);
+
+        groupedValue.loopInterval = 3.5F;
+        grouped.insert(0F, groupedValue);
+        properties.applyProperties(form, 0F);
+        assertEquals(3.5D, form.loopInterval.get(),
+            "non-empty grouped sound track does not override the legacy loop interval");
+
+        grouped.removeAll();
+        properties.applyProperties(form, 0F);
+        assertEquals(1.25D, form.loopInterval.get(),
+            "deleting the last grouped sound keyframe does not restore the legacy loop interval");
+
+        properties.resetProperties(form);
+        assertTrue(form.loopInterval.getRuntimeValue() == null,
+            "sound property reset leaves the loop interval runtime value behind");
+        assertEquals(0.75D, form.loopInterval.get(),
+            "sound property reset does not restore the persisted loop interval");
     }
 
     private static List<Object> replayOrder()

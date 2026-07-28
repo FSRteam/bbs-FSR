@@ -28,6 +28,28 @@ public final class ReplayIdentityLookupSourceTest
         verifiesIdentityLookupContract();
         verifiesReplayUiCallSites();
         verifiesSoundGuideVisibilityOwnership();
+        verifiesSoundLoopIntervalUiContract();
+    }
+
+    private static void verifiesSoundLoopIntervalUiContract()
+    {
+        Path project = findProjectRoot();
+        String formPanel = compact(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/ui/forms/editors/panels/UIAbstractSoundFormPanel.java"
+        )));
+        String keyframeFactory = compact(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UISoundKeyframeFactory.java"
+        )));
+        String uiKeys = compact(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/ui/UIKeys.java"
+        )));
+
+        check(formPanel.contains("this.looping,UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_LOOP_INTERVAL,this.loopInterval),this.startOffset"),
+            "sound Form panel does not place loop interval immediately after looping");
+        check(keyframeFactory.contains("looping,UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_LOOP_INTERVAL,loopInterval),UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_START_OFFSET,startOffset)"),
+            "sound keyframe panel does not place loop interval immediately after looping");
+        check(uiKeys.contains("FORMS_EDITORS_SOUND_LOOP_INTERVAL=L10n.lang(\"bbs.ui.forms.editors.sound.loop_interval\")"),
+            "sound loop interval UI key is missing or points to the wrong localization key");
     }
 
     private static void verifiesSoundGuideVisibilityOwnership()
