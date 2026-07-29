@@ -39,6 +39,7 @@ import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.clips.MissingClip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.IFactory;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -65,6 +66,7 @@ public class UIClips extends UIElement
     private static final int SNAP_DISTANCE = 10;
 
     private static final Area CLIP_AREA = new Area();
+    private static final ClipFactoryData MISSING_CLIP_DATA = new ClipFactoryData(Icons.EXCLAMATION, 0x8f4b4b).recordingOnly();
 
     /* Main objects */
     private IUIClipsDelegate delegate;
@@ -263,9 +265,23 @@ public class UIClips extends UIElement
         return this.factory;
     }
 
+    /**
+     * Missing plugin clips stay on the timeline as data-preserving placeholders. Keep
+     * their rendering metadata stable as well, so opening a film never dereferences
+     * absent plugin registration data.
+     */
+    public ClipFactoryData getClipFactoryData(Clip clip)
+    {
+        ClipFactoryData data = clip == null ? null : this.factory.getData(clip);
+
+        return data == null ? MISSING_CLIP_DATA : data;
+    }
+
     public String getClipDisplayName(Clip clip)
     {
         if (!clip.title.get().isEmpty()) return clip.title.get();
+        if (clip instanceof MissingClip missing) return UIKeys.CAMERA_TIMELINE_MISSING_CLIP.format(missing.typeId()).get();
+        if (this.factory.getData(clip) == null) return UIKeys.CAMERA_TIMELINE_MISSING_CLIP.format(clip.getClass().getSimpleName()).get();
         if (!BBSSettings.editorClipAutoName.get()) return "";
         return this.renderers.get(clip).getDefaultLabel(this, clip);
     }
@@ -523,6 +539,12 @@ public class UIClips extends UIElement
     private void addConverters(ContextMenuManager menu, UIContext context)
     {
         ClipFactoryData data = this.factory.getData(this.delegate.getClip());
+
+        if (data == null)
+        {
+            return;
+        }
+
         Collection<Link> converters = data.converters.keySet();
 
         if (converters.isEmpty())
@@ -537,8 +559,12 @@ public class UIClips extends UIElement
                 for (Link type : converters)
                 {
                     IKey label = UIKeys.CAMERA_TIMELINE_CONTEXT_CONVERT_TO.format(UIKeys.C_CLIP.get(type));
+                    ClipFactoryData targetData = this.factory.getData(type);
 
-                    add.action(Icons.REFRESH, label, this.factory.getData(type).color, () -> this.convertTo(type));
+                    if (targetData != null)
+                    {
+                        add.action(Icons.REFRESH, label, targetData.color, () -> this.convertTo(type));
+                    }
                 }
             });
         });
@@ -565,7 +591,19 @@ public class UIClips extends UIElement
         }
 
         ClipFactoryData data = this.factory.getData(clipsFromSelection.get(clipsFromSelection.size() - 1));
+
+        if (data == null)
+        {
+            return;
+        }
+
         IClipConverter converter = data.converters.get(type);
+
+        if (converter == null)
+        {
+            return;
+        }
+
         List<Clip> newClips = new ArrayList<>();
 
         for (Clip clip : clipsFromSelection)

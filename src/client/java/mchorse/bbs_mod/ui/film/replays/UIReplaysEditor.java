@@ -392,7 +392,7 @@ public class UIReplaysEditor extends UIElement {
             return;
         }
 
-        int color = clipsPanel.clips.getFactory().getData(clip).color;
+        int color = clipsPanel.clips.getClipFactoryData(clip).color;
         int left = Math.max(area.x, x1);
         int right = Math.min(area.ex(), x2);
         int top = area.y + 1;

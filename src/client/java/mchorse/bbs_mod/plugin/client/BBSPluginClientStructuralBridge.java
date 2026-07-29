@@ -49,6 +49,7 @@ import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Physical-client thread fence and export guard for structural plugin transactions. */
 public final class BBSPluginClientStructuralBridge
@@ -57,17 +58,24 @@ public final class BBSPluginClientStructuralBridge
     private static final Map<String, InputConstants.Key> SAVED_KEYS = new ConcurrentHashMap<>();
     private static final Map<Object, PluginOwner> ENTITY_RENDERER_OWNERS = new ConcurrentHashMap<>();
     private static final Map<Object, PluginOwner> BLOCK_RENDERER_OWNERS = new ConcurrentHashMap<>();
+    private static final AtomicBoolean BLOCKING_CLIENT_SHUTDOWN = new AtomicBoolean();
 
     private BBSPluginClientStructuralBridge() {}
 
     public static void runSafepoint(Runnable operation)
     {
         Minecraft minecraft = Minecraft.getInstance();
+        boolean blockingShutdown = BLOCKING_CLIENT_SHUTDOWN.get();
 
-        if (minecraft == null || minecraft.isSameThread())
+        if (minecraft == null || minecraft.isSameThread() || blockingShutdown)
         {
             operation.run();
-            refreshProjection();
+
+            if (!blockingShutdown)
+            {
+                refreshProjection();
+            }
+
             return;
         }
 
@@ -107,8 +115,39 @@ public final class BBSPluginClientStructuralBridge
         }
     }
 
+    public static void runBlockingShutdown(Runnable shutdown)
+    {
+        Objects.requireNonNull(shutdown, "shutdown");
+        Minecraft minecraft = Minecraft.getInstance();
+
+        if (minecraft == null || !minecraft.isSameThread())
+        {
+            shutdown.run();
+            return;
+        }
+
+        boolean owner = BLOCKING_CLIENT_SHUTDOWN.compareAndSet(false, true);
+
+        try
+        {
+            shutdown.run();
+        }
+        finally
+        {
+            if (owner)
+            {
+                BLOCKING_CLIENT_SHUTDOWN.set(false);
+            }
+        }
+    }
+
     public static boolean isBusy()
     {
+        if (BLOCKING_CLIENT_SHUTDOWN.get())
+        {
+            return false;
+        }
+
         if (BBSModClient.getVideoRecorder() != null && BBSModClient.getVideoRecorder().isRecording())
         {
             return true;
@@ -501,6 +540,11 @@ public final class BBSPluginClientStructuralBridge
 
     private static void reloadRenderers()
     {
+        if (BLOCKING_CLIENT_SHUTDOWN.get())
+        {
+            return;
+        }
+
         Minecraft minecraft = Minecraft.getInstance();
 
         if (minecraft == null || minecraft.getResourceManager() == null)

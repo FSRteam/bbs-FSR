@@ -47,6 +47,7 @@ import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.particles.ParticleManager;
+import mchorse.bbs_mod.plugin.client.BBSPluginClientStructuralBridge;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.resources.packs.URLError;
@@ -800,7 +801,8 @@ public class BBSModClient
             runClientLifecycleStep("cancel microphone recording", () -> UIAudioRecorder.cancelActive(filmPanel));
             saveFilmPanelForLifecycle(filmPanel, "client stopping");
             runClientLifecycleStep("notify addon client stopping", () -> ClientApiCompat.emitClientStopping(Minecraft.getInstance()));
-            runClientLifecycleStep("stop hot plugin runtime", BBSMod::stopHotPluginRuntime);
+            runClientLifecycleStep("stop hot plugin runtime", () ->
+                BBSPluginClientStructuralBridge.runBlockingShutdown(BBSMod::stopHotPluginRuntime));
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
             runClientLifecycleStep("shutdown UI mirror", () -> BBSUiMirrorRuntime.shutdown());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
