@@ -70,8 +70,8 @@ public class SoundFormPlayback
             return;
         }
 
-        /* reconcile drops any voice whose position is past the end of the clip,
-         * so looping has to wrap the request here or the sound simply stops */
+        /* Keep raw timeline seconds through reflection collection. Each path
+         * has a different propagation delay and therefore its own loop phase. */
         float duration = 0F;
 
         if (form.looping.get())
@@ -79,11 +79,12 @@ public class SoundFormPlayback
             SoundBuffer buffer = sounds.get(link, false);
             duration = buffer == null ? 0F : buffer.getDuration();
 
-            if (duration > 0F)
-            {
-                seconds = SoundPlaybackTimeline.wrapLoopingSeconds(seconds, duration);
-            }
         }
+
+        float directSeconds = SoundPlaybackTimeline.projectLoopingSeconds(
+            seconds, form.startOffset.get(), duration, form.looping.get(), form.loopInterval.get(), form.pitch.get());
+        boolean nativeLooping = SoundPlaybackTimeline.usesNativeLooping(
+            form.looping.get(), form.loopInterval.get());
 
         float dx = listenerX - formX;
         float dy = listenerY - formY;
@@ -103,11 +104,11 @@ public class SoundFormPlayback
 
         float directGain = form.gainAt(dirX, dirY, dirZ, distance);
 
-        if (directGain > 0F && !blockOccluded && !entityOccluded)
+        if (Float.isFinite(directSeconds) && directGain > 0F && !blockOccluded && !entityOccluded)
         {
             this.desired.put(this.directKey, SoundManager.VoiceRequest.spatial(
-                link, seconds, directGain, formX, formY, formZ,
-                form.pitch.get(), form.looping.get(), form.getMaxDistance(), seek));
+                link, directSeconds, directGain, formX, formY, formZ,
+                form.pitch.get(), nativeLooping, form.getMaxDistance(), seek));
         }
 
         int order = form.getReflectionOrder();
@@ -151,23 +152,18 @@ public class SoundFormPlayback
                     reflectionDistance);
             }
 
-            /* A reflection arriving before the clip started has nothing to play yet */
-            float voiceSeconds = voice.seconds;
+            float voiceSeconds = SoundPlaybackTimeline.projectLoopingSeconds(
+                voice.seconds, form.startOffset.get(), duration, form.looping.get(), form.loopInterval.get(), form.pitch.get());
 
-            if (!voice.isAudible() || voiceSeconds < 0F)
+            if (!voice.isAudible() || !Float.isFinite(voiceSeconds))
             {
                 continue;
-            }
-
-            if (duration > 0F)
-            {
-                voiceSeconds = SoundPlaybackTimeline.wrapLoopingSeconds(voiceSeconds, duration);
             }
 
             this.desired.put(this.reflectionKeys[i],
                 SoundManager.VoiceRequest.spatial(
                     link, voiceSeconds, voice.gain, voice.x, voice.y, voice.z,
-                    form.pitch.get(), form.looping.get(), form.getMaxDistance(), seek));
+                    form.pitch.get(), nativeLooping, form.getMaxDistance(), seek));
         }
 
         sounds.reconcile(owner, this.desired, playing);

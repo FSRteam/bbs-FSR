@@ -47,6 +47,7 @@ public class SoundKeyframeFactory implements IKeyframeFactory<SoundKeyframeValue
                 value.volume = map.getFloat("volume", 1F);
                 value.pitch = map.getFloat("pitch", 1F);
                 value.looping = map.getBool("looping");
+                value.loopInterval = map.getFloat("loop_interval");
                 value.startOffset = map.getFloat("start_offset");
             }
             case SHAPE ->
@@ -97,6 +98,7 @@ public class SoundKeyframeFactory implements IKeyframeFactory<SoundKeyframeValue
                 map.putFloat("volume", value.volume);
                 map.putFloat("pitch", value.pitch);
                 map.putBool("looping", value.looping);
+                map.putFloat("loop_interval", value.loopInterval);
                 map.putFloat("start_offset", value.startOffset);
             }
             case SHAPE ->
@@ -170,6 +172,8 @@ public class SoundKeyframeFactory implements IKeyframeFactory<SoundKeyframeValue
                 this.interpolated.volume = lerp(interpolation, preA.volume, a.volume, b.volume, postB.volume, x);
                 this.interpolated.pitch = lerp(interpolation, preA.pitch, a.pitch, b.pitch, postB.pitch, x);
                 this.interpolated.looping = a.looping;
+                this.interpolated.loopInterval = lerp(interpolation,
+                    preA.loopInterval, a.loopInterval, b.loopInterval, postB.loopInterval, x);
                 this.interpolated.startOffset = lerp(interpolation, preA.startOffset, a.startOffset, b.startOffset, postB.startOffset, x);
             }
             case SHAPE ->

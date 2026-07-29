@@ -5,6 +5,8 @@ import mchorse.bbs_mod.audio.wav.WaveWriter;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.ICameraController;
+import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
+import mchorse.bbs_mod.forms.renderers.sound.SoundFormPlayback;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.film.audio.CaptureBackend;
@@ -66,6 +68,7 @@ public final class AudioLifecycleTest
             captureFailuresAreDistinctAndBounded();
             playbackIdentityAndGlobalCleanup();
             playbackSpatialParametersAndExplicitSeek();
+            soundFormLoopIntervalLifecycle();
             playbackSpatialStereoDownmixAndCleanup();
             previewRestartReplacesUniqueOnly();
             playbackCleanupRetriesAndRetiredOwners();
@@ -1220,6 +1223,85 @@ public final class AudioLifecycleTest
 
         manager.deleteSounds();
         backend.assertAllReleasedExactlyOnce("spatial playback parameters");
+    }
+
+    private static void soundFormLoopIntervalLifecycle() throws Exception
+    {
+        Link link = Link.assets("audio/form-loop-interval.wav");
+        Wave wave = new Wave(new PcmFormat(PcmEncoding.PCM_S16_LE, ChannelLayout.MONO, 10), new byte[200]);
+        MemoryAssetProvider provider = new MemoryAssetProvider();
+        provider.put(link, wav(wave));
+        FakeSoundBackend backend = new FakeSoundBackend();
+        SoundManager manager = new SoundManager(provider, backend, Runnable::run, () -> true);
+        SoundFormPlayback playback = new SoundFormPlayback();
+        SoundSphereForm form = new SoundSphereForm();
+        Object owner = new Object();
+
+        form.audio.set(link);
+        form.playing.set(true);
+        form.looping.set(true);
+        form.loopInterval.set(2F);
+
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            9.5F, true, true);
+
+        SoundPlayer first = ownedDirectVoice(manager, owner, playback,
+            "positive loop interval starts an audible direct voice");
+        int firstSource = first.getSource();
+        check(!backend.source(first).looping, "positive loop interval disables native looping");
+
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            10.5F, true, false);
+
+        check(manager.getOwnedVoiceCount(owner) == 0, "positive loop interval removes the source during its gap");
+        check(backend.successfulSourceDeletes(firstSource) == 1,
+            "gap removal deletes the previous source exactly once");
+
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            12.25F, true, false);
+
+        SoundPlayer restarted = ownedDirectVoice(manager, owner, playback,
+            "next loop window recreates the direct voice");
+        int restartedSource = restarted.getSource();
+        check(restartedSource != firstSource && backend.sourceCreateCalls.get() == 2,
+            "next loop window creates a fresh source identity");
+        check(Math.abs(backend.source(restarted).offset - .25F) < .001F
+                && backend.events.contains("seek:" + restartedSource),
+            "recreated source seeks to the next audible window position");
+        check(!backend.source(restarted).looping, "recreated positive-interval source keeps native looping disabled");
+
+        form.loopInterval.set(0F);
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            20.25F, true, false);
+
+        check(ownedDirectVoice(manager, owner, playback, "zero loop interval retains the direct voice") == restarted,
+            "zero loop interval does not recreate the active source");
+        check(backend.source(restarted).looping, "zero loop interval retains native looping");
+
+        manager.deleteSounds();
+        backend.assertAllReleasedExactlyOnce("sound form loop interval lifecycle");
+    }
+
+    private static SoundPlayer ownedDirectVoice(SoundManager manager, Object owner,
+        SoundFormPlayback playback, String label) throws Exception
+    {
+        java.lang.reflect.Field field = SoundFormPlayback.class.getDeclaredField("directKey");
+
+        field.setAccessible(true);
+
+        SoundPlayer player = manager.getOwnedVoice(owner, field.get(playback));
+
+        check(player != null, label);
+
+        return player;
     }
 
     private static void playbackSpatialStereoDownmixAndCleanup() throws Exception

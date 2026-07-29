@@ -72,6 +72,30 @@ public final class SoundAcousticsTest {
             "timeline: a looping reflection remains silent until its delayed arrival");
         check(close(SoundPlaybackTimeline.wrapLoopingSeconds(5.25F, 5F), 0.25F),
             "timeline: an arrived looping voice wraps inside the clip duration");
+        check(close(SoundPlaybackTimeline.projectLoopingSeconds(5.75F, 5F, true, 0F), 0.75F),
+            "timeline: a zero interval preserves seamless looping");
+        check(Float.isNaN(SoundPlaybackTimeline.projectLoopingSeconds(5.75F, 5F, true, 2F)),
+            "timeline: a positive interval omits the voice during its silence window");
+        check(close(SoundPlaybackTimeline.projectLoopingSeconds(7F, 5F, true, 2F), 0F),
+            "timeline: the next interval cycle restarts at the clip beginning");
+        check(close(SoundPlaybackTimeline.projectLoopingSeconds(13F, 12F, 5F, true, 2F), 3F),
+            "timeline: start offsets normalize inside the clip before applying the interval");
+        check(Float.isNaN(SoundPlaybackTimeline.projectLoopingSeconds(11.9F, 12F, 5F, true, 2F)),
+            "timeline: a delayed reflection stays absent even with a nonzero start offset");
+        check(SoundPlaybackTimeline.usesNativeLooping(true, 0F),
+            "timeline: zero interval keeps native OpenAL looping");
+        check(!SoundPlaybackTimeline.usesNativeLooping(true, 0.01F),
+            "timeline: a positive interval disables native OpenAL looping");
+        check(close(SoundPlaybackTimeline.projectLoopingSeconds(3F, 0F, 5F, true, 0F, 2F), 1F),
+            "timeline: seamless-loop seeks account for fast pitch");
+        check(Float.isNaN(SoundPlaybackTimeline.projectLoopingSeconds(2.5F, 0F, 5F, true, 2F, 2F)),
+            "timeline: fast pitch enters the gap when natural playback ends");
+        check(close(SoundPlaybackTimeline.projectLoopingSeconds(4.5F, 0F, 5F, true, 2F, 2F), 0F),
+            "timeline: fast pitch preserves the full configured gap before restart");
+        check(close(SoundPlaybackTimeline.projectLoopingSeconds(5F, 0F, 5F, true, 2F, 0.5F), 2.5F),
+            "timeline: slow pitch remains audible until natural playback ends");
+        check(close(SoundPlaybackTimeline.projectLoopingSeconds(2F, 1F, 5F, false, 0F, 2F), 3F),
+            "timeline: non-looping seeks also account for pitch");
 
         check(!SoundPlaybackTimeline.shouldSeek(20F, 21F, true, true, true),
             "timeline: normal forward playback advances without forced seeks");
@@ -395,6 +419,7 @@ public final class SoundAcousticsTest {
         b.volume = 3F;
         b.pitch = 2F;
         b.looping = true;
+        b.loopInterval = 4F;
         b.startOffset = 6F;
         b.extent = 8F;
         b.innerAngle = 100F;
@@ -417,7 +442,8 @@ public final class SoundAcousticsTest {
         SoundKeyframeValue sound = interpolate(SoundKeyframeValue.Group.SOUND, a, b);
         check(sound.audio.equals(a.audio) && sound.playing == a.playing && sound.looping == a.looping,
             "sound interpolation: resource and booleans use the left snapshot");
-        check(close(sound.volume, 2F) && close(sound.pitch, 1.5F) && close(sound.startOffset, 4F),
+        check(close(sound.volume, 2F) && close(sound.pitch, 1.5F)
+                && close(sound.loopInterval, 2.5F) && close(sound.startOffset, 4F),
             "sound interpolation: numeric values are linear");
 
         SoundKeyframeValue shape = interpolate(SoundKeyframeValue.Group.SHAPE, a, b);
@@ -456,6 +482,7 @@ public final class SoundAcousticsTest {
         value.volume = 1F;
         value.pitch = 1F;
         value.looping = false;
+        value.loopInterval = 1F;
         value.startOffset = 2F;
         value.extent = 4F;
         value.innerAngle = 20F;
@@ -508,7 +535,7 @@ public final class SoundAcousticsTest {
         }
 
         String[] expected = {
-            "audio", "playing", "volume", "pitch", "looping", "startOffset",
+            "audio", "playing", "volume", "pitch", "looping", "loopInterval", "startOffset",
             "refDistance", "rolloff", "airAbsorption",
             "reflections", "reflectionCount", "reflectionDecay", "reflectionVoices",
             "blockReflections", "entityReflections", "passThroughBlocks", "passThroughEntities",

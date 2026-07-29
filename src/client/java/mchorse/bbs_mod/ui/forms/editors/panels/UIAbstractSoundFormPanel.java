@@ -36,6 +36,7 @@ public abstract class UIAbstractSoundFormPanel <T extends AbstractSoundForm> ext
     public UITrackpad volume;
     public UITrackpad pitch;
     public UIToggle looping;
+    public UITrackpad loopInterval;
     public UITrackpad startOffset;
     public UIButton preview;
 
@@ -77,6 +78,8 @@ public abstract class UIAbstractSoundFormPanel <T extends AbstractSoundForm> ext
         this.pitch = new UITrackpad((v) -> this.form.pitch.set(v.floatValue()));
         this.pitch.tooltip(UIKeys.FORMS_EDITORS_SOUND_PITCH);
         this.looping = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_LOOPING, (b) -> this.form.looping.set(b.getValue()));
+        this.loopInterval = new UITrackpad((v) -> this.form.loopInterval.set(v.floatValue()));
+        this.loopInterval.tooltip(UIKeys.FORMS_EDITORS_SOUND_LOOP_INTERVAL);
         this.startOffset = new UITrackpad((v) -> this.form.startOffset.set(v.floatValue()));
         this.startOffset.tooltip(UIKeys.FORMS_EDITORS_SOUND_START_OFFSET);
 
@@ -116,7 +119,9 @@ public abstract class UIAbstractSoundFormPanel <T extends AbstractSoundForm> ext
     protected void addSourceOptions()
     {
         this.options.add(UI.label(UIKeys.FORMS_EDITORS_SOUND_SOURCE), this.pickAudio, this.playing,
-            UI.row(this.volume, this.pitch), this.looping, this.startOffset, this.preview);
+            UI.row(this.volume, this.pitch), this.looping,
+            UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_LOOP_INTERVAL, this.loopInterval),
+            this.startOffset, this.preview);
     }
 
     protected void addFalloffOptions()
@@ -180,6 +185,8 @@ public abstract class UIAbstractSoundFormPanel <T extends AbstractSoundForm> ext
         this.pitch.setValue(form.pitch.get());
         this.pitch.limit(form.pitch);
         this.looping.setValue(form.looping.get());
+        this.loopInterval.setValue(form.loopInterval.get());
+        this.loopInterval.limit(form.loopInterval);
         this.startOffset.setValue(form.startOffset.get());
         this.startOffset.limit(form.startOffset);
 

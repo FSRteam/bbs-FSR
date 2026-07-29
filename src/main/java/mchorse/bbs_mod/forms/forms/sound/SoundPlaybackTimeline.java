@@ -98,6 +98,93 @@ public final class SoundPlaybackTimeline
     }
 
     /**
+     * Project raw timeline seconds into one voice's loop period. Negative raw
+     * seconds stay absent so delayed reflections cannot wrap in early.
+     */
+    public static float projectLoopingSeconds(float seconds, float duration,
+        boolean looping, float interval)
+    {
+        return projectLoopingSeconds(seconds, 0F, duration, looping, interval);
+    }
+
+    /**
+     * Project a voice after separating its clip offset from elapsed timeline
+     * time. A start offset is always a position inside the clip, never inside
+     * the configured silence window.
+     */
+    public static float projectLoopingSeconds(float seconds, float startOffset,
+        float duration, boolean looping, float interval)
+    {
+        return projectLoopingSeconds(seconds, startOffset, duration, looping, interval, 1F);
+    }
+
+    /**
+     * Convert one voice's timeline position to a media offset. Audio duration
+     * is expressed in media seconds, while the interval is expressed in
+     * timeline seconds, so pitch changes the audible portion of each cycle
+     * but never changes the requested silence duration.
+     */
+    public static float projectLoopingSeconds(float seconds, float startOffset,
+        float duration, boolean looping, float interval, float pitch)
+    {
+        float offset = Math.max(0F, startOffset);
+        float elapsed = seconds - offset;
+
+        if (elapsed < 0F || !Float.isFinite(elapsed) || !Float.isFinite(offset)
+            || pitch <= 0F || !Float.isFinite(pitch))
+        {
+            return Float.NaN;
+        }
+
+        float rate = pitch;
+
+        if (!looping || duration <= 0F || !Float.isFinite(duration))
+        {
+            return offset + elapsed * rate;
+        }
+
+        float gap = Float.isNaN(interval) ? 0F : Math.max(0F, interval);
+        float clipOffset = wrapLoopingSeconds(offset, duration);
+        float firstAudibleDuration = (duration - clipOffset) / rate;
+
+        if (gap == 0F)
+        {
+            return wrapLoopingSeconds(clipOffset + elapsed * rate, duration);
+        }
+
+        if (elapsed < firstAudibleDuration)
+        {
+            return clipOffset + elapsed * rate;
+        }
+
+        elapsed -= firstAudibleDuration;
+
+        if (elapsed < gap)
+        {
+            return Float.NaN;
+        }
+
+        elapsed -= gap;
+
+        float audibleDuration = duration / rate;
+        float period = audibleDuration + gap;
+        float phase = Float.isInfinite(period) ? elapsed : elapsed % period;
+
+        if (phase < 0F)
+        {
+            phase += period;
+        }
+
+        return phase < audibleDuration ? phase * rate : Float.NaN;
+    }
+
+    /** Native OpenAL looping is reserved for the zero-gap seamless case. */
+    public static boolean usesNativeLooping(boolean looping, float interval)
+    {
+        return looping && !(interval > 0F);
+    }
+
+    /**
      * Normal forward playback lets OpenAL advance naturally. Pausing,
      * scrubbing, reverse playback, a loop wrap, or a fresh trigger requires an
      * explicit seek to the timeline-derived position.

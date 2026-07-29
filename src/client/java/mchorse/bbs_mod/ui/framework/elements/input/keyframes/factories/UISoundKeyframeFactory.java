@@ -76,18 +76,21 @@ public class UISoundKeyframeFactory extends UIKeyframeFactory<SoundKeyframeValue
         UITrackpad volume = new UITrackpad((v) -> this.edit((s) -> s.volume = v.floatValue()));
         UITrackpad pitch = new UITrackpad((v) -> this.edit((s) -> s.pitch = v.floatValue()));
         UIToggle looping = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_LOOPING, (b) -> this.edit((v) -> v.looping = b.getValue()));
+        UITrackpad loopInterval = new UITrackpad((v) -> this.edit((s) -> s.loopInterval = v.floatValue()));
         UITrackpad startOffset = new UITrackpad((v) -> this.edit((s) -> s.startOffset = v.floatValue()));
 
         playing.setValue(value.playing);
         looping.setValue(value.looping);
         volume.setValue(value.volume);
         pitch.setValue(value.pitch);
+        loopInterval.setValue(value.loopInterval);
         startOffset.setValue(value.startOffset);
 
         if (this.form != null)
         {
             volume.limit(this.form.volume);
             pitch.limit(this.form.pitch);
+            loopInterval.limit(this.form.loopInterval);
             startOffset.limit(this.form.startOffset);
         }
 
@@ -97,6 +100,7 @@ public class UISoundKeyframeFactory extends UIKeyframeFactory<SoundKeyframeValue
             UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_VOLUME, volume).marginTop(UIConstants.SECTION_GAP),
             UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_PITCH, pitch),
             looping,
+            UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_LOOP_INTERVAL, loopInterval),
             UI.labelRow(UIKeys.FORMS_EDITORS_SOUND_START_OFFSET, startOffset).marginTop(UIConstants.SECTION_GAP)
         ));
     }

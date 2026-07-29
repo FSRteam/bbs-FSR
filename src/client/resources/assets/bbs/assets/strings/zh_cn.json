@@ -1933,6 +1933,7 @@
     "bbs.ui.forms.editors.sound.pass_through_blocks": "穿过方块",
     "bbs.ui.forms.editors.sound.pass_through_entities": "穿过实体",
     "bbs.ui.forms.editors.sound.looping": "循环",
+    "bbs.ui.forms.editors.sound.loop_interval": "循环间隔（秒）",
     "bbs.ui.forms.editors.sound.start_offset": "起始偏移",
     "bbs.ui.forms.editors.sound.preview": "试听",
     "bbs.ui.forms.editors.sound.shape": "发射形状",

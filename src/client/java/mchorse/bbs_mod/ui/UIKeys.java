@@ -506,6 +506,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_SOUND_FALLOFF_LINEAR = L10n.lang("bbs.ui.forms.editors.sound.falloff_linear");
     public static final IKey FORMS_EDITORS_SOUND_FALLOFF_MODEL = L10n.lang("bbs.ui.forms.editors.sound.falloff_model");
     public static final IKey FORMS_EDITORS_SOUND_GUIDE_COLOR = L10n.lang("bbs.ui.forms.editors.sound.guide_color");
+    public static final IKey FORMS_EDITORS_SOUND_LOOP_INTERVAL = L10n.lang("bbs.ui.forms.editors.sound.loop_interval");
     public static final IKey FORMS_EDITORS_SOUND_LOOPING = L10n.lang("bbs.ui.forms.editors.sound.looping");
     public static final IKey FORMS_EDITORS_SOUND_PITCH = L10n.lang("bbs.ui.forms.editors.sound.pitch");
     public static final IKey FORMS_EDITORS_SOUND_PASS_THROUGH_BLOCKS = L10n.lang("bbs.ui.forms.editors.sound.pass_through_blocks");

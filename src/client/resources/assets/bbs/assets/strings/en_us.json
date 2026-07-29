@@ -1934,6 +1934,7 @@
 	"bbs.ui.forms.editors.sound.pass_through_blocks": "Pass through blocks",
 	"bbs.ui.forms.editors.sound.pass_through_entities": "Pass through entities",
 	"bbs.ui.forms.editors.sound.looping": "Loop",
+	"bbs.ui.forms.editors.sound.loop_interval": "Loop interval (seconds)",
 	"bbs.ui.forms.editors.sound.start_offset": "Start offset",
 	"bbs.ui.forms.editors.sound.preview": "Preview",
 	"bbs.ui.forms.editors.sound.shape": "Emission shape",

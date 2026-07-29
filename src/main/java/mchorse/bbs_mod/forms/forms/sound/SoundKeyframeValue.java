@@ -31,6 +31,7 @@ public class SoundKeyframeValue
     public float volume = 1F;
     public float pitch = 1F;
     public boolean looping;
+    public float loopInterval;
     public float startOffset;
 
     /* Shape: extent is radius for a sphere and range for a cone. */
@@ -67,6 +68,7 @@ public class SoundKeyframeValue
         value.volume = this.volume;
         value.pitch = this.pitch;
         value.looping = this.looping;
+        value.loopInterval = this.loopInterval;
         value.startOffset = this.startOffset;
         value.extent = this.extent;
         value.innerAngle = this.innerAngle;
@@ -107,6 +109,7 @@ public class SoundKeyframeValue
                 value.volume = form.volume.get();
                 value.pitch = form.pitch.get();
                 value.looping = form.looping.get();
+                value.loopInterval = form.loopInterval.get();
                 value.startOffset = form.startOffset.get();
             }
             case SHAPE ->
@@ -161,6 +164,7 @@ public class SoundKeyframeValue
                 form.volume.setRuntimeValue(this.volume);
                 form.pitch.setRuntimeValue(this.pitch);
                 form.looping.setRuntimeValue(this.looping);
+                form.loopInterval.setRuntimeValue(this.loopInterval);
                 form.startOffset.setRuntimeValue(this.startOffset);
             }
             case SHAPE ->
@@ -215,6 +219,7 @@ public class SoundKeyframeValue
                 form.volume.setRuntimeValue(null);
                 form.pitch.setRuntimeValue(null);
                 form.looping.setRuntimeValue(null);
+                form.loopInterval.setRuntimeValue(null);
                 form.startOffset.setRuntimeValue(null);
             }
             case SHAPE ->

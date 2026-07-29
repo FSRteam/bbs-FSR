@@ -39,6 +39,8 @@ public abstract class AbstractSoundForm extends Form
     public final ValueFloat volume = new ValueFloat("volume", 1F, 0F, Float.POSITIVE_INFINITY);
     public final ValueFloat pitch = new ValueFloat("pitch", 1F, 0.1F, 4F);
     public final ValueBoolean looping = new ValueBoolean("looping", false);
+    /** Silence between loop iterations, in seconds. Zero keeps native seamless looping. */
+    public final ValueFloat loopInterval = new ValueFloat("loop_interval", 0F, 0F, Float.POSITIVE_INFINITY);
     /** Offset into the clip, in seconds, where playback begins. */
     public final ValueFloat startOffset = new ValueFloat("start_offset", 0F, 0F, 3600F);
 
@@ -76,6 +78,7 @@ public abstract class AbstractSoundForm extends Form
         this.volume.invisible();
         this.pitch.invisible();
         this.looping.invisible();
+        this.loopInterval.invisible();
         this.startOffset.invisible();
         this.falloff.invisible();
         this.refDistance.invisible();
@@ -96,6 +99,7 @@ public abstract class AbstractSoundForm extends Form
         this.add(this.volume);
         this.add(this.pitch);
         this.add(this.looping);
+        this.add(this.loopInterval);
         this.add(this.startOffset);
 
         this.add(this.falloff);
