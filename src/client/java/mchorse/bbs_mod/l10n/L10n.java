@@ -2,7 +2,6 @@ package mchorse.bbs_mod.l10n;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
@@ -141,7 +140,7 @@ public class L10n
 
     public void reload()
     {
-        this.reload(BBSSettings.language.get(), BBSMod.getProvider());
+        this.reload(BBSModClient.getLanguageKey(), BBSMod.getProvider());
     }
 
     public void reload(String language, AssetProvider provider)

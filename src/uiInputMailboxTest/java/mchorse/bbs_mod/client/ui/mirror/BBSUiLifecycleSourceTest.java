@@ -22,10 +22,27 @@ public final class BBSUiLifecycleSourceTest
     public static void runAll()
     {
         assertOwnerAwareInputCallSites();
+        assertLanguageResolutionContracts();
         assertRepositoryRebindsBeforeDataAndPinsAfter();
         assertMorphingSelectionAndDemorphRemainDistinct();
         assertDashboardEditorReactivationContracts();
         assertRefreshedDockAndDashboardContracts();
+    }
+
+    private static void assertLanguageResolutionContracts()
+    {
+        String l10n = readSource("src/client/java/mchorse/bbs_mod/l10n/L10n.java");
+        String client = readSource("src/client/java/mchorse/bbs_mod/BBSModClient.java");
+        String reload = sourceSection(l10n, "public void reload()", "public void reload(String language");
+        String languageKey = sourceSection(client, "public static String getLanguageKey()", "public static void reloadLanguage");
+
+        check(reload.contains("this.reload(BBSModClient.getLanguageKey(), BBSMod.getProvider());")
+                && !reload.contains("BBSSettings.language.get()"),
+            "startup L10n reload can still treat the empty follow-Minecraft setting as en_us");
+        check(languageKey.contains("BBSSettings.language == null ? \"\" : BBSSettings.language.get()")
+                && languageKey.contains("minecraft.options.languageCode")
+                && languageKey.contains("? \"en_us\" : key"),
+            "language resolution no longer preserves explicit BBS, Minecraft, then en_us fallback order");
     }
 
     private static void assertRefreshedDockAndDashboardContracts()
@@ -209,7 +226,9 @@ public final class BBSUiLifecycleSourceTest
     {
         String dashboard = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/UIDashboard.java");
         String panels = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDashboardPanels.java");
+        String flightSupported = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/IFlightSupported.java");
         String modelBlocks = readSource("src/client/java/mchorse/bbs_mod/ui/model_blocks/UIModelBlockPanel.java");
+        String filmPanel = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
         String filmController = readSource("src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java");
         String formRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderer.java");
         String formContext = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderingContext.java");
@@ -220,15 +239,16 @@ public final class BBSUiLifecycleSourceTest
         String modelEditorPanel = readSource("src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelEditorPanel.java");
         String clientNetwork = readSource("src/client/java/mchorse/bbs_mod/network/ClientNetwork.java");
         String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
-        String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
-        String modelEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIModelForm.java");
         String transformBase = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UITransform.java");
         String poseFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseKeyframeFactory.java");
         String poseTransformFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseTransformKeyframeFactory.java");
         String baseTextbox = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UIBaseTextbox.java");
         String textbox = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextbox.java");
         String textarea = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextarea.java");
+        String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
+        String modelEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIModelForm.java");
         String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
+        String modelVao = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/ModelVAO.java");
         String enableMode = sourceSection(transform, "public void enableMode(int mode)", "private HotkeyTarget currentHotkeyTarget");
 
         check(panels.contains("private boolean panelAppeared;")
@@ -239,14 +259,25 @@ public final class BBSUiLifecycleSourceTest
         String dashboardOpen = sourceSection(dashboard, "public void onOpen(UIBaseMenu oldMenu)", "public void onClose(UIBaseMenu nextMenu)");
         String restorePanelControls = sourceSection(dashboard, "private void restoreCurrentPanelControls()", "protected void closeMenu()");
         String outsideRecording = sourceSection(filmController, "public void startRecording(List<String> groups)", "public void stopRecording()");
+        String filmActivate = sourceSection(filmPanel, "private void activateLifecycle()", "public void close()");
 
         check(dashboardOpen.contains("this.panels.open();")
                 && dashboardOpen.contains("this.restoreCurrentPanelControls();")
                 && restorePanelControls.contains("this.context.unfocus();")
                 && restorePanelControls.contains("this.orbitUI.cancelGesture();")
-                && restorePanelControls.contains("this.orbitUI.setControl(this.panels.isFlightSupported())")
+                && restorePanelControls.contains("panel.shouldEnableFlightOnRestore()")
+                && restorePanelControls.contains("this.orbitUI.setControl(enableFlight)")
+                && !restorePanelControls.contains("this.panels.isFlightSupported()")
                 && restorePanelControls.contains("this.copyCurrentEntityCamera();"),
             "dashboard same-panel reopen no longer restores focus, orbit input and the world camera");
+        String filmFlightRestore = sourceSection(filmPanel, "public boolean shouldEnableFlightOnRestore()", "public void toggleFlight()");
+
+        check(flightSupported.contains("public default boolean shouldEnableFlightOnRestore()")
+                && filmFlightRestore.contains("return false;")
+                && filmActivate.indexOf("this.setFlight(false);") < filmActivate.indexOf("cameraController.add(this.runner);")
+                && filmPanel.contains("this.setFlight(!this.isFlying());")
+                && filmPanel.contains("this.dashboard.orbitUI.setControl(flight);"),
+            "Film dashboard re-entry can automatically restore flight mode");
         check(outsideRecording.indexOf("Film film = this.panel.getData();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
                 && outsideRecording.indexOf("int cursor = this.panel.getCursor();")
@@ -269,9 +300,16 @@ public final class BBSUiLifecycleSourceTest
                 && formContext.contains("!this.isPicking()")
                 && formContext.contains("!this.ui")
                 && formContext.contains("!this.modelRenderer")
+                && formRenderer.contains("boolean queueSuspended = false;")
                 && formRenderer.contains("queueWasActive = FormTranslucentQueue.suspend();")
+                && formRenderer.contains("queueSuspended = true;")
+                && formRenderer.contains("if (queueSuspended)")
                 && formRenderer.contains("FormTranslucentQueue.restore(queueWasActive);"),
             "non-world Form previews can still leak into the deferred translucent queue");
+        check(modelVao.contains("format == DefaultVertexFormat.POSITION_TEX")
+                && modelVao.contains("int vao = compact ? this.vao2 : this.vao;")
+                && occurrences(modelVao, "hasShaders && !compact") == 2,
+            "vanilla armor glint can still bind the Iris entity VAO instead of position/UV");
         check(mobRenderer.contains("this.setupTarget(context, BBSShaders.getPickerModelsProgram());")
                 && mobRenderer.contains("RenderSystem.setShader(BBSShaders::getPickerModelsProgram);")
                 && mobRenderer.contains("Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());")
