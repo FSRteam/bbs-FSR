@@ -2,7 +2,7 @@ package mchorse.bbs_mod.settings.ui;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.themes.ThemeManager;
+import mchorse.bbs_mod.ui.themes.ThemeTemplateExporter;
 import mchorse.bbs_mod.ui.themes.UITheme;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -19,9 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +53,7 @@ public class UIThemeOverlayPanel extends UIOverlayPanel
         this.folder.tooltip(UIKeys.SKINS_OPEN_FOLDER, Direction.LEFT);
         this.export = new UIIcon(Icons.DOWNLOAD, (b) ->
         {
-            if (exportTemplate(this.getContext()) != null)
+            if (exportTemplate(this.getContext(), this.list.getCurrentFirst()) != null)
             {
                 this.fill();
             }
@@ -155,27 +153,28 @@ public class UIThemeOverlayPanel extends UIOverlayPanel
     }
 
     /**
-     * Copies the bundled template theme into an unoccupied
-     * {@code themes/my-theme[-n]/} folder and posts a notification.
+     * Exports the active theme for callers that don't have a picker selection.
      *
      * @return the created folder, or null when the export failed
      */
     public static File exportTemplate(UIContext context)
     {
-        File themes = getThemesFolder();
-        File target = new File(themes, "my-theme");
+        return exportTemplate(context, ThemeManager.current());
+    }
 
-        for (int i = 2; target.exists(); i++)
-        {
-            target = new File(themes, "my-theme-" + i);
-        }
+    /**
+     * Exports the selected theme and its local resources as an editable copy.
+     *
+     * @return the created folder, or null when the export failed
+     */
+    public static File exportTemplate(UIContext context, UITheme theme)
+    {
+        UITheme selected = theme == null ? ThemeManager.current() : theme;
+        File target = null;
 
         try
         {
-            String json = readTemplateJson();
-
-            target.mkdirs();
-            Files.writeString(new File(target, "theme.json").toPath(), json, StandardCharsets.UTF_8);
+            target = ThemeTemplateExporter.export(selected.id, getThemesFolder(), BBSMod.getProvider());
         }
         catch (Exception e)
         {
@@ -190,25 +189,6 @@ public class UIThemeOverlayPanel extends UIOverlayPanel
         }
 
         return target;
-    }
-
-    /**
-     * The example theme ships in the jar (same source as docs/theme-spec);
-     * fall back to the built-in dark document when it's absent.
-     */
-    private static String readTemplateJson() throws Exception
-    {
-        for (String id : new String[] {"example", ThemeManager.DEFAULT_THEME_ID})
-        {
-            try (InputStream in = BBSMod.getProvider().getAsset(Link.assets("themes/" + id + "/theme.json")))
-            {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            catch (Exception e)
-            {}
-        }
-
-        throw new Exception("No template theme document is available");
     }
 
     public static class UIThemeList extends UIList<UITheme>
@@ -227,7 +207,7 @@ public class UIThemeOverlayPanel extends UIOverlayPanel
         @Override
         protected boolean sortElements()
         {
-            this.getList().sort((a, b) -> a.name.compareToIgnoreCase(b.name));
+            this.getList().sort((a, b) -> this.themeName(a).compareToIgnoreCase(this.themeName(b)));
 
             return true;
         }
@@ -235,7 +215,18 @@ public class UIThemeOverlayPanel extends UIOverlayPanel
         @Override
         protected String elementToString(UIContext context, int i, UITheme theme)
         {
-            return theme.name;
+            return this.themeName(theme);
+        }
+
+        /**
+         * Built-in theme names are translatable through {@code bbs.ui.themes.<id>}; external packs
+         * keep whatever their theme.json declares, since we have no keys for user-supplied ids.
+         */
+        private String themeName(UITheme theme)
+        {
+            return this.external.contains(theme.id)
+                ? theme.name
+                : L10n.lang("bbs.ui.themes." + theme.id, theme.name, null).get();
         }
 
         @Override
@@ -258,7 +249,7 @@ public class UIThemeOverlayPanel extends UIOverlayPanel
             FontRenderer font = context.batcher.getFont();
             int ty = y + (h - font.getHeight()) / 2;
 
-            context.batcher.textShadow(theme.name, sx + 4, ty, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
+            context.batcher.textShadow(this.themeName(theme), sx + 4, ty, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
 
             String meta = (this.external.contains(theme.id) ? UIKeys.SKINS_SOURCE_EXTERNAL : UIKeys.SKINS_SOURCE_BUILTIN).get();
 

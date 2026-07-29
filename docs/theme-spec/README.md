@@ -30,7 +30,7 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 
 生效方式:游戏内 `BBS 面板 → 设置(齿轮)→ 皮肤 → 选择主题`。
 修改 JSON 后点皮肤栏的**重载**按钮即时生效,无需重启。
-"导出模板"按钮会把样例包写入用户主题目录,作为起步。
+"导出模板"按钮会把主题列表中当前选中的主题及其同目录资源写入用户主题目录,作为起步。
 
 坏文件安全:JSON 语法错误、非法颜色、未知缓动名等都**不会崩溃游戏**——
 回退到内置 dark(或该 key 的继承值)并在日志输出 warn。
@@ -194,11 +194,12 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 | `motion.press` | `{false, scale 1}` | 按下压缩、松开回弹;`scale` 指定按下倍率如 0.94 |
 | `motion.layout` | `{false}` | 面板布局变更时 bounds 从旧位置动画到新位置(渲染与命中始终一致) |
 | `motion.toggle` | `{false, 180, "sine_out"}` | 开关滑块位置、轨道色和滑块色的切换反馈 |
+| `motion.drag_follow` | `{false, 180, "sine_out"}` | 拖拽把手的纯视觉跟随;真实布局、命中与落点始终即时更新,松手立即回到真实位置 |
 | `motion.taskbar_hide` | `{true, 250, "sine_inout"}` | 活动仪表盘面板与底栏整体自动隐藏/唤回;功能本身还受用户设置开关门控 |
 
-### 4.6.1 preset / tracks —— 轨道编排(overlay、context_menu)
+### 4.6.1 preset / tracks —— 轨道编排(overlay、context_menu、notification)
 
-`overlay` 与 `context_menu` 条目支持在固定属性集 `alpha/scale/x/y` 上编排进出场:
+`overlay`、`context_menu` 与 `notification` 条目支持在固定属性集 `alpha/scale/x/y` 上编排进出场:
 每条 track 只给 `from` 起点(终点恒为静止态:alpha 1、scale 1、偏移 0),退场自动反向。
 
 - `preset` 快捷方式:`"scale"`(v1 默认观感:缩放+淡入)、`"slide_right"`、`"slide_up"`、`"fade"`。

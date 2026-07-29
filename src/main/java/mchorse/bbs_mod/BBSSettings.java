@@ -49,6 +49,7 @@ public class BBSSettings {
 	public static ValueBoolean accentFollowsTheme;
 	public static ValueBoolean motionEnabled;
 	public static ValueFloat motionSpeed;
+	public static ValueString motionEasing;
 	public static ValueBoolean showTooltips;
 	public static ValueInt tooltipStyle;
 	public static ValueBoolean textEntryOpenAnim;
@@ -210,6 +211,10 @@ public class BBSSettings {
 	private static final float IDENTITY_BRIGHTNESS = 1F;
 	private static final float BRIGHTNESS_EPSILON = 0.001F;
 	private static final int DEFAULT_PRIMARY_COLOR = 0xff3242;
+	private static final String DEFAULT_MOTION_EASING = "sine_out";
+	private static final String[] LEGACY_MOTION_EASINGS = {
+		"sine_out", "sine_out", "linear", "sine_out", "exp_out"
+	};
 	/** Legacy int values of the removed "theme" setting, kept for migration. */
 	private static final int LEGACY_LIGHT_THEME = 0;
 
@@ -335,7 +340,11 @@ public class BBSSettings {
 	}
 
 	public static int fieldFillColor() {
-		return ThemeManager.current().fieldFill;
+		/* Field fill is a background surface like the four surface() getters, and text boxes and
+		 * icon buttons sit right next to panels painted with those. Leaving it un-adjusted made
+		 * those frames keep their theme colour while everything around them followed the
+		 * background brightness slider. Alpha is preserved, so translucent fills still work. */
+		return applyBackgroundBrightness(ThemeManager.current().fieldFill);
 	}
 
 	public static int fieldBorderColor() {
@@ -559,6 +568,20 @@ public class BBSSettings {
 			root.put("personalization", personalization);
 		}
 
+		MapType skins = root.getMap("skins");
+		boolean skinsMigrated = false;
+
+		if (skins.has("motion_easing") && skins.get("motion_easing").isNumeric()) {
+			int legacy = skins.getInt("motion_easing");
+			String interpolation = legacy >= 0 && legacy < LEGACY_MOTION_EASINGS.length
+				? LEGACY_MOTION_EASINGS[legacy]
+				: DEFAULT_MOTION_EASING;
+
+			skins.putString("motion_easing", interpolation);
+			root.put("skins", skins);
+			skinsMigrated = true;
+		}
+
 		MapType transformation = root.getMap("transformation");
 		boolean transformationMigrated = false;
 
@@ -617,7 +640,7 @@ public class BBSSettings {
 			root.put("video", video);
 		}
 
-		return personalizationMigrated || transformationMigrated || videoMigrated;
+		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated;
 	}
 
 	private static boolean migrateLegacyValue(MapType oldCategory, MapType newCategory, String key) {
@@ -692,6 +715,7 @@ public class BBSSettings {
 		accentFollowsTheme = builder.getBoolean("accent_follows_theme", true);
 		motionEnabled = builder.getBoolean("motion_enabled", true);
 		motionSpeed = builder.getFloat("motion_speed", 1F, 0.5F, 2F);
+		motionEasing = builder.getString("motion_easing", DEFAULT_MOTION_EASING);
 
 		builder.category("refreshed", Icons.REFRESH);
 		showTooltips = builder.getBoolean("show_tooltips", true);

@@ -1161,6 +1161,20 @@ public class Batcher2D
 
     public void text(String label, float x, float y, int color, boolean shadow)
     {
+        this.renderText(label, x, y, color, shadow, false);
+    }
+
+    /**
+     * Draw text while preserving its RGB instead of applying the legacy light-theme
+     * conversion of explicit white to black. Global alpha still applies.
+     */
+    public void textExactColor(String label, float x, float y, int color)
+    {
+        this.renderText(label, x, y, color, false, true);
+    }
+
+    private void renderText(String label, float x, float y, int color, boolean shadow, boolean exactColor)
+    {
         if (shadow && !BBSSettings.textShadow())
         {
             shadow = false;
@@ -1173,12 +1187,14 @@ public class Batcher2D
             return;
         }
 
-        if (BBSSettings.isLightTheme())
-        {
-            color = darkenWhite(color);
-        }
+        color = resolveTextColor(color, BBSSettings.isLightTheme(), exactColor);
 
         this.drawTextDirect(label, x, y, color, shadow);
+    }
+
+    private static int resolveTextColor(int color, boolean lightTheme, boolean exactColor)
+    {
+        return lightTheme && !exactColor ? darkenWhite(color) : color;
     }
 
     private void drawTextDirect(String label, float x, float y, int color, boolean shadow)

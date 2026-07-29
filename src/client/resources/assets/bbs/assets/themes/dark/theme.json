@@ -45,6 +45,7 @@
         "hover": { "enabled": true, "duration": 80, "easing": "sine_out" },
         "notification": { "enabled": true, "duration": 150, "easing": "back_out" },
         "context_menu": { "enabled": true, "duration": 100, "easing": "quad_out" },
-        "scrollbar": { "enabled": true, "duration": 200, "easing": "sine_inout" }
+        "scrollbar": { "enabled": true, "duration": 200, "easing": "sine_inout" },
+        "drag_follow": { "enabled": false, "duration": 180, "easing": "sine_out" }
     }
 }

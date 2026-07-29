@@ -9,7 +9,6 @@ import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.Minecraft;
 
 import java.util.function.BooleanSupplier;
@@ -83,6 +82,7 @@ public class Scroll
 
     private float scrollbarRatio;
     private double targetScroll;
+    private final UITween scrollTween = new UITween();
     private BooleanSupplier smoothScrolling;
     private IntSupplier wheelScrollStep;
 
@@ -159,16 +159,16 @@ public class Scroll
         return this;
     }
 
-    private boolean shouldSmoothScrolling()
+    private UIThemeMotion getSmoothScrollingMotion()
     {
         if (!BBSSettings.scrollingSmoothness.get() || (this.smoothScrolling != null && !this.smoothScrolling.getAsBoolean()))
         {
-            return false;
+            return null;
         }
 
         UIThemeMotion spec = UIMotions.scrollSmooth();
 
-        return UIMotions.enabled() && spec != null && spec.enabled;
+        return UIMotions.duration(spec) > 0 ? spec : null;
     }
 
     private int getWheelScrollStep()
@@ -243,6 +243,7 @@ public class Scroll
         this.scroll = this.targetScroll = x;
 
         this.clamp();
+        this.scrollTween.snap((float) this.scroll);
     }
 
     /**
@@ -297,21 +298,29 @@ public class Scroll
     public void clamp()
     {
         int size = this.direction.getSide(this.area);
+        double previousScroll = this.scroll;
 
         if (this.scrollSize <= size)
         {
             this.scroll = this.targetScroll = 0;
+            this.scrollTween.snap(0F);
         }
         else
         {
             this.scroll = MathUtils.clamp(this.scroll, 0, this.scrollSize - size);
             this.targetScroll = MathUtils.clamp(this.targetScroll, 0, this.scrollSize - size);
+
+            if (this.scroll != previousScroll)
+            {
+                this.scrollTween.snap((float) this.scroll);
+            }
         }
     }
 
     public void updateTarget()
     {
         this.scroll = this.targetScroll;
+        this.scrollTween.snap((float) this.scroll);
     }
 
     public void copy(Scroll scroll)
@@ -319,6 +328,7 @@ public class Scroll
         this.scroll = scroll.scroll;
         this.targetScroll = scroll.targetScroll;
         this.scrollSize = scroll.scrollSize;
+        this.scrollTween.snap((float) this.scroll);
     }
 
     /**
@@ -599,18 +609,7 @@ public class Scroll
      */
     public void drag(int x, int y)
     {
-        if (this.shouldSmoothScrolling())
-        {
-            float delta = Minecraft.getInstance().getTimer().getGameTimeDeltaTicks();
-
-            /* The higher the FPS, the smaller the lerp factor is,
-             * the lower the FPS, the bigger the factor is */
-            this.scroll = Lerps.lerp(this.scroll, this.targetScroll, Math.min(1F, delta / 2.5F));
-        }
-        else
-        {
-            this.scroll = this.targetScroll;
-        }
+        this.updateVisualScroll(System.currentTimeMillis());
 
         if (this.dragging)
         {
@@ -638,6 +637,25 @@ public class Scroll
 
             this.scrollTo(to);
         }
+    }
+
+    private void updateVisualScroll(long nowMs)
+    {
+        UIThemeMotion motion = this.getSmoothScrollingMotion();
+
+        if (motion == null)
+        {
+            this.scroll = this.targetScroll;
+            this.scrollTween.snap((float) this.scroll);
+
+            return;
+        }
+
+        this.scrollTween.to((float) this.targetScroll, motion);
+
+        float maximum = Math.max(0, this.scrollSize - this.direction.getSide(this.area));
+
+        this.scroll = MathUtils.clamp(this.scrollTween.update(nowMs), 0F, maximum);
     }
 
     private float updateScrollbarFade(Area scrollbarArea, int mouseX, int mouseY)

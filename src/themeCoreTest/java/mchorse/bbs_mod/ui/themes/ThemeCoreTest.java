@@ -3,6 +3,8 @@ package mchorse.bbs_mod.ui.themes;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.resources.AssetProvider;
+import mchorse.bbs_mod.resources.ISourcePack;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -11,11 +13,18 @@ import sun.misc.Unsafe;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.MessageDigest;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
@@ -47,8 +56,11 @@ public final class ThemeCoreTest
         testLegacyMigration();
         testBuiltinJsonParity();
         testBatcherGlobalAlphaStack();
+        ThemeWidgetForegroundTest.run();
         testSpecExampleTheme();
         testBuiltinPacks();
+        testThemeTemplateExport();
+        testSkinMotionTranslations();
         testCornerRadiusParsing();
         testTracksAndPresetParsing();
         testDecorAndBackgroundParsing();
@@ -114,10 +126,104 @@ public final class ThemeCoreTest
         for (UIThemeMotion motion : new UIThemeMotion[] {
             refreshed.overlay, refreshed.panelSwitch, refreshed.hover, refreshed.notification,
             refreshed.contextMenu, refreshed.scrollbar, refreshed.scrollSmooth, refreshed.hoverScale,
-            refreshed.press, refreshed.layout, refreshed.toggle, refreshed.taskbarHide
+            refreshed.press, refreshed.layout, refreshed.toggle, refreshed.dragFollow, refreshed.taskbarHide
         })
         {
             assertEquals(UIThemeMotion.MotionType.SPRING, motion.type, "refreshed motion entries use spring curves");
+        }
+
+        UIThemeMotionTracks notificationTracks = refreshed.notification.tracks;
+
+        assertTrue(notificationTracks != null, "refreshed notification declares render tracks");
+        assertEquals(80F, notificationTracks.xAt(0F), "refreshed notification starts 80 px to the right");
+        assertEquals(40F, notificationTracks.xAt(0.5F), "refreshed notification x track is sampled at runtime");
+        assertEquals(0.5F, notificationTracks.alphaAt(0.5F), "refreshed notification alpha track is sampled at runtime");
+        assertTrue(!refreshed.dragFollow.enabled, "refreshed keeps drag follow opt-in");
+
+        UITheme strawberry = parseFile("strawberry", themes.resolve("strawberry/theme.json"), dark);
+
+        assertTrue(strawberry.dragFollow.enabled, "strawberry demonstrates drag follow");
+    }
+
+    private static void testThemeTemplateExport() throws Exception
+    {
+        Path root = Files.createTempDirectory("bbs-theme-export-");
+        Map<Link, byte[]> assets = new HashMap<>();
+        byte[] icons = {1, 2, 3, 4};
+        byte[] decal = {5, 6, 7};
+        String refreshed = """
+            {
+                "format": 1,
+                "name": "Refreshed",
+                "textures": {
+                    "icons": "assets:themes/refreshed/icons.png",
+                    "background": null
+                },
+                "decorations": [
+                    {"texture": "assets:themes/refreshed/decor/decal.png"}
+                ]
+            }
+            """;
+
+        assets.put(Link.assets("themes/refreshed/theme.json"), refreshed.getBytes(StandardCharsets.UTF_8));
+        assets.put(Link.assets("themes/refreshed/icons.png"), icons);
+        assets.put(Link.assets("themes/refreshed/decor/decal.png"), decal);
+        assets.put(Link.assets("themes/refreshed/notes.txt"), new byte[] {8});
+        assets.put(Link.assets("themes/amber/theme.json"), "{\"format\":1,\"name\":\"Amber\"}".getBytes(StandardCharsets.UTF_8));
+
+        AssetProvider provider = new AssetProvider();
+
+        provider.register(new MapSourcePack(assets));
+
+        try
+        {
+            File first = ThemeTemplateExporter.export("refreshed", root.toFile(), provider);
+
+            assertEquals("refreshed-copy", first.getName(), "selected theme determines export folder");
+
+            MapType exported = DataToString.mapFromString(Files.readString(first.toPath().resolve("theme.json")));
+
+            assertTrue(exported != null, "exported theme document parses");
+            assertEquals("Refreshed", exported.getString("name"), "selected theme document is exported");
+            assertEquals("assets:themes/refreshed-copy/icons.png", exported.getMap("textures").getString("icons"), "icon link is rewritten to the exported id");
+            assertEquals("assets:themes/refreshed-copy/decor/decal.png", exported.getList("decorations").getMap(0).getString("texture"), "decoration link is rewritten to the exported id");
+            assertTrue(java.util.Arrays.equals(icons, Files.readAllBytes(first.toPath().resolve("icons.png"))), "icon bytes are preserved");
+            assertTrue(java.util.Arrays.equals(decal, Files.readAllBytes(first.toPath().resolve("decor/decal.png"))), "nested asset bytes are preserved");
+            assertTrue(Files.isRegularFile(first.toPath().resolve("notes.txt")), "unreferenced files in the theme directory are preserved");
+
+            File second = ThemeTemplateExporter.export("refreshed", root.toFile(), provider);
+
+            assertEquals("refreshed-copy-2", second.getName(), "export collision gets a stable suffix");
+
+            File amber = ThemeTemplateExporter.export("amber", root.toFile(), provider);
+            MapType amberDocument = DataToString.mapFromString(Files.readString(amber.toPath().resolve("theme.json")));
+
+            assertEquals("Amber", amberDocument.getString("name"), "changing the selection changes the exported document");
+        }
+        finally
+        {
+            deleteTree(root);
+        }
+    }
+
+    private static void testSkinMotionTranslations() throws Exception
+    {
+        for (String language : new String[] {"en_us", "zh_cn"})
+        {
+            Path path = Path.of("src/client/resources/assets/bbs/assets/strings/" + language + ".json");
+            MapType strings = DataToString.mapFromString(Files.readString(path));
+
+            assertTrue(strings != null, language + " strings parse");
+
+            for (String key : new String[] {
+                "bbs.config.skins.motion_enabled",
+                "bbs.config.skins.motion_enabled-comment",
+                "bbs.config.skins.motion_speed",
+                "bbs.config.skins.motion_speed-comment"
+            })
+            {
+                assertTrue(!strings.getString(key, "").isBlank(), language + " translates " + key);
+            }
         }
     }
 
@@ -183,6 +289,8 @@ public final class ThemeCoreTest
 
         /* Entries absent from the document inherit the fallback */
         assertEquals(150, theme.notification.duration, "notification inherited");
+        assertTrue(!theme.dragFollow.enabled, "drag_follow inherited disabled state");
+        assertEquals(180, theme.dragFollow.duration, "drag_follow inherited duration");
     }
 
     private static void testMissingKeysInherit()
@@ -195,6 +303,7 @@ public final class ThemeCoreTest
         assertEquals(fallback.surfaceChrome, theme.surfaceChrome, "inherited chrome");
         assertEquals(fallback.textPrimary, theme.textPrimary, "inherited text");
         assertEquals(fallback.overlay, theme.overlay, "inherited overlay entry");
+        assertEquals(fallback.dragFollow, theme.dragFollow, "inherited drag_follow entry");
         assertEquals("mini", theme.name, "name defaults to id, not inherited");
         assertEquals("", theme.author, "author defaults to empty");
     }
@@ -330,6 +439,7 @@ public final class ThemeCoreTest
                     "notification": { "response": 0.8, "damping": 0.5 },
                     "context_menu": { "type": "warp" },
                     "toggle": { "type": "spring", "response": 0.32, "damping": 0.78 },
+                    "drag_follow": { "enabled": true, "type": "spring", "response": 0.28, "damping": 0.82 },
                     "taskbar_hide": { "type": "spring", "response": 0.42, "damping": 0.88 }
                 }
             }
@@ -352,6 +462,9 @@ public final class ThemeCoreTest
         assertEquals(UIThemeMotion.DEFAULT_DAMPING, theme.notification.damping, "ease entry keeps default spring damping");
         assertEquals(UIThemeMotion.MotionType.EASE, theme.contextMenu.type, "unknown type falls back to ease");
         assertEquals(UIThemeMotion.MotionType.SPRING, theme.toggle.type, "toggle spring type parses");
+        assertTrue(theme.dragFollow.enabled, "drag_follow enabled flag parses");
+        assertEquals(UIThemeMotion.MotionType.SPRING, theme.dragFollow.type, "drag_follow spring type parses");
+        assertEquals(0.28F, theme.dragFollow.response, "drag_follow response parses");
         assertEquals(UIThemeMotion.MotionType.SPRING, theme.taskbarHide.type, "taskbar hide spring type parses");
     }
 
@@ -426,6 +539,12 @@ public final class ThemeCoreTest
         root = DataToString.mapFromString("{ \"personalization\": { \"theme\": 0 }, \"skins\": { \"theme_id\": \"custom\" } }");
         BBSSettings.migrateLegacySettings(root);
         assertEquals("custom", root.getMap("skins").getString("theme_id"), "existing theme_id wins");
+
+        /* The short-lived integer curve selector migrates to the stable interpolation id. */
+        root = DataToString.mapFromString("{ \"skins\": { \"motion_easing\": 4 } }");
+        assertTrue(BBSSettings.migrateLegacySettings(root), "integer motion easing migration reports a change");
+        assertEquals("exp_out", root.getMap("skins").getString("motion_easing"), "legacy snappy mode becomes exp_out");
+        assertTrue(!BBSSettings.migrateLegacySettings(root), "string motion interpolation does not migrate twice");
     }
 
     /**
@@ -486,6 +605,8 @@ public final class ThemeCoreTest
         assertEquals(codeDark.overlay.duration, dark.overlay.duration, "code default overlay parity");
         assertEquals(codeDark.scrollbar.easing, dark.scrollbar.easing, "code default scrollbar easing parity");
         assertEquals(codeDark.overlay.type, dark.overlay.type, "code default overlay type parity");
+        assertEquals(codeDark.dragFollow.enabled, dark.dragFollow.enabled, "code default drag_follow enabled parity");
+        assertEquals(codeDark.dragFollow.duration, dark.dragFollow.duration, "code default drag_follow duration parity");
 
         UITheme light = parseFile("light", Path.of("src/client/resources/assets/bbs/assets/themes/light/theme.json"), dark);
 
@@ -855,6 +976,81 @@ public final class ThemeCoreTest
         assertTrue(theme.backgroundMode == UITheme.BackgroundMode.TILE, "child inherits background mode");
         assertTrue(Math.abs(theme.backgroundDim - 0.4F) < 0.0001F, "child inherits background dim");
         assertEquals(1, theme.decorations.size(), "child inherits decorations");
+    }
+
+    private static void deleteTree(Path root) throws IOException
+    {
+        if (!Files.exists(root))
+        {
+            return;
+        }
+
+        try (var paths = Files.walk(root))
+        {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList())
+            {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
+    private static final class MapSourcePack implements ISourcePack
+    {
+        private final Map<Link, byte[]> assets;
+
+        private MapSourcePack(Map<Link, byte[]> assets)
+        {
+            this.assets = assets;
+        }
+
+        @Override
+        public String getPrefix()
+        {
+            return Link.ASSETS;
+        }
+
+        @Override
+        public boolean hasAsset(Link link)
+        {
+            return this.assets.containsKey(link);
+        }
+
+        @Override
+        public InputStream getAsset(Link link) throws IOException
+        {
+            byte[] bytes = this.assets.get(link);
+
+            if (bytes == null)
+            {
+                throw new IOException("Missing test asset " + link);
+            }
+
+            return new ByteArrayInputStream(bytes);
+        }
+
+        @Override
+        public File getFile(Link link)
+        {
+            return null;
+        }
+
+        @Override
+        public Link getLink(File file)
+        {
+            return null;
+        }
+
+        @Override
+        public void getLinksFromPath(Collection<Link> links, Link link, boolean recursive)
+        {
+            for (Link asset : this.assets.keySet())
+            {
+                if (asset.source.equals(link.source) && asset.path.startsWith(link.path))
+                {
+                    links.add(asset);
+                }
+            }
+        }
     }
 
     private static void assertTrue(boolean condition, String message)

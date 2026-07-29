@@ -226,6 +226,7 @@ public class ThemeParser
         builder.press = motionEntry(id, motion, "press", fallback.press);
         builder.layout = motionEntry(id, motion, "layout", fallback.layout);
         builder.toggle = motionEntry(id, motion, "toggle", fallback.toggle);
+        builder.dragFollow = motionEntry(id, motion, "drag_follow", fallback.dragFollow);
         builder.taskbarHide = motionEntry(id, motion, "taskbar_hide", fallback.taskbarHide);
 
         return builder.build();
@@ -604,6 +605,7 @@ public class ThemeParser
         builder.press = new UIThemeMotion(false, 80, Interpolations.SINE_OUT);
         builder.layout = new UIThemeMotion(false, 200, Interpolations.SINE_INOUT);
         builder.toggle = new UIThemeMotion(false, 180, Interpolations.SINE_OUT);
+        builder.dragFollow = new UIThemeMotion(false, 180, Interpolations.SINE_OUT);
         builder.taskbarHide = new UIThemeMotion(true, 250, Interpolations.SINE_INOUT);
 
         return builder.build();

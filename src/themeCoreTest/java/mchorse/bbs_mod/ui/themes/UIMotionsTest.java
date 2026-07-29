@@ -1,10 +1,16 @@
 package mchorse.bbs_mod.ui.themes;
 
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.settings.values.core.ValueString;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
+import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 /**
  * Executable regressions for the motion layer basics: snap semantics,
@@ -28,11 +34,13 @@ public final class UIMotionsTest
         testDurationComposition();
         testSnapAndDisabled();
         testTweenProgression();
+        testSelectedInterpolationOverridesEveryMotionType();
         testSpringClosedFormBranches();
         testSpringInterruptVelocityContinuity();
         testSpringSettlingAndSameTarget();
         testExitReverseTween();
         testCoverageEntriesDefaults();
+        testScrollUsesThemeCurve();
         testLayoutTransitionInterpolation();
 
         System.out.println("UIMotionsTest: all tests passed");
@@ -50,22 +58,75 @@ public final class UIMotionsTest
         UIThemeMotion press = UIMotions.press();
         UIThemeMotion layout = UIMotions.layout();
         UIThemeMotion toggle = UIMotions.toggle();
+        UIThemeMotion dragFollow = UIMotions.dragFollow();
         UIThemeMotion taskbarHide = UIMotions.taskbarHide();
 
-        assertTrue(scrollSmooth != null && hoverScale != null && press != null && layout != null && toggle != null && taskbarHide != null, "coverage entries present");
+        assertTrue(scrollSmooth != null && hoverScale != null && press != null && layout != null && toggle != null && dragFollow != null && taskbarHide != null, "coverage entries present");
         assertTrue(scrollSmooth.enabled, "scroll_smooth enabled by default");
         assertTrue(!hoverScale.enabled, "hover_scale disabled by default");
         assertTrue(!press.enabled, "press disabled by default");
         assertTrue(!layout.enabled, "layout disabled by default");
         assertTrue(!toggle.enabled, "toggle disabled by default");
+        assertTrue(!dragFollow.enabled, "drag_follow disabled by default");
         assertTrue(taskbarHide.enabled, "taskbar_hide enabled by default behind its user setting");
         assertEquals(1F, hoverScale.scale, "hover_scale scale defaults to 1");
         assertEquals(1F, press.scale, "press scale defaults to 1");
         assertEquals(0, UIMotions.duration(hoverScale), "disabled hover_scale has zero duration");
         assertEquals(0, UIMotions.duration(layout), "disabled layout has zero duration");
         assertEquals(0, UIMotions.duration(toggle), "disabled toggle has zero duration");
+        assertEquals(0, UIMotions.duration(dragFollow), "disabled drag_follow takes the settled render path");
         assertTrue(UIMotions.duration(scrollSmooth) > 0, "enabled scroll_smooth has a positive duration");
         assertTrue(UIMotions.duration(taskbarHide) > 0, "enabled taskbar_hide has a positive duration");
+    }
+
+    private static void testScrollUsesThemeCurve() throws Exception
+    {
+        Field currentField = field(ThemeManager.class, "current");
+        Field currentIdField = field(ThemeManager.class, "currentId");
+        UITheme previousTheme = (UITheme) currentField.get(null);
+        String previousId = (String) currentIdField.get(null);
+        ValueBoolean previousSmoothness = BBSSettings.scrollingSmoothness;
+
+        try
+        {
+            UITheme.Builder builder = new UITheme.Builder("dark", ThemeParser.defaultDark("dark"));
+
+            builder.scrollSmooth = spring(0.8F, 0.5F);
+            currentField.set(null, builder.build());
+            currentIdField.set(null, "dark");
+            BBSSettings.scrollingSmoothness = new ValueBoolean("scrolling_smoothness_test", true);
+
+            Scroll scroll = new Scroll(new Area(0, 0, 100, 100));
+
+            scroll.scrollSize = 1000;
+            scroll.setScroll(0D);
+            scroll.scrollTo(100D);
+
+            Method update = Scroll.class.getDeclaredMethod("updateVisualScroll", long.class);
+
+            update.setAccessible(true);
+            update.invoke(scroll, System.currentTimeMillis());
+
+            UITween tween = (UITween) field(Scroll.class, "scrollTween").get(scroll);
+            long start = getLongField(tween, "startMs");
+            float expected = expectedSpringState(0F, 100F, 0F, 0.8F, 0.5F, 0.2F).value;
+
+            update.invoke(scroll, start + 200L);
+            assertNear(expected, (float) scroll.getScroll(), 0.01F, "scroll_smooth consumes the theme spring curve");
+
+            BBSSettings.scrollingSmoothness.set(false);
+            scroll.scrollTo(240D);
+            update.invoke(scroll, start + 201L);
+
+            assertEquals(240D, scroll.getScroll(), "disabled smooth scrolling keeps the immediate path");
+            assertTrue(tween.isSettled(), "disabled smooth scrolling settles its visual tween");
+        }
+        finally
+        {
+            currentField.set(null, previousTheme);
+            currentIdField.set(null, previousId);
+            BBSSettings.scrollingSmoothness = previousSmoothness;
+        }
     }
 
     /**
@@ -186,6 +247,38 @@ public final class UIMotionsTest
         /* Calling to() with the same target every frame is a no-op */
         tween.to(0F, spec);
         assertTrue(tween.isSettled(), "same-target to() doesn't restart");
+    }
+
+    private static void testSelectedInterpolationOverridesEveryMotionType() throws Exception
+    {
+        ValueString previous = BBSSettings.motionEasing;
+
+        try
+        {
+            BBSSettings.motionEasing = new ValueString("motion_easing_test", "linear");
+
+            UIThemeMotion ease = new UIThemeMotion(true, 400, Interpolations.BOUNCE_OUT);
+            UIThemeMotion spring = new UIThemeMotion(true, 400, Interpolations.BOUNCE_OUT, UIThemeMotion.MotionType.SPRING, 0.4F, 0.4F);
+
+            assertEquals(Interpolations.LINEAR, UIMotions.easing(ease), "selected interpolation overrides ease themes");
+            assertEquals(Interpolations.LINEAR, UIMotions.easing(spring), "selected interpolation overrides spring themes");
+            assertEquals(UIThemeMotion.MotionType.EASE, UIMotions.type(spring), "spring theme uses selected interpolation mode");
+
+            UITween tween = new UITween();
+
+            tween.to(1F, spring);
+
+            long start = getLongField(tween, "startMs");
+
+            assertNear(0.5F, tween.update(start + 200L), 0.002F, "selected linear interpolation drives spring-authored motion");
+
+            BBSSettings.motionEasing.set("not_registered");
+            assertEquals(Interpolations.SINE_OUT, UIMotions.easing(ease), "invalid persisted interpolation falls back safely");
+        }
+        finally
+        {
+            BBSSettings.motionEasing = previous;
+        }
     }
 
     private static void testSpringClosedFormBranches() throws Exception

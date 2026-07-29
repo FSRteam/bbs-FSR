@@ -38,6 +38,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
 import mchorse.bbs_mod.ui.utils.Label;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.motion.UIMotionEasings;
 import mchorse.bbs_mod.utils.FFMpegUtils;
 import mchorse.bbs_mod.utils.OS;
 import mchorse.bbs_mod.utils.interps.Interpolation;
@@ -225,6 +226,22 @@ public class UIValueMap
                 });
 
                 button.w(90);
+
+                return Arrays.asList(UIValueFactory.column(button, value));
+            }
+
+            if (value == BBSSettings.motionEasing)
+            {
+                UIIcon button = new UIIcon(
+                    () -> UIInterpolationContextMenu.INTERP_ICON_MAP.getOrDefault(UIMotionEasings.selected(), Icons.INTERP_LINEAR),
+                    (b) ->
+                    {
+                        Interpolation interpolation = new Interpolation("motion_easing", Interpolations.MAP, UIMotionEasings.selected());
+
+                        b.getContext().replaceContextMenu(new UIInterpolationContextMenu(interpolation)
+                            .callback(() -> value.set(interpolation.getInterp().getKey())));
+                    }
+                );
 
                 return Arrays.asList(UIValueFactory.column(button, value));
             }

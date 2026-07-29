@@ -4,6 +4,8 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.themes.UITheme;
 import mchorse.bbs_mod.ui.themes.UIThemeMotion;
+import mchorse.bbs_mod.utils.interps.IInterp;
+import mchorse.bbs_mod.utils.interps.Interpolations;
 
 /**
  * Static helpers that combine a theme's motion entries with the user-level
@@ -55,8 +57,29 @@ public class UIMotions
         return Math.round(spec.duration / speed);
     }
 
-    public static float response(UIThemeMotion spec)
+    /** Effective easing for every motion entry, including spring-authored theme entries. */
+    public static IInterp easing(UIThemeMotion spec)
     {
+        IInterp themed = spec == null || spec.easing == null ? Interpolations.SINE_OUT : spec.easing;
+
+        return UIMotionEasings.resolve(themed);
+    }
+
+    /**
+     * Selecting an interpolation is an explicit global override. Spring-authored entries then
+     * use their response as an ease duration so the chosen curve visibly affects every theme.
+     */
+    public static UIThemeMotion.MotionType type(UIThemeMotion spec)
+    {
+        if (spec == null)
+        {
+            return UIThemeMotion.MotionType.EASE;
+        }
+
+        return UIMotionEasings.overridesTheme() ? UIThemeMotion.MotionType.EASE : spec.type;
+    }
+
+    public static float response(UIThemeMotion spec)    {
         if (spec == null || !spec.enabled || !enabled())
         {
             return 0F;
@@ -125,6 +148,11 @@ public class UIMotions
     public static UIThemeMotion toggle()
     {
         return ThemeManager.current().toggle;
+    }
+
+    public static UIThemeMotion dragFollow()
+    {
+        return ThemeManager.current().dragFollow;
     }
 
     public static UIThemeMotion taskbarHide()

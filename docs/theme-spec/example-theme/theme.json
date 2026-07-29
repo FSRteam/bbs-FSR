@@ -91,6 +91,7 @@
         "press":         { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
         "layout":        { "enabled": false, "duration": 200, "easing": "sine_inout" },
         "toggle":        { "enabled": false, "duration": 180, "easing": "sine_out" },
+        "drag_follow":   { "enabled": false, "duration": 180, "easing": "sine_out" },
         "taskbar_hide":  { "enabled": true, "duration": 250, "easing": "sine_inout" }
     }
 }

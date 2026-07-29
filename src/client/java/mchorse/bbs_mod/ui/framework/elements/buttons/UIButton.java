@@ -118,11 +118,16 @@ public class UIButton extends UIClickable<UIButton> implements ITextColoring
         int x = this.area.mx(font.getWidth(label));
         int y = this.area.my(font.getHeight());
 
-        /* Colors.WHITE doubles as "follow the theme" for the default text color */
-        int labelColor = this.textColor == Colors.WHITE ? BBSSettings.textColor() : this.textColor;
+        int labelColor = resolveLabelColor(this.textColor, BBSSettings.textColor());
 
         context.batcher.text(label, x, y, Colors.mulRGB(labelColor, 1F - 0.1F * hoverFactor), this.textShadow);
 
         this.renderLockedArea(context);
+    }
+
+    private static int resolveLabelColor(int configuredColor, int themeTextColor)
+    {
+        /* Colors.WHITE doubles as "follow the theme" for the default text color. */
+        return configuredColor == Colors.WHITE ? themeTextColor : configuredColor;
     }
 }

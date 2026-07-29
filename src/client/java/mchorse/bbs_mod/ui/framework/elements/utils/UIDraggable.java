@@ -1,8 +1,12 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.themes.UIThemeMotion;
 import mchorse.bbs_mod.ui.utils.Scroll;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.colors.Colors;
 import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
@@ -27,6 +31,8 @@ public class UIDraggable extends UIElement
     private int mouseX;
     private int mouseY;
     private Vector2i referenceMouse;
+    private final UITween visualX = new UITween();
+    private final UITween visualY = new UITween();
 
     public UIDraggable(Consumer<UIContext> callback)
     {
@@ -116,6 +122,7 @@ public class UIDraggable extends UIElement
             this.mouseX = context.mouseX;
             this.mouseY = context.mouseY;
             this.dragOwnership.acquire(context.mouseButton);
+            this.snapVisualPosition();
 
             if (this.reference != null)
             {
@@ -137,6 +144,7 @@ public class UIDraggable extends UIElement
         }
 
         this.referenceMouse = null;
+        this.snapVisualPosition();
 
         if (this.dragEndCallback != null)
         {
@@ -152,6 +160,7 @@ public class UIDraggable extends UIElement
         if (this.dragOwnership.release(context.mouseButton))
         {
             this.referenceMouse = null;
+            this.snapVisualPosition();
         }
     }
 
@@ -166,6 +175,7 @@ public class UIDraggable extends UIElement
         {
             this.dragOwnership.release(GLFW.GLFW_MOUSE_BUTTON_LEFT);
             this.referenceMouse = null;
+            this.snapVisualPosition();
         }
 
         if (enabled)
@@ -182,13 +192,47 @@ public class UIDraggable extends UIElement
 
         if (!this.hover || this.area.isInside(context) || this.isDragging())
         {
-            if (this.render != null)
+            UIThemeMotion follow = UIMotions.dragFollow();
+            boolean animated = this.isDragging() && UIMotions.duration(follow) > 0;
+
+            if (animated)
             {
-                this.render.accept(context);
+                this.visualX.to(this.area.x, follow);
+                this.visualY.to(this.area.y, follow);
             }
             else
             {
-                Scroll.bar(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey());
+                this.snapVisualPosition();
+            }
+
+            float x = this.visualX.update();
+            float y = this.visualY.update();
+            boolean transformed = animated && (!this.visualX.isSettled() || !this.visualY.isSettled());
+            PoseStack pose = context.batcher.getContext().pose();
+
+            if (transformed)
+            {
+                pose.pushPose();
+                pose.translate(x - this.area.x, y - this.area.y, 0F);
+            }
+
+            try
+            {
+                if (this.render != null)
+                {
+                    this.render.accept(context);
+                }
+                else
+                {
+                    Scroll.bar(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey());
+                }
+            }
+            finally
+            {
+                if (transformed)
+                {
+                    pose.popPose();
+                }
             }
         }
 
@@ -220,5 +264,11 @@ public class UIDraggable extends UIElement
                 context.mouseY = mouseY;
             }
         }
+    }
+
+    private void snapVisualPosition()
+    {
+        this.visualX.snap(this.area.x);
+        this.visualY.snap(this.area.y);
     }
 }

@@ -1,7 +1,7 @@
 {
     "format": 1,
     "name": "Refreshed",
-    "author": "BBS Refreshed / FSR",
+    "author": "FSR",
     "description": "Refreshed 2.0 visual style adapted to the FSR theme system",
     "base": "dark",
     "variant": "dark",
@@ -72,6 +72,7 @@
         "press":         { "enabled": true, "type": "spring", "response": 0.18, "damping": 0.80, "scale": 0.96 },
         "layout":        { "enabled": true, "type": "spring", "response": 0.42, "damping": 0.86 },
         "toggle":        { "enabled": true, "type": "spring", "response": 0.32, "damping": 0.78 },
+        "drag_follow":   { "enabled": false, "type": "spring", "response": 0.30, "damping": 0.86 },
         "taskbar_hide":  { "enabled": true, "type": "spring", "response": 0.42, "damping": 0.88 }
     },
     "textures": {

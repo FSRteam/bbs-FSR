@@ -72,6 +72,7 @@
         "scroll_smooth": { "enabled": true },
         "hover_scale": { "enabled": true, "duration": 90, "easing": "sine_out", "scale": 1.06 },
         "press": { "enabled": true, "type": "spring", "response": 0.2, "damping": 0.6, "scale": 0.94 },
-        "layout": { "enabled": true, "type": "spring", "response": 0.3, "damping": 0.9 }
+        "layout": { "enabled": true, "type": "spring", "response": 0.3, "damping": 0.9 },
+        "drag_follow": { "enabled": true, "type": "spring", "response": 0.28, "damping": 0.82 }
     }
 }

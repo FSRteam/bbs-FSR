@@ -51,6 +51,95 @@ public class Easings
 
     /* Easing factories */
 
+    /**
+     * Cubic Bezier timing with implicit (0, 0) and (1, 1) endpoints — the same shape CSS'
+     * {@code cubic-bezier()} and Core Animation's timing functions describe. The curve is
+     * parametric, so x is first solved for the curve parameter, then that parameter's y is
+     * returned. Control points are expected inside 0..1, which keeps x monotonic and the
+     * solve well behaved.
+     */
+    public static IEasing cubicBezier(double x1, double y1, double x2, double y2)
+    {
+        return (args, x) -> bezierAxis(bezierParameter(x, x1, x2), y1, y2);
+    }
+
+    private static double bezierAxis(double t, double p1, double p2)
+    {
+        double inv = 1D - t;
+
+        return 3D * inv * inv * t * p1 + 3D * inv * t * t * p2 + t * t * t;
+    }
+
+    private static double bezierSlope(double t, double p1, double p2)
+    {
+        double inv = 1D - t;
+
+        return 3D * inv * inv * p1 + 6D * inv * t * (p2 - p1) + 3D * t * t * (1D - p2);
+    }
+
+    private static double bezierParameter(double x, double x1, double x2)
+    {
+        if (x <= 0D)
+        {
+            return 0D;
+        }
+
+        if (x >= 1D)
+        {
+            return 1D;
+        }
+
+        double t = x;
+
+        for (int i = 0; i < 8; i++)
+        {
+            double error = bezierAxis(t, x1, x2) - x;
+
+            if (Math.abs(error) < 1e-6D)
+            {
+                return t;
+            }
+
+            double slope = bezierSlope(t, x1, x2);
+
+            if (Math.abs(slope) < 1e-6D)
+            {
+                break;
+            }
+
+            t -= error / slope;
+        }
+
+        /* Newton stalls on nearly flat segments, so finish with a bounded bisection. */
+        double low = 0D;
+        double high = 1D;
+
+        t = x;
+
+        for (int i = 0; i < 24; i++)
+        {
+            double value = bezierAxis(t, x1, x2);
+
+            if (Math.abs(value - x) < 1e-6D)
+            {
+                break;
+            }
+
+            if (value < x)
+            {
+                low = t;
+            }
+            else
+            {
+                high = t;
+            }
+
+            t = (low + high) / 2D;
+        }
+
+        return t;
+    }
+
     public static IEasing out(IEasing easing)
     {
         return (args, x) -> 1D - easing.calculate(args, 1D - x);

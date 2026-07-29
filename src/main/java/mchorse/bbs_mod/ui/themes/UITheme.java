@@ -93,6 +93,7 @@ public class UITheme
     public final UIThemeMotion press;
     public final UIThemeMotion layout;
     public final UIThemeMotion toggle;
+    public final UIThemeMotion dragFollow;
     public final UIThemeMotion taskbarHide;
 
     UITheme(Builder builder)
@@ -163,6 +164,7 @@ public class UITheme
         this.press = builder.press;
         this.layout = builder.layout;
         this.toggle = builder.toggle;
+        this.dragFollow = builder.dragFollow;
         this.taskbarHide = builder.taskbarHide;
     }
 
@@ -234,6 +236,7 @@ public class UITheme
         public UIThemeMotion press;
         public UIThemeMotion layout;
         public UIThemeMotion toggle;
+        public UIThemeMotion dragFollow;
         public UIThemeMotion taskbarHide;
 
         /**
@@ -314,6 +317,7 @@ public class UITheme
             this.press = from.press;
             this.layout = from.layout;
             this.toggle = from.toggle;
+            this.dragFollow = from.dragFollow;
             this.taskbarHide = from.taskbarHide;
         }
 

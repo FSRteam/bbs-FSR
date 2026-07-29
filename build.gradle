@@ -286,6 +286,12 @@ sourceSets {
     }
 }
 
+runs {
+    client {
+        modSource sourceSets.client
+    }
+}
+
 configurations {
     clientImplementation.extendsFrom implementation
     clientCompileOnly.extendsFrom compileOnly
