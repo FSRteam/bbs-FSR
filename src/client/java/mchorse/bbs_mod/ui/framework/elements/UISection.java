@@ -94,10 +94,21 @@ public class UISection extends UIElement
 
     public void resizeParent()
     {
-        if (this.getParent() != null)
+        UIElement parent = this.getParent();
+
+        if (parent == null)
         {
-            this.getParent().resize();
+            return;
         }
+
+        UIElement element = parent;
+
+        while (element != null && !(element instanceof UIScrollView))
+        {
+            element = element.getParent();
+        }
+
+        (element == null ? parent : element).resize();
     }
 
     @Override
