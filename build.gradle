@@ -377,6 +377,8 @@ dependencies {
 
     clientCompileOnly "maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge"
     clientCompileOnly "maven.modrinth:iris:1.8.8+1.21.1-neoforge"
+    clientRuntimeOnly "maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge"
+    clientRuntimeOnly "maven.modrinth:iris:1.8.8+1.21.1-neoforge"
 
     // TODO: validate 1.21.1-compatible versions for optional client mods before re-enabling
     // modCompileOnly "maven.modrinth:distanthorizons:2.1.0-a-1.20.4"
@@ -405,6 +407,12 @@ tasks.register('testVideoExportUtils', JavaExec) {
     dependsOn tasks.named('clientClasses'), tasks.named('videoExportTestClasses')
     classpath = sourceSets.videoExportTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.utils.VideoExportUtilsTest'
+}
+
+tasks.register('testMatrixUtils', JavaExec) {
+    dependsOn tasks.named('compileJava')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.utils.MatrixUtilsTest'
 }
 
 tasks.register('testPlatformResourceConsistency', JavaExec) {
@@ -593,6 +601,7 @@ tasks.register('buildSmokeFixturePlugins') {
 }
 
 def bbsVerificationTaskNames = [
+    'testMatrixUtils',
     'testSoundAcoustics',
     'testPluginHotReload',
     'testAudioFormat',

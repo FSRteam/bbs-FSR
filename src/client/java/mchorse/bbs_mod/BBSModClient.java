@@ -467,7 +467,14 @@ public class BBSModClient
             UIKeys.GENERAL_Y,
             UIKeys.GENERAL_Z
         );
-        BBSSettings.scaleHotkeyOrder.labels(UIKeys.GENERAL_X, UIKeys.GENERAL_Y, UIKeys.GENERAL_Z);
+        BBSSettings.scaleHotkeyOrder
+            .labels(
+                UIKeys.TRANSFORMS_TARGET_ALL,
+                UIKeys.GENERAL_X,
+                UIKeys.GENERAL_Y,
+                UIKeys.GENERAL_Z
+            )
+            .colors(0, Colors.A100 | Colors.RED, Colors.A100 | Colors.GREEN, Colors.A100 | Colors.BLUE);
         BBSSettings.rotateHotkeyOrder.labels(
             UIKeys.TRANSFORMS_TARGET_VIEW,
             UIKeys.TRANSFORMS_TARGET_SPHERE,

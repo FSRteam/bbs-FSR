@@ -838,8 +838,6 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_TEXTURE = L10n.lang("bbs.ui.model_editor.texture");
     public static final IKey MODEL_EDITOR_UI_SCALE = L10n.lang("bbs.ui.model_editor.ui_scale");
     public static final IKey MODEL_EDITOR_SCALE = L10n.lang("bbs.ui.model_editor.scale");
-    public static final IKey MODEL_EDITOR_BEVEL = L10n.lang("bbs.ui.model_editor.bevel");
-    public static final IKey MODEL_EDITOR_BEVEL_SEGMENTS = L10n.lang("bbs.ui.model_editor.bevel_segments");
     public static final IKey MODEL_EDITOR_WELDS = L10n.lang("bbs.ui.model_editor.welds");
     public static final IKey MODEL_EDITOR_WELD_SOURCE_BONE = L10n.lang("bbs.ui.model_editor.weld.source_bone");
     public static final IKey MODEL_EDITOR_WELD_SOURCE_FACE = L10n.lang("bbs.ui.model_editor.weld.source_face");
@@ -889,6 +887,12 @@ public class UIKeys
     public static final IKey MODEL_EDITOR_SNEAKING_CLEAR = L10n.lang("bbs.ui.model_editor.sneaking.clear");
     public static final IKey MODEL_EDITOR_OPEN_HISTORY = L10n.lang("bbs.ui.model_editor.open_history");
     public static final IKey MODEL_EDITOR_HISTORY_TITLE = L10n.lang("bbs.ui.model_editor.history-title");
+    public static final IKey MODEL_EDITOR_ITEM_DUPLICATE = L10n.lang("bbs.ui.model_editor.item.duplicate");
+    public static final IKey MODEL_EDITOR_WELD_DUPLICATE = L10n.lang("bbs.ui.model_editor.weld.duplicate");
+    public static final IKey MODEL_EDITOR_MAP_DUPLICATE = L10n.lang("bbs.ui.model_editor.map.duplicate");
+    public static final IKey MODEL_EDITOR_KEYS_EXPAND_ALL = L10n.lang("bbs.ui.model_editor.keys.expand_all");
+    public static final IKey MODEL_EDITOR_KEYS_COLLAPSE_ALL = L10n.lang("bbs.ui.model_editor.keys.collapse_all");
+    public static final IKey MODEL_EDITOR_KEYS_FIND_BONE = L10n.lang("bbs.ui.model_editor.keys.find_bone");
     public static final IKey MODEL_BLOCKS_TRANSFORM_FIRST_PERSON = L10n.lang("bbs.ui.model_blocks.transform.first_person");
     public static final IKey MODEL_BLOCKS_TRANSFORM_INVENTORY = L10n.lang("bbs.ui.model_blocks.transform.inventory");
     public static final IKey MODEL_BLOCKS_TRANSFORM_THIRD_PERSON = L10n.lang("bbs.ui.model_blocks.transform.third_person");
@@ -1355,6 +1359,7 @@ public class UIKeys
     public static final IKey TRANSFORMS_ALTERNATE_INVERT = L10n.lang("bbs.ui.transforms.alternate_invert");
     public static final IKey TRANSFORMS_SPACE_GLOBAL = L10n.lang("bbs.ui.transforms.space.global");
     public static final IKey TRANSFORMS_SPACE_LOCAL = L10n.lang("bbs.ui.transforms.space.local");
+    public static final IKey TRANSFORMS_TARGET_ALL = L10n.lang("bbs.ui.transforms.target.all");
     public static final IKey TRANSFORMS_TARGET_SCREEN = L10n.lang("bbs.ui.transforms.target.screen");
     public static final IKey TRANSFORMS_TARGET_SPHERE = L10n.lang("bbs.ui.transforms.target.sphere");
     public static final IKey TRANSFORMS_TARGET_VIEW = L10n.lang("bbs.ui.transforms.target.view");

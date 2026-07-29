@@ -10,10 +10,8 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * A {@link ModelWeld} resolved against a concrete model. The weld seals a bending joint by pulling both
@@ -97,39 +95,6 @@ public class WeldBinding
         }
 
         return false;
-    }
-
-    /**
-     * Welded face quads per cube, so the bevel can leave those faces (and their edges) sharp — the seam
-     * lives on them — while the rest of the cube still rounds.
-     */
-    public static Map<ModelCube, Set<ModelQuad>> weldedFaces(Model model, List<ModelWeld> welds)
-    {
-        Map<ModelCube, Set<ModelQuad>> faces = new HashMap<>();
-
-        for (ModelWeld weld : welds)
-        {
-            collectFaces(model, weld.sourceBone, weld.sourceFace, faces);
-            collectFaces(model, weld.targetBone, weld.targetFace, faces);
-        }
-
-        return faces;
-    }
-
-    private static void collectFaces(Model model, String bone, String faceName, Map<ModelCube, Set<ModelQuad>> faces)
-    {
-        CubeFace face = CubeFace.fromName(faceName);
-        ModelGroup group = model.getGroup(bone);
-
-        if (face == null || group == null)
-        {
-            return;
-        }
-
-        for (ModelCube cube : facedCubes(group, face))
-        {
-            faces.computeIfAbsent(cube, (k) -> new HashSet<>()).add(faceQuad(cube, face));
-        }
     }
 
     /** The group's cubes that carry the welded face, in model order; {@link #pairByCrossSection} pairs them up. */

@@ -185,8 +185,11 @@ public abstract class BaseFilmController
         {
             if (relative)
             {
-                stack.last().pose().identity();
-                stack.last().normal().identity();
+                /* Cancel the global camera view without discarding a view/local matrix
+                 * already supplied by the active render pass. Vanilla starts with an
+                 * identity stack; Iris may seed it before this replay is rendered. */
+                stack.last().pose().rotate(context.camera.rotation());
+                stack.last().normal().rotate(context.camera.rotation());
             }
 
             MatrixStackUtils.multiply(stack, target);

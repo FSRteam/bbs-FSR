@@ -128,6 +128,7 @@ public abstract class FormRenderer <T extends Form>
         int light = context.light;
         PoseStack world = context.world;
         boolean queueWasActive = false;
+        boolean queueSuspended = false;
         boolean stackPushed = false;
         boolean worldPushed = false;
         boolean statesApplied = false;
@@ -140,6 +141,7 @@ public abstract class FormRenderer <T extends Form>
             if (!context.canDeferWorldTranslucency())
             {
                 queueWasActive = FormTranslucentQueue.suspend();
+                queueSuspended = true;
             }
 
             statesApplied = true;
@@ -205,7 +207,10 @@ public abstract class FormRenderer <T extends Form>
                 finally
                 {
                     context.light = light;
-                    FormTranslucentQueue.restore(queueWasActive);
+                    if (queueSuspended)
+                    {
+                        FormTranslucentQueue.restore(queueWasActive);
+                    }
 
                     if (statesApplied)
                     {

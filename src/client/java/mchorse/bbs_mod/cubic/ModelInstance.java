@@ -7,11 +7,8 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.cubic.data.animation.Animations;
 import mchorse.bbs_mod.cubic.data.model.Model;
-import mchorse.bbs_mod.cubic.data.model.ModelCube;
-import mchorse.bbs_mod.cubic.data.model.ModelCubeBevel;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.data.model.ModelMesh;
-import mchorse.bbs_mod.cubic.data.model.ModelQuad;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.View;
@@ -59,7 +56,6 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -98,9 +94,6 @@ public class ModelInstance implements IModelInstance
 
     /** Welds resolved against the model (groups/cubes/corners). Built lazily on first render, kept across frames. */
     private List<WeldBinding> weldBindings;
-
-    /** Whether the cubes' quads currently carry a bevel, so {@link #applyBevel} knows to reset them. */
-    private boolean beveled;
 
     /** Whether the VAO bake skipped some groups (shape-keyed meshes) — those render immediate via the hybrid path. */
     private boolean partialVaos;
@@ -212,45 +205,6 @@ public class ModelInstance implements IModelInstance
         }
 
         this.config.fromData(data);
-        this.applyBevel();
-    }
-
-    /**
-     * (Re)generate the cubes' quads to match the config's bevel. Welded faces (and their edges) stay
-     * sharp — the seam lives on them — while the rest of a welded cube still rounds. Rebuilding VAOs
-     * afterwards is the caller's business (the load order does it naturally; the editor's refresh re-bakes).
-     */
-    public void applyBevel()
-    {
-        float bevel = this.config.bevel.get();
-
-        if (!(this.model instanceof Model model) || (bevel <= 0F && !this.beveled))
-        {
-            return;
-        }
-
-        for (ModelGroup group : model.getAllGroups())
-        {
-            for (ModelCube cube : group.cubes)
-            {
-                cube.generateQuads(model.textureWidth, model.textureHeight);
-            }
-        }
-
-        if (bevel > 0F)
-        {
-            Map<ModelCube, Set<ModelQuad>> welded = WeldBinding.weldedFaces(model, this.config.getWelds());
-
-            for (ModelGroup group : model.getAllGroups())
-            {
-                for (ModelCube cube : group.cubes)
-                {
-                    ModelCubeBevel.apply(cube, bevel, this.config.bevelSegments.get(), welded.getOrDefault(cube, Collections.emptySet()));
-                }
-            }
-        }
-
-        this.beveled = bevel > 0F;
     }
 
     /* Config accessors — the instance reads all of these from {@link #config}. */

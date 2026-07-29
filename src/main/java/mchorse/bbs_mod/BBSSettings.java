@@ -704,11 +704,11 @@ public class BBSSettings {
 
 		builder.category("transformation", Icons.SCALE);
 		gizmos = builder.getBoolean("gizmos", true);
-		axesScale = builder.getFloat("axes_scale", 3F, 0F, 10F);
-		axesThickness = builder.getFloat("axes_thickness", 0.5F, 0.25F, 3F);
+		axesScale = builder.getFloat("axes_scale", 2F, 0F, 10F);
+		axesThickness = builder.getFloat("axes_thickness", 0.35F, 0.25F, 3F);
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", true);
 		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
-		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 1);
+		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 0);
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
@@ -725,7 +725,7 @@ public class BBSSettings {
 		poseShowDisabledBones = builder.getBoolean("pose_show_disabled_bones", false);
 		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
 		builder.register(translateHotkeyOrder);
-		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");
+		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "all", "x", "y", "z");
 		builder.register(scaleHotkeyOrder);
 		rotateHotkeyOrder = new ValueOrder("rotate_hotkey_order", "view", "sphere", "x", "y", "z");
 		builder.register(rotateHotkeyOrder);
@@ -740,7 +740,7 @@ public class BBSSettings {
 
 		builder.category("background", Icons.IMAGE);
 		backgroundImage = builder.getRL("image", null);
-		backgroundColor = builder.getInt("color", 0xff101217).colorAlpha();
+		backgroundColor = builder.getInt("color", 0x7b000000).colorAlpha();
 
 		builder.category("chroma_sky", Icons.GLOBE);
 		chromaSkyEnabled = builder.getBoolean("enabled", false);
@@ -750,8 +750,8 @@ public class BBSSettings {
 
 		builder.category("scrollbars", Icons.VERTICAL);
 		scrollbarWidth = builder.getInt("width", 4, 2, 10);
-		scrollingSensitivity = builder.getFloat("sensitivity", 1F, 0F, 10F);
-		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 1F, 0F, 10F);
+		scrollingSensitivity = builder.getFloat("sensitivity", 3F, 0F, 10F);
+		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 3F, 0F, 10F);
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", false);
 

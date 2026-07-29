@@ -1408,6 +1408,11 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
     @Override
     public void render(UIContext context)
     {
+        if (this.isEnabled() && (this.focused || this.area.isInside(context)))
+        {
+            context.requestCursor(GLFW.GLFW_IBEAM_CURSOR);
+        }
+
         this.handleLogic(context);
 
         if (this.background)

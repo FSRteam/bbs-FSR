@@ -222,6 +222,12 @@ public final class BBSUiLifecycleSourceTest
         String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
         String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
         String modelEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIModelForm.java");
+        String transformBase = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UITransform.java");
+        String poseFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseKeyframeFactory.java");
+        String poseTransformFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseTransformKeyframeFactory.java");
+        String baseTextbox = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UIBaseTextbox.java");
+        String textbox = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextbox.java");
+        String textarea = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextarea.java");
         String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
         String enableMode = sourceSection(transform, "public void enableMode(int mode)", "private HotkeyTarget currentHotkeyTarget");
 
@@ -311,8 +317,29 @@ public final class BBSUiLifecycleSourceTest
                 && modelRenderer.contains("!reusePreviewPose"),
             "animated preview pose reuse no longer covers picking, matrix sampling and the model-editor thumbnail");
         check(enableMode.contains("this.nextHotkeyTarget(mode, ray)")
-                && !enableMode.contains("enableUniformScale"),
-            "the S hotkey no longer follows the configured X/Y/Z scale cycle");
+                && enableMode.contains("target == HotkeyTarget.ALL")
+                && enableMode.contains("this.enableUniformScale(drag, true)")
+                && transform.contains("if (this.isScaleAll()) return HotkeyTarget.ALL;")
+                && transform.contains("ALL(\"all\", null, false)"),
+            "the S hotkey no longer cycles through the configured all/X/Y/Z targets");
+        check(transform.contains("private boolean isScaleFieldDragging()")
+                && transform.contains("field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.syncUniformScaleRow())")
+                && transform.contains("!this.editing && !this.isScaleFieldDragging()")
+                && transform.contains("!= this.isScaleRowCollapsed()")
+                && transformBase.contains("protected boolean isScaleRowCollapsed()"),
+            "uniform-scale row synchronization can mutate children during a trackpad render or compare against the SPACE/RMB modifier");
+        check(poseFactory.contains("class UIPoseTransforms extends UIKeyframePropTransform")
+                && poseFactory.contains("protected void applyDuringRecording(int tick, Consumer<Transform> consumer)")
+                && poseFactory.contains("UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick")
+                && poseFactory.contains("Keyframe<Pose> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick)")
+                && poseTransformFactory.contains("class UIPoseTransforms extends UIKeyframePropTransform")
+                && poseTransformFactory.contains("Keyframe<PoseTransform> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick)"),
+            "Pose or PoseTransform editing still bypasses transform recording keyframes");
+        check(baseTextbox.contains("protected void requestTextCursor(UIContext context)")
+                && baseTextbox.contains("context.requestCursor(GLFW.GLFW_IBEAM_CURSOR)")
+                && textbox.contains("this.requestTextCursor(context);")
+                && textarea.contains("context.requestCursor(GLFW.GLFW_IBEAM_CURSOR)"),
+            "text fields no longer request the I-beam cursor while focused or hovered");
         check(formEditor.contains("this.general.hotkeyDrag(() ->")
                 && modelEditor.contains("this.modelPanel.poseEditor.transform.hotkeyDrag(() ->"),
             "form/model transform hotkeys cannot reach the view and sphere rotation modes");

@@ -80,6 +80,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         int width;
         int height;
+        int viewportX;
+        int viewportY;
 
         try (MemoryStack stack = MemoryStack.stackPush())
         {
@@ -87,6 +89,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
             GL30.glGetIntegerv(GL30.GL_VIEWPORT, viewport);
 
+            viewportX = viewport.get(0);
+            viewportY = viewport.get(1);
             width = viewport.get(2);
             height = viewport.get(3);
         }
@@ -96,9 +100,11 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         int h = MathUtils.clamp(this.form.height.get(), 2, 4096);
         int prevDraw = GL30.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int prevRead = GL30.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
-        Vector3f light0 = RenderSystem.shaderLightDirections[0];
-        Vector3f light1 = RenderSystem.shaderLightDirections[1];
+        int prevCullFace = GL30.glGetInteger(GL11.GL_CULL_FACE_MODE);
+        Vector3f light0 = new Vector3f(RenderSystem.shaderLightDirections[0]);
+        Vector3f light1 = new Vector3f(RenderSystem.shaderLightDirections[1]);
         Matrix4f projectionMatrix = this.projectionMatrix.set(RenderSystem.getProjectionMatrix());
+        VertexSorting vertexSorting = RenderSystem.getVertexSorting();
 
         GL30.glCullFace(GL30.GL_FRONT);
         RenderSystem.setShaderLights(framebufferLight0, framebufferLight1);
@@ -106,54 +112,73 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         RenderSystem.getModelViewStack().pushMatrix();
         RenderSystem.getModelViewStack().identity();
 
-        framebuffer.apply();
-
-        if (w != mainTexture.width || h != mainTexture.height)
-        {
-            framebuffer.resize(w, h);
-        }
-
-        framebuffer.clear();
-
-        context.stack.pushPose();
-        context.stack.last().pose().identity();
-        context.stack.last().normal().identity();
-
-        depth += 1;
-
-        if (depth == 1)
-        {
-            BBSRendering.setIrisMainBound(false);
-        }
-
-        boolean queueWasActive = FormTranslucentQueue.suspend();
-
         try
         {
-            super.renderBodyParts(context);
+            RenderSystem.applyModelViewMatrix();
+            framebuffer.apply();
+
+            if (w != mainTexture.width || h != mainTexture.height)
+            {
+                framebuffer.resize(w, h);
+            }
+
+            framebuffer.clear();
+
+            context.stack.pushPose();
+
+            try
+            {
+                context.stack.last().pose().identity();
+                context.stack.last().normal().identity();
+
+                depth += 1;
+                boolean outermost = depth == 1;
+
+                try
+                {
+                    if (outermost)
+                    {
+                        BBSRendering.setIrisMainBound(false);
+                    }
+
+                    boolean queueWasActive = FormTranslucentQueue.suspend();
+
+                    try
+                    {
+                        super.renderBodyParts(context);
+                    }
+                    finally
+                    {
+                        FormTranslucentQueue.restore(queueWasActive);
+                    }
+                }
+                finally
+                {
+                    depth -= 1;
+
+                    if (outermost)
+                    {
+                        BBSRendering.setIrisMainBound(true);
+                    }
+                }
+            }
+            finally
+            {
+                context.stack.popPose();
+            }
         }
         finally
         {
-            depth -= 1;
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
+            GL30.glViewport(viewportX, viewportY, width, height);
 
-            if (depth == 0)
-            {
-                BBSRendering.setIrisMainBound(true);
-            }
-
-            FormTranslucentQueue.restore(queueWasActive);
+            RenderSystem.setShaderLights(light0, light1);
+            RenderSystem.getModelViewStack().popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(projectionMatrix, vertexSorting);
+            GL30.glCullFace(prevCullFace);
         }
-
-        context.stack.popPose();
-
-        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
-        GL30.glViewport(0, 0, width, height);
-
-        RenderSystem.setShaderLights(light0, light1);
-        RenderSystem.getModelViewStack().popMatrix();
-        RenderSystem.setProjectionMatrix(projectionMatrix, VertexSorting.DISTANCE_TO_ORIGIN);
-        GL30.glCullFace(GL30.GL_BACK);
 
         boolean shading = !context.isPicking();
         VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR;
