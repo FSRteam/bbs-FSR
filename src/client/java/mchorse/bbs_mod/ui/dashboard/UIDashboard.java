@@ -282,7 +282,10 @@ public class UIDashboard extends UIBaseMenu
     {
         this.context.unfocus();
         this.orbitUI.cancelGesture();
-        this.orbitUI.setControl(this.panels.isFlightSupported());
+        boolean enableFlight = this.panels.panel instanceof IFlightSupported panel
+            && panel.shouldEnableFlightOnRestore();
+
+        this.orbitUI.setControl(enableFlight);
 
         if (this.panels.panel instanceof IFlightSupported panel)
         {

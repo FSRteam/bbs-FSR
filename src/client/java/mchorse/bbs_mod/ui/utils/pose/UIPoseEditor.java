@@ -6,7 +6,6 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
-import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -18,7 +17,6 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
-import mchorse.bbs_mod.ui.utils.resizers.AutomaticResizer;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -37,9 +35,6 @@ import java.util.function.Consumer;
 public class UIPoseEditor extends UIElement
 {
     private static String lastLimb = "";
-
-    /** The bone list never shrinks below this height when it gets stretched to fill the panel. */
-    private static final int MIN_LIST_HEIGHT = UIStringList.DEFAULT_HEIGHT * 4;
 
     public UIBoneList groups;
     public UITrackpad fix;
@@ -162,73 +157,8 @@ public class UIPoseEditor extends UIElement
 
         this.column().vertical().stretch();
         this.add(this.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting),
-            this.glintSection,
-            this.transform.marginTop(4));
-    }
-
-    @Override
-    public void resize()
-    {
-        if (this.stretchesBoneList())
-        {
-            this.stretchBoneList();
-        }
-
-        super.resize();
-    }
-
-    /**
-     * Whether the bone list grows to fill the viewport. Only the film editor's pose keyframe editor
-     * opts in; the form pose editor keeps the list at its fixed height, so the collapsible sections
-     * below it (transform, shape keys) lay out predictably instead of fighting the stretch.
-     */
-    protected boolean stretchesBoneList()
-    {
-        return false;
-    }
-
-    private void stretchBoneList()
-    {
-        UIScrollView viewport = this.getViewport();
-
-        if (viewport == null || this.area.h <= 0 || this.groups.getParent() == null)
-        {
-            return;
-        }
-
-        int target = viewport.area.ey() - this.getViewportPadding(viewport);
-        int height = this.groups.list.getFlex().getH() + (target - this.area.ey());
-
-        this.groups.list.h(Math.max(height, MIN_LIST_HEIGHT));
-    }
-
-    private UIScrollView getViewport()
-    {
-        UIElement element = this.getParent();
-
-        while (element != null)
-        {
-            if (element instanceof UIScrollView)
-            {
-                return (UIScrollView) element;
-            }
-
-            element = element.getParent();
-        }
-
-        return null;
-    }
-
-    /** The scroll content lays itself out with this much padding at the bottom; leaving exactly
-     *  that gap below the list is what keeps the panel from overflowing into a stray scrollbar. */
-    private int getViewportPadding(UIScrollView viewport)
-    {
-        if (viewport.getFlex().post instanceof AutomaticResizer resizer)
-        {
-            return resizer.padding;
-        }
-
-        return UIConstants.SCROLL_PADDING;
+            this.transform.marginTop(4),
+            this.glintSection);
     }
 
     private void applyChildren(Consumer<PoseTransform> consumer)

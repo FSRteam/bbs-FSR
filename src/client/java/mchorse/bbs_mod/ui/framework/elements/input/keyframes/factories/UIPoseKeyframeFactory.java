@@ -66,14 +66,24 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
         if (this.getFlex().getW() > 240)
         {
-            this.poseEditor.add(UI.row(
-                UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
-                UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
-            ));
+            this.poseEditor.add(
+                UI.row(
+                    UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
+                    UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
+                ),
+                this.poseEditor.glintSection
+            );
         }
         else
         {
-            this.poseEditor.add(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform);
+            this.poseEditor.add(
+                UI.label(UIKeys.FORMS_EDITOR_BONE),
+                this.poseEditor.groups,
+                UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix),
+                UI.row(this.poseEditor.color, this.poseEditor.lighting),
+                this.poseEditor.transform,
+                this.poseEditor.glintSection
+            );
         }
 
         /* Ew... */

@@ -3125,6 +3125,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return this.dashboard.orbitUI.canControl();
     }
 
+    @Override
+    public boolean shouldEnableFlightOnRestore()
+    {
+        return false;
+    }
+
     public void toggleFlight()
     {
         this.setFlight(!this.isFlying());
