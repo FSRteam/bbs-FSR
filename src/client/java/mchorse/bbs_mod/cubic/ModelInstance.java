@@ -16,11 +16,11 @@ import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
 import mchorse.bbs_mod.cubic.render.CubicCubeRenderer;
 import mchorse.bbs_mod.cubic.render.CubicGlintCubeRenderer;
-import mchorse.bbs_mod.cubic.render.GlintRenderState;
 import mchorse.bbs_mod.cubic.render.CubicMatrixRenderer;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.CubicVAOBuilderRenderer;
 import mchorse.bbs_mod.cubic.render.CubicVAORenderer;
+import mchorse.bbs_mod.cubic.render.GlintRenderState;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
@@ -470,6 +470,7 @@ public class ModelInstance implements IModelInstance
 
                 renderProcessor.setColor(color.r, color.g, color.b, color.a);
                 CubicRenderer.processRenderModel(renderProcessor, null, stack, model);
+                renderProcessor.renderGlint();
             }
             else
             {
@@ -582,38 +583,51 @@ public class ModelInstance implements IModelInstance
     {
         for (int mode = 1; mode <= 3; mode++)
         {
-            float speed = 0F;
-            Color color = null;
-            boolean any = false;
-
-            for (ModelGroup group : model.getAllGroups())
+            for (int transformMode = 0; transformMode < 2; transformMode++)
             {
-                if (group.glintMode == mode && (restrictTo == null || restrictTo.contains(group)))
+                boolean transformed = transformMode == 1;
+                Set<ModelGroup> batchGroups = new HashSet<>();
+                float speed = 0F;
+                Color color = null;
+
+                for (ModelGroup group : model.getAllGroups())
                 {
-                    speed = group.glintSpeed;
-                    color = group.glintColor;
-                    any = true;
+                    if (group.visible && group.glintMode == mode
+                        && (restrictTo == null || restrictTo.contains(group))
+                        && group.glintTransform.isDefault() != transformed)
+                    {
+                        if (batchGroups.isEmpty())
+                        {
+                            speed = group.glintSpeed;
+                            color = group.glintColor;
+                        }
 
-                    break;
+                        batchGroups.add(group);
+                    }
                 }
-            }
 
-            if (!any)
-            {
-                continue;
-            }
+                if (batchGroups.isEmpty())
+                {
+                    continue;
+                }
 
-            CubicGlintCubeRenderer processor = new CubicGlintCubeRenderer(light, overlay, keys, mode, restrictTo);
+                Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+                CubicGlintCubeRenderer processor = new CubicGlintCubeRenderer(light, overlay, keys,
+                    mode, batchGroups, GlintRenderState.getViewOrigin(modelView));
 
-            BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+                BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
 
-            CubicRenderer.processRenderModel(processor, builder, stack, model);
+                CubicRenderer.processRenderModel(processor, builder, stack, model);
 
-            MeshData mesh = builder.build();
+                MeshData mesh = builder.build();
 
-            if (mesh != null)
-            {
-                GlintRenderState.drawMesh(mode, speed, color, mesh);
+                if (mesh != null)
+                {
+                    Vector3f origin = modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f()));
+
+                    FormTranslucentQueue.add(new FormTranslucentQueue.GlintMeshCommand(
+                        mode, speed, color, transformed, mesh, modelView, origin));
+                }
             }
         }
     }
@@ -752,10 +766,14 @@ public class ModelInstance implements IModelInstance
             this.drawImmediate(builder.buildOrThrow(), drawShader, stack,
                 explicitWeld ? WELD_NORMAL_MAT : null, stencilMap,
                 BBSModClient.getTextures().getLastBound(), color.a);
+        }
 
-            /* Bones that fell back to the CPU never reached the VAO renderer's glint pass,
-             * so they get one here. Restricted to exactly those bones — the rest already
-             * drew their glint alongside their VAO. */
+        /* Both base paths must finish before either glint path changes RenderType state.
+         * In the world, these commands are appended after any deferred base geometry. */
+        renderProcessor.renderGlint();
+
+        if (cpuGeometry)
+        {
             this.renderGlintImmediate(stack, model, light, overlay, stencilMap, keys, cpuGroups);
         }
     }

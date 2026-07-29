@@ -1,11 +1,10 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import mchorse.bbs_mod.cubic.render.GlintRenderState;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.utils.colors.Color;
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /**
@@ -20,8 +19,7 @@ public class GlintTintVertexConsumer implements VertexConsumer
     private final VertexConsumer target;
     private final int color;
     private final int mode;
-    private final Matrix4f view = new Matrix4f(RenderSystem.getModelViewMatrix());
-    private final Matrix3f viewNormal;
+    private final Vector3f viewOrigin;
     private final Vector3f position = new Vector3f();
     private final Vector3f normal = new Vector3f();
 
@@ -30,12 +28,7 @@ public class GlintTintVertexConsumer implements VertexConsumer
         this.target = target;
         this.color = color.getARGBColor();
         this.mode = mode;
-
-        Matrix3f normal = new Matrix3f(this.view);
-
-        this.viewNormal = Math.abs(normal.determinant()) > 0.00001F
-            ? normal.invert().transpose()
-            : new Matrix3f();
+        this.viewOrigin = GlintRenderState.getViewOrigin(RenderSystem.getModelViewMatrix());
     }
 
     @Override
@@ -87,15 +80,17 @@ public class GlintTintVertexConsumer implements VertexConsumer
             return this.color;
         }
 
-        this.view.transformPosition(x, y, z, this.position);
-        this.viewNormal.transform(this.normal.set(nx, ny, nz));
+        /* Captured position, normal, and the inverse-model-view camera origin all use the
+         * same PoseStack-baked coordinate space. */
+        this.position.set(this.viewOrigin).sub(x, y, z);
+        this.normal.set(nx, ny, nz);
 
         if (this.position.lengthSquared() <= 0.00001F || this.normal.lengthSquared() <= 0.00001F)
         {
             return this.color;
         }
 
-        this.position.normalize().negate();
+        this.position.normalize();
         this.normal.normalize();
 
         float facing = Math.abs(this.normal.dot(this.position));

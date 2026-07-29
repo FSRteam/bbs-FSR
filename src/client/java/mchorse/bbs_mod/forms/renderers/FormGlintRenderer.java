@@ -1,18 +1,20 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import mchorse.bbs_mod.cubic.render.GlintRenderState;
 import mchorse.bbs_mod.cubic.render.vao.IModelVAO;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.utils.colors.Color;
 import net.minecraft.client.renderer.MultiBufferSource;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.function.Consumer;
 
@@ -37,8 +39,9 @@ public class FormGlintRenderer
 
         Color color = form.glintColor.get();
 
-        GlintRenderState.renderVao(mode, form.glintSpeed.get(), color,
-            form.glintTransform.get(), vao, modelView, normalMat, light, overlay);
+        FormTranslucentQueue.add(new FormTranslucentQueue.GlintVAOCommand(
+            mode, form.glintSpeed.get(), color, form.glintTransform.get(),
+            vao, modelView, normalMat, light, overlay));
     }
 
     /**
@@ -73,7 +76,29 @@ public class FormGlintRenderer
         }
 
         /* Captured vanilla geometry already contains the local layer transform. */
-        GlintRenderState.drawMesh(mode, form.glintSpeed.get(), color, mesh);
+        Vector3f origin = FormTranslucentQueue.getSortOrigin();
+
+        renderMesh(form, mesh, origin == null ? null : new Vector3f(origin));
+    }
+
+    /** Submit already transformed glint vertices after their base surface. */
+    public static void renderMesh(Form form, MeshData mesh, Vector3f origin)
+    {
+        if (mesh == null || form.glintMode.get() == Form.GLINT_OFF)
+        {
+            return;
+        }
+
+        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+
+        if (origin == null)
+        {
+            origin = modelView.getTranslation(new Vector3f());
+        }
+
+        FormTranslucentQueue.add(new FormTranslucentQueue.GlintMeshCommand(
+            form.glintMode.get(), form.glintSpeed.get(), form.glintColor.get(),
+            !form.glintTransform.get().isDefault(), mesh, modelView, origin));
     }
 
 }

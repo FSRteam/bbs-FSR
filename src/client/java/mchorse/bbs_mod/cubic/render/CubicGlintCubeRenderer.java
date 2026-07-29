@@ -2,7 +2,6 @@ package mchorse.bbs_mod.cubic.render;
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -11,8 +10,6 @@ import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 
 import java.util.Set;
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /**
@@ -28,23 +25,22 @@ public class CubicGlintCubeRenderer extends CubicCubeRenderer
     private final int mode;
     private final Set<ModelGroup> restrictTo;
     private final Color previousColor = new Color();
-    private final Matrix4f view = new Matrix4f(RenderSystem.getModelViewMatrix());
-    private final Matrix3f viewNormal;
+    private final Vector3f viewOrigin = new Vector3f();
     private final Vector3f viewPosition = new Vector3f();
     private final Vector3f transformedNormal = new Vector3f();
 
-    public CubicGlintCubeRenderer(int light, int overlay, ShapeKeys shapeKeys, int mode, Set<ModelGroup> restrictTo)
+    public CubicGlintCubeRenderer(int light, int overlay, ShapeKeys shapeKeys, int mode,
+        Set<ModelGroup> restrictTo, Vector3f viewOrigin)
     {
         super(light, overlay, null, shapeKeys);
 
         this.mode = mode;
         this.restrictTo = restrictTo;
 
-        Matrix3f normal = new Matrix3f(this.view);
-
-        this.viewNormal = Math.abs(normal.determinant()) > 0.00001F
-            ? normal.invert().transpose()
-            : new Matrix3f();
+        if (viewOrigin != null)
+        {
+            this.viewOrigin.set(viewOrigin);
+        }
     }
 
     @Override
@@ -89,15 +85,18 @@ public class CubicGlintCubeRenderer extends CubicCubeRenderer
             return 1F;
         }
 
-        this.view.transformPosition(x, y, z, this.viewPosition);
-        this.viewNormal.transform(this.transformedNormal.set(normal));
+        /* Position, normal, and view origin are expressed in the same emitted-vertex
+         * coordinate space. This remains correct whether that space is group-local (VAO
+         * edge pass) or PoseStack-baked (immediate path). */
+        this.viewPosition.set(this.viewOrigin).sub(x, y, z);
+        this.transformedNormal.set(normal);
 
         if (this.viewPosition.lengthSquared() <= 0.00001F || this.transformedNormal.lengthSquared() <= 0.00001F)
         {
             return 1F;
         }
 
-        this.viewPosition.normalize().negate();
+        this.viewPosition.normalize();
         this.transformedNormal.normalize();
 
         float facing = Math.abs(this.transformedNormal.dot(this.viewPosition));

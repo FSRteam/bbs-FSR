@@ -4,7 +4,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
-import mchorse.bbs_mod.cubic.render.GlintRenderState;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
@@ -270,7 +269,10 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         this.fillQuad(DefaultVertexFormat.NEW_ENTITY, glintBuilder, this.glintStack.last().pose(), color, overlay, light, this.glintStack.last());
 
-        GlintRenderState.drawMesh(mode, this.form.glintSpeed.get(), color, glintBuilder.buildOrThrow());
+        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+        Vector3f origin = modelView.transformPosition(this.glintStack.last().pose().getTranslation(new Vector3f()));
+
+        FormGlintRenderer.renderMesh(this.form, glintBuilder.buildOrThrow(), origin);
     }
 
     /** Both faces of the billboard, wound so each is visible from its own side. */
