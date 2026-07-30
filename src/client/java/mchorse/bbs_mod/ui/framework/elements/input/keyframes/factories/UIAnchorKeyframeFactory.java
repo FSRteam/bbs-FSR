@@ -8,6 +8,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -25,7 +26,11 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
@@ -76,27 +81,89 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
         }
 
         Form form = entity.getForm();
-        List<String> attachments = new ArrayList<>(FormUtilsClient.getRenderer(form).collectMatrices(entity, 0F).keySet());
 
-        attachments.sort(String::compareToIgnoreCase);
+        /* BoneHierarchy — same source as the filter track overlay and the pose
+         * editor (both iterate hierarchy.getBones()). */
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
+        Map<String, String> hierarchyLabels = hierarchy.getLabels(false);
 
-        /* Collect labels (substitute track names) */
-        List<String> labels = new ArrayList<>(attachments);
+        /* Start with hierarchy bones as the primary list so user always sees the
+         * same bone names as the filter track / pose track. */
+        Map<String, String> attachmentSet = new LinkedHashMap<>(); // key → label
 
-        for (int i = 0; i < labels.size(); i++)
+        for (String boneId : hierarchy.getBoneIds())
         {
-            String label = labels.get(i);
-            Form path = FormUtils.getForm(form, label);
+            String label = hierarchyLabels.get(boneId);
 
-            if (path != null)
+            if (label != null)
             {
-                labels.set(i, path.getTrackName(label));
+                attachmentSet.put(boneId, label);
+            }
+            else
+            {
+                attachmentSet.put(boneId, boneId);
             }
         }
 
-        if (attachments.isEmpty())
+        /* Add any MatrixCache entries that are NOT already bone IDs (e.g. sub-form
+         * body parts, extra attachment points). For these we try to resolve a
+         * meaningful label; on miss we fall back to the last path segment. */
+        Set<String> seen = new HashSet<>(attachmentSet.keySet());
+
+        for (String key : FormUtilsClient.getRenderer(form).collectMatrices(entity, 0F).keySet())
         {
-            return;
+            if (key.isEmpty() || seen.contains(key))
+            {
+                continue;
+            }
+
+            seen.add(key);
+
+            /* Sub-form? */
+            Form subForm = FormUtils.getForm(form, key);
+
+            if (subForm != null)
+            {
+                attachmentSet.put(key, subForm.getTrackName(key));
+                continue;
+            }
+
+            /* Try resolving through hierarchy */
+            String resolved = hierarchy.resolveId(key);
+            String label = null;
+
+            if (resolved != null)
+            {
+                label = hierarchyLabels.get(resolved);
+            }
+
+            /* Last path segment as fallback */
+            if (label == null)
+            {
+                int sep = key.lastIndexOf('/');
+
+                if (sep >= 0)
+                {
+                    label = key.substring(sep + 1);
+                }
+                else
+                {
+                    label = key;
+                }
+            }
+
+            attachmentSet.put(key, label);
+        }
+
+        /* Build sorted lists */
+        List<String> attachments = new ArrayList<>(attachmentSet.keySet());
+        List<String> labels = new ArrayList<>(attachmentSet.size());
+
+        attachments.sort(String::compareToIgnoreCase);
+
+        for (String key : attachments)
+        {
+            labels.add(attachmentSet.get(key));
         }
 
         panel.getContext().replaceContextMenu((menu) ->
