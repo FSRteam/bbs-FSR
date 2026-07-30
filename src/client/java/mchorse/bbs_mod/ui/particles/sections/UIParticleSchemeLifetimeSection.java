@@ -7,11 +7,12 @@ import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeLo
 import mchorse.bbs_mod.particles.components.lifetime.ParticleComponentLifetimeOnce;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection<ParticleComponentLifetime>
 {
@@ -30,6 +31,7 @@ public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection
             this.editor.markUndoBoundary();
         });
         this.active.placeholder(UIKeys.SNOWSTORM_LIFETIME_TIME);
+        this.active.icon(Icons.TIME);
         this.active.tooltip(IKey.EMPTY);
 
         this.expiration = new UITextbox(10000, (str) ->
@@ -48,6 +50,7 @@ public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection
             this.editor.markUndoBoundary();
         });
         this.expiration.placeholder(UIKeys.SNOWSTORM_EXPRESSION);
+        this.expiration.icon(Icons.STOPWATCH);
         this.expiration.tooltip(IKey.EMPTY);
 
         this.expirationLabel = this.fieldLabel(UIKeys.SNOWSTORM_EXPRESSION);
@@ -63,11 +66,11 @@ public class UIParticleSchemeLifetimeSection extends UIParticleSchemeModeSection
     }
 
     @Override
-    protected void fillModes(UICirculate button)
+    protected void fillModes(UIIcons button)
     {
-        button.addLabel(UIKeys.SNOWSTORM_LIFETIME_EXPRESSION);
-        button.addLabel(UIKeys.SNOWSTORM_LIFETIME_LOOPING);
-        button.addLabel(UIKeys.SNOWSTORM_LIFETIME_ONCE);
+        button.add(Icons.CODE, UIKeys.SNOWSTORM_LIFETIME_EXPRESSION);
+        button.add(Icons.REFRESH, UIKeys.SNOWSTORM_LIFETIME_LOOPING);
+        button.add(Icons.STOP, UIKeys.SNOWSTORM_LIFETIME_ONCE);
     }
 
     @Override

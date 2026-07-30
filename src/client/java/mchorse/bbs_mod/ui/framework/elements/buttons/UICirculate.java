@@ -126,21 +126,30 @@ public class UICirculate extends UIClickable<UICirculate>
     @Override
     protected void renderSkin(UIContext context)
     {
-        int color = Colors.A100 | (this.custom ? this.customColor : BBSSettings.primaryColor.get());
+        int color = Colors.A100 | (this.custom ? this.customColor : BBSSettings.accentColorRGB());
 
         if (this.hover)
         {
             color = Colors.mulRGB(color, 0.85F);
         }
 
-        context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
+        int radius = BBSSettings.cornerWidget();
+
+        if (radius > 0)
+        {
+            context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, color);
+        }
+        else
+        {
+            context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
+        }
 
         FontRenderer font = context.batcher.getFont();
         String label = font.limitToWidth(this.label.get(), this.area.w - 4);
         int x = this.area.mx(font.getWidth(label));
         int y = this.area.my(font.getHeight());
 
-        context.batcher.textShadow(label, x, y, Colors.mulRGB(Colors.WHITE, this.hover ? 0.9F : 1F));
+        context.batcher.textShadow(label, x, y, Colors.mulRGB(BBSSettings.textColor(), this.hover ? 0.9F : 1F));
 
         this.renderLockedArea(context);
     }

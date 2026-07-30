@@ -7,6 +7,8 @@ import org.joml.Vector3d;
 
 public class MatrixUtilsTest {
     public static void main(String[] args) {
+        testAxisGetAngleAround();
+
         testRotationOrder(MatrixUtils.RotationOrder.YXZ, MatrixUtils.RotationOrder.YXZ,
                 45, 45, 45,
                 45, 45, 45);

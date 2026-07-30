@@ -3,6 +3,8 @@ package mchorse.bbs_mod.utils.keyframes.factories;
 import java.util.HashMap;
 import java.util.Map;
 
+import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
+
 public class KeyframeFactories
 {
     public static final Map<String, IKeyframeFactory> FACTORIES = new HashMap<>();
@@ -30,6 +32,11 @@ public class KeyframeFactories
     public static final ActionsConfigKeyframeFactory ACTIONS_CONFIG = new ActionsConfigKeyframeFactory();
     public static final ShapeKeysKeyframeFactory SHAPE_KEYS = new ShapeKeysKeyframeFactory();
     public static final ParticleSettingsKeyframeFactory PARTICLE_SETTINGS = new ParticleSettingsKeyframeFactory();
+    public static final SoundKeyframeFactory SOUND = new SoundKeyframeFactory(SoundKeyframeValue.Group.SOUND);
+    public static final SoundKeyframeFactory SOUND_SHAPE = new SoundKeyframeFactory(SoundKeyframeValue.Group.SHAPE);
+    public static final SoundKeyframeFactory SOUND_VISUALIZATION = new SoundKeyframeFactory(SoundKeyframeValue.Group.VISUALIZATION);
+    public static final SoundKeyframeFactory SOUND_FALLOFF = new SoundKeyframeFactory(SoundKeyframeValue.Group.FALLOFF);
+    public static final SoundKeyframeFactory SOUND_REFLECTIONS = new SoundKeyframeFactory(SoundKeyframeValue.Group.REFLECTIONS);
 
     public static boolean isNumeric(IKeyframeFactory factory)
     {
@@ -65,5 +72,10 @@ public class KeyframeFactories
         FACTORIES.put("actions_config", ACTIONS_CONFIG);
         FACTORIES.put("shape_keys", SHAPE_KEYS);
         FACTORIES.put("particle_settings", PARTICLE_SETTINGS);
+        FACTORIES.put("sound", SOUND);
+        FACTORIES.put("sound_shape", SOUND_SHAPE);
+        FACTORIES.put("sound_visualization", SOUND_VISUALIZATION);
+        FACTORIES.put("sound_falloff", SOUND_FALLOFF);
+        FACTORIES.put("sound_reflections", SOUND_REFLECTIONS);
     }
 }

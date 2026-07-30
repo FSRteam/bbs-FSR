@@ -39,6 +39,7 @@ public class UIOverlayPanel extends UIElement
 
         this.title = UI.label(title);
         this.close = new UIIcon(Icons.CLOSE, (b) -> this.close());
+        this.close.hoverBackgroundColor(Colors.RED | Colors.A100).pressedBackgroundColor(Colors.RED | Colors.A100);
         this.content = new UIElement();
         this.icons = new UIElement();
 
@@ -180,13 +181,22 @@ public class UIOverlayPanel extends UIElement
     protected void renderBackground(UIContext context)
     {
         context.batcher.dropShadow(this.area.x, this.area.y, this.area.ex(), this.area.ey(), 10, BBSSettings.panelShadowOpaqueColor(), BBSSettings.panelShadowTransparentColor());
-        this.area.render(context.batcher, BBSSettings.raisedSurface());
+        int radius = BBSSettings.cornerChrome();
 
-        this.icons.area.render(context.batcher, BBSSettings.chromeSurface());
-
-        if (this.close.area.isInside(context))
+        if (radius > 0)
         {
-            this.close.area.render(context.batcher, Colors.RED | Colors.A100);
+            context.batcher.roundedFrame(this.area.x, this.area.y, this.area.w, this.area.h, radius, 1F, BBSSettings.chromeSurface(), BBSSettings.raisedSurface());
+            this.icons.area.render(context.batcher, BBSSettings.chromeSurface());
+        }
+        else
+        {
+            this.area.render(context.batcher, BBSSettings.raisedSurface());
+            this.icons.area.render(context.batcher, BBSSettings.chromeSurface());
+
+            if (this.close.area.isInside(context))
+            {
+                this.close.area.render(context.batcher, Colors.RED | Colors.A100);
+            }
         }
 
         if (this.title.area.isInside(context))

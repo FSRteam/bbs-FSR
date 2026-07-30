@@ -91,6 +91,17 @@ public class FormCategories implements IWatchDogListener
         this.markDirty();
     }
 
+    public void removeExtraForm(mchorse.bbs_mod.forms.forms.Form form)
+    {
+        if (form == null)
+        {
+            return;
+        }
+
+        this.extraForms.removeForm(form);
+        this.markDirty();
+    }
+
     public List<FormCategory> getAllCategories()
     {
         List<FormCategory> formCategories = new ArrayList<>();

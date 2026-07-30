@@ -23,6 +23,7 @@ public final class FilmEditorMigrationLogicTest
             testPerFilmScrollIsolation();
             testAnchorTransformInterpolation();
             FilmReplayFirstPersonSyncSourceTest.runAll();
+            RenderRuntimeMigrationSourceTest.runAll();
             RecentFormCategoryTest.runAll();
 
             if (args.length == 0 || !"--logic-only".equals(args[0]))

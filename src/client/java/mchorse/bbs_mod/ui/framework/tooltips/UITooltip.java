@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.tooltips;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -33,7 +34,7 @@ public class UITooltip
 
     public void render(UIContext context)
     {
-        if (this.element != null)
+        if (BBSSettings.showTooltipsEnabled() && this.element != null)
         {
             this.element.renderTooltip(context, this.area);
         }

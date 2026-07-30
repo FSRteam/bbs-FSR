@@ -12,6 +12,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.particles.UISectionStateManager;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 import java.util.function.Consumer;
 
@@ -169,6 +170,7 @@ public abstract class UIParticleSchemeSection extends UISection
             this.editor.markUndoBoundary();
         });
         textbox.placeholder(placeholder);
+        textbox.icon(Icons.CODE);
         if (tooltip != null) textbox.tooltip(tooltip);
         textbox.setText(expression == null ? "" : expression.toString());
         return textbox;

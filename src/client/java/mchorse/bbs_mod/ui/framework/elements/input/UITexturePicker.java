@@ -1192,7 +1192,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
 
             if (this.editor.isVisible())
             {
-                this.edit.area.render(context.batcher, Colors.A50 | BBSSettings.primaryColor.get());
+                this.edit.area.render(context.batcher, Colors.A50 | BBSSettings.accentColorRGB());
             }
         }
 
@@ -1217,7 +1217,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
                 int x = this.text.area.x;
                 int y = this.text.area.ey();
 
-                context.batcher.box(x, y, x + w + 4, y + 4 + font.getHeight(), Colors.A50 | BBSSettings.primaryColor.get());
+                context.batcher.box(x, y, x + w + 4, y + 4 + font.getHeight(), Colors.A50 | BBSSettings.accentColorRGB());
                 context.batcher.textShadow(this.typed, x + 2, y + 2);
             }
 

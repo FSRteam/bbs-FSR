@@ -8,13 +8,14 @@ import mchorse.bbs_mod.particles.ParticleCurveType;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.sections.UIParticleSchemeSection;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 import java.util.Map;
@@ -26,7 +27,7 @@ public class UICurveEditor extends UIElement
     public UILabel name;
     public UIIcon rename;
     public UIIcon delete;
-    public UICirculate type;
+    public UIIcons type;
     public UICurve curve;
     public UITextbox input;
     public UITextbox range;
@@ -42,11 +43,11 @@ public class UICurveEditor extends UIElement
         this.rename.tooltip(UIKeys.SNOWSTORM_CURVES_RENAME);
         this.delete = new UIIcon(Icons.REMOVE, this::remove);
         this.delete.tooltip(UIKeys.SNOWSTORM_CURVES_REMOVE);
-        this.type = new UICirculate((b) -> this.changeType(b.getValue()));
+        this.type = new UIIcons((b) -> this.changeType(b.getValue()));
 
         for (ParticleCurveType type : ParticleCurveType.values())
         {
-            this.type.addLabel(UIKeys.C_CURVE_TYPE.get(type.id));
+            this.type.add(this.curveTypeIcon(type), UIKeys.C_CURVE_TYPE.get(type.id));
         }
 
         this.curve = new UICurve(section);
@@ -59,6 +60,7 @@ public class UICurveEditor extends UIElement
             }
         });
         this.input.placeholder(UIKeys.SNOWSTORM_CURVES_INPUT);
+        this.input.icon(Icons.IN);
         this.range = new UITextbox(10000, (str) ->
         {
             if (this.particleCurve != null)
@@ -68,6 +70,7 @@ public class UICurveEditor extends UIElement
             }
         });
         this.range.placeholder(UIKeys.SNOWSTORM_CURVES_RANGE);
+        this.range.icon(Icons.OUT);
 
         this.curve.h(100);
 
@@ -76,6 +79,17 @@ public class UICurveEditor extends UIElement
         this.add(UI.row(UI.label(UIKeys.SNOWSTORM_CURVES_TYPE, 20).labelAnchor(0, 0.5F), this.type));
         this.add(this.curve, this.labeledField(UIKeys.SNOWSTORM_CURVES_INPUT, this.input));
         this.add(this.labeledField(UIKeys.SNOWSTORM_CURVES_RANGE, this.range));
+    }
+
+    private Icon curveTypeIcon(ParticleCurveType type)
+    {
+        return switch (type)
+        {
+            case HERMITE -> Icons.CURVES;
+            case BEZIER -> Icons.INTERP_BEZIER;
+            case BEZIER_CHAIN -> Icons.LINK;
+            default -> Icons.INTERP_LINEAR;
+        };
     }
 
     private UIElement labeledField(IKey label, UIElement field)

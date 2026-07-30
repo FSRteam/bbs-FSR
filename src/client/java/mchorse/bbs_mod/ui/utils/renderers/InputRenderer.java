@@ -73,7 +73,7 @@ public class InputRenderer
 
     public static void renderMouseWheel(Batcher2D batcher, int x, int y, int scroll, long current)
     {
-        int color = BBSSettings.primaryColor.get();
+        int color = BBSSettings.accentColorRGB();
 
         batcher.dropShadow(x, y, x + 4, y + 16, 2, Colors.A50 | color, color);
         batcher.box(x, y, x + 4, y + 16, 0xff111111);
@@ -224,12 +224,17 @@ public class InputRenderer
                 batcher.icon(Icons.KEY_CAP_LEFT, x, y);
                 batcher.iconArea(Icons.KEY_CAP_REPEATABLE, x + 4, y, fw - 8, 20);
                 batcher.icon(Icons.KEY_CAP_RIGHT, x + fw, y, 1F, 0F);
-                batcher.text(key.getLabel(), x + 8, y + 5, Colors.A100);
+                batcher.textExactColor(key.getLabel(), x + 8, y + 5, keyCapLabelColor(BBSSettings.isLightTheme()));
             }
         }
 
         this.lastQX = lqx;
         this.lastQY = lqy;
+    }
+
+    private static int keyCapLabelColor(boolean lightTheme)
+    {
+        return lightTheme ? Colors.WHITE : Colors.A100;
     }
 
     public void keyPressed(UIContext context, int key)

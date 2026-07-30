@@ -55,6 +55,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.layout.UIDockStyleRenderer;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -69,7 +70,10 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -171,7 +175,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
     private static final float DRAG_HANDLE_TOP_OFFSET_NORM = 0.01F;
     private static final int SPLITTER_HANDLE_PX = 14;
-    private static final int SPLITTER_HANDLE_LINE_PX = 1;
     private static final int SPLITTER_LINK_HITBOX_PADDING_PX = 8;
     private static final int DROP_ZONE_CENTER = -1;
     private static final float DROP_EDGE_MARGIN = 0.2F;
@@ -199,6 +202,260 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private String dropTargetPanelId;
     private int dropTargetZone = DROP_ZONE_CENTER;
     private final List<Integer> draggedSplitterIndices = new ArrayList<>();
+
+    /* Panel layout transition (theme motion `layout`): from/to snapshots of
+     * normalized stack bounds, interpolated back into flex each frame with a
+     * real resize() so rendering and hit testing always agree */
+    private final Map<String, PanelBoundsSnapshot> layoutTransitionFromBounds = new HashMap<>();
+    private final Map<String, PanelBoundsSnapshot> layoutTransitionToBounds = new HashMap<>();
+    private final UITween layoutTransitionTween = new UITween();
+    private boolean layoutTransitioning;
+    private boolean layoutTransitionCapturePending;
+
+    private static class PanelBoundsSnapshot
+    {
+        public float x;
+        public float y;
+        public float w;
+        public float h;
+        public int topOffsetPx;
+
+        public void set(float x, float y, float w, float h, int topOffsetPx)
+        {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.topOffsetPx = topOffsetPx;
+        }
+    }
+
+    private int getLayoutTransitionDurationMs()
+    {
+        return BBSSettings.filmEditorLayoutTransitionEnabled() ? UIMotions.duration(UIMotions.layout()) : 0;
+    }
+
+    private void beginLayoutTransitionCapture()
+    {
+        this.layoutTransitionCapturePending = false;
+
+        if (this.getLayoutTransitionDurationMs() <= 0 || this.editor == null || this.editor.area.w <= 0 || this.editor.area.h <= 0)
+        {
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+
+            return;
+        }
+
+        if (this.layoutTransitioning)
+        {
+            this.captureInterpolatedLayoutBoundsAsFrom();
+        }
+        else
+        {
+            this.captureLayoutBoundsSnapshot(this.layoutTransitionFromBounds);
+        }
+
+        this.layoutTransitionCapturePending = true;
+    }
+
+    private void endLayoutTransitionCapture()
+    {
+        if (!this.layoutTransitionCapturePending)
+        {
+            return;
+        }
+
+        this.layoutTransitionCapturePending = false;
+
+        int durationMs = this.getLayoutTransitionDurationMs();
+
+        if (durationMs <= 0)
+        {
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+
+            return;
+        }
+
+        this.captureLayoutBoundsSnapshot(this.layoutTransitionToBounds);
+
+        boolean anyAnimatable = false;
+
+        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
+        {
+            PanelBoundsSnapshot from = entry.getValue();
+            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(entry.getKey());
+
+            if (to == null)
+            {
+                continue;
+            }
+
+            if (Math.abs(from.x - to.x) > 5e-4F || Math.abs(from.y - to.y) > 5e-4F
+                || Math.abs(from.w - to.w) > 5e-4F || Math.abs(from.h - to.h) > 5e-4F
+                || from.topOffsetPx != to.topOffsetPx)
+            {
+                anyAnimatable = true;
+
+                break;
+            }
+        }
+
+        if (!anyAnimatable)
+        {
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+
+            return;
+        }
+
+        this.layoutTransitionTween.snap(0F);
+        this.layoutTransitionTween.to(1F, UIMotions.layout());
+        this.layoutTransitioning = true;
+    }
+
+    private void captureLayoutBoundsSnapshot(Map<String, PanelBoundsSnapshot> out)
+    {
+        out.clear();
+
+        for (Map.Entry<String, DockStackInfo> entry : this.dockStackByPanelId.entrySet())
+        {
+            DockStackInfo info = entry.getValue();
+            int topOffset = info.isStacked() ? DOCK_STACK_TABS_HEIGHT_PX : 0;
+            PanelBoundsSnapshot snap = new PanelBoundsSnapshot();
+
+            snap.set(info.x, info.y, info.w, info.h, topOffset);
+            out.put(entry.getKey(), snap);
+        }
+    }
+
+    private float layoutTransitionEased(long now)
+    {
+        return MathUtils.clamp(this.layoutTransitionTween.update(now), 0F, 1F);
+    }
+
+    /** Interrupted transition: freeze the current interpolated state as the new from. */
+    private void captureInterpolatedLayoutBoundsAsFrom()
+    {
+        float eased = this.layoutTransitionEased(System.currentTimeMillis());
+        Map<String, PanelBoundsSnapshot> blended = new HashMap<>();
+
+        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
+        {
+            String id = entry.getKey();
+            PanelBoundsSnapshot from = entry.getValue();
+            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(id);
+
+            if (to == null)
+            {
+                continue;
+            }
+
+            PanelBoundsSnapshot snap = new PanelBoundsSnapshot();
+
+            snap.set(
+                Lerps.lerp(from.x, to.x, eased),
+                Lerps.lerp(from.y, to.y, eased),
+                Lerps.lerp(from.w, to.w, eased),
+                Lerps.lerp(from.h, to.h, eased),
+                Math.round(Lerps.lerp(from.topOffsetPx, to.topOffsetPx, eased))
+            );
+            blended.put(id, snap);
+        }
+
+        this.layoutTransitionFromBounds.clear();
+        this.layoutTransitionFromBounds.putAll(blended);
+    }
+
+    /**
+     * While transitioning, write interpolated bounds back into the panels'
+     * flex and do a real resize(), so hit testing follows the animation.
+     * Settled: zero-touch, the exact target layout stays in place.
+     */
+    private void advanceLayoutTransition()
+    {
+        if (!this.layoutTransitioning)
+        {
+            return;
+        }
+
+        if (this.editor == null || this.editor.area.w <= 0 || this.editor.area.h <= 0)
+        {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        float eased = this.layoutTransitionEased(now);
+        float[] preview = this.layoutTransitionPreviewRect();
+        boolean anyApplied = false;
+
+        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
+        {
+            String id = entry.getKey();
+            PanelBoundsSnapshot from = entry.getValue();
+            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(id);
+            UIElement panel = this.panelById.get(id);
+            DockStackInfo targetInfo = this.dockStackByPanelId.get(id);
+
+            if (to == null || panel == null || targetInfo == null)
+            {
+                continue;
+            }
+
+            float x = Lerps.lerp(from.x, to.x, eased);
+            float y = Lerps.lerp(from.y, to.y, eased);
+            float w = Lerps.lerp(from.w, to.w, eased);
+            float h = Lerps.lerp(from.h, to.h, eased);
+            int topOffset = Math.round(Lerps.lerp(from.topOffsetPx, to.topOffsetPx, eased));
+            int[] g = panel == this.preview ? new int[4] : this.panelGutter(targetInfo, preview);
+
+            panel.relative(this.editor)
+                .x(x, g[0])
+                .y(y, topOffset + g[1])
+                .w(w, -g[0] - g[2])
+                .h(h, -topOffset - g[1] - g[3]);
+
+            UIDraggable dragHandle = this.dragHandlesById.get(id);
+
+            if (dragHandle != null && dragHandle.isVisible())
+            {
+                float tabsOffset = topOffset > 0 ? (float) topOffset / Math.max(1, this.editor.area.h) : 0F;
+
+                dragHandle.relative(this.editor)
+                    .x(x, g[0])
+                    .y(y + tabsOffset + DRAG_HANDLE_TOP_OFFSET_NORM, g[1])
+                    .w(w, -g[0] - g[2])
+                    .h(DRAG_HANDLE_HEIGHT_NORM);
+            }
+
+            anyApplied = true;
+        }
+
+        if (anyApplied)
+        {
+            this.editor.resize();
+        }
+
+        if (this.layoutTransitionTween.isSettled())
+        {
+            /* eased(1) == 1, so the last write already equals the exact
+             * target flex from applyPanelBoundsFromStacks; just stop */
+            this.layoutTransitioning = false;
+            this.layoutTransitionFromBounds.clear();
+            this.layoutTransitionToBounds.clear();
+        }
+    }
+
+    private float[] layoutTransitionPreviewRect()
+    {
+        DockStackInfo info = this.dockStackByPanelId.get(PANEL_PREVIEW_ID);
+
+        return info == null ? null : new float[] {info.x, info.y, info.w, info.h};
+    }
 
     private static class DockStackInfo
     {
@@ -872,8 +1129,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (next != root)
         {
+            this.beginLayoutTransitionCapture();
             this.setCurrentFilmLayoutRoot(next);
             this.setupEditorFlex(true);
+            this.endLayoutTransitionCapture();
         }
     }
 
@@ -972,8 +1231,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         EditorLayoutNode root = EditorLayoutNode.fromData(layoutData);
         if (root != null)
         {
+            this.beginLayoutTransitionCapture();
             this.setCurrentFilmLayoutRoot(root);
             this.setupEditorFlex(true);
+            this.endLayoutTransitionCapture();
         }
     }
 
@@ -1568,8 +1829,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (newRoot != null && newRoot != root)
         {
+            this.beginLayoutTransitionCapture();
             this.setCurrentFilmLayoutRoot(newRoot);
             this.setupEditorFlex(true);
+            this.endLayoutTransitionCapture();
         }
     }
 
@@ -1644,10 +1907,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private void renderPanelDragHandle(UIContext context, UIDraggable handle)
     {
         boolean active = handle.area.isInside(context) || handle.isDragging();
-        int color = active ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.6F);
-        int cx = handle.area.mx();
-        int cy = handle.area.y + handle.area.h / 2 + 4;
-        context.batcher.icon(Icons.ALL_DIRECTIONS, color, cx, cy, 0.5F, 0.5F);
+
+        UIDockStyleRenderer.renderPanelDragHandle(context, handle.area, active);
     }
 
     private int computeDropZone(Area area, int mouseX, int mouseY)
@@ -1688,48 +1949,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             return;
         }
-        Area a = target.area;
-        int border = BBSSettings.primaryColor(Colors.A50);
-        int fill = BBSSettings.primaryColor(Colors.A25);
-        if (this.dropTargetZone == DROP_ZONE_CENTER)
-        {
-            this.renderDropZoneRect(context, a, border, fill);
-            return;
-        }
-        float m = DROP_EDGE_MARGIN;
-        int strip = 2;
-        switch (this.dropTargetZone)
-        {
-            case EditorLayoutNode.EDGE_LEFT:
-                context.batcher.box(a.x, a.y, a.x + (int) (a.w * m), a.ey(), fill);
-                context.batcher.box(a.x + (int) (a.w * m) - strip, a.y, a.x + (int) (a.w * m) + strip, a.ey(), border);
-                break;
-            case EditorLayoutNode.EDGE_RIGHT:
-                context.batcher.box(a.ex() - (int) (a.w * m), a.y, a.ex(), a.ey(), fill);
-                context.batcher.box(a.ex() - (int) (a.w * m) - strip, a.y, a.ex() - (int) (a.w * m) + strip, a.ey(), border);
-                break;
-            case EditorLayoutNode.EDGE_TOP:
-                context.batcher.box(a.x, a.y, a.ex(), a.y + (int) (a.h * m), fill);
-                context.batcher.box(a.x, a.y + (int) (a.h * m) - strip, a.ex(), a.y + (int) (a.h * m) + strip, border);
-                break;
-            case EditorLayoutNode.EDGE_BOTTOM:
-                context.batcher.box(a.x, a.ey() - (int) (a.h * m), a.ex(), a.ey(), fill);
-                context.batcher.box(a.x, a.ey() - (int) (a.h * m) - strip, a.ex(), a.ey() - (int) (a.h * m) + strip, border);
-                break;
-            default:
-                this.renderDropZoneRect(context, a, border, fill);
-                break;
-        }
-    }
-
-    private void renderDropZoneRect(UIContext context, Area a, int border, int fill)
-    {
-        context.batcher.box(a.x, a.y, a.ex(), a.ey(), fill);
-        int t = 2;
-        context.batcher.box(a.x, a.y, a.ex(), a.y + t, border);
-        context.batcher.box(a.x, a.ey() - t, a.ex(), a.ey(), border);
-        context.batcher.box(a.x, a.y, a.x + t, a.ey(), border);
-        context.batcher.box(a.ex() - t, a.y, a.ex(), a.ey(), border);
+        UIDockStyleRenderer.renderDropZone(context, target.area, this.dropTargetZone, DROP_EDGE_MARGIN);
     }
 
     private void renderSplitter(UIContext context, int index)
@@ -1740,31 +1960,15 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
         UIDraggable splitter = this.splitterHandles.get(index);
         EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
+        boolean legacyVisible = splitter.isDragging() || this.draggedSplitterIndices.contains(index);
+        boolean active = legacyVisible || splitter.area.isInside(context);
 
         if (BBSSettings.editorResizablePanels.get())
         {
             context.requestCursor(this.getSplitterCursor(index, context.mouseX, context.mouseY));
         }
 
-        int lineColor = BBSSettings.primaryColor(Colors.A100);
-
-        if (!splitter.isDragging() && !this.draggedSplitterIndices.contains(index))
-        {
-            return;
-        }
-
-        if (info.horizontal)
-        {
-            int cy = splitter.area.y + splitter.area.h / 2;
-            int half = SPLITTER_HANDLE_LINE_PX / 2;
-            context.batcher.box(splitter.area.x, cy - half, splitter.area.ex(), cy - half + SPLITTER_HANDLE_LINE_PX, lineColor);
-        }
-        else
-        {
-            int cx = splitter.area.x + splitter.area.w / 2;
-            int half = SPLITTER_HANDLE_LINE_PX / 2;
-            context.batcher.box(cx - half, splitter.area.y, cx - half + SPLITTER_HANDLE_LINE_PX, splitter.area.ey(), lineColor);
-        }
+        UIDockStyleRenderer.renderSplitter(context, splitter.area, info.horizontal, active, legacyVisible);
     }
 
     private int getSplitterCursor(int index, int mouseX, int mouseY)
@@ -2187,6 +2391,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.clearPanelDragState();
         this.clearSplitterDragState();
+        this.beginLayoutTransitionCapture();
         this.selectedMainEditorPanel = element;
 
         if (previousRoot != this.getCurrentFilmLayoutRoot())
@@ -2206,6 +2411,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.toggleFlight();
         }
+
+        this.endLayoutTransitionCapture();
     }
 
     private void captureTimelineViewport(UIElement panel)
@@ -2647,6 +2854,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         this.recorder.cancel();
         UIAudioRecorder.cancelActive(this);
+        this.controller.shutdown();
         this.flushFilmCollaborationEdits();
         BBSFilmCollaborationBridge.detach(this);
 
@@ -2677,6 +2885,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         this.recorder.cancel();
         UIAudioRecorder.cancelActive(this);
+        this.controller.shutdown();
         this.flushFilmCollaborationEdits();
         BBSFilmCollaborationBridge.detach(this);
         super.disappear();
@@ -2916,6 +3125,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return this.dashboard.orbitUI.canControl();
     }
 
+    @Override
+    public boolean shouldEnableFlightOnRestore()
+    {
+        return false;
+    }
+
     public void toggleFlight()
     {
         this.setFlight(!this.isFlying());
@@ -3064,8 +3279,15 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             return;
         }
 
+        button.active(active);
+
         Area area = button.area;
         boolean hover = area.isInside(context.mouseX, context.mouseY);
+
+        if (BBSSettings.cornerWidget() > 0)
+        {
+            return;
+        }
 
         if (active)
         {
@@ -3147,6 +3369,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.updateLogic(context);
+        this.advanceLayoutTransition();
 
         this.area.render(context.batcher, BBSSettings.baseSurface());
 

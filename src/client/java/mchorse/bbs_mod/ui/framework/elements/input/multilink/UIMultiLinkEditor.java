@@ -12,6 +12,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.utils.UICanvasEditor;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -236,7 +237,7 @@ public class UIMultiLinkEditor extends UICanvasEditor
                     filters.set((float) child.pixelate, child.erase ? 1F : 0F, 0F, 0F);
                 }
 
-                RenderSystem.setShaderTexture(0, context.render.getTextures().getTexture(Icons.ATLAS).id);
+                RenderSystem.setShaderTexture(0, context.render.getTextures().getTexture(ThemeManager.resolveIconAtlas(Icons.ATLAS)).id);
 
                 final ShaderInstance finalProgram = shader;
 

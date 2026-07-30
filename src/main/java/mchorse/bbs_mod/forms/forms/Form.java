@@ -17,8 +17,10 @@ import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
+import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
@@ -45,6 +47,33 @@ public abstract class Form extends ValueGroup
     public final ValueAnchor anchor = new ValueAnchor("anchor", new Anchor());
     public final ValueBoolean shaderShadow = new ValueBoolean("shaderShadow", true);
     public final ValueBoolean additiveColor = new ValueBoolean("additive_color", false);
+
+    /* Enchantment glint over the whole form: off, full, edge or vanilla. Model
+     * forms drive their glint per bone from the pose instead, since a skeleton lets the
+     * effect be placed far more precisely than one switch for the entire form. */
+    public final ValueInt glintMode = new ValueInt("glint", GLINT_OFF);
+    /* Glint tint, with alpha doubling as the effect's opacity. */
+    public final ValueColor glintColor = new ValueColor("glint_color", Color.white());
+    public final ValueFloat glintSpeed = new ValueFloat("glint_speed", 1F);
+    public final ValueTransform glintTransform = new ValueTransform("glint_transform", new Transform());
+
+    public static final int GLINT_OFF = 0;
+    public static final int GLINT_FULL = 1;
+    public static final int GLINT_EDGE = 2;
+    public static final int GLINT_VANILLA = 3;
+
+    /**
+     * Whether this kind of form renders the glint above, which decides if the editor offers
+     * the controls at all — an switch that visibly does nothing is worse than no switch.
+     *
+     * <p>Off by default: drawing the glint means re-drawing the form's geometry through a
+     * a compatible vanilla render type, which only renderers with reusable geometry can do.
+     * Model forms opt out too, driving their glint per bone from the pose instead.</p>
+     */
+    public boolean supportsGlint()
+    {
+        return false;
+    }
 
     public final List<ValueTransform> additionalTransforms = new ArrayList<>();
 
@@ -89,7 +118,11 @@ public abstract class Form extends ValueGroup
         this.add(this.transform);
         this.add(this.transformOverlay);
 
-        for (int i = 0; i < (BBSSettings.recordingPoseTransformOverlays.get()); i++)
+        /* Settings may be unregistered (bare JVM tests, early bootstrap);
+         * fall back to the registered default of 0 overlays */
+        int overlays = BBSSettings.recordingPoseTransformOverlays == null ? 0 : BBSSettings.recordingPoseTransformOverlays.get();
+
+        for (int i = 0; i < overlays; i++)
         {
             ValueTransform valueTransform = new ValueTransform("transform_overlay" + i, new Transform());
 
@@ -101,6 +134,10 @@ public abstract class Form extends ValueGroup
         this.add(this.anchor);
         this.add(this.shaderShadow);
         this.add(this.additiveColor);
+        this.add(this.glintMode);
+        this.add(this.glintColor);
+        this.add(this.glintSpeed);
+        this.add(this.glintTransform);
 
         this.hitbox.invisible();
         this.hitboxWidth.invisible();

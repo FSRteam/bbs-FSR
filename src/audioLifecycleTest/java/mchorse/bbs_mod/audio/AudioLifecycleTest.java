@@ -5,6 +5,8 @@ import mchorse.bbs_mod.audio.wav.WaveWriter;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.ICameraController;
+import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
+import mchorse.bbs_mod.forms.renderers.sound.SoundFormPlayback;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.film.audio.CaptureBackend;
@@ -65,19 +67,23 @@ public final class AudioLifecycleTest
             captureFinalDrainAndConsumerFailuresOwnResourcesOnce();
             captureFailuresAreDistinctAndBounded();
             playbackIdentityAndGlobalCleanup();
+            playbackSpatialParametersAndExplicitSeek();
+            soundFormLoopIntervalLifecycle();
+            playbackSpatialStereoDownmixAndCleanup();
+            previewRestartReplacesUniqueOnly();
             playbackCleanupRetriesAndRetiredOwners();
             playbackContextDispatchDefersBackend();
             cameraControllerRemovalShutsDown();
             capture.assertExpectedErrors();
         }
 
-        System.out.println("AudioLifecycleTest: all tests passed; captured 25 expected failure diagnostics");
+        System.out.println("AudioLifecycleTest: all tests passed; captured 26 expected failure diagnostics");
     }
 
     /** Captures deliberate fake-device failures while rejecting unexpected production diagnostics. */
     private static final class ExpectedErrorLogCapture extends AbstractAppender implements AutoCloseable
     {
-        private static final int EXPECTED_ERROR_COUNT = 25;
+        private static final int EXPECTED_ERROR_COUNT = 26;
         private final List<LoggerState> states;
         private final List<LogEvent> events = new CopyOnWriteArrayList<>();
 
@@ -1176,6 +1182,212 @@ public final class AudioLifecycleTest
         backend.assertAllReleasedExactlyOnce("identity playback ownership");
     }
 
+    private static void playbackSpatialParametersAndExplicitSeek() throws Exception
+    {
+        Link link = Link.assets("audio/spatial-parameters.wav");
+        Wave wave = new Wave(new PcmFormat(PcmEncoding.PCM_S16_LE, ChannelLayout.MONO, 10), new byte[200]);
+        MemoryAssetProvider provider = new MemoryAssetProvider();
+        provider.put(link, wav(wave));
+        FakeSoundBackend backend = new FakeSoundBackend();
+        SoundManager manager = new SoundManager(provider, backend, Runnable::run, () -> true);
+        Object owner = new Object();
+        Object identity = new Object();
+
+        SoundManager.VoiceRequest initial = SoundManager.VoiceRequest.spatial(
+            link, 1.25F, 0.6F, 2F, 3F, 4F, 1.5F, true, 96F, true);
+        manager.reconcile(owner, new IdentityHashMap<>(Map.of(identity, initial)), true);
+
+        SoundPlayer player = manager.getOwnedVoice(owner, identity);
+        FakeSoundBackend.Source source = backend.source(player);
+
+        check(!source.relative, "spatial voice is world-relative");
+        check(Math.abs(source.x - 2F) < .001F && Math.abs(source.y - 3F) < .001F
+                && Math.abs(source.z - 4F) < .001F,
+            "spatial voice applies its world position");
+        check(Math.abs(source.pitch - 1.5F) < .001F, "spatial voice applies form pitch");
+        check(source.looping, "spatial voice enables native looping");
+        check(Math.abs(source.maxDistance - 96F) < .001F, "spatial voice applies form range");
+
+        source.offset = 5F;
+        SoundManager.VoiceRequest continuous = SoundManager.VoiceRequest.spatial(
+            link, 1.3F, 0.6F, 2F, 3F, 4F, 1.5F, true, 96F, false);
+        manager.reconcile(owner, new IdentityHashMap<>(Map.of(identity, continuous)), true);
+        check(Math.abs(source.offset - 5F) < .001F,
+            "continuous pitched playback is not dragged back to the unpitched timeline offset");
+
+        SoundManager.VoiceRequest scrubbed = SoundManager.VoiceRequest.spatial(
+            link, 2F, 0.6F, 2F, 3F, 4F, 1.5F, true, 96F, true);
+        manager.reconcile(owner, new IdentityHashMap<>(Map.of(identity, scrubbed)), false);
+        check(Math.abs(source.offset - 2F) < .001F && source.state == FakeSoundBackend.State.PAUSED,
+            "paused scrub explicitly seeks and pauses the spatial voice");
+
+        manager.deleteSounds();
+        backend.assertAllReleasedExactlyOnce("spatial playback parameters");
+    }
+
+    private static void soundFormLoopIntervalLifecycle() throws Exception
+    {
+        Link link = Link.assets("audio/form-loop-interval.wav");
+        Wave wave = new Wave(new PcmFormat(PcmEncoding.PCM_S16_LE, ChannelLayout.MONO, 10), new byte[200]);
+        MemoryAssetProvider provider = new MemoryAssetProvider();
+        provider.put(link, wav(wave));
+        FakeSoundBackend backend = new FakeSoundBackend();
+        SoundManager manager = new SoundManager(provider, backend, Runnable::run, () -> true);
+        SoundFormPlayback playback = new SoundFormPlayback();
+        SoundSphereForm form = new SoundSphereForm();
+        Object owner = new Object();
+
+        form.audio.set(link);
+        form.playing.set(true);
+        form.looping.set(true);
+        form.loopInterval.set(2F);
+
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            9.5F, true, true);
+
+        SoundPlayer first = ownedDirectVoice(manager, owner, playback,
+            "positive loop interval starts an audible direct voice");
+        int firstSource = first.getSource();
+        check(!backend.source(first).looping, "positive loop interval disables native looping");
+
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            10.5F, true, false);
+
+        check(manager.getOwnedVoiceCount(owner) == 0, "positive loop interval removes the source during its gap");
+        check(backend.successfulSourceDeletes(firstSource) == 1,
+            "gap removal deletes the previous source exactly once");
+
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            12.25F, true, false);
+
+        SoundPlayer restarted = ownedDirectVoice(manager, owner, playback,
+            "next loop window recreates the direct voice");
+        int restartedSource = restarted.getSource();
+        check(restartedSource != firstSource && backend.sourceCreateCalls.get() == 2,
+            "next loop window creates a fresh source identity");
+        check(Math.abs(backend.source(restarted).offset - .25F) < .001F
+                && backend.events.contains("seek:" + restartedSource),
+            "recreated source seeks to the next audible window position");
+        check(!backend.source(restarted).looping, "recreated positive-interval source keeps native looping disabled");
+
+        form.loopInterval.set(0F);
+        playback.update(manager, owner, form,
+            0F, 0F, 0F, 1F, 0F, 0F,
+            SoundFormPlayback.NO_SURFACES, 0, false, false,
+            20.25F, true, false);
+
+        check(ownedDirectVoice(manager, owner, playback, "zero loop interval retains the direct voice") == restarted,
+            "zero loop interval does not recreate the active source");
+        check(backend.source(restarted).looping, "zero loop interval retains native looping");
+
+        manager.deleteSounds();
+        backend.assertAllReleasedExactlyOnce("sound form loop interval lifecycle");
+    }
+
+    private static SoundPlayer ownedDirectVoice(SoundManager manager, Object owner,
+        SoundFormPlayback playback, String label) throws Exception
+    {
+        java.lang.reflect.Field field = SoundFormPlayback.class.getDeclaredField("directKey");
+
+        field.setAccessible(true);
+
+        SoundPlayer player = manager.getOwnedVoice(owner, field.get(playback));
+
+        check(player != null, label);
+
+        return player;
+    }
+
+    private static void playbackSpatialStereoDownmixAndCleanup() throws Exception
+    {
+        Link link = Link.assets("audio/spatial-stereo.wav");
+        int[][] frames = new int[100][2];
+        frames[0][0] = 24576;
+        frames[0][1] = -8192;
+        Wave stereo = new Wave(new PcmFormat(PcmEncoding.PCM_S16_LE, ChannelLayout.STEREO, 10),
+            stereoFrames(frames));
+        MemoryAssetProvider provider = new MemoryAssetProvider();
+        provider.put(link, wav(stereo));
+        FakeSoundBackend backend = new FakeSoundBackend();
+        SoundManager manager = new SoundManager(provider, backend, Runnable::run, () -> true);
+        Object owner = new Object();
+        Object direct = new Object();
+
+        manager.reconcile(owner, new IdentityHashMap<>(Map.of(
+            direct, new SoundManager.VoiceRequest(link, 0.5F, 1F))), true);
+        SoundPlayer listenerRelative = manager.getOwnedVoice(owner, direct);
+        SoundBuffer buffer = listenerRelative.getBuffer();
+        int originalHandle = buffer.getBuffer(false);
+        int spatialHandle = buffer.getBuffer(true);
+
+        check(originalHandle != spatialHandle, "stereo asset owns a distinct mono spatial buffer");
+        check(backend.source(listenerRelative).buffer == originalHandle
+                && backend.buffer(originalHandle).getFormat().layout() == ChannelLayout.STEREO,
+            "listener-relative playback preserves the authored stereo buffer");
+        Wave spatialWave = backend.buffer(spatialHandle);
+        check(spatialWave.getFormat().layout() == ChannelLayout.MONO,
+            "spatial playback variant is mono for OpenAL positioning");
+        check(Math.abs(PcmSamples.readNormalized(spatialWave, 0, 0) - 0.25D) < 0.0001D,
+            "spatial stereo downmix follows the 0.5L plus 0.5R format contract");
+        check(provider.reads(link) == 1 && backend.bufferCreateCalls.get() == 2,
+            "original and spatial buffers share one asset decode");
+
+        int listenerSource = listenerRelative.getSource();
+        SoundManager.VoiceRequest spatialDirect = SoundManager.VoiceRequest.spatial(
+            link, 0.5F, 1F, 2F, 3F, 4F);
+        manager.reconcile(owner, new IdentityHashMap<>(Map.of(direct, spatialDirect)), true);
+        SoundPlayer directPlayer = manager.getOwnedVoice(owner, direct);
+        FakeSoundBackend.Source directSource = backend.source(directPlayer);
+
+        check(directPlayer.getSource() != listenerSource
+                && backend.successfulSourceDeletes(listenerSource) == 1,
+            "changing spatial mode recreates the source before selecting another buffer");
+        check(directSource.buffer == spatialHandle && !directSource.relative,
+            "direct spatial voice attaches the mono positional buffer");
+
+        Object reflection = new Object();
+        SoundManager.VoiceRequest spatialReflection = SoundManager.VoiceRequest.spatial(
+            link, 0.25F, 0.4F, -6F, 1F, 8F);
+        IdentityHashMap<Object, SoundManager.VoiceRequest> spatialVoices = new IdentityHashMap<>();
+        spatialVoices.put(direct, spatialDirect);
+        spatialVoices.put(reflection, spatialReflection);
+        manager.reconcile(owner, spatialVoices, true);
+        FakeSoundBackend.Source reflectedSource = backend.source(manager.getOwnedVoice(owner, reflection));
+
+        check(reflectedSource.buffer == spatialHandle && !reflectedSource.relative,
+            "reflected voice shares the mono positional buffer");
+        check(Math.abs(directSource.x - reflectedSource.x) > 0.001F
+                || Math.abs(directSource.y - reflectedSource.y) > 0.001F
+                || Math.abs(directSource.z - reflectedSource.z) > 0.001F,
+            "direct and reflected voices retain independent world positions");
+        manager.deleteSounds();
+        backend.assertAllReleasedExactlyOnce("stereo spatial playback ownership");
+
+        FakeSoundBackend cleanupBackend = new FakeSoundBackend();
+        SoundManager cleanupManager = new SoundManager(provider, cleanupBackend, Runnable::run, () -> true);
+        SoundBuffer cleanupBuffer = cleanupManager.load(link, false);
+        int cleanupOriginal = cleanupBuffer.getBuffer(false);
+        int cleanupSpatial = cleanupBuffer.getBuffer(true);
+        cleanupBackend.failNextDeleteBuffer = true;
+        cleanupManager.deleteSound(link);
+
+        check(cleanupBuffer.getBuffer(false) == cleanupOriginal
+                && cleanupBuffer.getBuffer(true) < 0
+                && cleanupBackend.successfulBufferDeletes(cleanupSpatial) == 1,
+            "partial stereo-buffer cleanup retains only the failed handle for retry");
+        cleanupManager.deleteSounds();
+        check(cleanupBuffer.isCleanupComplete()
+                && cleanupBackend.successfulBufferDeletes(cleanupOriginal) == 1,
+            "later cleanup retries the remaining stereo-buffer handle");
+        cleanupBackend.assertAllReleasedExactlyOnce("stereo spatial cleanup retry");
+    }
+
     private static void playbackCleanupRetriesAndRetiredOwners() throws Exception
     {
         Link link = Link.assets("audio/retry.wav");
@@ -1276,6 +1488,56 @@ public final class AudioLifecycleTest
         check(globalRetryBackend.totalOperationCalls.get() == operationsAfterNullCleanup,
             "repeated player/buffer cleanup never reaches released fake handles");
         globalRetryBackend.assertAllReleasedExactlyOnce("global retry playback ownership");
+    }
+
+    private static void previewRestartReplacesUniqueOnly() throws Exception
+    {
+        Link link = Link.assets("audio/restart-preview.wav");
+        Wave wave = new Wave(new PcmFormat(PcmEncoding.PCM_S16_LE, ChannelLayout.MONO, 10), new byte[200]);
+        MemoryAssetProvider provider = new MemoryAssetProvider();
+        provider.put(link, wav(wave));
+        FakeSoundBackend backend = new FakeSoundBackend();
+        SoundManager manager = new SoundManager(provider, backend, Runnable::run, () -> true);
+
+        /* Waveform generation is GPU-backed and intentionally excluded from
+         * this headless lifecycle test; replacement ownership is identical. */
+        SoundPlayer firstPreview = manager.restartUnique(link, false);
+        int firstPreviewSource = firstPreview.getSource();
+        Object owner = new Object();
+        Object clip = new Object();
+        IdentityHashMap<Object, SoundManager.VoiceRequest> desired = new IdentityHashMap<>();
+        desired.put(clip, new SoundManager.VoiceRequest(link, 0.25F, 0.75F));
+        manager.reconcile(owner, desired, true);
+        SoundPlayer ownedVoice = manager.getOwnedVoice(owner, clip);
+        int ownedSource = ownedVoice.getSource();
+
+        SoundPlayer secondPreview = manager.restartUnique(link, false);
+
+        check(secondPreview != null && secondPreview != firstPreview
+                && secondPreview.getSource() != firstPreviewSource,
+            "preview restart creates a fresh source from the beginning");
+        check(backend.successfulSourceDeletes(firstPreviewSource) == 1,
+            "preview restart releases the previous unique source exactly once");
+        check(manager.getOwnedVoice(owner, clip) == ownedVoice
+                && ownedVoice.getSource() == ownedSource
+                && backend.sources.containsKey(ownedSource),
+            "preview restart leaves an owner-scoped voice using the same link untouched");
+        check(manager.getPlayers().stream().filter(SoundPlayer::isUnique).count() == 1,
+            "preview restart retains exactly one unique preview source");
+
+        int secondPreviewSource = secondPreview.getSource();
+        SoundPlayer thirdPreview = manager.restartUnique(link, false);
+
+        check(thirdPreview != null && thirdPreview.getSource() != secondPreviewSource,
+            "every preview click replaces the prior source");
+        check(backend.successfulSourceDeletes(secondPreviewSource) == 1,
+            "second preview source is released on the next click");
+        check(manager.getOwnedVoice(owner, clip) == ownedVoice,
+            "repeated preview restarts never stop the owner-scoped voice");
+
+        manager.releaseOwner(owner);
+        manager.deleteSounds();
+        backend.assertAllReleasedExactlyOnce("preview restart ownership");
     }
 
     private static void playbackContextDispatchDefersBackend() throws Exception
@@ -1904,6 +2166,7 @@ public final class AudioLifecycleTest
     private static final class MemoryAssetProvider extends AssetProvider
     {
         private final Map<Link, byte[]> assets = new HashMap<>();
+        private final Map<Link, Integer> readCounts = new HashMap<>();
 
         private void put(Link link, byte[] bytes)
         {
@@ -1913,6 +2176,7 @@ public final class AudioLifecycleTest
         @Override
         public java.io.InputStream getAsset(Link link) throws IOException
         {
+            this.readCounts.merge(link, 1, Integer::sum);
             byte[] bytes = this.assets.get(link);
 
             if (bytes == null)
@@ -1921,6 +2185,11 @@ public final class AudioLifecycleTest
             }
 
             return new ByteArrayInputStream(bytes);
+        }
+
+        private int reads(Link link)
+        {
+            return this.readCounts.getOrDefault(link, 0);
         }
     }
 
@@ -1971,6 +2240,13 @@ public final class AudioLifecycleTest
             private int buffer;
             private float gain;
             private float offset;
+            private float pitch = 1F;
+            private float maxDistance;
+            private boolean relative;
+            private boolean looping;
+            private float x;
+            private float y;
+            private float z;
             private State state = State.INITIAL;
 
             private Source(int handle)
@@ -2104,7 +2380,7 @@ public final class AudioLifecycleTest
         public void setSourceMaxDistance(int source, float distance)
         {
             this.record("setSourceMaxDistance");
-            this.source(source);
+            this.source(source).maxDistance = distance;
         }
 
         @Override
@@ -2118,28 +2394,32 @@ public final class AudioLifecycleTest
         public void setSourcePitch(int source, float pitch)
         {
             this.record("setSourcePitch");
-            this.source(source);
+            this.source(source).pitch = pitch;
         }
 
         @Override
         public void setSourceRelative(int source, boolean relative)
         {
             this.record("setSourceRelative");
-            this.source(source);
+            this.source(source).relative = relative;
         }
 
         @Override
         public void setSourceLooping(int source, boolean looping)
         {
             this.record("setSourceLooping");
-            this.source(source);
+            this.source(source).looping = looping;
         }
 
         @Override
         public void setSourcePosition(int source, float x, float y, float z)
         {
             this.record("setSourcePosition");
-            this.source(source);
+            Source owned = this.source(source);
+
+            owned.x = x;
+            owned.y = y;
+            owned.z = z;
         }
 
         @Override

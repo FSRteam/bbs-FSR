@@ -6,6 +6,8 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.ITextColoring;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.function.Consumer;
@@ -21,6 +23,8 @@ public class UIButton extends UIClickable<UIButton> implements ITextColoring
     public int customColor;
     public int customHighlightColor;
     public boolean background = true;
+
+    private final UITween hoverTween = new UITween();
 
     public UIButton(IKey label, Consumer<UIButton> callback)
     {
@@ -79,16 +83,34 @@ public class UIButton extends UIClickable<UIButton> implements ITextColoring
     @Override
     protected void renderSkin(UIContext context)
     {
-        int color = this.custom ? this.customColor : BBSSettings.primaryColor.get() | Colors.A100;
+        int color = this.custom ? this.customColor : BBSSettings.accentColorRGB() | Colors.A100;
+        int highlight = this.custom ? this.customHighlightColor : Colors.mulRGB(color, 0.85F);
 
-        if (this.hover)
+        this.hoverTween.to(this.hover ? 1F : 0F, UIMotions.hover());
+
+        float hoverFactor = this.hoverTween.update();
+
+        if (!this.hoverTween.isSettled())
         {
-            color = this.custom ? this.customHighlightColor : Colors.mulRGB(color, 0.85F);
+            color = Colors.lerp(color, highlight, hoverFactor);
+        }
+        else if (this.hover)
+        {
+            color = highlight;
         }
 
         if (this.background)
         {
-            context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color | Colors.A100, true, false);
+            int radius = BBSSettings.cornerWidget();
+
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, color | Colors.A100);
+            }
+            else
+            {
+                context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color | Colors.A100, true, false);
+            }
         }
 
         FontRenderer font = context.batcher.getFont();
@@ -96,8 +118,16 @@ public class UIButton extends UIClickable<UIButton> implements ITextColoring
         int x = this.area.mx(font.getWidth(label));
         int y = this.area.my(font.getHeight());
 
-        context.batcher.text(label, x, y, Colors.mulRGB(this.textColor, this.hover ? 0.9F : 1F), this.textShadow);
+        int labelColor = resolveLabelColor(this.textColor, BBSSettings.textColor());
+
+        context.batcher.text(label, x, y, Colors.mulRGB(labelColor, 1F - 0.1F * hoverFactor), this.textShadow);
 
         this.renderLockedArea(context);
+    }
+
+    private static int resolveLabelColor(int configuredColor, int themeTextColor)
+    {
+        /* Colors.WHITE doubles as "follow the theme" for the default text color. */
+        return configuredColor == Colors.WHITE ? themeTextColor : configuredColor;
     }
 }

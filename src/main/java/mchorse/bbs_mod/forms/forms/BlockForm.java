@@ -21,4 +21,10 @@ public class BlockForm extends Form
     {
         return BuiltInRegistries.BLOCK.getKey(this.blockState.get().getBlock()).toString();
     }
+
+    @Override
+    public boolean supportsGlint()
+    {
+        return true;
+    }
 }

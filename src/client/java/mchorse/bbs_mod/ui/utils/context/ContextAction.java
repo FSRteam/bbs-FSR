@@ -55,14 +55,14 @@ public class ContextAction
         this.renderBackground(context, x, y, w, h, hover, selected);
 
         context.batcher.icon(this.icon, x + 2, y + h / 2, 0, 0.5F);
-        context.batcher.text(this.label.get(), x + 22, y + (h - font.getHeight()) / 2 + 1, Colors.WHITE, false);
+        context.batcher.text(this.label.get(), x + 22, y + (h - font.getHeight()) / 2 + 1, BBSSettings.textColor(), false);
     }
 
     protected void renderBackground(UIContext context, int x, int y, int w, int h, boolean hover, boolean selected)
     {
         if (hover)
         {
-            context.batcher.box(x, y, x + w, y + h, Colors.A50 | BBSSettings.primaryColor.get());
+            context.batcher.box(x, y, x + w, y + h, Colors.A50 | BBSSettings.accentColorRGB());
         }
     }
 }

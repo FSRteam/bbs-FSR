@@ -6,14 +6,19 @@ import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.factory.IFactory;
+import mchorse.bbs_mod.plugin.manager.PluginStructuralInstanceTracker;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.BiConsumer;
 
 public class Clips extends ValueGroup
 {
@@ -25,6 +30,7 @@ public class Clips extends ValueGroup
         super(id);
 
         this.factory = factory;
+        PluginStructuralInstanceTracker.track(this);
     }
 
     public IFactory<Clip, ClipFactoryData> getFactory()
@@ -241,7 +247,70 @@ public class Clips extends ValueGroup
 
     public List<Clip> get()
     {
+        this.recoverMissing();
         return Collections.unmodifiableList(this.clips);
+    }
+
+    public Snapshot snapshotStructuralTypes(Set<Class<?>> types)
+    {
+        if (types == null || types.isEmpty())
+        {
+            return Snapshot.empty(this);
+        }
+
+        java.util.Map<Integer, MapType> data = new java.util.LinkedHashMap<>();
+
+        for (int i = 0; i < this.clips.size(); i += 1)
+        {
+            Clip clip = this.clips.get(i);
+
+            if (types.contains(clip.getClass()))
+            {
+                MapType map = this.factory.toData(clip);
+                data.put(i, (MapType) map.copy());
+                this.clips.set(i, new MissingClip(map));
+            }
+        }
+
+        if (!data.isEmpty())
+        {
+            this.sync();
+        }
+
+        return new Snapshot(this, data);
+    }
+
+    private void recoverMissing()
+    {
+        boolean changed = false;
+
+        for (int i = 0; i < this.clips.size(); i += 1)
+        {
+            Clip current = this.clips.get(i);
+
+            if (!(current instanceof MissingClip missing))
+            {
+                continue;
+            }
+
+            try
+            {
+                Clip recovered = this.factory.fromData(missing.sourceData());
+
+                if (recovered != null)
+                {
+                    this.clips.set(i, recovered);
+                    changed = true;
+                }
+            }
+            catch (Exception ignored)
+            {}
+        }
+
+        if (changed)
+        {
+            this.sync();
+        }
     }
 
     public int findNextTick(int tick)
@@ -319,7 +388,7 @@ public class Clips extends ValueGroup
 
         for (Clip clip : this.clips)
         {
-            list.add(this.factory.toData(clip));
+            list.add(clip instanceof MissingClip missing ? missing.sourceData() : this.factory.toData(clip));
         }
 
         return list;
@@ -369,9 +438,76 @@ public class Clips extends ValueGroup
 
                     this.clips.add(clip);
                 }
+                else
+                {
+                    this.clips.add(new MissingClip(map));
+                }
             }
         }
 
         this.sync();
+    }
+
+    public static final class Snapshot
+    {
+        private final Clips holder;
+        private final Map<Integer, MapType> data;
+
+        private Snapshot(Clips holder, Map<Integer, MapType> data)
+        {
+            this.holder = holder;
+            this.data = data;
+        }
+
+        private static Snapshot empty(Clips holder)
+        {
+            return new Snapshot(holder, Map.of());
+        }
+
+        public boolean isEmpty()
+        {
+            return this.data.isEmpty();
+        }
+
+        public int rebuild(BiConsumer<String, Throwable> failure)
+        {
+            int failed = 0;
+
+            for (Map.Entry<Integer, MapType> entry : this.data.entrySet())
+            {
+                int index = entry.getKey();
+                MapType source = entry.getValue();
+                String typeKey = this.holder.factory.getTypeKey();
+
+                if (!this.holder.factory.hasType(Link.create(source.getString(typeKey))))
+                {
+                    /* Type no longer registered (plugin generation retired it) - this is
+                     * the expected degradation path, not a rebuild failure, so the
+                     * placeholder stays without raising a diagnostic. */
+                    this.holder.clips.set(index, new MissingClip(source));
+
+                    continue;
+                }
+
+                try
+                {
+                    Clip clip = this.holder.factory.fromData(source);
+                    this.holder.clips.set(index, clip == null ? new MissingClip(source) : clip);
+                }
+                catch (Throwable error)
+                {
+                    failed += 1;
+                    this.holder.clips.set(index, new MissingClip(source));
+                    failure.accept(source.getString(typeKey, "<unknown-clip>"), error);
+                }
+            }
+
+            if (!this.data.isEmpty())
+            {
+                this.holder.sync();
+            }
+
+            return failed;
+        }
     }
 }

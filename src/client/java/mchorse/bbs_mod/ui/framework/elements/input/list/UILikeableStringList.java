@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.SoundLikeManager;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -80,7 +81,7 @@ public class UILikeableStringList extends UIStringList
             displayText = context.batcher.getFont().limitToWidth(displayText, maxWidth);
         }
 
-        context.batcher.textShadow(displayText, x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? Colors.HIGHLIGHT : Colors.WHITE);
+        context.batcher.textShadow(displayText, x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
 
         if (isNoneOption)
         {

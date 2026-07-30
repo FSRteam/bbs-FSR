@@ -1,0 +1,82 @@
+{
+    "format": 1,
+    "name": "Refreshed",
+    "author": "FSR",
+    "description": "Refreshed 2.0 visual style adapted to the FSR theme system",
+    "base": "dark",
+    "variant": "dark",
+    "colors": {
+        "surface": {
+            "chrome": "#0F1114",
+            "base": "#0F1114",
+            "raised": "#121519",
+            "deep": "#08090B",
+            "divider": "#46465A"
+        },
+        "accent": {
+            "primary": "#8D6DB8"
+        },
+        "text": {
+            "primary": "#FFFFFF",
+            "muted": "#AAAAAA"
+        },
+        "state": {
+            "positive": "#59D940",
+            "negative": "#FF4059",
+            "warning": "#FFBB00",
+            "active": "#0088FF",
+            "highlight": "#DDDDFF",
+            "cursor": "#57F52A"
+        },
+        "field_fill": "#1A1C21",
+        "field_border": "#3A4D58",
+        "tab_active_line": "#46465A",
+        "tab_active_gradient": "#88464658",
+        "area_tint": "#18181E",
+        "area_tint_light": "#1B1B22",
+        "drop_fill": "#44121218",
+        "drop_border": "#AA2A2A36",
+        "splitter_active": "#AA7A7A8C",
+        "splitter_idle": "#22FFFFFF",
+        "shadow_muted": "#26262E",
+        "trackpad_scrub": "#6E6E7C",
+        "notification_fill": "#0E1013",
+        "notification_text": "#FFFFFF",
+        "selection_fill": "#448D6DB8",
+        "selection_outline": "#8D6DB8",
+        "icon_pressed": "#775C9C",
+        "icon_disabled": "#00000000",
+        "scrollbar_shadow": "#88000000"
+    },
+    "style": {
+        "text_shadow": true,
+        "bevel": false,
+        "panel_shadow": true,
+        "corner_radius": {
+            "chrome": 5,
+            "panel": 5,
+            "widget": 5
+        }
+    },
+    "motion": {
+        "enabled": true,
+        "speed": 1.0,
+        "overlay":       { "enabled": true, "type": "spring", "response": 0.34, "damping": 0.84, "preset": "scale", "tracks": { "scale": { "from": 0.85 }, "alpha": { "from": 0.0 } } },
+        "panel_switch":  { "enabled": true, "type": "spring", "response": 0.30, "damping": 0.88, "preset": "fade" },
+        "hover":         { "enabled": true, "type": "spring", "response": 0.20, "damping": 0.92 },
+        "notification":  { "enabled": true, "type": "spring", "response": 0.38, "damping": 0.78, "preset": "slide_right", "tracks": { "x": { "from": 80.0 }, "alpha": { "from": 0.0 } } },
+        "context_menu":  { "enabled": true, "type": "spring", "response": 0.28, "damping": 0.86, "preset": "scale" },
+        "scrollbar":     { "enabled": true, "type": "spring", "response": 0.30, "damping": 0.90 },
+        "scroll_smooth": { "enabled": true, "type": "spring", "response": 0.32, "damping": 0.96 },
+        "hover_scale":   { "enabled": true, "type": "spring", "response": 0.24, "damping": 0.82, "scale": 1.04 },
+        "press":         { "enabled": true, "type": "spring", "response": 0.18, "damping": 0.80, "scale": 0.96 },
+        "layout":        { "enabled": true, "type": "spring", "response": 0.42, "damping": 0.86 },
+        "toggle":        { "enabled": true, "type": "spring", "response": 0.32, "damping": 0.78 },
+        "drag_follow":   { "enabled": false, "type": "spring", "response": 0.30, "damping": 0.86 },
+        "taskbar_hide":  { "enabled": true, "type": "spring", "response": 0.42, "damping": 0.88 }
+    },
+    "textures": {
+        "icons": "assets:themes/refreshed/icons.png",
+        "background": null
+    }
+}

@@ -753,6 +753,7 @@ public class UITrackpad extends UIBaseTextbox
         boolean dragging = this.isDraggingTime();
         boolean plus = !dragging && this.plusOne.isInside(context);
         boolean minus = !dragging && this.minusOne.isInside(context);
+        int radius = BBSSettings.cornerWidget();
 
         if (this.isEnabled() && (this.textbox.isFocused() || (!dragging && this.area.isInside(context))))
         {
@@ -762,19 +763,40 @@ public class UITrackpad extends UIBaseTextbox
         if (this.textbox.isFocused())
         {
             this.textbox.render(context);
-            context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), Colors.opaque(BBSSettings.primaryColor.get()));
+
+            if (radius <= 0)
+            {
+                context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), Colors.opaque(BBSSettings.accentColorRGB()));
+            }
         }
         else
         {
-            this.area.render(context.batcher, BBSSettings.inputSurface());
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.inputSurface());
+            }
+            else
+            {
+                this.area.render(context.batcher, BBSSettings.inputSurface());
+            }
 
             if (dragging)
             {
                 /* Draw filling background */
-                int color = BBSSettings.primaryColor.get();
+                int scrub = BBSSettings.trackpadScrubColor();
+                int color = scrub == 0 ? Colors.A100 | BBSSettings.accentColorRGB() : scrub;
                 int fx = MathUtils.clamp(context.mouseX, this.area.x + padding, this.area.ex() - padding);
+                int x1 = Math.min(fx, this.initialX);
+                int x2 = Math.max(fx, this.initialX);
 
-                context.batcher.box(Math.min(fx, this.initialX), this.area.y + padding, Math.max(fx, this.initialX), this.area.ey() - padding, Colors.A100 | color);
+                if (radius > 0)
+                {
+                    context.batcher.roundedBox(x1, this.area.y + padding, x2 - x1, this.area.h - padding * 2, radius, color);
+                }
+                else
+                {
+                    context.batcher.box(x1, this.area.y + padding, x2, this.area.ey() - padding, color);
+                }
             }
 
             FontRenderer font = context.batcher.getFont();
@@ -786,8 +808,19 @@ public class UITrackpad extends UIBaseTextbox
 
             if (BBSSettings.enableTrackpadIncrements.get() || this.area.isInside(context))
             {
-                this.plusOne.render(context.batcher, plus ? 0x22ffffff : 0x0affffff, padding);
-                this.minusOne.render(context.batcher, minus ? 0x22ffffff : 0x0affffff, padding);
+                int plusColor = plus ? 0x22ffffff : 0x0affffff;
+                int minusColor = minus ? 0x22ffffff : 0x0affffff;
+
+                if (radius > 0)
+                {
+                    this.renderIncrementZone(context, this.minusOne, minusColor, true, padding, radius);
+                    this.renderIncrementZone(context, this.plusOne, plusColor, false, padding, radius);
+                }
+                else
+                {
+                    this.plusOne.render(context.batcher, plusColor, padding);
+                    this.minusOne.render(context.batcher, minusColor, padding);
+                }
 
                 context.batcher.icon(Icons.MOVE_LEFT, minus ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.5F), x + (this.plusOne.w - Icons.MOVE_LEFT.w) / 2, y + (h - 16) / 2);
                 context.batcher.icon(Icons.MOVE_RIGHT, plus ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.5F), x + w - this.minusOne.w + (this.minusOne.w - Icons.MOVE_RIGHT.w) / 2, y + (h - 16) / 2);
@@ -869,6 +902,49 @@ public class UITrackpad extends UIBaseTextbox
         this.renderLockedArea(context);
 
         super.render(context);
+    }
+
+    private void renderIncrementZone(UIContext context, Area zone, int color, boolean left, int padding, float radius)
+    {
+        float x = zone.x + padding;
+        float y = zone.y + padding;
+        float w = zone.w - padding * 2F;
+        float h = zone.h - padding * 2F;
+
+        if (w <= 0F || h <= 0F)
+        {
+            return;
+        }
+
+        float r = Math.max(0.5F, Math.min(radius, Math.min(w, h) / 2F));
+        float capWidth = Math.min(w, Math.max(1F, r * 2F));
+        int clipWidth = Math.max(1, (int) Math.ceil(Math.min(r, w)));
+
+        if (left)
+        {
+            context.batcher.clip((int) x, (int) y, clipWidth, Math.max(1, (int) h), context);
+            context.batcher.roundedBox(x, y, capWidth, h, r, color);
+            context.batcher.unclip(context);
+
+            if (clipWidth < w)
+            {
+                context.batcher.box(x + clipWidth, y, x + w, y + h, color);
+            }
+        }
+        else
+        {
+            int bodyWidth = Math.max(0, (int) w - clipWidth);
+            float capX = x + w - capWidth;
+
+            context.batcher.clip((int) x + bodyWidth, (int) y, clipWidth, Math.max(1, (int) h), context);
+            context.batcher.roundedBox(capX, y, capWidth, h, r, color);
+            context.batcher.unclip(context);
+
+            if (bodyWidth > 0)
+            {
+                context.batcher.box(x, y, x + bodyWidth, y + h, color);
+            }
+        }
     }
 
     public double getValueModifier()

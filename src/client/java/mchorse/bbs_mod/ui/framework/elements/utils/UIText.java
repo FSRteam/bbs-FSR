@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -167,6 +168,12 @@ public class UIText extends UIElement implements ITextColoring
 
             int y = this.paddingV;
             int color = this.area.isInside(context) ? this.hoverColor : this.color;
+
+            /* Colors.WHITE doubles as "follow the theme" for the default text color */
+            if (color == Colors.WHITE)
+            {
+                color = BBSSettings.textColor();
+            }
 
             for (String line : this.text)
             {

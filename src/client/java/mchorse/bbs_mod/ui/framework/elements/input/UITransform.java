@@ -230,6 +230,12 @@ public abstract class UITransform extends UIElement
         return this.uniformDrag || Window.isKeyPressed(GLFW.GLFW_KEY_SPACE);
     }
 
+    /** Whether the scale row currently shows the single linked field. */
+    protected boolean isScaleRowCollapsed()
+    {
+        return this.uniformScale;
+    }
+
     private void syncScale(double value)
     {
         if (this.isUniformScale())

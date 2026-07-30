@@ -216,6 +216,7 @@ public final class BBSUiInputDispatcherTest
         UIKeybindGestureOwnershipTest.runAll();
         UIFormCategoryHitTestTest.runAll();
         UISectionMouseButtonTest.runAll();
+        UIViewportInputCleanupTest.runAll();
         DockPanelDragFailureTest.runAll();
         OrbitFilmGestureOwnershipTest.runAll();
         GizmoInteractionGenerationTest.runAll();

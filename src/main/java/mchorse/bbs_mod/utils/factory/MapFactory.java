@@ -24,7 +24,7 @@ public class MapFactory <T, D> implements IFactory<T, D>
 
         for (Map.Entry<Link, Class<? extends T>> entry : this.factory.entrySet())
         {
-            factory.register(entry.getKey(), entry.getValue(), this.data.get(entry.getValue()));
+            factory.register(entry.getKey(), entry.getValue(), this.data.get(entry.getKey()));
         }
 
         return factory;
@@ -46,10 +46,29 @@ public class MapFactory <T, D> implements IFactory<T, D>
 
     public MapFactory<T, D> unregister(String key)
     {
-        Class<? extends T> clazz = this.factory.remove(key);
+        if (key == null || key.isBlank())
+        {
+            return this;
+        }
 
-        this.factoryInverse.remove(clazz);
-        this.data.remove(clazz);
+        return this.unregister(Link.create(key));
+    }
+
+    public MapFactory<T, D> unregister(Link type)
+    {
+        if (type == null)
+        {
+            return this;
+        }
+
+        Class<? extends T> clazz = this.factory.remove(type);
+
+        if (clazz != null && type.equals(this.factoryInverse.get(clazz)))
+        {
+            this.factoryInverse.remove(clazz);
+        }
+
+        this.data.remove(type);
 
         return this;
     }

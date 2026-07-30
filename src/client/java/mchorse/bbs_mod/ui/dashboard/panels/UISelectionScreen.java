@@ -48,6 +48,9 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
     private static final int ICON_GAP = 4;
     private static final int ICON_SIZE = 20;
 
+    /** The banner every selection screen shows; a subclass can swap it for one of its own. */
+    private static final Link BANNER = Link.assets("textures/banners/bg.png");
+
     protected final UIDataDashboardPanel<T> panel;
     protected final UIElement card;
     protected final UIElement banner;
@@ -223,7 +226,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
 
     protected Link getBannerTexture()
     {
-        return null;
+        return BANNER;
     }
 
     protected void onDuplicateData(T data)
@@ -745,7 +748,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
     {
         int bg = BBSSettings.raisedSurface();
         int border = BBSSettings.color(BBSSettings.dividerColor(), Colors.A12);
-        int accent = BBSSettings.primaryColor.get();
+        int accent = BBSSettings.accentColorRGB();
 
         context.batcher.dropShadow(area.x, area.y, area.ex(), area.ey(), 14, Colors.A50, 0);
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), bg);

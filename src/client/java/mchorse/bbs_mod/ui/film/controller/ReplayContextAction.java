@@ -61,7 +61,7 @@ public class ReplayContextAction extends ContextAction
             context.batcher.icon(Icons.FILM, x + 2, y + h / 2, 0, 0.5F);
         }
 
-        context.batcher.text(this.label.get(), x + offset, y + (h - font.getHeight()) / 2 + 1, Colors.WHITE, false);
+        context.batcher.text(this.label.get(), x + offset, y + (h - font.getHeight()) / 2 + 1, BBSSettings.textColor(), false);
     }
 
     @Override

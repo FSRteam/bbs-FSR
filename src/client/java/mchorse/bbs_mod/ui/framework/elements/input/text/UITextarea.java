@@ -1408,6 +1408,11 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
     @Override
     public void render(UIContext context)
     {
+        if (this.isEnabled() && (this.focused || this.area.isInside(context)))
+        {
+            context.requestCursor(GLFW.GLFW_IBEAM_CURSOR);
+        }
+
         this.handleLogic(context);
 
         if (this.background)
@@ -1508,8 +1513,8 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
             context.batcher.box(cx, cy - 1, cx + 1, cy + font.getHeight() + 1, c);
         }
 
-        this.horizontal.renderScrollbar(context.batcher);
-        this.vertical.renderScrollbar(context.batcher);
+        this.horizontal.renderScrollbar(context.batcher, context.mouseX, context.mouseY);
+        this.vertical.renderScrollbar(context.batcher, context.mouseX, context.mouseY);
 
         this.renderForeground(font, context);
 
@@ -1528,12 +1533,12 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
 
     protected void renderTextLine(UIContext context, String line, int i, int j, int nx, int ny)
     {
-        context.batcher.text(line, nx, ny, Colors.WHITE, true);
+        context.batcher.text(line, nx, ny, BBSSettings.textColor(), true);
     }
 
     protected void renderBackground(UIContext context)
     {
-        int borderColor = this.focused ? Colors.A100 | BBSSettings.primaryColor.get() : Colors.LIGHTER_GRAY;
+        int borderColor = this.focused ? Colors.A100 | BBSSettings.accentColorRGB() : Colors.LIGHTER_GRAY;
 
         this.area.render(context.batcher, borderColor);
         this.area.render(context.batcher, BBSSettings.inputSurface(), 1);
@@ -1670,7 +1675,7 @@ public class UITextarea <T extends TextLine> extends UIElement implements IFocus
     private void renderSelectionArea(FontRenderer font, UIContext context, int x1, int y1, int x2, int y2)
     {
         final int selectionPad = 2;
-        int color = Colors.A50 | BBSSettings.primaryColor.get();
+        int color = Colors.A50 | BBSSettings.accentColorRGB();
 
         boolean middle = y2 > y1 + this.lineHeight;
         boolean bottom = y2 > y1;

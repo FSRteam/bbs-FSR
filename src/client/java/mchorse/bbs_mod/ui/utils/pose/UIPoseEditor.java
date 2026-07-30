@@ -6,7 +6,8 @@ import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
@@ -18,7 +19,6 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
-import mchorse.bbs_mod.ui.utils.resizers.AutomaticResizer;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -40,13 +40,15 @@ public class UIPoseEditor extends UIElement
 {
     private static String lastLimb = "";
 
-    /** The bone list never shrinks below this height when it gets stretched to fill the panel. */
-    private static final int MIN_LIST_HEIGHT = UIStringList.DEFAULT_HEIGHT * 4;
-
     public UIBoneList groups;
     public UITrackpad fix;
     public UIColor color;
     public UIToggle lighting;
+    public UICirculate glintMode;
+    public UIColor glintColor;
+    public UITrackpad glintSpeed;
+    public UIPropTransform glintTransform;
+    public UISection glintSection;
     public UIPropTransform transform;
 
     private String group = "";
@@ -98,78 +100,68 @@ public class UIPoseEditor extends UIElement
                 this.applyChildren((p) -> this.setLighting(p, this.lighting.getValue()));
             });
         });
+        this.glintMode = new UICirculate((c) -> this.applyGlintModeToSelection(c.getValue()));
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_OFF);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_FULL);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_EDGE);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_VANILLA);
+        this.glintMode.tooltip(UIKeys.POSE_CONTEXT_GLINT_TOOLTIP);
+        this.glintMode.h(UIConstants.CONTROL_HEIGHT);
+        this.glintMode.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setGlintMode(p, this.glintMode.getValue()));
+            });
+        });
+        this.glintColor = new UIColor((c) -> this.applyGlintColorToSelection(c));
+        this.glintColor.withAlpha();
+        this.glintColor.tooltip(UIKeys.POSE_CONTEXT_GLINT_COLOR_TOOLTIP);
+        this.glintColor.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setGlintColor(p, this.glintColor.picker.color.getARGBColor()));
+            });
+        });
+        this.glintSpeed = new UITrackpad((v) -> this.applyGlintSpeedToSelection(v.floatValue()));
+        this.glintSpeed.limit(-4D, 4D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
+        this.glintSpeed.tooltip(UIKeys.POSE_CONTEXT_GLINT_SPEED_TOOLTIP);
+        this.glintSpeed.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                this.applyChildren((p) -> this.setGlintSpeed(p, (float) this.glintSpeed.getValue()));
+            });
+        });
+        this.glintTransform = this.createGlintTransformEditor();
+        this.glintSection = new UISection(UIKeys.POSE_CONTEXT_GLINT_TRANSFORM);
+        this.glintSection.fields.add(
+            UI.row(this.glintMode, this.glintColor),
+            UI.labelRow(UIKeys.POSE_CONTEXT_GLINT_SPEED, this.glintSpeed),
+            this.glintTransform
+        );
+        this.glintSection.context((menu) ->
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
+            {
+                Transform source = this.glintTransform.getTransform();
+
+                if (source != null)
+                {
+                    this.applyChildren((p) -> this.setGlintTransform(p, source));
+                }
+            });
+        });
         this.transform = this.createTransformEditor();
         this.transform.setModel();
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        this.add(this.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting), this.transform.marginTop(4));
-    }
-
-    @Override
-    public void resize()
-    {
-        if (this.stretchesBoneList())
-        {
-            this.stretchBoneList();
-        }
-
-        super.resize();
-    }
-
-    /**
-     * Whether the bone list grows to fill the viewport. Only the film editor's pose keyframe editor
-     * opts in; the form pose editor keeps the list at its fixed height, so the collapsible sections
-     * below it (transform, shape keys) lay out predictably instead of fighting the stretch.
-     */
-    protected boolean stretchesBoneList()
-    {
-        return false;
-    }
-
-    private void stretchBoneList()
-    {
-        UIScrollView viewport = this.getViewport();
-
-        if (viewport == null || this.area.h <= 0 || this.groups.getParent() == null)
-        {
-            return;
-        }
-
-        int target = viewport.area.ey() - this.getViewportPadding(viewport);
-        int height = this.groups.list.getFlex().getH() + (target - this.area.ey());
-
-        this.groups.list.h(Math.max(height, MIN_LIST_HEIGHT));
-    }
-
-    private UIScrollView getViewport()
-    {
-        UIElement element = this.getParent();
-
-        while (element != null)
-        {
-            if (element instanceof UIScrollView)
-            {
-                return (UIScrollView) element;
-            }
-
-            element = element.getParent();
-        }
-
-        return null;
-    }
-
-    /** The scroll content lays itself out with this much padding at the bottom; leaving exactly
-     *  that gap below the list is what keeps the panel from overflowing into a stray scrollbar. */
-    private int getViewportPadding(UIScrollView viewport)
-    {
-        if (viewport.getFlex().post instanceof AutomaticResizer resizer)
-        {
-            return resizer.padding;
-        }
-
-        return UIConstants.SCROLL_PADDING;
+        this.add(this.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting),
+            this.transform.marginTop(4),
+            this.glintSection);
     }
 
     private void applyChildren(Consumer<PoseTransform> consumer)
@@ -375,6 +367,10 @@ public class UIPoseEditor extends UIElement
 
         this.fix.setVisible(hasBones);
         this.color.setVisible(hasBones);
+        this.glintMode.setVisible(hasBones);
+        this.glintColor.setVisible(hasBones);
+        this.glintSpeed.setVisible(hasBones);
+        this.glintSection.setVisible(hasBones);
         this.lighting.setVisible(hasBones);
         this.transform.setVisible(hasBones);
 
@@ -449,6 +445,11 @@ public class UIPoseEditor extends UIElement
         return new UIPosePropTransform();
     }
 
+    protected UIPropTransform createGlintTransformEditor()
+    {
+        return new UIGlintPropTransform();
+    }
+
     /** Applies each channel edit as a delta so selected bones retain their relative poses. */
     private class UIPosePropTransform extends UIDeltaPropTransform
     {
@@ -496,6 +497,19 @@ public class UIPoseEditor extends UIElement
         }
     }
 
+    /** Keeps glint-space edits separate from the bone's ordinary pose transform. */
+    private class UIGlintPropTransform extends UIDeltaPropTransform
+    {
+        @Override
+        protected void applyToSelection(Consumer<Transform> consumer)
+        {
+            for (String bone : new ArrayList<>(UIPoseEditor.this.groups.list.getCurrent()))
+            {
+                consumer.accept(UIPoseEditor.this.pose.get(bone).glintTransform);
+            }
+        }
+    }
+
     protected void pickBone(String bone)
     {
         if (bone == null || bone.isEmpty())
@@ -515,6 +529,10 @@ public class UIPoseEditor extends UIElement
             this.fix.setValue(0F);
             this.color.setColor(Colors.WHITE);
             this.lighting.setValue(false);
+            this.glintMode.setValue((int) PoseTransform.GLINT_OFF);
+            this.glintColor.setColor(Colors.WHITE);
+            this.glintSpeed.setValue(PoseTransform.DEFAULT_GLINT_SPEED);
+            this.glintTransform.setTransform(null);
             this.transform.setTransform(null);
 
             return;
@@ -529,6 +547,10 @@ public class UIPoseEditor extends UIElement
         this.fix.setValue(poseTransform.fix);
         this.color.setColor(poseTransform.color.getARGBColor());
         this.lighting.setValue(poseTransform.lighting == 0F);
+        this.glintMode.setValue((int) poseTransform.glintMode);
+        this.glintColor.setColor(poseTransform.glintColor.getARGBColor());
+        this.glintSpeed.setValue(poseTransform.glintSpeed);
+        this.glintTransform.setTransform(poseTransform.glintTransform);
         this.transform.setTransform(poseTransform);
     }
 
@@ -673,6 +695,24 @@ public class UIPoseEditor extends UIElement
         this.lighting.setValue(value);
     }
 
+    private void applyGlintModeToSelection(int value)
+    {
+        this.forEachSelectedPose((pt) -> this.setGlintMode(pt, value));
+        this.glintMode.setValue(value);
+    }
+
+    private void applyGlintColorToSelection(int argb)
+    {
+        this.forEachSelectedPose((pt) -> this.setGlintColor(pt, argb));
+        this.glintColor.setColor(argb);
+    }
+
+    private void applyGlintSpeedToSelection(float value)
+    {
+        this.forEachSelectedPose((pt) -> this.setGlintSpeed(pt, value));
+        this.glintSpeed.setValue(value);
+    }
+
     private void toggleFix()
     {
         if (this.groups.list.getCurrent().isEmpty())
@@ -698,5 +738,25 @@ public class UIPoseEditor extends UIElement
     protected void setLighting(PoseTransform poseTransform, boolean value)
     {
         poseTransform.lighting = value ? 0F : 1F;
+    }
+
+    protected void setGlintMode(PoseTransform poseTransform, int value)
+    {
+        poseTransform.glintMode = value;
+    }
+
+    protected void setGlintColor(PoseTransform poseTransform, int value)
+    {
+        poseTransform.glintColor.set(value);
+    }
+
+    protected void setGlintSpeed(PoseTransform poseTransform, float value)
+    {
+        poseTransform.glintSpeed = value;
+    }
+
+    protected void setGlintTransform(PoseTransform poseTransform, Transform value)
+    {
+        poseTransform.glintTransform.copy(value);
     }
 }

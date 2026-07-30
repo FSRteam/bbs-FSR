@@ -20,6 +20,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
 import mchorse.bbs_mod.settings.values.ui.ValueExportChannelLayout;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.IInterp;
@@ -44,8 +45,18 @@ public class BBSSettings {
 	public static ValueBoolean enableTrackpadIncrements;
 	public static ValueBoolean enableTrackpadScrolling;
 	public static ValueFloat userIntefaceScale;
+	public static ValueString themeId;
+	public static ValueBoolean accentFollowsTheme;
+	public static ValueBoolean motionEnabled;
+	public static ValueFloat motionSpeed;
+	public static ValueString motionEasing;
+	public static ValueBoolean showTooltips;
 	public static ValueInt tooltipStyle;
-	public static ValueInt theme;
+	public static ValueBoolean textEntryOpenAnim;
+	public static ValueBoolean filmEditorLayoutTransitionEnabled;
+	public static ValueBoolean dashboardAutoHideTaskbar;
+	public static ValueInt dashboardTaskbarHideDelay;
+	public static ValueBoolean editorVerticalLinesTimeline;
 	public static ValueFloat fov;
 	public static ValueBoolean hsvColorPicker;
 	public static ValueBoolean forceQwerty;
@@ -132,6 +143,7 @@ public class BBSSettings {
 	public static ValueBoolean editorRuleOfThirds;
 	public static ValueBoolean editorCenterLines;
 	public static ValueBoolean editorCrosshair;
+	public static ValueBoolean editorShowAllSoundGuides;
 	public static ValueBoolean editorSeconds;
 	public static ValueBoolean editorTimelineGrid;
 	public static ValueString keyframeDefaultInterpolation;
@@ -193,44 +205,50 @@ public class BBSSettings {
 	public static ValueString cdnUrl;
 	public static ValueString cdnToken;
 
-	private static final int LIGHT_THEME = 0;
-	private static final int DARK_THEME = 1;
-	private static final int DEFAULT_THEME = DARK_THEME;
 	private static final float DEFAULT_BACKGROUND_BRIGHTNESS = 1F;
 	private static final float MIN_BACKGROUND_BRIGHTNESS = 0.5F;
 	private static final float MAX_BACKGROUND_BRIGHTNESS = 1.5F;
 	private static final float IDENTITY_BRIGHTNESS = 1F;
 	private static final float BRIGHTNESS_EPSILON = 0.001F;
 	private static final int DEFAULT_PRIMARY_COLOR = 0xff3242;
-	private static final int LIGHT_CHROME_SURFACE = 0xffe6e9ef;
-	private static final int DARK_CHROME_SURFACE = 0xff111316;
-	private static final int LIGHT_BASE_SURFACE = 0xfff1f4f8;
-	private static final int DARK_BASE_SURFACE = 0xff171a1f;
-	private static final int LIGHT_RAISED_SURFACE = 0xfff8fafd;
-	private static final int DARK_RAISED_SURFACE = 0xff1d2127;
-	private static final int LIGHT_DEEP_SURFACE = 0xffdee4ed;
-	private static final int DARK_DEEP_SURFACE = 0xff0f1217;
-	private static final int LIGHT_DIVIDER_COLOR = 0xffc2cbd8;
-	private static final int DARK_DIVIDER_COLOR = 0xff30353d;
+	private static final String DEFAULT_MOTION_EASING = "sine_out";
+	private static final String[] LEGACY_MOTION_EASINGS = {
+		"sine_out", "sine_out", "linear", "sine_out", "exp_out"
+	};
+	/** Legacy int values of the removed "theme" setting, kept for migration. */
+	private static final int LEGACY_LIGHT_THEME = 0;
 
 	public static int primaryColor() {
 		return primaryColor(Colors.A50);
 	}
 
 	public static int primaryColor(int alpha) {
-		return withAlpha(primaryColor.get(), alpha);
+		return withAlpha(primaryColorBase(), alpha);
+	}
+
+	/**
+	 * The effective accent color: the theme's accent while "accent follows
+	 * theme" is enabled, the user-picked color otherwise.
+	 */
+	private static int primaryColorBase() {
+		if (accentFollowsTheme == null || accentFollowsTheme.get()) {
+			return ThemeManager.current().accentPrimary;
+		}
+
+		return primaryColor == null ? DEFAULT_PRIMARY_COLOR : primaryColor.get();
+	}
+
+	/** RGB-only accent (no alpha), safe to compose with {@code | Colors.Axx}. */
+	public static int accentColorRGB() {
+		return primaryColorBase() & Colors.RGB;
 	}
 
 	public static boolean isLightTheme() {
-		return theme != null && theme.get() == LIGHT_THEME;
+		return ThemeManager.current().light;
 	}
 
 	private static int withAlpha(int color, int alpha) {
 		return (color & Colors.RGB) | alpha;
-	}
-
-	private static int getThemeColor(int lightColor, int darkColor) {
-		return isLightTheme() ? lightColor : darkColor;
 	}
 
 	private static float getBackgroundBrightnessFactor() {
@@ -269,28 +287,177 @@ public class BBSSettings {
 		return a | (r << 16) | (g << 8) | b;
 	}
 
-	private static int getThemeSurface(int lightColor, int darkColor) {
-		return applyBackgroundBrightness(getThemeColor(lightColor, darkColor));
-	}
-
 	public static int chromeSurface() {
-		return getThemeSurface(LIGHT_CHROME_SURFACE, DARK_CHROME_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceChrome);
 	}
 
 	public static int baseSurface() {
-		return getThemeSurface(LIGHT_BASE_SURFACE, DARK_BASE_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceBase);
 	}
 
 	public static int raisedSurface() {
-		return getThemeSurface(LIGHT_RAISED_SURFACE, DARK_RAISED_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceRaised);
 	}
 
 	public static int deepSurface() {
-		return getThemeSurface(LIGHT_DEEP_SURFACE, DARK_DEEP_SURFACE);
+		return applyBackgroundBrightness(ThemeManager.current().surfaceDeep);
 	}
 
 	public static int dividerColor() {
-		return getThemeColor(LIGHT_DIVIDER_COLOR, DARK_DIVIDER_COLOR);
+		return ThemeManager.current().surfaceDivider;
+	}
+
+	public static int textColor() {
+		return ThemeManager.current().textPrimary;
+	}
+
+	public static int mutedTextColor() {
+		return ThemeManager.current().textMuted;
+	}
+
+	public static int positiveColor() {
+		return ThemeManager.current().statePositive;
+	}
+
+	public static int negativeColor() {
+		return ThemeManager.current().stateNegative;
+	}
+
+	public static int warningColor() {
+		return ThemeManager.current().stateWarning;
+	}
+
+	public static int activeColor() {
+		return ThemeManager.current().stateActive;
+	}
+
+	public static int highlightColor() {
+		return ThemeManager.current().stateHighlight;
+	}
+
+	public static int cursorColor() {
+		return ThemeManager.current().stateCursor;
+	}
+
+	public static int fieldFillColor() {
+		/* Field fill is a background surface like the four surface() getters, and text boxes and
+		 * icon buttons sit right next to panels painted with those. Leaving it un-adjusted made
+		 * those frames keep their theme colour while everything around them followed the
+		 * background brightness slider. Alpha is preserved, so translucent fills still work. */
+		return applyBackgroundBrightness(ThemeManager.current().fieldFill);
+	}
+
+	public static int fieldBorderColor() {
+		return ThemeManager.current().fieldBorder;
+	}
+
+	public static int tabActiveLineColor() {
+		return ThemeManager.current().tabActiveLine;
+	}
+
+	public static int tabActiveGradientColor() {
+		return ThemeManager.current().tabActiveGradient;
+	}
+
+	public static int areaTintColor() {
+		return ThemeManager.current().areaTint;
+	}
+
+	public static int areaTintLightColor() {
+		return ThemeManager.current().areaTintLight;
+	}
+
+	public static int dropFillColor() {
+		return ThemeManager.current().dropFill;
+	}
+
+	public static int dropBorderColor() {
+		return ThemeManager.current().dropBorder;
+	}
+
+	public static int splitterActiveColor() {
+		return ThemeManager.current().splitterActive;
+	}
+
+	public static int splitterIdleColor() {
+		return ThemeManager.current().splitterIdle;
+	}
+
+	public static int shadowMutedColor() {
+		return ThemeManager.current().shadowMuted;
+	}
+
+	public static int trackpadScrubColor() {
+		return ThemeManager.current().trackpadScrub;
+	}
+
+	public static int notificationFillColor() {
+		return ThemeManager.current().notificationFill;
+	}
+
+	public static int notificationTextColor() {
+		return ThemeManager.current().notificationText;
+	}
+
+	public static int selectionFillColor() {
+		return ThemeManager.current().selectionFill;
+	}
+
+	public static int selectionOutlineColor() {
+		return ThemeManager.current().selectionOutline;
+	}
+
+	public static int iconPressedColor() {
+		return ThemeManager.current().iconPressed;
+	}
+
+	public static int iconDisabledColor() {
+		return ThemeManager.current().iconDisabled;
+	}
+
+	public static int scrollbarShadowColor() {
+		return ThemeManager.current().scrollbarShadow;
+	}
+
+	public static boolean showTooltipsEnabled() {
+		return showTooltips == null || showTooltips.get();
+	}
+
+	public static boolean textEntryOpenAnimationEnabled() {
+		return textEntryOpenAnim == null || textEntryOpenAnim.get();
+	}
+
+	public static boolean filmEditorLayoutTransitionEnabled() {
+		return filmEditorLayoutTransitionEnabled == null || filmEditorLayoutTransitionEnabled.get();
+	}
+
+	public static boolean dashboardAutoHideTaskbarEnabled() {
+		return dashboardAutoHideTaskbar != null && dashboardAutoHideTaskbar.get();
+	}
+
+	public static int dashboardTaskbarHideDelayMs() {
+		return dashboardTaskbarHideDelay == null ? 100 : dashboardTaskbarHideDelay.get();
+	}
+
+	public static boolean verticalTimelineLinesEnabled() {
+		return (editorTimelineGrid != null && editorTimelineGrid.get())
+			|| (editorVerticalLinesTimeline != null && editorVerticalLinesTimeline.get());
+	}
+
+	public static boolean textShadow() {
+		return ThemeManager.current().textShadow;
+	}
+
+	public static int cornerChrome() {
+		return ThemeManager.current().cornerChrome;
+	}
+
+	public static int cornerPanel() {
+		return ThemeManager.current().cornerPanel;
+	}
+
+	public static int cornerWidget() {
+		return ThemeManager.current().cornerWidget;
 	}
 
 	public static int color(int color, int alpha) {
@@ -309,11 +476,11 @@ public class BBSSettings {
 	}
 
 	public static int panelShadowOpaqueColor() {
-		return Colors.A25 | primaryColor.get();
+		return Colors.A25 | (primaryColorBase() & Colors.RGB);
 	}
 
 	public static int panelShadowTransparentColor() {
-		return Colors.setA(primaryColor.get(), 0F);
+		return Colors.setA(primaryColorBase(), 0F);
 	}
 
 	public static int getDefaultDuration() {
@@ -378,8 +545,41 @@ public class BBSSettings {
 		personalizationMigrated |= migrateLegacyValue(appearance, personalization, "track_width");
 		personalizationMigrated |= migrateLegacyValue(appearance, personalization, "keyframe_default_shape");
 
+		if (personalization.has("theme") && !root.getMap("skins").has("theme_id")) {
+			MapType skins = root.getMap("skins");
+
+			skins.putString("theme_id", personalization.getInt("theme") == LEGACY_LIGHT_THEME ? "light" : "dark");
+			root.put("skins", skins);
+			personalization.remove("theme");
+			personalizationMigrated = true;
+		}
+
+		if (personalization.has("primary_color") && !root.getMap("skins").has("accent_follows_theme")) {
+			if ((personalization.getInt("primary_color") & Colors.RGB) != DEFAULT_PRIMARY_COLOR) {
+				MapType skins = root.getMap("skins");
+
+				skins.putBool("accent_follows_theme", false);
+				root.put("skins", skins);
+				personalizationMigrated = true;
+			}
+		}
+
 		if (personalizationMigrated) {
 			root.put("personalization", personalization);
+		}
+
+		MapType skins = root.getMap("skins");
+		boolean skinsMigrated = false;
+
+		if (skins.has("motion_easing") && skins.get("motion_easing").isNumeric()) {
+			int legacy = skins.getInt("motion_easing");
+			String interpolation = legacy >= 0 && legacy < LEGACY_MOTION_EASINGS.length
+				? LEGACY_MOTION_EASINGS[legacy]
+				: DEFAULT_MOTION_EASING;
+
+			skins.putString("motion_easing", interpolation);
+			root.put("skins", skins);
+			skinsMigrated = true;
 		}
 
 		MapType transformation = root.getMap("transformation");
@@ -440,7 +640,7 @@ public class BBSSettings {
 			root.put("video", video);
 		}
 
-		return personalizationMigrated || transformationMigrated || videoMigrated;
+		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated;
 	}
 
 	private static boolean migrateLegacyValue(MapType oldCategory, MapType newCategory, String key) {
@@ -483,8 +683,6 @@ public class BBSSettings {
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
 		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F);
-		tooltipStyle = builder.getInt("tooltip_style", DEFAULT_THEME);
-		tooltipStyle.invisible();
 		fov = builder.getFloat("fov", 40, 0, 180);
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
@@ -509,17 +707,32 @@ public class BBSSettings {
 		interfaceShadows = builder.getBoolean("interface_shadows", true);
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
 		stencilHighlightColor = builder.getInt("stencil_highlight_color", 0x2EFFFFFF).colorAlpha();
-		theme = builder.getInt("theme", DEFAULT_THEME);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10);
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 
+		builder.category("skins", Icons.BRUSH);
+		themeId = builder.getString("theme_id", ThemeManager.DEFAULT_THEME_ID);
+		accentFollowsTheme = builder.getBoolean("accent_follows_theme", true);
+		motionEnabled = builder.getBoolean("motion_enabled", true);
+		motionSpeed = builder.getFloat("motion_speed", 1F, 0.5F, 2F);
+		motionEasing = builder.getString("motion_easing", DEFAULT_MOTION_EASING);
+
+		builder.category("refreshed", Icons.REFRESH);
+		showTooltips = builder.getBoolean("show_tooltips", true);
+		tooltipStyle = builder.getInt("tooltip_style", 0, 0, 2);
+		textEntryOpenAnim = builder.getBoolean("text_entry_open_anim", true);
+		filmEditorLayoutTransitionEnabled = builder.getBoolean("film_editor_layout_transition_enabled", true);
+		dashboardAutoHideTaskbar = builder.getBoolean("dashboard_auto_hide_taskbar", false);
+		dashboardTaskbarHideDelay = builder.getInt("dashboard_taskbar_hide_delay", 100, 100, 15000);
+		editorVerticalLinesTimeline = builder.getBoolean("vertical_lines_timeline", false);
+
 		builder.category("transformation", Icons.SCALE);
 		gizmos = builder.getBoolean("gizmos", true);
-		axesScale = builder.getFloat("axes_scale", 3F, 0F, 10F);
-		axesThickness = builder.getFloat("axes_thickness", 0.5F, 0.25F, 3F);
+		axesScale = builder.getFloat("axes_scale", 2F, 0F, 10F);
+		axesThickness = builder.getFloat("axes_thickness", 0.35F, 0.25F, 3F);
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", true);
 		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
-		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 1);
+		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 0);
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
@@ -536,7 +749,7 @@ public class BBSSettings {
 		poseShowDisabledBones = builder.getBoolean("pose_show_disabled_bones", false);
 		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
 		builder.register(translateHotkeyOrder);
-		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");
+		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "all", "x", "y", "z");
 		builder.register(scaleHotkeyOrder);
 		rotateHotkeyOrder = new ValueOrder("rotate_hotkey_order", "view", "sphere", "x", "y", "z");
 		builder.register(rotateHotkeyOrder);
@@ -551,7 +764,7 @@ public class BBSSettings {
 
 		builder.category("background", Icons.IMAGE);
 		backgroundImage = builder.getRL("image", null);
-		backgroundColor = builder.getInt("color", 0xff101217).colorAlpha();
+		backgroundColor = builder.getInt("color", 0x7b000000).colorAlpha();
 
 		builder.category("chroma_sky", Icons.GLOBE);
 		chromaSkyEnabled = builder.getBoolean("enabled", false);
@@ -561,8 +774,8 @@ public class BBSSettings {
 
 		builder.category("scrollbars", Icons.VERTICAL);
 		scrollbarWidth = builder.getInt("width", 4, 2, 10);
-		scrollingSensitivity = builder.getFloat("sensitivity", 1F, 0F, 10F);
-		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 1F, 0F, 10F);
+		scrollingSensitivity = builder.getFloat("sensitivity", 3F, 0F, 10F);
+		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 3F, 0F, 10F);
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", false);
 
@@ -620,6 +833,7 @@ public class BBSSettings {
 		editorRuleOfThirds = builder.getBoolean("rule_of_thirds", false);
 		editorCenterLines = builder.getBoolean("center_lines", false);
 		editorCrosshair = builder.getBoolean("crosshair", false);
+		editorShowAllSoundGuides = builder.getBoolean("show_all_sound_guides", false);
 		editorSeconds = builder.getBoolean("seconds", false);
 		editorTimelineGrid = builder.getBoolean("timeline_grid", false);
 		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());

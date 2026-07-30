@@ -2,6 +2,7 @@ package mchorse.bbs_mod.addon.v2;
 
 import mchorse.bbs_mod.addon.BBSAddonCollector;
 import mchorse.bbs_mod.addon.BBSAddonIdentityRegistry;
+import mchorse.bbs_mod.addon.FabricAddonEntrypointImporterTest;
 import mchorse.bbs_mod.api.BBSApiVersion;
 import mchorse.bbs_mod.api.addon.BBSAddon;
 import mchorse.bbs_mod.api.addon.BBSAddonCapability;
@@ -67,6 +68,7 @@ public final class BBSAddonLifecycleTest
             brokerSingleFrameLimitsStayWithinFrozenPayloads();
             clientBrokerDeliveryRequiresDispatcher();
             AddonBrokerDiagnosticLimiterTest.run();
+            FabricAddonEntrypointImporterTest.runAll();
             capture.assertExpectedErrors();
         }
 

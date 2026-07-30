@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
@@ -185,7 +186,7 @@ public class GizmoInteraction
         int x = (int) (center.x - font.getWidth(readout) / 2F);
         int y = (int) (center.y - 28);
 
-        context.batcher.textCard(readout, x, y, Colors.WHITE, Colors.A75);
+        context.batcher.textCard(readout, x, y, BBSSettings.textColor(), Colors.A75);
     }
 
     public void stop()

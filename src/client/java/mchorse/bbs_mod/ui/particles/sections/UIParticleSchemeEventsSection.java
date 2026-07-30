@@ -14,8 +14,8 @@ import mchorse.bbs_mod.particles.events.ParticleEventTriggerList;
 import mchorse.bbs_mod.particles.events.ParticleLoopingDistanceEvents;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
@@ -401,15 +401,15 @@ public class UIParticleSchemeEventsSection extends UIParticleSchemeSection
         {
             this.removeAll();
 
-            UICirculate type = new UICirculate((b) -> this.setNodeType(b.getValue()));
+            UIIcons type = new UIIcons((b) -> this.setNodeType(b.getValue()));
 
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_NODE_NONE);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_NODE_EXPRESSION);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_NODE_LOG);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_NODE_PARTICLE);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_NODE_SOUND);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_NODE_SEQUENCE);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_NODE_RANDOMIZE);
+            type.add(Icons.DISABLED, UIKeys.SNOWSTORM_EVENTS_NODE_NONE);
+            type.add(Icons.CODE, UIKeys.SNOWSTORM_EVENTS_NODE_EXPRESSION);
+            type.add(Icons.CONSOLE, UIKeys.SNOWSTORM_EVENTS_NODE_LOG);
+            type.add(Icons.PARTICLE, UIKeys.SNOWSTORM_EVENTS_NODE_PARTICLE);
+            type.add(Icons.SOUND, UIKeys.SNOWSTORM_EVENTS_NODE_SOUND);
+            type.add(Icons.LIST, UIKeys.SNOWSTORM_EVENTS_NODE_SEQUENCE);
+            type.add(Icons.EXCHANGE, UIKeys.SNOWSTORM_EVENTS_NODE_RANDOMIZE);
             type.setValue(this.getNodeType());
 
             if (this.randomChild)
@@ -432,7 +432,7 @@ public class UIParticleSchemeEventsSection extends UIParticleSchemeSection
                 {
                     this.node.expression = UIParticleSchemeEventsSection.this.parse(str, this.node.expression);
                     UIParticleSchemeEventsSection.this.editor.markUndoBoundary();
-                }).delayedInput();
+                }).delayedInput().icon(Icons.CODE);
 
                 expression.setText(this.node.expression == null ? "" : this.node.expression.toString());
                 this.add(UIParticleSchemeEventsSection.this.labeledField(UIKeys.SNOWSTORM_EVENTS_NODE_EXPRESSION, expression));
@@ -492,7 +492,7 @@ public class UIParticleSchemeEventsSection extends UIParticleSchemeSection
                 effect.effect = str;
                 UIParticleSchemeEventsSection.this.markDirty();
             }).delayedInput();
-            UICirculate type = new UICirculate((b) ->
+            UIIcons type = new UIIcons((b) ->
             {
                 effect.type = switch (b.getValue())
                 {
@@ -508,12 +508,12 @@ public class UIParticleSchemeEventsSection extends UIParticleSchemeSection
             {
                 effect.preEffectExpression = str.trim().isEmpty() ? null : UIParticleSchemeEventsSection.this.parse(str, effect.preEffectExpression);
                 UIParticleSchemeEventsSection.this.editor.markUndoBoundary();
-            }).delayedInput();
+            }).delayedInput().icon(Icons.CODE);
 
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_EMITTER);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_EMITTER_BOUND);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_PARTICLE);
-            type.addLabel(UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_PARTICLE_VELOCITY);
+            type.add(Icons.SPRAY, UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_EMITTER);
+            type.add(Icons.LINK, UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_EMITTER_BOUND);
+            type.add(Icons.PARTICLE, UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_PARTICLE);
+            type.add(Icons.ALL_DIRECTIONS, UIKeys.SNOWSTORM_EVENTS_EFFECT_TYPE_PARTICLE_VELOCITY);
             type.setValue(this.effectTypeIndex(effect.type));
             effectId.setText(effect.effect);
             preExpression.setText(effect.preEffectExpression == null ? "" : effect.preEffectExpression.toString());

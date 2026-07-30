@@ -37,7 +37,14 @@ public class DataParser
         if (isMap || first == '[')
         {
             char opposite = isMap ? '}' : ']';
-            String excerpt = string.substring(1, string.lastIndexOf(opposite));
+            int end = string.lastIndexOf(opposite);
+
+            if (end < 1)
+            {
+                return null;
+            }
+
+            String excerpt = string.substring(1, end);
 
             return isMap ? parseMap(excerpt) : parseList(excerpt);
         }

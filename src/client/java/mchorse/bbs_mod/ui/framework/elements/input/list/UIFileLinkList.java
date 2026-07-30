@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -156,7 +157,7 @@ public class UIFileLinkList extends UIList<UIFileLinkList.FileLink>
     protected void renderElementPart(UIContext context, FileLink element, int i, int x, int y, boolean hover, boolean selected)
     {
         context.batcher.icon(element.folder ? Icons.FOLDER : Icons.IMAGE, Colors.setA(Colors.WHITE, hover ? 0.75F : 0.6F), x + 2, y);
-        context.batcher.textShadow(element.title, x + 20, y + 4, hover ? Colors.HIGHLIGHT : Colors.WHITE);
+        context.batcher.textShadow(element.title, x + 20, y + 4, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
     }
 
     public static class FileLink

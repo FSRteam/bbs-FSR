@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -162,7 +163,7 @@ public class UICropEditor extends UICanvasEditor
     {
         Area area = this.calculateCropArea();
 
-        context.batcher.normalizedBox(area.x, area.y, area.ex(), area.ey(), Colors.setA(Colors.ACTIVE, 0.25F));
+        context.batcher.normalizedBox(area.x, area.y, area.ex(), area.ey(), Colors.setA(BBSSettings.activeColor(), 0.25F));
         context.batcher.normalizedBox(area.x, area.y, area.ex(), area.ey(), Colors.setA(Colors.WHITE, 0.25F));
 
         this.drawHandle(context, 0, new Vector2f(area.x, area.y));
@@ -179,7 +180,7 @@ public class UICropEditor extends UICanvasEditor
 
         if (this.handle == handle)
         {
-            color = Colors.setA(Colors.ACTIVE, 1F);
+            color = Colors.setA(BBSSettings.activeColor(), 1F);
         }
 
         context.batcher.box(x - 3, y - 3, x + 3, y + 3, color);

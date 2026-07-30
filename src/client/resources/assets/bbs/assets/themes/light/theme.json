@@ -1,0 +1,20 @@
+{
+    "format": 1,
+    "name": "Light",
+    "author": "BBS",
+    "description": "Built-in light theme",
+    "base": "dark",
+    "variant": "light",
+    "colors": {
+        "surface": {
+            "chrome": "#E6E9EF",
+            "base": "#F1F4F8",
+            "raised": "#F8FAFD",
+            "deep": "#DEE4ED",
+            "divider": "#C2CBD8"
+        }
+    },
+    "style": {
+        "text_shadow": false
+    }
+}

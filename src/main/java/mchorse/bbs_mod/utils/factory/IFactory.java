@@ -68,6 +68,17 @@ public interface IFactory <T, D>
 
     public Collection<Link> getKeys();
 
+    /**
+     * Whether a type is currently registered in this factory. Callers that need to
+     * tell "type not registered" (expected degradation, e.g. a plugin generation no
+     * longer providing it) apart from a genuine {@link #fromData(MapType)} failure
+     * should check this first.
+     */
+    public default boolean hasType(Link type)
+    {
+        return type != null && this.getKeys().contains(type);
+    }
+
     public default Collection<String> getStringKeys()
     {
         Set<String> keys = new HashSet<>();

@@ -57,7 +57,7 @@ public class CubicCubeRenderer implements ICubicRenderer
     protected Vector4f vertex = new Vector4f();
 
     private ModelVertex modelVertex = new ModelVertex();
-    private ShapeKeys shapeKeys;
+    protected ShapeKeys shapeKeys;
 
     /* Welds active for the model being rendered (null when it has none). Resolved once on the instance. */
     protected List<WeldBinding> welds;
@@ -402,10 +402,11 @@ public class CubicCubeRenderer implements ICubicRenderer
     }
 
     /** Write a single finished vertex (position, uv and normal already resolved) into the buffer. */
-    private void emit(BufferBuilder builder, ModelGroup group, float x, float y, float z, float u, float v, Vector3f normal)
+    protected void emit(BufferBuilder builder, ModelGroup group, float x, float y, float z, float u, float v, Vector3f normal)
     {
+        float vertexAlpha = this.getVertexAlpha(x, y, z, normal);
         VertexConsumer vertexConsumer = builder.addVertex(x, y, z)
-            .setColor(this.r * group.color.r, this.g * group.color.g, this.b * group.color.b, this.a * group.color.a)
+            .setColor(this.r * group.color.r, this.g * group.color.g, this.b * group.color.b, this.a * group.color.a * vertexAlpha)
             .setUv(u, v)
             .setOverlay(this.overlay);
 
@@ -422,6 +423,12 @@ public class CubicCubeRenderer implements ICubicRenderer
         }
 
         vertexConsumer.setNormal(normal.x, normal.y, normal.z);
+    }
+
+    /** Per-vertex opacity hook used by decorative passes such as edge glint. */
+    protected float getVertexAlpha(float x, float y, float z, Vector3f normal)
+    {
+        return 1F;
     }
 
     /**

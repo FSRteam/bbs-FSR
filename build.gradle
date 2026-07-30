@@ -164,6 +164,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
+    themeCoreTest {
+        java.srcDirs = ['src/themeCoreTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath
+    }
     folderManagerTest {
         java.srcDirs = ['src/folderManagerTest/java']
         resources.srcDirs = []
@@ -266,6 +272,24 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    soundAcousticsTest {
+        java.srcDirs = ['src/soundAcousticsTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+    pluginSmokeFixture {
+        java.srcDirs = ['src/pluginSmokeFixture/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+}
+
+runs {
+    client {
+        modSource sourceSets.client
+    }
 }
 
 configurations {
@@ -276,6 +300,8 @@ configurations {
     videoExportTestRuntimeOnly.extendsFrom clientRuntimeOnly
     platformResourceTestImplementation.extendsFrom implementation
     platformResourceTestRuntimeOnly.extendsFrom runtimeOnly
+    themeCoreTestImplementation.extendsFrom clientImplementation
+    themeCoreTestRuntimeOnly.extendsFrom clientRuntimeOnly
     folderManagerTestImplementation.extendsFrom implementation
     folderManagerTestRuntimeOnly.extendsFrom runtimeOnly
     interactionActionTestImplementation.extendsFrom implementation
@@ -310,6 +336,8 @@ configurations {
     audioVerificationTestRuntimeOnly.extendsFrom clientRuntimeOnly
     pluginHotReloadTestImplementation.extendsFrom clientImplementation
     pluginHotReloadTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    pluginSmokeFixtureImplementation.extendsFrom clientImplementation
+    pluginSmokeFixtureRuntimeOnly.extendsFrom clientRuntimeOnly
 }
 
 java {
@@ -361,6 +389,8 @@ dependencies {
 
     clientCompileOnly "maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge"
     clientCompileOnly "maven.modrinth:iris:1.8.8+1.21.1-neoforge"
+    clientRuntimeOnly "maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge"
+    clientRuntimeOnly "maven.modrinth:iris:1.8.8+1.21.1-neoforge"
 
     // TODO: validate 1.21.1-compatible versions for optional client mods before re-enabling
     // modCompileOnly "maven.modrinth:distanthorizons:2.1.0-a-1.20.4"
@@ -391,10 +421,28 @@ tasks.register('testVideoExportUtils', JavaExec) {
     mainClass = 'mchorse.bbs_mod.utils.VideoExportUtilsTest'
 }
 
+tasks.register('testMatrixUtils', JavaExec) {
+    dependsOn tasks.named('compileJava')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.utils.MatrixUtilsTest'
+}
+
 tasks.register('testPlatformResourceConsistency', JavaExec) {
     dependsOn tasks.named('compileJava'), tasks.named('platformResourceTestClasses')
     classpath = sourceSets.platformResourceTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.compat.PlatformResourceConsistencyTest'
+}
+
+tasks.register('testThemeCore', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('themeCoreTestClasses')
+    classpath = sourceSets.themeCoreTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.ui.themes.ThemeCoreTest'
+}
+
+tasks.register('testUiMotions', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('themeCoreTestClasses')
+    classpath = sourceSets.themeCoreTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.ui.themes.UIMotionsTest'
 }
 
 tasks.register('testFolderManagerContainment', JavaExec) {
@@ -481,6 +529,12 @@ tasks.register('testBinaryCompatibility', JavaExec) {
     mainClass = 'mchorse.bbs_mod.client.compat.LegacyPublicDescriptorCompatibilityTest'
 }
 
+tasks.register('testSoundAcoustics', JavaExec) {
+    dependsOn tasks.named('compileJava'), tasks.named('soundAcousticsTestClasses')
+    classpath = sourceSets.soundAcousticsTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.audio.SoundAcousticsTest'
+}
+
 tasks.register('testAudioFormat', JavaExec) {
     dependsOn tasks.named('compileJava'), tasks.named('audioFormatTestClasses')
     classpath = sourceSets.audioFormatTest.runtimeClasspath
@@ -524,13 +578,51 @@ tasks.register('testPluginHotReload', JavaExec) {
     mainClass = 'mchorse.bbs_mod.plugin.PluginHotReloadTestSuite'
 }
 
+tasks.register('smokeFixturePluginV1Jar', Jar) {
+    group = 'bbs'
+    description = 'Packages the 1.0 generation of the real on-disk FSR structural-capability smoke fixture plugin.'
+    dependsOn tasks.named('pluginSmokeFixtureClasses')
+    destinationDirectory = layout.buildDirectory.dir('smoke-plugins')
+    archiveFileName = 'bbssmokefixture-1.0.0.jar'
+    from(sourceSets.pluginSmokeFixture.output) {
+        include 'bbssmokefixture/v1/**'
+    }
+    from(file('src/pluginSmokeFixture/manifests/v1/bbs-plugin.json')) {
+        into 'META-INF'
+    }
+}
+
+tasks.register('smokeFixturePluginV2Jar', Jar) {
+    group = 'bbs'
+    description = 'Packages the 2.0 generation of the real on-disk FSR structural-capability smoke fixture plugin.'
+    dependsOn tasks.named('pluginSmokeFixtureClasses')
+    destinationDirectory = layout.buildDirectory.dir('smoke-plugins')
+    archiveFileName = 'bbssmokefixture-2.0.0.jar'
+    from(sourceSets.pluginSmokeFixture.output) {
+        include 'bbssmokefixture/v2/**'
+    }
+    from(file('src/pluginSmokeFixture/manifests/v2/bbs-plugin.json')) {
+        into 'META-INF'
+    }
+}
+
+tasks.register('buildSmokeFixturePlugins') {
+    group = 'bbs'
+    description = 'Builds the real, on-disk 1.0/2.0 FSR structural-capability smoke fixture plugin jars for manual NeoForge client/server smoke testing (see .trellis/tasks/07-23-fsr-plugin-structural-hot-reload).'
+    dependsOn tasks.named('smokeFixturePluginV1Jar'), tasks.named('smokeFixturePluginV2Jar')
+}
+
 def bbsVerificationTaskNames = [
+    'testMatrixUtils',
+    'testSoundAcoustics',
     'testPluginHotReload',
     'testAudioFormat',
     'testAudioLifecycle',
     'testAudioVerification',
     'testVideoExportUtils',
     'testPlatformResourceConsistency',
+    'testThemeCore',
+    'testUiMotions',
     'testFolderManagerContainment',
     'testInteractionActions',
     'testNetworkSecurity',

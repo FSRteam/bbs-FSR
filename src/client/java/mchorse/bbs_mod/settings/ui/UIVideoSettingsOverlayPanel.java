@@ -143,7 +143,7 @@ public class UIVideoSettingsOverlayPanel extends UIOverlayPanel
         this.argumentsAudio.setText(this.value.argumentsAudio.get());
         this.audio.setValue(this.value.audio.get());
         ChannelLayout layout = this.resolvedLayout();
-        int selectedColor = BBSSettings.primaryColor.get();
+        int selectedColor = BBSSettings.accentColorRGB();
         int unselectedColor = BBSSettings.raisedSurface();
 
         this.audioMono.color(layout == ChannelLayout.MONO ? selectedColor : unselectedColor);

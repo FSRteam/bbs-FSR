@@ -13,12 +13,14 @@ import mchorse.bbs_mod.particles.components.shape.directions.ShapeDirectionInwar
 import mchorse.bbs_mod.particles.components.shape.directions.ShapeDirectionVector;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.colors.Colors;
 
 public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<ParticleComponentShapeBase>
 {
@@ -48,6 +50,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.editor.markUndoBoundary();
         });
         this.offsetX.placeholder(UIKeys.GENERAL_X);
+        this.offsetX.icon(Icons.X).barColor(Colors.RED);
 
         this.offsetY = new UITextbox(10000, (str) ->
         {
@@ -55,6 +58,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.editor.markUndoBoundary();
         });
         this.offsetY.placeholder(UIKeys.GENERAL_Y);
+        this.offsetY.icon(Icons.Y).barColor(Colors.GREEN);
 
         this.offsetZ = new UITextbox(10000, (str) ->
         {
@@ -62,6 +66,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.editor.markUndoBoundary();
         });
         this.offsetZ.placeholder(UIKeys.GENERAL_Z);
+        this.offsetZ.icon(Icons.Z).barColor(Colors.BLUE);
 
         this.direction = new UIDirectionSection(this);
         this.surface = new UIToggle(UIKeys.SNOWSTORM_SHAPE_SURFACE, (b) ->
@@ -79,6 +84,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.editor.markUndoBoundary();
         });
         this.radius.placeholder(UIKeys.SNOWSTORM_SHAPE_RADIUS);
+        this.radius.icon(Icons.OUTLINE_SPHERE);
 
         this.label = UI.label(IKey.EMPTY, 20).labelAnchor(0, 1F);
 
@@ -97,6 +103,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.editor.markUndoBoundary();
         });
         this.x.placeholder(UIKeys.GENERAL_X);
+        this.x.icon(Icons.X).barColor(Colors.RED);
 
         this.y = new UITextbox(10000, (str) ->
         {
@@ -113,6 +120,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.editor.markUndoBoundary();
         });
         this.y.placeholder(UIKeys.GENERAL_Y);
+        this.y.icon(Icons.Y).barColor(Colors.GREEN);
 
         this.z = new UITextbox(10000, (str) ->
         {
@@ -129,6 +137,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             this.editor.markUndoBoundary();
         });
         this.z.placeholder(UIKeys.GENERAL_Z);
+        this.z.icon(Icons.Z).barColor(Colors.BLUE);
 
         this.xyz = new UIElement();
         this.xyz.column().vertical().stretch().height(20);
@@ -154,14 +163,14 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
     }
 
     @Override
-    protected void fillModes(UICirculate button)
+    protected void fillModes(UIIcons button)
     {
-        button.addLabel(UIKeys.SNOWSTORM_SHAPE_POINT);
-        button.addLabel(UIKeys.SNOWSTORM_SHAPE_BOX);
-        button.addLabel(UIKeys.SNOWSTORM_SHAPE_SPHERE);
-        button.addLabel(UIKeys.SNOWSTORM_SHAPE_DISC);
-        button.addLabel(UIKeys.SNOWSTORM_SHAPE_AABB);
-        button.addLabel(UIKeys.SNOWSTORM_SHAPE_CUSTOM);
+        button.add(Icons.BULLET, UIKeys.SNOWSTORM_SHAPE_POINT);
+        button.add(Icons.SQUARE, UIKeys.SNOWSTORM_SHAPE_BOX);
+        button.add(Icons.SPHERE, UIKeys.SNOWSTORM_SHAPE_SPHERE);
+        button.add(Icons.CIRCLE, UIKeys.SNOWSTORM_SHAPE_DISC);
+        button.add(Icons.OUTLINE, UIKeys.SNOWSTORM_SHAPE_AABB);
+        button.add(Icons.SHAPES, UIKeys.SNOWSTORM_SHAPE_CUSTOM);
     }
 
     @Override
@@ -272,7 +281,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
     {
         public UIParticleSchemeShapeSection parent;
 
-        public UICirculate mode;
+        public UIIcons mode;
         public UIElement xyz;
         public UITextbox x;
         public UITextbox y;
@@ -283,7 +292,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
             super();
 
             this.parent = parent;
-            this.mode = new UICirculate((b) ->
+            this.mode = new UIIcons((b) ->
             {
                 int value = this.mode.getValue();
 
@@ -303,9 +312,9 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
                 this.parent.editor.dirty();
                 this.fillData();
             });
-            this.mode.addLabel(UIKeys.SNOWSTORM_SHAPE_DIRECTION_OUTWARDS);
-            this.mode.addLabel(UIKeys.SNOWSTORM_SHAPE_DIRECTION_INWARDS);
-            this.mode.addLabel(UIKeys.SNOWSTORM_SHAPE_DIRECTION_VECTOR);
+            this.mode.add(Icons.MAXIMIZE, UIKeys.SNOWSTORM_SHAPE_DIRECTION_OUTWARDS);
+            this.mode.add(Icons.MINIMIZE, UIKeys.SNOWSTORM_SHAPE_DIRECTION_INWARDS);
+            this.mode.add(Icons.ARROW_RIGHT, UIKeys.SNOWSTORM_SHAPE_DIRECTION_VECTOR);
 
             this.x = new UITextbox(10000, (str) ->
             {
@@ -314,6 +323,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
                 this.parent.editor.markUndoBoundary();
             });
             this.x.placeholder(UIKeys.GENERAL_X);
+            this.x.icon(Icons.X).barColor(Colors.RED);
 
             this.y = new UITextbox(10000, (str) ->
             {
@@ -322,6 +332,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
                 this.parent.editor.markUndoBoundary();
             });
             this.y.placeholder(UIKeys.GENERAL_Y);
+            this.y.icon(Icons.Y).barColor(Colors.GREEN);
 
             this.z = new UITextbox(10000, (str) ->
             {
@@ -330,6 +341,7 @@ public class UIParticleSchemeShapeSection extends UIParticleSchemeModeSection<Pa
                 this.parent.editor.markUndoBoundary();
             });
             this.z.placeholder(UIKeys.GENERAL_Z);
+            this.z.icon(Icons.Z).barColor(Colors.BLUE);
 
             this.xyz = new UIElement();
             this.xyz.column().vertical().stretch().height(20);

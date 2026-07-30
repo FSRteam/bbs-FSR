@@ -93,6 +93,23 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
             consumers.setSubstitute(BBSRendering.getColorConsumer(BlockFormRenderer.color));
             Minecraft.getInstance().getItemRenderer().renderStatic(this.form.stack.get(), this.form.modelTransform.get(), light, context.overlay, context.stack, consumers, context.entity.level(), 0);
             consumers.draw();
+
+            if (!context.isPicking())
+            {
+                int finalLight = light;
+
+                context.stack.pushPose();
+                try
+                {
+                    MatrixStackUtils.applyTransform(context.stack, this.form.glintTransform.get());
+                    FormGlintRenderer.renderCaptured(this.form, (capture) ->
+                        Minecraft.getInstance().getItemRenderer().renderStatic(this.form.stack.get(), this.form.modelTransform.get(), finalLight, context.overlay, context.stack, capture, context.entity.level(), 0));
+                }
+                finally
+                {
+                    context.stack.popPose();
+                }
+            }
         }
         finally
         {

@@ -172,6 +172,13 @@ public class UIPropTransform extends UITransform
             field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.endGesture());
         }
 
+        /* Scale-row synchronization restructures the child list, so defer it until
+         * the trackpad has finished applying values from render(). */
+        for (UITrackpad field : new UITrackpad[]{this.sx, this.sy, this.sz})
+        {
+            field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.syncUniformScaleRow());
+        }
+
         this.noCulling();
     }
 
@@ -502,6 +509,26 @@ public class UIPropTransform extends UITransform
         this.setTransform(this.getTransform());
     }
 
+    private boolean isScaleFieldDragging()
+    {
+        return this.sx.isDragging() || this.sy.isDragging() || this.sz.isDragging();
+    }
+
+    private void syncUniformScaleRow()
+    {
+        if (this.transform == null || !BBSSettings.uniformScale.get())
+        {
+            return;
+        }
+
+        Vector3f scale = this.transform.scale;
+
+        if ((scale.x == scale.y && scale.y == scale.z) != this.isScaleRowCollapsed())
+        {
+            this.toggleUniformScale();
+        }
+    }
+
     public void setTransform(Transform transform)
     {
         this.transform = transform;
@@ -517,20 +544,12 @@ public class UIPropTransform extends UITransform
             return;
         }
 
-        /* Uniform-scale synchronization rebuilds the scale row. Never mutate that UI
-         * tree while a drag is being rendered; disable()/acceptChanges() performs the
-         * final synchronization after the gesture has ended. */
-        if (!this.editing && BBSSettings.uniformScale.get())
+        /* Rebuilding the scale row during a field drag mutates the UI tree from render()
+         * and can throw ConcurrentModificationException. Both hotkey/gizmo edits and
+         * scale-field drags synchronize once their gesture has ended. */
+        if (!this.editing && !this.isScaleFieldDragging())
         {
-            float minScale = Math.min(transform.scale.x, Math.min(transform.scale.y, transform.scale.z));
-            float maxScale = Math.max(transform.scale.x, Math.max(transform.scale.y, transform.scale.z));
-
-            if (
-                (minScale == maxScale && !this.isUniformScale()) ||
-                (minScale != maxScale && this.isUniformScale())
-            ) {
-                this.toggleUniformScale();
-            }
+            this.syncUniformScaleRow();
         }
 
         this.fillT(transform.translate.x, transform.translate.y, transform.translate.z);
@@ -558,6 +577,10 @@ public class UIPropTransform extends UITransform
         {
             this.enableScreenTranslate(drag, true);
         }
+        else if (target == HotkeyTarget.ALL)
+        {
+            this.enableUniformScale(drag, true);
+        }
         else
         {
             this.enableHotkeyAxis(mode, target.axis, drag);
@@ -574,6 +597,7 @@ public class UIPropTransform extends UITransform
         if (this.dragKind == DragKind.VIEW) return HotkeyTarget.VIEW;
         if (this.isSphereRotate()) return HotkeyTarget.SPHERE;
         if (this.dragKind == DragKind.SCREEN) return HotkeyTarget.SCREEN;
+        if (this.isScaleAll()) return HotkeyTarget.ALL;
         if (this.axis == Axis.Y) return HotkeyTarget.Y;
         if (this.axis == Axis.Z) return HotkeyTarget.Z;
 
@@ -1737,7 +1761,7 @@ public class UIPropTransform extends UITransform
             int x = this.area.mx(font.getWidth(label));
             int y = this.area.my(font.getHeight());
 
-            context.batcher.textCard(label, x, y, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
+            context.batcher.textCard(label, x, y, BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A50));
 
             if (this.numericActive)
             {
@@ -1745,8 +1769,8 @@ public class UIPropTransform extends UITransform
                 int nx = this.area.mx(font.getWidth(numericLabel));
                 int ny = y + font.getHeight() + 8;
 
-                context.batcher.textCard(numericLabel, nx, ny, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
-                context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, Colors.WHITE, Colors.A50);
+                context.batcher.textCard(numericLabel, nx, ny, BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A50));
+                context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, BBSSettings.textColor(), Colors.A50);
             }
         }
     }
@@ -3146,6 +3170,7 @@ public class UIPropTransform extends UITransform
         VIEW("view", null, true),
         SPHERE("sphere", null, true),
         SCREEN("screen", null, true),
+        ALL("all", null, false),
         X("x", Axis.X, false),
         Y("y", Axis.Y, false),
         Z("z", Axis.Z, false);

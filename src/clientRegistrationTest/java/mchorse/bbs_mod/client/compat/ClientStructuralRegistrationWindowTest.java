@@ -30,11 +30,14 @@ public final class ClientStructuralRegistrationWindowTest
             NetworkCompatClientDescriptorTest.runAll();
             UIFilmPanelCompatibilityDescriptorTest.runAll();
             CameraControllerResetTest.runAll();
+            ModelBlockItemRendererSourceTest.runAll();
+            MissingClipTimelineFallbackTest.runAll();
             acceptsBeforeEventAndRejectsLateCalls();
             closesBeforeInvokingNeoForgeRegistrations();
             isolatesRegistrationFailures();
             keepsSnapshotsImmutable();
             productionFacadeAndNeoForgeEventsStayWired();
+            blockingPluginShutdownStaysWired();
             capture.assertExpectedErrors();
         }
 
@@ -173,6 +176,28 @@ public final class ClientStructuralRegistrationWindowTest
             "finally",
             "ClientApiCompat.registerQueuedEntityRenderers",
             "ClientApiCompat.registerQueuedBlockEntityRenderers");
+    }
+
+    private static void blockingPluginShutdownStaysWired()
+    {
+        String client = compact(readSource("src/client/java/mchorse/bbs_mod/BBSModClient.java"));
+        String bridge = compact(readSource(
+            "src/client/java/mchorse/bbs_mod/plugin/client/BBSPluginClientStructuralBridge.java"));
+
+        check(client.contains(
+                "BBSPluginClientStructuralBridge.runBlockingShutdown(BBSMod::stopHotPluginRuntime)"),
+            "client shutdown no longer enters the blocking structural-shutdown mode");
+        check(bridge.contains(
+                "if (minecraft == null || minecraft.isSameThread() || blockingShutdown) { operation.run();"),
+            "blocking shutdown no longer bypasses client-thread safepoint scheduling");
+        check(bridge.contains("if (!blockingShutdown) { refreshProjection(); }"),
+            "blocking shutdown can refresh client projections while the render thread is stopping");
+        check(bridge.contains(
+                "if (BLOCKING_CLIENT_SHUTDOWN.get()) { return false; } if (BBSModClient.getVideoRecorder()"),
+            "blocking shutdown can still be rejected by the recording/export busy guard");
+        check(bridge.contains(
+                "private static void reloadRenderers() { if (BLOCKING_CLIENT_SHUTDOWN.get()) { return; }"),
+            "blocking shutdown can still enter renderer resource reload");
     }
 
     private static String readSource(String relativePath)

@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.api.plugin;
 
-/** Manifest capability names. Structural capabilities are parsed for diagnostics but require a restart. */
+/** Manifest capability names. Structural registrations are staged and replayed by generation. */
 public enum BBSPluginCapability
 {
     EVENTS("events", true),
@@ -12,12 +12,12 @@ public enum BBSPluginCapability
     FILM_COLLABORATION("film_collaboration", true),
     EXECUTORS("executors", true),
 
-    FORMS("forms", false),
-    CLIPS("clips", false),
-    PARTICLES("particles", false),
-    KEY_MAPPINGS("key_mappings", false),
-    ENTITY_RENDERER("entity_renderer", false),
-    BLOCK_ENTITY_RENDERER("block_entity_renderer", false),
+    FORMS("forms", true),
+    CLIPS("clips", true),
+    PARTICLES("particles", true),
+    KEY_MAPPINGS("key_mappings", true),
+    ENTITY_RENDERER("entity_renderer", true),
+    BLOCK_ENTITY_RENDERER("block_entity_renderer", true),
     MINECRAFT_REGISTRY("minecraft_registry", false),
     MIXIN("mixin", false),
     ACCESS_TRANSFORMER("access_transformer", false),

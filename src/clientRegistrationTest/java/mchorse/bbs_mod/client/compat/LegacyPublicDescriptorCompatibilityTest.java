@@ -79,6 +79,7 @@ public final class LegacyPublicDescriptorCompatibilityTest
         requirePublicStatic(BBSMod.class, "registerAddon", void.class, BBSAddonDescriptor.class, Supplier.class);
         requirePublicStatic(BBSMod.class, "registerAddon", void.class, Supplier.class);
         requirePublicStatic(BBSMod.class, "registerAddon", void.class, String.class, Supplier.class);
+        requirePublicVirtual(BBSMod.class, "onInitialize", void.class);
 
         requirePublicConstructor(BBSAddonCollector.class);
         requirePublic(BBSAddonCollector.class, "register", boolean.class, String.class, BBSAddonMod.class);
@@ -183,6 +184,15 @@ public final class LegacyPublicDescriptorCompatibilityTest
         Method method = requirePublic(owner, name, returnType, parameters);
 
         check(Modifier.isStatic(method.getModifiers()), descriptor(owner, name, parameters) + " is no longer static");
+
+        return method;
+    }
+
+    private static Method requirePublicVirtual(Class<?> owner, String name, Class<?> returnType, Class<?>... parameters)
+    {
+        Method method = requirePublic(owner, name, returnType, parameters);
+
+        check(!Modifier.isStatic(method.getModifiers()), descriptor(owner, name, parameters) + " is no longer virtual");
 
         return method;
     }

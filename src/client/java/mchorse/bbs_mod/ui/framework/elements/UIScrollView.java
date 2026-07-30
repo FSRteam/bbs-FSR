@@ -253,7 +253,7 @@ public class UIScrollView extends UIElement implements IViewport
                 this.unapply(context);
             }
 
-            this.scroll.renderScrollbar(context.batcher);
+            this.scroll.renderScrollbar(context.batcher, context.mouseX, context.mouseY);
         }
         finally
         {

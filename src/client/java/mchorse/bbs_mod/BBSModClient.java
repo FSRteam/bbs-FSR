@@ -47,6 +47,7 @@ import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.particles.ParticleManager;
+import mchorse.bbs_mod.plugin.client.BBSPluginClientStructuralBridge;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.resources.packs.URLError;
@@ -442,16 +443,6 @@ public class BBSModClient
             }
         });
 
-        BBSSettings.theme.modes(
-            UIKeys.ENGINE_THEME_LIGHT,
-            UIKeys.ENGINE_THEME_DARK
-        );
-
-        BBSSettings.tooltipStyle.modes(
-            UIKeys.ENGINE_TOOLTIP_STYLE_LIGHT,
-            UIKeys.ENGINE_TOOLTIP_STYLE_DARK
-        );
-
         BBSSettings.keystrokeMode.modes(
             UIKeys.ENGINE_KEYSTROKES_POSITION_AUTO,
             UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_LEFT,
@@ -465,13 +456,26 @@ public class BBSModClient
             UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL
         );
 
+        BBSSettings.tooltipStyle.modes(
+            UIKeys.ENGINE_TOOLTIP_STYLE_THEME,
+            UIKeys.ENGINE_TOOLTIP_STYLE_DARK,
+            UIKeys.ENGINE_TOOLTIP_STYLE_LIGHT
+        );
+
         BBSSettings.translateHotkeyOrder.labels(
             UIKeys.TRANSFORMS_TARGET_SCREEN,
             UIKeys.GENERAL_X,
             UIKeys.GENERAL_Y,
             UIKeys.GENERAL_Z
         );
-        BBSSettings.scaleHotkeyOrder.labels(UIKeys.GENERAL_X, UIKeys.GENERAL_Y, UIKeys.GENERAL_Z);
+        BBSSettings.scaleHotkeyOrder
+            .labels(
+                UIKeys.TRANSFORMS_TARGET_ALL,
+                UIKeys.GENERAL_X,
+                UIKeys.GENERAL_Y,
+                UIKeys.GENERAL_Z
+            )
+            .colors(0, Colors.A100 | Colors.RED, Colors.A100 | Colors.GREEN, Colors.A100 | Colors.BLUE);
         BBSSettings.rotateHotkeyOrder.labels(
             UIKeys.TRANSFORMS_TARGET_VIEW,
             UIKeys.TRANSFORMS_TARGET_SPHERE,
@@ -797,7 +801,8 @@ public class BBSModClient
             runClientLifecycleStep("cancel microphone recording", () -> UIAudioRecorder.cancelActive(filmPanel));
             saveFilmPanelForLifecycle(filmPanel, "client stopping");
             runClientLifecycleStep("notify addon client stopping", () -> ClientApiCompat.emitClientStopping(Minecraft.getInstance()));
-            runClientLifecycleStep("stop hot plugin runtime", BBSMod::stopHotPluginRuntime);
+            runClientLifecycleStep("stop hot plugin runtime", () ->
+                BBSPluginClientStructuralBridge.runBlockingShutdown(BBSMod::stopHotPluginRuntime));
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
             runClientLifecycleStep("shutdown UI mirror", () -> BBSUiMirrorRuntime.shutdown());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());

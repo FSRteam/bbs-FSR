@@ -8,6 +8,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.utils.clips.Clip;
+import mchorse.bbs_mod.utils.clips.MissingClip;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.neoforged.fml.loading.LoadingModList;
@@ -112,10 +113,27 @@ public final class FilmActionAuthorityPolicyTest
         Film decoded = new Film();
 
         decoded.fromData(raw);
-        check(rawActions.size() == 1 && decoded.replays.getList().get(0).actions.size() == 0,
-            "the unknown-action fixture was not dropped by typed decoding");
+
+        /* Since the plugin hot-reload work, an unknown action is no longer
+         * silently dropped: it decodes to a non-executing MissingClip
+         * placeholder. That is the stricter contract for this policy: the
+         * typed film keeps the same action count as the raw payload AND the
+         * placeholder itself sits outside the exact-class allowlist, so
+         * administrator authority is still required with or without the raw
+         * document. */
+        check(rawActions.size() == 1 && decoded.replays.getList().get(0).actions.size() == 1,
+            "the unknown-action fixture was not retained as a placeholder by typed decoding");
+
+        Clip placeholder = decoded.replays.getList().get(0).actions.get().get(0);
+
+        check(placeholder instanceof MissingClip,
+            "the unknown-action fixture did not decode to MissingClip");
+        check(FilmActionAuthorityPolicy.requiresAdministrator(placeholder),
+            "a MissingClip placeholder bypassed clip authority");
+        check(FilmActionAuthorityPolicy.requiresAdministrator(decoded),
+            "a film with an unknown action bypassed administrator authority");
         check(FilmActionAuthorityPolicy.requiresAdministrator(decoded, raw),
-            "a raw unknown action disappeared across typed decoding and bypassed authority");
+            "a raw unknown action bypassed authority across typed decoding");
 
         MapType missingActions = new MapType();
         ListType replayList = new ListType();

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.line.LineBuilder;
 import mchorse.bbs_mod.graphics.line.SolidColorLineRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -145,7 +146,7 @@ public class UIGraphCanvas extends UICanvas
 
             if (!isNaN)
             {
-                context.batcher.box(mouseX, Math.min(y1, y2), mouseX + 1, Math.max(y1, y2), Colors.CURSOR);
+                context.batcher.box(mouseX, Math.min(y1, y2), mouseX + 1, Math.max(y1, y2), BBSSettings.cursorColor());
             }
 
             int y3 = y1 < y2 ? y1 : y1 - 12;

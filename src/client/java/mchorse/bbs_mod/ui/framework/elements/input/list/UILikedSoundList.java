@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.SoundLikeManager;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -59,7 +60,7 @@ public class UILikedSoundList extends UIList<SoundLikeManager.LikedSound>
 
         Link link = Link.create(element.getPath());
         boolean exists = BBSMod.getProvider().getFile(link) != null;
-        int textColor = exists ? (hover ? Colors.HIGHLIGHT : Colors.WHITE) : Colors.RED;
+        int textColor = exists ? (hover ? BBSSettings.highlightColor() : BBSSettings.textColor()) : BBSSettings.negativeColor();
 
         int iconX = this.area.x + this.area.w - 20;
         int iconY = y + (this.scroll.scrollItemSize - 16) / 2;

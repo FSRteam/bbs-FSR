@@ -16,12 +16,18 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.LightTexture;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -31,6 +37,10 @@ public class CubicVAORenderer extends CubicCubeRenderer
     private ShaderInstance program;
     private ModelInstance model;
     private Function<String, Link> textureResolver;
+    private final List<FormTranslucentQueue.DrawCommand> glintCommands = new ArrayList<>();
+
+    /** Whether any base geometry of this model went into the deferred queue (see renderGlint). */
+    private boolean deferredBase;
 
     /**
      * Non-null puts the renderer in hybrid mode (a welded model): these groups — and any group with no baked VAO —
@@ -119,6 +129,8 @@ public class CubicVAORenderer extends CubicCubeRenderer
 
             if (FormTranslucentQueue.needsSplit(this.program, this.stencilMap, texture, a))
             {
+                this.deferredBase = true;
+
                 FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_OPAQUE);
                 ModelVAORenderer.render(this.program, entry.getValue(), modelView, normalMat, r, g, b, a, light, this.overlay);
                 FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_SINGLE);
@@ -128,6 +140,9 @@ public class CubicVAORenderer extends CubicCubeRenderer
             else if (FormTranslucentQueue.needsWholeDefer(this.program, this.stencilMap, texture, a))
             {
                 ShaderInstance program = this.program;
+
+                this.deferredBase = true;
+
                 FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
                     () -> program, FormTranslucentQueue.PASS_SINGLE, true, texture, modelView,
                     normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
@@ -138,6 +153,98 @@ public class CubicVAORenderer extends CubicCubeRenderer
             }
         }
 
+        this.collectGlint(stack, group, model, groupVaos, light);
+
         return false;
     }
+
+    /**
+     * Submit every collected glint only after the model's complete base pass. This keeps
+     * RenderType state changes from affecting later bones and places world glint after any
+     * deferred translucent base commands.
+     *
+     * <p>When the base pass drew immediately, the glint must draw immediately too. The queue is
+     * only flushed again once the world pass has returned, and the overlay's {@code GL_EQUAL}
+     * depth test rejects every fragment as soon as the projection differs from the one the base
+     * geometry was drawn with — which reads as the glint vanishing entirely outside the editor
+     * preview, where the queue is suspended and everything already draws immediately.</p>
+     */
+    public void renderGlint()
+    {
+        for (FormTranslucentQueue.DrawCommand command : this.glintCommands)
+        {
+            if (this.deferredBase)
+            {
+                FormTranslucentQueue.add(command);
+            }
+            else
+            {
+                command.draw();
+                command.release();
+            }
+        }
+
+        this.glintCommands.clear();
+        this.deferredBase = false;
+    }
+
+    /**
+     * Captures the bone's second pass without changing render state during base rendering.
+     *
+     * <p>Skipped while picking — the stencil pass encodes bone indices into the buffer,
+     * and an extra draw would corrupt which bone a click resolves to.</p>
+     */
+    private void collectGlint(PoseStack stack, ModelGroup group, Model model, Map<String, ModelVAO> groupVaos, int light)
+    {
+        if (group.glintMode == 0 || this.stencilMap != null)
+        {
+            return;
+        }
+
+        if (group.glintMode == mchorse.bbs_mod.forms.forms.Form.GLINT_EDGE)
+        {
+            this.collectEdgeGlint(stack, group, model, light);
+
+            return;
+        }
+
+        Matrix4f modelView = ModelVAORenderer.captureModelView(stack);
+        Matrix3f normalMat = new Matrix3f(stack.last().normal());
+
+        for (ModelVAO vao : groupVaos.values())
+        {
+            this.glintCommands.add(new FormTranslucentQueue.GlintVAOCommand(
+                group.glintMode, group.glintSpeed, group.glintColor, group.glintTransform,
+                vao, modelView, normalMat, light, this.overlay));
+        }
+    }
+
+    /** Edge intensity is view-dependent, so bake that one cheap CPU pass per enabled bone. */
+    private void collectEdgeGlint(PoseStack stack, ModelGroup group, Model model, int light)
+    {
+        Matrix4f modelView = ModelVAORenderer.captureModelView(stack);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+        CubicGlintCubeRenderer renderer = new CubicGlintCubeRenderer(light, this.overlay, this.shapeKeys,
+            group.glintMode, null, GlintRenderState.getViewOrigin(modelView));
+        PoseStack localStack = new PoseStack();
+
+        renderer.setWelds(this.welds);
+        /* The base VAO stores cube/mesh vertices in group-local space and applies the bone
+         * matrix in the shader. Generate the edge pass in that same space and draw it with
+         * the captured base matrix. Baking the bone matrix on the CPU produced slightly
+         * different depth bits, so GL_EQUAL passed only over a direction-dependent arc. */
+        renderer.renderGroup(builder, localStack, group, model);
+
+        MeshData mesh = builder.build();
+
+        if (mesh != null)
+        {
+            Vector3f origin = modelView.getTranslation(new Vector3f());
+
+            this.glintCommands.add(new FormTranslucentQueue.GlintMeshCommand(
+                group.glintMode, group.glintSpeed, group.glintColor,
+                !group.glintTransform.isDefault(), mesh, modelView, origin));
+        }
+    }
+
 }

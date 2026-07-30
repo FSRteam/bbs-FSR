@@ -24,6 +24,7 @@ import mchorse.bbs_mod.ui.dashboard.textures.UITextureManagerPanel;
 import mchorse.bbs_mod.ui.dashboard.utils.UIGraphPanel;
 import mchorse.bbs_mod.ui.dashboard.utils.UIOrbitCamera;
 import mchorse.bbs_mod.ui.dashboard.utils.UIOrbitCameraKeys;
+import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIRenderingContext;
@@ -38,6 +39,7 @@ import mchorse.bbs_mod.ui.selectors.UISelectorsOverlayPanel;
 import mchorse.bbs_mod.ui.utility.UIUtilityOverlayPanel;
 import mchorse.bbs_mod.ui.utility.audio.UIAudioEditorPanel;
 import mchorse.bbs_mod.ui.utils.UIChalkboard;
+import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
@@ -117,6 +119,7 @@ public class UIDashboard extends UIBaseMenu
         IKey category = UIKeys.DASHBOARD_CATEGORY;
 
         this.main.keys().register(Keys.CYCLE_PANELS, this::cyclePanels).category(category);
+        this.main.keys().register(Keys.TOGGLE_TASKBAR_AUTO_HIDE, this::toggleTaskbarAutoHide).category(category);
         this.overlay.keys().register(Keys.TOGGLE_VISIBILITY, () ->
         {
             if (this.panels.panel.canToggleVisibility())
@@ -213,6 +216,15 @@ public class UIDashboard extends UIBaseMenu
         UIUtils.playClick();
     }
 
+    private void toggleTaskbarAutoHide()
+    {
+        boolean enabled = !BBSSettings.dashboardAutoHideTaskbarEnabled();
+
+        BBSSettings.dashboardAutoHideTaskbar.set(enabled);
+        this.panels.resetTaskbarAutoHide();
+        this.context.notifyInfo(enabled ? UIKeys.DASHBOARD_AUTO_HIDE_ENABLED : UIKeys.DASHBOARD_AUTO_HIDE_DISABLED);
+    }
+
     public UIDashboardPanels getPanels()
     {
         return this.panels;
@@ -270,7 +282,10 @@ public class UIDashboard extends UIBaseMenu
     {
         this.context.unfocus();
         this.orbitUI.cancelGesture();
-        this.orbitUI.setControl(this.panels.isFlightSupported());
+        boolean enableFlight = this.panels.panel instanceof IFlightSupported panel
+            && panel.shouldEnableFlightOnRestore();
+
+        this.orbitUI.setControl(enableFlight);
 
         if (this.panels.panel instanceof IFlightSupported panel)
         {
@@ -361,17 +376,13 @@ public class UIDashboard extends UIBaseMenu
         Link background = BBSSettings.backgroundImage.get();
         int color = BBSSettings.backgroundColor.get();
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-
         if (background == null)
         {
-            context.batcher.box(0, 0, this.width, this.height, color);
+            background = ThemeManager.current().background;
         }
-        else
-        {
-            context.batcher.texturedBox(context.getTextures().getTexture(background), color, 0, 0, this.width, this.height, 0, 0, this.width, this.height, this.width, this.height);
-        }
+
+        UIThemeBackdrop.renderBackground(context, background, color, this.width, this.height);
+        UIThemeBackdrop.renderDecorations(context, this.width, this.height);
     }
 
     @Override

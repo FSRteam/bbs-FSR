@@ -465,6 +465,7 @@ public class UIFilmPreview extends UIElement
         camera.copy(this.panel.getWorldCamera());
         camera.view.set(this.panel.lastView);
         camera.projection.set(this.panel.lastProjection);
+        this.panel.getController().updateSoundGuideDrag(context);
         context.batcher.flush();
 
         if (texture != null)
@@ -532,7 +533,7 @@ public class UIFilmPreview extends UIElement
         int resLabelH = context.batcher.getFont().getHeight();
         int resX = area.ex() - 4;
         int resY = area.ey() - resLabelH - 5;
-        context.batcher.textCard(resLabel, resX - resLabelW, resY, Colors.WHITE, Colors.A50);
+        context.batcher.textCard(resLabel, resX - resLabelW, resY, BBSSettings.textColor(), Colors.A50);
 
         this.panel.getController().renderHUD(context, area);
 

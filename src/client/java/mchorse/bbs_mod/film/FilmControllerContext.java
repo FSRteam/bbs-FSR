@@ -2,6 +2,7 @@ package mchorse.bbs_mod.film;
 
 import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -37,6 +38,9 @@ public class FilmControllerContext
 
     public String nameTag = "";
     public boolean relative;
+    public FormProperties timelineProperties;
+    public float timelineTick;
+    public boolean timelinePlaying;
 
     private FilmControllerContext()
     {}
@@ -52,6 +56,9 @@ public class FilmControllerContext
         this.anchorLocal = false;
         this.nameTag = "";
         this.relative = false;
+        this.timelineProperties = null;
+        this.timelineTick = Float.NaN;
+        this.timelinePlaying = false;
     }
 
     public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, IBbsWorldRenderContext context)
@@ -153,6 +160,15 @@ public class FilmControllerContext
     public FilmControllerContext relative(boolean relative)
     {
         this.relative = relative;
+
+        return this;
+    }
+
+    public FilmControllerContext timeline(FormProperties properties, float tick, boolean playing)
+    {
+        this.timelineProperties = properties;
+        this.timelineTick = tick;
+        this.timelinePlaying = playing;
 
         return this;
     }

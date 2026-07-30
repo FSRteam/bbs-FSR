@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -84,8 +85,10 @@ public class UILabel extends UIElement implements ITextColoring
         int x = this.area.x(this.anchorX, font.getWidth(label));
         int y = this.area.y(this.anchorY, font.getHeight());
         int background = this.backgroundColor == null ? this.background : this.backgroundColor.get();
+        /* Colors.WHITE doubles as "follow the theme" for the default text color */
+        int labelColor = this.color == Colors.WHITE ? BBSSettings.textColor() : this.color;
 
-        context.batcher.textCard(label, x, y, this.color, background, 1, this.textShadow);
+        context.batcher.textCard(label, x, y, labelColor, background, 1, this.textShadow);
 
         super.render(context);
     }

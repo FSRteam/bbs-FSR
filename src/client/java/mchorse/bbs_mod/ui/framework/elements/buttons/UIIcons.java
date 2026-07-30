@@ -8,7 +8,6 @@ import mchorse.bbs_mod.ui.framework.tooltips.ITooltip;
 import mchorse.bbs_mod.ui.framework.tooltips.LabelTooltip;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIConstants;
-import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -26,6 +25,7 @@ public class UIIcons extends UIClickable<UIIcons>
 {
     protected List<Item> items = new ArrayList<>();
     protected int value;
+    private int pendingValue = -1;
 
     public UIIcons(Consumer<UIIcons> callback)
     {
@@ -74,12 +74,15 @@ public class UIIcons extends UIClickable<UIIcons>
 
             if (index != this.value)
             {
-                this.value = index;
-                UIUtils.playClick();
+                this.pendingValue = index;
 
-                if (this.callback != null)
+                try
                 {
-                    this.callback.accept(this);
+                    return super.subMouseClicked(context);
+                }
+                finally
+                {
+                    this.pendingValue = -1;
                 }
             }
 
@@ -87,6 +90,17 @@ public class UIIcons extends UIClickable<UIIcons>
         }
 
         return super.subMouseClicked(context);
+    }
+
+    @Override
+    protected void click(int mouseButton)
+    {
+        if (this.pendingValue >= 0)
+        {
+            this.value = this.pendingValue;
+        }
+
+        super.click(mouseButton);
     }
 
     private int indexAt(int mouseX)
@@ -113,8 +127,28 @@ public class UIIcons extends UIClickable<UIIcons>
 
         float cellW = this.area.w / (float) count;
         int hovered = this.hover ? this.indexAt(context.mouseX) : -1;
+        int radius = BBSSettings.cornerWidget();
 
-        this.area.render(context.batcher, BBSSettings.deepSurface());
+        if (radius > 0)
+        {
+            int fill = BBSSettings.fieldFillColor();
+            int border = BBSSettings.fieldBorderColor();
+
+            context.batcher.roundedFrame(
+                this.area.x,
+                this.area.y,
+                this.area.w,
+                this.area.h,
+                radius,
+                1F,
+                border == 0 ? BBSSettings.dividerColor() : border,
+                fill == 0 ? BBSSettings.deepSurface() : fill
+            );
+        }
+        else
+        {
+            this.area.render(context.batcher, BBSSettings.deepSurface());
+        }
 
         for (int i = 0; i < count; i++)
         {
@@ -130,10 +164,42 @@ public class UIIcons extends UIClickable<UIIcons>
             }
             else if (cellHover)
             {
-                context.batcher.box(x1, this.area.y, x2, this.area.ey(), BBSSettings.chromeSurface());
+                if (radius > 0)
+                {
+                    context.batcher.roundedBox(x1, this.area.y, x2 - x1, this.area.h, radius, BBSSettings.chromeSurface());
+                }
+                else
+                {
+                    context.batcher.box(x1, this.area.y, x2, this.area.ey(), BBSSettings.chromeSurface());
+                }
             }
 
-            int iconColor = active ? Colors.WHITE : (cellHover ? Colors.LIGHTEST_GRAY : Colors.setA(Colors.WHITE, 0.6F));
+            int stateFill = 0;
+
+            if (!this.isEnabled())
+            {
+                stateFill = BBSSettings.iconDisabledColor();
+            }
+            else if (this.pressed && cellHover)
+            {
+                stateFill = BBSSettings.iconPressedColor();
+            }
+
+            if (stateFill != 0)
+            {
+                if (radius > 0)
+                {
+                    context.batcher.roundedBox(x1, this.area.y, x2 - x1, this.area.h, radius, stateFill);
+                }
+                else
+                {
+                    context.batcher.box(x1, this.area.y, x2, this.area.ey(), stateFill);
+                }
+            }
+
+            int iconColor = !this.isEnabled()
+                ? Colors.setA(Colors.WHITE, 0.35F)
+                : (active ? Colors.WHITE : (cellHover ? Colors.LIGHTEST_GRAY : Colors.setA(Colors.WHITE, 0.6F)));
 
             context.batcher.icon(this.items.get(i).icon, iconColor, (x1 + x2) / 2, this.area.my(), 0.5F, 0.5F);
         }

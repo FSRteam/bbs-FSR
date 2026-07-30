@@ -6,6 +6,7 @@ import mchorse.bbs_mod.particles.components.meta.ParticleComponentInitialization
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 public class UIParticleSchemeInitializationSection extends UIParticleSchemeComponentSection<ParticleComponentInitialization>
 {
@@ -23,6 +24,7 @@ public class UIParticleSchemeInitializationSection extends UIParticleSchemeCompo
             this.editor.markUndoBoundary();
         });
         this.create.placeholder(UIKeys.SNOWSTORM_INITIALIZATION_CREATION);
+        this.create.icon(Icons.ADD);
         this.create.tooltip(UIKeys.SNOWSTORM_INITIALIZATION_CREATION_TOOLTIP);
 
         this.update = new UITextbox(10000, (str) ->
@@ -31,6 +33,7 @@ public class UIParticleSchemeInitializationSection extends UIParticleSchemeCompo
             this.editor.markUndoBoundary();
         });
         this.update.placeholder(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE);
+        this.update.icon(Icons.REFRESH);
         this.update.tooltip(UIKeys.SNOWSTORM_INITIALIZATION_UPDATE_TOOLTIP);
 
         this.particleUpdate = new UITextbox(10000, (str) ->
@@ -39,6 +42,7 @@ public class UIParticleSchemeInitializationSection extends UIParticleSchemeCompo
             this.editor.markUndoBoundary();
         });
         this.particleUpdate.placeholder(UIKeys.SNOWSTORM_PARTICLE_EXPRESSION_TITLE);
+        this.particleUpdate.icon(Icons.PARTICLE);
         this.particleUpdate.tooltip(UIKeys.SNOWSTORM_PARTICLE_EXPRESSION_TOOLTIP);
 
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_INITIALIZATION_CREATION, this.create));

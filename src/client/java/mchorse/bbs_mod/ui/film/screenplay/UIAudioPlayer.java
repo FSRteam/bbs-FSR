@@ -206,13 +206,13 @@ public class UIAudioPlayer extends UIElement implements IUITreeEventListener
 
             int x = this.area.x + 20 + (int) (playback * this.waveform.getPixelsPerSecond() - offset * PIXELS);
 
-            context.batcher.box(x, this.area.y, x + 1, this.area.ey(), Colors.CURSOR);
+            context.batcher.box(x, this.area.y, x + 1, this.area.ey(), BBSSettings.cursorColor());
 
             int color = BBSSettings.primaryColor(Colors.A50);
             String label = String.format("%.1f/%.1f", this.player.getPlaybackPosition(), this.player.getBuffer().getDuration());
             FontRenderer font = context.batcher.getFont();
 
-            context.batcher.textCard(label, this.area.ex() - 5 - font.getWidth(label), this.area.y + (this.area.h - font.getHeight()) / 2, Colors.WHITE, color);
+            context.batcher.textCard(label, this.area.ex() - 5 - font.getWidth(label), this.area.y + (this.area.h - font.getHeight()) / 2, BBSSettings.textColor(), color);
         }
 
         if (this.player != null && this.wasPlaying != this.player.isPlaying())

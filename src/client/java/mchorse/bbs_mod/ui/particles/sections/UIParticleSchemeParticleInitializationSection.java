@@ -6,6 +6,7 @@ import mchorse.bbs_mod.particles.components.meta.ParticleComponentParticleInitia
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 
 public class UIParticleSchemeParticleInitializationSection extends UIParticleSchemeComponentSection<ParticleComponentParticleInitialization>
 {
@@ -21,6 +22,7 @@ public class UIParticleSchemeParticleInitializationSection extends UIParticleSch
             this.editor.markUndoBoundary();
         });
         this.expression.placeholder(UIKeys.SNOWSTORM_EXPRESSION);
+        this.expression.icon(Icons.PARTICLE);
         this.expression.tooltip(UIKeys.SNOWSTORM_PARTICLE_EXPRESSION_TOOLTIP);
 
         this.fields.add(this.labeledField(UIKeys.SNOWSTORM_PARTICLE_EXPRESSION_TITLE, this.expression));

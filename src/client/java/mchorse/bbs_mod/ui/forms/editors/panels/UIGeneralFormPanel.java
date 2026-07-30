@@ -13,12 +13,16 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIKeybind;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
+import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
+import mchorse.bbs_mod.utils.colors.Color;
 
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -37,6 +41,11 @@ public class UIGeneralFormPanel extends UIFormPanel
     public UIToggle lighting;
     public UIToggle shaderShadow;
     public UIToggle additiveColor;
+    public UICirculate glintMode;
+    public UIColor glintColor;
+    public UITrackpad glintSpeed;
+    public UIPropTransform glintTransform;
+    public UISection glintSection;
     public UITrackpad uiScale;
     public UITextbox name;
     public UIPropTransform transform;
@@ -75,6 +84,20 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.lighting.tooltip(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING_TOOLTIP);
         this.shaderShadow = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_SHADER_SHADOW, (b) -> this.form.shaderShadow.set(b.getValue()));
         this.additiveColor = new UIToggle(UIKeys.FORMS_EDITORS_ADDITIVE_COLOR, (b) -> this.form.additiveColor.set(b.getValue()));
+        this.glintMode = new UICirculate((c) -> this.form.glintMode.set(c.getValue()));
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_OFF);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_FULL);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_EDGE);
+        this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_VANILLA);
+        this.glintMode.tooltip(UIKeys.FORMS_EDITORS_GENERAL_GLINT_TOOLTIP);
+        this.glintMode.h(UIConstants.CONTROL_HEIGHT);
+        this.glintColor = new UIColor((c) -> this.form.glintColor.set(Color.rgba(c)));
+        this.glintColor.withAlpha();
+        this.glintColor.tooltip(UIKeys.POSE_CONTEXT_GLINT_COLOR_TOOLTIP);
+        this.glintSpeed = new UITrackpad((v) -> this.form.glintSpeed.set(v.floatValue()));
+        this.glintSpeed.limit(-4D, 4D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
+        this.glintSpeed.tooltip(UIKeys.POSE_CONTEXT_GLINT_SPEED_TOOLTIP);
+        this.glintTransform = new UIPropTransform().callbacks(() -> this.form.glintTransform).barBackground();
         this.uiScale = new UITrackpad((v) -> this.form.uiScale.set(v.floatValue()));
         this.uiScale.limit(0.01D, 100D);
         this.name = new UITextbox(120, (t) -> this.form.name.set(t));
@@ -108,6 +131,13 @@ public class UIGeneralFormPanel extends UIFormPanel
             UI.labelRow(UIKeys.FORMS_EDITORS_GENERAL_UI_SCALE, this.uiScale)
         );
 
+        this.glintSection = new UISection(UIKeys.POSE_CONTEXT_GLINT_TRANSFORM);
+        this.glintSection.fields.add(
+            UI.row(this.glintMode, this.glintColor),
+            UI.labelRow(UIKeys.POSE_CONTEXT_GLINT_SPEED, this.glintSpeed),
+            this.glintTransform
+        );
+
         UISection tracks = new UISection(UIKeys.FORMS_EDITORS_GENERAL_SECTION_TRACKS);
 
         tracks.fields.add(this.filterTracks, this.boneTracks, this.trackName);
@@ -135,6 +165,7 @@ public class UIGeneralFormPanel extends UIFormPanel
 
         this.options.add(
             display,
+            this.glintSection,
             tracks,
             transform,
             hitbox,
@@ -163,6 +194,24 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.lighting.setValue(form.lighting.get() > 0F);
         this.shaderShadow.setValue(form.shaderShadow.get());
         this.additiveColor.setValue(form.additiveColor.get());
+
+        /* Only offered where the renderer actually draws it. Model forms have their own
+         * per-bone glint in the pose editor, so they leave these hidden as well. */
+        boolean glint = form.supportsGlint();
+
+        this.glintMode.setVisible(glint);
+        this.glintColor.setVisible(glint);
+        this.glintSpeed.setVisible(glint);
+        this.glintSection.setVisible(glint);
+
+        if (glint)
+        {
+            this.glintMode.setValue(form.glintMode.get());
+            this.glintColor.setColor(form.glintColor.get().getARGBColor());
+            this.glintSpeed.setValue(form.glintSpeed.get());
+            this.glintTransform.setTransform(form.glintTransform.get());
+        }
+
         this.uiScale.setValue(form.uiScale.get());
         this.name.setText(form.name.get());
         this.transform.setTransform(form.transform.get());

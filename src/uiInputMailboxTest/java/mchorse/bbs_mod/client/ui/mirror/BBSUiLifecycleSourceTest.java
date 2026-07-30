@@ -22,9 +22,58 @@ public final class BBSUiLifecycleSourceTest
     public static void runAll()
     {
         assertOwnerAwareInputCallSites();
+        assertLanguageResolutionContracts();
         assertRepositoryRebindsBeforeDataAndPinsAfter();
         assertMorphingSelectionAndDemorphRemainDistinct();
         assertDashboardEditorReactivationContracts();
+        assertRefreshedDockAndDashboardContracts();
+    }
+
+    private static void assertLanguageResolutionContracts()
+    {
+        String l10n = readSource("src/client/java/mchorse/bbs_mod/l10n/L10n.java");
+        String client = readSource("src/client/java/mchorse/bbs_mod/BBSModClient.java");
+        String reload = sourceSection(l10n, "public void reload()", "public void reload(String language");
+        String languageKey = sourceSection(client, "public static String getLanguageKey()", "public static void reloadLanguage");
+
+        check(reload.contains("this.reload(BBSModClient.getLanguageKey(), BBSMod.getProvider());")
+                && !reload.contains("BBSSettings.language.get()"),
+            "startup L10n reload can still treat the empty follow-Minecraft setting as en_us");
+        check(languageKey.contains("BBSSettings.language == null ? \"\" : BBSSettings.language.get()")
+                && languageKey.contains("minecraft.options.languageCode")
+                && languageKey.contains("? \"en_us\" : key"),
+            "language resolution no longer preserves explicit BBS, Minecraft, then en_us fallback order");
+    }
+
+    private static void assertRefreshedDockAndDashboardContracts()
+    {
+        String dashboard = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDashboardPanels.java");
+        String dataPanel = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDataDashboardPanel.java");
+        String dock = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockLayout.java");
+        String film = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
+        String renderer = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockStyleRenderer.java");
+
+        check(dashboard.contains("hidden * TASKBAR_HEIGHT")
+                && dashboard.contains("this.setPanelPlacement(this.panel, TASKBAR_HEIGHT - slide)")
+                && dashboard.contains("this.panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT)")
+                && dashboard.contains("this.panel.isDashboardChromeHovered(context.mouseX, context.mouseY)")
+                && dashboard.contains("overTopReveal || overBottomReveal")
+                && !dashboard.contains("y(0F, slide).w(1F).h(1F, -TASKBAR_HEIGHT)")
+                && dataPanel.contains("this.tabBar.relative(this).y(-tabsSlide)")
+                && dataPanel.contains("int contentTop = tabsHeight - tabsSlide"),
+            "dashboard auto-hide must slide only the bottom taskbar and top data-panel chrome, never the active panel itself");
+        check(dock.contains("UIDockStyleRenderer.renderPanelDragHandle")
+                && dock.contains("UIDockStyleRenderer.renderSplitter")
+                && dock.contains("UIDockStyleRenderer.renderDropZone")
+                && film.contains("UIDockStyleRenderer.renderPanelDragHandle")
+                && film.contains("UIDockStyleRenderer.renderSplitter")
+                && film.contains("UIDockStyleRenderer.renderDropZone"),
+            "film and reusable dock layouts no longer share all interaction-surface rendering");
+        check(renderer.contains("BBSSettings.areaTintColor()")
+                && renderer.contains("BBSSettings.splitterActiveColor()")
+                && renderer.contains("BBSSettings.dropBorderColor()")
+                && renderer.contains("themedBorder == 0 && themedFill == 0"),
+            "shared dock rendering no longer consumes Refreshed tokens or preserve the legacy zero-token path");
     }
 
     private static void assertOwnerAwareInputCallSites()
@@ -177,20 +226,31 @@ public final class BBSUiLifecycleSourceTest
     {
         String dashboard = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/UIDashboard.java");
         String panels = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDashboardPanels.java");
+        String flightSupported = readSource("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/IFlightSupported.java");
         String modelBlocks = readSource("src/client/java/mchorse/bbs_mod/ui/model_blocks/UIModelBlockPanel.java");
+        String filmPanel = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
         String filmController = readSource("src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java");
         String formRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderer.java");
         String formContext = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderingContext.java");
         String mobRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/MobFormRenderer.java");
         String itemRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/ItemFormRenderer.java");
         String modelRenderer = readSource("src/client/java/mchorse/bbs_mod/forms/renderers/ModelFormRenderer.java");
+        String uiModelRenderer = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/utils/UIModelRenderer.java");
+        String modelEditorPanel = readSource("src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelEditorPanel.java");
         String clientNetwork = readSource("src/client/java/mchorse/bbs_mod/network/ClientNetwork.java");
         String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
+        String transformBase = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UITransform.java");
+        String poseFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseKeyframeFactory.java");
+        String poseTransformFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseTransformKeyframeFactory.java");
+        String baseTextbox = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UIBaseTextbox.java");
+        String textbox = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextbox.java");
+        String textarea = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextarea.java");
         String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
         String poseFormEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIPoseForm.java");
         String renderLayerMixin = readSource("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
         String vertexConsumers = readSource("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
         String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
+        String modelVao = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/ModelVAO.java");
         String enableMode = sourceSection(transform, "public void enableMode(int mode)", "private HotkeyTarget currentHotkeyTarget");
 
         check(panels.contains("private boolean panelAppeared;")
@@ -201,14 +261,25 @@ public final class BBSUiLifecycleSourceTest
         String dashboardOpen = sourceSection(dashboard, "public void onOpen(UIBaseMenu oldMenu)", "public void onClose(UIBaseMenu nextMenu)");
         String restorePanelControls = sourceSection(dashboard, "private void restoreCurrentPanelControls()", "protected void closeMenu()");
         String outsideRecording = sourceSection(filmController, "public void startRecording(List<String> groups)", "public void stopRecording()");
+        String filmActivate = sourceSection(filmPanel, "private void activateLifecycle()", "public void close()");
 
         check(dashboardOpen.contains("this.panels.open();")
                 && dashboardOpen.contains("this.restoreCurrentPanelControls();")
                 && restorePanelControls.contains("this.context.unfocus();")
                 && restorePanelControls.contains("this.orbitUI.cancelGesture();")
-                && restorePanelControls.contains("this.orbitUI.setControl(this.panels.isFlightSupported())")
+                && restorePanelControls.contains("panel.shouldEnableFlightOnRestore()")
+                && restorePanelControls.contains("this.orbitUI.setControl(enableFlight)")
+                && !restorePanelControls.contains("this.panels.isFlightSupported()")
                 && restorePanelControls.contains("this.copyCurrentEntityCamera();"),
             "dashboard same-panel reopen no longer restores focus, orbit input and the world camera");
+        String filmFlightRestore = sourceSection(filmPanel, "public boolean shouldEnableFlightOnRestore()", "public void toggleFlight()");
+
+        check(flightSupported.contains("public default boolean shouldEnableFlightOnRestore()")
+                && filmFlightRestore.contains("return false;")
+                && filmActivate.indexOf("this.setFlight(false);") < filmActivate.indexOf("cameraController.add(this.runner);")
+                && filmPanel.contains("this.setFlight(!this.isFlying());")
+                && filmPanel.contains("this.dashboard.orbitUI.setControl(flight);"),
+            "Film dashboard re-entry can automatically restore flight mode");
         check(outsideRecording.indexOf("Film film = this.panel.getData();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
                 && outsideRecording.indexOf("int cursor = this.panel.getCursor();")
@@ -231,9 +302,16 @@ public final class BBSUiLifecycleSourceTest
                 && formContext.contains("!this.isPicking()")
                 && formContext.contains("!this.ui")
                 && formContext.contains("!this.modelRenderer")
+                && formRenderer.contains("boolean queueSuspended = false;")
                 && formRenderer.contains("queueWasActive = FormTranslucentQueue.suspend();")
+                && formRenderer.contains("queueSuspended = true;")
+                && formRenderer.contains("if (queueSuspended)")
                 && formRenderer.contains("FormTranslucentQueue.restore(queueWasActive);"),
             "non-world Form previews can still leak into the deferred translucent queue");
+        check(modelVao.contains("format == DefaultVertexFormat.POSITION_TEX")
+                && modelVao.contains("int vao = compact ? this.vao2 : this.vao;")
+                && occurrences(modelVao, "hasShaders && !compact") == 2,
+            "vanilla armor glint can still bind the Iris entity VAO instead of position/UV");
         check(mobRenderer.contains("this.setupTarget(context, BBSShaders.getPickerModelsProgram());")
                 && mobRenderer.contains("RenderSystem.setShader(BBSShaders::getPickerModelsProgram);")
                 && mobRenderer.contains("Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());")
@@ -242,12 +320,21 @@ public final class BBSUiLifecycleSourceTest
                 && mobRenderer.contains("LightTexture.FULL_BLOCK")
                 && itemRenderer.contains("LightTexture.FULL_BLOCK"),
             "multi-layer Mob picking or preview render-state restoration regressed");
+        check(formRenderer.contains("RenderSystem.setupLevelDiffuseLighting(UI_LIGHT_A, UI_LIGHT_B);")
+                && formRenderer.contains("new Vector3f(0F, 1F, -0.2F).normalize()")
+                && formRenderer.contains("new Vector3f(-0.85F, 0.85F, 1F).normalize()")
+                && uiModelRenderer.contains("this.lightMatrix.set(this.camera.view);")
+                && uiModelRenderer.contains("this.lightMatrix.transform(this.lightA);")
+                && uiModelRenderer.contains("this.lightMatrix.transform(this.lightB);"),
+            "form-list or 3D-preview diffuse lighting no longer matches the BBSFS camera-space contract");
         String modelBlockPacket = sourceSection(clientNetwork, "private static void handleClientModelBlockPacket", "private static void handlePlayerFormPacket");
         check(modelBlockPacket.indexOf("panel.fill((ModelBlockEntity) entity, true);")
                 < modelBlockPacket.indexOf("dashboard.focusModelBlock((ModelBlockEntity) entity);")
                 && occurrences(clientNetwork, "dashboard.focusModelBlock(") == 1
                 && dashboard.contains("public void focusModelBlock(ModelBlockEntity modelBlock)"),
             "model-block right-click no longer focuses its selected target exactly once");
+        String matrixPoseReuse = sourceSection(modelRenderer, "public boolean restoreForMatrices(", "public void capture(");
+        String thumbnailPoseReuse = sourceSection(modelRenderer, "public void renderPreviewThumbnail(", "private void renderInUI(");
         check(modelRenderer.contains("context.modelRenderer")
                 && modelRenderer.contains("context.isPicking()")
                 && modelRenderer.contains("this.context == context")
@@ -258,11 +345,41 @@ public final class BBSUiLifecycleSourceTest
                 && modelRenderer.contains("this.transition == Float.floatToIntBits(context.getTransition())")
                 && modelRenderer.contains("this.available = false;")
                 && modelRenderer.contains("this.previewPoseSnapshot.capture(context, model);")
+                && modelRenderer.contains("this.previewPoseSnapshot.restoreForMatrices(")
+                && modelRenderer.contains("public void renderPreviewThumbnail(")
+                && modelEditorPanel.contains("modelRenderer.renderPreviewThumbnail(")
+                && matrixPoseReuse.contains("this.semanticBase.equals(semanticBase)")
+                && matrixPoseReuse.contains("this.allowWorldTargetOverrides == allowWorldTargetOverrides")
+                && matrixPoseReuse.contains("this.allowWorldCollisions == allowWorldCollisions")
+                && !matrixPoseReuse.contains("this.available = false;")
+                && thumbnailPoseReuse.contains("this.beginRenderUI();")
+                && thumbnailPoseReuse.contains("this.finishRenderUI(context, x1, y1, x2, y2);")
                 && modelRenderer.contains("!reusePreviewPose"),
-            "animated preview pose reuse is not one-shot or lacks a strict normal-to-picking key");
+            "animated preview pose reuse no longer covers picking, matrix sampling and the model-editor thumbnail");
         check(enableMode.contains("this.nextHotkeyTarget(mode, ray)")
-                && !enableMode.contains("enableUniformScale"),
-            "the S hotkey no longer follows the configured X/Y/Z scale cycle");
+                && enableMode.contains("target == HotkeyTarget.ALL")
+                && enableMode.contains("this.enableUniformScale(drag, true)")
+                && transform.contains("if (this.isScaleAll()) return HotkeyTarget.ALL;")
+                && transform.contains("ALL(\"all\", null, false)"),
+            "the S hotkey no longer cycles through the configured all/X/Y/Z targets");
+        check(transform.contains("private boolean isScaleFieldDragging()")
+                && transform.contains("field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.syncUniformScaleRow())")
+                && transform.contains("!this.editing && !this.isScaleFieldDragging()")
+                && transform.contains("!= this.isScaleRowCollapsed()")
+                && transformBase.contains("protected boolean isScaleRowCollapsed()"),
+            "uniform-scale row synchronization can mutate children during a trackpad render or compare against the SPACE/RMB modifier");
+        check(poseFactory.contains("class UIPoseTransforms extends UIKeyframePropTransform")
+                && poseFactory.contains("protected void applyDuringRecording(int tick, Consumer<Transform> consumer)")
+                && poseFactory.contains("UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick")
+                && poseFactory.contains("Keyframe<Pose> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick)")
+                && poseTransformFactory.contains("class UIPoseTransforms extends UIKeyframePropTransform")
+                && poseTransformFactory.contains("Keyframe<PoseTransform> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick)"),
+            "Pose or PoseTransform editing still bypasses transform recording keyframes");
+        check(baseTextbox.contains("protected void requestTextCursor(UIContext context)")
+                && baseTextbox.contains("context.requestCursor(GLFW.GLFW_IBEAM_CURSOR)")
+                && textbox.contains("this.requestTextCursor(context);")
+                && textarea.contains("context.requestCursor(GLFW.GLFW_IBEAM_CURSOR)"),
+            "text fields no longer request the I-beam cursor while focused or hovered");
         check(formEditor.contains("this.general.hotkeyDrag(() ->")
                 && poseFormEditor.contains("posePanel.poseEditor.transform.hotkeyDrag(() ->"),
             "form/model transform hotkeys cannot reach the view and sphere rotation modes");

@@ -60,6 +60,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.lang.reflect.InvocationTargetException;
 import java.util.function.Predicate;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -98,6 +99,11 @@ public final class BBSPluginManager implements AutoCloseable
     private final Set<String> restartRequired = new HashSet<>();
     private final Map<PluginEventProxyKey, EventSubscription> eventProxies = new HashMap<>();
     private final Map<String, AutoCloseable> sourcePacks = new HashMap<>();
+    private final PluginParticleComponents particleComponents = new PluginParticleComponents();
+    private final PluginStructuralReloadCoordinator structuralReload = new PluginStructuralReloadCoordinator(
+        this::runStructuralSafepoint,
+        this::isStructuralReloadBusy
+    );
     private final AtomicLong sequence = new AtomicLong();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean started = new AtomicBoolean();
@@ -130,6 +136,11 @@ public final class BBSPluginManager implements AutoCloseable
     public Path pluginDirectory()
     {
         return this.pluginDirectory;
+    }
+
+    public Map<String, PluginParticleComponentClass> particleComponents()
+    {
+        return this.particleComponents.snapshot();
     }
 
     public boolean autoApply()
@@ -493,11 +504,15 @@ public final class BBSPluginManager implements AutoCloseable
         PluginRuntimeGeneration candidate = null;
         PluginShadowArtifact shadow = null;
         boolean published = false;
+        boolean structuralCommitted = false;
 
         try
         {
             shadow = this.artifactStore.stage(validated);
-            candidate = this.prepare(shadow, owner);
+            Set<String> replaceableStructuralKeys = incumbent == null
+                ? Set.of()
+                : incumbent.contributions().structuralRegistrations().keys();
+            candidate = this.prepare(shadow, owner, replaceableStructuralKeys);
             this.recordStatus(pluginId, validated.descriptor(), BBSPluginState.STAGED, "PREPARE", null);
 
             PluginArtifactFingerprint commitFingerprint = PluginArtifactFingerprint.capture(normalized);
@@ -509,6 +524,20 @@ public final class BBSPluginManager implements AutoCloseable
 
             this.installEventProxies(pluginId, candidate.eventRoutes().keySet());
             this.ensureSourcePack(pluginId, candidate.content() != null);
+            PluginRuntimeGeneration committedCandidate = candidate;
+            this.structuralReload.replace(
+                incumbent == null ? null : incumbent.contributions().structuralRegistrations(),
+                committedCandidate.structuralRegistrations(),
+                (type, error) -> this.recordDiagnostic(
+                    pluginId,
+                    owner.generation(),
+                    BBSPluginDiagnosticSeverity.ERROR,
+                    "REBUILD_FAILED",
+                    "failed to rebuild structural instance '" + type + "': " + safeMessage(error),
+                    error.getClass().getName()
+                )
+            );
+            structuralCommitted = true;
             ActivePluginGeneration<PluginRuntimeGeneration> publishedGeneration =
                 new ActivePluginGeneration<>(owner, candidate);
 
@@ -541,8 +570,10 @@ public final class BBSPluginManager implements AutoCloseable
         }
         catch (Throwable error)
         {
-            this.recordStatus(pluginId, validated.descriptor(), published ? BBSPluginState.RESTART_REQUIRED : BBSPluginState.FAILED,
-                published ? "POST_COMMIT" : "PREPARE", error);
+            boolean busy = error instanceof PluginStructuralReloadCoordinator.ReloadBusyException;
+            this.recordStatus(pluginId, validated.descriptor(), busy ? BBSPluginState.RELOAD_REJECTED_BUSY
+                    : published ? BBSPluginState.RESTART_REQUIRED : BBSPluginState.FAILED,
+                busy ? "RELOAD_REJECTED_BUSY" : published ? "POST_COMMIT" : "PREPARE", error);
 
             if (published)
             {
@@ -550,6 +581,22 @@ public final class BBSPluginManager implements AutoCloseable
             }
             else if (candidate != null)
             {
+                if (structuralCommitted)
+                {
+                    try
+                    {
+                        this.structuralReload.replace(
+                            candidate.structuralRegistrations(),
+                            incumbent == null ? null : incumbent.contributions().structuralRegistrations(),
+                            (type, rebuildError) -> LOGGER.warn("[bbs-plugin] rollback rebuild failed for {}", type, rebuildError)
+                        );
+                    }
+                    catch (Throwable rollbackError)
+                    {
+                        error.addSuppressed(rollbackError);
+                    }
+                }
+
                 this.closeCandidate(candidate);
             }
 
@@ -571,7 +618,7 @@ public final class BBSPluginManager implements AutoCloseable
         }
     }
 
-    private PluginRuntimeGeneration prepare(PluginShadowArtifact shadow, PluginOwner owner) throws Exception
+    private PluginRuntimeGeneration prepare(PluginShadowArtifact shadow, PluginOwner owner, Set<String> replaceableStructuralKeys) throws Exception
     {
         BBSPluginManifest manifest = shadow.manifest();
         BBSPluginDescriptor descriptor = shadow.descriptor();
@@ -629,7 +676,47 @@ public final class BBSPluginManager implements AutoCloseable
 
             Files.createDirectories(pluginData);
             BBSPluginDiagnosticSink sink = this.diagnosticSink(owner);
-            PluginGenerationContext context = new PluginGenerationContext(descriptor, owner, pluginData, sink, ledger, loader);
+            PluginStructuralRegistrationWindow structuralRegistrations = new PluginStructuralRegistrationWindow(owner, replaceableStructuralKeys);
+            PluginGenerationContext context = new PluginGenerationContext(
+                descriptor,
+                owner,
+                pluginData,
+                sink,
+                ledger,
+                loader,
+                structuralRegistrations,
+                PluginStructuralRegistryAdapters.forms(
+                    structuralRegistrations,
+                    descriptor,
+                    owner,
+                    ledger,
+                    BBSMod::getForms
+                ),
+                PluginStructuralRegistryAdapters.clips(
+                    structuralRegistrations,
+                    descriptor,
+                    owner,
+                    ledger,
+                    BBSMod::getFactoryCameraClips,
+                    BBSMod::getFactoryActionClips
+                ),
+                PluginStructuralRegistryAdapters.particles(
+                    structuralRegistrations,
+                    descriptor,
+                    owner,
+                    ledger,
+                    this.particleComponents,
+                    loader,
+                    BBSMod::getAddonParticleComponentClasses
+                ),
+                (extensionType) -> this.createClientExtension(
+                    extensionType,
+                    descriptor,
+                    owner,
+                    ledger,
+                    structuralRegistrations
+                )
+            );
             generation = new PluginRuntimeGeneration(
                 owner,
                 descriptor,
@@ -854,6 +941,36 @@ public final class BBSPluginManager implements AutoCloseable
 
     private void unload(String pluginId, BBSPluginStopReason reason)
     {
+        ActivePluginGeneration<PluginRuntimeGeneration> current = this.active.active(pluginId);
+        boolean structuralRemoved = false;
+
+        if (current != null)
+        {
+            try
+            {
+                PluginRuntimeGeneration runtime = current.contributions();
+                this.structuralReload.replace(
+                    runtime.structuralRegistrations(),
+                    null,
+                    (type, error) -> this.recordDiagnostic(
+                        pluginId,
+                        current.owner().generation(),
+                        BBSPluginDiagnosticSeverity.ERROR,
+                        "REBUILD_FAILED",
+                        "failed to degrade structural instance '" + type + "': " + safeMessage(error),
+                        error.getClass().getName()
+                    )
+                );
+                structuralRemoved = true;
+            }
+            catch (PluginStructuralReloadCoordinator.ReloadBusyException error)
+            {
+                this.recordStatus(pluginId, current.contributions().descriptor(), BBSPluginState.RELOAD_REJECTED_BUSY,
+                    "RELOAD_REJECTED_BUSY", error);
+                return;
+            }
+        }
+
         ActivePluginGeneration<PluginRuntimeGeneration> removed;
 
         try
@@ -862,6 +979,19 @@ public final class BBSPluginManager implements AutoCloseable
         }
         catch (Throwable error)
         {
+            if (structuralRemoved && current != null)
+            {
+                try
+                {
+                    this.structuralReload.replace(null, current.contributions().structuralRegistrations(),
+                        (type, rebuildError) -> LOGGER.warn("[bbs-plugin] unload rollback rebuild failed for {}", type, rebuildError));
+                }
+                catch (Throwable rollbackError)
+                {
+                    error.addSuppressed(rollbackError);
+                }
+            }
+
             this.recordStatus(pluginId, null, BBSPluginState.FAILED, "UNLOAD_ROUTE", error);
             return;
         }
@@ -1103,6 +1233,127 @@ public final class BBSPluginManager implements AutoCloseable
         catch (Throwable error)
         {
             LOGGER.warn("[bbs-plugin] client content refresh failed", error);
+        }
+    }
+
+    private void runStructuralSafepoint(Runnable operation)
+    {
+        if (!this.physicalClient)
+        {
+            operation.run();
+            return;
+        }
+
+        try
+        {
+            Class<?> bridge = Class.forName(
+                "mchorse.bbs_mod.plugin.client.BBSPluginClientStructuralBridge",
+                false,
+                BBSPluginManager.class.getClassLoader()
+            );
+            bridge.getMethod("runSafepoint", Runnable.class).invoke(null, operation);
+        }
+        catch (ClassNotFoundException ignored)
+        {
+            /* Common-only regression launchers do not include the client source set. */
+            operation.run();
+        }
+        catch (InvocationTargetException error)
+        {
+            Throwable cause = error.getCause();
+
+            if (cause instanceof RuntimeException runtime)
+            {
+                throw runtime;
+            }
+            if (cause instanceof Error fatal)
+            {
+                throw fatal;
+            }
+
+            throw new IllegalStateException("client structural safepoint failed", cause);
+        }
+        catch (ReflectiveOperationException error)
+        {
+            throw new IllegalStateException("client structural safepoint bridge is unavailable", error);
+        }
+    }
+
+    private boolean isStructuralReloadBusy()
+    {
+        if (!this.physicalClient)
+        {
+            return false;
+        }
+
+        try
+        {
+            Class<?> bridge = Class.forName(
+                "mchorse.bbs_mod.plugin.client.BBSPluginClientStructuralBridge",
+                false,
+                BBSPluginManager.class.getClassLoader()
+            );
+
+            return (boolean) bridge.getMethod("isBusy").invoke(null);
+        }
+        catch (ClassNotFoundException ignored)
+        {
+            return false;
+        }
+        catch (ReflectiveOperationException error)
+        {
+            throw new IllegalStateException("client structural busy guard failed", error);
+        }
+    }
+
+    private Object createClientExtension(
+        Class<?> extensionType,
+        BBSPluginDescriptor descriptor,
+        PluginOwner owner,
+        PluginContributionLedger ledger,
+        PluginStructuralRegistrationWindow structuralRegistrations
+    )
+    {
+        if (!this.physicalClient)
+        {
+            return null;
+        }
+
+        try
+        {
+            Class<?> bridge = Class.forName(
+                "mchorse.bbs_mod.plugin.client.BBSPluginClientStructuralBridge",
+                false,
+                BBSPluginManager.class.getClassLoader()
+            );
+
+            return bridge.getMethod(
+                "createExtension",
+                Class.class,
+                BBSPluginDescriptor.class,
+                PluginOwner.class,
+                PluginContributionLedger.class,
+                PluginStructuralRegistrationWindow.class
+            ).invoke(null, extensionType, descriptor, owner, ledger, structuralRegistrations);
+        }
+        catch (ClassNotFoundException ignored)
+        {
+            return null;
+        }
+        catch (InvocationTargetException error)
+        {
+            Throwable cause = error.getCause();
+
+            if (cause instanceof RuntimeException runtime)
+            {
+                throw runtime;
+            }
+
+            throw new IllegalStateException("client plugin context extension failed", cause);
+        }
+        catch (ReflectiveOperationException error)
+        {
+            throw new IllegalStateException("client plugin context extension bridge is unavailable", error);
         }
     }
 

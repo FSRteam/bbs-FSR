@@ -29,6 +29,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
+import mchorse.bbs_mod.ui.utils.UISelectionRenderer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -38,6 +39,7 @@ import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.clips.MissingClip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.IFactory;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -64,6 +66,7 @@ public class UIClips extends UIElement
     private static final int SNAP_DISTANCE = 10;
 
     private static final Area CLIP_AREA = new Area();
+    private static final ClipFactoryData MISSING_CLIP_DATA = new ClipFactoryData(Icons.EXCLAMATION, 0x8f4b4b).recordingOnly();
 
     /* Main objects */
     private IUIClipsDelegate delegate;
@@ -129,7 +132,7 @@ public class UIClips extends UIElement
         /* Draw the marker */
         FontRenderer font = context.batcher.getFont();
         int width = font.getWidth(label) + 3;
-        int color = BBSSettings.primaryColor.get();
+        int color = BBSSettings.accentColorRGB();
 
         context.batcher.box(x, area.y, x + 1, area.ey(), color | Colors.A100);
 
@@ -140,7 +143,7 @@ public class UIClips extends UIElement
         }
 
         /* Draw the tick label */
-        context.batcher.textCard(label, x + 3, area.ey() - 2 - font.getHeight(), Colors.WHITE, Colors.setA(color, 0.78F), 2);
+        context.batcher.textCard(label, x + 3, area.ey() - 2 - font.getHeight(), BBSSettings.textColor(), Colors.setA(color, 0.78F), 2);
     }
 
     public UIClips(IUIClipsDelegate delegate, IFactory<Clip, ClipFactoryData> factory)
@@ -189,7 +192,7 @@ public class UIClips extends UIElement
 
             if (hasSelected)
             {
-                menu.action(Icons.REMOVE, UIKeys.CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS, Colors.NEGATIVE, this::removeSelected);
+                menu.action(Icons.REMOVE, UIKeys.CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS, BBSSettings.negativeColor() & Colors.RGB, this::removeSelected);
             }
         });
 
@@ -262,9 +265,23 @@ public class UIClips extends UIElement
         return this.factory;
     }
 
+    /**
+     * Missing plugin clips stay on the timeline as data-preserving placeholders. Keep
+     * their rendering metadata stable as well, so opening a film never dereferences
+     * absent plugin registration data.
+     */
+    public ClipFactoryData getClipFactoryData(Clip clip)
+    {
+        ClipFactoryData data = clip == null ? null : this.factory.getData(clip);
+
+        return data == null ? MISSING_CLIP_DATA : data;
+    }
+
     public String getClipDisplayName(Clip clip)
     {
         if (!clip.title.get().isEmpty()) return clip.title.get();
+        if (clip instanceof MissingClip missing) return UIKeys.CAMERA_TIMELINE_MISSING_CLIP.format(missing.typeId()).get();
+        if (this.factory.getData(clip) == null) return UIKeys.CAMERA_TIMELINE_MISSING_CLIP.format(clip.getClass().getSimpleName()).get();
         if (!BBSSettings.editorClipAutoName.get()) return "";
         return this.renderers.get(clip).getDefaultLabel(this, clip);
     }
@@ -522,6 +539,12 @@ public class UIClips extends UIElement
     private void addConverters(ContextMenuManager menu, UIContext context)
     {
         ClipFactoryData data = this.factory.getData(this.delegate.getClip());
+
+        if (data == null)
+        {
+            return;
+        }
+
         Collection<Link> converters = data.converters.keySet();
 
         if (converters.isEmpty())
@@ -536,8 +559,12 @@ public class UIClips extends UIElement
                 for (Link type : converters)
                 {
                     IKey label = UIKeys.CAMERA_TIMELINE_CONTEXT_CONVERT_TO.format(UIKeys.C_CLIP.get(type));
+                    ClipFactoryData targetData = this.factory.getData(type);
 
-                    add.action(Icons.REFRESH, label, this.factory.getData(type).color, () -> this.convertTo(type));
+                    if (targetData != null)
+                    {
+                        add.action(Icons.REFRESH, label, targetData.color, () -> this.convertTo(type));
+                    }
                 }
             });
         });
@@ -564,7 +591,19 @@ public class UIClips extends UIElement
         }
 
         ClipFactoryData data = this.factory.getData(clipsFromSelection.get(clipsFromSelection.size() - 1));
+
+        if (data == null)
+        {
+            return;
+        }
+
         IClipConverter converter = data.converters.get(type);
+
+        if (converter == null)
+        {
+            return;
+        }
+
         List<Clip> newClips = new ArrayList<>();
 
         for (Clip clip : clipsFromSelection)
@@ -2132,7 +2171,7 @@ public class UIClips extends UIElement
         batcher.unclip(context);
         batcher.clip(this.vertical.area, context);
 
-        this.vertical.renderScrollbar(batcher);
+        this.vertical.renderScrollbar(batcher, context.mouseX, context.mouseY);
 
         batcher.unclip(context);
     }
@@ -2215,7 +2254,7 @@ public class UIClips extends UIElement
     {
         if (this.selecting)
         {
-            context.batcher.normalizedBox(this.lastX, this.lastY, context.mouseX, context.mouseY, BBSSettings.accentOverlay(Colors.A25));
+            UISelectionRenderer.renderMarquee(context, this.lastX, this.lastY, context.mouseX, context.mouseY);
         }
     }
 

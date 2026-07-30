@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.color.UIColorPicker;
@@ -104,13 +105,37 @@ public class UIColor extends UIElement
     @Override
     public void render(UIContext context)
     {
-        int padding = 0;
+        int radius = BBSSettings.cornerWidget();
+        int padding = radius > 0 ? 1 : 0;
 
-        this.picker.renderRect(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey());
+        if (radius > 0)
+        {
+            context.batcher.roundedFrame(
+                this.area.x,
+                this.area.y,
+                this.area.w,
+                this.area.h,
+                radius,
+                1F,
+                BBSSettings.fieldBorderColor(),
+                this.picker.color.getARGBColor()
+            );
+        }
+        else
+        {
+            this.picker.renderRect(context.batcher, this.area.x, this.area.y, this.area.ex(), this.area.ey());
+        }
 
         if (this.area.isInside(context))
         {
-            this.area.render(context.batcher, Colors.A12, padding);
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x + padding, this.area.y + padding, this.area.w - padding * 2, this.area.h - padding * 2, Math.max(0, radius - padding), Colors.A12);
+            }
+            else
+            {
+                this.area.render(context.batcher, Colors.A12, padding);
+            }
         }
 
         if (this.label)
@@ -118,7 +143,7 @@ public class UIColor extends UIElement
             FontRenderer font = context.batcher.getFont();
             String label = this.picker.color.stringify(this.picker.editAlpha);
 
-            context.batcher.textCard(label, this.area.mx(font.getWidth(label)), this.area.my(font.getHeight() - 1), Colors.WHITE, Colors.A25, 1);
+            context.batcher.textCard(label, this.area.mx(font.getWidth(label)), this.area.my(font.getHeight() - 1), BBSSettings.textColor(), Colors.A25, 1);
         }
 
         this.renderLockedArea(context);

@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import mchorse.bbs_mod.utils.pose.Transform;
 
 /** Pose editor bound to a form's own {@link ValuePose}, including undo notifications. */
 public class UIPoseFormEditor extends UIPoseEditor
@@ -50,6 +51,12 @@ public class UIPoseFormEditor extends UIPoseEditor
     }
 
     @Override
+    protected UIPropTransform createGlintTransformEditor()
+    {
+        return super.createGlintTransformEditor().callbacks(() -> this.valuePose);
+    }
+
+    @Override
     protected void pastePose(MapType data)
     {
         this.valuePose.preNotify(IValueListener.FLAG_UNMERGEABLE);
@@ -86,6 +93,39 @@ public class UIPoseFormEditor extends UIPoseEditor
     {
         this.valuePose.preNotify(IValueListener.FLAG_UNMERGEABLE);
         super.setLighting(transform, value);
+        this.valuePose.postNotify(IValueListener.FLAG_UNMERGEABLE);
+    }
+    @Override
+    protected void setGlintMode(PoseTransform transform, int value)
+    {
+        this.valuePose.preNotify(IValueListener.FLAG_UNMERGEABLE);
+        super.setGlintMode(transform, value);
+        this.valuePose.postNotify(IValueListener.FLAG_UNMERGEABLE);
+    }
+
+    @Override
+    protected void setGlintColor(PoseTransform transform, int value)
+    {
+        /* Mergeable like the bone color, so dragging through the picker collapses into a
+         * single undo step instead of one per shade. */
+        this.valuePose.preNotify();
+        super.setGlintColor(transform, value);
+        this.valuePose.postNotify();
+    }
+
+    @Override
+    protected void setGlintSpeed(PoseTransform transform, float value)
+    {
+        this.valuePose.preNotify();
+        super.setGlintSpeed(transform, value);
+        this.valuePose.postNotify();
+    }
+
+    @Override
+    protected void setGlintTransform(PoseTransform transform, Transform value)
+    {
+        this.valuePose.preNotify(IValueListener.FLAG_UNMERGEABLE);
+        super.setGlintTransform(transform, value);
         this.valuePose.postNotify(IValueListener.FLAG_UNMERGEABLE);
     }
 }

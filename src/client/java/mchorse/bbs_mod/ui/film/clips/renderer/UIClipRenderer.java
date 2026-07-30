@@ -40,7 +40,7 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
         int left = area.x;
         int right = area.ex();
 
-        ClipFactoryData data = clips.getFactory().getData(clip);
+        ClipFactoryData data = clips.getClipFactoryData(clip);
         int color = Colors.A100 | data.color;
 
         if (current)

@@ -1,0 +1,47 @@
+{
+    "format": 1,
+    "name": "Retro Amber",
+    "author": "BBS",
+    "description": "Flat retro terminal look: amber on warm black, springy slow motion",
+    "base": "dark",
+    "variant": "dark",
+    "colors": {
+        "surface": {
+            "chrome": "#141008",
+            "base": "#1A150A",
+            "raised": "#221B0D",
+            "deep": "#0E0B06",
+            "divider": "#4A3B1A"
+        },
+        "accent": {
+            "primary": "#FFB000"
+        },
+        "text": {
+            "primary": "#FFCC66",
+            "muted": "#A98B4F"
+        },
+        "state": {
+            "positive": "#9ACD32",
+            "negative": "#FF5533",
+            "warning": "#FFD700",
+            "active": "#FFA500",
+            "highlight": "#FFE8B0",
+            "cursor": "#FFB000"
+        }
+    },
+    "style": {
+        "text_shadow": false,
+        "bevel": false,
+        "panel_shadow": false
+    },
+    "motion": {
+        "enabled": true,
+        "speed": 0.8,
+        "overlay": { "enabled": true, "duration": 220, "easing": "elastic_out" },
+        "panel_switch": { "enabled": true, "duration": 160, "easing": "quad_out" },
+        "hover": { "enabled": true, "duration": 140, "easing": "sine_out" },
+        "notification": { "enabled": true, "duration": 260, "easing": "bounce_out" },
+        "context_menu": { "enabled": true, "duration": 150, "easing": "back_out" },
+        "scrollbar": { "enabled": true, "duration": 350, "easing": "sine_inout" }
+    }
+}

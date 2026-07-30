@@ -209,7 +209,7 @@ public class UILayerElement extends UIElement
         /* Destructive: remove at the very bottom. */
         if (canDelete)
         {
-            menu.action(Icons.REMOVE, UIKeys.TEXTURES_LAYERS_CONTEXT_REMOVE, Colors.NEGATIVE, () -> this.panel.currentEditor.recordLayerChange(null, () ->
+            menu.action(Icons.REMOVE, UIKeys.TEXTURES_LAYERS_CONTEXT_REMOVE, BBSSettings.negativeColor() & Colors.RGB, () -> this.panel.currentEditor.recordLayerChange(null, () ->
             {
                 this.panel.currentEditor.getDocument().layers.remove(this.index);
                 this.layer.delete();

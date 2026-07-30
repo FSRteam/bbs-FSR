@@ -1,0 +1,97 @@
+{
+    "_doc": "FSR 主题包样例(规范 v1)。以 '_' 开头的键是注释,加载时被忽略。逐 key 说明见 ../README.md",
+    "format": 1,
+
+    "name": "示例·夜蓝",
+    "author": "FSR",
+    "description": "官方规范样例:靛蓝夜色调,展示全部可配置项",
+    "base": "dark",
+    "variant": "dark",
+
+    "_doc_colors": "颜色支持 #RRGGBB 或 #AARRGGBB。surface 五色决定 80% 观感,注意保持 deep < chrome < base < raised 的明度关系",
+    "colors": {
+        "surface": {
+            "chrome": "#10131A",
+            "base": "#151926",
+            "raised": "#1B2030",
+            "deep": "#0D101A",
+            "divider": "#2C3450"
+        },
+        "accent": {
+            "primary": "#6C8CFF"
+        },
+        "text": {
+            "primary": "#F2F4FF",
+            "muted": "#9AA3C0"
+        },
+        "state": {
+            "positive": "#59D940",
+            "negative": "#FF4059",
+            "warning": "#FFBB00",
+            "active": "#4A7DFF",
+            "highlight": "#DDE4FF",
+            "cursor": "#57F52A"
+        },
+        "field_fill": "#0F1217",
+        "field_border": "#30353D",
+        "tab_active_line": "#FF3242",
+        "tab_active_gradient": "#00000000",
+        "area_tint": "#00000000",
+        "area_tint_light": "#00000000",
+        "drop_fill": "#00000000",
+        "drop_border": "#00000000",
+        "splitter_active": "#00000000",
+        "splitter_idle": "#00000000",
+        "shadow_muted": "#00000000",
+        "trackpad_scrub": "#00000000",
+        "notification_fill": "#00000000",
+        "notification_text": "#FFFFFF",
+        "selection_fill": "#00000000",
+        "selection_outline": "#00000000",
+        "icon_pressed": "#00000000",
+        "icon_disabled": "#00000000",
+        "scrollbar_shadow": "#00000000"
+    },
+
+    "_doc_style": "样式开关:text_shadow=文字阴影,bevel=按钮立体斜边,panel_shadow=面板辉光阴影;corner_radius 三级圆角半径 0-16,0=直角(旧版观感)",
+    "style": {
+        "text_shadow": true,
+        "bevel": true,
+        "panel_shadow": true,
+        "corner_radius": {
+            "chrome": 0,
+            "panel": 0,
+            "widget": 0
+        }
+    },
+
+    "_doc_textures": "icons 指向本主题文件夹内的 atlas 覆盖(assets:themes/<id>/...),null=用默认;background 是根界面背景图(mode: stretch/cover/tile,dim: 0-1 暗化)。示例保持 null,玩法见 textures/README.md",
+    "textures": {
+        "icons": null,
+        "background": null,
+        "background_mode": "stretch",
+        "background_dim": 0.0
+    },
+
+    "_doc_decorations": "装饰贴花数组(最多 16 项):{texture, anchor 九宫位, offset, scale, opacity},画在背景之后 UI 之前,永不参与点击。示例留空",
+    "decorations": [],
+
+    "_doc_motion": "每项: enabled + type(ease=duration/easing;spring=response/damping,打断时速度连续) + 可选 preset/tracks 编排(overlay/context_menu)+ scale(仅 hover_scale/press);有效时长 = duration ÷ (主题speed × 用户speed);任何一层关掉即无动画",
+    "motion": {
+        "enabled": true,
+        "speed": 1.0,
+        "overlay":       { "enabled": true, "type": "ease", "duration": 120, "easing": "sine_out" },
+        "panel_switch":  { "enabled": true, "type": "ease", "duration": 100, "easing": "sine_inout" },
+        "hover":         { "enabled": true, "type": "ease", "duration": 80,  "easing": "sine_out" },
+        "notification":  { "enabled": true, "type": "ease", "duration": 150, "easing": "back_out" },
+        "context_menu":  { "enabled": true, "type": "ease", "duration": 100, "easing": "quad_out" },
+        "scrollbar":     { "enabled": true, "type": "ease", "duration": 200, "easing": "sine_inout" },
+        "scroll_smooth": { "enabled": true },
+        "hover_scale":   { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
+        "press":         { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
+        "layout":        { "enabled": false, "duration": 200, "easing": "sine_inout" },
+        "toggle":        { "enabled": false, "duration": 180, "easing": "sine_out" },
+        "drag_follow":   { "enabled": false, "duration": 180, "easing": "sine_out" },
+        "taskbar_hide":  { "enabled": true, "duration": 250, "easing": "sine_inout" }
+    }
+}

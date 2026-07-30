@@ -8,6 +8,9 @@ version="${mod_version}"
 displayName="${mod_name}"
 description="A new generation of video production mod"
 authors="McHorse, Wemppy"
+credits="Chryfi (tracker clip), FunkyFight (minor features and bug fixes), ElGatoPro300 (bug fixes), McMiro (Arabic translations), Chunk7 (Chinese translations), CheesyKirah (German translations), aoa (Korean translations), Nioum (French translations), csabee (Hungarian translations), Nikashi33 (Indonesian translations), Legoego19 (Polish translations), Fanyel (Portuguese translations), El_Redstoniano (Spanish translations), Sam Su~ (Thai translations), Rüyaperest (Turkish translations), Kirkus (Ukrainian translations), Eleeter (Urdu translations), Diobede (Vietnamese translations)"
+displayURL="https://www.patreon.com/McHorse"
+logoFile="assets/bbs/icon.png"
 
 [[dependencies.${mod_id}]]
 modId="minecraft"

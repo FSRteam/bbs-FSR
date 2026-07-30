@@ -14,6 +14,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.IKeyframeSha
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.interps.IInterp;
@@ -400,8 +401,22 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         int mult = this.keyframes.getXAxis().getMult();
         int hx = this.keyframes.getDuration() / mult;
         int ht = (int) this.keyframes.fromGraphX(area.x);
+        boolean verticalTimelineLines = BBSSettings.verticalTimelineLinesEnabled();
 
         this.keyframes.renderRuler(context);
+
+        if (verticalTimelineLines)
+        {
+            TimelineRulerRenderer.renderGrid(
+                context,
+                area,
+                area.y,
+                Math.max(ht, 0),
+                this.keyframes.getDuration(),
+                this.keyframes::toGraphX,
+                TimeUtils::formatTime
+            );
+        }
 
         for (int j = Math.max(ht / mult, 0); j <= hx; j++)
         {
@@ -414,7 +429,11 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
             String label = TimeUtils.formatTime(j * mult);
 
-            context.batcher.box(x, area.y, x + 1, area.ey(), Colors.setA(Colors.WHITE, 0.25F));
+            if (!verticalTimelineLines)
+            {
+                context.batcher.box(x, area.y, x + 1, area.ey(), Colors.setA(Colors.WHITE, 0.25F));
+            }
+
             context.batcher.text(label, x + 4, area.y + 4);
         }
 
@@ -692,7 +711,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             Keyframe prev = j > 0 ? (Keyframe) keyframes.get(j - 1) : null;
             int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
 
-            int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
+            int c = sheet.selection.has(j) ? BBSSettings.activeColor() & Colors.RGB : 0;
             int mx = this.keyframes.toGraphX(frame.getTick());
             int mc = c | Colors.A100;
             IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);
@@ -791,7 +810,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             Keyframe prev = j > 0 ? (Keyframe) keyframes.get(j - 1) : null;
             int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
 
-            int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
+            int c = sheet.selection.has(j) ? BBSSettings.activeColor() & Colors.RGB : 0;
             int mx = this.keyframes.toGraphX(frame.getTick());
             int mc = c | Colors.A100;
             IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);

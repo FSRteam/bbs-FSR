@@ -754,7 +754,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     protected void renderTimelineGrid(UIContext context)
     {
-        if (!BBSSettings.editorTimelineGrid.get())
+        if (!BBSSettings.verticalTimelineLinesEnabled())
         {
             return;
         }
@@ -1274,7 +1274,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         for (int j = 0; j < keyframes.size(); j++)
         {
             Keyframe frame = (Keyframe) keyframes.get(j);
-            int c = sheet.selection.has(j) ? Colors.ACTIVE : 0;
+            int c = sheet.selection.has(j) ? BBSSettings.activeColor() & Colors.RGB : 0;
             int mx = this.keyframes.toGraphX(frame.getTick());
             int mc = c | Colors.A100;
             IKeyframeShapeRenderer shapeResult = renderShape(frame, context, builder, matrix, mx, my, 2, mc);
@@ -1389,7 +1389,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             this.renderLabels(context, builder, matrix, this.elements, 0, this.getDopeSheetY());
         }
 
-        this.dopeSheet.renderScrollbar(context.batcher);
+        this.dopeSheet.renderScrollbar(context.batcher, context.mouseX, context.mouseY);
     }
 
     /* State recovery */

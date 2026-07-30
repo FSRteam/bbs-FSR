@@ -82,6 +82,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private PoseStack modelStack = new PoseStack();
     private final Pose renderPose = new Pose();
     private final Color renderColor = new Color();
+    private final Matrix4f armorBendDelta = new Matrix4f();
 
     private ActionsConfig lastConfigs;
     private IAnimator animator;
@@ -286,6 +287,18 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
+        this.renderInUI(context, x1, y1, x2, y2, null, null);
+    }
+
+    public void renderPreviewThumbnail(UIContext context, int x1, int y1, int x2, int y2, Object sourceOwner, IEntity sourceEntity)
+    {
+        this.beginRenderUI();
+        this.renderInUI(context, x1, y1, x2, y2, sourceOwner, sourceEntity);
+        this.finishRenderUI(context, x1, y1, x2, y2);
+    }
+
+    private void renderInUI(UIContext context, int x1, int y1, int x2, int y2, Object sourceOwner, IEntity sourceEntity)
+    {
         context.batcher.flush();
 
         this.ensureAnimator(context.getTransition());
@@ -294,6 +307,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.animator != null && model != null)
         {
+            boolean reusePreviewPose = sourceOwner != null
+                && this.previewPoseSnapshot.consume(sourceOwner, sourceEntity, model, context.getTransition());
             PoseStack stack = context.batcher.getContext().pose();
 
             stack.pushPose();
@@ -310,10 +325,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 float scale = this.form.uiScale.get() * model.getUiScale();
 
                 FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
-                model.model.resetPose();
+                if (!reusePreviewPose)
+                {
+                    model.model.resetPose();
 
-                this.animator.applyActions(null, model, context.getTransition());
-                model.model.applyPose(this.getPose(this.renderPose));
+                    this.animator.applyActions(null, model, context.getTransition());
+                    model.model.applyPose(this.getPose(this.renderPose));
+                }
 
                 MatrixStackUtils.multiply(stack, uiMatrix);
                 stack.scale(scale, scale, scale);
@@ -325,7 +343,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                     ? GameRenderer::getRendertypeEntityTranslucentCullShader
                     : BBSShaders::getModel;
 
-                this.renderModel(this.entity, this.uiSimulationOwner, mainShader, stack, model, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, color, true, null, context.getTransition(), null, false, false);
+                this.renderModel(this.entity, this.uiSimulationOwner, mainShader, stack, model, LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, color, true, null, context.getTransition(), null, false, false, !reusePreviewPose);
 
                 /* Render body parts */
                 stack.pushPose();
@@ -592,17 +610,32 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         if (matrix != null)
         {
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
+            Matrix4f bendDelta = this.getArmorBendDelta(type, armorSlot);
+            PoseStack lowerStack = null;
+
+            if (bendDelta != null)
+            {
+                lowerStack = this.getModelStack();
+                MatrixStackUtils.multiply(lowerStack, stack.last().pose());
+                MatrixStackUtils.multiply(lowerStack, bendDelta);
+                this.applyArmorTransform(lowerStack, matrix, armorSlot);
+            }
 
             stack.pushPose();
             try
             {
-                MatrixStackUtils.multiply(stack, matrix);
-                MatrixStackUtils.applyTransform(stack, armorSlot.transform);
-                stack.mulPose(ROTATE_X_180);
+                this.applyArmorTransform(stack, matrix, armorSlot);
 
                 CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
 
-                ActorEntityRenderer.armorRenderer.renderArmorSlot(stack, consumers, target, type.slot, type, light);
+                float bendStart = armorSlot.hasBendRange() ? armorSlot.bendStart : type.defaultBendStart;
+                float bendEnd = armorSlot.hasBendRange() ? armorSlot.bendEnd : type.defaultBendEnd;
+                /* Keep the model-local bend between the outer render transform and
+                 * the armor attachment. Putting it before the completed render matrix
+                 * rotates camera-relative translation around the joint. */
+                Matrix4f lower = lowerStack == null ? null : lowerStack.last().pose();
+
+                ActorEntityRenderer.armorRenderer.renderArmorSlot(stack, lower, bendStart, bendEnd, consumers, target, type.slot, type, light);
                 consumers.draw();
             }
             finally
@@ -613,6 +646,50 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 RenderSystem.enableDepthTest();
             }
         }
+    }
+
+    private void applyArmorTransform(PoseStack stack, Matrix4f matrix, ArmorSlot armorSlot)
+    {
+        MatrixStackUtils.multiply(stack, matrix);
+        MatrixStackUtils.applyTransform(stack, armorSlot.transform);
+        stack.mulPose(ROTATE_X_180);
+    }
+
+    /**
+     * Rotation the bending joint contributes, in model-local space, or {@code null} when this
+     * slot doesn't bend or the model has no such joint.
+     *
+     * <p>Bending joints (elbows, knees) sit as siblings of the armor attachment bones, not
+     * as ancestors, so armor parented to the upper bone alone stays rigid while the limb
+     * bends. Naming the joint lets the armor get skinned across it instead.</p>
+     *
+     * <p>The joint's matrix can't be used to place armor directly — it's anchored at the
+     * joint, so it would drag the armor away from where it belongs. What's needed is only
+     * the rotation the joint adds, which is what dividing out its origin yields:
+     * {@code origin} is captured before the group's own pivot rotation and scale are
+     * applied, so {@code matrix * origin⁻¹} is exactly that rotation about the joint's
+     * pivot. It's the identity while the joint is straight, leaving the armor untouched.</p>
+     */
+    private Matrix4f getArmorBendDelta(ArmorType type, ArmorSlot armorSlot)
+    {
+        String lowerGroup = armorSlot.hasLowerGroup() ? armorSlot.lowerGroup : type.defaultLowerGroup;
+
+        if (lowerGroup.isEmpty())
+        {
+            return null;
+        }
+
+        MatrixCacheEntry entry = this.bones.get(lowerGroup);
+        Matrix4f matrix = entry.matrix();
+        Matrix4f origin = entry.origin();
+
+        if (matrix == null || origin == null)
+        {
+            /* Model has no such joint — plain rigid armor, like every non-bending model. */
+            return null;
+        }
+
+        return this.armorBendDelta.set(origin).invert().mulLocal(matrix);
     }
 
     private void renderItems(IEntity target, ModelInstance model, PoseStack stack, EquipmentSlot slot, ItemDisplayContext mode, List<ArmorSlot> items, Color color, int overlay, int light)
@@ -851,6 +928,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         private IEntity entity;
         private ModelInstance model;
         private FormRenderingContext context;
+        private final Matrix4f semanticBase = new Matrix4f();
+        private boolean hasSemanticBase;
+        private boolean allowWorldTargetOverrides;
+        private boolean allowWorldCollisions;
         private int age;
         private int transition;
         private boolean available;
@@ -887,11 +968,51 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return true;
         }
 
+        public boolean consume(Object owner, IEntity entity, ModelInstance model, float transition)
+        {
+            boolean matches = this.matches(owner, entity, model, transition);
+
+            this.available = false;
+
+            if (matches)
+            {
+                this.restore();
+            }
+
+            return matches;
+        }
+
+        public boolean restoreForMatrices(Object owner, IEntity entity, ModelInstance model, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, float transition)
+        {
+            boolean hasSemanticBase = semanticBase != null;
+            boolean matches = this.matches(owner, entity, model, transition)
+                && this.hasSemanticBase == hasSemanticBase
+                && (!hasSemanticBase || this.semanticBase.equals(semanticBase))
+                && this.allowWorldTargetOverrides == allowWorldTargetOverrides
+                && this.allowWorldCollisions == allowWorldCollisions;
+
+            if (matches)
+            {
+                this.restore();
+            }
+
+            return matches;
+        }
+
         public void capture(FormRenderingContext context, ModelInstance model)
         {
             this.owner = context.simulationOwner;
             this.entity = context.entity;
             this.context = context;
+            this.hasSemanticBase = context.world != null;
+
+            if (this.hasSemanticBase)
+            {
+                this.semanticBase.set(context.world.last().pose());
+            }
+
+            this.allowWorldTargetOverrides = context.allowWorldTargetOverrides;
+            this.allowWorldCollisions = context.allowWorldCollisions;
             this.age = getAge(context.entity);
             this.transition = Float.floatToIntBits(context.getTransition());
 
@@ -928,6 +1049,29 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         public void invalidate()
         {
             this.available = false;
+        }
+
+        private boolean matches(Object owner, IEntity entity, ModelInstance model, float transition)
+        {
+            return this.available
+                && this.owner == owner
+                && this.entity == entity
+                && this.model == model
+                && this.age == getAge(entity)
+                && this.transition == Float.floatToIntBits(transition);
+        }
+
+        private void restore()
+        {
+            for (ModelGroupPose pose : this.groups)
+            {
+                pose.restore();
+            }
+
+            for (BOBJBonePose pose : this.bones)
+            {
+                pose.restore();
+            }
         }
 
         private static int getAge(IEntity entity)
@@ -1189,22 +1333,35 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             /* Collect bones and add them to matrix list */
             if (this.animator != null && model != null)
             {
-                model.model.resetPose();
-
-                this.animator.applyActions(entity, model, transition);
-                model.model.applyPose(this.getPose(this.renderPose));
-
                 /* Film placement-aware collection receives the exact semantic base and owner,
                  * so absolute target overrides and physics produce the same attachment bone as
                  * render3D. Legacy/UI collection keeps its isolated local IK-only behavior. */
-                ModelConstraintsRuntime.apply(model);
                 Object owner = simulationOwner == null ? this.uiSimulationOwner : simulationOwner;
+                boolean reusePreviewPose = this.previewPoseSnapshot.restoreForMatrices(
+                    owner,
+                    entity,
+                    model,
+                    modelSemanticBase,
+                    allowWorldTargetOverrides,
+                    allowWorldCollisions,
+                    transition
+                );
 
-                this.applyIK(model, owner, modelSemanticBase, allowWorldTargetOverrides);
-
-                if (modelSemanticBase != null)
+                if (!reusePreviewPose)
                 {
-                    this.physicsRuntime.apply(entity, owner, model, transition, modelSemanticBase, allowWorldTargetOverrides, allowWorldCollisions);
+                    model.model.resetPose();
+
+                    this.animator.applyActions(entity, model, transition);
+                    model.model.applyPose(this.getPose(this.renderPose));
+
+                    ModelConstraintsRuntime.apply(model);
+
+                    this.applyIK(model, owner, modelSemanticBase, allowWorldTargetOverrides);
+
+                    if (modelSemanticBase != null)
+                    {
+                        this.physicsRuntime.apply(entity, owner, model, transition, modelSemanticBase, allowWorldTargetOverrides, allowWorldCollisions);
+                    }
                 }
 
                 stack.mulPose(ROTATE_Y_180);

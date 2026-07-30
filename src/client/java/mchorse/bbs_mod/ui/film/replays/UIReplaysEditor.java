@@ -32,6 +32,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -405,7 +406,7 @@ public class UIReplaysEditor extends UIElement {
             return;
         }
 
-        int color = clipsPanel.clips.getFactory().getData(clip).color;
+        int color = clipsPanel.clips.getClipFactoryData(clip).color;
         int left = Math.max(area.x, x1);
         int right = Math.min(area.ex(), x2);
         int top = area.y + 1;
@@ -1151,6 +1152,11 @@ public class UIReplaysEditor extends UIElement {
         formSheets.clear();
 
         if ((this.showAllTracks() || this.category == ReplayCategory.MODEL)
+                && form instanceof AbstractSoundForm soundForm) {
+            UIReplaysEditorUtils.addSoundSheets(soundForm, this.replay.properties, orderedFormSheets);
+        }
+
+        if ((this.showAllTracks() || this.category == ReplayCategory.MODEL)
                 && form instanceof ModelForm modelForm) {
             List<UIKeyframeSheet> materialSheets = new ArrayList<>();
             UIReplaysEditorUtils.addMaterialTextureSheets(modelForm, this.replay.properties, materialSheets);
@@ -1342,6 +1348,11 @@ public class UIReplaysEditor extends UIElement {
         }
 
         if (stencil != null && stencil.hasPicked()) {
+            if (inside && context.mouseButton == 0
+                    && this.filmPanel.getController().startViewportSoundGuide(context)) {
+                return true;
+            }
+
             if (inside && context.mouseButton == 0
                     && this.filmPanel.getController().startViewportGizmo(context)) {
                 return true;

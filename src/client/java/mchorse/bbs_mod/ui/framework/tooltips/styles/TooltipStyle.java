@@ -11,17 +11,19 @@ public abstract class TooltipStyle
 
     public static TooltipStyle get()
     {
-        return get(BBSSettings.theme == null ? 1 : BBSSettings.theme.get());
-    }
+        int style = BBSSettings.tooltipStyle == null ? 0 : BBSSettings.tooltipStyle.get();
 
-    public static TooltipStyle get(int style)
-    {
-        if (style == 0)
+        if (style == 1)
+        {
+            return DARK;
+        }
+
+        if (style == 2)
         {
             return LIGHT;
         }
 
-        return DARK;
+        return BBSSettings.isLightTheme() ? LIGHT : DARK;
     }
 
     public abstract void renderBackground(UIContext context, Area area);

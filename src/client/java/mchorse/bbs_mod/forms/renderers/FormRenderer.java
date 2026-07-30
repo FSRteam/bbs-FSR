@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -32,6 +34,9 @@ import java.util.function.Supplier;
 
 public abstract class FormRenderer <T extends Form>
 {
+    private static final Vector3f UI_LIGHT_A = new Vector3f(0F, 1F, -0.2F).normalize();
+    private static final Vector3f UI_LIGHT_B = new Vector3f(-0.85F, 0.85F, 1F).normalize();
+
     protected T form;
     private final Transform combinedTransform = new Transform();
     private final Matrix4f transformMatrix = new Matrix4f();
@@ -46,6 +51,10 @@ public abstract class FormRenderer <T extends Form>
         return this.form;
     }
 
+    /** Release renderer-owned runtime resources before this form is discarded. */
+    public void release()
+    {}
+
     public List<String> getBones()
     {
         return this.getBoneHierarchy().getBoneIds();
@@ -58,7 +67,20 @@ public abstract class FormRenderer <T extends Form>
 
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)
     {
+        this.beginRenderUI();
         this.renderInUI(context, x1, y1, x2, y2);
+        this.finishRenderUI(context, x1, y1, x2, y2);
+    }
+
+    protected final void beginRenderUI()
+    {
+        /* Match BBSFS' form-list lighting instead of inheriting whichever
+         * diffuse-light state the previously rendered UI element left behind. */
+        RenderSystem.setupLevelDiffuseLighting(UI_LIGHT_A, UI_LIGHT_B);
+    }
+
+    protected final void finishRenderUI(UIContext context, int x1, int y1, int x2, int y2)
+    {
         BBSFormPreviewCapture.include(context, x1, y1, x2, y2);
 
         FontRenderer font = context.batcher.getFont();
@@ -70,7 +92,7 @@ public abstract class FormRenderer <T extends Form>
 
             int w = font.getWidth(name);
 
-            context.batcher.textCard(name, (x2 + x1 - w) / 2, y1 + 6, Colors.WHITE, Colors.ACTIVE | Colors.A50);
+            context.batcher.textCard(name, (x2 + x1 - w) / 2, y1 + 6, BBSSettings.textColor(), (BBSSettings.activeColor() & Colors.RGB) | Colors.A50);
         }
 
         int keybind = this.form.hotkey.get();
@@ -82,7 +104,7 @@ public abstract class FormRenderer <T extends Form>
 
             int w = font.getWidth(name);
 
-            context.batcher.textCard(name, (x2 + x1 - w) / 2, y2 - 6 - font.getHeight(), Colors.WHITE, Colors.A50);
+            context.batcher.textCard(name, (x2 + x1 - w) / 2, y2 - 6 - font.getHeight(), BBSSettings.textColor(), Colors.A50);
         }
     }
 
@@ -110,6 +132,7 @@ public abstract class FormRenderer <T extends Form>
         int light = context.light;
         PoseStack world = context.world;
         boolean queueWasActive = false;
+        boolean queueSuspended = false;
         boolean stackPushed = false;
         boolean worldPushed = false;
         boolean statesApplied = false;
@@ -122,6 +145,7 @@ public abstract class FormRenderer <T extends Form>
             if (!context.canDeferWorldTranslucency())
             {
                 queueWasActive = FormTranslucentQueue.suspend();
+                queueSuspended = true;
             }
 
             statesApplied = true;
@@ -187,7 +211,10 @@ public abstract class FormRenderer <T extends Form>
                 finally
                 {
                     context.light = light;
-                    FormTranslucentQueue.restore(queueWasActive);
+                    if (queueSuspended)
+                    {
+                        FormTranslucentQueue.restore(queueWasActive);
+                    }
 
                     if (statesApplied)
                     {

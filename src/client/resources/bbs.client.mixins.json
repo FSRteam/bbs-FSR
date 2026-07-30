@@ -31,7 +31,10 @@
         "WorldMixin",
         "LivingEntityRendererInvoker",
         "EntityRenderDispatcherMixin",
-        "KeyboardMixin"
+        "KeyboardMixin",
+        "KeyMappingAccessor",
+        "EntityRenderersAccessor",
+        "BlockEntityRenderersAccessor"
     ],
     "injectors": {
         "defaultRequire": 1

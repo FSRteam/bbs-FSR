@@ -1213,7 +1213,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
                 context.batcher.box(x, y, x + 2, y + h, Colors.A100 | color);
                 context.batcher.gradientHBox(x + 2, y, x + 24, y + h, Colors.A25 | color, color);
                 context.batcher.icon(icon, x + 2, y + h / 2F, 0F, 0.5F);
-                context.batcher.textShadow(this.elementToString(context, i, element), x + 24, y + (h - context.batcher.getFont().getHeight()) / 2, hover ? Colors.HIGHLIGHT : Colors.WHITE);
+                context.batcher.textShadow(this.elementToString(context, i, element), x + 24, y + (h - context.batcher.getFont().getHeight()) / 2, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
             }
         };
 
@@ -1569,7 +1569,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
                         Icon icon = element.value.icon;
 
                         context.batcher.icon(icon, x + 3, y + (h - 16) / 2F);
-                        context.batcher.textShadow(element.title.get(), x + 22, y + (h - context.batcher.getFont().getHeight()) / 2, hover ? Colors.HIGHLIGHT : Colors.WHITE);
+                        context.batcher.textShadow(element.title.get(), x + 22, y + (h - context.batcher.getFont().getHeight()) / 2, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
                     }
                 };
                 this.operations.background();
@@ -2340,7 +2340,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
         }
         else
         {
-            context.batcher.textShadow(this.elementToString(context, i, element), x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? Colors.mulRGB(Colors.HIGHLIGHT, 0.75F) : Colors.GRAY);
+            context.batcher.textShadow(this.elementToString(context, i, element), x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? Colors.mulRGB(BBSSettings.highlightColor(), 0.75F) : Colors.GRAY);
         }
 
         Form form = replay.form.get();

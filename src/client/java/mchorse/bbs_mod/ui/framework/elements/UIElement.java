@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -1665,7 +1666,7 @@ public class UIElement implements IUIElement, IUndoElement
             this.keybinds.add(context, this.area.isInside(context));
         }
 
-        if (this.tooltip != null && this.area.isInside(context))
+        if (BBSSettings.showTooltipsEnabled() && this.tooltip != null && this.area.isInside(context))
         {
             context.tooltip.set(context, this);
         }
@@ -1695,7 +1696,16 @@ public class UIElement implements IUIElement, IUndoElement
     {
         if (!this.isEnabled())
         {
-            this.area.render(context.batcher, Colors.A50);
+            int radius = BBSSettings.cornerWidget();
+
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, Colors.A50);
+            }
+            else
+            {
+                this.area.render(context.batcher, Colors.A50);
+            }
 
             context.batcher.outlinedIcon(Icons.LOCKED, this.area.mx(), this.area.my(), 0.5F, 0.5F);
         }

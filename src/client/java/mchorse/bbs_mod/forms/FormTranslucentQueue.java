@@ -5,12 +5,16 @@ import com.mojang.blaze3d.shaders.Uniform;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.cubic.render.GlintRenderState;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.IModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -271,6 +275,81 @@ public final class FormTranslucentQueue
             ModelVAORenderer.render(program, this.vao, this.modelView, this.normalMat,
                 this.r, this.g, this.b, this.a, this.light, this.overlay);
             setPassMode(program, PASS_SINGLE);
+        }
+    }
+
+    /** Deferred glint stays adjacent to translucent form/model commands while retaining
+     * the vanilla RenderType setup needed by Iris and other shader packs. */
+    public static final class GlintVAOCommand extends DrawCommand
+    {
+        private final int mode;
+        private final float speed;
+        private final Color color = new Color();
+        private final Transform transform;
+        private final IModelVAO vao;
+        private final Matrix4f modelView;
+        private final Matrix3f normalMat;
+        private final int light;
+        private final int overlay;
+
+        public GlintVAOCommand(int mode, float speed, Color color, Transform transform,
+            IModelVAO vao, Matrix4f modelView, Matrix3f normalMat, int light, int overlay)
+        {
+            super(modelView.getTranslation(new Vector3f()), false, false);
+            this.mode = mode;
+            this.speed = speed;
+            this.color.copy(color);
+            this.transform = transform.copy();
+            this.vao = vao;
+            this.modelView = new Matrix4f(modelView);
+            this.normalMat = new Matrix3f(normalMat);
+            this.light = light;
+            this.overlay = overlay;
+        }
+
+        @Override
+        public void draw()
+        {
+            GlintRenderState.renderVao(this.mode, this.speed, this.color, this.transform,
+                this.vao, this.modelView, this.normalMat, this.light, this.overlay);
+        }
+    }
+
+    public static final class GlintMeshCommand extends DrawCommand
+    {
+        private final int mode;
+        private final float speed;
+        private final Color color = new Color();
+        private final boolean transformed;
+        private final VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+        private final Matrix4f modelView;
+
+        public GlintMeshCommand(int mode, float speed, Color color, boolean transformed,
+            MeshData mesh, Matrix4f modelView, Vector3f origin)
+        {
+            super(origin, false, false);
+            this.mode = mode;
+            this.speed = speed;
+            this.color.copy(color);
+            this.transformed = transformed;
+            this.modelView = new Matrix4f(modelView);
+
+            this.buffer.bind();
+            this.buffer.upload(mesh);
+            VertexBuffer.unbind();
+        }
+
+        @Override
+        public void draw()
+        {
+            GlintRenderState.drawBuffer(this.mode, this.speed, this.color, this.transformed,
+                this.buffer, this.modelView);
+        }
+
+        @Override
+        public void release()
+        {
+            this.buffer.close();
         }
     }
 

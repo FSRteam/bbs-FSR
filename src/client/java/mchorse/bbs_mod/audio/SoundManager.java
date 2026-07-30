@@ -281,6 +281,11 @@ public class SoundManager implements IWatchDogListener
 
     public SoundPlayer playUnique(Link link)
     {
+        return this.playUnique(link, true);
+    }
+
+    SoundPlayer playUnique(Link link, boolean includeWaveform)
+    {
         this.requireContextThread("playUnique");
 
         for (SoundPlayer player : this.sounds)
@@ -293,7 +298,7 @@ public class SoundManager implements IWatchDogListener
             }
         }
 
-        SoundBuffer buffer = this.get(link, true);
+        SoundBuffer buffer = this.get(link, includeWaveform);
 
         if (buffer != null)
         {
@@ -315,6 +320,31 @@ public class SoundManager implements IWatchDogListener
         }
 
         return null;
+    }
+
+    /** Replace only the matching one-shot preview source and restart it at the beginning. */
+    public SoundPlayer restartUnique(Link link)
+    {
+        return this.restartUnique(link, true);
+    }
+
+    SoundPlayer restartUnique(Link link, boolean includeWaveform)
+    {
+        this.requireContextThread("restartUnique");
+
+        for (SoundPlayer player : new ArrayList<>(this.sounds))
+        {
+            SoundBuffer buffer = player.getBuffer();
+
+            if (player.isUnique() && buffer != null && Objects.equals(buffer.getId(), link)
+                && this.deletePlayer(player))
+            {
+                this.sounds.remove(player);
+                this.removeOwnedVoice(player);
+            }
+        }
+
+        return this.playUnique(link, includeWaveform);
     }
 
     /**
@@ -367,7 +397,8 @@ public class SoundManager implements IWatchDogListener
 
             ManagedVoice voice = actual.get(clipIdentity);
 
-            if (voice != null && !Objects.equals(voice.link, request.link()))
+            if (voice != null && (!Objects.equals(voice.link, request.link())
+                || voice.spatial != request.spatial()))
             {
                 if (this.releaseVoice(voice))
                 {
@@ -408,10 +439,10 @@ public class SoundManager implements IWatchDogListener
             {
                 try
                 {
-                    SoundPlayer player = new SoundPlayer(buffer).managed();
+                    SoundPlayer player = new SoundPlayer(buffer, request.spatial()).managed();
 
-                    player.setRelative(true);
-                    voice = new ManagedVoice(request.link(), player);
+                    player.setRelative(!request.spatial());
+                    voice = new ManagedVoice(request.link(), player, request.spatial());
                     actual.put(clipIdentity, voice);
                     this.sounds.add(player);
                 }
@@ -469,9 +500,24 @@ public class SoundManager implements IWatchDogListener
         SoundPlayer player = voice.player;
 
         player.setVolume(request.gain());
+        player.setPitch(request.pitch());
+        player.setLooping(request.looping());
+        player.setMaxDistance(request.maxDistance());
+
+        /* Re-applied every frame because a spatial voice can move. A change
+         * between spatial and listener-relative playback recreates the source
+         * during reconciliation so it is attached to the correct buffer. */
+        player.setRelative(!request.spatial());
+
+        if (request.spatial())
+        {
+            player.setPosition(request.x(), request.y(), request.z());
+        }
+
         float current = player.getPlaybackPosition();
         float difference = Math.abs(request.seconds() - current);
-        boolean mustSeek = difference > (playing ? PLAYING_DRIFT_SECONDS : PAUSED_DRIFT_SECONDS);
+        boolean mustSeek = request.seek()
+            && difference > (playing ? PLAYING_DRIFT_SECONDS : PAUSED_DRIFT_SECONDS);
 
         if (!player.isPlaying() && playing)
         {
@@ -868,16 +914,63 @@ public class SoundManager implements IWatchDogListener
         }
     }
 
-    public record VoiceRequest(Link link, float seconds, float gain)
+    /**
+     * A voice the owner wants to hear this frame.
+     *
+     * @param spatial whether the voice is positioned in the world; when false
+     *                the voice plays relative to the listener, which is what
+     *                film audio tracks want
+     */
+    public record VoiceRequest(Link link, float seconds, float gain,
+        boolean spatial, float x, float y, float z,
+        float pitch, boolean looping, float maxDistance, boolean seek)
     {
         public VoiceRequest
         {
             Objects.requireNonNull(link, "link");
         }
 
+        /**
+         * A listener-relative voice, the original behaviour. Kept so that every
+         * existing caller stays byte-for-byte unchanged.
+         */
+        public VoiceRequest(Link link, float seconds, float gain)
+        {
+            this(link, seconds, gain, false, 0F, 0F, 0F,
+                1F, false, SoundPlayer.DEFAULT_MAX_DISTANCE, true);
+        }
+
+        /** Compatibility constructor for the first spatial request shape. */
+        public VoiceRequest(Link link, float seconds, float gain, boolean spatial, float x, float y, float z)
+        {
+            this(link, seconds, gain, spatial, x, y, z,
+                1F, false, SoundPlayer.DEFAULT_MAX_DISTANCE, true);
+        }
+
+        /** A voice positioned at a point in the world. */
+        public static VoiceRequest spatial(Link link, float seconds, float gain, float x, float y, float z)
+        {
+            return new VoiceRequest(link, seconds, gain, true, x, y, z);
+        }
+
+        /** A configurable world voice used by sound forms. */
+        public static VoiceRequest spatial(Link link, float seconds, float gain,
+            float x, float y, float z, float pitch, boolean looping, float maxDistance, boolean seek)
+        {
+            return new VoiceRequest(link, seconds, gain, true, x, y, z,
+                pitch, looping, maxDistance, seek);
+        }
+
         boolean isValid()
         {
-            return Float.isFinite(this.seconds) && Float.isFinite(this.gain) && this.gain >= 0F;
+            if (!Float.isFinite(this.seconds) || !Float.isFinite(this.gain) || this.gain < 0F
+                || !Float.isFinite(this.pitch) || this.pitch <= 0F
+                || !Float.isFinite(this.maxDistance) || this.maxDistance <= 0F)
+            {
+                return false;
+            }
+
+            return !this.spatial || (Float.isFinite(this.x) && Float.isFinite(this.y) && Float.isFinite(this.z));
         }
     }
 
@@ -885,12 +978,14 @@ public class SoundManager implements IWatchDogListener
     {
         private final Link link;
         private final SoundPlayer player;
+        private final boolean spatial;
         private float expectedSeconds;
 
-        private ManagedVoice(Link link, SoundPlayer player)
+        private ManagedVoice(Link link, SoundPlayer player, boolean spatial)
         {
             this.link = link;
             this.player = player;
+            this.spatial = spatial;
         }
     }
 }

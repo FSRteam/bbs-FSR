@@ -100,7 +100,9 @@ public class ModelVAO implements IModelVAO
     public void render(VertexFormat format, float r, float g, float b, float a, int light, int overlay)
     {
         boolean hasShaders = isShadersEnabled();
-        int vao = hasShaders || format == DefaultVertexFormat.NEW_ENTITY ? this.vao : this.vao2;
+        boolean compact = format == DefaultVertexFormat.POSITION_TEX
+            || !hasShaders && format != DefaultVertexFormat.NEW_ENTITY;
+        int vao = compact ? this.vao2 : this.vao;
 
         GL30.glBindVertexArray(vao);
 
@@ -116,10 +118,10 @@ public class ModelVAO implements IModelVAO
             GL30.glVertexAttrib4f(3, r, g, b, a);
         }
 
-        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
+        if (hasShaders && !compact) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
         else GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
-        if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
+        if (hasShaders && !compact) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
         else GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
 
         GL30.glDrawArrays(GL30.GL_TRIANGLES, 0, this.count);

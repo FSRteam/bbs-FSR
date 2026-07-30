@@ -59,7 +59,7 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
         this.renderModel(BBSShaders::getModel,
             stack,
             OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, Colors.WHITE,
-            context.getTransition(), false
+            context.getTransition(), false, true
         );
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
@@ -83,11 +83,11 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
         );
 
         this.renderModel(shader, context.stack, context.overlay, context.light, context.color,
-            context.getTransition(), context.canDeferWorldTranslucency());
+            context.getTransition(), context.canDeferWorldTranslucency(), !context.isPicking());
     }
 
     private void renderModel(Supplier<ShaderInstance> shader, PoseStack matrices, int overlay, int light,
-        int overlayColor, float transition, boolean defer)
+        int overlayColor, float transition, boolean defer, boolean renderGlint)
     {
         Link texture = this.form.texture.get();
         ModelVAO data = BBSModClient.getTextures().getExtruder().get(texture);
@@ -137,6 +137,11 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             else
             {
                 ModelVAORenderer.render(finalShader, data, matrices, r, g, b, a, light, overlay);
+            }
+
+            if (renderGlint)
+            {
+                FormGlintRenderer.render(this.form, data, modelView, normalMat, light, overlay);
             }
 
             RenderSystem.disableBlend();

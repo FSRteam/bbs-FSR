@@ -108,6 +108,23 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
             consumers.setSubstitute(BBSRendering.getColorConsumer(set));
             Minecraft.getInstance().getBlockRenderer().renderSingleBlock(this.form.blockState.get(), context.stack, consumers, light, context.overlay);
             consumers.draw();
+
+            if (!context.isPicking())
+            {
+                int finalLight = light;
+
+                context.stack.pushPose();
+                try
+                {
+                    MatrixStackUtils.applyTransform(context.stack, this.form.glintTransform.get());
+                    FormGlintRenderer.renderCaptured(this.form, (capture) ->
+                        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(this.form.blockState.get(), context.stack, capture, finalLight, context.overlay));
+                }
+                finally
+                {
+                    context.stack.popPose();
+                }
+            }
         }
         finally
         {

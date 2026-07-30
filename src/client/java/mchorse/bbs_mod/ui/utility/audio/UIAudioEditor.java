@@ -639,7 +639,7 @@ public class UIAudioEditor extends UIElement
 
         if (selected || playing)
         {
-            context.batcher.outline(codeArea.x, codeArea.y, codeArea.ex(), codeArea.ey(), selected ? Colors.WHITE : Colors.ACTIVE | Colors.A100);
+            context.batcher.outline(codeArea.x, codeArea.y, codeArea.ex(), codeArea.ey(), selected ? Colors.WHITE : BBSSettings.activeColor());
         }
 
         if (selected)

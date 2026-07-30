@@ -17,6 +17,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.repos.IRepository;
@@ -38,6 +39,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     private boolean openedBefore;
     private boolean tabsEnabled;
+    private float dashboardChromeHiddenAmount;
 
     private Timer savingTimer = new Timer(0);
     private long dataRequestVersion;
@@ -89,20 +91,44 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         }
 
         int tabsHeight = UIDataTabs.TABS_HEIGHT_PX;
+        int tabsSlide = Math.round(tabsHeight * this.dashboardChromeHiddenAmount);
+        int contentTop = tabsHeight - tabsSlide;
         int sidebarWidth = Math.max(0, this.getSidebarWidthPx());
 
+        this.tabBar.relative(this).y(-tabsSlide).w(1F).h(tabsHeight);
         this.tabBar.setRightInsetPx(this.getTabsRightInsetPx());
-        this.iconBar.relative(this).x(1F, -sidebarWidth).y(tabsHeight).w(sidebarWidth).h(1F, -tabsHeight).column(0).stretch();
+        this.iconBar.relative(this).x(1F, -sidebarWidth).y(contentTop).w(sidebarWidth).h(1F, -contentTop).column(0).stretch();
         this.iconBar.setVisible(sidebarWidth > 0);
 
         if (sidebarWidth > 0)
         {
-            this.editor.relative(this).y(tabsHeight).wTo(this.iconBar.area).h(1F, -tabsHeight);
+            this.editor.relative(this).y(contentTop).wTo(this.iconBar.area).h(1F, -contentTop);
         }
         else
         {
-            this.editor.relative(this).y(tabsHeight).w(1F).h(1F, -tabsHeight);
+            this.editor.relative(this).y(contentTop).w(1F).h(1F, -contentTop);
         }
+    }
+
+    @Override
+    public void setDashboardChromeHiddenAmount(float amount)
+    {
+        amount = MathUtils.clamp(amount, 0F, 1F);
+
+        if (this.dashboardChromeHiddenAmount == amount)
+        {
+            return;
+        }
+
+        this.dashboardChromeHiddenAmount = amount;
+        this.setupTabsLayout();
+    }
+
+    @Override
+    public boolean isDashboardChromeHovered(int mouseX, int mouseY)
+    {
+        return this.tabsEnabled && this.tabBar != null && this.tabBar.isVisible()
+            && this.tabBar.area.isInside(mouseX, mouseY);
     }
 
     protected int getSidebarWidthPx()

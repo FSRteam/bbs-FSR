@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils.context;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -39,6 +40,6 @@ public class ItemStackContextAction extends ContextAction
             matrices.popPose();
         }
 
-        context.batcher.text(this.label.get(), x + 22, y + (h - font.getHeight()) / 2 + 1, Colors.WHITE, false);
+        context.batcher.text(this.label.get(), x + 22, y + (h - font.getHeight()) / 2 + 1, BBSSettings.textColor(), false);
     }
 }

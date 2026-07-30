@@ -6,6 +6,10 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.ITextColoring;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
+import mchorse.bbs_mod.ui.themes.UIThemeMotion;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.function.Consumer;
@@ -16,6 +20,9 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
     public int color = Colors.WHITE;
     public boolean textShadow = true;
     private boolean value;
+
+    private final UITween hoverTween = new UITween();
+    private final UITween valueTween = new UITween();
 
     public UIToggle(IKey label, Consumer<UIToggle> callback)
     {
@@ -28,6 +35,7 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
 
         this.label = label;
         this.value = value;
+        this.valueTween.snap(value ? 1F : 0F);
         this.h(14);
     }
 
@@ -91,9 +99,65 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
     protected void renderSkin(UIContext context)
     {
         FontRenderer font = context.batcher.getFont();
-        String label = font.limitToWidth(this.label.get(), this.area.w - TRACK_W - 6);
+        int radius = BBSSettings.cornerWidget();
+        int labelTrackWidth = radius > 0 ? 28 : TRACK_W;
+        String label = font.limitToWidth(this.label.get(), this.area.w - labelTrackWidth - 6);
 
-        context.batcher.text(label, this.area.x, this.area.my(font.getHeight()), this.color, this.textShadow);
+        /* Colors.WHITE doubles as "follow the theme" for the default text color */
+        int labelColor = this.color == Colors.WHITE ? BBSSettings.textColor() : this.color;
+
+        context.batcher.text(label, this.area.x, this.area.my(font.getHeight()), labelColor, this.textShadow);
+
+        this.hoverTween.to(this.hover ? 1F : 0F, UIMotions.hover());
+
+        float hoverFactor = this.hoverTween.update();
+        UIThemeMotion toggleMotion = UIMotions.toggle();
+
+        this.valueTween.to(this.value ? 1F : 0F, toggleMotion);
+
+        float valueFactor = this.valueTween.update();
+        float visualValue = this.valueTween.isSettled() ? (this.value ? 1F : 0F) : MathUtils.clamp(valueFactor, 0F, 1F);
+        boolean themedToggle = toggleMotion != null && toggleMotion.enabled;
+
+        if (radius > 0)
+        {
+            float trackX = this.area.ex() - 30F;
+            float trackY = this.area.my() - 6F;
+            float trackW = 28F;
+            float trackH = 12F;
+            float trackR = Math.min(radius, trackH * 0.5F);
+            int trackOff = BBSSettings.inputSurface();
+            int trackOn = Colors.A100 | BBSSettings.accentColorRGB();
+            int trackFill = this.valueTween.isSettled() ? (this.value ? trackOn : trackOff) : Colors.lerp(trackOff, trackOn, visualValue);
+            int thumbOff = 0xffc9cdd2;
+            int thumbBase = themedToggle ? Colors.lerp(thumbOff, Colors.WHITE, visualValue) : thumbOff;
+            int thumbColor;
+
+            if (this.hoverTween.isSettled())
+            {
+                thumbColor = this.hover ? Colors.lerp(thumbBase, Colors.WHITE, 0.2F) : thumbBase;
+            }
+            else
+            {
+                thumbColor = Colors.lerp(thumbBase, Colors.lerp(thumbBase, Colors.WHITE, 0.2F), hoverFactor);
+            }
+
+            context.batcher.roundedBox(trackX, trackY, trackW, trackH, trackR, trackFill);
+
+            float pad = 2F;
+            float thumbCx = trackX + pad + 5F + (trackW - 2F * pad - 10F) * visualValue;
+            float thumbCy = this.area.my();
+
+            context.batcher.filledCircle(thumbCx, thumbCy, 5F, thumbColor, 28);
+
+            if (!this.isEnabled())
+            {
+                context.batcher.roundedBox(trackX, trackY, trackW, trackH, trackR, Colors.A50);
+                context.batcher.outlinedIcon(Icons.LOCKED, trackX + trackW * 0.5F, thumbCy, 0.5F, 0.5F);
+            }
+
+            return;
+        }
 
         int my = this.area.my();
         int trackRight = this.area.ex() - 2;
@@ -101,13 +165,26 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
         int trackTop = my + KNOB / 2 - TRACK_H;
         int trackBottom = my + KNOB / 2;
 
-        int trackFill = this.value ? Colors.A100 | BBSSettings.primaryColor.get() : 0xff3a3d41;
+        int trackOff = 0xff3a3d41;
+        int trackOn = Colors.A100 | BBSSettings.accentColorRGB();
+        int trackFill = this.valueTween.isSettled() ? (this.value ? trackOn : trackOff) : Colors.lerp(trackOff, trackOn, visualValue);
 
         context.batcher.bevelBox(trackLeft, trackTop, trackRight, trackBottom, trackFill, false, true);
 
-        int knobLeft = trackLeft + (this.value ? TRACK_W - KNOB : 0);
+        int knobLeft = trackLeft + Math.round((TRACK_W - KNOB) * visualValue);
         int knobTop = my - KNOB / 2;
-        int knobColor = this.hover ? Colors.lerp(0xffc9cdd2, Colors.WHITE, 0.2F) : 0xffc9cdd2;
+        int knobOff = 0xffc9cdd2;
+        int knobBase = themedToggle ? Colors.lerp(knobOff, Colors.WHITE, visualValue) : knobOff;
+        int knobColor;
+
+        if (this.hoverTween.isSettled())
+        {
+            knobColor = this.hover ? Colors.lerp(knobBase, Colors.WHITE, 0.2F) : knobBase;
+        }
+        else
+        {
+            knobColor = Colors.lerp(knobBase, Colors.lerp(knobBase, Colors.WHITE, 0.2F), hoverFactor);
+        }
 
         context.batcher.bevelBox(knobLeft, knobTop, knobLeft + KNOB, knobTop + KNOB, knobColor, true, true);
 

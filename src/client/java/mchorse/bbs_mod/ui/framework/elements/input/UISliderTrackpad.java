@@ -531,19 +531,35 @@ public class UISliderTrackpad extends UIElement
             this.updateHandleArea();
         }
 
-        int primary = BBSSettings.primaryColor.get();
+        int primary = BBSSettings.accentColorRGB();
         int fillX = MathUtils.clamp(this.getHandleCenter(), this.area.x, this.area.ex());
         int fillColor = Colors.setA(primary, this.dragging ? DRAG_VALUE_ALPHA : VALUE_ALPHA);
         int handleColor = this.dragging ? Colors.WHITE : Colors.setA(Colors.WHITE, this.handleArea.isInside(context) ? HANDLE_HOVER_ALPHA : HANDLE_ALPHA);
+        int radius = BBSSettings.cornerWidget();
 
-        this.area.render(context.batcher, BBSSettings.inputSurface());
+        if (radius > 0)
+        {
+            context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.inputSurface());
+        }
+        else
+        {
+            this.area.render(context.batcher, BBSSettings.inputSurface());
+        }
 
         if (this.hasSliderRange())
         {
-            context.batcher.box(this.area.x, this.area.y, fillX, this.area.ey(), fillColor);
-            context.batcher.box(fillX - 1, this.area.y, fillX + 1, this.area.ey(), Colors.setA(primary, MARKER_ALPHA));
-
-            context.batcher.box(this.handleArea.x, this.handleArea.y, this.handleArea.ex(), this.handleArea.ey(), handleColor);
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(this.area.x, this.area.y, fillX - this.area.x, this.area.h, radius, fillColor);
+                context.batcher.roundedBox(fillX - 1, this.area.y, 2, this.area.h, 1F, Colors.setA(primary, MARKER_ALPHA));
+                context.batcher.roundedBox(this.handleArea.x, this.handleArea.y, this.handleArea.w, this.handleArea.h, radius, handleColor);
+            }
+            else
+            {
+                context.batcher.box(this.area.x, this.area.y, fillX, this.area.ey(), fillColor);
+                context.batcher.box(fillX - 1, this.area.y, fillX + 1, this.area.ey(), Colors.setA(primary, MARKER_ALPHA));
+                context.batcher.box(this.handleArea.x, this.handleArea.y, this.handleArea.ex(), this.handleArea.ey(), handleColor);
+            }
         }
 
         FontRenderer font = context.batcher.getFont();

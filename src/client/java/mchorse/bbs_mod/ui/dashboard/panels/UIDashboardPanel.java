@@ -52,6 +52,14 @@ public class UIDashboardPanel extends UIElement
     public void update()
     {}
 
+    public void setDashboardChromeHiddenAmount(float amount)
+    {}
+
+    public boolean isDashboardChromeHovered(int mouseX, int mouseY)
+    {
+        return false;
+    }
+
     public void startRenderFrame(float tickDelta)
     {}
 

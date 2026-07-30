@@ -19,12 +19,17 @@ import mchorse.bbs_mod.particles.events.ParticleEventTimeline;
 import mchorse.bbs_mod.particles.events.ParticleEventTriggerList;
 import mchorse.bbs_mod.particles.events.ParticleLoopingDistanceEvents;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.ui.framework.elements.input.text.utils.Textbox;
+import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.gui.Font;
 import net.minecraft.server.Bootstrap;
 import net.neoforged.fml.loading.LoadingModList;
 import org.joml.Vector3d;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,8 +56,86 @@ public final class ParticleRuntimeConsistencyTest
         testBundledDefaultTexture();
         testExplicitRenderSpaces();
         testOuterWorldDepthSnapshot();
+        testTextboxContentInsetBounds();
 
         System.out.println("ParticleRuntimeConsistencyTest: all tests passed");
+    }
+
+    private static void testTextboxContentInsetBounds()
+    {
+        FontRenderer renderer = new FontRenderer();
+
+        renderer.setRenderer(new HeadlessFont());
+
+        Textbox plain = new Textbox(null);
+
+        plain.area.set(10, 0, 100, 20);
+        plain.setFont(renderer);
+        plain.setText("abcdef");
+        check(textboxIndexAt(plain, 15) == 1, "default textbox hit testing changed");
+
+        Textbox decorated = new Textbox(null);
+
+        decorated.area.set(10, 0, 100, 20);
+        decorated.setFont(renderer);
+        decorated.setContentInset(23);
+        decorated.setText("abcdef");
+        check(textboxIndexAt(decorated, 39) == 2, "textbox content inset was not applied to hit testing");
+
+        decorated.area.w = 12;
+        decorated.setContentInset(40);
+        decorated.setText("abc");
+
+        int left = textboxInt(decorated, "left");
+        int right = textboxInt(decorated, "right");
+
+        check(left >= 0 && left <= right && right <= 3, "narrow decorated textbox produced invalid bounds");
+    }
+
+    private static int textboxInt(Textbox textbox, String name)
+    {
+        try
+        {
+            Field field = Textbox.class.getDeclaredField(name);
+
+            field.setAccessible(true);
+
+            return field.getInt(textbox);
+        }
+        catch (ReflectiveOperationException exception)
+        {
+            throw new AssertionError("Could not inspect textbox " + name, exception);
+        }
+    }
+
+    private static int textboxIndexAt(Textbox textbox, int x)
+    {
+        try
+        {
+            Method method = Textbox.class.getDeclaredMethod("getIndexAt", int.class);
+
+            method.setAccessible(true);
+
+            return (int) method.invoke(textbox, x);
+        }
+        catch (ReflectiveOperationException exception)
+        {
+            throw new AssertionError("Could not inspect textbox hit testing", exception);
+        }
+    }
+
+    private static final class HeadlessFont extends Font
+    {
+        private HeadlessFont()
+        {
+            super((location) -> null, false);
+        }
+
+        @Override
+        public int width(String text)
+        {
+            return text == null ? 0 : text.length();
+        }
     }
 
     private static void bootstrapStandaloneMinecraftRuntime()

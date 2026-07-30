@@ -78,6 +78,11 @@ public final class BBSAddonCollector
         return this.registerInstance(addonId, addon, true, "external");
     }
 
+    synchronized boolean registerExternal(String addonId, BBSAddonMod addon, String source)
+    {
+        return this.registerInstance(addonId, addon, true, source == null || source.isBlank() ? "external" : source);
+    }
+
     /**
      * Lazy public registration. In addition to isolating supplier failures,
      * this keeps a rejected duplicate from constructing or running at all.
@@ -290,6 +295,14 @@ public final class BBSAddonCollector
     public synchronized List<RegistrationDiagnostic> getRegistrationDiagnostics()
     {
         return Collections.unmodifiableList(new ArrayList<>(this.registrationDiagnostics));
+    }
+
+    synchronized void recordExternalDiscoveryFailure(String addonId, String source, Throwable error)
+    {
+        String key = addonId == null || addonId.isBlank() ? "<unknown>" : addonId.trim();
+        String origin = source == null || source.isBlank() ? "external-discovery" : source;
+
+        this.error(key, BBSAddonPhase.DISCOVER, origin, "external addon discovery failed", error);
     }
 
     public synchronized int size()

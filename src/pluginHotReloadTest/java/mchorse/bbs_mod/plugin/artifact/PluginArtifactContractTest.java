@@ -134,11 +134,11 @@ public final class PluginArtifactContractTest
 
         Path structuralCapability = root.resolve("structural-capability.jar");
         writeJar(structuralCapability, codeManifest("1.0.0", "example.ExamplePlugin", null)
-            .replace("[\"events\"]", "[\"forms\"]"), Map.of(
-                "example/ExamplePlugin.class", new byte[] {0}
-            ));
+            .replace("[\"events\"]", "[\"minecraft_registry\"]"), Map.of(
+            "example/ExamplePlugin.class", new byte[] {0}
+        ));
         check(validator.validate(root, structuralCapability).status() == PluginArtifactStatus.RESTART_REQUIRED,
-            "structural manifest capability is restart-only");
+            "unsupported registry capability remains restart-only");
 
         Path unsafeEntry = root.resolve("unsafe-entry.jar");
         writeJar(unsafeEntry, codeManifest("1.0.0", "example.ExamplePlugin", null), Map.of(
@@ -152,6 +152,17 @@ public final class PluginArtifactContractTest
         writeJar(nativeContent, contentManifest(), Map.of("native/example.dll", new byte[] {0}));
         check(validator.validate(root, nativeContent).status() == PluginArtifactStatus.RESTART_REQUIRED,
             "native content artifact is restart-only");
+
+        Path reloadRestart = root.resolve("reload-restart.jar");
+        writeJar(reloadRestart, codeManifest("1.0.0", "example.ExamplePlugin", null)
+            .replace("\"reload\":\"hot\"", "\"reload\":\"restart\""), Map.of(
+            "example/ExamplePlugin.class", new byte[] {0}
+        ));
+        PluginArtifactValidation reloadRestartValidation = validator.validate(root, reloadRestart);
+        check(reloadRestartValidation.status() == PluginArtifactStatus.RESTART_REQUIRED,
+            "manifest reload=restart requires restart even with an otherwise hot-safe plugin");
+        check(reloadRestartValidation.issues().stream().anyMatch((issue) -> issue.code().equals("RELOAD_RESTART")),
+            "manifest reload=restart must report the RELOAD_RESTART diagnostic code");
 
         try
         {

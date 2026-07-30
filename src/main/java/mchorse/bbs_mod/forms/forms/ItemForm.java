@@ -25,4 +25,10 @@ public class ItemForm extends Form
     {
         return BuiltInRegistries.ITEM.getKey(this.stack.get().getItem()).toString();
     }
+
+    @Override
+    public boolean supportsGlint()
+    {
+        return true;
+    }
 }
