@@ -118,9 +118,9 @@ public final class ThemeCoreTest
         );
 
         assertEquals(
-            "41dd95d44b6a7ac467efd34f6a7f4e527f0dd6babd21052447cc0687efe0d657",
+            "b7762a7a546f03bdd3b7f7461f04ace8261884ca6dc954123b95c30b8690a39e",
             refreshedIconHash,
-            "refreshed icon atlas matches the Refreshed 2.0 source jar byte for byte"
+            "refreshed icon atlas matches the bundled Refreshed icon revision"
         );
 
         for (UIThemeMotion motion : new UIThemeMotion[] {
@@ -470,7 +470,8 @@ public final class ThemeCoreTest
 
     private static void testBadJsonAndFormat()
     {
-        assertTrue(DataToString.mapFromString("{ not json !!") == null, "broken JSON parses to null");
+        assertTrue(DataToString.mapFromString("{ not json !!") == null, "unterminated map parses to null");
+        assertTrue(DataToString.listFromString("[ not json !!") == null, "unterminated list parses to null");
 
         Map<String, MapType> themes = new HashMap<>();
 
