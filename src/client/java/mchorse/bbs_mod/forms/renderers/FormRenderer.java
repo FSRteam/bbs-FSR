@@ -29,7 +29,6 @@ import net.minecraft.world.InteractionHand;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -58,7 +57,12 @@ public abstract class FormRenderer <T extends Form>
 
     public List<String> getBones()
     {
-        return Collections.emptyList();
+        return this.getBoneHierarchy().getBoneIds();
+    }
+
+    public BoneHierarchy getBoneHierarchy()
+    {
+        return BoneHierarchy.EMPTY;
     }
 
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)

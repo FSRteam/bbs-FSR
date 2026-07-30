@@ -560,7 +560,7 @@ public class Gizmo
     /**
      * Draw the gizmo's visual over a viewport area in the UI pass, from the
      * model-view captured this frame ({@link #lastRenderMatrix}, set by
-     * {@link #captureVisual} or {@link #renderStencil}).
+     * {@link #captureVisual}).
      *
      * <p>It draws straight onto the main framebuffer through the UI pipeline with
      * the GL viewport set to {@code area} — the same setup the form editor's
@@ -1197,6 +1197,19 @@ public class Gizmo
         }
     }
 
+    /**
+     * Draw the pick IDs from a stack already positioned at the gizmo origin.
+     *
+     * <p>Deliberately does NOT capture {@link #lastRenderMatrix}: the picking pass only runs while
+     * the cursor is inside the preview viewport
+     * ({@link mchorse.bbs_mod.ui.film.controller.UIFilmController#renderStencil}), so capturing here
+     * would make the gizmo's world placement &mdash; and with it every drag that resolves through
+     * {@link #computeWorldOrigin} / {@link #computeWorldAxes} &mdash; depend on where the cursor
+     * happens to be. It re-collects the form's matrices on its own pass, and for a MobForm whose
+     * equipment feature layers take part in the capture that lands on a different bone frame than
+     * the visual pass, which put the drag plane at the wrong depth and blew hotkey translation up.
+     * The visual pass ({@link #captureVisual}) owns placement; this only draws.</p>
+     */
     public void renderStencil(PoseStack stack, StencilMap map)
     {
         if (BBSRendering.isIrisShadowPass())
@@ -1208,7 +1221,6 @@ public class Gizmo
         {
             stack.pushPose();
             MatrixStackUtils.scaleBack(stack);
-            this.captureRenderMatrix(stack);
             this.drawStencilAxes(stack, map);
             stack.popPose();
         }

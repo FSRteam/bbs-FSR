@@ -23,6 +23,8 @@
     "key.bbs.play_film_and_record": "播放影片并录制",
     "key.bbs.teleport": "传送至当前回放",
     "key.bbs.zoom": "瞄准 (BBS 枪)",
+    "bbs.ui.forms.editors.mob.entities": "生物",
+    "bbs.ui.forms.editors.mob.pick_entity": "选取生物...",
     "category.bbs.main": "BBS mod",
 
     "gamerule.bbsEditing": "BBS mod 的编辑权限"

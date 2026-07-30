@@ -220,6 +220,7 @@ public final class BBSUiInputDispatcherTest
         DockPanelDragFailureTest.runAll();
         OrbitFilmGestureOwnershipTest.runAll();
         GizmoInteractionGenerationTest.runAll();
+        PoseFormRegressionSourceTest.runAll();
         BBSUiLifecycleSourceTest.runAll();
         BBSUiOpenDispatcherTest.runAll();
 

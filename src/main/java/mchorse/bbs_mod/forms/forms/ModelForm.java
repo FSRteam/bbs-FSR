@@ -25,7 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ModelForm extends Form
+public class ModelForm extends Form implements PoseForm
 {
     public final ValueLink texture = new ValueLink("texture", null);
     public final ValueLinks materialTextures = new ValueLinks("material_textures");
@@ -95,6 +95,24 @@ public class ModelForm extends Form
         this.add(this.physics);
         this.add(this.constraints);
         this.add(this.pickingOverrides);
+    }
+
+    @Override
+    public ValuePose getPose()
+    {
+        return this.pose;
+    }
+
+    @Override
+    public ValuePose getPoseOverlay()
+    {
+        return this.poseOverlay;
+    }
+
+    @Override
+    public ValueBoolean getBoneTracks()
+    {
+        return this.boneTracks;
     }
 
     @Override

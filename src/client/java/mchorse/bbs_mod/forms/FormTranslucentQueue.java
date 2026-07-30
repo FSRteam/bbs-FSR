@@ -418,24 +418,53 @@ public final class FormTranslucentQueue
         private final RenderType layer;
         private final VertexBuffer buffer;
         private final Matrix4f modelView;
+        private final Runnable prepare;
 
-        public RenderLayerCommand(RenderType layer, VertexBuffer buffer, Matrix4f modelView, Vector3f origin, boolean depthWrite)
+        public RenderLayerCommand(
+            RenderType layer,
+            VertexBuffer buffer,
+            Matrix4f modelView,
+            Vector3f origin,
+            boolean depthWrite,
+            Runnable prepare
+        )
         {
             super(origin, true, depthWrite);
             this.layer = layer;
             this.buffer = buffer;
             this.modelView = modelView;
+            this.prepare = prepare;
         }
 
         @Override
         public void draw()
         {
             layer.setupRenderState();
-            RenderSystem.depthMask(depthWrite);
-            buffer.bind();
-            buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
-            VertexBuffer.unbind();
-            layer.clearRenderState();
+
+            try
+            {
+                RenderSystem.depthMask(depthWrite);
+
+                if (this.prepare != null)
+                {
+                    this.prepare.run();
+                }
+
+                buffer.bind();
+
+                try
+                {
+                    buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
+                }
+                finally
+                {
+                    VertexBuffer.unbind();
+                }
+            }
+            finally
+            {
+                layer.clearRenderState();
+            }
         }
 
         @Override

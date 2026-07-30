@@ -246,7 +246,9 @@ public final class BBSUiLifecycleSourceTest
         String textbox = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextbox.java");
         String textarea = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/text/UITextarea.java");
         String formEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
-        String modelEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIModelForm.java");
+        String poseFormEditor = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIPoseForm.java");
+        String renderLayerMixin = readSource("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
+        String vertexConsumers = readSource("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
         String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
         String modelVao = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/ModelVAO.java");
         String enableMode = sourceSection(transform, "public void enableMode(int mode)", "private HotkeyTarget currentHotkeyTarget");
@@ -379,8 +381,15 @@ public final class BBSUiLifecycleSourceTest
                 && textarea.contains("context.requestCursor(GLFW.GLFW_IBEAM_CURSOR)"),
             "text fields no longer request the I-beam cursor while focused or hovered");
         check(formEditor.contains("this.general.hotkeyDrag(() ->")
-                && modelEditor.contains("this.modelPanel.poseEditor.transform.hotkeyDrag(() ->"),
+                && poseFormEditor.contains("posePanel.poseEditor.transform.hotkeyDrag(() ->"),
             "form/model transform hotkeys cannot reach the view and sphere rotation modes");
+        check(renderLayerMixin.contains("BufferUploader;drawWithShader")
+                && renderLayerMixin.contains("shift = At.Shift.BEFORE")
+                && renderLayerMixin.contains("CustomVertexConsumerProvider.prepareLayer")
+                && vertexConsumers.contains("public static void prepareLayer(RenderType layer)"),
+            "form picking shader can be overwritten by RenderType setup before the buffer draw");
+        check(!mobRenderer.contains("RenderSystem.getModelViewMatrix().identity()"),
+            "MobForm rendering can erase the active camera matrix before later world debug rendering");
         check(bobj.contains("if (this.hasArmatureChanged(matrices))")
                 && bobj.contains("private int[] dominantBones;")
                 && bobj.contains("if (this.pickingPrepared && this.pickingIncrement == stencilMap.increment)"),

@@ -4,8 +4,10 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
-import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.PoseForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -24,6 +26,8 @@ import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
@@ -37,23 +41,33 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         this.poseEditor = new UIPoseFactoryEditor(editor, keyframe);
 
         UIKeyframeSheet sheet = editor.getGraph().getSheet(keyframe);
+        Form form = FormUtils.getForm(sheet.property);
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
-        if (FormUtils.getForm(sheet.property) instanceof ModelForm modelForm)
+        for (Object object : sheet.channel.getKeyframes())
+        {
+            if (object instanceof Keyframe<?> poseKeyframe && poseKeyframe.getValue() instanceof Pose pose && hierarchy.needsMigration(pose))
+            {
+                poseKeyframe.preNotify(IValueListener.FLAG_UNMERGEABLE);
+                hierarchy.migratePose(pose);
+                poseKeyframe.postNotify(IValueListener.FLAG_UNMERGEABLE);
+            }
+        }
+
+        if (form instanceof ModelForm modelForm)
         {
             ModelInstance model = ((ModelFormRenderer) FormUtilsClient.getRenderer(modelForm)).getModel();
 
             if (model != null)
             {
                 this.poseEditor.setPose(keyframe.getValue(), model.getPoseGroup());
-                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones());
+                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones(), hierarchy, false);
             }
         }
-        else if (FormUtils.getForm(sheet.property) instanceof MobForm mobForm)
+        else if (form instanceof PoseForm)
         {
-            List<String> bones = FormUtilsClient.getRenderer(mobForm).getBones();
-
             this.poseEditor.setPose(keyframe.getValue(), "");
-            this.poseEditor.fillGroups(bones, false);
+            this.poseEditor.fillGroups(hierarchy, false, false);
         }
 
         this.scroll.add(this.poseEditor);
@@ -136,6 +150,22 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             });
         }
 
+        public static void applyBones(UIKeyframes editor, Keyframe keyframe, List<String> boneNames, BiConsumer<String, PoseTransform> consumer)
+        {
+            if (boneNames == null || boneNames.isEmpty())
+            {
+                return;
+            }
+
+            apply(editor, keyframe, (pose) ->
+            {
+                for (String bone : boneNames)
+                {
+                    consumer.accept(bone, pose.get(bone));
+                }
+            });
+        }
+
         public UIPoseFactoryEditor(UIKeyframes editor, Keyframe<Pose> keyframe)
         {
             super();
@@ -206,15 +236,27 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
 
         @Override
+        protected boolean supportsMirror()
+        {
+            return true;
+        }
+
+        @Override
         protected void applyToSelection(Consumer<Transform> consumer)
         {
-            UIPoseFactoryEditor.apply(this.editor.editor, this.editor.keyframe, this.editor.groups.list.getCurrent(), (transform) -> consumer.accept(transform));
+            Map<String, UIPoseEditor.BoneEdit> targets = this.editor.resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert());
+
+            UIPoseFactoryEditor.applyBones(this.editor.editor, this.editor.keyframe, new ArrayList<>(targets.keySet()),
+                (bone, poseT) -> this.editor.applyToBone(targets.get(bone), poseT, consumer));
         }
 
         @Override
         protected void applyDuringRecording(int tick, Consumer<Transform> consumer)
         {
-            applyRecording(this.editor.editor, this.editor.keyframe, tick, this.editor.groups.list.getCurrent(), (transform) -> consumer.accept(transform));
+            Map<String, UIPoseEditor.BoneEdit> targets = this.editor.resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert());
+
+            applyRecordingBones(this.editor.editor, this.editor.keyframe, tick, new ArrayList<>(targets.keySet()),
+                (bone, poseT) -> this.editor.applyToBone(targets.get(bone), poseT, consumer));
         }
 
         @Override
@@ -242,12 +284,32 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
             {
                 Pose pose = (Pose) recorded.getValue();
-
                 recorded.preNotify();
 
                 for (String bone : bones)
                 {
                     consumer.accept(pose.get(bone));
+                }
+
+                recorded.postNotify();
+            });
+        }
+
+        public static void applyRecordingBones(UIKeyframes editor, Keyframe keyframe, int tick, List<String> bones, BiConsumer<String, PoseTransform> consumer)
+        {
+            if (bones == null || bones.isEmpty())
+            {
+                return;
+            }
+
+            UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
+            {
+                Pose pose = (Pose) recorded.getValue();
+                recorded.preNotify();
+
+                for (String bone : bones)
+                {
+                    consumer.accept(bone, pose.get(bone));
                 }
 
                 recorded.postNotify();

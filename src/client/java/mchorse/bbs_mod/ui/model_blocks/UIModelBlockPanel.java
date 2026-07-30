@@ -67,6 +67,7 @@ import org.joml.Vector3f;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSupported, GizmoViewport
 {
@@ -338,10 +339,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
                 pos.getZ() + 0.5F + transform.translate.z
             )
         ));
-        drag.setRotateAxes(GizmoDrag.computeRotateAxes(
-            transform,
-            () -> MatrixStackUtils.stripScale(new Matrix4f(transform.createMatrix()))
-        ));
+        Supplier<Matrix4f> rotationSampler = () -> MatrixStackUtils.stripScale(new Matrix4f(transform.createMatrix()));
+
+        drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform, rotationSampler));
+        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform, true, rotationSampler));
+        drag.setRotationParents(transform, null, rotationSampler);
 
         return drag;
     }

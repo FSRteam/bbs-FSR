@@ -64,7 +64,6 @@ import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -251,19 +250,38 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     }
 
     @Override
-    public List<String> getBones()
+    public BoneHierarchy getBoneHierarchy()
     {
         ModelInstance model = this.getModel();
 
         if (model == null)
         {
-            return Collections.emptyList();
+            return BoneHierarchy.EMPTY;
         }
 
-        List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-        bones.removeIf((bone) -> PoseBones.isHidden(model.getDisabledBones(), bone));
+        List<BoneHierarchy.Bone> bones = new ArrayList<>();
 
-        return bones;
+        for (String bone : model.model.getGroupKeysInHierarchyOrder())
+        {
+            if (PoseBones.isHidden(model.getDisabledBones(), bone))
+            {
+                continue;
+            }
+
+            String parent = model.model.getParentGroupKey(bone);
+            int depth = 0;
+            String current = parent;
+
+            while (current != null && !current.isEmpty())
+            {
+                depth++;
+                current = model.model.getParentGroupKey(current);
+            }
+
+            bones.add(new BoneHierarchy.Bone(bone, bone, parent, depth, ""));
+        }
+
+        return new BoneHierarchy(bones);
     }
 
     @Override

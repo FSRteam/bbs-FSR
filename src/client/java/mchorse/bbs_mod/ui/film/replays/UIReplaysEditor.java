@@ -24,6 +24,7 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -32,6 +33,7 @@ import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
+import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.L10n;
@@ -273,7 +275,19 @@ public class UIReplaysEditor extends UIElement {
 
     /** The key a sheet is identified by in track filters (global and per-form). */
     public static String getSheetFilterKey(UIKeyframeSheet sheet) {
-        return sheet.isBoneTrack ? sheet.title.get() : StringUtils.fileName(sheet.id);
+        if (sheet.isBoneTrack)
+        {
+            PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(sheet.id);
+
+            if (path != null)
+            {
+                return path.formPath().isEmpty() ? path.bone() : path.formPath() + "/" + path.bone();
+            }
+
+            return sheet.title.get();
+        }
+
+        return StringUtils.fileName(sheet.id);
     }
 
     /** The form a sheet belongs to, whether it backs a form property or carries its owner directly (bones, materials, IK). */
@@ -628,9 +642,15 @@ public class UIReplaysEditor extends UIElement {
         this.collectPhysicsSheets(sheets);
 
         this.keys.clear();
+        Map<String, Integer> keyToColor = new HashMap<>();
+        Map<String, String> keyToLabel = new HashMap<>();
 
         for (UIKeyframeSheet sheet : sheets) {
-            this.keys.add(getSheetFilterKey(sheet));
+            String filterKey = getSheetFilterKey(sheet);
+
+            this.keys.add(filterKey);
+            keyToColor.put(filterKey, sheet.color);
+            keyToLabel.put(filterKey, sheet.title.get());
         }
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
@@ -654,10 +674,20 @@ public class UIReplaysEditor extends UIElement {
             return false;
         });
 
+        Set<UIKeyframeSheet> kept = new LinkedHashSet<>(sheets);
+
+        poseTabs.entrySet().removeIf((entry) ->
+        {
+            entry.getValue().removeIf((child) -> !kept.contains(child));
+
+            return !kept.contains(entry.getKey()) || entry.getValue().isEmpty();
+        });
+        poseTabDepths.keySet().retainAll(kept);
+
         Form lastForm = null;
 
         for (UIKeyframeSheet sheet : sheets) {
-            Form form = sheet.property == null ? null : FormUtils.getForm(sheet.property);
+            Form form = getSheetForm(sheet);
 
             if (!Objects.equals(lastForm, form)) {
                 sheet.separator = true;
@@ -698,10 +728,10 @@ public class UIReplaysEditor extends UIElement {
                     return;
                 }
 
-                if (replayForEditor.form.get() instanceof ModelForm modelForm) {
-                    int mouseY = this.getContext().mouseY;
-                    UIKeyframeSheet sheet = view.getGraph().getSheet(mouseY);
+                int mouseY = this.getContext().mouseY;
+                UIKeyframeSheet sheet = view.getGraph().getSheet(mouseY);
 
+                if (replayForEditor.form.get() instanceof ModelForm modelForm) {
                     if (sheet != null
                             && sheet.channel.getFactory() == KeyframeFactories.POSE
                             && sheet.id.equals("pose")) {
@@ -742,30 +772,6 @@ public class UIReplaysEditor extends UIElement {
                         });
                     }
 
-                    boolean isPoseTrack
-                            = sheet != null
-                            && sheet.channel.getFactory() == KeyframeFactories.POSE
-                            && (sheet.id.equals("pose")
-                            || sheet.id.endsWith(FormUtils.PATH_SEPARATOR + "pose"))
-                            && !sheet.id.contains("pose_overlay");
-
-                    Form sheetForm = sheet != null && sheet.property != null ? FormUtils.getForm(sheet.property) : null;
-                    boolean limbTracksOn = sheetForm instanceof ModelForm m && m.boneTracks.get();
-
-                    if (isPoseTrack && sheet.selection.hasAny() && limbTracksOn) {
-                        ModelForm poseModelForm = sheetForm instanceof ModelForm m ? m : modelForm;
-                        menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () -> {
-                            if (this.keyframeEditor != editor || this.replay != replayForEditor) {
-                                return;
-                            }
-
-                            UIReplaysEditorUtils.posesToLimbTracks(replayForEditor, sheet, poseModelForm);
-
-                            sheet.selection.removeSelected();
-                            this.updateChannelsList();
-                        });
-                    }
-
                     List<String> controllers = ModelIKRuntime.getControllers(ModelFormRenderer.getModel(modelForm));
 
                     if (!controllers.isEmpty()) {
@@ -780,6 +786,29 @@ public class UIReplaysEditor extends UIElement {
                     }
                 }
 
+                boolean isPoseTrack
+                        = sheet != null
+                        && sheet.channel.getFactory() == KeyframeFactories.POSE
+                        && (sheet.id.equals("pose")
+                        || sheet.id.endsWith(FormUtils.PATH_SEPARATOR + "pose"))
+                        && !sheet.id.contains("pose_overlay");
+
+                Form sheetForm = sheet == null ? null : getSheetForm(sheet);
+                boolean limbTracksOn = sheetForm instanceof PoseForm poseForm && poseForm.getBoneTracks().get();
+
+                if (isPoseTrack && sheet.selection.hasAny() && limbTracksOn) {
+                    menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () -> {
+                        if (this.keyframeEditor != editor || this.replay != replayForEditor) {
+                            return;
+                        }
+
+                        UIReplaysEditorUtils.posesToLimbTracks(replayForEditor, sheet);
+
+                        sheet.selection.removeSelected();
+                        this.updateChannelsList();
+                    });
+                }
+
                 if (view.getGraph() instanceof UIKeyframeDopeSheet) {
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () -> {
                         if (this.keyframeEditor != editor || this.replay != replayForEditor || replayForEditor == null) {
@@ -787,14 +816,11 @@ public class UIReplaysEditor extends UIElement {
                         }
 
                         Set<String> disabledSet = BBSSettings.disabledSheets.get();
-                        Map<String, Integer> keyToColor = new HashMap<>();
-                        for (UIKeyframeSheet sheet : view.getGraph().getSheets()) {
-                            keyToColor.put(getSheetFilterKey(sheet), sheet.color);
-                        }
                         UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(
                                 disabledSet,
                                 this.keys,
-                                keyToColor
+                                keyToColor,
+                                keyToLabel
                         );
 
                         UIOverlay.addOverlay(this.getContext(), panel, 240, 0.9F);
@@ -1138,10 +1164,10 @@ public class UIReplaysEditor extends UIElement {
         }
 
         if ((this.showAllTracks() || this.category == ReplayCategory.POSE)
-                && form instanceof ModelForm modelForm) {
+                && form instanceof PoseForm) {
             List<UIKeyframeSheet> boneSheets = new ArrayList<>();
             Map<String, Integer> depthBySheetId = new HashMap<>();
-            UIReplaysEditorUtils.addBoneTrackSheets(modelForm, this.replay.properties, boneSheets, depthBySheetId);
+            UIReplaysEditorUtils.addBoneTrackSheets(form, this.replay.properties, boneSheets, depthBySheetId);
 
             for (UIKeyframeSheet boneSheet : boneSheets)
             {
@@ -1241,7 +1267,7 @@ public class UIReplaysEditor extends UIElement {
      * in the graph, so no switch is forced.
      */
     private void pickFormBone(Form form, String bone, boolean insert) {
-        if (form instanceof ModelForm && bone != null && !bone.isEmpty() && !this.showAllTracks() && this.category != ReplayCategory.POSE) {
+        if (form instanceof PoseForm && bone != null && !bone.isEmpty() && !this.showAllTracks() && this.category != ReplayCategory.POSE) {
             this.setCategory(ReplayCategory.POSE);
         }
 

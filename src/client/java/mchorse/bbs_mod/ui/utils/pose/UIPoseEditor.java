@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.utils.pose;
 
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -10,6 +11,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.UIDeltaPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -28,6 +30,8 @@ import mchorse.bbs_mod.utils.pose.Transform;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -51,8 +55,7 @@ public class UIPoseEditor extends UIElement
     private Pose pose;
     protected IModel model;
     protected Map<String, String> flippedParts;
-
-    private int suppressPoseSync;
+    private BoneHierarchy hierarchy = BoneHierarchy.EMPTY;
 
     public UIPoseEditor()
     {
@@ -163,19 +166,26 @@ public class UIPoseEditor extends UIElement
 
     private void applyChildren(Consumer<PoseTransform> consumer)
     {
-        if (this.model == null)
-        {
-            return;
-        }
+        LinkedHashSet<String> children = new LinkedHashSet<>();
 
         for (String bone : this.groups.list.getCurrent())
         {
-            Collection<String> keys = this.model.getAllChildrenKeys(bone);
-
-            for (String key : keys)
+            if (this.model != null)
             {
-                consumer.accept(this.pose.get(key));
+                children.addAll(this.model.getAllChildrenKeys(bone));
             }
+            else
+            {
+                for (BoneHierarchy.Bone child : this.hierarchy.getDescendants(bone))
+                {
+                    children.add(child.id());
+                }
+            }
+        }
+
+        for (String child : children)
+        {
+            consumer.accept(this.pose.get(child));
         }
     }
 
@@ -190,16 +200,6 @@ public class UIPoseEditor extends UIElement
     public String getGroup()
     {
         return this.groups.list.getCurrentFirst();
-    }
-
-    private void beginSuppressPoseSync()
-    {
-        this.suppressPoseSync++;
-    }
-
-    private void endSuppressPoseSync()
-    {
-        this.suppressPoseSync--;
     }
 
     protected void pastePose(MapType data)
@@ -231,8 +231,23 @@ public class UIPoseEditor extends UIElement
     {
         this.model = null;
         this.flippedParts = null;
+        this.hierarchy = BoneHierarchy.EMPTY;
 
         this.fillInGroups(groups, reset, true);
+    }
+
+    public void fillGroups(BoneHierarchy hierarchy, boolean reset)
+    {
+        this.fillGroups(hierarchy, reset, false);
+    }
+
+    public void fillGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
+    {
+        this.model = null;
+        this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
+        this.flippedParts = this.createHierarchyFlipMap(this.hierarchy);
+
+        this.fillInGroups(this.hierarchy, reset, hierarchicalLabels);
     }
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset)
@@ -242,8 +257,32 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones)
     {
+        this.fillGroups(model, flippedParts, reset, disabledBones, null);
+    }
+
+    public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones, BoneHierarchy hierarchy)
+    {
+        this.fillGroups(model, flippedParts, reset, disabledBones, hierarchy, false);
+    }
+
+    public void fillGroups(
+        IModel model,
+        Map<String, String> flippedParts,
+        boolean reset,
+        Collection<String> disabledBones,
+        BoneHierarchy hierarchy,
+        boolean hierarchicalLabels
+    )
+    {
         this.model = model;
         this.flippedParts = flippedParts;
+        this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
+
+        if (!this.hierarchy.getBones().isEmpty())
+        {
+            this.fillInGroups(this.hierarchy, reset, hierarchicalLabels);
+            return;
+        }
 
         if (model == null)
         {
@@ -255,6 +294,60 @@ public class UIPoseEditor extends UIElement
 
         bones.removeIf((bone) -> PoseBones.isHidden(disabledBones, bone));
         this.fillInGroups(bones, reset, false);
+    }
+
+    private void fillInGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
+    {
+        this.groups.setSource(hierarchy.getBoneIds(), hierarchy.getLabels(hierarchicalLabels), false);
+        this.groups.filter(reset);
+    }
+
+    private Map<String, String> createHierarchyFlipMap(BoneHierarchy hierarchy)
+    {
+        Map<String, String> idsByPath = new LinkedHashMap<>();
+        Map<String, String> flipped = new LinkedHashMap<>();
+        LinkedHashSet<String> paired = new LinkedHashSet<>();
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            idsByPath.put(this.hierarchyPathKey(hierarchy, bone, false), bone.id());
+        }
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            String path = this.hierarchyPathKey(hierarchy, bone, false);
+            String mirroredPath = this.hierarchyPathKey(hierarchy, bone, true);
+            String partner = idsByPath.get(mirroredPath);
+
+            if (
+                !path.equals(mirroredPath)
+                    && partner != null
+                    && !partner.equals(bone.id())
+                    && !paired.contains(bone.id())
+                    && !paired.contains(partner)
+            )
+            {
+                flipped.put(bone.id(), partner);
+                paired.add(bone.id());
+                paired.add(partner);
+            }
+        }
+
+        return flipped;
+    }
+
+    private String hierarchyPathKey(BoneHierarchy hierarchy, BoneHierarchy.Bone bone, boolean mirror)
+    {
+        StringBuilder key = new StringBuilder(bone.layerId());
+
+        for (BoneHierarchy.Bone ancestor : hierarchy.getAncestors(bone.id()))
+        {
+            String name = mirror ? Pose.getMirrorName(ancestor.name()) : ancestor.name();
+
+            key.append('\u0000').append(name.length()).append(':').append(name);
+        }
+
+        return key.toString();
     }
 
     private void fillInGroups(Collection<String> groups, boolean reset, boolean sort)
@@ -278,6 +371,7 @@ public class UIPoseEditor extends UIElement
         this.glintColor.setVisible(hasBones);
         this.glintSpeed.setVisible(hasBones);
         this.glintSection.setVisible(hasBones);
+        this.lighting.setVisible(hasBones);
         this.transform.setVisible(hasBones);
 
         List<String> list = this.groups.list.getList();
@@ -348,74 +442,71 @@ public class UIPoseEditor extends UIElement
 
     protected UIPropTransform createTransformEditor()
     {
-        return new UIPosePropTransform(this::syncPoseTransformToSelection, true);
+        return new UIPosePropTransform();
     }
 
     protected UIPropTransform createGlintTransformEditor()
     {
-        return new UIPosePropTransform(this::syncGlintTransformToSelection, false);
+        return new UIGlintPropTransform();
     }
 
-    /**
-     * Applies transform edits from the primary bone to the rest of the multi-selection.
-     */
-    private class UIPosePropTransform extends UIPropTransform
+    /** Applies each channel edit as a delta so selected bones retain their relative poses. */
+    private class UIPosePropTransform extends UIDeltaPropTransform
     {
-        private final Runnable sync;
-
-        UIPosePropTransform(Runnable sync, boolean hotkeys)
+        UIPosePropTransform()
         {
-            this.sync = sync;
+            this.enableHotkeys();
+        }
 
-            if (hotkeys)
+        @Override
+        protected boolean supportsMirror()
+        {
+            return true;
+        }
+
+        @Override
+        protected void applyToSelection(Consumer<Transform> consumer)
+        {
+            for (Map.Entry<String, BoneEdit> target : UIPoseEditor.this.resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert()).entrySet())
             {
-                this.enableHotkeys();
+                UIPoseEditor.this.applyToBone(target.getValue(), UIPoseEditor.this.pose.get(target.getKey()), consumer);
             }
         }
 
         @Override
-        public void rejectChanges()
+        protected void reset()
         {
-            UIPoseEditor.this.beginSuppressPoseSync();
-
-            try
+            this.preCallback();
+            this.applyToTarget((transform) ->
             {
-                super.rejectChanges();
-            }
-            finally
-            {
-                UIPoseEditor.this.endSuppressPoseSync();
-            }
+                transform.translate.set(0F, 0F, 0F);
+                transform.scale.set(1F, 1F, 1F);
+                transform.rotate.set(0F, 0F, 0F);
+                transform.rotate2.set(0F, 0F, 0F);
+            });
+            this.postCallback();
 
-            this.sync.run();
-        }
-
-        @Override
-        public void setT(Axis axis, double x, double y, double z)
-        {
-            super.setT(axis, x, y, z);
-            this.sync.run();
-        }
-
-        @Override
-        public void setS(Axis axis, double x, double y, double z)
-        {
-            super.setS(axis, x, y, z);
-            this.sync.run();
-        }
-
-        @Override
-        public void setR(Axis axis, double x, double y, double z)
-        {
-            super.setR(axis, x, y, z);
-            this.sync.run();
+            this.syncTargetTransform();
         }
 
         @Override
         public void setR2(Axis axis, double x, double y, double z)
         {
             super.setR2(axis, x, y, z);
-            this.sync.run();
+            this.syncTargetTransform();
+        }
+    }
+
+    /** Keeps glint-space edits separate from the bone's ordinary pose transform. */
+    private class UIGlintPropTransform extends UIDeltaPropTransform
+    {
+        @Override
+        protected void applyToSelection(Consumer<Transform> consumer)
+        {
+            for (String bone : new ArrayList<>(UIPoseEditor.this.groups.list.getCurrent()))
+            {
+                consumer.accept(UIPoseEditor.this.pose.get(bone).glintTransform);
+            }
         }
     }
 
@@ -463,65 +554,124 @@ public class UIPoseEditor extends UIElement
         this.transform.setTransform(poseTransform);
     }
 
-    private void syncPoseTransformToSelection()
+    public Map<String, BoneEdit> resolveBoneEdits(boolean mirror, boolean invert)
     {
-        if (this.suppressPoseSync > 0)
+        Map<String, BoneEdit> edits = new LinkedHashMap<>();
+        List<String> selected = this.groups.list.getCurrent();
+
+        for (int i = 0; i < selected.size(); i++)
         {
-            return;
+            edits.put(selected.get(i), new BoneEdit(false, invert && i % 2 == 1));
         }
 
-        List<String> bones = this.groups.list.getCurrent();
-
-        if (bones.size() <= 1)
+        if (mirror)
         {
-            return;
-        }
-
-        if (!(this.transform.getTransform() instanceof PoseTransform primary))
-        {
-            return;
-        }
-
-        for (String bone : bones)
-        {
-            PoseTransform pt = this.pose.get(bone);
-
-            if (pt != primary)
+            for (String bone : new ArrayList<>(edits.keySet()))
             {
-                pt.copy(primary);
+                String partner = this.mirrorPartner(bone);
+
+                if (partner != null && !edits.containsKey(partner))
+                {
+                    edits.put(partner, new BoneEdit(true, false));
+                }
+            }
+        }
+
+        return edits;
+    }
+
+    private String mirrorPartner(String bone)
+    {
+        String partner = null;
+
+        if (this.flippedParts != null && !this.flippedParts.isEmpty())
+        {
+            partner = this.flippedParts.get(bone);
+
+            if (partner == null)
+            {
+                for (Map.Entry<String, String> entry : this.flippedParts.entrySet())
+                {
+                    if (bone.equals(entry.getValue()))
+                    {
+                        partner = entry.getKey();
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (partner == null)
+        {
+            String mirrored = Pose.getMirrorName(bone);
+
+            partner = mirrored.equals(bone) ? null : mirrored;
+        }
+
+        return partner != null && this.groups.list.getList().contains(partner) ? partner : null;
+    }
+
+    public void applyToBone(BoneEdit edit, PoseTransform transform, Consumer<Transform> consumer)
+    {
+        if (edit.mirror)
+        {
+            mirrorTransform(transform);
+        }
+
+        if (edit.invert)
+        {
+            negateRotation(transform);
+        }
+
+        try
+        {
+            consumer.accept(transform);
+        }
+        finally
+        {
+            if (edit.invert)
+            {
+                negateRotation(transform);
+            }
+
+            if (edit.mirror)
+            {
+                mirrorTransform(transform);
             }
         }
     }
 
-    private void syncGlintTransformToSelection()
+    private static void mirrorTransform(Transform transform)
     {
-        if (this.suppressPoseSync > 0)
+        transform.translate.mul(-1F, 1F, 1F);
+        transform.rotate.mul(1F, -1F, -1F);
+        transform.rotate2.mul(1F, -1F, -1F);
+    }
+
+    private static void negateRotation(Transform transform)
+    {
+        transform.rotate.mul(-1F, -1F, -1F);
+        transform.rotate2.mul(-1F, -1F, -1F);
+    }
+
+    public static class BoneEdit
+    {
+        public final boolean mirror;
+        public final boolean invert;
+
+        public BoneEdit(boolean mirror, boolean invert)
         {
-            return;
-        }
-
-        List<String> bones = this.groups.list.getCurrent();
-        Transform primary = this.glintTransform.getTransform();
-
-        if (bones.size() <= 1 || primary == null)
-        {
-            return;
-        }
-
-        for (String bone : bones)
-        {
-            Transform target = this.pose.get(bone).glintTransform;
-
-            if (target != primary)
-            {
-                target.copy(primary);
-            }
+            this.mirror = mirror;
+            this.invert = invert;
         }
     }
 
     private void forEachSelectedPose(Consumer<PoseTransform> consumer)
     {
-        for (String bone : this.groups.list.getCurrent())
+        List<String> selected = new ArrayList<>(this.groups.list.getCurrent());
+
+        for (String bone : selected)
         {
             consumer.accept(this.pose.get(bone));
         }

@@ -33,4 +33,17 @@ public class RenderLayerMixin
             info.cancel();
         }
     }
+
+    @Inject(
+        method = "draw",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/vertex/BufferUploader;drawWithShader(Lcom/mojang/blaze3d/vertex/MeshData;)V",
+            shift = At.Shift.BEFORE
+        )
+    )
+    private void bbs$prepareDraw(MeshData meshData, CallbackInfo info)
+    {
+        CustomVertexConsumerProvider.prepareLayer((RenderType) (Object) this);
+    }
 }
