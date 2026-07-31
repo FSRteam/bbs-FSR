@@ -10,6 +10,7 @@ import mchorse.bbs_mod.cubic.ik.IKControls;
 import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
 import mchorse.bbs_mod.cubic.ik.ModelIKIO;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
@@ -121,6 +122,44 @@ public class UIReplaysEditorUtils
     public static void addBoneTrackSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out)
     {
         addBoneTrackSheets(form, properties, out, null);
+    }
+
+    /** One per-form track whose value contains the four glint fields for every bone. */
+    public static void addGlintControlSheet(Form form, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        if (!(form instanceof PoseForm poseForm))
+        {
+            return;
+        }
+
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
+
+        if (hierarchy.getBones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(form);
+        String id = FormControlKeys.toGlintControlKey(path);
+        IKey title = path.isEmpty()
+            ? UIKeys.POSE_CONTEXT_GLINT_LAYER
+            : IKey.constant(path + "/" + UIKeys.POSE_CONTEXT_GLINT_LAYER.get());
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.GLINT);
+
+        out.add(new UIKeyframeSheet(id, title, Colors.MAGENTA, false, channel, null)
+            .icon(Icons.LIGHT).form(form).seed(() -> buildGlintControls(poseForm, hierarchy)));
+    }
+
+    private static GlintControls buildGlintControls(PoseForm form, BoneHierarchy hierarchy)
+    {
+        GlintControls controls = new GlintControls();
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            controls.get(bone.id()).copy(form.getPose().get().get(bone.id()));
+        }
+
+        return controls;
     }
 
     public static void addBoneTrackSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out, Map<String, Integer> depthBySheetId)
@@ -640,6 +679,7 @@ public class UIReplaysEditorUtils
             addPoleTargetSheets(modelForm, properties, sheets);
         }
 
+        addGlintControlSheet(form, properties, sheets);
         addBoneTrackSheets(form, properties, sheets);
 
         return sheets;

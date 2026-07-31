@@ -944,6 +944,7 @@ public class UIKeys
     public static final IKey POSE_CONTEXT_GLINT_SPEED = L10n.lang("bbs.ui.pose.context.glint-speed");
     public static final IKey POSE_CONTEXT_GLINT_SPEED_TOOLTIP = L10n.lang("bbs.ui.pose.context.glint-speed-tooltip");
     public static final IKey POSE_CONTEXT_GLINT_TRANSFORM = L10n.lang("bbs.ui.pose.context.glint-transform");
+    public static final IKey POSE_CONTEXT_GLINT_LAYER = L10n.lang("bbs.ui.pose.context.glint-layer");
     public static final IKey FORMS_EDITORS_GENERAL_GLINT_TOOLTIP = L10n.lang("bbs.ui.forms.editors.general.glint-tooltip");
     public static final IKey POSE_CONTEXT_FLIP_POSE = L10n.lang("bbs.ui.pose.context.flip_pose");
     public static final IKey POSE_CONTEXT_NAME = L10n.lang("bbs.ui.pose.context.name");

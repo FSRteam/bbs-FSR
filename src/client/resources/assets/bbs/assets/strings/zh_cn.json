@@ -1176,6 +1176,7 @@
     "bbs.ui.pose.context.glint-speed": "附魔速度",
     "bbs.ui.pose.context.glint-speed-tooltip": "附魔光效在骨骼上流动的速度。负值反向流动，为零则静止",
     "bbs.ui.pose.context.glint-transform": "附魔层变换",
+    "bbs.ui.pose.context.glint-layer": "附魔层",
     "bbs.ui.pose.context.flip_pose": "翻转姿势",
     "bbs.ui.pose.context.name": "名称...",
     "bbs.ui.pose.context.paste": "粘贴姿势",

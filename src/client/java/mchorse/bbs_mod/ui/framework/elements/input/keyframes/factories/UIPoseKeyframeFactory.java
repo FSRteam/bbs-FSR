@@ -84,8 +84,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 UI.row(
                     UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
                     UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
-                ),
-                this.poseEditor.glintSection
+                )
             );
         }
         else
@@ -95,8 +94,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 this.poseEditor.groups,
                 UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix),
                 UI.row(this.poseEditor.color, this.poseEditor.lighting),
-                this.poseEditor.transform,
-                this.poseEditor.glintSection
+                this.poseEditor.transform
             );
         }
 

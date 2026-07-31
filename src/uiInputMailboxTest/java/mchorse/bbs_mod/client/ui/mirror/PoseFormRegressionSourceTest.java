@@ -19,6 +19,10 @@ public final class PoseFormRegressionSourceTest
     private static final String GIZMO_DRAG = "src/client/java/mchorse/bbs_mod/ui/utils/GizmoDrag.java";
     private static final String PROP_TRANSFORM = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java";
     private static final String POSE_KEYFRAME = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseKeyframeFactory.java";
+    private static final String GLINT_KEYFRAME = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIGlintKeyframeFactory.java";
+    private static final String GENERAL_FORM_PANEL = "src/client/java/mchorse/bbs_mod/ui/forms/editors/panels/UIGeneralFormPanel.java";
+    private static final String FORM = "src/main/java/mchorse/bbs_mod/forms/forms/Form.java";
+    private static final String FORM_PROPERTIES = "src/main/java/mchorse/bbs_mod/film/replays/FormProperties.java";
     private static final String FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/UIFormEditor.java";
     private static final String MOB_FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIMobForm.java";
     private static final String STATE_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/states/keyframes/UIAnimationStateEditor.java";
@@ -41,6 +45,10 @@ public final class PoseFormRegressionSourceTest
         String gizmoDrag = read(root.resolve(GIZMO_DRAG));
         String propTransform = read(root.resolve(PROP_TRANSFORM));
         String poseKeyframe = read(root.resolve(POSE_KEYFRAME));
+        String glintKeyframe = read(root.resolve(GLINT_KEYFRAME));
+        String generalFormPanel = read(root.resolve(GENERAL_FORM_PANEL));
+        String form = read(root.resolve(FORM));
+        String formProperties = read(root.resolve(FORM_PROPERTIES));
         String formEditor = read(root.resolve(FORM_EDITOR));
         String mobFormEditor = read(root.resolve(MOB_FORM_EDITOR));
         String stateEditor = read(root.resolve(STATE_EDITOR));
@@ -55,6 +63,7 @@ public final class PoseFormRegressionSourceTest
         filmBoneConsumersShareOnePlacementSample(filmBase, filmEditor);
         mirrorEditingUsesSelectionDeltas(editor);
         filmPoseEditingUsesSelectionDeltas(poseKeyframe);
+        glintUsesDedicatedKeyframeTrack(editor, poseKeyframe, glintKeyframe, generalFormPanel, form, formProperties, filmEditor, stateEditor);
         deferredLayersCapturePreparation(provider, queue);
         matrixSamplingPreservesFeaturePreparation(renderer);
         translationSamplingUsesLivePose(gizmoDrag, propTransform);
@@ -205,6 +214,43 @@ public final class PoseFormRegressionSourceTest
             "film pose tracks no longer apply per-bone mirror semantics");
         check(transform.contains("applyRecordingBones"),
             "film pose mirror edits no longer support transform recording");
+    }
+
+    private static void glintUsesDedicatedKeyframeTrack(
+        String poseEditor,
+        String poseKeyframe,
+        String glintKeyframe,
+        String generalFormPanel,
+        String form,
+        String formProperties,
+        String filmEditor,
+        String stateEditor
+    )
+    {
+        String poseLayout = section(poseKeyframe, "public void resize()", "public static class UIPoseFactoryEditor");
+
+        check(!poseLayout.contains("glintSection"),
+            "the pose keyframe panel still mounts the enchantment-layer controls");
+        check(generalFormPanel.contains("this.glintSection.setExpanded(false)"),
+            "the form editor's enchantment layer is not collapsed by default");
+        check(poseEditor.contains("this.glintSection.setExpanded(false)"),
+            "the per-bone form editor's enchantment layer is not collapsed by default");
+        check(form.contains("this.glintMode.invisible()")
+                && form.contains("this.glintColor.invisible()")
+                && form.contains("this.glintSpeed.invisible()")
+                && form.contains("this.glintTransform.invisible()"),
+            "the four low-level form glint properties are still exposed as separate timeline tracks");
+        check(glintKeyframe.contains("class UIGlintKeyframeFactory")
+                && glintKeyframe.contains("UIKeys.POSE_CONTEXT_GLINT_LAYER")
+                && glintKeyframe.contains("GlintControls"),
+            "the dedicated enchantment-layer keyframe editor is missing");
+        check(formProperties.contains("for (KeyframeChannel value : glintChannels)")
+                && formProperties.contains("entry.getValue().apply(pose.get().get(entry.getKey()))"),
+            "the dedicated enchantment layer no longer overlays the evaluated pose");
+        check(filmEditor.contains("addGlintControlSheet(form, properties, sheets)"),
+            "the Film editor no longer contributes the enchantment-layer sheet");
+        check(stateEditor.contains("addGlintControlSheet(form, this.state.properties, orderedFormSheets)"),
+            "animation states no longer contribute the enchantment-layer sheet");
     }
 
     private static void matrixSamplingPreservesFeaturePreparation(String source)

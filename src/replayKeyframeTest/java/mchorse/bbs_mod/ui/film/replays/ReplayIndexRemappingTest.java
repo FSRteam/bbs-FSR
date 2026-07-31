@@ -8,6 +8,7 @@ import mchorse.bbs_mod.actions.types.EntityInteractionActionClip;
 import mchorse.bbs_mod.actions.values.ActionTarget;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
+import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
@@ -61,6 +62,7 @@ public final class ReplayIndexRemappingTest
             testGroupedSoundChannelsPreserveLegacyFallback();
             testGroupedSoundLoopIntervalLifecycle();
             testBbsVolumeFieldsHaveNoFiniteUpperLimit();
+            testGlintLayerKeyframes();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
             KeyframeInteractionTest.run();
@@ -354,6 +356,39 @@ public final class ReplayIndexRemappingTest
         form.volume.set(-1F);
         assertEquals(0D, clip.volume.get(), "film audio volume remains non-negative");
         assertEquals(0D, form.volume.get(), "sound form volume remains non-negative");
+    }
+
+    private static void testGlintLayerKeyframes()
+    {
+        GlintControls a = new GlintControls();
+        GlintControls b = new GlintControls();
+
+        a.get("arm").mode = 0F;
+        a.get("arm").speed = 1F;
+        b.get("arm").mode = 2F;
+        b.get("arm").speed = 3F;
+        b.get("arm").transform.translate.x = 4F;
+
+        GlintControls early = KeyframeFactories.GLINT.interpolate(a, a, b, b, Interpolations.LINEAR, 0.25F).copy();
+        GlintControls late = KeyframeFactories.GLINT.interpolate(a, a, b, b, Interpolations.LINEAR, 0.75F).copy();
+
+        assertEquals(0D, early.get("arm").mode, "glint mode remains discrete before the midpoint");
+        assertEquals(2D, late.get("arm").mode, "glint mode switches at the midpoint");
+        assertEquals(1.5D, early.get("arm").speed, "glint speed interpolates");
+        assertEquals(1D, early.get("arm").transform.translate.x, "glint transform interpolates");
+
+        /* A stored default is meaningful: it explicitly turns off a statically glinted bone. */
+        late.get("leg");
+        KeyframeChannel<GlintControls> channel = new KeyframeChannel<>("glint_layer", KeyframeFactories.GLINT);
+
+        channel.insert(0F, late);
+
+        KeyframeChannel<GlintControls> restored = new KeyframeChannel<>("glint_layer", KeyframeFactories.GLINT);
+
+        restored.fromData(channel.toData());
+        assertTrue(restored.getFactory() == KeyframeFactories.GLINT, "glint keyframe factory type was not restored");
+        assertTrue(restored.get(0).getValue().controls.containsKey("leg"),
+            "an explicit default/off glint bone disappeared during serialization");
     }
 
     @SuppressWarnings("unchecked")

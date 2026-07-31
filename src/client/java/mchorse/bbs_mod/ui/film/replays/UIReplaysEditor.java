@@ -1165,6 +1165,8 @@ public class UIReplaysEditor extends UIElement {
 
         if ((this.showAllTracks() || this.category == ReplayCategory.POSE)
                 && form instanceof PoseForm) {
+            UIReplaysEditorUtils.addGlintControlSheet(form, this.replay.properties, orderedFormSheets);
+
             List<UIKeyframeSheet> boneSheets = new ArrayList<>();
             Map<String, Integer> depthBySheetId = new HashMap<>();
             UIReplaysEditorUtils.addBoneTrackSheets(form, this.replay.properties, boneSheets, depthBySheetId);

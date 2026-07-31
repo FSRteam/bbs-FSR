@@ -137,6 +137,7 @@ public class UIGeneralFormPanel extends UIFormPanel
             UI.labelRow(UIKeys.POSE_CONTEXT_GLINT_SPEED, this.glintSpeed),
             this.glintTransform
         );
+        this.glintSection.setExpanded(false);
 
         UISection tracks = new UISection(UIKeys.FORMS_EDITORS_GENERAL_SECTION_TRACKS);
 

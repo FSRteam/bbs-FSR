@@ -1153,6 +1153,7 @@
 	"bbs.ui.pose.context.glint-speed": "Glint speed",
 	"bbs.ui.pose.context.glint-speed-tooltip": "How fast the glint scrolls across the bone. Negative values scroll the other way, zero holds it still",
 	"bbs.ui.pose.context.glint-transform": "Glint layer transform",
+	"bbs.ui.pose.context.glint-layer": "Enchantment layer",
 	"bbs.ui.pose.context.flip_pose": "Flip pose",
 	"bbs.ui.pose.context.name": "Name...",
 	"bbs.ui.pose.context.paste": "Paste pose",

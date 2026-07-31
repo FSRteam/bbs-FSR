@@ -141,6 +141,7 @@ public class UIPoseEditor extends UIElement
             UI.labelRow(UIKeys.POSE_CONTEXT_GLINT_SPEED, this.glintSpeed),
             this.glintTransform
         );
+        this.glintSection.setExpanded(false);
         this.glintSection.context((menu) ->
         {
             menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->

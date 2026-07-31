@@ -362,6 +362,8 @@ public class UIAnimationStateEditor extends UIElement
 
         if (form instanceof PoseForm)
         {
+            UIReplaysEditorUtils.addGlintControlSheet(form, this.state.properties, orderedFormSheets);
+
             List<UIKeyframeSheet> boneSheets = new ArrayList<>();
             Map<String, Integer> depthBySheetId = new HashMap<>();
 
