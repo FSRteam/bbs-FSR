@@ -13,6 +13,8 @@ import java.nio.file.Path;
 public final class PoseFormRegressionSourceTest
 {
     private static final String POSE_EDITOR = "src/client/java/mchorse/bbs_mod/ui/utils/pose/UIPoseEditor.java";
+    private static final String POSE_FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIPoseForm.java";
+    private static final String MODEL_FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIModelForm.java";
     private static final String PROVIDER = "src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java";
     private static final String QUEUE = "src/client/java/mchorse/bbs_mod/forms/FormTranslucentQueue.java";
     private static final String MOB_RENDERER = "src/client/java/mchorse/bbs_mod/forms/renderers/MobFormRenderer.java";
@@ -39,6 +41,8 @@ public final class PoseFormRegressionSourceTest
     {
         Path root = findProjectRoot();
         String editor = read(root.resolve(POSE_EDITOR));
+        String poseFormEditor = read(root.resolve(POSE_FORM_EDITOR));
+        String modelFormEditor = read(root.resolve(MODEL_FORM_EDITOR));
         String provider = read(root.resolve(PROVIDER));
         String queue = read(root.resolve(QUEUE));
         String renderer = read(root.resolve(MOB_RENDERER));
@@ -61,6 +65,7 @@ public final class PoseFormRegressionSourceTest
         gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmBase);
         hiddenAxesStillRefreshGizmoPlacement(formRenderer);
         filmBoneConsumersShareOnePlacementSample(filmBase, filmEditor);
+        proceduralPanelGizmoKeepsPoseSelection(editor, poseFormEditor, modelFormEditor);
         mirrorEditingUsesSelectionDeltas(editor);
         filmPoseEditingUsesSelectionDeltas(poseKeyframe);
         glintUsesDedicatedKeyframeTrack(editor, poseKeyframe, glintKeyframe, generalFormPanel, form, formProperties, filmEditor, stateEditor);
@@ -73,6 +78,56 @@ public final class PoseFormRegressionSourceTest
         unusableJacobianFallsBackInsteadOfFreezing();
         renderOnlyPlayersCannotPush(renderer);
         mobRenderReleasesSharedStateOnFailure(renderer);
+    }
+
+    /**
+     * IK, physics and constraints panels own one bone at a time, while the hidden pose editor can
+     * retain a multi-selection. Gizmo sampling and writes must follow the visible panel without
+     * rewriting that pose-list selection.
+     */
+    private static void proceduralPanelGizmoKeepsPoseSelection(
+        String poseEditor,
+        String poseFormEditor,
+        String modelFormEditor
+    )
+    {
+        String overrideSetter = section(
+            poseEditor,
+            "public void setTransformBoneOverride(String bone)",
+            "public String getTransformBone()"
+        );
+
+        check(overrideSetter.contains("this.transform.setTransform(this.pose.get(target))"),
+            "the procedural-panel Gizmo no longer binds its transform to the panel-owned bone");
+        check(!overrideSetter.contains("groups.list.setCurrent")
+                && !overrideSetter.contains("groups.list.setCurrentScroll")
+                && !overrideSetter.contains("selectBone("),
+            "binding a procedural-panel Gizmo mutates the hidden pose-list selection");
+
+        String edits = section(
+            poseEditor,
+            "public Map<String, BoneEdit> resolveBoneEdits(boolean mirror, boolean invert)",
+            "private String mirrorPartner(String bone)"
+        );
+
+        check(edits.contains("this.transformBoneOverride.isEmpty()")
+                && edits.contains("Collections.singletonList(this.transformBoneOverride)"),
+            "procedural-panel Gizmo writes no longer target only the panel-owned bone");
+
+        String editableTransform = section(
+            poseFormEditor,
+            "public UIPropTransform getEditableTransform()",
+            "public void collectUndoData(MapType data)"
+        );
+
+        assertOrdered(editableTransform,
+            "this.syncTransformBone()",
+            "return this.posePanel.poseEditor.transform");
+        check(poseFormEditor.contains("this.posePanel.poseEditor.getTransformBone()"),
+            "Gizmo origin sampling no longer follows the panel-owned bone override");
+        check(modelFormEditor.contains(
+                "return this.view == null || this.view == this.modelPanel ? \"\" : this.view.getSelectedBone();"),
+            "the visible model panel no longer supplies the Gizmo's bone owner");
     }
 
     /**

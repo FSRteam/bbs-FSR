@@ -56,6 +56,8 @@ public class UIPoseEditor extends UIElement
     protected IModel model;
     protected Map<String, String> flippedParts;
     private BoneHierarchy hierarchy = BoneHierarchy.EMPTY;
+    /* A procedural panel may own the gizmo without changing the hidden pose-list selection. */
+    private String transformBoneOverride = "";
 
     public UIPoseEditor()
     {
@@ -201,6 +203,32 @@ public class UIPoseEditor extends UIElement
     public String getGroup()
     {
         return this.groups.list.getCurrentFirst();
+    }
+
+    public void setTransformBoneOverride(String bone)
+    {
+        String target = this.hasBone(bone) ? bone : "";
+
+        if (this.transformBoneOverride.equals(target))
+        {
+            return;
+        }
+
+        this.transformBoneOverride = target;
+
+        if (target.isEmpty())
+        {
+            this.pickBones(this.groups.list.getCurrent());
+        }
+        else
+        {
+            this.transform.setTransform(this.pose.get(target));
+        }
+    }
+
+    public String getTransformBone()
+    {
+        return this.transformBoneOverride.isEmpty() ? this.getGroup() : this.transformBoneOverride;
     }
 
     protected void pastePose(MapType data)
@@ -558,7 +586,9 @@ public class UIPoseEditor extends UIElement
     public Map<String, BoneEdit> resolveBoneEdits(boolean mirror, boolean invert)
     {
         Map<String, BoneEdit> edits = new LinkedHashMap<>();
-        List<String> selected = this.groups.list.getCurrent();
+        List<String> selected = this.transformBoneOverride.isEmpty()
+            ? this.groups.list.getCurrent()
+            : Collections.singletonList(this.transformBoneOverride);
 
         for (int i = 0; i < selected.size(); i++)
         {

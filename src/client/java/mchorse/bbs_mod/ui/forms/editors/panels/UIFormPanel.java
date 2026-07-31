@@ -63,4 +63,10 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
     {
         return false;
     }
+
+    /** Bone currently owned by a single-bone panel, or empty when this panel has no bone target. */
+    public String getSelectedBone()
+    {
+        return "";
+    }
 }

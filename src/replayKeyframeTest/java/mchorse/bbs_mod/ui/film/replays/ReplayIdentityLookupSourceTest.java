@@ -27,8 +27,64 @@ public final class ReplayIdentityLookupSourceTest
     {
         verifiesIdentityLookupContract();
         verifiesReplayUiCallSites();
+        verifiesAllTracksCollectorContract();
         verifiesSoundGuideVisibilityOwnership();
         verifiesSoundLoopIntervalUiContract();
+    }
+
+    private static void verifiesAllTracksCollectorContract()
+    {
+        Path project = findProjectRoot();
+        String replayEditor = compact(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditor.java"
+        )));
+        String curated = section(
+            replayEditor,
+            "privatevoidcollectCuratedSheets(",
+            "privatevoidcollectFormPropertySheets("
+        );
+        String properties = section(
+            replayEditor,
+            "privatevoidcollectFormPropertySheets(",
+            "/**IKtracksliveintheirowncategory"
+        );
+        String ik = section(
+            replayEditor,
+            "privatevoidcollectIKSheets(List<UIKeyframeSheet>sheets){",
+            "/**Physicstracksliveintheirowncategory"
+        );
+        String physics = section(
+            replayEditor,
+            "privatevoidcollectPhysicsSheets(List<UIKeyframeSheet>sheets){",
+            "/**ShowtheIKtab"
+        );
+        String flush = section(
+            replayEditor,
+            "privatevoidflushForm(",
+            "privatevoidsavePoseTabState("
+        );
+
+        for (String collector : List.of(curated, properties, ik, physics, flush))
+        {
+            check(!collector.contains("showAllTracks()") && !collector.contains("this.category"),
+                "a replay track collector filters by category before the all-tracks view can see it");
+        }
+
+        String update = section(
+            replayEditor,
+            "publicvoidupdateChannelsList()",
+            "privatevoidreplaceKeyframeEditor("
+        );
+
+        assertOrdered(update,
+            "this.collectCuratedSheets(sheets)",
+            "this.collectFormPropertySheets(sheets,poseTabs,poseTabDepths)",
+            "this.collectIKSheets(sheets)",
+            "this.collectPhysicsSheets(sheets)",
+            "sheets.removeIf",
+            "shouldShowTrack(v,this.category,this.showAllTracks())");
+        check(replayEditor.contains("returnallTracks||categoryOf(sheet)==category;"),
+            "all-tracks mode no longer bypasses the centralized category filter");
     }
 
     private static void verifiesSoundLoopIntervalUiContract()

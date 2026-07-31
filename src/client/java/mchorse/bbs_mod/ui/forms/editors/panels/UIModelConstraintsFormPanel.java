@@ -194,6 +194,12 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         return true;
     }
 
+    @Override
+    public String getSelectedBone()
+    {
+        return this.selectedBone;
+    }
+
     private void selectBone(String bone)
     {
         this.selectedBone = bone == null ? "" : bone;

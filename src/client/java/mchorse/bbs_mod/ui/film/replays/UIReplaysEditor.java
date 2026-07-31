@@ -24,6 +24,7 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
@@ -297,6 +298,62 @@ public class UIReplaysEditor extends UIElement {
         }
 
         return sheet.property == null ? null : FormUtils.getForm(sheet.property);
+    }
+
+    /** Keep track-category ownership in one place so the all-tracks view and category tabs cannot drift apart. */
+    public static ReplayCategory categoryOf(UIKeyframeSheet sheet)
+    {
+        String id = sheet.id;
+
+        if (FormControlKeys.isIKControlChannel(id)
+            || PerLimbService.isIKTargetChannel(id)
+            || PerLimbService.isPoleTargetChannel(id))
+        {
+            return ReplayCategory.IK;
+        }
+
+        if (FormControlKeys.isPhysicsControlChannel(id)
+            || FormControlKeys.isWindControlChannel(id)
+            || PerLimbService.isPhysicsTargetChannel(id))
+        {
+            return ReplayCategory.PHYSICS;
+        }
+
+        if (FormControlKeys.isGlintControlChannel(id))
+        {
+            return ReplayCategory.POSE;
+        }
+
+        if (PerLimbService.isPoseBoneChannel(id))
+        {
+            return ReplayCategory.POSE;
+        }
+
+        if (PerLimbService.isMaterialTextureChannel(id))
+        {
+            return ReplayCategory.MODEL;
+        }
+
+        if (sheet.property == null && sheet.form == null)
+        {
+            return ReplayCategory.PLAYER;
+        }
+
+        String name = StringUtils.fileName(id);
+
+        return isPoseProperty(name) ? ReplayCategory.POSE : ReplayCategory.MODEL;
+    }
+
+    private static boolean isPoseProperty(String name)
+    {
+        return name.startsWith("transform")
+            || name.startsWith("pose")
+            || name.startsWith("shape_keys");
+    }
+
+    static boolean shouldShowTrack(UIKeyframeSheet sheet, ReplayCategory category, boolean allTracks)
+    {
+        return allTracks || categoryOf(sheet) == category;
     }
 
     public static void renderRuler(
@@ -656,6 +713,10 @@ public class UIReplaysEditor extends UIElement {
         Set<String> disabled = BBSSettings.disabledSheets.get();
 
         sheets.removeIf(v -> {
+            if (!shouldShowTrack(v, this.category, this.showAllTracks())) {
+                return true;
+            }
+
             String filterKey = getSheetFilterKey(v);
             for (String s : disabled) {
                 if (filterKey.equals(s) || v.id.equals(s) || v.id.endsWith("/" + s)) {
@@ -917,10 +978,6 @@ public class UIReplaysEditor extends UIElement {
     }
 
     private void collectCuratedSheets(List<UIKeyframeSheet> sheets) {
-        if (!this.showAllTracks() && this.category != ReplayCategory.PLAYER) {
-            return;
-        }
-
         for (String key : ReplayKeyframes.CURATED_CHANNELS) {
             BaseValue value = this.replay.keyframes.get(key);
             KeyframeChannel channel = (KeyframeChannel) value;
@@ -941,17 +998,8 @@ public class UIReplaysEditor extends UIElement {
 
         for (String key : FormUtils.collectPropertyPaths(this.replay.form.get())) {
             KeyframeChannel property = this.replay.properties.getOrCreate(this.replay.form.get(), key);
-            String name = StringUtils.fileName(key);
-            boolean isPose
-                    = name.startsWith("transform")
-                    || name.startsWith("pose")
-                    || name.startsWith("pose_overlay")
-                    || name.startsWith("shape_keys");
 
-            if (property != null
-                    && (this.showAllTracks()
-                    || (this.category == ReplayCategory.MODEL && !isPose)
-                    || (this.category == ReplayCategory.POSE && isPose))) {
+            if (property != null) {
                 BaseValueBasic formProperty = FormUtils.getProperty(this.replay.form.get(), key);
                 Form form
                         = formProperty.getParent() instanceof Form ? (Form) formProperty.getParent() : null;
@@ -982,10 +1030,6 @@ public class UIReplaysEditor extends UIElement {
 
     /** IK tracks live in their own category; they are not form properties, so collect them by walking the form tree. */
     private void collectIKSheets(List<UIKeyframeSheet> sheets) {
-        if (!this.showAllTracks() && this.category != ReplayCategory.IK) {
-            return;
-        }
-
         this.collectIKSheets(sheets, this.replay.form.get());
     }
 
@@ -1007,10 +1051,6 @@ public class UIReplaysEditor extends UIElement {
 
     /** Physics tracks live in their own category; like IK they are not form properties, so collect them by walking the form tree. */
     private void collectPhysicsSheets(List<UIKeyframeSheet> sheets) {
-        if (!this.showAllTracks() && this.category != ReplayCategory.PHYSICS) {
-            return;
-        }
-
         this.collectPhysicsSheets(sheets, this.replay.form.get());
     }
 
@@ -1151,20 +1191,17 @@ public class UIReplaysEditor extends UIElement {
         List<UIKeyframeSheet> orderedFormSheets = new ArrayList<>(formSheets);
         formSheets.clear();
 
-        if ((this.showAllTracks() || this.category == ReplayCategory.MODEL)
-                && form instanceof AbstractSoundForm soundForm) {
+        if (form instanceof AbstractSoundForm soundForm) {
             UIReplaysEditorUtils.addSoundSheets(soundForm, this.replay.properties, orderedFormSheets);
         }
 
-        if ((this.showAllTracks() || this.category == ReplayCategory.MODEL)
-                && form instanceof ModelForm modelForm) {
+        if (form instanceof ModelForm modelForm) {
             List<UIKeyframeSheet> materialSheets = new ArrayList<>();
             UIReplaysEditorUtils.addMaterialTextureSheets(modelForm, this.replay.properties, materialSheets);
             orderedFormSheets.addAll(materialSheets);
         }
 
-        if ((this.showAllTracks() || this.category == ReplayCategory.POSE)
-                && form instanceof PoseForm) {
+        if (form instanceof PoseForm) {
             UIReplaysEditorUtils.addGlintControlSheet(form, this.replay.properties, orderedFormSheets);
 
             List<UIKeyframeSheet> boneSheets = new ArrayList<>();

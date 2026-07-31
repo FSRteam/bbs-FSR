@@ -67,4 +67,10 @@ public class UIModelForm extends UIPoseForm<ModelForm>
 
         super.pickBoneFromViewport(bone, preferredPanel);
     }
+
+    @Override
+    protected String getTransformBoneOverride()
+    {
+        return this.view == null || this.view == this.modelPanel ? "" : this.view.getSelectedBone();
+    }
 }

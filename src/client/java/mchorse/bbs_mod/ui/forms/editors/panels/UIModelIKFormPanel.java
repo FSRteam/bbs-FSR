@@ -315,6 +315,12 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         return true;
     }
 
+    @Override
+    public String getSelectedBone()
+    {
+        return this.selectedBone;
+    }
+
     private void openBoneMenu(String current, Consumer<String> callback)
     {
         if (this.bones.getList().isEmpty())

@@ -32,6 +32,8 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     @Override
     public UIPropTransform getEditableTransform()
     {
+        this.syncTransformBone();
+
         return this.posePanel.poseEditor.transform;
     }
 
@@ -74,7 +76,20 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
 
     protected String bonePath()
     {
-        return StringUtils.combinePaths(FormUtils.getPath(this.form), this.posePanel.poseEditor.groups.list.getCurrentFirst());
+        this.syncTransformBone();
+
+        return StringUtils.combinePaths(FormUtils.getPath(this.form), this.posePanel.poseEditor.getTransformBone());
+    }
+
+    /** A visible procedural panel can own the gizmo while leaving the pose list untouched. */
+    protected String getTransformBoneOverride()
+    {
+        return "";
+    }
+
+    private void syncTransformBone()
+    {
+        this.posePanel.poseEditor.setTransformBoneOverride(this.getTransformBoneOverride());
     }
 
     @Override

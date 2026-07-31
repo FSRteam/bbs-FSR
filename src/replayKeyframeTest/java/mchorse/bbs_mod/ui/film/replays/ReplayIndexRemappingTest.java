@@ -12,7 +12,9 @@ import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.FormProperties;
+import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.ReplayIndexRemapper;
 import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -27,6 +29,7 @@ import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.KeyframeNavigationTest;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.film.utils.keyframes.KeyframeInteractionTest;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.factory.MapFactory;
@@ -62,6 +65,7 @@ public final class ReplayIndexRemappingTest
             testGroupedSoundChannelsPreserveLegacyFallback();
             testGroupedSoundLoopIntervalLifecycle();
             testBbsVolumeFieldsHaveNoFiniteUpperLimit();
+            testReplayTrackCategories();
             testGlintLayerKeyframes();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
@@ -358,6 +362,33 @@ public final class ReplayIndexRemappingTest
         assertEquals(0D, form.volume.get(), "sound form volume remains non-negative");
     }
 
+    private static void testReplayTrackCategories()
+    {
+        assertTrackCategory("x", false, UIReplaysEditor.ReplayCategory.PLAYER);
+        assertTrackCategory("visible", true, UIReplaysEditor.ReplayCategory.MODEL);
+        assertTrackCategory("pose", true, UIReplaysEditor.ReplayCategory.POSE);
+        assertTrackCategory("transform_overlay", true, UIReplaysEditor.ReplayCategory.POSE);
+        assertTrackCategory("shape_keys", true, UIReplaysEditor.ReplayCategory.POSE);
+        assertTrackCategory(FormControlKeys.toGlintControlKey(""), true, UIReplaysEditor.ReplayCategory.POSE);
+        assertTrackCategory(PerLimbService.toPoseBoneKey("", "arm"), true, UIReplaysEditor.ReplayCategory.POSE);
+        assertTrackCategory(FormControlKeys.toIKControlKey(""), true, UIReplaysEditor.ReplayCategory.IK);
+        assertTrackCategory(PerLimbService.toIKTargetKey("", "hand"), true, UIReplaysEditor.ReplayCategory.IK);
+        assertTrackCategory(PerLimbService.toPoleTargetKey("", "hand"), true, UIReplaysEditor.ReplayCategory.IK);
+        assertTrackCategory(FormControlKeys.toPhysicsControlKey(""), true, UIReplaysEditor.ReplayCategory.PHYSICS);
+        assertTrackCategory(FormControlKeys.toWindControlKey(""), true, UIReplaysEditor.ReplayCategory.PHYSICS);
+        assertTrackCategory(PerLimbService.toPhysicsTargetKey("", "cape"), true, UIReplaysEditor.ReplayCategory.PHYSICS);
+        assertTrackCategory(PerLimbService.toMaterialTextureKey("", "body"), true, UIReplaysEditor.ReplayCategory.MODEL);
+
+        UIKeyframeSheet physics = trackSheet(FormControlKeys.toPhysicsControlKey(""), true);
+
+        assertTrue(UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PLAYER, true),
+            "all-tracks mode still applies a category filter");
+        assertTrue(!UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PLAYER, false),
+            "player tab includes physics tracks");
+        assertTrue(UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PHYSICS, false),
+            "physics tab drops its own tracks");
+    }
+
     private static void testGlintLayerKeyframes()
     {
         GlintControls a = new GlintControls();
@@ -389,6 +420,22 @@ public final class ReplayIndexRemappingTest
         assertTrue(restored.getFactory() == KeyframeFactories.GLINT, "glint keyframe factory type was not restored");
         assertTrue(restored.get(0).getValue().controls.containsKey("leg"),
             "an explicit default/off glint bone disappeared during serialization");
+    }
+
+    private static void assertTrackCategory(String id, boolean owned, UIReplaysEditor.ReplayCategory expected)
+    {
+        UIReplaysEditor.ReplayCategory actual = UIReplaysEditor.categoryOf(trackSheet(id, owned));
+
+        assertTrue(actual == expected,
+            "track " + id + " was classified as " + actual + " instead of " + expected);
+    }
+
+    private static UIKeyframeSheet trackSheet(String id, boolean owned)
+    {
+        KeyframeChannel<Float> channel = new KeyframeChannel<>(id, KeyframeFactories.FLOAT);
+        UIKeyframeSheet sheet = new UIKeyframeSheet(id, mchorse.bbs_mod.l10n.keys.IKey.constant(id), 0, false, channel, null);
+
+        return owned ? sheet.form(new AnchorForm()) : sheet;
     }
 
     @SuppressWarnings("unchecked")

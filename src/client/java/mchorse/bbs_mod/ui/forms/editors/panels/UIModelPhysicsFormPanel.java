@@ -625,6 +625,12 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         return true;
     }
 
+    @Override
+    public String getSelectedBone()
+    {
+        return this.selectedBone;
+    }
+
     private void updateFields()
     {
         boolean panelEnabled = this.bones.isEnabled();
