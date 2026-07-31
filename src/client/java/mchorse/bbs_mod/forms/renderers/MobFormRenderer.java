@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSShaders;
@@ -273,6 +274,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 }
 
                 RenderSystem.enableBlend();
+                this.applyAdditiveBlend();
             });
 
             consumers.setUI(true);
@@ -696,7 +698,32 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             }
 
             RenderSystem.enableBlend();
+            this.applyAdditiveBlend();
         };
+    }
+
+    /**
+     * True additive blending (GL_SRC_ALPHA, GL_ONE) when the form's additive
+     * color flag is on. The vertex-color BRIGHTEN path in {@link FormColorBlend}
+     * is clamped by byte vertex formats, so an actual blend-function switch is
+     * required for the glow effect - the same approach ParticleEmitter uses for
+     * {@code ParticleMaterial.ADD}.
+     *
+     * <p>Called from the layer preparation hooks, which run after the vanilla
+     * {@code RenderType#setupRenderState()} and before the draw - the state is
+     * cleared back by the layer's {@code clearRenderState()} afterwards.</p>
+     */
+    private void applyAdditiveBlend()
+    {
+        if (this.form.additiveColor.get())
+        {
+            RenderSystem.blendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA,
+                GlStateManager.DestFactor.ONE,
+                GlStateManager.SourceFactor.ONE,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA
+            );
+        }
     }
 
     @Override
