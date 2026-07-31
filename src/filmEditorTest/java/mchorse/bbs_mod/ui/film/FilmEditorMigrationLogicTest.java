@@ -23,6 +23,7 @@ public final class FilmEditorMigrationLogicTest
             testPerFilmScrollIsolation();
             testAnchorTransformInterpolation();
             FilmReplayFirstPersonSyncSourceTest.runAll();
+            OrbitFilmCameraMissingRendererSourceTest.runAll();
             RenderRuntimeMigrationSourceTest.runAll();
             RecentFormCategoryTest.runAll();
 
