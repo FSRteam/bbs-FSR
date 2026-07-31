@@ -27,6 +27,7 @@ public final class PoseFormRegressionSourceTest
     private static final String FILM_CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
     private static final String FILM_BASE = "src/client/java/mchorse/bbs_mod/film/BaseFilmController.java";
     private static final String FILM_CONTEXT = "src/client/java/mchorse/bbs_mod/film/FilmControllerContext.java";
+    private static final String UI_SCREEN = "src/client/java/mchorse/bbs_mod/ui/framework/UIScreen.java";
     private static final String FORM_RENDERER = "src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIPickableFormRenderer.java";
 
     private PoseFormRegressionSourceTest()
@@ -50,6 +51,7 @@ public final class PoseFormRegressionSourceTest
         String filmController = read(root.resolve(FILM_CONTROLLER));
         String filmBase = read(root.resolve(FILM_BASE));
         String filmContext = read(root.resolve(FILM_CONTEXT));
+        String uiScreen = read(root.resolve(UI_SCREEN));
         String formRenderer = read(root.resolve(FORM_RENDERER));
 
         gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmBase);
@@ -58,6 +60,7 @@ public final class PoseFormRegressionSourceTest
         actorReplaysKeepCapturingGizmoPlacement(filmBase, filmContext);
         disabledReplayHidesGizmo(filmController);
         additiveBlendDoesNotLeak(renderer);
+        pausedPreviewsKeepInterpolating(uiScreen);
         mirrorEditingUsesSelectionDeltas(editor);
         filmPoseEditingUsesSelectionDeltas(poseKeyframe);
         deferredLayersCapturePreparation(provider, queue);
@@ -240,6 +243,22 @@ public final class PoseFormRegressionSourceTest
             "a non-additive form no longer resets the blend function, so an earlier additive form leaks into it");
         check(finallyBlock.contains("RenderSystem.defaultBlendFunc();"),
             "an additive form no longer restores the blend function after its render, so the leak reaches later forms");
+    }
+
+    /**
+     * Pause-capable menus (e.g. the morphing panel) freeze the game timer's partial tick, so
+     * preview animations that advance at the screen tick rate render with a fixed interpolation
+     * offset and visibly step at 20 TPS. The screen transition must derive an advancing partial
+     * tick from wall-clock time while paused.
+     */
+    private static void pausedPreviewsKeepInterpolating(String uiScreen)
+    {
+        String resolve = section(uiScreen, "private float resolveTransition(float delta)", "public void render(GuiGraphics");
+
+        check(resolve.contains("mc.isPaused()"),
+            "the paused-screen partial tick is no longer derived from wall clock, so UI preview animations step at 20 TPS");
+        check(resolve.contains("Util.getMillis()"),
+            "the paused-screen transition no longer advances from wall-clock time");
     }
 
     private static void mirrorEditingUsesSelectionDeltas(String source)
