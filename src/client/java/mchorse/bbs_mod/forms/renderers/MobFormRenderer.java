@@ -422,6 +422,12 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 FormTranslucentQueue.setSortOrigin(null);
                 CustomVertexConsumerProvider.clearRunnables();
 
+                /* An additive form leaves its (SRC_ALPHA, ONE) function behind when the last
+                 * layer it drew was opaque (its clear is a no-op for blend). Restore the default
+                 * here so later forms in the frame do not inherit it. Deferred translucent layers
+                 * re-apply their own preparation at queue draw time, so this does not disturb them. */
+                RenderSystem.defaultBlendFunc();
+
                 context.stack.popPose();
 
                 if (context.world != null)
@@ -724,6 +730,16 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA
             );
+        }
+        else
+        {
+            /* Opaque (NO_TRANSPARENCY) layers leave the blend function untouched on
+             * clear, so an additive form drawn earlier in the frame can leak its
+             * (SRC_ALPHA, ONE) function into the RenderSystem state. The layer
+             * preparation then re-enables blend with that leaked function, tinting
+             * every later non-additive form. Reset to the default function here so
+             * each form draws with its own blend, not the previous form's. */
+            RenderSystem.defaultBlendFunc();
         }
     }
 
