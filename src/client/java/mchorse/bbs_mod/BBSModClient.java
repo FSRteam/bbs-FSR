@@ -56,6 +56,7 @@ import mchorse.bbs_mod.resources.packs.URLSourcePack;
 import mchorse.bbs_mod.resources.packs.URLTextureErrorCallback;
 import mchorse.bbs_mod.selectors.EntitySelectors;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.utils.keyframes.factories.ItemStackKeyframeFactory;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.audio.UIAudioRecorder;
@@ -87,6 +88,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.Connection;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import org.lwjgl.glfw.GLFW;
@@ -389,6 +391,13 @@ public class BBSModClient
 
     public void onInitializeClient()
     {
+        ItemStackKeyframeFactory.setClientRegistryAccess(() ->
+        {
+            Level level = Minecraft.getInstance().level;
+
+            return level == null ? null : level.registryAccess();
+        });
+
         AssetProvider provider = BBSMod.getProvider();
 
         textures = new TextureManager(provider);

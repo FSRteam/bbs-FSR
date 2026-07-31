@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import com.mojang.serialization.Lifecycle;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -8,6 +9,7 @@ import mchorse.bbs_mod.actions.types.EntityInteractionActionClip;
 import mchorse.bbs_mod.actions.values.ActionTarget;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
+import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
@@ -15,6 +17,7 @@ import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.ReplayIndexRemapper;
 import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
@@ -32,9 +35,22 @@ import mchorse.bbs_mod.utils.factory.MapFactory;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
+import mchorse.bbs_mod.utils.keyframes.factories.ItemStackKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.SoundKeyframeFactory;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.RegistrationInfo;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.neoforged.fml.loading.LoadingModList;
 
 import java.lang.reflect.Field;
@@ -61,6 +77,7 @@ public final class ReplayIndexRemappingTest
             testGroupedSoundChannelsPreserveLegacyFallback();
             testGroupedSoundLoopIntervalLifecycle();
             testBbsVolumeFieldsHaveNoFiniteUpperLimit();
+            testEnchantedEquipmentSerializationRoundTrip();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
             KeyframeInteractionTest.run();
@@ -136,6 +153,74 @@ public final class ReplayIndexRemappingTest
         }
 
         Bootstrap.bootStrap();
+    }
+
+    private static void testEnchantedEquipmentSerializationRoundTrip()
+    {
+        MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
+        enchantments.register(Enchantments.SHARPNESS, enchantment(Enchantments.SHARPNESS.location()), RegistrationInfo.BUILT_IN);
+        enchantments.register(Enchantments.PROTECTION, enchantment(Enchantments.PROTECTION.location()), RegistrationInfo.BUILT_IN);
+        HolderLookup.Provider provider = new RegistryAccess.ImmutableRegistryAccess(List.of(enchantments));
+
+        ItemStackKeyframeFactory.setClientRegistryAccess(() -> provider);
+
+        try
+        {
+            ReplayKeyframes source = new ReplayKeyframes("keyframes");
+            ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+            ItemStack chest = new ItemStack(Items.DIAMOND_CHESTPLATE);
+
+            sword.enchant(enchantments.getHolderOrThrow(Enchantments.SHARPNESS), 5);
+            chest.enchant(enchantments.getHolderOrThrow(Enchantments.PROTECTION), 4);
+
+            source.mainHand.insert(0F, sword);
+            source.armorChest.insert(0F, chest);
+
+            BaseType data = source.toData();
+            BaseType loaded = DataStorageUtils.readFromBytes(DataStorageUtils.writeToBytes(data));
+            ReplayKeyframes copy = new ReplayKeyframes("keyframes");
+
+            copy.fromData(loaded);
+
+            ItemStack hand = copy.mainHand.interpolate(0F);
+            ItemStack body = copy.armorChest.interpolate(0F);
+
+            assertTrue(
+                ItemStack.isSameItemSameComponents(sword, hand),
+                "enchanted main-hand item components lost after film serialization"
+            );
+            assertTrue(
+                ItemStack.isSameItemSameComponents(chest, body),
+                "enchanted armor components lost after film serialization"
+            );
+            assertTrue(
+                hand.getEnchantmentLevel(enchantments.getHolderOrThrow(Enchantments.SHARPNESS)) == 5,
+                "main-hand enchantment level lost after film serialization"
+            );
+            assertTrue(
+                body.getEnchantmentLevel(enchantments.getHolderOrThrow(Enchantments.PROTECTION)) == 4,
+                "armor enchantment level lost after film serialization"
+            );
+        }
+        finally
+        {
+            ItemStackKeyframeFactory.setClientRegistryAccess(null);
+        }
+    }
+
+    private static Enchantment enchantment(ResourceLocation id)
+    {
+        return Enchantment.enchantment(
+            Enchantment.definition(
+                HolderSet.direct(),
+                10,
+                5,
+                Enchantment.dynamicCost(1, 11),
+                Enchantment.dynamicCost(21, 11),
+                2,
+                EquipmentSlotGroup.MAINHAND
+            )
+        ).build(id);
     }
 
     private static void testEverySingleDeletion()
