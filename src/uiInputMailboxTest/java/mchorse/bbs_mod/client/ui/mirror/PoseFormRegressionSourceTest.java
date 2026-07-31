@@ -63,7 +63,23 @@ public final class PoseFormRegressionSourceTest
         modelPartJacobianSurvivesConditioning();
         unusableJacobianFallsBackInsteadOfFreezing();
         renderOnlyPlayersCannotPush(renderer);
+        mobDeathStateUsesEntitySpecificClock(renderer);
         mobRenderReleasesSharedStateOnFailure(renderer);
+    }
+
+    private static void mobDeathStateUsesEntitySpecificClock(String renderer)
+    {
+        String tick = section(renderer, "public void tick(IEntity source)", "private boolean updatePauseState");
+        String refresh = section(renderer, "private void refreshDeathState()", "private void ensureAnimationInitialized");
+
+        check(tick.contains("this.entity.tick();"),
+            "dead previews no longer drive the vanilla death lifecycle through entity.tick()");
+        check(refresh.contains("living.setPose(net.minecraft.world.entity.Pose.DYING)"),
+            "Health 0 no longer preserves the dying pose through source synchronization");
+        check(!renderer.contains("EnderDragon"),
+            "MobForm death state regressed to an entity-type-specific clock");
+        check(!renderer.contains("LivingEntityInvoker"),
+            "MobFormRenderer still references the removed invoker");
     }
 
     /**

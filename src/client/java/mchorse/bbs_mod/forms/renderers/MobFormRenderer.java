@@ -226,6 +226,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             compound.putString("id", id);
             this.entity.load(compound);
+            this.refreshDeathState();
             this.entity.noPhysics = true;
         }
     }
@@ -916,6 +917,15 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         }
 
         this.entity.noPhysics = true;
+        this.refreshDeathState();
+    }
+
+    private void refreshDeathState()
+    {
+        if (this.entity instanceof LivingEntity living && living.getHealth() <= 0F)
+        {
+            living.setPose(net.minecraft.world.entity.Pose.DYING);
+        }
     }
 
     private void ensureAnimationInitialized(IEntity source)
