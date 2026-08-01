@@ -51,7 +51,14 @@ public class CubicGlintCubeRenderer extends CubicCubeRenderer
             return false;
         }
 
-        this.setColor(group.glintColor.r, group.glintColor.g, group.glintColor.b, group.glintColor.a);
+        /* Additive energySwirl blending ignores the vertex alpha channel, so fold the
+         * glint's opacity into RGB. The alpha channel is then left to the geometric edge
+         * mask below instead of the user's slider. */
+        this.setColor(
+            group.glintColor.r * group.glintColor.a,
+            group.glintColor.g * group.glintColor.a,
+            group.glintColor.b * group.glintColor.a,
+            1F);
 
         /* Vertex color is built as this color times the bone's own tint, which would let a
          * tinted bone wash out its glint. Neutralize the tint for the duration of this
