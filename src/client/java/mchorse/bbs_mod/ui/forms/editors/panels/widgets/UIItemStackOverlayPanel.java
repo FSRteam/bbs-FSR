@@ -9,10 +9,10 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.utils.keyframes.factories.ItemStackKeyframeFactory;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
@@ -79,7 +79,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
             try
             {
                 CompoundTag nbtCompound = TagParser.parseTag(v);
-                ItemStack itemStack = ItemStack.CODEC.parse(NbtOps.INSTANCE, nbtCompound).result().orElse(ItemStack.EMPTY);
+                ItemStack itemStack = ItemStack.CODEC.parse(ItemStackKeyframeFactory.currentOps(), nbtCompound).result().orElse(ItemStack.EMPTY);
 
                 this.pickItemStack(itemStack);
                 this.itemList.list.setCurrentScroll(BuiltInRegistries.ITEM.getKey(this.stack.getItem()).toString());
@@ -109,7 +109,7 @@ public class UIItemStackOverlayPanel extends UIOverlayPanel
 
     private void updateNbt()
     {
-        this.nbt.setText(ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, this.stack).result().map(Tag::getAsString).orElse("{}"));
+        this.nbt.setText(ItemStack.CODEC.encodeStart(ItemStackKeyframeFactory.currentOps(), this.stack).result().map(Tag::getAsString).orElse("{}"));
     }
 
     private void pickItemStack(ItemStack itemStack)
