@@ -1829,7 +1829,14 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     private boolean canShowGizmo()
     {
-        return UIBaseMenu.shouldRenderAxes() && !this.isRecording() && (this.getBone() != null || this.isAnchorGizmo());
+        Replay replay = this.getReplay();
+
+        /* A disabled replay is skipped by the render pass, so its gizmo placement
+         * stops being captured. Hide the gizmo instead of letting it linger on the
+         * last captured (stale) matrix. */
+        return UIBaseMenu.shouldRenderAxes() && !this.isRecording()
+            && (replay == null || replay.enabled.get())
+            && (this.getBone() != null || this.isAnchorGizmo());
     }
 
     private void renderStencil(IBbsWorldRenderContext renderContext, UIContext context, boolean altPressed)

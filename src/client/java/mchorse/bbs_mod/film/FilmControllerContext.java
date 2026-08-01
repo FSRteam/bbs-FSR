@@ -41,6 +41,8 @@ public class FilmControllerContext
     public FormProperties timelineProperties;
     public float timelineTick;
     public boolean timelinePlaying;
+    /** Skip the visible form render but still capture gizmo placement. */
+    public boolean gizmoOnly;
 
     private FilmControllerContext()
     {}
@@ -59,6 +61,7 @@ public class FilmControllerContext
         this.timelineProperties = null;
         this.timelineTick = Float.NaN;
         this.timelinePlaying = false;
+        this.gizmoOnly = false;
     }
 
     public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, IBbsWorldRenderContext context)
@@ -169,6 +172,13 @@ public class FilmControllerContext
         this.timelineProperties = properties;
         this.timelineTick = tick;
         this.timelinePlaying = playing;
+
+        return this;
+    }
+
+    public FilmControllerContext gizmoOnly(boolean gizmoOnly)
+    {
+        this.gizmoOnly = gizmoOnly;
 
         return this;
     }

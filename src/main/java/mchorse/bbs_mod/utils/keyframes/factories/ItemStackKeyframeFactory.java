@@ -2,22 +2,101 @@ package mchorse.bbs_mod.utils.keyframes.factories;
 
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.interps.IInterp;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.fml.util.thread.SidedThreadGroups;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 
 public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
 {
+    /**
+     * Item components such as enchantments encode registry holders through
+     * {@code RegistryFixedCodec}, which fails with a plain {@code NbtOps}.
+     *
+     * <p>The registry context is resolved per call from the current environment
+     * (see {@link #currentRegistry()}), not from a process-wide provider: the
+     * server thread uses the server registry so server-side playback decodes
+     * holders bound to the server registry, and the client thread uses the
+     * client level registry (installed via {@link #setClientRegistryAccess})
+     * so recording and the film editor preserve client-bound holders. Callers
+     * that already hold a provider can pass it explicitly to the
+     * {@code ...(value, provider)} overloads.</p>
+     */
+    private static volatile Supplier<HolderLookup.Provider> clientRegistryAccess;
+
+    /**
+     * Install the client level registry access. Only consulted when no server
+     * thread is active, so server-side decode always binds holders to the
+     * server registry. A {@code null} supplier clears the client access.
+     */
+    public static void setClientRegistryAccess(Supplier<HolderLookup.Provider> provider)
+    {
+        clientRegistryAccess = provider;
+    }
+
+    private static HolderLookup.Provider currentRegistry()
+    {
+        if (isServerThread())
+        {
+            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+
+            if (server != null)
+            {
+                return server.registryAccess();
+            }
+        }
+
+        Supplier<HolderLookup.Provider> client = clientRegistryAccess;
+
+        return client == null ? null : client.get();
+    }
+
+    /**
+     * The server keeps its own registry instances on the server thread (and
+     * its workers), which are distinct from the client thread's instances even
+     * in an integrated server. {@code SidedThreadGroups.SERVER} identifies that
+     * thread group, so film decode during server-side playback binds holders to
+     * the server registry and stream encoding through {@code
+     * RegistryFriendlyByteBuf} succeeds.
+     */
+    private static boolean isServerThread()
+    {
+        for (ThreadGroup group = Thread.currentThread().getThreadGroup(); group != null; group = group.getParent())
+        {
+            if (group == SidedThreadGroups.SERVER)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static DynamicOps<Tag> ops(HolderLookup.Provider provider)
+    {
+        return provider == null ? NbtOps.INSTANCE : provider.createSerializationContext(NbtOps.INSTANCE);
+    }
+
     @Override
     public ItemStack fromData(BaseType data)
     {
-        return this.tryFromData(data).orElse(ItemStack.EMPTY);
+        return this.fromData(data, currentRegistry());
+    }
+
+    public ItemStack fromData(BaseType data, HolderLookup.Provider provider)
+    {
+        return this.tryFromData(data, provider).orElse(ItemStack.EMPTY);
     }
 
     /**
@@ -27,6 +106,11 @@ public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
      * empty slot and remains valid.
      */
     public Optional<ItemStack> tryFromData(BaseType data)
+    {
+        return this.tryFromData(data, currentRegistry());
+    }
+
+    public Optional<ItemStack> tryFromData(BaseType data, HolderLookup.Provider provider)
     {
         if (data == null)
         {
@@ -40,7 +124,7 @@ public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
 
         try
         {
-            DataResult<Pair<ItemStack, Tag>> decode = ItemStack.CODEC.decode(NbtOps.INSTANCE, DataStorageUtils.toNbt(data));
+            DataResult<Pair<ItemStack, Tag>> decode = ItemStack.CODEC.decode(ops(provider), DataStorageUtils.toNbt(data));
 
             return decode.result().map(Pair::getFirst);
         }
@@ -53,7 +137,12 @@ public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
     @Override
     public BaseType toData(ItemStack value)
     {
-        Optional<Tag> result = ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, value).result();
+        return this.toData(value, currentRegistry());
+    }
+
+    public BaseType toData(ItemStack value, HolderLookup.Provider provider)
+    {
+        Optional<Tag> result = ItemStack.CODEC.encodeStart(ops(provider), value).result();
 
         return result.map(DataStorageUtils::fromNbt).orElse(new MapType());
     }
