@@ -257,6 +257,7 @@ public class FilmEditorController extends BaseFilmController
         return super.getFilmControllerContext(context, replay, entity)
             .transition(this.getTransition(entity, context.tickDelta()))
             .bone(aBone, local)
+            .gizmoSpace(this.controller.getBoneSpace(), this.controller.getGizmoView())
             .bone2(aBone2, local2)
             .anchorGizmo(anchorGizmo, this.controller.getAnchorLocal());
     }

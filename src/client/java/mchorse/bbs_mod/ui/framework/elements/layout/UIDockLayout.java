@@ -11,9 +11,12 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.motion.UIMotions;
+import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.interps.Lerps;
 
 import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
@@ -45,7 +48,10 @@ public class UIDockLayout extends UIElement
     private static final int SPLITTER_HANDLE_PX = 14;
     private static final int SPLITTER_LINK_HITBOX_PADDING_PX = 8;
     private static final int DROP_ZONE_CENTER = -1;
-    private static final float DROP_EDGE_MARGIN = 0.2F;
+    private static final int DROP_EDITOR_EDGE_PX = 16;
+    private static final int DROP_PANEL_EDGE_PX = 48;
+    private static final float DROP_PANEL_EDGE_MAX = 0.25F;
+    private static final float DROP_ROOT_RATIO = 0.25F;
     private static final int EDITOR_MIN_SIZE_FOR_PX_HANDLES = 10;
     private static final int DOCK_STACK_TABS_HEIGHT_PX = 20;
     private static final int PANEL_GAP_PX = 4;
@@ -59,6 +65,11 @@ public class UIDockLayout extends UIElement
     private final List<UIDockStackTabs> dockStackTabs = new ArrayList<>();
     private final Map<String, DockStackInfo> dockStackByPanelId = new HashMap<>();
     private final List<Integer> draggedSplitterIndices = new ArrayList<>();
+    private final Map<String, float[]> transitionFromPanels = new HashMap<>();
+    private final Map<String, float[]> transitionToPanels = new HashMap<>();
+    private final Map<String, float[]> transitionFromHandles = new HashMap<>();
+    private final Map<String, float[]> transitionToHandles = new HashMap<>();
+    private final UITween layoutTransition = new UITween();
 
     private final UIRenderable surfaces = new UIRenderable(this::renderPanelSurfaces);
     private final UIRenderable borders = new UIRenderable(this::renderPanelBorders);
@@ -67,7 +78,10 @@ public class UIDockLayout extends UIElement
     private boolean layoutLocked = true;
     private String draggingPanelId;
     private String dropTargetPanelId;
+    private boolean dropTargetIsRoot;
     private int dropTargetZone = DROP_ZONE_CENTER;
+    private boolean layoutTransitioning;
+    private boolean transitionCapturePending;
 
     /* Configuration */
     private ILayoutSource source;
@@ -75,8 +89,11 @@ public class UIDockLayout extends UIElement
     private Supplier<Boolean> gate = () -> true;
     private Runnable onChanged = () -> {};
     private Runnable onSplitterDragEnd = () -> {};
+    private Runnable beforeLayoutChange = () -> {};
+    private Runnable afterLayoutChange = () -> {};
     private UnaryOperator<EditorLayoutNode> ensureFn = UnaryOperator.identity();
     private Function<String, Icon> iconFn;
+    private Supplier<Boolean> animateLayoutChanges = () -> false;
 
     public UIDockLayout()
     {
@@ -118,6 +135,21 @@ public class UIDockLayout extends UIElement
     public UIDockLayout onSplitterDragEnd(Runnable onSplitterDragEnd)
     {
         this.onSplitterDragEnd = onSplitterDragEnd;
+
+        return this;
+    }
+
+    public UIDockLayout layoutChangeCallbacks(Runnable before, Runnable after)
+    {
+        this.beforeLayoutChange = before == null ? () -> {} : before;
+        this.afterLayoutChange = after == null ? () -> {} : after;
+
+        return this;
+    }
+
+    public UIDockLayout animateLayoutChanges(Supplier<Boolean> enabled)
+    {
+        this.animateLayoutChanges = enabled == null ? () -> false : enabled;
 
         return this;
     }
@@ -180,6 +212,11 @@ public class UIDockLayout extends UIElement
         return this.layoutLocked;
     }
 
+    public boolean isSplitterDragging()
+    {
+        return this.splitterHandles.stream().anyMatch(UIDraggable::isDragging);
+    }
+
     public boolean isPanelActive(String panelId)
     {
         DockStackInfo stack = this.dockStackByPanelId.get(panelId);
@@ -228,18 +265,31 @@ public class UIDockLayout extends UIElement
         this.setupFlex(true);
     }
 
+    public void refreshVisibility()
+    {
+        this.updateTabVisibility();
+    }
+
     public void toggleLock()
     {
-        this.layoutLocked = !this.layoutLocked;
-        this.clearPanelDragState();
-        this.clearSplitterDragState();
-        this.setupFlex(true);
+        this.beginLayoutChange();
+
+        try
+        {
+            this.layoutLocked = !this.layoutLocked;
+            this.clearPanelDragState();
+            this.clearSplitterDragState();
+            this.setupFlex(true);
+        }
+        finally
+        {
+            this.endLayoutChange();
+        }
     }
 
     public void resetLayout()
     {
-        this.setLayoutRoot(this.source.getDefault());
-        this.refresh();
+        this.applyLayoutRoot(this.source.getDefault());
     }
 
     /** Current layout tree (with all required panels ensured), e.g. for serializing into a preset. */
@@ -252,9 +302,169 @@ public class UIDockLayout extends UIElement
     {
         if (root != null)
         {
-            this.setLayoutRoot(root);
-            this.setupFlex(true);
+            this.beginLayoutChange();
+
+            try
+            {
+                this.setLayoutRoot(root);
+                this.clearPanelDragState();
+                this.clearSplitterDragState();
+                this.setupFlex(true);
+            }
+            finally
+            {
+                this.endLayoutChange();
+            }
         }
+    }
+
+    private void beginLayoutChange()
+    {
+        this.transitionCapturePending = false;
+
+        if (this.animateLayoutChanges.get() && this.area.w > 0 && this.area.h > 0)
+        {
+            this.advanceLayoutTransition();
+            this.captureBounds(this.panelById, this.transitionFromPanels);
+            this.captureBounds(this.dragHandlesById, this.transitionFromHandles);
+            this.transitionCapturePending = true;
+        }
+        else
+        {
+            this.clearLayoutTransition();
+        }
+
+        this.beforeLayoutChange.run();
+    }
+
+    private void endLayoutChange()
+    {
+        this.afterLayoutChange.run();
+
+        if (!this.transitionCapturePending)
+        {
+            return;
+        }
+
+        this.transitionCapturePending = false;
+        this.captureBounds(this.panelById, this.transitionToPanels);
+        this.captureBounds(this.dragHandlesById, this.transitionToHandles);
+
+        if (!hasChangedBounds(this.transitionFromPanels, this.transitionToPanels)
+            && !hasChangedBounds(this.transitionFromHandles, this.transitionToHandles))
+        {
+            this.clearLayoutTransition();
+            return;
+        }
+
+        this.layoutTransition.snap(0F);
+        this.layoutTransition.to(1F, UIMotions.layout());
+        this.layoutTransitioning = true;
+        this.applyInterpolatedBounds(0F);
+    }
+
+    private void captureBounds(Map<String, ? extends UIElement> elements, Map<String, float[]> out)
+    {
+        out.clear();
+
+        for (Map.Entry<String, ? extends UIElement> entry : elements.entrySet())
+        {
+            Area area = entry.getValue().area;
+
+            out.put(entry.getKey(), new float[] {
+                (area.x - this.area.x) / (float) this.area.w,
+                (area.y - this.area.y) / (float) this.area.h,
+                area.w / (float) this.area.w,
+                area.h / (float) this.area.h
+            });
+        }
+    }
+
+    private static boolean hasChangedBounds(Map<String, float[]> from, Map<String, float[]> to)
+    {
+        for (Map.Entry<String, float[]> entry : from.entrySet())
+        {
+            float[] target = to.get(entry.getKey());
+
+            if (target == null)
+            {
+                continue;
+            }
+
+            float[] source = entry.getValue();
+
+            for (int i = 0; i < source.length; i++)
+            {
+                if (Math.abs(source[i] - target[i]) > 5E-4F)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private void advanceLayoutTransition()
+    {
+        if (!this.layoutTransitioning)
+        {
+            return;
+        }
+
+        float progress = MathUtils.clamp(this.layoutTransition.update(System.currentTimeMillis()), 0F, 1F);
+
+        this.applyInterpolatedBounds(progress);
+
+        if (this.layoutTransition.isSettled())
+        {
+            this.applyInterpolatedBounds(1F);
+            this.clearLayoutTransition();
+        }
+    }
+
+    private void applyInterpolatedBounds(float progress)
+    {
+        this.applyInterpolatedBounds(this.panelById, this.transitionFromPanels, this.transitionToPanels, progress);
+        this.applyInterpolatedBounds(this.dragHandlesById, this.transitionFromHandles, this.transitionToHandles, progress);
+        this.resize();
+    }
+
+    private void applyInterpolatedBounds(Map<String, ? extends UIElement> elements, Map<String, float[]> from, Map<String, float[]> to, float progress)
+    {
+        for (Map.Entry<String, ? extends UIElement> entry : elements.entrySet())
+        {
+            float[] source = from.get(entry.getKey());
+            float[] target = to.get(entry.getKey());
+
+            if (source == null || target == null)
+            {
+                continue;
+            }
+
+            entry.getValue().relative(this)
+                .x(Lerps.lerp(source[0], target[0], progress))
+                .y(Lerps.lerp(source[1], target[1], progress))
+                .w(Lerps.lerp(source[2], target[2], progress))
+                .h(Lerps.lerp(source[3], target[3], progress));
+        }
+    }
+
+    private void clearLayoutTransition()
+    {
+        this.layoutTransitioning = false;
+        this.transitionCapturePending = false;
+        this.transitionFromPanels.clear();
+        this.transitionToPanels.clear();
+        this.transitionFromHandles.clear();
+        this.transitionToHandles.clear();
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        this.advanceLayoutTransition();
+        super.render(context);
     }
 
     public boolean cycleDockStackTab(int offset)
@@ -347,8 +557,7 @@ public class UIDockLayout extends UIElement
 
         if (next != root)
         {
-            this.setLayoutRoot(next);
-            this.setupFlex(true);
+            this.applyLayoutRoot(next);
         }
     }
 
@@ -538,6 +747,11 @@ public class UIDockLayout extends UIElement
         for (UIDockStackTabs tabs : this.dockStackTabs)
         {
             tabs.setVisible(show);
+        }
+
+        for (UIDraggable handle : this.splitterHandles)
+        {
+            handle.setVisible(show && !this.layoutLocked);
         }
 
         this.onChanged.run();
@@ -1026,21 +1240,42 @@ public class UIDockLayout extends UIElement
     private void clearPanelDragState()
     {
         this.draggingPanelId = null;
+        this.clearDropTarget();
+    }
+
+    private void clearDropTarget()
+    {
         this.dropTargetPanelId = null;
+        this.dropTargetIsRoot = false;
         this.dropTargetZone = DROP_ZONE_CENTER;
+    }
+
+    private boolean hasDropTarget()
+    {
+        return this.dropTargetIsRoot || this.dropTargetPanelId != null;
     }
 
     private void applyPanelDropResult(String dragId, String targetId, int zone)
     {
         EditorLayoutNode root = this.layoutRoot();
-        EditorLayoutNode newRoot = zone == DROP_ZONE_CENTER
-            ? EditorLayoutNode.copyWithInsertStackAt(root, targetId, dragId)
-            : EditorLayoutNode.copyWithInsertSplitAt(root, targetId, dragId, zone);
+        EditorLayoutNode newRoot;
+
+        if (targetId == null)
+        {
+            newRoot = EditorLayoutNode.copyWithInsertSplitAtRoot(root, dragId, zone, DROP_ROOT_RATIO);
+        }
+        else if (zone == DROP_ZONE_CENTER)
+        {
+            newRoot = EditorLayoutNode.copyWithInsertStackAt(root, targetId, dragId);
+        }
+        else
+        {
+            newRoot = EditorLayoutNode.copyWithInsertSplitAt(root, targetId, dragId, zone);
+        }
 
         if (newRoot != null && newRoot != root)
         {
-            this.setLayoutRoot(newRoot);
-            this.setupFlex(true);
+            this.applyLayoutRoot(newRoot);
         }
     }
 
@@ -1053,8 +1288,7 @@ public class UIDockLayout extends UIElement
                 this.draggingPanelId = panelId;
             }
 
-            this.dropTargetPanelId = null;
-            this.dropTargetZone = DROP_ZONE_CENTER;
+            this.clearDropTarget();
 
             for (UIDockStackTabs tabs : this.dockStackTabs)
             {
@@ -1072,6 +1306,16 @@ public class UIDockLayout extends UIElement
 
                     break;
                 }
+            }
+
+            int editorEdge = nearestEdge(this.area, context.mouseX, context.mouseY, DROP_EDITOR_EDGE_PX, DROP_EDITOR_EDGE_PX);
+
+            if (editorEdge != DROP_ZONE_CENTER)
+            {
+                this.dropTargetIsRoot = true;
+                this.dropTargetZone = editorEdge;
+
+                return;
             }
 
             for (Map.Entry<String, UIElement> e : this.panelById.entrySet())
@@ -1095,10 +1339,11 @@ public class UIDockLayout extends UIElement
             String dragId = this.draggingPanelId;
             String targetId = this.dropTargetPanelId;
             int targetZone = this.dropTargetZone;
+            boolean hasTarget = this.hasDropTarget();
 
             try
             {
-                if (dragId == null || targetId == null || dragId.equals(targetId))
+                if (dragId == null || !hasTarget || dragId.equals(targetId))
                 {
                     return;
                 }
@@ -1124,34 +1369,53 @@ public class UIDockLayout extends UIElement
 
     private int computeDropZone(Area area, int mouseX, int mouseY)
     {
-        int ax = area.x;
-        int ay = area.y;
-        int aw = area.w;
-        int ah = area.h;
-        float nx = aw <= 0 ? 0.5F : (mouseX - ax) / (float) aw;
-        float ny = ah <= 0 ? 0.5F : (mouseY - ay) / (float) ah;
+        return nearestEdge(area, mouseX, mouseY, panelEdgeBand(area.w), panelEdgeBand(area.h));
+    }
 
-        if (nx < DROP_EDGE_MARGIN)
+    private static int panelEdgeBand(int size)
+    {
+        return Math.min(DROP_PANEL_EDGE_PX, (int) (size * DROP_PANEL_EDGE_MAX));
+    }
+
+    private static int nearestEdge(Area area, int mouseX, int mouseY, int bandX, int bandY)
+    {
+        int left = mouseX - area.x;
+        int right = area.ex() - 1 - mouseX;
+        int top = mouseY - area.y;
+        int bottom = area.ey() - 1 - mouseY;
+
+        if (left < 0 || right < 0 || top < 0 || bottom < 0)
         {
-            return EditorLayoutNode.EDGE_LEFT;
+            return DROP_ZONE_CENTER;
         }
 
-        if (nx > 1F - DROP_EDGE_MARGIN)
+        int zone = DROP_ZONE_CENTER;
+        int best = Integer.MAX_VALUE;
+
+        if (left < bandX && left < best)
         {
-            return EditorLayoutNode.EDGE_RIGHT;
+            best = left;
+            zone = EditorLayoutNode.EDGE_LEFT;
         }
 
-        if (ny < DROP_EDGE_MARGIN)
+        if (right < bandX && right < best)
         {
-            return EditorLayoutNode.EDGE_TOP;
+            best = right;
+            zone = EditorLayoutNode.EDGE_RIGHT;
         }
 
-        if (ny > 1F - DROP_EDGE_MARGIN)
+        if (top < bandY && top < best)
         {
-            return EditorLayoutNode.EDGE_BOTTOM;
+            best = top;
+            zone = EditorLayoutNode.EDGE_TOP;
         }
 
-        return DROP_ZONE_CENTER;
+        if (bottom < bandY && bottom < best)
+        {
+            zone = EditorLayoutNode.EDGE_BOTTOM;
+        }
+
+        return zone;
     }
 
     /* Rendering */
@@ -1205,19 +1469,28 @@ public class UIDockLayout extends UIElement
 
     private void renderDropZoneHighlight(UIContext context)
     {
-        if (this.layoutLocked || this.draggingPanelId == null || this.dropTargetPanelId == null)
+        if (this.layoutLocked || this.draggingPanelId == null || !this.hasDropTarget())
         {
             return;
         }
 
-        UIElement target = this.panelById.get(this.dropTargetPanelId);
+        Area area = this.area;
+        float ratio = DROP_ROOT_RATIO;
 
-        if (target == null)
+        if (!this.dropTargetIsRoot)
         {
-            return;
+            UIElement target = this.panelById.get(this.dropTargetPanelId);
+
+            if (target == null)
+            {
+                return;
+            }
+
+            area = target.area;
+            ratio = EditorLayoutNode.SPLIT_RATIO;
         }
 
-        UIDockStyleRenderer.renderDropZone(context, target.area, this.dropTargetZone, DROP_EDGE_MARGIN);
+        UIDockStyleRenderer.renderDropZone(context, area, this.dropTargetZone, ratio);
     }
 
     /* Helper types */

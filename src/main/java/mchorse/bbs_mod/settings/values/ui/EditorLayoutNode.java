@@ -18,6 +18,13 @@ public abstract class EditorLayoutNode
     public static final String DIR_V = "v";
     public static final String DIR_H = "h";
 
+    /** A split never collapses a side entirely, so every panel keeps a grabbable sliver. */
+    public static final float MIN_RATIO = 0.05F;
+    public static final float MAX_RATIO = 0.95F;
+
+    /** Share a panel takes when it is split off against another panel. */
+    public static final float SPLIT_RATIO = 0.5F;
+
     /** Drop zone edges for split (left/right = vertical split, top/bottom = horizontal). */
     public static final int EDGE_LEFT = 0;
     public static final int EDGE_RIGHT = 1;
@@ -211,6 +218,28 @@ public abstract class EditorLayoutNode
         boolean droppedFirst = (edge == EDGE_LEFT || edge == EDGE_TOP);
 
         return copyWithInsertedSplitAroundTarget(root2, targetPanelId, droppedPanelId, horizontal, droppedFirst);
+    }
+
+    /**
+     * Returns a new tree with droppedPanel split off against the layout as a whole, so it spans the
+     * full width or height of that edge instead of only the panel it was dropped on.
+     */
+    public static EditorLayoutNode copyWithInsertSplitAtRoot(EditorLayoutNode root, String droppedPanelId, int edge, float ratio)
+    {
+        EditorLayoutNode rest = copyWithRemovedPanel(root, droppedPanelId);
+        EditorLayoutNode dropped = new PanelNode(droppedPanelId);
+
+        if (rest == null)
+        {
+            return dropped;
+        }
+
+        boolean horizontal = edge == EDGE_TOP || edge == EDGE_BOTTOM;
+        boolean droppedFirst = edge == EDGE_LEFT || edge == EDGE_TOP;
+
+        return droppedFirst
+            ? new SplitterNode(horizontal, ratio, dropped, rest)
+            : new SplitterNode(horizontal, 1F - ratio, rest, dropped);
     }
 
     /** Returns a new tree with droppedPanel added into target panel's stack (center drop behavior). */

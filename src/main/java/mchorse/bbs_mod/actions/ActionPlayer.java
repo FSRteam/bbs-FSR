@@ -6,6 +6,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.Morph;
@@ -632,7 +633,7 @@ public class ActionPlayer
 
         if (vy == 0D)
         {
-            vy = -0.0784;
+            vy = -ReplayKeyframes.GRAVITY_PROBE;
         }
 
         if (!FilmPlaybackPolicy.isPoseAllowed(x, y, z, yawHead, yawHead, yawBody, pitch)
@@ -643,10 +644,13 @@ public class ActionPlayer
         }
 
         Vec3 pos = actor.position();
+        boolean grounded = replay.keyframes.grounded.interpolate(tick) > 0;
 
         if (ticking)
         {
-            actor.move(MoverType.SELF, new Vec3(x - pos.x, y - pos.y, z - pos.z));
+            double dY = y - pos.y - (grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D);
+
+            actor.move(MoverType.SELF, new Vec3(x - pos.x, dY, z - pos.z));
         }
 
         actor.setPos(x, y, z);
@@ -655,7 +659,8 @@ public class ActionPlayer
         actor.setXRot(pitch);
         actor.setYBodyRot(yawBody);
         actor.setShiftKeyDown(replay.keyframes.sneaking.interpolate(tick) > 0);
-        actor.setOnGround(replay.keyframes.grounded.interpolate(tick) > 0);
+        actor.setOnGround(grounded);
+        actor.setSprinting(replay.keyframes.sprinting.interpolate(tick) > 0);
 
         boolean actorProjection = actor instanceof ActorEntity;
         boolean isolatedProjection = actor instanceof ActorEntity actorEntity

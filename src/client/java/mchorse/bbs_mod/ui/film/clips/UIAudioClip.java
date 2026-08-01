@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UISoundOverlayPanel;
@@ -25,7 +26,7 @@ public class UIAudioClip extends UIClip<AudioClip>
     public UIIcon openFolder;
     public UIIcon extendDuration;
     public UITrackpad offset;
-    public UITrackpad volume;
+    public UISliderTrackpad volume;
 
     public UIAudioClip(AudioClip clip, IUIClipsDelegate editor)
     {
@@ -82,7 +83,7 @@ public class UIAudioClip extends UIClip<AudioClip>
         this.offset = new UITrackpad((v) -> this.clip.offset.set(v.intValue()));
         this.offset.integer();
 
-        this.volume = new UITrackpad((v) -> this.clip.volume.set(v.floatValue()));
+        this.volume = new UISliderTrackpad((v) -> this.clip.volume.set(v.floatValue()));
         this.volume.limit(this.clip.volume).values(0.05F, 0.01F, 0.2F).increment(0.1F).tooltip(UIKeys.CAMERA_PANELS_AUDIO_VOLUME);
     }
 

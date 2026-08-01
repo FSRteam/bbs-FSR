@@ -109,6 +109,7 @@ public class UIKeyframes extends UIElement
     public UIKeyframes(Consumer<Keyframe> callback)
     {
         this.callback = callback;
+        this.tooltip = new UIKeyframePreviewTooltip(this);
 
         this.labelResizer = new UIDraggable((context) ->
         {
@@ -1073,6 +1074,12 @@ public class UIKeyframes extends UIElement
     public boolean isNavigating()
     {
         return this.navigating;
+    }
+
+    /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
+    public boolean isInteracting()
+    {
+        return this.dragging >= 0 || this.selecting || this.navigating || this.scaling || this.stacking;
     }
 
     /* Sheet management */

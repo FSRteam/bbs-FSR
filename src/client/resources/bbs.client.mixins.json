@@ -3,6 +3,7 @@
     "package": "mchorse.bbs_mod.mixin.client",
     "compatibilityLevel": "JAVA_21",
     "client": [
+        "BackgroundRendererMixin",
         "CameraMixin",
         "GameRendererMixin",
         "EntityRendererDispatcherInvoker",

@@ -52,6 +52,8 @@ public final class BBSUiLifecycleSourceTest
         String dock = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockLayout.java");
         String film = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
         String renderer = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockStyleRenderer.java");
+        String trackpad = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UITrackpad.java");
+        String slider = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UISliderTrackpad.java");
 
         check(dashboard.contains("hidden * TASKBAR_HEIGHT")
                 && dashboard.contains("this.setPanelPlacement(this.panel, TASKBAR_HEIGHT - slide)")
@@ -62,18 +64,25 @@ public final class BBSUiLifecycleSourceTest
                 && dataPanel.contains("this.tabBar.relative(this).y(-tabsSlide)")
                 && dataPanel.contains("int contentTop = tabsHeight - tabsSlide"),
             "dashboard auto-hide must slide only the bottom taskbar and top data-panel chrome, never the active panel itself");
-        check(dock.contains("UIDockStyleRenderer.renderPanelDragHandle")
+        check(film.contains("private final UIDockLayout dock;")
+                && film.contains("this.dock = new UIDockLayout();")
+                && film.contains("this.editor.add(this.dock);")
+                && dock.contains("UIDockStyleRenderer.renderPanelDragHandle")
                 && dock.contains("UIDockStyleRenderer.renderSplitter")
-                && dock.contains("UIDockStyleRenderer.renderDropZone")
-                && film.contains("UIDockStyleRenderer.renderPanelDragHandle")
-                && film.contains("UIDockStyleRenderer.renderSplitter")
-                && film.contains("UIDockStyleRenderer.renderDropZone"),
+                && dock.contains("UIDockStyleRenderer.renderDropZone"),
             "film and reusable dock layouts no longer share all interaction-surface rendering");
         check(renderer.contains("BBSSettings.areaTintColor()")
                 && renderer.contains("BBSSettings.splitterActiveColor()")
                 && renderer.contains("BBSSettings.dropBorderColor()")
                 && renderer.contains("themedBorder == 0 && themedFill == 0"),
             "shared dock rendering no longer consumes Refreshed tokens or preserve the legacy zero-token path");
+        check(trackpad.contains("BBSSettings.trackpadScrubColor()")
+                && trackpad.contains("BBSSettings.accentColorRGB()")
+                && trackpad.contains("BBSSettings.cornerWidget()")
+                && slider.contains("BBSSettings.accentColorRGB()")
+                && slider.contains("BBSSettings.cornerWidget()")
+                && occurrences(slider, "context.batcher.roundedBox(") >= 4,
+            "migrated numeric controls no longer preserve themed accents and Refreshed rounded rendering");
     }
 
     private static void assertOwnerAwareInputCallSites()
@@ -251,7 +260,7 @@ public final class BBSUiLifecycleSourceTest
         String vertexConsumers = readSource("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
         String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
         String modelVao = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/ModelVAO.java");
-        String enableMode = sourceSection(transform, "public void enableMode(int mode)", "private HotkeyTarget currentHotkeyTarget");
+        String enableMode = sourceSection(transform, "public void enableMode(TransformOp op)", "private HotkeyTarget currentHotkeyTarget");
 
         check(panels.contains("private boolean panelAppeared;")
                 && panels.contains("if (this.panel != null && !this.panelAppeared)")
@@ -356,7 +365,7 @@ public final class BBSUiLifecycleSourceTest
                 && thumbnailPoseReuse.contains("this.finishRenderUI(context, x1, y1, x2, y2);")
                 && modelRenderer.contains("!reusePreviewPose"),
             "animated preview pose reuse no longer covers picking, matrix sampling and the model-editor thumbnail");
-        check(enableMode.contains("this.nextHotkeyTarget(mode, ray)")
+        check(enableMode.contains("this.nextHotkeyTarget(op, ray)")
                 && enableMode.contains("target == HotkeyTarget.ALL")
                 && enableMode.contains("this.enableUniformScale(drag, true)")
                 && transform.contains("if (this.isScaleAll()) return HotkeyTarget.ALL;")

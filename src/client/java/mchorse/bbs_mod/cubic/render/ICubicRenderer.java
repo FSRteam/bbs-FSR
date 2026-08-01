@@ -3,10 +3,10 @@ package mchorse.bbs_mod.cubic.render;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
-import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.joml.Matrices;
+import mchorse.bbs_mod.utils.pose.Transform;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import org.joml.Vector3f;
 
 public interface ICubicRenderer
@@ -45,13 +45,19 @@ public interface ICubicRenderer
             return;
         }
 
-        if (group.current.rotate.z != 0F) stack.mulPose(Axis.ZP.rotation(MathUtils.toRad(group.current.rotate.z)));
-        if (group.current.rotate.y != 0F) stack.mulPose(Axis.YP.rotation(MathUtils.toRad(group.current.rotate.y)));
-        if (group.current.rotate.x != 0F) stack.mulPose(Axis.XP.rotation(MathUtils.toRad(group.current.rotate.x)));
+        if (group.current.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            stack.mulPose(group.current.quat);
 
-        if (group.current.rotate2.z != 0F) stack.mulPose(Axis.ZP.rotation(MathUtils.toRad(group.current.rotate2.z)));
-        if (group.current.rotate2.y != 0F) stack.mulPose(Axis.YP.rotation(MathUtils.toRad(group.current.rotate2.y)));
-        if (group.current.rotate2.x != 0F) stack.mulPose(Axis.XP.rotation(MathUtils.toRad(group.current.rotate2.x)));
+            return;
+        }
+
+        Vector3f rotate = group.current.rotate;
+
+        if (rotate.x != 0F || rotate.y != 0F || rotate.z != 0F)
+        {
+            stack.mulPose(Matrices.toLocalRotationZYXDegrees(rotate));
+        }
     }
 
     public static void scaleGroup(PoseStack stack, ModelGroup group)

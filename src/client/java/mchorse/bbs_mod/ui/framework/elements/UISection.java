@@ -1,7 +1,5 @@
 package mchorse.bbs_mod.ui.framework.elements;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -11,6 +9,9 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import java.util.function.Consumer;
 
 /**
  * A collapsible section: a clickable header bar (a fold arrow and a title sitting
@@ -27,6 +28,7 @@ public class UISection extends UIElement
     public UIElement fields;
 
     private boolean expanded = true;
+    private Consumer<UISection> callback;
 
     public UISection()
     {
@@ -61,6 +63,18 @@ public class UISection extends UIElement
         return this;
     }
 
+    /**
+     * Notified whenever the fold state changes, so an owner can remember it —
+     * panels are rebuilt from scratch on many editor actions, and a section
+     * that always came back at its default would undo the user's fold.
+     */
+    public UISection onToggle(Consumer<UISection> callback)
+    {
+        this.callback = callback;
+
+        return this;
+    }
+
     public boolean isExpanded()
     {
         return this.expanded;
@@ -87,6 +101,11 @@ public class UISection extends UIElement
         else
         {
             this.fields.removeFromParent();
+        }
+
+        if (this.callback != null)
+        {
+            this.callback.accept(this);
         }
 
         this.resizeParent();
@@ -153,7 +172,7 @@ public class UISection extends UIElement
 
         matrices.pushPose();
         matrices.translate(cx, cy, 0F);
-        matrices.mulPose(Axis.ZP.rotationDegrees(this.expanded ? 90F : 0F));
+        matrices.rotateAround(Axis.ZP.rotationDegrees(this.expanded ? 90F : 0F), 0F, 0F, 0F);
         context.batcher.icon(Icons.ARROW_SMALL, Colors.WHITE, 0, 0, 0.5F, 0.5F);
         matrices.popPose();
     }

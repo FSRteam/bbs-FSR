@@ -2,6 +2,7 @@ package mchorse.bbs_mod.items;
 
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
@@ -33,6 +34,8 @@ public final class GunPropertiesPolicy
     public static final float MAX_TRANSFORM_TRANSLATION = 1_024F;
     public static final float MAX_TRANSFORM_SCALE = 1_024F;
     public static final float MAX_TRANSFORM_ROTATION = 100_000F;
+    private static final float MIN_QUATERNION_LENGTH_SQUARED = 0.999F;
+    private static final float MAX_QUATERNION_LENGTH_SQUARED = 1.001F;
 
     private GunPropertiesPolicy()
     {}
@@ -165,8 +168,36 @@ public final class GunPropertiesPolicy
         return transform != null
             && isVectorAllowed(transform.translate, MAX_TRANSFORM_TRANSLATION)
             && isVectorAllowed(transform.scale, MAX_TRANSFORM_SCALE)
-            && isVectorAllowed(transform.rotate, MAX_TRANSFORM_ROTATION)
-            && isVectorAllowed(transform.rotate2, MAX_TRANSFORM_ROTATION);
+            && isRotationAllowed(transform);
+    }
+
+    private static boolean isRotationAllowed(Transform transform)
+    {
+        if (transform.rotationMode == Transform.RotationMode.EULER)
+        {
+            return isVectorAllowed(transform.rotate, MAX_TRANSFORM_ROTATION);
+        }
+
+        if (transform.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            Quaternionf quaternion = transform.quat;
+
+            if (quaternion == null
+                || !Float.isFinite(quaternion.x)
+                || !Float.isFinite(quaternion.y)
+                || !Float.isFinite(quaternion.z)
+                || !Float.isFinite(quaternion.w))
+            {
+                return false;
+            }
+
+            float lengthSquared = quaternion.lengthSquared();
+
+            return lengthSquared >= MIN_QUATERNION_LENGTH_SQUARED
+                && lengthSquared <= MAX_QUATERNION_LENGTH_SQUARED;
+        }
+
+        return false;
     }
 
     private static boolean hasText(String command)

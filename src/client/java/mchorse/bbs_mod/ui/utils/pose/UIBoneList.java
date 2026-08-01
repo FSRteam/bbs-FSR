@@ -107,6 +107,10 @@ public class UIBoneList extends UIElement
         String query = this.search.getText().trim().toLowerCase();
         List<String> visible = new ArrayList<>();
 
+        /* This list is refilled per keystroke instead of using UIList's own filter,
+         * so tell the tree renderer explicitly when matches should draw flat. */
+        this.list.flat(!query.isEmpty());
+
         for (String bone : this.allGroups)
         {
             String label = this.labels.getOrDefault(bone, bone);

@@ -80,6 +80,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2147,14 +2148,18 @@ public class UIReplayList extends UIList<ReplayListEntry>
         replay.keyframes.y.insert(0, y);
         replay.keyframes.z.insert(0, z);
 
+        /* Mode-aware read: on a quaternion-mode transform the euler channels are
+         * stale zeros — reading them raw would take the yaw-only path with yaw 0
+         * and silently drop the block's whole rotation. */
+        Vector3f rotation = transform.getEulerRotation(new Vector3f());
+
         if (!transform.isDefault())
         {
             if (
-                transform.rotate.x == 0 && transform.rotate.z == 0 &&
-                transform.rotate2.x == 0 && transform.rotate2.y == 0 && transform.rotate2.z == 0 &&
+                rotation.x == 0 && rotation.z == 0 &&
                 transform.scale.x == 1 && transform.scale.y == 1 && transform.scale.z == 1
             ) {
-                double yaw = -Math.toDegrees(transform.rotate.y);
+                double yaw = -Math.toDegrees(rotation.y);
 
                 replay.keyframes.yaw.insert(0, yaw);
                 replay.keyframes.headYaw.insert(0, yaw);

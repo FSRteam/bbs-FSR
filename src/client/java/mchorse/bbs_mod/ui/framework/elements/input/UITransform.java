@@ -17,10 +17,12 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.AxisAngle4f;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
@@ -41,16 +43,13 @@ public abstract class UITransform extends UIElement
     public UITrackpad rx;
     public UITrackpad ry;
     public UITrackpad rz;
-    public UITrackpad r2x;
-    public UITrackpad r2y;
-    public UITrackpad r2z;
 
     protected UIIcon iconT;
     protected UIIcon iconS;
     protected UIIcon iconR;
-    protected UIIcon iconR2;
 
     protected UIElement scaleRow;
+    protected UIElement rotateRow;
 
     private boolean uniformDrag;
     private boolean uniformScale;
@@ -82,21 +81,21 @@ public abstract class UITransform extends UIElement
             this.internalSetS(value, Axis.X);
             this.syncScale(value);
         }).disableCanceling();
-        this.sx.onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_X));
+        this.sx.factor().onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_X));
         this.sx.textbox.setColor(Colors.RED);
         this.sy = new UITrackpad((value) ->
         {
             this.internalSetS(value, Axis.Y);
             this.syncScale(value);
         }).disableCanceling();
-        this.sy.onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Y));
+        this.sy.factor().onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Y));
         this.sy.textbox.setColor(Colors.GREEN);
         this.sz = new UITrackpad((value) ->
         {
             this.internalSetS(value, Axis.Z);
             this.syncScale(value);
         }).disableCanceling();
-        this.sz.onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Z));
+        this.sz.factor().onlyNumbers().tooltip(raw.format(UIKeys.TRANSFORMS_SCALE, UIKeys.GENERAL_Z));
         this.sz.textbox.setColor(Colors.BLUE);
 
         this.rx = new UITrackpad((value) -> this.internalSetR(value, Axis.X)).degrees().onlyNumbers();
@@ -109,40 +108,26 @@ public abstract class UITransform extends UIElement
         this.rz.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE, UIKeys.GENERAL_Z));
         this.rz.textbox.setColor(Colors.BLUE);
 
-        this.r2x = new UITrackpad((value) -> this.internalSetR2(value, Axis.X)).degrees().onlyNumbers();
-        this.r2x.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE2, UIKeys.GENERAL_X));
-        this.r2x.textbox.setColor(Colors.RED);
-        this.r2y = new UITrackpad((value) -> this.internalSetR2(value, Axis.Y)).degrees().onlyNumbers();
-        this.r2y.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE2, UIKeys.GENERAL_Y));
-        this.r2y.textbox.setColor(Colors.GREEN);
-        this.r2z = new UITrackpad((value) -> this.internalSetR2(value, Axis.Z)).degrees().onlyNumbers();
-        this.r2z.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATE2, UIKeys.GENERAL_Z));
-        this.r2z.textbox.setColor(Colors.BLUE);
-
         this.w(1F).column(2).stretch().vertical();
 
         this.iconT = new UIIcon(Icons.ALL_DIRECTIONS, null);
         this.iconS = new UIIcon(Icons.SCALE, (b) -> this.toggleUniformScale());
         this.iconS.tooltip(UIKeys.TRANSFORMS_UNIFORM_SCALE);
         this.iconR = new UIIcon(Icons.REFRESH, null);
-        this.iconR2 = new UIIcon(Icons.REFRESH, null);
 
         this.iconT.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
         this.iconS.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
         this.iconR.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
-        this.iconR2.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
 
-        this.iconT.disabledColor = this.iconS.disabledColor = this.iconR.disabledColor = this.iconR2.disabledColor = Colors.WHITE;
-        this.iconT.hoverColor = this.iconS.hoverColor = this.iconR.hoverColor = this.iconR2.hoverColor = Colors.WHITE;
+        this.iconT.disabledColor = this.iconS.disabledColor = this.iconR.disabledColor = Colors.WHITE;
+        this.iconT.hoverColor = this.iconS.hoverColor = this.iconR.hoverColor = Colors.WHITE;
 
         this.iconT.setEnabled(false);
         this.iconR.setEnabled(false);
-        this.iconR2.setEnabled(false);
 
         this.add(UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.iconT, this.tx, this.ty, this.tz));
         this.add(this.scaleRow = UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.iconS, this.sx, this.sy, this.sz));
-        this.add(UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.iconR, this.rx, this.ry, this.rz));
-        this.add(UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.iconR2, this.r2x, this.r2y, this.r2z));
+        this.add(this.rotateRow = UI.row(2, 0, UIConstants.CONTROL_HEIGHT, this.iconR, this.rx, this.ry, this.rz));
 
         this.context((menu) ->
         {
@@ -178,7 +163,7 @@ public abstract class UITransform extends UIElement
             menu.action(Icons.CLOSE, UIKeys.TRANSFORMS_CONTEXT_RESET, this::reset);
         });
 
-        this.w(190).h(4 * UIConstants.CONTROL_HEIGHT);
+        this.w(190).h(3 * UIConstants.CONTROL_HEIGHT);
 
         this.keys().register(Keys.COPY, this::copyTransformations).inside().label(UIKeys.TRANSFORMS_CONTEXT_COPY);
         this.keys().register(Keys.PASTE, () ->
@@ -230,7 +215,7 @@ public abstract class UITransform extends UIElement
         return this.uniformDrag || Window.isKeyPressed(GLFW.GLFW_KEY_SPACE);
     }
 
-    /** Whether the scale row currently shows the single linked field. */
+    /** Whether the scale row is collapsed to the single linked field (see {@link #toggleUniformScale()}). */
     protected boolean isScaleRowCollapsed()
     {
         return this.uniformScale;
@@ -263,12 +248,6 @@ public abstract class UITransform extends UIElement
         this.setR(null, x, y, z);
     }
 
-    public void fillSetR2(double x, double y, double z)
-    {
-        this.fillR2(x, y, z);
-        this.setR2(null, x, y, z);
-    }
-
     public void fillT(double x, double y, double z)
     {
         this.tx.setValue(x);
@@ -288,13 +267,6 @@ public abstract class UITransform extends UIElement
         this.rx.setValue(x);
         this.ry.setValue(y);
         this.rz.setValue(z);
-    }
-
-    public void fillR2(double x, double y, double z)
-    {
-        this.r2x.setValue(x);
-        this.r2y.setValue(y);
-        this.r2z.setValue(z);
     }
     
     protected void internalSetT(double x, Axis axis)
@@ -354,21 +326,6 @@ public abstract class UITransform extends UIElement
         }
     }
 
-    protected void internalSetR2(double x, Axis axis)
-    {
-        try
-        {
-            this.setR2(axis,
-                axis == Axis.X ? x : this.r2x.value,
-                axis == Axis.Y ? x : this.r2y.value,
-                axis == Axis.Z ? x : this.r2z.value
-            );
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-    }
 
     public abstract void setT(Axis axis, double x, double y, double z);
 
@@ -376,7 +333,21 @@ public abstract class UITransform extends UIElement
 
     public abstract void setR(Axis axis, double x, double y, double z);
 
-    public abstract void setR2(Axis axis, double x, double y, double z);
+    /**
+     * Store a full rotation given as a quaternion. The base editor folds it onto
+     * the euler fields; {@link UIPropTransform} overrides this with the direct
+     * quaternion write for quaternion-mode transforms (and the delta editors fan
+     * it as a quaternion delta across the selection). This is the delivery for
+     * rotations solved as a whole (world paste), where a per-channel euler delta
+     * against a quaternion bone's stale channels would have the wrong basis.
+     */
+    public void setRQuat(Quaternionf quat)
+    {
+        Vector3f euler = Matrices.toEulerZYXRadians(quat, new Vector3f());
+
+        this.fillSetR(MathUtils.toDeg(euler.x), MathUtils.toDeg(euler.y), MathUtils.toDeg(euler.z));
+    }
+
 
     private void copyTransformations()
     {
@@ -391,9 +362,6 @@ public abstract class UITransform extends UIElement
         list.addDouble(this.rx.value);
         list.addDouble(this.ry.value);
         list.addDouble(this.rz.value);
-        list.addDouble(this.r2x.value);
-        list.addDouble(this.r2y.value);
-        list.addDouble(this.r2z.value);
 
         Window.setClipboard(list);
     }
@@ -403,7 +371,6 @@ public abstract class UITransform extends UIElement
         this.pasteTranslation(this.getVector(list, 0));
         this.pasteScale(this.getVector(list, 3));
         this.pasteRotation(this.getVector(list, 6));
-        this.pasteRotation2(this.getVector(list, 9));
     }
 
     public void pasteTranslation(Vector3d translation)
@@ -419,11 +386,6 @@ public abstract class UITransform extends UIElement
     public void pasteRotation(Vector3d rotation)
     {
         this.fillSetR(rotation.x, rotation.y, rotation.z);
-    }
-
-    public void pasteRotation2(Vector3d rotation)
-    {
-        this.fillSetR2(rotation.x, rotation.y, rotation.z);
     }
 
     private Vector3d getVector(ListType list, int offset)
@@ -460,6 +422,12 @@ public abstract class UITransform extends UIElement
         this.worldProvider = provider;
 
         return this;
+    }
+
+    /** The world-matrix source wired by the host, or {@code null} (see {@link #worldTransform}). */
+    protected IWorldTransformProvider getWorldProvider()
+    {
+        return this.worldProvider;
     }
 
     /** Capture the element's current full world matrix into the shared world clipboard. */
@@ -526,52 +494,91 @@ public abstract class UITransform extends UIElement
         Vector3f startTranslate = new Vector3f(transform.translate);
         Vector3f startRotate = new Vector3f(transform.rotate);
         Vector3f startScale = new Vector3f(transform.scale);
+        Quaternionf startQuat = new Quaternionf(transform.quat);
+        Transform.RotationMode startMode = transform.rotationMode;
+        boolean wasQuaternion = startMode == Transform.RotationMode.QUATERNION;
 
-        Vector3f targetScale = new Vector3f();
-        Matrix3f targetRotation = orthonormalize(cached.get3x3(new Matrix3f()), targetScale);
-        Vector3f targetPosition = cached.getTranslation(new Vector3f());
+        Vector3f finalTranslate;
+        Vector3f finalRotate;
+        Vector3f finalScale;
 
-        Matrix3f jacobian = GizmoDrag.computeTranslateJacobian(transform, () -> sampler.get().getTranslation(new Vector3f()));
-
-        if (Math.abs(jacobian.determinant()) > 1.0E-9F)
+        /* The solve mutates the live transform as scratch (and force-flips a
+         * quaternion bone to euler); the sampler runs real render code every
+         * pass, so the finally guarantees the scratch state can't leak into the
+         * scene if any of that throws mid-solve. */
+        try
         {
-            Vector3f error = targetPosition.sub(sampler.get().getTranslation(new Vector3f()), new Vector3f());
-
-            jacobian.invert().transform(error);
-            transform.translate.add(error);
-        }
-
-        for (int i = 0; i < WORLD_PASTE_ITERATIONS; i++)
-        {
-            Matrix3f axes = GizmoDrag.computeRotateAxes(transform, sampler);
-
-            if (Math.abs(axes.determinant()) > 1.0E-9F)
+            /* The solve iterates on the euler channels, but on a quaternion-mode bone the render follows
+             * the quat — the euler writes would leave the sampled matrix frozen and the loop would add the
+             * same error every pass (garbage handed to setR). Fold the quat into the euler channels for
+             * the solve (same orientation, nearest branch), so the sampler tracks the writes. */
+            if (wasQuaternion)
             {
-                Matrix3f current = orthonormalize(sampler.get().get3x3(new Matrix3f()), new Vector3f());
-                Matrix3f delta = new Matrix3f(targetRotation).mul(current.invert());
-                AxisAngle4f axisAngle = new AxisAngle4f().set(delta);
-                Vector3f error = new Vector3f(axisAngle.x, axisAngle.y, axisAngle.z).mul(axisAngle.angle);
-
-                axes.invert().transform(error);
-                transform.rotate.add(error);
+                transform.setModeEuler();
             }
 
-            this.solveScale(transform, sampler, targetScale);
+            Vector3f targetScale = new Vector3f();
+            Matrix3f targetRotation = orthonormalize(cached.get3x3(new Matrix3f()), targetScale);
+            Vector3f targetPosition = cached.getTranslation(new Vector3f());
+
+            Matrix3f jacobian = GizmoDrag.computeTranslateJacobian(transform, () -> sampler.get().getTranslation(new Vector3f()));
+
+            if (Math.abs(jacobian.determinant()) > 1.0E-9F)
+            {
+                Vector3f error = targetPosition.sub(sampler.get().getTranslation(new Vector3f()), new Vector3f());
+
+                jacobian.invert().transform(error);
+                transform.translate.add(error);
+            }
+
+            for (int i = 0; i < WORLD_PASTE_ITERATIONS; i++)
+            {
+                Matrix3f axes = GizmoDrag.computeRotateAxes(transform, sampler);
+
+                if (Math.abs(axes.determinant()) > 1.0E-9F)
+                {
+                    Matrix3f current = orthonormalize(sampler.get().get3x3(new Matrix3f()), new Vector3f());
+                    Matrix3f delta = new Matrix3f(targetRotation).mul(current.invert());
+                    AxisAngle4f axisAngle = new AxisAngle4f().set(delta);
+                    Vector3f error = new Vector3f(axisAngle.x, axisAngle.y, axisAngle.z).mul(axisAngle.angle);
+
+                    axes.invert().transform(error);
+                    transform.rotate.add(error);
+                }
+
+                this.solveScale(transform, sampler, targetScale);
+            }
+
+            finalTranslate = new Vector3f(transform.translate);
+            finalRotate = new Vector3f(transform.rotate);
+            finalScale = new Vector3f(transform.scale);
         }
-
-        Vector3f finalTranslate = new Vector3f(transform.translate);
-        Vector3f finalRotate = new Vector3f(transform.rotate);
-        Vector3f finalScale = new Vector3f(transform.scale);
-
-        /* The solve used the live transform as scratch; hand the net result to the editor's own
-         * apply path (undo, notify, multi-bone) from the original values. */
-        transform.translate.set(startTranslate);
-        transform.rotate.set(startRotate);
-        transform.scale.set(startScale);
+        finally
+        {
+            /* The solve used the live transform as scratch; hand the net result to the editor's own
+             * apply path (undo, notify, multi-bone) from the original values — mode included. */
+            transform.translate.set(startTranslate);
+            transform.rotate.set(startRotate);
+            transform.scale.set(startScale);
+            transform.quat.set(startQuat);
+            transform.rotationMode = startMode;
+        }
 
         this.fillSetT(finalTranslate.x, finalTranslate.y, finalTranslate.z);
         this.fillSetS(finalScale.x, finalScale.y, finalScale.z);
-        this.fillSetR(MathUtils.toDeg(finalRotate.x), MathUtils.toDeg(finalRotate.y), MathUtils.toDeg(finalRotate.z));
+
+        if (wasQuaternion)
+        {
+            /* A per-channel euler delivery (fillSetR) is measured by the delta
+             * editors against a quaternion bone's STALE channels — a delta with
+             * the wrong basis. Hand the solved rotation over whole instead;
+             * setRQuat applies it mode-aware in every editor. */
+            this.setRQuat(Matrices.toQuaternionZYXRadians(finalRotate.x, finalRotate.y, finalRotate.z));
+        }
+        else
+        {
+            this.fillSetR(MathUtils.toDeg(finalRotate.x), MathUtils.toDeg(finalRotate.y), MathUtils.toDeg(finalRotate.z));
+        }
     }
 
     /**
@@ -631,7 +638,6 @@ public abstract class UITransform extends UIElement
         this.fillSetT(0, 0, 0);
         this.fillSetS(1, 1, 1);
         this.fillSetR(0, 0, 0);
-        this.fillSetR2(0, 0, 0);
     }
 
     @Override

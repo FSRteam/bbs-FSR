@@ -7,12 +7,18 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MissingForm;
+import mchorse.bbs_mod.forms.forms.MobForm;
+import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.pose.PoseTransform;
+import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,6 +30,75 @@ public class FormUtils
     public static final String PATH_SEPARATOR = "/";
 
     private static final List<String> path = new ArrayList<>();
+
+    public static boolean isPoseProperty(String name)
+    {
+        return name.startsWith("transform")
+            || name.startsWith("pose")
+            || name.startsWith("pose_overlay")
+            || name.startsWith("shape_keys");
+    }
+
+    public static Vector3f additivePoseRotationBase(ValuePose editedTrack, String bone)
+    {
+        return additivePoseRotationBase(editedTrack, bone, null);
+    }
+
+    public static Vector3f additivePoseRotationBase(ValuePose editedTrack, String bone, Vector3f evaluatedRadians)
+    {
+        Form form = getForm(editedTrack);
+        List<ValuePose> tracks = new ArrayList<>();
+
+        if (form instanceof ModelForm modelForm)
+        {
+            tracks.add(modelForm.pose);
+            tracks.add(modelForm.poseOverlay);
+            tracks.addAll(modelForm.additionalOverlays);
+        }
+        else if (form instanceof MobForm mobForm)
+        {
+            tracks.add(mobForm.pose);
+            tracks.add(mobForm.poseOverlay);
+        }
+        else
+        {
+            return null;
+        }
+
+        if (!tracks.contains(editedTrack))
+        {
+            return null;
+        }
+
+        Vector3f trackSum = new Vector3f();
+        Vector3f editedContribution = new Vector3f();
+
+        for (ValuePose track : tracks)
+        {
+            PoseTransform transform = track.get().transforms.get(bone);
+
+            if (transform == null)
+            {
+                continue;
+            }
+
+            if (transform.rotationMode == Transform.RotationMode.QUATERNION || transform.fix != 0F)
+            {
+                return null;
+            }
+
+            if (track == editedTrack)
+            {
+                editedContribution.set(transform.rotate);
+            }
+            else
+            {
+                trackSum.add(transform.rotate);
+            }
+        }
+
+        return evaluatedRadians == null ? trackSum : new Vector3f(evaluatedRadians).sub(editedContribution);
+    }
 
     public static Form fromData(BaseType data)
     {

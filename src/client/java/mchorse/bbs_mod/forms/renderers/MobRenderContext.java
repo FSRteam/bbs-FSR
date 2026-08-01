@@ -756,15 +756,13 @@ public final class MobRenderContext implements AutoCloseable
             {
                 transform.translate.lerp(value.translate, value.fix);
                 transform.scale.lerp(value.scale, value.fix);
-                transform.rotate.lerp(value.rotate, value.fix);
-                transform.rotate2.lerp(value.rotate2, value.fix);
+                transform.lerpRotation(value, value.fix);
             }
             else
             {
                 transform.translate.add(value.translate);
                 transform.scale.add(value.scale).sub(1F, 1F, 1F);
-                transform.rotate.add(value.rotate);
-                transform.rotate2.add(value.rotate2);
+                transform.addRotation(value);
             }
         }
 

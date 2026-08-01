@@ -15,6 +15,7 @@ import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,8 +34,7 @@ public class BOBJModel implements IModel
     private List<BOBJModelVAO> vaos = new ArrayList<>();
     private boolean simple;
 
-    /* Bone indices at least one mesh vertex is weighted to — the rest are bare markers (reach
-     * points carrying no skin). Built once on first query (IK stretch needs it). */
+    /** Bone indices with at least one weighted vertex; lazily filled by {@link #boneDeformsMesh}. */
     private Set<Integer> deformingBones;
 
     public BOBJModel(BOBJArmature armature, List<BOBJLoader.CompiledData> meshes, boolean simple)
@@ -47,11 +47,6 @@ public class BOBJModel implements IModel
     public BOBJArmature getArmature()
     {
         return this.armature;
-    }
-
-    public List<BOBJModelVAO> getVaos()
-    {
-        return this.vaos;
     }
 
     /**
@@ -81,6 +76,11 @@ public class BOBJModel implements IModel
         }
 
         return this.deformingBones.contains(boneIndex);
+    }
+
+    public List<BOBJModelVAO> getVaos()
+    {
+        return this.vaos;
     }
 
     public void delete()
@@ -157,21 +157,31 @@ public class BOBJModel implements IModel
                 bone.orient = null;
             }
 
-            // lighting/color transform attributes are not supported in this branch
+            // TODO: bone.lighting = transform.lighting;
+            // TODO: bone.color.copy(transform.color);
             bone.transform.translate.add(transform.translate);
             bone.transform.scale.add(transform.scale).sub(1, 1, 1);
-            bone.transform.rotate.add(transform.rotate);
-            bone.transform.rotate2.add(transform.rotate2);
 
-            /* Compose the pose rotation into the orientation quaternion (radians, rotate then rotate2). */
-            Quaternionf delta = Matrices.toQuaternionZYXRadians(transform.rotate.x, transform.rotate.y, transform.rotate.z);
-
-            if (transform.rotate2.x != 0F || transform.rotate2.y != 0F || transform.rotate2.z != 0F)
+            if (transform.rotationMode == Transform.RotationMode.QUATERNION)
             {
-                delta.mul(Matrices.toQuaternionZYXRadians(transform.rotate2.x, transform.rotate2.y, transform.rotate2.z));
-            }
+                /* Quaternion pose: seed orient from the euler so far, compose the
+                 * pose quaternion straight in (gimbal-free), keep the euler readback
+                 * for gizmo/IK. Mirrors Model.applyPose. */
+                if (bone.orient == null)
+                {
+                    bone.orient = Matrices.toLocalRotationZYXRadians(bone.transform.rotate);
+                }
 
-            bone.composeOrient(delta);
+                bone.orient.mul(transform.createRotation());
+                bone.transform.rotate.add(Matrices.toEulerZYXRadians(transform.quat, new Vector3f()));
+            }
+            else
+            {
+                bone.transform.rotate.add(transform.rotate);
+
+                /* Compose the pose rotation into the orientation quaternion (radians). */
+                bone.composeOrient(Matrices.toQuaternionZYXRadians(transform.rotate.x, transform.rotate.y, transform.rotate.z));
+            }
         }
     }
 

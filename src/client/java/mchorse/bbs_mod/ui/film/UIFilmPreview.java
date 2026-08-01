@@ -160,6 +160,7 @@ public class UIFilmPreview extends UIElement
             {
                 menu.action(Icons.MOVE_TO, UIKeys.FILM_REPLAY_ORBIT_TELEPORT_TO_RECORDING, controller::teleportOrbitPivotToReplay);
                 menu.action(Icons.LINK, UIKeys.FILM_CONTROLLER_KEYS_ATTACH_ORBIT, controller.orbit.isAttached(), controller::toggleOrbitAttachment);
+                menu.action(Icons.FRUSTUM, UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_ORTHO, controller.orbit.isOrtho(), controller.orbit::toggleOrtho);
             }
         });
         this.recordReplay = new UIIcon(Icons.SPHERE, (b) -> this.panel.getController().pickRecording());
@@ -413,7 +414,11 @@ public class UIFilmPreview extends UIElement
 
             context.menu.runWithPreservedMouseCapture(
                 this,
-                () -> handled[0] = this.panel.replayEditor.clickViewport(context, area)
+                () ->
+                {
+                    handled[0] = this.panel.getController().orbitGizmo.mouseClicked(context, area)
+                        || this.panel.replayEditor.clickViewport(context, area);
+                }
             );
 
             return handled[0];
@@ -487,7 +492,10 @@ public class UIFilmPreview extends UIElement
             );
         }
 
-        this.renderCursor(context);
+        if (!this.panel.getController().orbitGizmo.isActive())
+        {
+            this.renderCursor(context);
+        }
 
         boolean needGuides = BBSSettings.editorRuleOfThirds.get()
             || BBSSettings.editorCenterLines.get()

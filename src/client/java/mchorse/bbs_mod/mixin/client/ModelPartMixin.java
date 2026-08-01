@@ -7,6 +7,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
+import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.renderer.LightTexture;
@@ -51,6 +52,7 @@ public abstract class ModelPartMixin
         float scaleX = part.xScale;
         float scaleY = part.yScale;
         float scaleZ = part.zScale;
+        Quaternionf quaternion = null;
 
         if (transform != null && transform.fix > 0F)
         {
@@ -74,9 +76,18 @@ public abstract class ModelPartMixin
             pivotX += transform.translate.x;
             pivotY += transform.translate.y;
             pivotZ += transform.translate.z;
-            pitch += transform.rotate.x;
-            yaw += transform.rotate.y;
-            roll += transform.rotate.z;
+
+            if (transform.rotationMode == Transform.RotationMode.QUATERNION)
+            {
+                quaternion = new Quaternionf().rotationZYX(roll, yaw, pitch).mul(transform.quat);
+            }
+            else
+            {
+                pitch += transform.rotate.x;
+                yaw += transform.rotate.y;
+                roll += transform.rotate.z;
+            }
+
             scaleX += transform.scale.x - 1F;
             scaleY += transform.scale.y - 1F;
             scaleZ += transform.scale.z - 1F;
@@ -85,14 +96,13 @@ public abstract class ModelPartMixin
         matrices.translate(pivotX / 16F, pivotY / 16F, pivotZ / 16F);
         MobRenderContext.captureOrigin(part, matrices.last().pose());
 
-        if (pitch != 0F || yaw != 0F || roll != 0F)
+        if (quaternion != null)
+        {
+            matrices.mulPose(quaternion);
+        }
+        else if (pitch != 0F || yaw != 0F || roll != 0F)
         {
             matrices.mulPose(new Quaternionf().rotationZYX(roll, yaw, pitch));
-        }
-
-        if (transform != null && (transform.rotate2.x != 0F || transform.rotate2.y != 0F || transform.rotate2.z != 0F))
-        {
-            matrices.mulPose(new Quaternionf().rotationZYX(transform.rotate2.z, transform.rotate2.y, transform.rotate2.x));
         }
 
         if (scaleX != 1F || scaleY != 1F || scaleZ != 1F)

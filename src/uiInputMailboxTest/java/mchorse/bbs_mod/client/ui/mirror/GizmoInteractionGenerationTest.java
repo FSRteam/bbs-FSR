@@ -7,6 +7,8 @@ import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.AdditiveDrag;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
@@ -288,11 +290,11 @@ public final class GizmoInteractionGenerationTest
             UIPropTransform transform = allocate(UIPropTransform.class);
 
             setBoolean(transform, "editing", true);
-            setBoolean(transform, "scaleAll", true);
+            setObject(transform, "strategy", new AdditiveDrag(null, TransformOp.SCALE, Axis.X, null, true));
             check(transform.getDebugLineStencilIndex() == -1,
                 "uniform scale exposed its internal X sampling axis as a debug guide");
 
-            setBoolean(transform, "scaleAll", false);
+            setObject(transform, "strategy", new AdditiveDrag(null, TransformOp.SCALE, Axis.X, null, false));
             setObject(transform, "axis", Axis.X);
             check(transform.getDebugLineStencilIndex() == Gizmo.STENCIL_X,
                 "ordinary X-axis editing lost its debug guide");

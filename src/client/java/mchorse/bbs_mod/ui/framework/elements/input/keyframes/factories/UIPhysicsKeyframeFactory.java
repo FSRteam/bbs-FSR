@@ -8,6 +8,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -32,10 +33,10 @@ import java.util.function.Consumer;
 public class UIPhysicsKeyframeFactory extends UIKeyframeFactory<PhysicsControls>
 {
     public UIStringList chains;
-    public UITrackpad weight;
+    public UISliderTrackpad weight;
     public UITrackpad gravity;
-    public UITrackpad damping;
-    public UITrackpad stiffness;
+    public UISliderTrackpad damping;
+    public UISliderTrackpad stiffness;
     public UIToggle enabled;
 
     private ModelForm form;
@@ -60,16 +61,16 @@ public class UIPhysicsKeyframeFactory extends UIKeyframeFactory<PhysicsControls>
         });
         this.chains.background().h(UIConstants.LIST_ITEM_HEIGHT * 6);
 
-        this.weight = new UITrackpad((v) -> this.edit((control) -> control.weight = v.floatValue()));
+        this.weight = new UISliderTrackpad((v) -> this.edit((control) -> control.weight = v.floatValue()));
         this.weight.limit(0D, 1D).increment(0.1D).values(0.1D, 0.05D, 0.2D);
 
         this.gravity = new UITrackpad((v) -> this.edit((control) -> control.gravity = v.floatValue()));
         this.gravity.increment(0.1D).values(0.1D, 0.05D, 0.2D);
 
-        this.damping = new UITrackpad((v) -> this.edit((control) -> control.damping = v.floatValue()));
+        this.damping = new UISliderTrackpad((v) -> this.edit((control) -> control.damping = v.floatValue()));
         this.damping.limit(0D, 1D).increment(0.05D).values(0.05D, 0.01D, 0.1D);
 
-        this.stiffness = new UITrackpad((v) -> this.edit((control) -> control.stiffness = v.floatValue()));
+        this.stiffness = new UISliderTrackpad((v) -> this.edit((control) -> control.stiffness = v.floatValue()));
         this.stiffness.limit(0D, 1D).increment(0.05D).values(0.05D, 0.01D, 0.1D);
 
         this.enabled = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ENABLED, (b) -> this.edit((control) -> control.enabled = b.getValue()));

@@ -7,6 +7,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIPoseFormPanel;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.StringUtils;
 import org.joml.Matrix4f;
@@ -60,6 +61,12 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     public Matrix4f getOrigin(float transition)
     {
         return this.getOrigin(transition, this.bonePath(), this.posePanel.poseEditor.transform.isLocal());
+    }
+
+    @Override
+    public TransformSpace getGizmoSpace()
+    {
+        return this.posePanel.poseEditor.transform.getSpace();
     }
 
     @Override

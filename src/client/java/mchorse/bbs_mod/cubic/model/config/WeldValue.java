@@ -3,6 +3,7 @@ package mchorse.bbs_mod.cubic.model.config;
 import mchorse.bbs_mod.cubic.weld.ModelWeld;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValueString;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 
 /**
@@ -18,6 +19,12 @@ public class WeldValue extends ValueGroup
     public final ValueFloat maxAngle = new ValueFloat("max_angle", 120F);
     public final ValueFloat seamFalloff = new ValueFloat("seam_falloff", 0.35F, 0F, 1F);
 
+    /** The PARENT bone's share of the joint's deformation; 0.5 (the default) is the old bisector split. */
+    public final ValueFloat parentShare = new ValueFloat("parent_share", 0.5F, 0F, 1F);
+
+    /** Off by default so scenes tuned before twist distribution existed keep rendering identically. */
+    public final ValueBoolean twist = new ValueBoolean("twist", false);
+
     public WeldValue(String id)
     {
         super(id);
@@ -28,6 +35,8 @@ public class WeldValue extends ValueGroup
         this.add(this.targetFace);
         this.add(this.maxAngle);
         this.add(this.seamFalloff);
+        this.add(this.parentShare);
+        this.add(this.twist);
     }
 
     public ModelWeld toWeld()
@@ -38,7 +47,9 @@ public class WeldValue extends ValueGroup
             this.targetBone.get(),
             this.targetFace.get(),
             this.maxAngle.get(),
-            this.seamFalloff.get()
+            this.seamFalloff.get(),
+            this.parentShare.get(),
+            this.twist.get()
         );
     }
 }
