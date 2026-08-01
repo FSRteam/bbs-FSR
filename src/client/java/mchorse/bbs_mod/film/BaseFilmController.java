@@ -195,12 +195,20 @@ public abstract class BaseFilmController
             }
 
             MatrixStackUtils.multiply(stack, target);
-            FormUtilsClient.render(form, formContext);
+
+            /* Gizmo-only pass: an actor replay renders the world ActorEntity
+             * instead of the editor entity, but the gizmo placement still needs
+             * this frame's snapshot, so skip the visible form (and its shadow /
+             * name tag below) while keeping renderAxes / renderAnchorGizmo. */
+            if (!context.gizmoOnly)
+            {
+                FormUtilsClient.render(form, formContext);
+            }
 
             if (UIBaseMenu.shouldRenderAxes())
             {
                 if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, formContext, stack);
-                if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack);
+                if (!context.gizmoOnly && context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack);
             }
         }
         finally
@@ -213,7 +221,7 @@ public abstract class BaseFilmController
             renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorLocal, context.map, stack);
         }
 
-        if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
+        if (!relative && context.map == null && !context.gizmoOnly && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
         {
             /* Skip the shadow when the form is hidden (form.visible, animatable via keyframes): the form
              * itself renders nothing then - see FormRenderer.render - so its shadow must vanish too.
@@ -270,7 +278,7 @@ public abstract class BaseFilmController
             }
         }
 
-        if (!relative && !context.nameTag.isEmpty() && context.map == null && form.visible.get())
+        if (!relative && !context.gizmoOnly && !context.nameTag.isEmpty() && context.map == null && form.visible.get())
         {
             /* Hide the name tag along with the form (form.visible, animatable via keyframes): when the
              * form renders nothing, its name tag must vanish too - same reasoning as the shadow above. */
@@ -1700,16 +1708,24 @@ public abstract class BaseFilmController
 
     protected void renderEntity(IBbsWorldRenderContext context, Replay replay, IEntity entity)
     {
-        if (!replay.actor.get())
+        FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
+        float transition = getTransition(entity, context.tickDelta());
+
+        filmContext.transition = transition;
+        filmContext.timeline(replay.properties, replay.getTick(this.getTick()) + transition, this.isTimelinePlaying());
+
+        if (replay.actor.get())
         {
-            FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
-            float transition = getTransition(entity, context.tickDelta());
-
-            filmContext.transition = transition;
-            filmContext.timeline(replay.properties, replay.getTick(this.getTick()) + transition, this.isTimelinePlaying());
-
-            renderEntity(filmContext);
+            /* Actor replays render the world ActorEntity instead of the editor
+             * entity. The editor entity is still the gizmo's placement source,
+             * so keep capturing this frame's transform/pose/anchor matrices
+             * (Gizmo#captureVisual) without drawing the editor form on top of
+             * the actor — otherwise the gizmo sits on a stale matrix and stops
+             * following the replayed form's anchor. */
+            filmContext.gizmoOnly(true);
         }
+
+        renderEntity(filmContext);
     }
 
     protected FilmControllerContext getFilmControllerContext(IBbsWorldRenderContext context, Replay replay, IEntity entity)

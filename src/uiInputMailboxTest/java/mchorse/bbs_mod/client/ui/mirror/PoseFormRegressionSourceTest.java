@@ -32,6 +32,8 @@ public final class PoseFormRegressionSourceTest
     private static final String GIZMO = "src/client/java/mchorse/bbs_mod/ui/utils/Gizmo.java";
     private static final String FILM_CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
     private static final String FILM_BASE = "src/client/java/mchorse/bbs_mod/film/BaseFilmController.java";
+    private static final String FILM_CONTEXT = "src/client/java/mchorse/bbs_mod/film/FilmControllerContext.java";
+    private static final String UI_SCREEN = "src/client/java/mchorse/bbs_mod/ui/framework/UIScreen.java";
     private static final String FORM_RENDERER = "src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIPickableFormRenderer.java";
 
     private PoseFormRegressionSourceTest()
@@ -60,12 +62,18 @@ public final class PoseFormRegressionSourceTest
         String gizmo = read(root.resolve(GIZMO));
         String filmController = read(root.resolve(FILM_CONTROLLER));
         String filmBase = read(root.resolve(FILM_BASE));
+        String filmContext = read(root.resolve(FILM_CONTEXT));
+        String uiScreen = read(root.resolve(UI_SCREEN));
         String formRenderer = read(root.resolve(FORM_RENDERER));
 
         gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmBase);
         hiddenAxesStillRefreshGizmoPlacement(formRenderer);
         filmBoneConsumersShareOnePlacementSample(filmBase, filmEditor);
         proceduralPanelGizmoKeepsPoseSelection(editor, poseFormEditor, modelFormEditor);
+        actorReplaysKeepCapturingGizmoPlacement(filmBase, filmContext);
+        disabledReplayHidesGizmo(filmController);
+        additiveBlendDoesNotLeak(renderer);
+        pausedPreviewsKeepInterpolating(uiScreen);
         mirrorEditingUsesSelectionDeltas(editor);
         filmPoseEditingUsesSelectionDeltas(poseKeyframe);
         glintUsesDedicatedKeyframeTrack(editor, poseKeyframe, glintKeyframe, generalFormPanel, form, formProperties, filmEditor, stateEditor);
@@ -77,7 +85,23 @@ public final class PoseFormRegressionSourceTest
         modelPartJacobianSurvivesConditioning();
         unusableJacobianFallsBackInsteadOfFreezing();
         renderOnlyPlayersCannotPush(renderer);
+        mobDeathStateUsesEntitySpecificClock(renderer);
         mobRenderReleasesSharedStateOnFailure(renderer);
+    }
+
+    private static void mobDeathStateUsesEntitySpecificClock(String renderer)
+    {
+        String tick = section(renderer, "public void tick(IEntity source)", "private boolean updatePauseState");
+        String refresh = section(renderer, "private void refreshDeathState()", "private void ensureAnimationInitialized");
+
+        check(tick.contains("this.entity.tick();"),
+            "dead previews no longer drive the vanilla death lifecycle through entity.tick()");
+        check(refresh.contains("living.setPose(net.minecraft.world.entity.Pose.DYING)"),
+            "Health 0 no longer preserves the dying pose through source synchronization");
+        check(!renderer.contains("EnderDragon"),
+            "MobForm death state regressed to an entity-type-specific clock");
+        check(!renderer.contains("LivingEntityInvoker"),
+            "MobFormRenderer still references the removed invoker");
     }
 
     /**
@@ -228,6 +252,77 @@ public final class PoseFormRegressionSourceTest
         check(section(filmEditor, "private static Vector3f sampleFilmBoneRotationOffset", "private static void buildAnchorGizmoDrag")
                 .contains("applyReplayProperties(panel, entity, replay, transition)"),
             "the film bone rotation offset samples without the replay's animated properties applied");
+    }
+
+    /**
+     * Actor replays render the world ActorEntity instead of the editor entity, but the editor entity
+     * stays the gizmo's placement source. If the visual pass skips actor replays entirely the gizmo's
+     * captured matrix goes stale and the handles stop following the replayed form's anchor.
+     */
+    private static void actorReplaysKeepCapturingGizmoPlacement(String filmBase, String filmContext)
+    {
+        String wrapper = section(
+            filmBase,
+            "protected void renderEntity(IBbsWorldRenderContext context, Replay replay, IEntity entity)",
+            "protected FilmControllerContext getFilmControllerContext"
+        );
+        String pass = section(
+            filmBase,
+            "public static void renderEntity(FilmControllerContext context)",
+            "private static void renderAxes"
+        );
+
+        check(wrapper.contains("if (replay.actor.get())") && wrapper.contains("filmContext.gizmoOnly(true)"),
+            "actor replays no longer run a gizmo-only capture pass, so the gizmo stops following the form anchor");
+        check(pass.contains("if (!context.gizmoOnly)"),
+            "the gizmo-only pass no longer skips the visible editor form render");
+        check(filmContext.contains("public boolean gizmoOnly"),
+            "FilmControllerContext no longer carries the gizmo-only flag");
+    }
+
+    /**
+     * A disabled replay is skipped by the render pass, so its gizmo placement stops being captured.
+     * The gizmo must hide in that state instead of lingering on the last captured (stale) matrix.
+     */
+    private static void disabledReplayHidesGizmo(String filmController)
+    {
+        String canShow = section(filmController, "private boolean canShowGizmo()", "private void renderStencil(");
+
+        check(canShow.contains("replay.enabled.get()"),
+            "a disabled replay no longer hides the gizmo, so it lingers on a stale matrix");
+    }
+
+    /**
+     * Opaque (NO_TRANSPARENCY) layers leave the blend function untouched on clear, so an additive
+     * form can leak its (SRC_ALPHA, ONE) function into RenderSystem state and tint later
+     * non-additive forms whose layer preparation re-enables blend. The additive form must reset the
+     * function to default for non-additive forms and restore it after its own render.
+     */
+    private static void additiveBlendDoesNotLeak(String renderer)
+    {
+        String blend = section(renderer, "private void applyAdditiveBlend()", "public void tick(IEntity source)");
+        String finallyBlock = section(renderer, "FormTranslucentQueue.setSortOrigin(null);", "context.stack.popPose();");
+
+        check(blend.contains("RenderSystem.defaultBlendFunc();"),
+            "a non-additive form no longer resets the blend function, so an earlier additive form leaks into it");
+        check(finallyBlock.contains("RenderSystem.defaultBlendFunc();"),
+            "an additive form no longer restores the blend function after its render, so the leak reaches later forms");
+    }
+
+    /**
+     * Pause-capable menus (e.g. the morphing panel) freeze the game timer's partial tick, so
+     * preview animations that advance at the screen tick rate render with a fixed interpolation
+     * offset and visibly step at 20 TPS. The screen transition must derive an advancing partial
+     * tick from wall-clock time while paused.
+     */
+    private static void pausedPreviewsKeepInterpolating(String uiScreen)
+    {
+        String resolve = section(uiScreen, "private float resolveTransition(float delta)", "public void render(GuiGraphics");
+
+        check(resolve.contains("mc.isPaused()"),
+            "the paused-screen partial tick is no longer derived from wall clock, so UI preview animations step at 20 TPS");
+        check(resolve.contains("Util.getMillis()"),
+            "the paused-screen transition no longer advances from wall-clock time");
     }
 
     private static void mirrorEditingUsesSelectionDeltas(String source)

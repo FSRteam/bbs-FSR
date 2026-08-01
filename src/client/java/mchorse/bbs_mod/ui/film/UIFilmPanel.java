@@ -3145,6 +3145,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.controller.stopGizmoInteraction();
         }
+        else
+        {
+            /* handleKeyPressed only forwards to the orbit controller while flight is
+             * on, so a toggle with a movement key still held never delivers its
+             * release and the direction would resume on the next toggle. */
+            this.controller.orbit.resetVelocity();
+        }
 
         if (!this.isRunning() || !flight)
         {

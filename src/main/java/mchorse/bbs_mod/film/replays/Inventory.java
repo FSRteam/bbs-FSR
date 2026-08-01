@@ -64,7 +64,7 @@ public class Inventory extends BaseValue
 
         for (int i = 0; i < list.size(); i++)
         {
-            ItemStack stack = KeyframeFactories.ITEM_STACK.tryFromData(list.get(i))
+            ItemStack stack = KeyframeFactories.ITEM_STACK.tryFromData(list.get(i), player.registryAccess())
                 .orElseThrow(() -> new IllegalArgumentException("Player inventory contains an invalid item stack"));
 
             staged.add(stack.copy());

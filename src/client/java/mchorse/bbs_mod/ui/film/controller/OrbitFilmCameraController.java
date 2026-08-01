@@ -532,6 +532,16 @@ public class OrbitFilmCameraController implements ICameraController
         this.anchorYaw = 0F;
     }
 
+    /**
+     * Drop the latched movement direction. Key events only reach {@link #keyPressed}
+     * while flight is on, so toggling flight off with a movement key still held never
+     * delivers the release and the velocity would otherwise resume on the next toggle.
+     */
+    public void resetVelocity()
+    {
+        this.velocityPosition.set(0, 0, 0);
+    }
+
     private Vector3f getReplayPivot(float transition)
     {
         OrbitTarget target = this.getOrbitTarget(transition);

@@ -62,13 +62,21 @@ public class UIAnimationStateKeyframes extends UIKeyframes
     protected void renderBackground(UIContext context)
     {
         super.renderBackground(context);
+    }
 
+    @Override
+    protected void renderOverlay(UIContext context)
+    {
         if (this.editor != null)
         {
             int cx = this.toGraphX(this.getOffset());
             String label = TimeUtils.formatTime(this.getOffset()) + "/" + TimeUtils.formatTime(this.getDuration());
 
+            context.batcher.clip(this.graphArea, context);
             UIClips.renderCursor(context, label, this.area, cx - 1);
+            context.batcher.unclip(context);
         }
+
+        super.renderOverlay(context);
     }
 }
