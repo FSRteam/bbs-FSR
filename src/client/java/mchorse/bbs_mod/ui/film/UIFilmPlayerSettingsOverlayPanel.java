@@ -6,6 +6,7 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageBarOverlayPanel;
 import mchorse.bbs_mod.ui.utils.UIConstants;
@@ -16,10 +17,10 @@ public class UIFilmPlayerSettingsOverlayPanel extends UIMessageBarOverlayPanel
 {
     private final Film film;
 
-    public final UITrackpad hp;
-    public final UITrackpad hunger;
+    public final UISliderTrackpad hp;
+    public final UISliderTrackpad hunger;
     public final UITrackpad xpLevel;
-    public final UITrackpad xpProgress;
+    public final UISliderTrackpad xpProgress;
     public final UITrackpad mobRecordingRadius;
 
     public final UIButton replaceInventory;
@@ -34,16 +35,16 @@ public class UIFilmPlayerSettingsOverlayPanel extends UIMessageBarOverlayPanel
 
         this.message.removeFromParent();
 
-        this.hp = new UITrackpad((v) -> BaseValue.edit(this.film.hp, (value) -> value.set(v.floatValue())));
+        this.hp = new UISliderTrackpad((v) -> BaseValue.edit(this.film.hp, (value) -> value.set(v.floatValue())));
         this.hp.limit(1, 20, true).setValue(this.film.hp.get());
 
-        this.hunger = new UITrackpad((v) -> BaseValue.edit(this.film.hunger, (value) -> value.set(v.floatValue())));
+        this.hunger = new UISliderTrackpad((v) -> BaseValue.edit(this.film.hunger, (value) -> value.set(v.floatValue())));
         this.hunger.limit(1, 20, true).setValue(this.film.hunger.get());
 
         this.xpLevel = new UITrackpad((v) -> BaseValue.edit(this.film.xpLevel, (value) -> value.set(v.intValue())));
         this.xpLevel.limit(0).integer().setValue(this.film.xpLevel.get());
 
-        this.xpProgress = new UITrackpad((v) -> BaseValue.edit(this.film.xpProgress, (value) -> value.set(v.floatValue())));
+        this.xpProgress = new UISliderTrackpad((v) -> BaseValue.edit(this.film.xpProgress, (value) -> value.set(v.floatValue())));
         this.xpProgress.limit(0, 1).increment(0.01D).setValue(this.film.xpProgress.get());
 
         this.mobRecordingRadius = new UITrackpad((v) -> BaseValue.edit(this.film.mobRecordingRadius, (value) -> value.set(v.floatValue())));

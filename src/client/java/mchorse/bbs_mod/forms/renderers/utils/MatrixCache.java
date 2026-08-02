@@ -38,6 +38,16 @@ public class MatrixCache
         this.entries.put(path, new MatrixCacheEntry(matrix, origin, rotationOffset));
     }
 
+    public void put(String path, Matrix4f matrix, Matrix4f origin, Vector3f rotationOffset, Vector3f evaluatedRotation)
+    {
+        this.entries.put(path, new MatrixCacheEntry(matrix, origin, rotationOffset, evaluatedRotation));
+    }
+
+    public void putEvaluated(String path, Matrix4f matrix, Matrix4f origin, Vector3f evaluatedRotation)
+    {
+        this.put(path, matrix, origin, null, evaluatedRotation);
+    }
+
     public Set<String> keySet()
     {
         return this.entries.keySet();

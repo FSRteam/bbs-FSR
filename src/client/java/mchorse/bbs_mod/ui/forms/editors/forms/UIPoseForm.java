@@ -7,6 +7,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIPoseFormPanel;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.StringUtils;
 import org.joml.Matrix4f;
@@ -32,6 +33,8 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     @Override
     public UIPropTransform getEditableTransform()
     {
+        this.syncTransformBone();
+
         return this.posePanel.poseEditor.transform;
     }
 
@@ -61,6 +64,12 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     }
 
     @Override
+    public TransformSpace getGizmoSpace()
+    {
+        return this.posePanel.poseEditor.transform.getSpace();
+    }
+
+    @Override
     public Matrix4f getOriginMatrix(float transition)
     {
         return this.getOrigin(transition, this.bonePath(), true);
@@ -74,7 +83,20 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
 
     protected String bonePath()
     {
-        return StringUtils.combinePaths(FormUtils.getPath(this.form), this.posePanel.poseEditor.groups.list.getCurrentFirst());
+        this.syncTransformBone();
+
+        return StringUtils.combinePaths(FormUtils.getPath(this.form), this.posePanel.poseEditor.getTransformBone());
+    }
+
+    /** A visible procedural panel can own the gizmo while leaving the pose list untouched. */
+    protected String getTransformBoneOverride()
+    {
+        return "";
+    }
+
+    private void syncTransformBone()
+    {
+        this.posePanel.poseEditor.setTransformBoneOverride(this.getTransformBoneOverride());
     }
 
     @Override

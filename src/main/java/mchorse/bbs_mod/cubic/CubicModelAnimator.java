@@ -53,7 +53,19 @@ public class CubicModelAnimator
         double pre = segment.preA.getValue().get();
         double post = segment.postB.getValue().get();
 
-        return segment.b.getInterpolation().interpolate(IInterp.context.set(pre, start, destination, post, segment.x));
+        double duration = IInterp.context.duration;
+        double startTick = IInterp.context.startTick;
+
+        IInterp.context.segment(segment.duration, segment.a.getTick());
+
+        try
+        {
+            return segment.b.getInterpolation().interpolate(IInterp.context.set(pre, start, destination, post, segment.x));
+        }
+        finally
+        {
+            IInterp.context.segment(duration, startTick);
+        }
     }
 
     public static void animate(Model model, Animation animation, float frame, float blend, boolean skipInitial)

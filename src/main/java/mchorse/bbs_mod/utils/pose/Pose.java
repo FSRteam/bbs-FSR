@@ -105,12 +105,8 @@ public class Pose implements IMapSerializable
             this.transforms.put(pair.a, r);
             this.transforms.put(pair.b, l);
 
-            r.translate.mul(-1F, 1F, 1F);
-            r.rotate.mul(1F, -1F, -1F);
-            r.rotate2.mul(1F, -1F, -1F);
-            l.translate.mul(-1F, 1F, 1F);
-            l.rotate.mul(1F, -1F, -1F);
-            l.rotate2.mul(1F, -1F, -1F);
+            r.mirrorX();
+            l.mirrorX();
 
             bones.remove(pair.a);
             bones.remove(pair.b);
@@ -118,11 +114,7 @@ public class Pose implements IMapSerializable
 
         for (String bone : bones)
         {
-            PoseTransform poseTransform = this.transforms.get(bone);
-
-            poseTransform.translate.mul(-1F, 1F, 1F);
-            poseTransform.rotate.mul(1F, -1F, -1F);
-            poseTransform.rotate2.mul(1F, -1F, -1F);
+            this.transforms.get(bone).mirrorX();
         }
     }
 

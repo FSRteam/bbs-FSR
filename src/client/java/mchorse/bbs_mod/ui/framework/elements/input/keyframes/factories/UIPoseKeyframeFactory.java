@@ -4,13 +4,12 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
-import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
-import mchorse.bbs_mod.forms.forms.PoseForm;
-import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
@@ -18,11 +17,15 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
+import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,33 +44,23 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         this.poseEditor = new UIPoseFactoryEditor(editor, keyframe);
 
         UIKeyframeSheet sheet = editor.getGraph().getSheet(keyframe);
-        Form form = FormUtils.getForm(sheet.property);
-        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
 
-        for (Object object : sheet.channel.getKeyframes())
-        {
-            if (object instanceof Keyframe<?> poseKeyframe && poseKeyframe.getValue() instanceof Pose pose && hierarchy.needsMigration(pose))
-            {
-                poseKeyframe.preNotify(IValueListener.FLAG_UNMERGEABLE);
-                hierarchy.migratePose(pose);
-                poseKeyframe.postNotify(IValueListener.FLAG_UNMERGEABLE);
-            }
-        }
-
-        if (form instanceof ModelForm modelForm)
+        if (FormUtils.getForm(sheet.property) instanceof ModelForm modelForm)
         {
             ModelInstance model = ((ModelFormRenderer) FormUtilsClient.getRenderer(modelForm)).getModel();
 
             if (model != null)
             {
                 this.poseEditor.setPose(keyframe.getValue(), model.getPoseGroup());
-                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones(), hierarchy, false);
+                this.poseEditor.fillGroups(model.model, model.getFlippedParts(), false, model.getDisabledBones());
             }
         }
-        else if (form instanceof PoseForm)
+        else if (FormUtils.getForm(sheet.property) instanceof MobForm mobForm)
         {
+            List<String> bones = FormUtilsClient.getRenderer(mobForm).getBones();
+
             this.poseEditor.setPose(keyframe.getValue(), "");
-            this.poseEditor.fillGroups(hierarchy, false, false);
+            this.poseEditor.fillGroups(bones, false);
         }
 
         this.scroll.add(this.poseEditor);
@@ -80,24 +73,14 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
         if (this.getFlex().getW() > 240)
         {
-            this.poseEditor.add(
-                UI.row(
-                    UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
-                    UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
-                ),
-                this.poseEditor.glintSection
-            );
+            this.poseEditor.add(UI.row(
+                UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
+                UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
+            ));
         }
         else
         {
-            this.poseEditor.add(
-                UI.label(UIKeys.FORMS_EDITOR_BONE),
-                this.poseEditor.groups,
-                UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix),
-                UI.row(this.poseEditor.color, this.poseEditor.lighting),
-                this.poseEditor.transform,
-                this.poseEditor.glintSection
-            );
+            this.poseEditor.add(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform);
         }
 
         /* Ew... */
@@ -150,6 +133,11 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             });
         }
 
+        /**
+         * Like {@link #apply(UIKeyframes, Keyframe, List, Consumer)} but hands the bone
+         * name alongside its {@link PoseTransform}, so callers can decide per bone (e.g.
+         * mirror editing via {@link UIPoseEditor#applyToBone}).
+         */
         public static void applyBones(UIKeyframes editor, Keyframe keyframe, List<String> boneNames, BiConsumer<String, PoseTransform> consumer)
         {
             if (boneNames == null || boneNames.isEmpty())
@@ -179,6 +167,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         private String getGroup(PoseTransform transform)
         {
             return CollectionUtils.getKey(this.getPose().transforms, transform);
+        }
+
+        @Override
+        protected boolean stretchesBoneList()
+        {
+            return true;
         }
 
         @Override
@@ -323,8 +317,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             {
                 poseT.translate.set(0F, 0F, 0F);
                 poseT.scale.set(1F, 1F, 1F);
-                poseT.rotate.set(0F, 0F, 0F);
-                poseT.rotate2.set(0F, 0F, 0F);
+                poseT.resetRotation();
             });
             this.refillTransform();
         }

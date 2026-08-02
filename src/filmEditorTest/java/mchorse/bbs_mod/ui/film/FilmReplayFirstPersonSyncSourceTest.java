@@ -11,6 +11,9 @@ public final class FilmReplayFirstPersonSyncSourceTest
     private static final Path REPLAY = Path.of("src/main/java/mchorse/bbs_mod/film/replays/Replay.java");
     private static final Path CLIENT_NETWORK = Path.of("src/client/java/mchorse/bbs_mod/network/ClientNetwork.java");
     private static final Path SERVER_NETWORK = Path.of("src/main/java/mchorse/bbs_mod/network/ServerNetwork.java");
+    private static final Path ACTION_PLAYER = Path.of("src/main/java/mchorse/bbs_mod/actions/ActionPlayer.java");
+    private static final Path BASE_FILM_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/film/BaseFilmController.java");
+    private static final Path REPLAY_KEYFRAMES = Path.of("src/main/java/mchorse/bbs_mod/film/replays/ReplayKeyframes.java");
 
     private FilmReplayFirstPersonSyncSourceTest()
     {}
@@ -29,6 +32,9 @@ public final class FilmReplayFirstPersonSyncSourceTest
         String replay = compact(Files.readString(root.resolve(REPLAY)));
         String clientNetwork = compact(Files.readString(root.resolve(CLIENT_NETWORK)));
         String serverNetwork = compact(Files.readString(root.resolve(SERVER_NETWORK)));
+        String actionPlayer = compact(Files.readString(root.resolve(ACTION_PLAYER)));
+        String baseFilmController = compact(Files.readString(root.resolve(BASE_FILM_CONTROLLER)));
+        String replayKeyframes = compact(Files.readString(root.resolve(REPLAY_KEYFRAMES)));
 
         check(replay.contains("new ValueBoolean(\"fp\", false)"),
             "Replay no longer exposes the first-person value used by the editor");
@@ -46,6 +52,19 @@ public final class FilmReplayFirstPersonSyncSourceTest
         assertOrdered(serverNetwork,
             "BaseType data = NetworkDataDecoder.decode(bytes)",
             "actionPlayer.syncData(new DataPath(path), data)");
+        check(replayKeyframes.contains("public static final double GRAVITY_PROBE = 0.0784D"),
+            "replay playback lost the vanilla floor probe constant");
+        assertOrdered(actionPlayer,
+            "boolean grounded = replay.keyframes.grounded.interpolate(tick) > 0",
+            "grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D",
+            "actor.move(MoverType.SELF",
+            "actor.setOnGround(grounded)",
+            "actor.setSprinting(replay.keyframes.sprinting.interpolate(tick) > 0)");
+        assertOrdered(baseFilmController,
+            "grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D",
+            "player.move(MoverType.SELF",
+            "player.setOnGround(grounded)",
+            "player.setSprinting(replay.keyframes.sprinting.interpolate(replayTick) > 0)");
     }
 
     private static Path findProjectRoot()

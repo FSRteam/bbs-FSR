@@ -52,6 +52,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
@@ -132,6 +133,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     private int lastTick;
     private int cursor;
     private boolean playing;
+    private Consumer<Pair<Form, String>> bonePicking;
 
     static
     {
@@ -400,8 +402,59 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         this.setUndoId("form_editor");
     }
 
+    public void startBonePicking(Consumer<Pair<Form, String>> callback)
+    {
+        this.stopBonePicking();
+        this.bonePicking = callback;
+    }
+
+    public boolean isBonePicking()
+    {
+        return this.bonePicking != null;
+    }
+
+    public void stopBonePicking()
+    {
+        Consumer<Pair<Form, String>> callback = this.bonePicking;
+
+        this.bonePicking = null;
+
+        if (callback != null)
+        {
+            callback.accept(null);
+        }
+    }
+
     public boolean clickViewport(UIContext context, StencilFormFramebuffer stencil)
     {
+        if (this.bonePicking != null)
+        {
+            if (context.mouseButton == 1)
+            {
+                this.stopBonePicking();
+
+                return true;
+            }
+
+            if (context.mouseButton == 0)
+            {
+                if (Window.isShiftPressed())
+                {
+                    this.stopBonePicking();
+                }
+                else
+                {
+                    Consumer<Pair<Form, String>> callback = this.bonePicking;
+                    Pair<Form, String> pair = stencil.hasPicked() ? stencil.getPicked() : null;
+
+                    this.bonePicking = null;
+                    callback.accept(pair);
+
+                    return true;
+                }
+            }
+        }
+
         if (this.statesEditor.isVisible() && this.statesKeyframes.clickViewport(context, stencil))
         {
             return true;
@@ -490,11 +543,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         if (drag != null)
         {
+            drag.setGlobalAxes(this.renderer.getSceneAxes());
+
             Supplier<Matrix4f> rotationSampler = () ->
             {
                 Matrix4f origin = this.getOriginMatrix(transition);
 
-                return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
+                return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(this.renderer.toSceneMatrix(origin));
             };
             Vector3f rotationOffset = this.isBodyPartGizmoMode() ? null : this.editor.getRotationOffset(transition);
             boolean modelPart = !this.isBodyPartGizmoMode() && this.editor.editsModelPartTranslate(transform);
@@ -508,7 +563,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                     {
                         Matrix4f origin = this.getOrigin(transition);
 
-                        return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
+                        return origin == null ? new Vector3f() : this.renderer.toSceneMatrix(origin).getTranslation(new Vector3f());
                     }
                 );
             }
@@ -521,9 +576,20 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             ));
             drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, rotationSampler));
             drag.setRotationParents(transform.getTransform(), rotationOffset, rotationSampler);
+            drag.setAdditiveRotationBase(this.poseRotationBase(transform, transition));
         }
 
         return drag;
+    }
+
+    private Vector3f poseRotationBase(UIPropTransform transform, float transition)
+    {
+        if (this.isBodyPartGizmoMode() || this.statesEditor.isVisible() || !(this.editor instanceof UIModelForm modelForm))
+        {
+            return null;
+        }
+
+        return modelForm.poseRotationBase(transform, transition);
     }
 
     public void pickGizmoFormFromRenderer(Form form, String bone)
@@ -1004,6 +1070,21 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         }
 
         return this.editor.getOrigin(transition);
+    }
+
+    public TransformSpace getGizmoSpace()
+    {
+        if (this.statesEditor.isVisible())
+        {
+            return this.statesKeyframes.getGizmoSpace();
+        }
+
+        if (this.isBodyPartGizmoMode())
+        {
+            return this.bodyPartEditor.transform.getSpace();
+        }
+
+        return this.editor == null ? TransformSpace.LOCAL : this.editor.getGizmoSpace();
     }
 
     public Matrix4f getOriginMatrix(float transition)

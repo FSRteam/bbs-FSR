@@ -1,74 +1,33 @@
 package mchorse.bbs_mod.ui.framework.elements.input;
 
-import java.math.RoundingMode;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.util.Locale;
-import java.util.Set;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import org.lwjgl.glfw.GLFW;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiRemoteHeldState;
 import mchorse.bbs_mod.graphics.window.Window;
-import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.math.MathBuilder;
-import mchorse.bbs_mod.settings.values.numeric.ValueDouble;
-import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
-import mchorse.bbs_mod.settings.values.numeric.ValueInt;
-import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
-import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragStartEvent;
-import mchorse.bbs_mod.ui.framework.elements.input.text.UIBaseTextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
-import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.Minecraft;
 
-public class UITrackpad extends UIBaseTextbox
+/**
+ * A numeric field whose value is dragged relatively: the cursor's horizontal
+ * travel is multiplied by the current step, and the cursor wraps around the
+ * screen so an unbounded range stays reachable.
+ *
+ * The value itself, its limits and the text editing all live in
+ * {@link UINumericInput}. For values with a finite range see
+ * {@link UISliderTrackpad}, which positions the value along a track instead.
+ */
+public class UITrackpad extends UINumericInput<UITrackpad>
 {
-    private static final Set<Character> allowedNumberCharacters = ".-+/*^%() ".chars()
-        .mapToObj((o) -> (char) o)
-        .collect(Collectors.toSet());
-    private static final Factor globalFactor = new Factor(20, 1, 40, (x) ->
-    {
-        if (x <= 10) return x / 100D;
-        else if (x <= 20) return (x - 10) / 10D;
-        else if (x <= 30) return (x - 20) / 1D;
-
-        return (x - 30) * 10D;
-    });
-
-    private static final DecimalFormat FORMAT;
-
-    public Consumer<Double> callback;
-
-    protected double value;
-
-    /* Trackpad options */
-    public double strong = 1D;
-    public double normal = 0.25D;
-    public double weak = 0.05D;
-    public double increment = 1D;
-    public double min = Float.NEGATIVE_INFINITY;
-    public double max = Float.POSITIVE_INFINITY;
-    public boolean integer;
-    public boolean delayedInput;
-    public boolean onlyNumbers;
-
-    public boolean relative;
-    public boolean allowCanceling = true;
-    public IKey forcedLabel;
-
     /* Value dragging fields */
     private boolean wasInside;
     private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
@@ -80,34 +39,8 @@ public class UITrackpad extends UIBaseTextbox
 
     private Timer changed = new Timer(30);
 
-    private long time;
-    private double focusStartValue;
     private Area plusOne = new Area();
     private Area minusOne = new Area();
-
-    static
-    {
-        FORMAT = new DecimalFormat("#.###");
-        FORMAT.setRoundingMode(RoundingMode.HALF_EVEN);
-        FORMAT.setGroupingUsed(false);
-        FORMAT.setDecimalFormatSymbols(new DecimalFormatSymbols(Locale.ENGLISH));
-    }
-
-    public static void updateAmplifier(UIContext context)
-    {
-        if (context.mouseWheel == 0D)
-        {
-            return;
-        }
-
-        globalFactor.addX(context.mouseWheel > 0D ? 1 : -1);
-        context.notifyOrUpdate(UIKeys.TRACKPAD_GLOBAL_AMPLIFIER.format(globalFactor.getValue()), Colors.BLUE);
-    }
-
-    public static String format(double number)
-    {
-        return FORMAT.format(number).replace(',', '.');
-    }
 
     public UITrackpad()
     {
@@ -116,258 +49,13 @@ public class UITrackpad extends UIBaseTextbox
 
     public UITrackpad(Consumer<Double> callback)
     {
-        super();
-
-        this.callback = callback;
-
-        this.setValue(0);
-        this.h(UIConstants.CONTROL_HEIGHT);
+        super(callback);
     }
 
-    public UITrackpad max(double max)
-    {
-        this.max = max;
-
-        return this;
-    }
-
-    public UITrackpad limit(double min)
-    {
-        this.min = min;
-
-        return this;
-    }
-
-    public UITrackpad limit(double min, double max)
-    {
-        this.min = min;
-        this.max = max;
-
-        return this;
-    }
-
-    public UITrackpad limit(ValueInt value)
-    {
-        return this.limit(value.getMin(), value.getMax(), true);
-    }
-
-    public UITrackpad limit(ValueFloat value)
-    {
-        return this.limit(value.getMin(), value.getMax(), false);
-    }
-
-    public UITrackpad limit(ValueDouble value)
-    {
-        return this.limit(value.getMin(), value.getMax(), false);
-    }
-
-    public UITrackpad limit(double min, double max, boolean integer)
-    {
-        this.integer = integer;
-
-        return this.limit(min, max);
-    }
-
-    public UITrackpad integer()
-    {
-        this.integer = true;
-
-        return this;
-    }
-
-    public UITrackpad increment(double increment)
-    {
-        this.increment = increment;
-
-        return this;
-    }
-
-    public UITrackpad values(double normal)
-    {
-        this.normal = normal;
-        this.weak = normal / 5F;
-        this.strong = normal * 5F;
-
-        return this;
-    }
-
-    public UITrackpad values(double normal, double weak, double strong)
-    {
-        this.normal = normal;
-        this.weak = weak;
-        this.strong = strong;
-
-        return this;
-    }
-
-    public UITrackpad delayedInput()
-    {
-        this.delayedInput = true;
-
-        return this;
-    }
-
-    public UITrackpad onlyNumbers()
-    {
-        this.onlyNumbers = true;
-
-        return this;
-    }
-
-    public UITrackpad relative(boolean relative)
-    {
-        this.relative = relative;
-
-        return this;
-    }
-
-    public UITrackpad forcedLabel(IKey label)
-    {
-        this.forcedLabel = label;
-
-        return this;
-    }
-
-    public UITrackpad disableCanceling()
-    {
-        this.allowCanceling = false;
-
-        return this;
-    }
-
-    /* Values presets */
-
-    public UITrackpad degrees()
-    {
-        return this.increment(15D).values(1D, 0.1D, 5D  );
-    }
-
-    public UITrackpad block()
-    {
-        return this.increment(1 / 16D).values(1 / 32D, 1 / 128D, 1 / 2D);
-    }
-
-    public UITrackpad metric()
-    {
-        return this.values(0.1D, 0.01D, 1);
-    }
-
-    /**
-     * Whether this trackpad is dragging
-     */
+    @Override
     public boolean isDragging()
     {
         return this.dragOwnership.isActive();
-    }
-
-    public boolean isDraggingTime()
-    {
-        return this.isDragging() && System.currentTimeMillis() - this.time > 150;
-    }
-
-    public double getValue()
-    {
-        return this.value;
-    }
-
-    /**
-     * Set the value of the field. The input value would be rounded up to 3
-     * decimal places.
-     */
-    public void setValue(double value)
-    {
-        this.setValueInternal(value);
-
-        if (!this.textbox.isFocused())
-        {
-            this.updateTextField();
-        }
-    }
-
-    private void updateTextField()
-    {
-        if (Window.isAltPressed())
-        {
-            this.textbox.setText(this.integer ? String.valueOf((int) this.value) : String.valueOf(this.value));
-        }
-        else
-        {
-            this.textbox.setText(this.integer ? format((int) this.value) : format(this.value));
-        }
-    }
-
-    private void setValueInternal(double value)
-    {
-        value = MathUtils.clamp(value, this.min, this.max);
-
-        if (this.integer)
-        {
-            value = (int) value;
-        }
-
-        this.value = value;
-    }
-
-    /**
-     * Set value of this field and also notify the trackpad listener so it
-     * could detect the value change.
-     */
-    public void setValueAndNotify(double value)
-    {
-        double oldValue = this.value;
-
-        this.setValue(value);
-        this.accept(this.value, oldValue);
-    }
-
-    /** User commands must keep a focused textbox and its committed value in sync. */
-    private void setUserValueAndNotify(double value)
-    {
-        this.setValueAndNotify(value);
-
-        if (this.textbox.isFocused())
-        {
-            this.updateTextField();
-            this.focusStartValue = this.value;
-        }
-    }
-
-    private void accept(double value, double oldValue)
-    {
-        if (this.callback != null)
-        {
-            this.callback.accept(this.relative ? value - oldValue : this.value);
-        }
-    }
-
-    @Override
-    public void focus(UIContext context)
-    {
-        super.focus(context);
-
-        this.focusStartValue = this.value;
-
-        this.updateTextField();
-        this.textbox.setFocused(true);
-        this.textbox.moveCursorToEnd();
-    }
-
-    @Override
-    public void unfocus(UIContext context)
-    {
-        this.evaluate();
-
-        super.unfocus(context);
-
-        this.textbox.setFocused(false);
-
-        /* Reset the value in case it's out of range */
-        if (this.delayedInput && Double.compare(this.value, this.focusStartValue) != 0)
-        {
-            this.accept(this.value, this.focusStartValue);
-        }
-
-        this.setValue(this.value);
     }
 
     /**
@@ -380,7 +68,6 @@ public class UITrackpad extends UIBaseTextbox
 
         int w = this.area.w < 60 ? 12 : 20;
 
-        this.textbox.area.copy(this.area);
         this.plusOne.copy(this.area);
         this.minusOne.copy(this.area);
         this.plusOne.w = this.minusOne.w = w;
@@ -396,7 +83,7 @@ public class UITrackpad extends UIBaseTextbox
     {
         if (context.mouseButton == 2 && !this.isDragging() && this.area.isInside(context))
         {
-            this.setUserValueAndNotify(-this.value);
+            this.setValueAndNotify(-this.value);
 
             return true;
         }
@@ -435,11 +122,10 @@ public class UITrackpad extends UIBaseTextbox
                 this.initialX = context.mouseX;
                 this.initialY = context.mouseY;
                 this.lastValue = this.value;
-                this.time = System.currentTimeMillis();
 
                 try
                 {
-                    this.getEvents().emit(new UITrackpadDragStartEvent(this));
+                    this.emitDragStart();
                 }
                 catch (RuntimeException | Error exception)
                 {
@@ -509,7 +195,7 @@ public class UITrackpad extends UIBaseTextbox
 
         if (wasDragging)
         {
-            this.getEvents().emit(new UITrackpadDragEndEvent(this));
+            this.emitDragEnd();
         }
 
         return wasDragging || super.subMouseReleased(context);
@@ -573,11 +259,11 @@ public class UITrackpad extends UIBaseTextbox
         {
             if (context.mouseWheel > 0)
             {
-                this.setUserValueAndNotify(this.value + this.getValueModifier());
+                this.setValueAndNotify(this.value + this.getValueModifier());
             }
             else
             {
-                this.setUserValueAndNotify(this.value - this.getValueModifier());
+                this.setValueAndNotify(this.value - this.getValueModifier());
             }
 
             return true;
@@ -594,145 +280,7 @@ public class UITrackpad extends UIBaseTextbox
             return this.cancelDragging();
         }
 
-        if (this.isFocused())
-        {
-            if (context.isHeld(GLFW.GLFW_KEY_UP))
-            {
-                this.setUserValueAndNotify(this.value + this.getValueModifier());
-
-                return true;
-            }
-            else if (context.isHeld(GLFW.GLFW_KEY_DOWN))
-            {
-                this.setUserValueAndNotify(this.value - this.getValueModifier());
-
-                return true;
-            }
-            else if (context.isPressed(GLFW.GLFW_KEY_TAB))
-            {
-                context.focus(this, Window.isShiftPressed() ? -1 : 1);
-
-                return true;
-            }
-            else if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
-            {
-                context.unfocus();
-
-                return true;
-            }
-            else if (context.isPressed(GLFW.GLFW_KEY_ENTER))
-            {
-                context.focus(null);
-            }
-        }
-        else if (this.area.isInside(context))
-        {
-            if (!context.isFocused() && !Window.isCtrlPressed() && (context.isPressed(GLFW.GLFW_KEY_MINUS) || context.isPressed(GLFW.GLFW_KEY_KP_SUBTRACT)))
-            {
-                this.setUserValueAndNotify(-this.value);
-
-                return true;
-            }
-        }
-
-        String old = this.textbox.getText();
-        boolean result = this.textbox.keyPressed(context);
-        String text = this.textbox.getText();
-
-        if (this.textbox.isFocused() && !text.equals(old))
-        {
-            try
-            {
-                double oldValue = this.value;
-
-                this.setValueInternal(text.isEmpty() ? 0 : Double.parseDouble(text));
-
-                if (!this.delayedInput)
-                {
-                    this.accept(this.value, oldValue);
-                }
-            }
-            catch (Exception e)
-            {}
-        }
-
-        return result;
-    }
-
-    private boolean evaluate()
-    {
-        String text = this.textbox.getText().trim();
-
-        try
-        {
-            Float.parseFloat(text);
-
-            return false;
-        }
-        catch (Exception e)
-        {}
-
-        try
-        {
-            MathBuilder builder = new MathBuilder();
-
-            double oldValue = this.value;
-
-            this.setValue(builder.parse(text).get().doubleValue());
-            this.textbox.moveCursorToEnd();
-
-            if (!this.delayedInput)
-            {
-                this.accept(this.value, oldValue);
-            }
-
-            return true;
-        }
-        catch (Exception e)
-        {}
-
-        return false;
-    }
-
-    @Override
-    public boolean subTextInput(UIContext context)
-    {
-        char inputCharacter = context.getInputCharacter();
-
-        if (this.onlyNumbers && this.isFocused() && !this.numberCharacterAllowed(inputCharacter))
-        {
-            context.unfocus();
-
-            return false;
-        }
-
-        String old = this.textbox.getText();
-        boolean result = this.textbox.textInput(inputCharacter);
-        String text = this.textbox.getText();
-
-        if (this.textbox.isFocused() && !text.equals(old))
-        {
-            try
-            {
-                double oldValue = this.value;
-
-                this.setValueInternal(text.isEmpty() ? 0 : Double.parseDouble(text));
-
-                if (!this.delayedInput)
-                {
-                    this.accept(this.value, oldValue);
-                }
-            }
-            catch (Exception e)
-            {}
-        }
-
-        return result;
-    }
-
-    private boolean numberCharacterAllowed(char character)
-    {
-        return Character.isDigit(character) || allowedNumberCharacters.contains(character);
+        return super.subKeyPressed(context);
     }
 
     /**
@@ -842,7 +390,6 @@ public class UITrackpad extends UIBaseTextbox
                 final int border = 5;
                 final int borderPadding = border + 1;
                 boolean stop = false;
-
                 boolean wrapCursor = !BBSUiRemoteHeldState.isActive();
 
                 if (wrapCursor && mouseX <= border)
@@ -880,7 +427,7 @@ public class UITrackpad extends UIBaseTextbox
 
                         newValue = diff < 0 ? this.lastValue : newValue;
 
-                        if (this.value != newValue)
+                        if (this.value != this.normalize(newValue))
                         {
                             if (this.delayedInput)
                             {
@@ -945,25 +492,5 @@ public class UITrackpad extends UIBaseTextbox
                 context.batcher.box(x, y, x + bodyWidth, y + h, color);
             }
         }
-    }
-
-    public double getValueModifier()
-    {
-        double value = this.normal;
-
-        if (Window.isShiftPressed())
-        {
-            value = this.strong;
-        }
-        else if (Window.isAltPressed())
-        {
-            value = this.weak;
-        }
-        else if (Window.isCtrlPressed())
-        {
-            value = this.increment;
-        }
-
-        return value * globalFactor.getValue();
     }
 }

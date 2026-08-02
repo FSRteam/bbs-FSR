@@ -10,7 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -24,7 +24,7 @@ public class UIDebugOverlayContextMenu extends UIContextMenu
     public UIIcon enable;
     public UIIcon xray;
     public UIIcon dashed;
-    public UITrackpad opacity;
+    public UISliderTrackpad opacity;
 
     private final ValueModelDebug config;
     private final UIElement column;
@@ -40,7 +40,7 @@ public class UIDebugOverlayContextMenu extends UIContextMenu
         this.dashed = new UIIcon(Icons.LINE, (b) -> this.config.dashed.toggle());
         this.dashed.tooltip(UIKeys.MODEL_DEBUG_DASHED);
 
-        this.opacity = new UITrackpad((v) -> this.config.opacity.set(v.floatValue()));
+        this.opacity = new UISliderTrackpad((v) -> this.config.opacity.set(v.floatValue()));
         this.opacity.limit(this.config.opacity).setValue(this.config.opacity.get());
 
         List<UIElement> rows = new ArrayList<>();
@@ -67,7 +67,7 @@ public class UIDebugOverlayContextMenu extends UIContextMenu
     {
         UIIcon visible = new UIIcon(() -> element.visible.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> element.visible.toggle());
         UIColor color = new UIColor(element.color::set);
-        UITrackpad size = new UITrackpad((v) -> element.size.set(v.floatValue()));
+        UISliderTrackpad size = new UISliderTrackpad((v) -> element.size.set(v.floatValue()));
 
         color.setColor(element.color.get());
         size.limit(element.size).setValue(element.size.get());

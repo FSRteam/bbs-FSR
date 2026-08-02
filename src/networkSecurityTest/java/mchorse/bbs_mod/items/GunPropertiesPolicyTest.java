@@ -2,6 +2,7 @@ package mchorse.bbs_mod.items;
 
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.PermissionUtils;
+import mchorse.bbs_mod.utils.pose.Transform;
 
 public final class GunPropertiesPolicyTest
 {
@@ -90,6 +91,18 @@ public final class GunPropertiesPolicyTest
         properties = new GunProperties();
         properties.getTransformFirstPerson().scale.z = Float.POSITIVE_INFINITY;
         check(!GunPropertiesPolicy.isAllowed(properties), "non-finite held-gun transform was accepted");
+
+        properties = new GunProperties();
+        properties.projectileTransform.rotationMode = Transform.RotationMode.QUATERNION;
+        properties.projectileTransform.quat.set(Float.NaN, 0F, 0F, 1F);
+        check(!GunPropertiesPolicy.isProjectileRuntimeAllowed(properties),
+            "non-finite projectile quaternion was accepted");
+
+        properties = new GunProperties();
+        properties.projectileTransform.rotationMode = Transform.RotationMode.QUATERNION;
+        properties.projectileTransform.quat.set(0F, 0F, 0F, 0F);
+        check(!GunPropertiesPolicy.isProjectileRuntimeAllowed(properties),
+            "zero-length projectile quaternion was accepted");
 
         properties = new GunProperties();
         properties.cmdImpact = "say first\nsay second";

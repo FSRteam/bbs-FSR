@@ -1,10 +1,10 @@
 package mchorse.bbs_mod.ui.framework.elements.events;
 
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.UINumericInput;
 
-public class UITrackpadDragStartEvent extends UIEvent<UITrackpad>
+public class UITrackpadDragStartEvent extends UIEvent<UINumericInput<?>>
 {
-    public UITrackpadDragStartEvent(UITrackpad element)
+    public UITrackpadDragStartEvent(UINumericInput<?> element)
     {
         super(element);
     }

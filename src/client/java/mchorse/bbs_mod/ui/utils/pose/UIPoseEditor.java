@@ -7,25 +7,30 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
+import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UIDeltaPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.utils.PickedBone;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.resizers.AutomaticResizer;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
-import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseManager;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,10 +43,11 @@ import java.util.function.Consumer;
 
 public class UIPoseEditor extends UIElement
 {
-    private static String lastLimb = "";
+    /** The bone list never shrinks below this height when it gets stretched to fill the panel. */
+    private static final int MIN_LIST_HEIGHT = UIStringList.DEFAULT_HEIGHT * 4;
 
     public UIBoneList groups;
-    public UITrackpad fix;
+    public UISliderTrackpad fix;
     public UIColor color;
     public UIToggle lighting;
     public UICirculate glintMode;
@@ -56,6 +62,7 @@ public class UIPoseEditor extends UIElement
     protected IModel model;
     protected Map<String, String> flippedParts;
     private BoneHierarchy hierarchy = BoneHierarchy.EMPTY;
+    private String transformBoneOverride = "";
 
     public UIPoseEditor()
     {
@@ -72,8 +79,8 @@ public class UIPoseEditor extends UIElement
 
             return menu;
         });
-        this.fix = new UITrackpad((v) -> this.applyFixToSelection(v.floatValue()));
-        this.fix.limit(0D, 1D).increment(1D).values(0.1, 0.05D, 0.2D);
+        this.fix = new UISliderTrackpad((v) -> this.applyFixToSelection(v.floatValue()));
+        this.fix.limit(0D, 1D).increment(0.1D).values(0.1, 0.05D, 0.2D);
         this.fix.tooltip(UIKeys.POSE_CONTEXT_FIX_TOOLTIP);
         this.fix.context((menu) ->
         {
@@ -107,33 +114,18 @@ public class UIPoseEditor extends UIElement
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_VANILLA);
         this.glintMode.tooltip(UIKeys.POSE_CONTEXT_GLINT_TOOLTIP);
         this.glintMode.h(UIConstants.CONTROL_HEIGHT);
-        this.glintMode.context((menu) ->
-        {
-            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
-            {
-                this.applyChildren((p) -> this.setGlintMode(p, this.glintMode.getValue()));
-            });
-        });
-        this.glintColor = new UIColor((c) -> this.applyGlintColorToSelection(c));
+        this.glintMode.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
+            () -> this.applyChildren((p) -> this.setGlintMode(p, this.glintMode.getValue()))));
+        this.glintColor = new UIColor(this::applyGlintColorToSelection);
         this.glintColor.withAlpha();
         this.glintColor.tooltip(UIKeys.POSE_CONTEXT_GLINT_COLOR_TOOLTIP);
-        this.glintColor.context((menu) ->
-        {
-            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
-            {
-                this.applyChildren((p) -> this.setGlintColor(p, this.glintColor.picker.color.getARGBColor()));
-            });
-        });
+        this.glintColor.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
+            () -> this.applyChildren((p) -> this.setGlintColor(p, this.glintColor.picker.color.getARGBColor()))));
         this.glintSpeed = new UITrackpad((v) -> this.applyGlintSpeedToSelection(v.floatValue()));
         this.glintSpeed.limit(-4D, 4D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
         this.glintSpeed.tooltip(UIKeys.POSE_CONTEXT_GLINT_SPEED_TOOLTIP);
-        this.glintSpeed.context((menu) ->
-        {
-            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
-            {
-                this.applyChildren((p) -> this.setGlintSpeed(p, (float) this.glintSpeed.getValue()));
-            });
-        });
+        this.glintSpeed.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
+            () -> this.applyChildren((p) -> this.setGlintSpeed(p, (float) this.glintSpeed.getValue()))));
         this.glintTransform = this.createGlintTransformEditor();
         this.glintSection = new UISection(UIKeys.POSE_CONTEXT_GLINT_TRANSFORM);
         this.glintSection.fields.add(
@@ -141,51 +133,128 @@ public class UIPoseEditor extends UIElement
             UI.labelRow(UIKeys.POSE_CONTEXT_GLINT_SPEED, this.glintSpeed),
             this.glintTransform
         );
-        this.glintSection.context((menu) ->
+        this.glintSection.setExpanded(false);
+        this.glintSection.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
         {
-            menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY, () ->
-            {
-                Transform source = this.glintTransform.getTransform();
+            Transform source = this.glintTransform.getTransform();
 
-                if (source != null)
-                {
-                    this.applyChildren((p) -> this.setGlintTransform(p, source));
-                }
-            });
-        });
+            if (source != null)
+            {
+                this.applyChildren((p) -> this.setGlintTransform(p, source));
+            }
+        }));
         this.transform = this.createTransformEditor();
         this.transform.setModel();
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        this.add(this.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting),
-            this.transform.marginTop(4),
-            this.glintSection);
+        /* Both rows ride the same labelRow grid, so the fix trackpad and the colour
+         * swatch pin to one divider column. The lighting toggle keeps its own name
+         * and takes the label slot of its row — it used to sit in a bare row that
+         * spanned the full width and ignored that column. */
+        this.add(
+            this.groups,
+            UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix),
+            UI.labelRow(this.lighting, this.color),
+            this.transform,
+            this.glintSection
+        );
+    }
+
+    @Override
+    public void resize()
+    {
+        if (this.stretchesBoneList())
+        {
+            this.stretchBoneList();
+        }
+
+        super.resize();
+    }
+
+    /**
+     * Whether the bone list grows to fill the viewport. Only the film editor's pose keyframe editor
+     * opts in; the form pose editor keeps the list at its fixed height, so the collapsible sections
+     * below it (transform, shape keys) lay out predictably instead of fighting the stretch.
+     */
+    protected boolean stretchesBoneList()
+    {
+        return false;
+    }
+
+    private void stretchBoneList()
+    {
+        UIScrollView viewport = this.getViewport();
+
+        if (viewport == null || this.area.h <= 0 || this.groups.getParent() == null)
+        {
+            return;
+        }
+
+        int target = viewport.area.ey() - this.getViewportPadding(viewport);
+        int height = this.groups.list.getFlex().getH() + (target - this.area.ey());
+
+        this.groups.list.h(Math.max(height, MIN_LIST_HEIGHT));
+    }
+
+    private UIScrollView getViewport()
+    {
+        UIElement element = this.getParent();
+
+        while (element != null)
+        {
+            if (element instanceof UIScrollView)
+            {
+                return (UIScrollView) element;
+            }
+
+            element = element.getParent();
+        }
+
+        return null;
+    }
+
+    /** The scroll content lays itself out with this much padding at the bottom; leaving exactly
+     *  that gap below the list is what keeps the panel from overflowing into a stray scrollbar. */
+    private int getViewportPadding(UIScrollView viewport)
+    {
+        if (viewport.getFlex().post instanceof AutomaticResizer resizer)
+        {
+            return resizer.padding;
+        }
+
+        return UIConstants.SCROLL_PADDING;
     }
 
     private void applyChildren(Consumer<PoseTransform> consumer)
     {
-        LinkedHashSet<String> children = new LinkedHashSet<>();
-
-        for (String bone : this.groups.list.getCurrent())
+        /* Snapshot: getCurrent() is a shared, reused buffer and the consumer can
+         * re-enter it (film setFix notifies the keyframe) — see forEachSelectedPose. */
+        for (String bone : new ArrayList<>(this.groups.list.getCurrent()))
         {
+            Collection<String> keys;
+
             if (this.model != null)
             {
-                children.addAll(this.model.getAllChildrenKeys(bone));
+                keys = this.model.getAllChildrenKeys(bone);
             }
             else
             {
+                List<String> descendants = new ArrayList<>();
+
                 for (BoneHierarchy.Bone child : this.hierarchy.getDescendants(bone))
                 {
-                    children.add(child.id());
+                    descendants.add(child.id());
                 }
-            }
-        }
 
-        for (String child : children)
-        {
-            consumer.accept(this.pose.get(child));
+                keys = descendants;
+            }
+
+            for (String key : keys)
+            {
+                consumer.accept(this.pose.get(key));
+            }
         }
     }
 
@@ -200,6 +269,32 @@ public class UIPoseEditor extends UIElement
     public String getGroup()
     {
         return this.groups.list.getCurrentFirst();
+    }
+
+    public void setTransformBoneOverride(String bone)
+    {
+        String target = this.hasBone(bone) ? bone : "";
+
+        if (this.transformBoneOverride.equals(target))
+        {
+            return;
+        }
+
+        this.transformBoneOverride = target;
+
+        if (target.isEmpty())
+        {
+            this.pickBones(this.groups.list.getCurrent());
+        }
+        else
+        {
+            this.transform.setTransform(this.pose.get(target));
+        }
+    }
+
+    public String getTransformBone()
+    {
+        return this.transformBoneOverride.isEmpty() ? this.getGroup() : this.transformBoneOverride;
     }
 
     protected void pastePose(MapType data)
@@ -233,6 +328,7 @@ public class UIPoseEditor extends UIElement
         this.flippedParts = null;
         this.hierarchy = BoneHierarchy.EMPTY;
 
+        this.groups.list.setHierarchy(null, null);
         this.fillInGroups(groups, reset, true);
     }
 
@@ -246,8 +342,9 @@ public class UIPoseEditor extends UIElement
         this.model = null;
         this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
         this.flippedParts = this.createHierarchyFlipMap(this.hierarchy);
-
-        this.fillInGroups(this.hierarchy, reset, hierarchicalLabels);
+        this.groups.list.setHierarchy(null, null);
+        this.groups.setSource(this.hierarchy.getBoneIds(), this.hierarchy.getLabels(hierarchicalLabels), false);
+        this.groups.filter(reset);
     }
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset)
@@ -262,25 +359,22 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(IModel model, Map<String, String> flippedParts, boolean reset, Collection<String> disabledBones, BoneHierarchy hierarchy)
     {
-        this.fillGroups(model, flippedParts, reset, disabledBones, hierarchy, false);
-    }
-
-    public void fillGroups(
-        IModel model,
-        Map<String, String> flippedParts,
-        boolean reset,
-        Collection<String> disabledBones,
-        BoneHierarchy hierarchy,
-        boolean hierarchicalLabels
-    )
-    {
         this.model = model;
         this.flippedParts = flippedParts;
         this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
 
+        /* The hierarchy metadata rides along so the list renders as a tree; the list
+         * contents themselves keep being refilled by UIBoneList's search filter. */
+        this.groups.list.setHierarchy(model, (bone) -> PoseBones.isHidden(disabledBones, bone));
+
         if (!this.hierarchy.getBones().isEmpty())
         {
-            this.fillInGroups(this.hierarchy, reset, hierarchicalLabels);
+            List<String> bones = new ArrayList<>(this.hierarchy.getBoneIds());
+
+            bones.removeIf((bone) -> PoseBones.isHidden(disabledBones, bone));
+            this.groups.setSource(bones, this.hierarchy.getLabels(false), false);
+            this.groups.filter(reset);
+
             return;
         }
 
@@ -294,12 +388,6 @@ public class UIPoseEditor extends UIElement
 
         bones.removeIf((bone) -> PoseBones.isHidden(disabledBones, bone));
         this.fillInGroups(bones, reset, false);
-    }
-
-    private void fillInGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
-    {
-        this.groups.setSource(hierarchy.getBoneIds(), hierarchy.getLabels(hierarchicalLabels), false);
-        this.groups.filter(reset);
     }
 
     private Map<String, String> createHierarchyFlipMap(BoneHierarchy hierarchy)
@@ -319,13 +407,8 @@ public class UIPoseEditor extends UIElement
             String mirroredPath = this.hierarchyPathKey(hierarchy, bone, true);
             String partner = idsByPath.get(mirroredPath);
 
-            if (
-                !path.equals(mirroredPath)
-                    && partner != null
-                    && !partner.equals(bone.id())
-                    && !paired.contains(bone.id())
-                    && !paired.contains(partner)
-            )
+            if (!path.equals(mirroredPath) && partner != null && !partner.equals(bone.id())
+                && !paired.contains(bone.id()) && !paired.contains(partner))
             {
                 flipped.put(bone.id(), partner);
                 paired.add(bone.id());
@@ -367,15 +450,15 @@ public class UIPoseEditor extends UIElement
 
         this.fix.setVisible(hasBones);
         this.color.setVisible(hasBones);
+        this.lighting.setVisible(hasBones);
         this.glintMode.setVisible(hasBones);
         this.glintColor.setVisible(hasBones);
         this.glintSpeed.setVisible(hasBones);
         this.glintSection.setVisible(hasBones);
-        this.lighting.setVisible(hasBones);
         this.transform.setVisible(hasBones);
 
         List<String> list = this.groups.list.getList();
-        int i = Math.max(reset ? 0 : list.indexOf(lastLimb), 0);
+        int i = Math.max(reset ? 0 : list.indexOf(PickedBone.get()), 0);
 
         this.groups.list.setCurrentScroll(CollectionUtils.getSafe(list, i));
         this.pickBones(this.groups.list.getCurrent());
@@ -386,19 +469,20 @@ public class UIPoseEditor extends UIElement
         this.selectBone(bone, false);
     }
 
-    /** Whether this pose editor lists the given bone. */
+    /** Whether this pose editor lists the given bone (so a viewport pick can target it). */
     public boolean hasBone(String bone)
     {
         return bone != null && !bone.isEmpty() && this.groups.list.getList().contains(bone);
     }
 
     /**
-     * Select a bone, or toggle it in the multi-selection when additive. Keep at
-     * least one selected bone so the pose controls always have a target.
+     * Select a bone, or — when {@code additive} — toggle it in the multi-selection,
+     * so the viewport's Ctrl+click builds the same multi-bone selection the bone list
+     * does. Never leaves the selection empty (toggling off the last bone keeps it).
      */
     public void selectBone(String bone, boolean additive)
     {
-        lastLimb = bone;
+        PickedBone.set(bone);
 
         if (additive)
         {
@@ -450,7 +534,11 @@ public class UIPoseEditor extends UIElement
         return new UIGlintPropTransform();
     }
 
-    /** Applies each channel edit as a delta so selected bones retain their relative poses. */
+    /**
+     * Applies each transform edit as a per-channel delta to every selected bone,
+     * so a multi-selection keeps each bone's own pose instead of collapsing onto
+     * the primary's. See {@link UIDeltaPropTransform}.
+     */
     private class UIPosePropTransform extends UIDeltaPropTransform
     {
         UIPosePropTransform()
@@ -477,27 +565,19 @@ public class UIPoseEditor extends UIElement
         protected void reset()
         {
             this.preCallback();
-            this.applyToTarget((transform) ->
+            this.applyToTarget((t) ->
             {
-                transform.translate.set(0F, 0F, 0F);
-                transform.scale.set(1F, 1F, 1F);
-                transform.rotate.set(0F, 0F, 0F);
-                transform.rotate2.set(0F, 0F, 0F);
+                t.translate.set(0F, 0F, 0F);
+                t.scale.set(1F, 1F, 1F);
+                t.resetRotation();
             });
             this.postCallback();
 
             this.syncTargetTransform();
         }
 
-        @Override
-        public void setR2(Axis axis, double x, double y, double z)
-        {
-            super.setR2(axis, x, y, z);
-            this.syncTargetTransform();
-        }
     }
 
-    /** Keeps glint-space edits separate from the bone's ordinary pose transform. */
     private class UIGlintPropTransform extends UIDeltaPropTransform
     {
         @Override
@@ -525,7 +605,7 @@ public class UIPoseEditor extends UIElement
     {
         if (bones == null || bones.isEmpty())
         {
-            lastLimb = "";
+            PickedBone.set("");
             this.fix.setValue(0F);
             this.color.setColor(Colors.WHITE);
             this.lighting.setValue(false);
@@ -540,7 +620,7 @@ public class UIPoseEditor extends UIElement
 
         String primary = bones.get(0);
 
-        lastLimb = primary;
+        PickedBone.set(primary);
 
         PoseTransform poseTransform = this.pose.get(primary);
 
@@ -551,13 +631,50 @@ public class UIPoseEditor extends UIElement
         this.glintColor.setColor(poseTransform.glintColor.getARGBColor());
         this.glintSpeed.setValue(poseTransform.glintSpeed);
         this.glintTransform.setTransform(poseTransform.glintTransform);
-        this.transform.setTransform(poseTransform);
+        this.transform.setTransform(this.pose.get(this.getTransformBone()));
     }
 
+    private void forEachSelectedPose(Consumer<? super PoseTransform> consumer)
+    {
+        /* Snapshot the selection: getCurrent() hands back a shared, reused buffer,
+         * and the consumer can re-enter it (the film editor's setFix notifies the
+         * keyframe, which re-reads the selection) — iterating the live buffer would
+         * then throw ConcurrentModificationException. Same guard as flipPose/pastePose. */
+        for (String bone : new ArrayList<>(this.groups.list.getCurrent()))
+        {
+            consumer.accept(this.pose.get(bone));
+        }
+    }
+
+    /** How a single bone should receive an edit: reflected onto its left/right
+     *  counterpart ({@link #mirror}) and/or with its rotation flipped ({@link #invert}). */
+    public static class BoneEdit
+    {
+        public final boolean mirror;
+        public final boolean invert;
+
+        public BoneEdit(boolean mirror, boolean invert)
+        {
+            this.mirror = mirror;
+            this.invert = invert;
+        }
+    }
+
+    /**
+     * Bones an edit should touch and how. Selected bones are drivers; with
+     * {@code invert} on, every second selected bone (2nd, 4th, ... in selection
+     * order) has its rotation flipped. With {@code mirror} on, each driver's
+     * left/right counterpart is added reflected across the model's symmetry
+     * &mdash; even when unselected &mdash; so editing one bone mirrors onto its
+     * pair live. A counterpart that is itself selected stays a driver (never
+     * double-applied). Shared by the model panel and film pose editors.
+     */
     public Map<String, BoneEdit> resolveBoneEdits(boolean mirror, boolean invert)
     {
         Map<String, BoneEdit> edits = new LinkedHashMap<>();
-        List<String> selected = this.groups.list.getCurrent();
+        List<String> selected = this.transformBoneOverride.isEmpty()
+            ? this.groups.list.getCurrent()
+            : Collections.singletonList(this.transformBoneOverride);
 
         for (int i = 0; i < selected.size(); i++)
         {
@@ -580,6 +697,11 @@ public class UIPoseEditor extends UIElement
         return edits;
     }
 
+    /**
+     * The opposite-side counterpart of a bone (the model's flip map first, then
+     * the left/right name patterns), or null when it has none or the resolved
+     * name isn't an actual bone.
+     */
     private String mirrorPartner(String bone)
     {
         String partner = null;
@@ -612,68 +734,54 @@ public class UIPoseEditor extends UIElement
         return partner != null && this.groups.list.getList().contains(partner) ? partner : null;
     }
 
-    public void applyToBone(BoneEdit edit, PoseTransform transform, Consumer<Transform> consumer)
+    /**
+     * Applies the edit to one bone: reflecting it across the model's symmetry when
+     * {@code edit.mirror} (the shared {@link Transform#mirrorX} convention, same as
+     * {@link Pose#flip}), and/or flipping its rotation when {@code edit.invert}.
+     * Both are involutions wrapped around the write, so whatever the edit does to
+     * that channel is reflected/inverted.
+     */
+    public void applyToBone(BoneEdit edit, PoseTransform pt, Consumer<Transform> consumer)
     {
         if (edit.mirror)
         {
-            mirrorTransform(transform);
+            pt.mirrorX();
         }
 
         if (edit.invert)
         {
-            negateRotation(transform);
+            negateRotation(pt);
         }
 
-        try
+        consumer.accept(pt);
+
+        if (edit.invert)
         {
-            consumer.accept(transform);
+            negateRotation(pt);
         }
-        finally
+
+        if (edit.mirror)
         {
-            if (edit.invert)
-            {
-                negateRotation(transform);
-            }
-
-            if (edit.mirror)
-            {
-                mirrorTransform(transform);
-            }
+            pt.mirrorX();
         }
-    }
-
-    private static void mirrorTransform(Transform transform)
-    {
-        transform.translate.mul(-1F, 1F, 1F);
-        transform.rotate.mul(1F, -1F, -1F);
-        transform.rotate2.mul(1F, -1F, -1F);
     }
 
     private static void negateRotation(Transform transform)
     {
-        transform.rotate.mul(-1F, -1F, -1F);
-        transform.rotate2.mul(-1F, -1F, -1F);
-    }
-
-    public static class BoneEdit
-    {
-        public final boolean mirror;
-        public final boolean invert;
-
-        public BoneEdit(boolean mirror, boolean invert)
+        /* The invert convention is per-CHANNEL negation (not the true inverse
+         * rotation — Rz(-z)·Ry(-y)·Rx(-x) ≠ R⁻¹ on multi-axis poses), so a
+         * quaternion bone must run the same convention on its decomposed
+         * angles; quat.conjugate() would be a different involution and the
+         * inverted partners would diverge from their euler siblings. */
+        if (transform.rotationMode == Transform.RotationMode.QUATERNION)
         {
-            this.mirror = mirror;
-            this.invert = invert;
+            Vector3f euler = Matrices.toEulerZYXRadians(transform.quat, new Vector3f());
+
+            transform.quat.set(Matrices.toQuaternionZYXRadians(-euler.x, -euler.y, -euler.z));
         }
-    }
-
-    private void forEachSelectedPose(Consumer<PoseTransform> consumer)
-    {
-        List<String> selected = new ArrayList<>(this.groups.list.getCurrent());
-
-        for (String bone : selected)
+        else
         {
-            consumer.accept(this.pose.get(bone));
+            transform.rotate.mul(-1F, -1F, -1F);
         }
     }
 

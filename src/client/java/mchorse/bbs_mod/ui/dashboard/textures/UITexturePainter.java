@@ -19,6 +19,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -78,9 +79,9 @@ public class UITexturePainter extends UIElement
     private static final int MIN_OPTIONS_WIDTH = 140;
     private static final int MAX_BRUSH_SIZE = 1024;
 
-    public UITrackpad brightness;
+    public UISliderTrackpad brightness;
     public UITrackpad brushSize;
-    public UITrackpad brushSoftness;
+    public UISliderTrackpad brushSoftness;
 
     public UIColor primary;
     public UIColor secondary;
@@ -133,7 +134,7 @@ public class UITexturePainter extends UIElement
     private UIToggle brushBuildUpToggle;
     private UIToggle alphaLockToggle;
     private UIElement eraserOpacityRow;
-    private UITrackpad eraserOpacity;
+    private UISliderTrackpad eraserOpacity;
 
     private UIElement content;
     private final Consumer<Link> saveCallback;
@@ -267,13 +268,13 @@ public class UITexturePainter extends UIElement
         this.alphaLockToggle = new UIToggle(UIKeys.TEXTURES_ALPHA_LOCK, false, (b) -> {});
         this.alphaLockToggle.h(UIConstants.CONTROL_HEIGHT);
 
-        this.brightness = new UITrackpad();
+        this.brightness = new UISliderTrackpad();
         this.brightness.limit(0, 1).setValue(0.7);
         this.brightness.tooltip(UIKeys.TEXTURES_VIEWER_BRIGHTNESS);
 
         this.brushSize = new UITrackpad((v) -> this.setBrushSize(v.intValue()));
         this.brushSize.integer().limit(1, MAX_BRUSH_SIZE, true).setValue(1);
-        this.brushSoftness = new UITrackpad((v) -> {});
+        this.brushSoftness = new UISliderTrackpad((v) -> {});
         this.brushSoftness.integer().limit(0, 100, true).setValue(0);
 
         this.brushSizeRow = UI.labelRow(UIKeys.TEXTURES_BRUSH_SIZE, this.brushSize);
@@ -283,7 +284,7 @@ public class UITexturePainter extends UIElement
         this.brushBuildUpToggle = new UIToggle(UIKeys.TEXTURES_BRUSH_ACCUMULATIVE, this.brushBuildUp, (b) -> this.brushBuildUp = b.getValue());
         this.brushBuildUpToggle.h(UIConstants.CONTROL_HEIGHT);
 
-        this.eraserOpacity = new UITrackpad((v) -> {});
+        this.eraserOpacity = new UISliderTrackpad((v) -> {});
         this.eraserOpacity.limit(0, 100).setValue(100);
         this.eraserOpacityRow = UI.labelRow(UIKeys.TEXTURES_ERASER_OPACITY, this.eraserOpacity);
 

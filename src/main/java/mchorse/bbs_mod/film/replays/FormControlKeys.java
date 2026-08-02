@@ -13,6 +13,22 @@ public class FormControlKeys
     public static final String IK_CONTROLS = "ik_controls";
     public static final String PHYSICS_CONTROLS = "physics_controls";
     public static final String WIND_CONTROLS = "wind_controls";
+    public static final String GLINT_CONTROLS = "glint_layer";
+
+    public static boolean isGlintControlChannel(String id)
+    {
+        return id != null && id.contains(GLINT_CONTROLS);
+    }
+
+    public static String parseGlintControlFormPath(String id)
+    {
+        return parseFormPath(id, GLINT_CONTROLS);
+    }
+
+    public static String toGlintControlKey(String formPath)
+    {
+        return toKey(formPath, GLINT_CONTROLS);
+    }
 
     public static boolean isIKControlChannel(String id)
     {

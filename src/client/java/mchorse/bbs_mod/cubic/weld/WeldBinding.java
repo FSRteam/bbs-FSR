@@ -5,6 +5,11 @@ import mchorse.bbs_mod.cubic.data.model.ModelCube;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.data.model.ModelQuad;
 import mchorse.bbs_mod.cubic.data.model.ModelVertex;
+import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.joml.Matrices;
+import mchorse.bbs_mod.utils.pose.Transform;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 
@@ -44,27 +49,77 @@ public class WeldBinding
         this.layers = layers;
     }
 
+    /** Why a weld declaration fails to resolve against a model — surfaced by the editor instead of a silent no-op. */
+    public enum Issue
+    {
+        SOURCE_BONE,
+        TARGET_BONE,
+        SOURCE_FACE,
+        TARGET_FACE,
+
+        /** The bone exists, but none of its cubes has a quad on the welded face (mesh-only bone, or a trimmed cube). */
+        SOURCE_CUBES,
+        TARGET_CUBES
+    }
+
+    /**
+     * The first reason this weld can't resolve, or null when it can. THE precondition of {@link #resolve}:
+     * a weld passing this always yields a binding (both sides have a faced cube, so pairing yields at least
+     * one layer), so the two can't drift apart.
+     */
+    public static Issue diagnose(Model model, ModelWeld weld)
+    {
+        if (model.getGroup(weld.sourceBone) == null) return Issue.SOURCE_BONE;
+        if (model.getGroup(weld.targetBone) == null) return Issue.TARGET_BONE;
+        if (CubeFace.fromName(weld.sourceFace) == null) return Issue.SOURCE_FACE;
+        if (CubeFace.fromName(weld.targetFace) == null) return Issue.TARGET_FACE;
+
+        if (facedCubes(model.getGroup(weld.sourceBone), CubeFace.fromName(weld.sourceFace)).isEmpty()) return Issue.SOURCE_CUBES;
+        if (facedCubes(model.getGroup(weld.targetBone), CubeFace.fromName(weld.targetFace)).isEmpty()) return Issue.TARGET_CUBES;
+
+        return null;
+    }
+
     public static WeldBinding resolve(Model model, ModelWeld weld)
     {
+        if (diagnose(model, weld) != null)
+        {
+            return null;
+        }
+
         CubeFace sourceFace = CubeFace.fromName(weld.sourceFace);
         CubeFace targetFace = CubeFace.fromName(weld.targetFace);
         ModelGroup sourceGroup = model.getGroup(weld.sourceBone);
         ModelGroup targetGroup = model.getGroup(weld.targetBone);
 
-        if (sourceFace == null || targetFace == null || sourceGroup == null || targetGroup == null)
-        {
-            return null;
-        }
-
         List<ModelCube> sourceCubes = facedCubes(sourceGroup, sourceFace);
         List<ModelCube> targetCubes = facedCubes(targetGroup, targetFace);
-        float maxBend = (float) Math.toRadians(weld.maxAngle);
-        float falloff = weld.seamFalloff;
         List<Layer> layers = new ArrayList<>();
+
+        /* Rest-pose world matrices of both bones, composed the exact way the renderer stacks them: the
+         * corner correspondence between the two faces is decided HERE, in the one pose where the modeler
+         * actually aligned them — matching by proximity in whatever animated pose the first frame happens
+         * to catch fixes a bent/twisted mapping forever. (The rest twist bias is read off the same pose.) */
+        Matrix4f sourceGroupRest = restWorldMatrix(sourceGroup);
+        Matrix4f targetGroupRest = restWorldMatrix(targetGroup);
+
+        /* The share knob is authored as the PARENT bone's share, but the seam math is anchored to the
+         * target's face — so resolve which side the parent actually is from the model hierarchy and flip
+         * the share when the parent turned out to be the source. Source/target roles are whatever order
+         * the weld was authored in; without this, the same knob value would mean opposite things on two
+         * welds of the same rig. Unrelated bones (no ancestry either way) treat the target as the parent. */
+        float targetShare = isAncestor(sourceGroup, targetGroup) ? 1F - weld.parentShare : weld.parentShare;
 
         for (int[] pair : pairByCrossSection(sourceCubes, sourceFace, targetCubes, targetFace))
         {
-            layers.add(new Layer(sourceCubes.get(pair[0]), sourceFace, targetCubes.get(pair[1]), targetFace, maxBend, falloff));
+            ModelCube sourceCube = sourceCubes.get(pair[0]);
+            ModelCube targetCube = targetCubes.get(pair[1]);
+
+            layers.add(new Layer(
+                sourceCube, sourceFace, sourceGroupRest, restCubeMatrix(sourceGroupRest, sourceCube),
+                targetCube, targetFace, targetGroupRest, restCubeMatrix(targetGroupRest, targetCube),
+                weld, targetShare
+            ));
         }
 
         return layers.isEmpty() ? null : new WeldBinding(sourceGroup, targetGroup, layers);
@@ -191,23 +246,126 @@ public class WeldBinding
         return new Vector3f[] {new Vector3f(1F, 0F, 0F), new Vector3f(0F, 1F, 0F)};
     }
 
-    private static int nearest(Vector3f world, Vector3f[] corners)
+    /** Whether {@code ancestor} sits above {@code group} in the bone hierarchy. */
+    private static boolean isAncestor(ModelGroup ancestor, ModelGroup group)
     {
-        int best = 0;
-        float bestDist = Float.MAX_VALUE;
-
-        for (int i = 0; i < corners.length; i++)
+        for (ModelGroup parent = group.parent; parent != null; parent = parent.parent)
         {
-            float dist = corners[i].distanceSquared(world);
-
-            if (dist < bestDist)
+            if (parent == ancestor)
             {
-                bestDist = dist;
-                best = i;
+                return true;
             }
         }
 
-        return best;
+        return false;
+    }
+
+    /**
+     * The bone's rest-pose world matrix: every ancestor's initial transform composed exactly like
+     * {@code ICubicRenderer.applyGroupTransformations} does at rest (the translate term is zero there,
+     * since {@code current == initial}), so rest corners land where the renderer would put them.
+     */
+    private static Matrix4f restWorldMatrix(ModelGroup group)
+    {
+        Matrix4f matrix = group.parent != null ? restWorldMatrix(group.parent) : new Matrix4f();
+        Vector3f pivot = group.initial.translate;
+        Vector3f rotate = group.initial.rotate;
+        Vector3f scale = group.initial.scale;
+
+        matrix.translate(pivot.x / 16F, pivot.y / 16F, pivot.z / 16F);
+
+        /* NOT Transform.createRotation(): that reads euler as radians, while cubic group channels are
+         * degrees — the same reason rotateGroup goes through toLocalRotationZYXDegrees. */
+        if (group.initial.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            matrix.rotate(group.initial.quat);
+        }
+        else if (rotate.x != 0F || rotate.y != 0F || rotate.z != 0F)
+        {
+            matrix.rotate(Matrices.toLocalRotationZYXDegrees(rotate));
+        }
+
+        matrix.scale(scale.x, scale.y, scale.z);
+        matrix.translate(-pivot.x / 16F, -pivot.y / 16F, -pivot.z / 16F);
+
+        return matrix;
+    }
+
+    /** The cube's own modeling transform on top of its bone, mirroring {@code CubicCubeRenderer.rotate} (ZYX). */
+    private static Matrix4f restCubeMatrix(Matrix4f groupMatrix, ModelCube cube)
+    {
+        Matrix4f matrix = new Matrix4f(groupMatrix);
+        Vector3f pivot = cube.pivot;
+        Vector3f rotate = cube.rotate;
+
+        matrix.translate(pivot.x / 16F, pivot.y / 16F, pivot.z / 16F);
+
+        if (rotate.x != 0F || rotate.y != 0F || rotate.z != 0F)
+        {
+            matrix.rotateZ(MathUtils.toRad(rotate.z)).rotateY(MathUtils.toRad(rotate.y)).rotateX(MathUtils.toRad(rotate.x));
+        }
+
+        matrix.translate(-pivot.x / 16F, -pivot.y / 16F, -pivot.z / 16F);
+
+        return matrix;
+    }
+
+    /* All 24 orderings of {0,1,2,3}, for the optimal corner assignment below. */
+    private static final int[][] PERMUTATIONS = permutations();
+
+    private static int[][] permutations()
+    {
+        int[][] result = new int[24][];
+        int n = 0;
+
+        for (int a = 0; a < 4; a++)
+        {
+            for (int b = 0; b < 4; b++)
+            {
+                for (int c = 0; c < 4; c++)
+                {
+                    for (int d = 0; d < 4; d++)
+                    {
+                        if (a != b && a != c && a != d && b != c && b != d && c != d)
+                        {
+                            result[n++] = new int[] {a, b, c, d};
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Match each source corner to a distinct target corner, minimizing total rest-pose distance — a true
+     * bijection (4! is 24 candidates, brute force is exact). Independent per-corner nearest matching can
+     * send two source corners to the SAME target corner on a twisted or offset rest fit, which degenerates
+     * the seam quad.
+     */
+    private static int[] matchCorners(Vector3f[] sourceRest, Vector3f[] targetRest)
+    {
+        int[] best = PERMUTATIONS[0];
+        float bestScore = Float.MAX_VALUE;
+
+        for (int[] permutation : PERMUTATIONS)
+        {
+            float score = 0F;
+
+            for (int r = 0; r < 4; r++)
+            {
+                score += sourceRest[r].distanceSquared(targetRest[permutation[r]]);
+            }
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = permutation;
+            }
+        }
+
+        return best.clone();
     }
 
     private static Vector3f average(Vector3f[] points)
@@ -220,6 +378,18 @@ public class WeldBinding
         }
 
         return sum.mul(1F / points.length);
+    }
+
+    private static Vector3f[] transformCorners(Matrix4f matrix, Vector3f[] corners)
+    {
+        Vector3f[] world = new Vector3f[corners.length];
+
+        for (int i = 0; i < corners.length; i++)
+        {
+            world[i] = matrix.transformPosition(corners[i], new Vector3f());
+        }
+
+        return world;
     }
 
     private static Vector3f[] faceCorners(ModelCube cube, CubeFace face)
@@ -303,6 +473,17 @@ public class WeldBinding
         /* Fraction (0..1) of a cube's axis length the bend spreads from the seam; smaller = tighter band. */
         public final float falloff;
 
+        /* The target bone's EFFECTIVE share (0..1) of the joint's deformation — the authored parent share,
+         * already flipped by resolve() if the parent turned out to be the source. The source takes the rest. */
+        public final float targetShare;
+
+        /* Whether the seam also distributes twist (rotation about the bone axis) across the band. */
+        public final boolean twist;
+
+        /* Twist already present between the two faces in the rest pose (rotated cubes), subtracted from the
+         * live measurement so only ANIMATED twist deforms the band. */
+        private final float restTwist;
+
         /* Rigid world poses of the two faces, captured each frame before any snapping. */
         public final Vector3f[] capturedSourceWorld = {new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f()};
         public final Vector3f[] capturedTargetWorld = {new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f()};
@@ -317,8 +498,9 @@ public class WeldBinding
         public final Vector3f capturedTargetBoneAxis = new Vector3f();
         public final Vector3f capturedSourceBoneAxis = new Vector3f();
 
-        /* Source corner -> target corner, matched by proximity once both faces are captured. */
-        public final int[] sourceToTarget = {-1, -1, -1, -1};
+        /* Source corner -> target corner: a bijection fixed at resolve time from the rest pose (the one
+         * pose where the modeler aligned the faces), so no animated first frame can bake in a bad match. */
+        public final int[] sourceToTarget;
 
         /* The shared seam, indexed by target corner. */
         public final Vector3f[] seam = {new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f()};
@@ -331,20 +513,32 @@ public class WeldBinding
          * rest gap between the faces), so snapping to it is a no-op and the group may ride its baked VAO. */
         public boolean identity;
 
-        private Layer(ModelCube sourceCube, CubeFace sourceFace, ModelCube targetCube, CubeFace targetFace, float maxBend, float falloff)
+        private Layer(ModelCube sourceCube, CubeFace sourceFace, Matrix4f sourceGroupRest, Matrix4f sourceCubeRest, ModelCube targetCube, CubeFace targetFace, Matrix4f targetGroupRest, Matrix4f targetCubeRest, ModelWeld weld, float targetShare)
         {
             this.sourceCube = sourceCube;
             this.targetCube = targetCube;
             this.sourceCorners = faceCorners(sourceCube, sourceFace);
             this.targetCorners = faceCorners(targetCube, targetFace);
+
+            Vector3f[] sourceRestWorld = transformCorners(sourceCubeRest, this.sourceCorners);
+            Vector3f[] targetRestWorld = transformCorners(targetCubeRest, this.targetCorners);
+
+            this.sourceToTarget = matchCorners(sourceRestWorld, targetRestWorld);
             this.targetFaceNormal = new Vector3f(targetFace.normal);
             this.sourceFaceNormal = new Vector3f(sourceFace.normal);
             this.targetWeldPlane = this.targetCorners[0].dot(this.targetFaceNormal);
             this.sourceWeldPlane = this.sourceCorners[0].dot(this.sourceFaceNormal);
             this.targetAxisExtent = axisExtent(targetCube, this.targetFaceNormal);
             this.sourceAxisExtent = axisExtent(sourceCube, this.sourceFaceNormal);
-            this.maxBend = maxBend;
-            this.falloff = falloff;
+            this.maxBend = (float) Math.toRadians(weld.maxAngle);
+            this.falloff = weld.seamFalloff;
+            this.targetShare = targetShare;
+            this.twist = weld.twist;
+
+            Vector3f restSourceAxis = sourceGroupRest.transformDirection(new Vector3f(this.sourceFaceNormal)).normalize();
+            Vector3f restTargetAxis = targetGroupRest.transformDirection(new Vector3f(this.targetFaceNormal)).normalize();
+
+            this.restTwist = this.twistBetween(sourceRestWorld, targetRestWorld, restSourceAxis, restTargetAxis);
         }
 
         public void resetCapture()
@@ -372,14 +566,6 @@ public class WeldBinding
                 return;
             }
 
-            for (int r = 0; r < this.sourceToTarget.length; r++)
-            {
-                if (this.sourceToTarget[r] == -1)
-                {
-                    this.sourceToTarget[r] = nearest(this.capturedSourceWorld[r], this.capturedTargetWorld);
-                }
-            }
-
             Vector3f normal = new Vector3f(this.capturedTargetNormalWorld);
             Vector3f center = average(this.capturedTargetWorld);
             Vector3f across = this.foldAxis(normal, center);
@@ -394,21 +580,110 @@ public class WeldBinding
             }
             else
             {
-                float tanHalf = (float) Math.tan(Math.min(this.bendAngle(), this.maxBend) * 0.5F);
+                /* The target's tilt is its SHARE of the bend (0.5 = the bisector); the source implicitly
+                 * takes the rest by snapping to the same seam. Capped so tan can't blow up at share -> 1. */
+                float tilt = Math.min(this.effectiveBend() * this.targetShare, TILT_CAP);
+                float tanShear = (float) Math.tan(tilt);
 
                 for (int k = 0; k < this.seam.length; k++)
                 {
                     Vector3f target = this.capturedTargetWorld[k];
                     float position = (target.x - center.x) * across.x + (target.y - center.y) * across.y + (target.z - center.z) * across.z;
 
-                    this.seam[k].set(normal).mul(position * tanHalf).add(target);
+                    this.seam[k].set(normal).mul(position * tanShear).add(target);
                 }
             }
+
+            this.applyTwist();
 
             /* Ride the VAO only when the seam moves nothing — no bend AND the faces already meet at rest. A
              * rest-pose gap makes this false, so the weld seals it now instead of snapping it shut on first bend. */
             this.identity = this.seamMatchesRigid();
             this.seamReady = true;
+        }
+
+        /**
+         * Rotate the seam about the target's bone axis by the target's SHARE of the joint's twist. The
+         * snapping machinery distributes the rest: the target band follows the seam, and the source face —
+         * twisted the full angle in its rigid pose — unwinds the remainder as it snaps to the same seam,
+         * so a turning wrist wraps gradually across both bands instead of shearing at one plane.
+         */
+        private void applyTwist()
+        {
+            if (!this.twist)
+            {
+                return;
+            }
+
+            float bend = this.bendAngle();
+
+            /* Near a full fold the two bone axes go antiparallel, the swing-removal arc degenerates and the
+             * twist reading with it — fade it out before the math gets there. A fully folded joint has no
+             * visually readable twist anyway. */
+            float fade = MathUtils.clamp((TWIST_FADE_END - bend) / (TWIST_FADE_END - TWIST_FADE_START), 0F, 1F);
+
+            if (fade <= 0F)
+            {
+                return;
+            }
+
+            float angle = wrapAngle(this.twistBetween(this.capturedSourceWorld, this.capturedTargetWorld, this.capturedSourceBoneAxis, this.capturedTargetBoneAxis) - this.restTwist);
+            float seamTwist = angle * this.targetShare * fade;
+
+            if (Math.abs(seamTwist) < 1.0e-4F)
+            {
+                return;
+            }
+
+            Vector3f center = average(this.seam);
+            Quaternionf rotation = new Quaternionf().rotationAxis(seamTwist, this.capturedTargetBoneAxis);
+            Vector3f offset = new Vector3f();
+
+            for (Vector3f corner : this.seam)
+            {
+                rotation.transform(offset.set(corner).sub(center));
+                corner.set(offset).add(center);
+            }
+        }
+
+        /**
+         * Signed twist (radians) of the source face about the joint axis relative to the target face, swing
+         * removed: the shortest-arc rotation taking the source bone axis onto the target's rest relation
+         * (opposite of the target axis) carries a source corner direction into the target's frame — a
+         * shortest arc adds no twist of its own — and the residual in-plane angle to the MATCHED target
+         * corner direction is pure twist. Positive about the target bone axis (right-handed).
+         */
+        private float twistBetween(Vector3f[] sourceWorld, Vector3f[] targetWorld, Vector3f sourceAxis, Vector3f targetAxis)
+        {
+            Vector3f uT = new Vector3f(targetWorld[this.sourceToTarget[0]]).sub(average(targetWorld));
+            Vector3f uS = new Vector3f(sourceWorld[0]).sub(average(sourceWorld));
+
+            new Quaternionf().rotationTo(sourceAxis, new Vector3f(targetAxis).negate()).transform(uS);
+
+            uT.sub(new Vector3f(targetAxis).mul(uT.dot(targetAxis)));
+            uS.sub(new Vector3f(targetAxis).mul(uS.dot(targetAxis)));
+
+            if (uT.lengthSquared() < EPS_SQ || uS.lengthSquared() < EPS_SQ)
+            {
+                return 0F;
+            }
+
+            float sin = new Vector3f(uT).cross(uS).dot(targetAxis);
+            float cos = uT.dot(uS);
+
+            return (float) Math.atan2(sin, cos);
+        }
+
+        private static float wrapAngle(float angle)
+        {
+            float twoPi = (float) (Math.PI * 2);
+
+            angle %= twoPi;
+
+            if (angle > Math.PI) angle -= twoPi;
+            if (angle < -Math.PI) angle += twoPi;
+
+            return angle;
         }
 
         /**
@@ -462,6 +737,39 @@ public class WeldBinding
             return axis.lengthSquared() < EPS_SQ ? null : axis.normalize();
         }
 
+        /* Absolute ceiling for the seam's effective bend: past ~172 degrees tan(bend/2) blows the shear out
+         * to infinity, so no configured maxAngle may push the asymptote beyond this. */
+        private static final float HARD_CAP = (float) Math.toRadians(172);
+
+        /* Ceiling for the TARGET's tilt alone (share can push it past bend/2; tan explodes at 90). At the
+         * default share 0.5 this is exactly HARD_CAP/2, so it never clips the classic bisector split. */
+        private static final float TILT_CAP = (float) Math.toRadians(86);
+
+        /* The twist reading degenerates as the joint approaches a full fold (bone axes go antiparallel), so
+         * twist fades from full effect at 135 degrees of bend to nothing at 165. */
+        private static final float TWIST_FADE_START = (float) Math.toRadians(135);
+        private static final float TWIST_FADE_END = (float) Math.toRadians(165);
+
+        /**
+         * The bend the seam actually follows: exact up to {@link #maxBend}, then easing asymptotically toward
+         * a soft cap a bit past it instead of freezing dead — a hard stop reopens the joint the moment the
+         * bones bend further, and the discontinuity in the seam's velocity reads as a snap in motion.
+         */
+        private float effectiveBend()
+        {
+            float bend = this.bendAngle();
+            float max = Math.min(this.maxBend, HARD_CAP);
+
+            if (bend <= max)
+            {
+                return bend;
+            }
+
+            float range = Math.min(max * 0.25F, HARD_CAP - max);
+
+            return range <= 1.0e-3F ? max : max + range * (float) Math.tanh((bend - max) / range);
+        }
+
         /**
          * The fold angle, from the two bones' world axes alone (no quaternions, so scale/reflection are irrelevant).
          * At rest a straight limb has the two welded faces pointing apart, so their bone-carried normals are opposite
@@ -493,7 +801,7 @@ public class WeldBinding
 
         /**
          * Seam position for a point on the target cube's welded plane — bilinear over the face rect, so
-         * inset (beveled) geometry at the joint rides the seam too, not only the four exact corners.
+         * inset geometry at the joint rides the seam too, not only the four exact corners.
          */
         public Vector3f seamAtTarget(Vector3f local, Vector3f dest)
         {
@@ -522,7 +830,7 @@ public class WeldBinding
             float l1 = e1x * e1x + e1y * e1y + e1z * e1z;
             float l2 = e2x * e2x + e2y * e2y + e2z * e2z;
 
-            /* A face inset to a line by a large bevel has a degenerate edge — park that param mid-seam. */
+            /* A face inset to a line has a degenerate edge — park that param mid-seam. */
             float s = l1 > EPS_SQ ? (dx * e1x + dy * e1y + dz * e1z) / l1 : 0.5F;
             float t = l2 > EPS_SQ ? (dx * e2x + dy * e2y + dz * e2z) / l2 : 0.5F;
 

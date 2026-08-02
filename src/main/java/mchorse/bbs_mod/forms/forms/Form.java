@@ -134,6 +134,13 @@ public abstract class Form extends ValueGroup
         this.add(this.anchor);
         this.add(this.shaderShadow);
         this.add(this.additiveColor);
+
+        /* These remain persisted for the form editor and old Films, but the timeline now
+         * exposes one dedicated glint-layer track instead of four implementation fields. */
+        this.glintMode.invisible();
+        this.glintColor.invisible();
+        this.glintSpeed.invisible();
+        this.glintTransform.invisible();
         this.add(this.glintMode);
         this.add(this.glintColor);
         this.add(this.glintSpeed);

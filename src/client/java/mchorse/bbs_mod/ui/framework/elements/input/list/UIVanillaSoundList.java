@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import mchorse.bbs_mod.BBSSettings;
@@ -259,17 +260,27 @@ public class UIVanillaSoundList extends UIStringList
         try
         {
             ResourceLocation soundsJsonId = ResourceLocation.fromNamespaceAndPath("minecraft", "sounds.json");
-            Optional<Resource> resource = resourceManager.getResource(soundsJsonId);
+            JsonObject sounds = new JsonObject();
 
-            if (resource.isPresent())
+            /*
+             * A resource pack can contribute only a few sound events. Reading only the
+             * highest-priority sounds.json then hides every vanilla event below it.
+             */
+            for (Resource resource : resourceManager.getResourceStack(soundsJsonId))
             {
-                try (InputStream inputStream = resource.get().open())
+                try (InputStream inputStream = resource.open())
                 {
                     String jsonContent = IOUtils.readText(inputStream);
+                    JsonObject soundDefinitions = JsonParser.parseString(jsonContent).getAsJsonObject();
 
-                    return JsonParser.parseString(jsonContent).getAsJsonObject();
+                    for (Map.Entry<String, JsonElement> entry : soundDefinitions.entrySet())
+                    {
+                        sounds.add(entry.getKey(), entry.getValue());
+                    }
                 }
             }
+
+            return sounds.isEmpty() ? null : sounds;
         }
         catch (Exception e)
         {

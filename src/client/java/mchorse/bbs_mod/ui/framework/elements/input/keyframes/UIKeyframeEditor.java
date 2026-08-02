@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes;
 
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.data.DataStorageUtils;
@@ -28,8 +29,6 @@ import java.util.function.Supplier;
 public class UIKeyframeEditor extends UIElement
 {
     public static final int[] COLORS = {Colors.RED, Colors.GREEN, Colors.BLUE, Colors.CYAN, Colors.MAGENTA, Colors.YELLOW, Colors.LIGHTEST_GRAY & 0xffffff, Colors.DEEP_PINK};
-
-    /** Fixed top offset (px) for the parameters panel when target is set (space for drag icon). */
     private static final int EDIT_PANEL_TOP_OFFSET_PX = 20;
 
     public UIKeyframes view;
@@ -37,7 +36,6 @@ public class UIKeyframeEditor extends UIElement
 
     private UIElement target;
     private Supplier<Integer> editPanelTopOffsetPx;
-    /** Monotonically identifies the latest deferred property-panel replacement. */
     private long editorGeneration;
     private boolean timelineVisible = true;
     private boolean propertiesVisible = true;
@@ -65,26 +63,22 @@ public class UIKeyframeEditor extends UIElement
         return this;
     }
 
-    /** Optional: supply top offset in px for the parameters panel (e.g. 0 when layout locked). */
     public UIKeyframeEditor editPanelTopOffset(Supplier<Integer> supplier)
     {
         this.editPanelTopOffsetPx = supplier;
+
         return this;
     }
 
     private int getEditPanelTopOffsetPx()
     {
-        return this.editPanelTopOffsetPx != null ? this.editPanelTopOffsetPx.get() : EDIT_PANEL_TOP_OFFSET_PX;
+        return this.editPanelTopOffsetPx == null ? EDIT_PANEL_TOP_OFFSET_PX : this.editPanelTopOffsetPx.get();
     }
 
     private void pickKeyframe(Keyframe keyframe)
     {
         UIKeyframeFactory previous = this.editor;
 
-        /* A replacement can be known to this field before the hierarchy
-         * barrier has mounted it.  Saving only a physically mounted panel
-         * keeps an intermediate A -> B -> C pick from overwriting A's scroll
-         * position with B's not-yet-laid-out viewport. */
         if (previous != null && previous.getParent() == this)
         {
             UIKeyframeFactory.saveScroll(previous);
@@ -107,6 +101,7 @@ public class UIKeyframeEditor extends UIElement
             if (replacement != null && this.target != null)
             {
                 int top = this.getEditPanelTopOffsetPx();
+
                 replacement.relative(this.target).x(0).y(0, top).w(1F).h(1F, -top);
             }
             else if (replacement != null)
@@ -118,18 +113,10 @@ public class UIKeyframeEditor extends UIElement
         this.replaceEditor(previous, replacement, generation);
     }
 
-    /** Commit one latest-wins property-panel replacement after input dispatch. */
-    private void replaceEditor(
-            UIKeyframeFactory previous,
-            UIKeyframeFactory replacement,
-            long generation
-    )
+    private void replaceEditor(UIKeyframeFactory previous, UIKeyframeFactory replacement, long generation)
     {
         Runnable mutation = () ->
         {
-            /* Release the old physical attachment before admitting the new
-             * generation.  The identity fence below makes older queued
-             * replacements unable to add/layout/restore a stale panel. */
             if (previous != null && previous.getParent() == this)
             {
                 this.remove(previous);
@@ -140,9 +127,6 @@ public class UIKeyframeEditor extends UIElement
                 return;
             }
 
-            /* A prior generation may have been queued before its add ran.
-             * Remove every directly mounted factory so the latest generation
-             * is the only property panel left in this editor. */
             for (UIKeyframeFactory mounted : new ArrayList<>(this.getChildren(UIKeyframeFactory.class)))
             {
                 if (mounted != replacement && mounted.getParent() == this)
@@ -208,12 +192,12 @@ public class UIKeyframeEditor extends UIElement
         }
     }
 
-    /** Re-applies edit panel position (e.g. after layout lock toggle). */
     public void refreshEditPanelOffset()
     {
         if (this.editor != null && this.target != null)
         {
             int top = this.getEditPanelTopOffsetPx();
+
             this.editor.relative(this.target).x(0).y(0, top).w(1F).h(1F, -top);
             this.target.resize();
             this.resize();
@@ -337,7 +321,44 @@ public class UIKeyframeEditor extends UIElement
         return null;
     }
 
-    /** Whether the active keyframe edits the root form anchor rather than an IK/physics anchor value. */
+    /** The space of the active editable transform (mirrors
+     *  {@code UIReplaysEditorUtils.getEditableTransform}'s dispatch — the bone
+     *  tracks AND the form anchor), so the film gizmo is drawn in the very space
+     *  its drag operates in. */
+    public TransformSpace getBoneSpace()
+    {
+        UIKeyframeFactory editor = this.editor;
+
+        if (editor instanceof UIPoseKeyframeFactory pose)
+        {
+            return pose.poseEditor.transform.getSpace();
+        }
+        else if (editor instanceof UITransformKeyframeFactory transform)
+        {
+            return transform.transform.getSpace();
+        }
+        else if (editor instanceof UIPoseTransformKeyframeFactory poseTransform)
+        {
+            return poseTransform.transform.getSpace();
+        }
+        else if (editor instanceof UIAnchorKeyframeFactory anchor)
+        {
+            return anchor.transform.getSpace();
+        }
+
+        return TransformSpace.LOCAL;
+    }
+
+    /**
+     * Whether the active editor is the form's "anchor" property track — the one
+     * that re-parents the whole form to another replay's attachment and carries
+     * a {@link mchorse.bbs_mod.utils.pose.Transform} offset the gizmo can edit.
+     * The IK/pole/physics target tracks reuse the {@code Anchor} value type but
+     * are created without a backing property, so the {@code property != null}
+     * test excludes them; the {@code "anchor"} id keeps it to the root form's
+     * track, whose placement {@link mchorse.bbs_mod.film.BaseFilmController}
+     * resolves from the entity's own {@code form.anchor}.
+     */
     public boolean isFormAnchorTrack()
     {
         if (!(this.editor instanceof UIAnchorKeyframeFactory))
@@ -350,6 +371,7 @@ public class UIKeyframeEditor extends UIElement
         return sheet != null && sheet.property != null && "anchor".equals(sheet.id);
     }
 
+    /** Whether the anchor gizmo should be oriented in the bone's local space (mirrors {@link #getBone()}'s flag). */
     public boolean getAnchorLocal()
     {
         return this.editor instanceof UIAnchorKeyframeFactory factory && factory.transform.isLocal();

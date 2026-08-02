@@ -143,6 +143,46 @@ public class Interpolations
         }
     };
 
+    /**
+     * Same as {@link #STEP}, but the steps are measured in ticks (v1) and snapped
+     * to an absolute tick grid, rather than being a fraction of the segment.
+     *
+     * That way the steps last the same amount of ticks regardless of the distance
+     * between the keyframes, and all the channels step in sync.
+     */
+    public static final IInterp STEP_TICK = new BaseInterp("step_tick", GLFW.GLFW_KEY_G)
+    {
+        @Override
+        public double interpolate(InterpContext context)
+        {
+            boolean inSegment = context.duration > 0;
+
+            /* Outside of a keyframe segment (like the interpolation preview) there are no
+             * ticks to align to, so assume a second long segment starting at 0 */
+            double duration = inSegment ? context.duration : 20D;
+            double startTick = inSegment ? context.startTick : 0D;
+
+            double step = Math.max(1, Math.floor(context.args.v1));
+            double x = context.x;
+            double easing = MathUtils.clamp(context.args.v2, -1D, 1D);
+            double function = context.args.v3;
+            double phase = context.args.v4;
+
+            if (easing > 0) x = Lerps.lerp(x, Easings.EXP.calculate(null, x), easing);
+            if (easing < 0) x = Lerps.lerp(x, 1F - Easings.EXP.calculate(null, 1F - x), -easing);
+
+            double tick = (startTick + x * duration - phase) / step;
+
+            if (function > 0) tick = Math.ceil(tick);
+            else if (function < 0) tick = Math.round(tick);
+            else tick = Math.floor(tick);
+
+            x = MathUtils.clamp((tick * step + phase - startTick) / duration, 0D, 1D);
+
+            return Lerps.lerp(context.a, context.b, x);
+        }
+    };
+
     static
     {
         MAP.put(LINEAR.getKey(), LINEAR);
@@ -184,6 +224,7 @@ public class Interpolations
         MAP.put(AUTO.getKey(), AUTO);
         MAP.put(AUTO_CLAMPED.getKey(), AUTO_CLAMPED);
         MAP.put(BSPLINE.getKey(), BSPLINE);
+        MAP.put(STEP_TICK.getKey(), STEP_TICK);
     }
 
     public static IInterp get(String name)

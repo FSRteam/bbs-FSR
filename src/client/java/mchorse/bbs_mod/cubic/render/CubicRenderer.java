@@ -70,7 +70,11 @@ public class CubicRenderer
         return false;
     }
 
-    public static record PivotFrame(Vector3f position, Quaternionf parentRotation, Quaternionf worldRotation)
+    /**
+     * @param scale accumulated scale before this bone's own rotation; stretch
+     * translations divide it back out before being written to the local pose
+     */
+    public static record PivotFrame(Vector3f position, Quaternionf parentRotation, Quaternionf worldRotation, Vector3f scale)
     {}
 
     public static void collectPivotFrames(Model model, Set<String> wanted, Map<String, PivotFrame> out)
@@ -156,13 +160,14 @@ public class CubicRenderer
 
             if (frame == null)
             {
-                frame = new PivotFrame(new Vector3f(), new Quaternionf(), new Quaternionf());
+                frame = new PivotFrame(new Vector3f(), new Quaternionf(), new Quaternionf(), new Vector3f());
                 out.put(group.id, frame);
             }
 
             Matrix4f mat = stack.last().pose();
             mat.getTranslation(frame.position());
             mat.getUnnormalizedRotation(frame.parentRotation());
+            mat.getScale(frame.scale());
         }
 
         ICubicRenderer.rotateGroup(stack, group);
@@ -258,56 +263,13 @@ public class CubicRenderer
 
             desiredDirLocal.normalize();
 
+            Quaternionf base = bone.evaluatedRotation();
             Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
-            localRot.mul(twistAround(bone.current.rotate, bone.current.rotate2, restDirLocal));
-            Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
 
-            float rx = bone.current.rotate.x;
-            float ry = bone.current.rotate.y;
-            float rz = bone.current.rotate.z;
-            eulerDeg.x = wrapDegreesNear(eulerDeg.x, rx);
-            eulerDeg.y = wrapDegreesNear(eulerDeg.y, ry);
-            eulerDeg.z = wrapDegreesNear(eulerDeg.z, rz);
+            localRot.mul(Matrices.twistAbout(base, restDirLocal));
 
-            bone.current.rotate.set(eulerDeg);
-            bone.current.rotate2.set(0F, 0F, 0F);
-
-            /* This solve finalizes the bone in euler — drop any composed orientation so the renderer
-             * falls back to this euler (IK/physics own these bones, byte-identical to before). */
-            bone.orient = null;
-
-            parentWorld.mul(Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z));
+            bone.orient = localRot;
+            parentWorld.mul(localRot);
         }
-    }
-
-    private static Quaternionf twistAround(Vector3f rotate, Vector3f rotate2, Vector3f axisLocal)
-    {
-        Quaternionf local = Matrices.toQuaternionZYXDegrees(rotate.x, rotate.y, rotate.z);
-
-        if (rotate2.x != 0F || rotate2.y != 0F || rotate2.z != 0F)
-        {
-            local.mul(Matrices.toQuaternionZYXDegrees(rotate2.x, rotate2.y, rotate2.z));
-        }
-
-        return Matrices.twistAbout(local, axisLocal);
-    }
-
-    private static float wrapDegreesNear(float angle, float reference)
-    {
-        float delta = angle - reference;
-
-        while (delta > 180F)
-        {
-            angle -= 360F;
-            delta -= 360F;
-        }
-
-        while (delta < -180F)
-        {
-            angle += 360F;
-            delta += 360F;
-        }
-
-        return angle;
     }
 }

@@ -192,12 +192,7 @@ public class UISubtitleRenderer
                 stack.translate(transform.translate.x, transform.translate.y, transform.translate.z);
             }
 
-            if (transform.rotate.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate.z));
-            if (transform.rotate.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate.y));
-            if (transform.rotate.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate.x));
-            if (transform.rotate2.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate2.z));
-            if (transform.rotate2.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate2.y));
-            if (transform.rotate2.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate2.x));
+            stack.mulPose(transform.createRotation());
 
             if (transform.scale.x != 1F || transform.scale.y != 1F || transform.scale.z != 1F)
             {

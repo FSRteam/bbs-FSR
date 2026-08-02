@@ -139,15 +139,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 {
                     target.translate.lerp(value.translate, value.fix);
                     target.scale.lerp(value.scale, value.fix);
-                    target.rotate.lerp(value.rotate, value.fix);
-                    target.rotate2.lerp(value.rotate2, value.fix);
+                    target.lerpRotation(value, value.fix);
                 }
                 else
                 {
                     target.translate.add(value.translate);
                     target.scale.add(value.scale).sub(1F, 1F, 1F);
-                    target.rotate.add(value.rotate);
-                    target.rotate2.add(value.rotate2);
+                    target.addRotation(value);
                 }
             }
         }
@@ -581,7 +579,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             Matrix4f boneMatrix = new Matrix4f(stack.last().pose()).mul(entry.getValue().matrix());
             Matrix4f boneOrigin = new Matrix4f(stack.last().pose()).mul(entry.getValue().origin());
 
-            matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), boneMatrix, boneOrigin, entry.getValue().rotationOffset());
+            matrices.put(
+                StringUtils.combinePaths(prefix, entry.getKey()),
+                boneMatrix,
+                boneOrigin,
+                entry.getValue().rotationOffset(),
+                entry.getValue().evaluatedRotation()
+            );
         }
 
         int i = 0;

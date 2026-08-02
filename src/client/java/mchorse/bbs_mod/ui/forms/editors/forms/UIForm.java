@@ -15,6 +15,7 @@ import mchorse.bbs_mod.ui.forms.editors.panels.UIGeneralFormPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIPanelBase;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
@@ -60,6 +61,11 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     public Matrix4f getOrigin(float transition)
     {
         return this.getOrigin(transition, FormUtils.getPath(this.form), this.generalPanel != null && this.generalPanel.transform.isLocal());
+    }
+
+    public TransformSpace getGizmoSpace()
+    {
+        return this.generalPanel == null ? TransformSpace.LOCAL : this.generalPanel.transform.getSpace();
     }
 
     /**
@@ -120,6 +126,13 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
         Vector3f offset = this.getMatrixEntry(transition, path).rotationOffset();
 
         return offset == null ? new Vector3f() : new Vector3f(offset);
+    }
+
+    protected Vector3f getEvaluatedRotation(float transition, String path)
+    {
+        Vector3f rotation = this.getMatrixEntry(transition, path).evaluatedRotation();
+
+        return rotation == null ? null : new Vector3f(rotation);
     }
 
     protected MatrixCacheEntry getMatrixEntry(float transition, String path)

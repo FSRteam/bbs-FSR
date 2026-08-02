@@ -19,6 +19,14 @@ public class ValueFloat extends BaseValueNumber<Float>
     }
 
     @Override
+    public ValueFloat slider()
+    {
+        super.slider();
+
+        return this;
+    }
+
+    @Override
     protected Float clamp(Float value)
     {
         return MathUtils.clamp(value, this.min, this.max);

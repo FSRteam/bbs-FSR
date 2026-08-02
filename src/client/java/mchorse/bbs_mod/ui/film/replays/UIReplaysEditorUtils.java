@@ -10,6 +10,7 @@ import mchorse.bbs_mod.cubic.ik.IKControls;
 import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
 import mchorse.bbs_mod.cubic.ik.ModelIKIO;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
@@ -58,6 +59,7 @@ import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -121,6 +123,44 @@ public class UIReplaysEditorUtils
     public static void addBoneTrackSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out)
     {
         addBoneTrackSheets(form, properties, out, null);
+    }
+
+    /** One per-form track whose value contains the four glint fields for every bone. */
+    public static void addGlintControlSheet(Form form, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        if (!(form instanceof PoseForm poseForm))
+        {
+            return;
+        }
+
+        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
+
+        if (hierarchy.getBones().isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(form);
+        String id = FormControlKeys.toGlintControlKey(path);
+        IKey title = path.isEmpty()
+            ? UIKeys.POSE_CONTEXT_GLINT_LAYER
+            : IKey.constant(path + "/" + UIKeys.POSE_CONTEXT_GLINT_LAYER.get());
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.GLINT);
+
+        out.add(new UIKeyframeSheet(id, title, Colors.MAGENTA, false, channel, null)
+            .icon(Icons.LIGHT).form(form).seed(() -> buildGlintControls(poseForm, hierarchy)));
+    }
+
+    private static GlintControls buildGlintControls(PoseForm form, BoneHierarchy hierarchy)
+    {
+        GlintControls controls = new GlintControls();
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            controls.get(bone.id()).copy(form.getPose().get().get(bone.id()));
+        }
+
+        return controls;
     }
 
     public static void addBoneTrackSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out, Map<String, Integer> depthBySheetId)
@@ -640,6 +680,7 @@ public class UIReplaysEditorUtils
             addPoleTargetSheets(modelForm, properties, sheets);
         }
 
+        addGlintControlSheet(form, properties, sheets);
         addBoneTrackSheets(form, properties, sheets);
 
         return sheets;
@@ -807,6 +848,38 @@ public class UIReplaysEditorUtils
         boolean pose = panel.replayEditor.keyframeEditor.editor instanceof UIPoseKeyframeFactory;
 
         transform.worldTransform(pose ? new FilmBoneWorldProvider(panel) : null);
+        transform.rotationConstrained(pose ? () -> isFilmBoneRotationConstrained(panel) : null);
+    }
+
+    private static boolean isFilmBoneRotationConstrained(UIFilmPanel panel)
+    {
+        UIKeyframeEditor keyframeEditor = panel.replayEditor.keyframeEditor;
+
+        if (keyframeEditor == null || !(keyframeEditor.editor instanceof UIPoseKeyframeFactory))
+        {
+            return false;
+        }
+
+        IEntity entity = panel.getController().getCurrentEntity();
+        Pair<String, Boolean> bone = keyframeEditor.getBone();
+
+        if (entity == null || bone == null || bone.a == null)
+        {
+            return false;
+        }
+
+        UIKeyframeSheet sheet = keyframeEditor.getSheet(keyframeEditor.editor.getKeyframe());
+        BaseValueBasic property = sheet == null ? null : FormUtils.getProperty(entity.getForm(), sheet.id);
+        Form owner = property == null ? null : FormUtils.getForm(property);
+
+        if (!(owner instanceof ModelForm modelForm))
+        {
+            return false;
+        }
+
+        ModelInstance instance = ModelFormRenderer.getModel(modelForm);
+
+        return instance != null && ModelIKRuntime.isRotationConstrained(instance.model, modelForm, StringUtils.fileName(bone.a));
     }
 
     public static GizmoDrag buildFilmGizmoDrag(
@@ -819,7 +892,16 @@ public class UIReplaysEditorUtils
     {
         GizmoDrag drag = GizmoDrag.fromRenderedGizmo(camera, viewport);
 
-        if (drag == null || transform == null || transform.getTransform() == null || panel == null)
+        if (drag == null || panel == null)
+        {
+            return drag;
+        }
+
+        IEntity entity = panel.getController().getCurrentEntity();
+
+        drag.setGlobalAxes(BaseFilmController.getReplayWorldAxes(entity, transition));
+
+        if (transform == null || transform.getTransform() == null)
         {
             return drag;
         }
@@ -833,7 +915,6 @@ public class UIReplaysEditorUtils
 
         Pair<String, Boolean> bone = keyframeEditor.getBone();
         Replay replay = panel.replayEditor.getReplay();
-        IEntity entity = panel.getController().getCurrentEntity();
 
         if (bone == null || bone.a == null || replay == null || entity == null)
         {
@@ -914,9 +995,43 @@ public class UIReplaysEditorUtils
         drag.setJacobian(GizmoDrag.resolveTranslateJacobian(translateJacobian, mobPoseBone));
         drag.modelPartTranslate(mobPoseBone);
 
-        applyReplayProperties(panel, entity, replay, transition);
+        drag.setAdditiveRotationBase(filmPoseRotationBase(keyframeEditor, panel, camera, entity, replay, transition, bone.a));
 
         return drag;
+    }
+
+    private static Vector3f filmPoseRotationBase(
+        UIKeyframeEditor keyframeEditor,
+        UIFilmPanel panel,
+        Camera camera,
+        IEntity entity,
+        Replay replay,
+        float transition,
+        String bonePath
+    )
+    {
+        if (!(keyframeEditor.editor instanceof UIPoseKeyframeFactory))
+        {
+            return null;
+        }
+
+        UIKeyframeSheet sheet = keyframeEditor.getSheet(keyframeEditor.editor.getKeyframe());
+
+        if (sheet == null)
+        {
+            return null;
+        }
+
+        BaseValueBasic property = FormUtils.getProperty(entity.getForm(), sheet.id);
+
+        if (!(property instanceof ValuePose valuePose))
+        {
+            return null;
+        }
+
+        Vector3f evaluated = sampleFilmBoneEvaluatedRotation(panel, camera, entity, replay, transition, bonePath);
+
+        return FormUtils.additivePoseRotationBase(valuePose, StringUtils.fileName(bonePath), evaluated);
     }
 
     /**
@@ -972,6 +1087,29 @@ public class UIReplaysEditorUtils
         applyReplayProperties(panel, entity, replay, transition);
 
         return BaseFilmController.getGizmoBoneRotationOffset(
+            panel.getController().getEntities(),
+            entity,
+            replay,
+            camera.position.x,
+            camera.position.y,
+            camera.position.z,
+            transition,
+            bone
+        );
+    }
+
+    private static Vector3f sampleFilmBoneEvaluatedRotation(
+        UIFilmPanel panel,
+        Camera camera,
+        IEntity entity,
+        Replay replay,
+        float transition,
+        String bone
+    )
+    {
+        applyReplayProperties(panel, entity, replay, transition);
+
+        return BaseFilmController.getGizmoBoneEvaluatedRotation(
             panel.getController().getEntities(),
             entity,
             replay,

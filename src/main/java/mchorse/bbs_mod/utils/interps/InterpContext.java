@@ -17,6 +17,17 @@ public class InterpContext
     /* Extra variables */
     public final EasingArgs args = new EasingArgs();
 
+    /**
+     * Keyframe segment's length and starting tick. Zero duration means that the
+     * interpolation was invoked outside of a keyframe segment, so there are no
+     * ticks to align to.
+     *
+     * These are deliberately not reset by {@link #set(double, double, double, double, double)},
+     * because segments fill them in before the factory sets up the values.
+     */
+    public double duration;
+    public double startTick;
+
     /* NURBS Weights */
     public double w0;
     public double w1;
@@ -55,6 +66,14 @@ public class InterpContext
     public InterpContext setBoundary(boolean isStart, boolean isEnd) {
         this.isStart = isStart;
         this.isEnd = isEnd;
+
+        return this;
+    }
+
+    public InterpContext segment(double duration, double startTick)
+    {
+        this.duration = duration;
+        this.startTick = startTick;
 
         return this;
     }

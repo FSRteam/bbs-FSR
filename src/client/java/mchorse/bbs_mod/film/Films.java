@@ -360,6 +360,28 @@ public class Films
         this.controllers.add(controller);
     }
 
+    public void freeze(Film film, int tick, boolean animated)
+    {
+        this.unfreeze(film.getId());
+        this.controllers.add(new FrozenFilmController(film, tick, animated));
+    }
+
+    public void unfreeze(String filmId)
+    {
+        this.controllers.removeIf((controller) ->
+        {
+            boolean frozen = controller instanceof FrozenFilmController
+                && controller.film.getId().equals(filmId);
+
+            if (frozen)
+            {
+                controller.shutdown();
+            }
+
+            return frozen;
+        });
+    }
+
     public boolean has(String filmId)
     {
         for (BaseFilmController controller : this.controllers)

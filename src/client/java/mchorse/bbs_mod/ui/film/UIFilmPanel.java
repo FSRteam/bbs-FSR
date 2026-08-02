@@ -21,6 +21,7 @@ import mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.FrozenFilmController;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -52,15 +53,14 @@ import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.UIFilmUndoHandler;
 import mchorse.bbs_mod.ui.film.utils.undo.UIUndoHistoryOverlay;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.framework.elements.layout.UIDockStyleRenderer;
+import mchorse.bbs_mod.ui.framework.elements.layout.ILayoutSource;
+import mchorse.bbs_mod.ui.framework.elements.layout.UIDockLayout;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -70,10 +70,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
-import mchorse.bbs_mod.ui.utils.motion.UIMotions;
-import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -91,10 +88,8 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Collection;
@@ -121,8 +116,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public UIElement main;
     public UIElement editArea;
-    private final List<UIDraggable> splitterHandles = new ArrayList<>();
-    private final List<EditorLayoutNode.SplitterHandleInfo> splitterHandleInfos = new ArrayList<>();
+    private final UIDockLayout dock;
     public UIFilmRecorder recorder;
     public UIFilmPreview preview;
 
@@ -138,9 +132,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIIcon openCameraEditor;
     public UIIcon openReplayEditor;
     public UIIcon openActionEditor;
-
-    /** When true, docking and resizing are disabled; drag handles and their top offset are hidden. */
-    private boolean layoutLocked = true;
 
     private UICopyPasteController layoutPresetsController;
 
@@ -171,17 +162,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     /* Docking: layout panels and drag-to-swap/split */
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
-    private final Map<String, UIDraggable> dragHandlesById = new LinkedHashMap<>();
-    private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
-    private static final float DRAG_HANDLE_TOP_OFFSET_NORM = 0.01F;
-    private static final int SPLITTER_HANDLE_PX = 14;
-    private static final int SPLITTER_LINK_HITBOX_PADDING_PX = 8;
-    private static final int DROP_ZONE_CENTER = -1;
-    private static final float DROP_EDGE_MARGIN = 0.2F;
-    private static final int EDITOR_MIN_SIZE_FOR_PX_HANDLES = 10;
-    private static final int DOCK_STACK_TABS_HEIGHT_PX = 20;
-    private static final int PANEL_GAP_PX = 4;
-    private static final float PANEL_EDGE_EPS = 0.001F;
     private static final String PANEL_MAIN_ID = "main";
     private static final String PANEL_PREVIEW_ID = "preview";
     private static final String PANEL_EDIT_AREA_ID = "editArea";
@@ -192,424 +172,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private static final int FILM_TOP_BAR_BUTTON_SIZE = UIDataTabs.TABS_HEIGHT_PX;
     private static final int FILM_TOP_BAR_SEPARATOR_WIDTH = 8;
     private static final int FILM_TOP_BAR_ACTIONS_WIDTH = FILM_TOP_BAR_BUTTON_SIZE * 4 + FILM_TOP_BAR_SEPARATOR_WIDTH;
-    private final List<UIDockStackTabs> dockStackTabs = new ArrayList<>();
-    private final Map<String, DockStackInfo> dockStackByPanelId = new HashMap<>();
     private UIElement selectedMainEditorPanel;
     private UIElement topBarActions;
     private UIElement topBarSeparator;
 
-    private String draggingPanelId;
-    private String dropTargetPanelId;
-    private int dropTargetZone = DROP_ZONE_CENTER;
-    private final List<Integer> draggedSplitterIndices = new ArrayList<>();
-
-    /* Panel layout transition (theme motion `layout`): from/to snapshots of
-     * normalized stack bounds, interpolated back into flex each frame with a
-     * real resize() so rendering and hit testing always agree */
-    private final Map<String, PanelBoundsSnapshot> layoutTransitionFromBounds = new HashMap<>();
-    private final Map<String, PanelBoundsSnapshot> layoutTransitionToBounds = new HashMap<>();
-    private final UITween layoutTransitionTween = new UITween();
-    private boolean layoutTransitioning;
-    private boolean layoutTransitionCapturePending;
-
-    private static class PanelBoundsSnapshot
-    {
-        public float x;
-        public float y;
-        public float w;
-        public float h;
-        public int topOffsetPx;
-
-        public void set(float x, float y, float w, float h, int topOffsetPx)
-        {
-            this.x = x;
-            this.y = y;
-            this.w = w;
-            this.h = h;
-            this.topOffsetPx = topOffsetPx;
-        }
-    }
-
-    private int getLayoutTransitionDurationMs()
-    {
-        return BBSSettings.filmEditorLayoutTransitionEnabled() ? UIMotions.duration(UIMotions.layout()) : 0;
-    }
-
-    private void beginLayoutTransitionCapture()
-    {
-        this.layoutTransitionCapturePending = false;
-
-        if (this.getLayoutTransitionDurationMs() <= 0 || this.editor == null || this.editor.area.w <= 0 || this.editor.area.h <= 0)
-        {
-            this.layoutTransitioning = false;
-            this.layoutTransitionFromBounds.clear();
-            this.layoutTransitionToBounds.clear();
-
-            return;
-        }
-
-        if (this.layoutTransitioning)
-        {
-            this.captureInterpolatedLayoutBoundsAsFrom();
-        }
-        else
-        {
-            this.captureLayoutBoundsSnapshot(this.layoutTransitionFromBounds);
-        }
-
-        this.layoutTransitionCapturePending = true;
-    }
-
-    private void endLayoutTransitionCapture()
-    {
-        if (!this.layoutTransitionCapturePending)
-        {
-            return;
-        }
-
-        this.layoutTransitionCapturePending = false;
-
-        int durationMs = this.getLayoutTransitionDurationMs();
-
-        if (durationMs <= 0)
-        {
-            this.layoutTransitioning = false;
-            this.layoutTransitionFromBounds.clear();
-            this.layoutTransitionToBounds.clear();
-
-            return;
-        }
-
-        this.captureLayoutBoundsSnapshot(this.layoutTransitionToBounds);
-
-        boolean anyAnimatable = false;
-
-        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
-        {
-            PanelBoundsSnapshot from = entry.getValue();
-            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(entry.getKey());
-
-            if (to == null)
-            {
-                continue;
-            }
-
-            if (Math.abs(from.x - to.x) > 5e-4F || Math.abs(from.y - to.y) > 5e-4F
-                || Math.abs(from.w - to.w) > 5e-4F || Math.abs(from.h - to.h) > 5e-4F
-                || from.topOffsetPx != to.topOffsetPx)
-            {
-                anyAnimatable = true;
-
-                break;
-            }
-        }
-
-        if (!anyAnimatable)
-        {
-            this.layoutTransitioning = false;
-            this.layoutTransitionFromBounds.clear();
-            this.layoutTransitionToBounds.clear();
-
-            return;
-        }
-
-        this.layoutTransitionTween.snap(0F);
-        this.layoutTransitionTween.to(1F, UIMotions.layout());
-        this.layoutTransitioning = true;
-    }
-
-    private void captureLayoutBoundsSnapshot(Map<String, PanelBoundsSnapshot> out)
-    {
-        out.clear();
-
-        for (Map.Entry<String, DockStackInfo> entry : this.dockStackByPanelId.entrySet())
-        {
-            DockStackInfo info = entry.getValue();
-            int topOffset = info.isStacked() ? DOCK_STACK_TABS_HEIGHT_PX : 0;
-            PanelBoundsSnapshot snap = new PanelBoundsSnapshot();
-
-            snap.set(info.x, info.y, info.w, info.h, topOffset);
-            out.put(entry.getKey(), snap);
-        }
-    }
-
-    private float layoutTransitionEased(long now)
-    {
-        return MathUtils.clamp(this.layoutTransitionTween.update(now), 0F, 1F);
-    }
-
-    /** Interrupted transition: freeze the current interpolated state as the new from. */
-    private void captureInterpolatedLayoutBoundsAsFrom()
-    {
-        float eased = this.layoutTransitionEased(System.currentTimeMillis());
-        Map<String, PanelBoundsSnapshot> blended = new HashMap<>();
-
-        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
-        {
-            String id = entry.getKey();
-            PanelBoundsSnapshot from = entry.getValue();
-            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(id);
-
-            if (to == null)
-            {
-                continue;
-            }
-
-            PanelBoundsSnapshot snap = new PanelBoundsSnapshot();
-
-            snap.set(
-                Lerps.lerp(from.x, to.x, eased),
-                Lerps.lerp(from.y, to.y, eased),
-                Lerps.lerp(from.w, to.w, eased),
-                Lerps.lerp(from.h, to.h, eased),
-                Math.round(Lerps.lerp(from.topOffsetPx, to.topOffsetPx, eased))
-            );
-            blended.put(id, snap);
-        }
-
-        this.layoutTransitionFromBounds.clear();
-        this.layoutTransitionFromBounds.putAll(blended);
-    }
-
-    /**
-     * While transitioning, write interpolated bounds back into the panels'
-     * flex and do a real resize(), so hit testing follows the animation.
-     * Settled: zero-touch, the exact target layout stays in place.
-     */
-    private void advanceLayoutTransition()
-    {
-        if (!this.layoutTransitioning)
-        {
-            return;
-        }
-
-        if (this.editor == null || this.editor.area.w <= 0 || this.editor.area.h <= 0)
-        {
-            return;
-        }
-
-        long now = System.currentTimeMillis();
-        float eased = this.layoutTransitionEased(now);
-        float[] preview = this.layoutTransitionPreviewRect();
-        boolean anyApplied = false;
-
-        for (Map.Entry<String, PanelBoundsSnapshot> entry : this.layoutTransitionFromBounds.entrySet())
-        {
-            String id = entry.getKey();
-            PanelBoundsSnapshot from = entry.getValue();
-            PanelBoundsSnapshot to = this.layoutTransitionToBounds.get(id);
-            UIElement panel = this.panelById.get(id);
-            DockStackInfo targetInfo = this.dockStackByPanelId.get(id);
-
-            if (to == null || panel == null || targetInfo == null)
-            {
-                continue;
-            }
-
-            float x = Lerps.lerp(from.x, to.x, eased);
-            float y = Lerps.lerp(from.y, to.y, eased);
-            float w = Lerps.lerp(from.w, to.w, eased);
-            float h = Lerps.lerp(from.h, to.h, eased);
-            int topOffset = Math.round(Lerps.lerp(from.topOffsetPx, to.topOffsetPx, eased));
-            int[] g = panel == this.preview ? new int[4] : this.panelGutter(targetInfo, preview);
-
-            panel.relative(this.editor)
-                .x(x, g[0])
-                .y(y, topOffset + g[1])
-                .w(w, -g[0] - g[2])
-                .h(h, -topOffset - g[1] - g[3]);
-
-            UIDraggable dragHandle = this.dragHandlesById.get(id);
-
-            if (dragHandle != null && dragHandle.isVisible())
-            {
-                float tabsOffset = topOffset > 0 ? (float) topOffset / Math.max(1, this.editor.area.h) : 0F;
-
-                dragHandle.relative(this.editor)
-                    .x(x, g[0])
-                    .y(y + tabsOffset + DRAG_HANDLE_TOP_OFFSET_NORM, g[1])
-                    .w(w, -g[0] - g[2])
-                    .h(DRAG_HANDLE_HEIGHT_NORM);
-            }
-
-            anyApplied = true;
-        }
-
-        if (anyApplied)
-        {
-            this.editor.resize();
-        }
-
-        if (this.layoutTransitionTween.isSettled())
-        {
-            /* eased(1) == 1, so the last write already equals the exact
-             * target flex from applyPanelBoundsFromStacks; just stop */
-            this.layoutTransitioning = false;
-            this.layoutTransitionFromBounds.clear();
-            this.layoutTransitionToBounds.clear();
-        }
-    }
-
-    private float[] layoutTransitionPreviewRect()
-    {
-        DockStackInfo info = this.dockStackByPanelId.get(PANEL_PREVIEW_ID);
-
-        return info == null ? null : new float[] {info.x, info.y, info.w, info.h};
-    }
-
-    private static class DockStackInfo
-    {
-        public final List<String> panelIds;
-        public final String activePanelId;
-        public final float x;
-        public final float y;
-        public final float w;
-        public final float h;
-
-        public DockStackInfo(List<String> panelIds, String activePanelId, float x, float y, float w, float h)
-        {
-            this.panelIds = panelIds;
-            this.activePanelId = activePanelId;
-            this.x = x;
-            this.y = y;
-            this.w = w;
-            this.h = h;
-        }
-
-        public boolean isStacked()
-        {
-            return this.panelIds.size() > 1;
-        }
-
-        public String getAnchorPanelId()
-        {
-            return this.panelIds.isEmpty() ? "" : this.panelIds.get(0);
-        }
-    }
-
-    private static class UIDockStackTabs extends UIElement
-    {
-        private final UIFilmPanel panel;
-        private String anchorPanelId;
-        private final List<String> panelIds = new ArrayList<>();
-        private String activePanelId;
-
-        public UIDockStackTabs(UIFilmPanel panel)
-        {
-            this.panel = panel;
-        }
-
-        public void configure(DockStackInfo info)
-        {
-            this.anchorPanelId = info.getAnchorPanelId();
-            this.panelIds.clear();
-            this.panelIds.addAll(info.panelIds);
-            this.activePanelId = info.activePanelId;
-            this.setVisible(info.isStacked());
-        }
-
-        public boolean matches(DockStackInfo info)
-        {
-            return this.anchorPanelId.equals(info.getAnchorPanelId()) && this.panelIds.equals(info.panelIds);
-        }
-
-        @Override
-        public boolean subMouseClicked(UIContext context)
-        {
-            if (!this.isVisible() || context.mouseButton != 0 || !this.area.isInside(context) || this.panelIds.isEmpty())
-            {
-                return super.subMouseClicked(context);
-            }
-
-            int index = this.getTabIndex(context.mouseX);
-
-            if (index >= 0 && index < this.panelIds.size())
-            {
-                this.panel.activateDockStackTab(this.anchorPanelId, this.panelIds.get(index));
-
-                return true;
-            }
-
-            return super.subMouseClicked(context);
-        }
-
-        @Override
-        public void render(UIContext context)
-        {
-            if (!this.isVisible() || this.panelIds.isEmpty())
-            {
-                return;
-            }
-
-            int tabSize = this.getTabSize();
-            int hovered = this.area.isInside(context.mouseX, context.mouseY) ? this.getTabIndex(context.mouseX) : -1;
-            int y = this.area.y;
-            int ey = this.area.ey();
-
-            context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.chromeSurface());
-
-            for (int i = 0; i < this.panelIds.size(); i++)
-            {
-                int x = this.area.x + i * tabSize;
-
-                if (x >= this.area.ex())
-                {
-                    break;
-                }
-
-                int ex = Math.min(this.area.ex(), x + tabSize);
-                String panelId = this.panelIds.get(i);
-                boolean active = panelId.equals(this.activePanelId);
-                boolean hover = i == hovered;
-                Icon icon = this.panel.getDockPanelIcon(panelId);
-                int iconColor = active ? Colors.WHITE : (hover ? Colors.LIGHTEST_GRAY : Colors.mulRGB(Colors.WHITE, 0.75F));
-
-                if (active)
-                {
-                    Area.SHARED.set(x, y, ex - x, ey - y);
-                    UIDashboardPanels.renderHighlight(context.batcher, Area.SHARED, Direction.BOTTOM);
-                }
-
-                context.batcher.icon(icon, iconColor, (x + ex) / 2, (y + ey) / 2, 0.5F, 0.5F);
-            }
-
-            super.render(context);
-        }
-
-        private int getTabSize()
-        {
-            return Math.max(1, this.area.h);
-        }
-
-        private int getTabIndex(int mouseX)
-        {
-            int index = (mouseX - this.area.x) / this.getTabSize();
-
-            if (index < 0 || index >= this.panelIds.size())
-            {
-                return -1;
-            }
-
-            return index;
-        }
-
-        public String getPanelIdAt(int mouseX)
-        {
-            if (this.panelIds.isEmpty())
-            {
-                return this.anchorPanelId;
-            }
-
-            int index = this.getTabIndex(mouseX);
-
-            if (index < 0)
-            {
-                return null;
-            }
-
-            return this.panelIds.get(index);
-        }
-    }
 
     /**
      * Initialize the camera editor with a camera profile.
@@ -683,14 +249,25 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.tabBar.add(this.topBarActions);
 
         /* Setup elements */
-        this.editor.add(new UIRenderable(this::renderPanelSurfaces), this.main, new UIRenderable(this::renderPanelBorders), new UIRenderable(this::renderDropZoneHighlight));
-        for (String id : this.panelById.keySet())
+        this.dock = new UIDockLayout();
+        this.dock.relative(this.editor).w(1F).h(1F);
+        this.dock.source(this.createFilmLayoutSource())
+            .frameless(PANEL_PREVIEW_ID)
+            .gate(this::hasFilmInCurrentTab)
+            .ensure(this::ensureFilmLayoutPanels)
+            .icons(this::getDockPanelIcon)
+            .onChanged(this::onDockVisibilityChanged)
+            .onSplitterDragEnd(() -> this.applyPreviewSizeToBBS("splitterDragEnd"))
+            .animateLayoutChanges(BBSSettings::filmEditorLayoutTransitionEnabled);
+
+        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
         {
-            UIDraggable handle = this.createPanelDragHandle(id);
-            this.dragHandlesById.put(id, handle);
-            this.editor.add(handle);
+            this.dock.addPanel(entry.getKey(), entry.getValue(), this.getDockPanelIcon(entry.getKey()));
         }
-        this.main.add(this.editArea, this.cameraEditor, this.replayEditor, this.actionEditor, this.preview, this.replayEditor.replaysList, this.replayEditor.replayProperties);
+
+        this.dock.mount();
+        this.editor.add(this.dock);
+        this.main.add(this.cameraEditor, this.replayEditor, this.actionEditor);
         this.add(this.controller);
         this.overlay.namesList.setFileIcon(Icons.FILM);
 
@@ -729,14 +306,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_NEXT_DOCK_TAB, () ->
         {
-            if (this.cycleDockStackTab(1))
+            if (this.dock.cycleDockStackTab(1))
             {
                 UIUtils.playClick();
             }
         }).active(active).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_PREV_DOCK_TAB, () ->
         {
-            if (this.cycleDockStackTab(-1))
+            if (this.dock.cycleDockStackTab(-1))
             {
                 UIUtils.playClick();
             }
@@ -747,7 +324,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.fill(null);
 
-        this.setupEditorFlex(false);
         this.flightEditTime.mark();
 
         this.panels.add(this.cameraEditor);
@@ -831,13 +407,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public boolean isLayoutLocked()
     {
-        return this.layoutLocked;
+        return this.dock.isLocked();
     }
 
     /** Top offset (px) for parameters panels; 0 when layout locked. */
     public int getEditPanelTopOffsetPx()
     {
-        return this.layoutLocked ? 0 : EDIT_PANEL_TOP_OFFSET_PX;
+        return this.dock.isLocked() ? 0 : EDIT_PANEL_TOP_OFFSET_PX;
     }
 
     @Override
@@ -955,46 +531,19 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void updateTabVisibility()
     {
+        this.dock.refreshVisibility();
+    }
+
+    private void onDockVisibilityChanged()
+    {
         boolean hasFilm = this.hasFilmInCurrentTab();
-
-        if (!hasFilm)
-        {
-            for (UIElement panel : this.panelById.values())
-            {
-                panel.setVisible(false);
-            }
-        }
-        else
-        {
-            for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
-            {
-                boolean active = PANEL_MAIN_ID.equals(entry.getKey()) || this.isDockPanelActive(entry.getKey());
-
-                entry.getValue().setVisible(active);
-            }
-        }
 
         this.updateMainEditorVisibility(hasFilm);
 
-        for (Map.Entry<String, UIDraggable> entry : this.dragHandlesById.entrySet())
+        if (this.selectionPanel != null)
         {
-            DockStackInfo stack = this.dockStackByPanelId.get(entry.getKey());
-            boolean active = stack != null && entry.getKey().equals(stack.activePanelId);
-
-            entry.getValue().setVisible(hasFilm && !this.layoutLocked && active);
+            this.selectionPanel.setVisible(!hasFilm);
         }
-
-        for (UIDockStackTabs tabs : this.dockStackTabs)
-        {
-            tabs.setVisible(hasFilm);
-        }
-
-        for (UIDraggable handle : this.splitterHandles)
-        {
-            handle.setVisible(hasFilm && !this.layoutLocked);
-        }
-
-        this.selectionPanel.setVisible(!hasFilm);
     }
 
     private boolean hasFilmInCurrentTab()
@@ -1004,25 +553,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return tab != null && tab.dataId != null;
     }
 
-    private boolean isDockPanelActive(String panelId)
-    {
-        DockStackInfo stack = this.dockStackByPanelId.get(panelId);
-
-        return stack != null && panelId.equals(stack.activePanelId);
-    }
-
     private boolean isMainPanelActive()
     {
-        DockStackInfo mainStack = this.dockStackByPanelId.get(PANEL_MAIN_ID);
-
-        return mainStack == null || PANEL_MAIN_ID.equals(mainStack.activePanelId);
+        return this.dock.isPanelActive(PANEL_MAIN_ID);
     }
 
     private boolean isEditAreaPanelActive()
     {
-        DockStackInfo editAreaStack = this.dockStackByPanelId.get(PANEL_EDIT_AREA_ID);
-
-        return editAreaStack == null || PANEL_EDIT_AREA_ID.equals(editAreaStack.activePanelId);
+        return this.dock.isPanelActive(PANEL_EDIT_AREA_ID);
     }
 
     private void updateMainEditorVisibility(boolean hasFilm)
@@ -1051,9 +589,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private void toggleLayoutLock()
     {
-        this.layoutLocked = !this.layoutLocked;
-        this.clearPanelDragState();
-        this.setupEditorFlex(true);
+        this.dock.toggleLock();
         this.refreshEditPanelOffsets();
     }
 
@@ -1097,6 +633,48 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return BBSSettings.editorLayoutSettings;
     }
 
+    private ILayoutSource createFilmLayoutSource()
+    {
+        return new ILayoutSource()
+        {
+            @Override
+            public BaseValue value()
+            {
+                return UIFilmPanel.this.getFilmLayoutSettings();
+            }
+
+            @Override
+            public EditorLayoutNode getRoot()
+            {
+                return UIFilmPanel.this.getCurrentFilmLayoutRoot();
+            }
+
+            @Override
+            public void setRoot(EditorLayoutNode root)
+            {
+                UIFilmPanel.this.setCurrentFilmLayoutRoot(root);
+            }
+
+            @Override
+            public List<EditorLayoutNode.SplitterNode> getSplitters()
+            {
+                return UIFilmPanel.this.getCurrentFilmSplitters();
+            }
+
+            @Override
+            public List<EditorLayoutNode.SplitterNode> getSplittersForWrite()
+            {
+                return UIFilmPanel.this.getCurrentFilmSplittersForWrite();
+            }
+
+            @Override
+            public EditorLayoutNode getDefault()
+            {
+                return EditorLayoutNode.defaultFilmLayout();
+            }
+        };
+    }
+
     private EditorLayoutNode getCurrentFilmLayoutRoot()
     {
         return this.getFilmLayoutSettings().getFilmLayoutRoot(this.getCurrentFilmLayoutEditor());
@@ -1117,107 +695,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return this.getFilmLayoutSettings().getFilmSplittersForWrite(this.getCurrentFilmLayoutEditor());
     }
 
-    private void activateDockStackTab(String stackPanelId, String panelId)
-    {
-        if (stackPanelId == null || panelId == null)
-        {
-            return;
-        }
-
-        EditorLayoutNode root = this.getCurrentFilmLayoutRoot();
-        EditorLayoutNode next = EditorLayoutNode.copyWithStackActivePanel(root, stackPanelId, panelId);
-
-        if (next != root)
-        {
-            this.beginLayoutTransitionCapture();
-            this.setCurrentFilmLayoutRoot(next);
-            this.setupEditorFlex(true);
-            this.endLayoutTransitionCapture();
-        }
-    }
-
-    private boolean cycleDockStackTab(int offset)
-    {
-        if (offset == 0)
-        {
-            return false;
-        }
-
-        DockStackInfo stack = this.resolveDockStackForKeyboardCycle();
-
-        if (stack == null || !stack.isStacked() || stack.panelIds.isEmpty())
-        {
-            return false;
-        }
-
-        int currentIndex = stack.panelIds.indexOf(stack.activePanelId);
-
-        if (currentIndex < 0)
-        {
-            currentIndex = 0;
-        }
-
-        int size = stack.panelIds.size();
-        int nextIndex = (currentIndex + offset) % size;
-
-        if (nextIndex < 0)
-        {
-            nextIndex += size;
-        }
-
-        this.activateDockStackTab(stack.getAnchorPanelId(), stack.panelIds.get(nextIndex));
-
-        return true;
-    }
-
-    private DockStackInfo resolveDockStackForKeyboardCycle()
-    {
-        UIContext context = this.getContext();
-
-        if (context == null)
-        {
-            return null;
-        }
-
-        for (UIDockStackTabs tabs : this.dockStackTabs)
-        {
-            if (!tabs.isVisible() || !tabs.area.isInside(context.mouseX, context.mouseY))
-            {
-                continue;
-            }
-
-            DockStackInfo hoveredStack = this.dockStackByPanelId.get(tabs.anchorPanelId);
-
-            if (hoveredStack != null && hoveredStack.isStacked())
-            {
-                return hoveredStack;
-            }
-        }
-
-        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
-        {
-            UIElement panel = entry.getValue();
-
-            if (!panel.isVisible() || !panel.area.isInside(context.mouseX, context.mouseY))
-            {
-                continue;
-            }
-
-            DockStackInfo stack = this.dockStackByPanelId.get(entry.getKey());
-
-            if (stack != null && stack.isStacked())
-            {
-                return stack;
-            }
-        }
-
-        return null;
-    }
-
     private MapType getFilmLayoutPresetData()
     {
         MapType data = new MapType();
-        data.put("film_layout", this.getCurrentFilmLayoutRoot().toData());
+        data.put("film_layout", this.dock.getLayoutRoot().toData());
         return data;
     }
 
@@ -1231,103 +712,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         EditorLayoutNode root = EditorLayoutNode.fromData(layoutData);
         if (root != null)
         {
-            this.beginLayoutTransitionCapture();
-            this.setCurrentFilmLayoutRoot(root);
-            this.setupEditorFlex(true);
-            this.endLayoutTransitionCapture();
+            this.dock.applyLayoutRoot(root);
         }
     }
 
     private void resetFilmLayout()
     {
-        this.clearPanelDragState();
-        this.setCurrentFilmLayoutRoot(EditorLayoutNode.defaultFilmLayout());
-        this.setupEditorFlex(true);
-    }
-
-    private void setupEditorFlex(boolean resize)
-    {
-        EditorLayoutNode originalRoot = this.getCurrentFilmLayoutRoot();
-        EditorLayoutNode root = this.ensureFilmLayoutPanels(originalRoot);
-
-        if (root != originalRoot)
-        {
-            this.setCurrentFilmLayoutRoot(root);
-        }
-
-        List<EditorLayoutNode.SplitterNode> splitters = this.getCurrentFilmSplitters();
-
-        if (resize && splitters.size() == this.splitterHandles.size())
-        {
-            this.updateEditorFlexBoundsOnly(root);
-            this.resize();
-            this.resize();
-            return;
-        }
-
-        this.clearSplitterDragState();
-
-        List<DockStackInfo> stackInfos = new ArrayList<>();
-        this.collectDockStacks(root, 0F, 0F, 1F, 1F, stackInfos);
-
-        for (UIElement el : this.panelById.values())
-        {
-            el.resetFlex();
-        }
-
-        for (UIDraggable h : this.splitterHandles)
-        {
-            h.removeFromParent();
-        }
-
-        this.splitterHandles.clear();
-
-        for (UIDockStackTabs tabs : this.dockStackTabs)
-        {
-            tabs.removeFromParent();
-        }
-
-        this.dockStackTabs.clear();
-        this.dockStackByPanelId.clear();
-
-        for (UIDraggable h : this.dragHandlesById.values())
-        {
-            h.resetFlex();
-        }
-
-        this.applyPanelBoundsFromStacks(stackInfos);
-        this.rebuildDockStackTabs(stackInfos);
-
-        this.splitterHandleInfos.clear();
-        EditorLayoutNode.computeSplitterHandles(root, 0F, 0F, 1F, 1F, this.splitterHandleInfos);
-
-        for (int i = 0; i < splitters.size(); i++)
-        {
-            UIDraggable handle = this.createSplitterHandle(i);
-            this.splitterHandles.add(handle);
-            IUIElement insertAfter = i == 0 ? this.main : this.splitterHandles.get(i - 1);
-            this.editor.addAfter(insertAfter, handle);
-        }
-
-        if (this.layoutLocked)
-        {
-            for (UIDraggable h : this.dragHandlesById.values())
-            {
-                h.setVisible(false);
-            }
-        }
-        else
-        {
-            this.applyDragHandleBoundsFromStacks(stackInfos);
-        }
-
-        this.updateTabVisibility();
-
-        if (resize)
-        {
-            this.resize();
-            this.resize();
-        }
+        this.dock.resetLayout();
     }
 
     private EditorLayoutNode ensureFilmLayoutPanels(EditorLayoutNode root)
@@ -1376,641 +767,15 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
     }
 
-    private void applySplitterHandleBounds(UIDraggable handle, EditorLayoutNode.SplitterHandleInfo info)
-    {
-        int ew = this.editor.area.w;
-        int eh = this.editor.area.h;
-        if (ew < EDITOR_MIN_SIZE_FOR_PX_HANDLES || eh < EDITOR_MIN_SIZE_FOR_PX_HANDLES)
-        {
-            /* Editor not laid out yet (e.g. first open); use normalized bounds so handles are visible. */
-            handle.relative(this.editor).x(info.hx).y(info.hy).w(info.hw).h(info.hh);
-            return;
-        }
-        if (info.horizontal)
-        {
-            float centerY = info.hy + info.hh * 0.5F;
-            float hyNew = centerY - (SPLITTER_HANDLE_PX / (2F * eh));
-            handle.relative(this.editor).x(info.hx).y(hyNew).w(info.hw).h(SPLITTER_HANDLE_PX);
-        }
-        else
-        {
-            float centerX = info.hx + info.hw * 0.5F;
-            float hxNew = centerX - (SPLITTER_HANDLE_PX / (2F * ew));
-            handle.relative(this.editor).x(hxNew).y(info.hy).w(SPLITTER_HANDLE_PX).h(info.hh);
-        }
-    }
 
-    private void syncSplitterHandleBounds()
-    {
-        for (int i = 0; i < this.splitterHandles.size() && i < this.splitterHandleInfos.size(); i++)
-        {
-            this.applySplitterHandleBounds(this.splitterHandles.get(i), this.splitterHandleInfos.get(i));
-        }
-    }
 
-    private UIDraggable createSplitterHandle(int index)
-    {
-        UIDraggable handle = new UIDraggable((context) -> this.applySplitterDrag(context.mouseX, context.mouseY))
-        {
-            @Override
-            protected boolean subMouseClicked(UIContext context)
-            {
-                UIFilmPanel.this.beginSplitterDrag(index, context.mouseX, context.mouseY);
-                boolean handled = super.subMouseClicked(context);
 
-                if (!handled)
-                {
-                    UIFilmPanel.this.clearSplitterDragState();
-                }
 
-                return handled;
-            }
-        };
 
-        /* Disable the handle entirely (no click, no resize cursor) when panel resizing is turned off. */
-        handle.enabled(() -> BBSSettings.editorResizablePanels.get());
 
-        int cursor = this.splitterHandleInfos.get(index).horizontal ? GLFW.GLFW_VRESIZE_CURSOR : GLFW.GLFW_HRESIZE_CURSOR;
 
-        handle.hoverOnly().cursors(cursor, cursor).dragEnd(() ->
-        {
-            this.clearSplitterDragState();
-            this.applyPreviewSizeToBBS("splitterDragEnd");
-        });
-        handle.reference(() -> this.getSplitterHandleReferencePosition(index))
-            .referenceAxis(!this.splitterHandleInfos.get(index).horizontal, this.splitterHandleInfos.get(index).horizontal);
-        handle.rendering((context) -> this.renderSplitter(context, index));
-        this.applySplitterHandleBounds(handle, this.splitterHandleInfos.get(index));
 
-        return handle;
-    }
 
-    private void beginSplitterDrag(int index, int mouseX, int mouseY)
-    {
-        if (!BBSSettings.editorResizablePanels.get() || index < 0 || index >= this.splitterHandleInfos.size())
-        {
-            this.clearSplitterDragState();
-            return;
-        }
-
-        this.draggedSplitterIndices.clear();
-        this.draggedSplitterIndices.add(index);
-        boolean horizontal = this.splitterHandleInfos.get(index).horizontal;
-
-        for (int i = 0; i < this.splitterHandles.size() && i < this.splitterHandleInfos.size(); i++)
-        {
-            if (i == index || this.splitterHandleInfos.get(i).horizontal == horizontal)
-            {
-                continue;
-            }
-
-            UIDraggable handle = this.splitterHandles.get(i);
-
-            if (this.isInsideSplitterIntersectionHitbox(handle, mouseX, mouseY))
-            {
-                this.draggedSplitterIndices.add(i);
-            }
-        }
-    }
-
-    private boolean isInsideSplitterIntersectionHitbox(UIDraggable handle, int mouseX, int mouseY)
-    {
-        int padding = SPLITTER_LINK_HITBOX_PADDING_PX;
-
-        return mouseX >= handle.area.x - padding
-            && mouseX < handle.area.ex() + padding
-            && mouseY >= handle.area.y - padding
-            && mouseY < handle.area.ey() + padding;
-    }
-
-    private void clearSplitterDragState()
-    {
-        this.draggedSplitterIndices.clear();
-    }
-
-    private void applySplitterDrag(int mouseX, int mouseY)
-    {
-        if (this.draggedSplitterIndices.isEmpty())
-        {
-            return;
-        }
-
-        BaseValue.edit(this.getFilmLayoutSettings(), (__) ->
-        {
-            List<EditorLayoutNode.SplitterNode> splitters = this.getCurrentFilmSplittersForWrite();
-
-            for (int draggedIndex : this.draggedSplitterIndices)
-            {
-                this.applySplitterRatioFromMouse(splitters, draggedIndex, mouseX, mouseY);
-            }
-        });
-
-        this.setupEditorFlex(true);
-    }
-
-    private void applySplitterRatioFromMouse(List<EditorLayoutNode.SplitterNode> splitters, int index, int mouseX, int mouseY)
-    {
-        if (index < 0 || index >= splitters.size())
-        {
-            return;
-        }
-
-        float ratio = this.getSplitterRatioFromMouse(index, mouseX, mouseY);
-
-        if (ratio >= 0F)
-        {
-            splitters.get(index).setRatio(ratio);
-        }
-    }
-
-    /** @return ratio in [0,1] or -1 if index invalid */
-    private float getSplitterRatioFromMouse(int index, int mouseX, int mouseY)
-    {
-        if (index < 0 || index >= this.splitterHandleInfos.size())
-        {
-            return -1F;
-        }
-        EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
-        int ex = this.editor.area.x;
-        int ey = this.editor.area.y;
-        int ew = Math.max(1, this.editor.area.w);
-        int eh = Math.max(1, this.editor.area.h);
-        float ratio = info.horizontal
-            ? (mouseY - (ey + info.py * eh)) / (info.ph * eh)
-            : (mouseX - (ex + info.px * ew)) / (info.pw * ew);
-        return MathUtils.clamp(ratio, 0.05F, 0.95F);
-    }
-
-    private Vector2i getSplitterHandleReferencePosition(int index)
-    {
-        List<EditorLayoutNode.SplitterNode> splitters = this.getCurrentFilmSplitters();
-
-        if (index < 0 || index >= this.splitterHandleInfos.size() || index >= splitters.size())
-        {
-            return new Vector2i(this.editor.area.x, this.editor.area.y);
-        }
-        EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
-        float r = splitters.get(index).getRatio();
-        int ex = this.editor.area.x;
-        int ey = this.editor.area.y;
-        int ew = Math.max(1, this.editor.area.w);
-        int eh = Math.max(1, this.editor.area.h);
-        int hx = ex + (int) ((info.px + (info.horizontal ? info.pw * 0.5F : r * info.pw)) * ew);
-        int hy = ey + (int) ((info.py + (info.horizontal ? r * info.ph : info.ph * 0.5F)) * eh);
-        return new Vector2i(hx, hy);
-    }
-
-    private void collectDockStacks(EditorLayoutNode node, float x, float y, float w, float h, List<DockStackInfo> out)
-    {
-        if (node instanceof EditorLayoutNode.PanelNode)
-        {
-            String panelId = ((EditorLayoutNode.PanelNode) node).getPanelId();
-            List<String> ids = new ArrayList<>();
-            ids.add(panelId);
-            out.add(new DockStackInfo(ids, panelId, x, y, w, h));
-
-            return;
-        }
-
-        if (node instanceof EditorLayoutNode.StackNode)
-        {
-            EditorLayoutNode.StackNode stack = (EditorLayoutNode.StackNode) node;
-            out.add(new DockStackInfo(new ArrayList<>(stack.getPanelIds()), stack.getActivePanelId(), x, y, w, h));
-
-            return;
-        }
-
-        if (!(node instanceof EditorLayoutNode.SplitterNode))
-        {
-            return;
-        }
-
-        EditorLayoutNode.SplitterNode splitter = (EditorLayoutNode.SplitterNode) node;
-
-        if (splitter.isHorizontal())
-        {
-            float h1 = h * splitter.getRatio();
-
-            this.collectDockStacks(splitter.getFirst(), x, y, w, h1, out);
-            this.collectDockStacks(splitter.getSecond(), x, y + h1, w, h - h1, out);
-        }
-        else
-        {
-            float w1 = w * splitter.getRatio();
-
-            this.collectDockStacks(splitter.getFirst(), x, y, w1, h, out);
-            this.collectDockStacks(splitter.getSecond(), x + w1, y, w - w1, h, out);
-        }
-    }
-
-    private float[] previewStackRect(List<DockStackInfo> stackInfos)
-    {
-        for (DockStackInfo info : stackInfos)
-        {
-            if (info.panelIds.contains(PANEL_PREVIEW_ID))
-            {
-                return new float[] {info.x, info.y, info.w, info.h};
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Per-edge gaps keep panel seams from doubling up. The editor outer edge
-     * and frameless preview get a full gap; regular panel neighbours share it.
-     */
-    private int[] panelGutter(DockStackInfo info, float[] preview)
-    {
-        int half = PANEL_GAP_PX / 2;
-        float x = info.x;
-        float y = info.y;
-        float w = info.w;
-        float h = info.h;
-
-        boolean left = x <= PANEL_EDGE_EPS;
-        boolean top = y <= PANEL_EDGE_EPS;
-        boolean right = x + w >= 1F - PANEL_EDGE_EPS;
-        boolean bottom = y + h >= 1F - PANEL_EDGE_EPS;
-
-        if (preview != null)
-        {
-            float vx = preview[0];
-            float vy = preview[1];
-            float vw = preview[2];
-            float vh = preview[3];
-            boolean spanY = y < vy + vh - PANEL_EDGE_EPS && y + h > vy + PANEL_EDGE_EPS;
-            boolean spanX = x < vx + vw - PANEL_EDGE_EPS && x + w > vx + PANEL_EDGE_EPS;
-
-            left |= spanY && Math.abs(x - (vx + vw)) <= PANEL_EDGE_EPS;
-            right |= spanY && Math.abs((x + w) - vx) <= PANEL_EDGE_EPS;
-            top |= spanX && Math.abs(y - (vy + vh)) <= PANEL_EDGE_EPS;
-            bottom |= spanX && Math.abs((y + h) - vy) <= PANEL_EDGE_EPS;
-        }
-
-        return new int[] {
-            left ? PANEL_GAP_PX : half,
-            top ? PANEL_GAP_PX : half,
-            right ? PANEL_GAP_PX : half,
-            bottom ? PANEL_GAP_PX : half
-        };
-    }
-
-    private void applyPanelBoundsFromStacks(List<DockStackInfo> stackInfos)
-    {
-        this.dockStackByPanelId.clear();
-
-        float[] preview = this.previewStackRect(stackInfos);
-
-        for (DockStackInfo info : stackInfos)
-        {
-            int topOffset = info.isStacked() ? DOCK_STACK_TABS_HEIGHT_PX : 0;
-
-            for (String panelId : info.panelIds)
-            {
-                UIElement panel = this.panelById.get(panelId);
-
-                if (panel == null)
-                {
-                    continue;
-                }
-
-                int[] g = panel == this.preview ? new int[4] : this.panelGutter(info, preview);
-
-                panel.relative(this.editor)
-                    .x(info.x, g[0])
-                    .y(info.y, topOffset + g[1])
-                    .w(info.w, -g[0] - g[2])
-                    .h(info.h, -topOffset - g[1] - g[3]);
-                this.dockStackByPanelId.put(panelId, info);
-            }
-        }
-    }
-
-    private void rebuildDockStackTabs(List<DockStackInfo> stackInfos)
-    {
-        for (UIDockStackTabs tabs : this.dockStackTabs)
-        {
-            tabs.removeFromParent();
-        }
-
-        this.dockStackTabs.clear();
-
-        float[] preview = this.previewStackRect(stackInfos);
-
-        for (DockStackInfo info : stackInfos)
-        {
-            if (!info.isStacked())
-            {
-                continue;
-            }
-
-            UIDockStackTabs tabs = new UIDockStackTabs(this);
-            tabs.configure(info);
-            int[] g = this.panelGutter(info, preview);
-
-            tabs.relative(this.editor).x(info.x, g[0]).y(info.y, g[1]).w(info.w, -g[0] - g[2]).h(DOCK_STACK_TABS_HEIGHT_PX);
-            this.dockStackTabs.add(tabs);
-            this.editor.add(tabs);
-        }
-    }
-
-    /**
-     * Fast path for layout bounds updates: avoid mutating editor children list
-     * while rendering by only reconfiguring existing stack tabs.
-     */
-    private boolean updateDockStackTabsBoundsOnly(List<DockStackInfo> stackInfos)
-    {
-        List<DockStackInfo> stackedInfos = new ArrayList<>();
-
-        for (DockStackInfo info : stackInfos)
-        {
-            if (info.isStacked())
-            {
-                stackedInfos.add(info);
-            }
-        }
-
-        if (stackedInfos.size() != this.dockStackTabs.size())
-        {
-            return false;
-        }
-
-        for (int i = 0; i < stackedInfos.size(); i++)
-        {
-            UIDockStackTabs tabs = this.dockStackTabs.get(i);
-            DockStackInfo info = stackedInfos.get(i);
-
-            if (!tabs.matches(info))
-            {
-                return false;
-            }
-        }
-
-        float[] preview = this.previewStackRect(stackInfos);
-
-        for (int i = 0; i < stackedInfos.size(); i++)
-        {
-            UIDockStackTabs tabs = this.dockStackTabs.get(i);
-            DockStackInfo info = stackedInfos.get(i);
-
-            tabs.configure(info);
-            int[] g = this.panelGutter(info, preview);
-
-            tabs.relative(this.editor).x(info.x, g[0]).y(info.y, g[1]).w(info.w, -g[0] - g[2]).h(DOCK_STACK_TABS_HEIGHT_PX);
-        }
-
-        return true;
-    }
-
-    private void applyDragHandleBoundsFromStacks(List<DockStackInfo> stackInfos)
-    {
-        for (UIDraggable handle : this.dragHandlesById.values())
-        {
-            handle.setVisible(false);
-        }
-
-        int editorHeight = Math.max(1, this.editor.area.h);
-        float[] preview = this.previewStackRect(stackInfos);
-
-        for (DockStackInfo info : stackInfos)
-        {
-            UIDraggable handle = this.dragHandlesById.get(info.activePanelId);
-
-            if (handle == null)
-            {
-                continue;
-            }
-
-            float tabsOffset = info.isStacked() ? (float) DOCK_STACK_TABS_HEIGHT_PX / editorHeight : 0F;
-            int[] g = PANEL_PREVIEW_ID.equals(info.activePanelId) ? new int[4] : this.panelGutter(info, preview);
-
-            handle.relative(this.editor)
-                .x(info.x, g[0])
-                .y(info.y + tabsOffset + DRAG_HANDLE_TOP_OFFSET_NORM, g[1])
-                .w(info.w, -g[0] - g[2])
-                .h(DRAG_HANDLE_HEIGHT_NORM);
-            handle.setVisible(!this.layoutLocked);
-        }
-    }
-
-    private void updateEditorFlexBoundsOnly(EditorLayoutNode root)
-    {
-        List<DockStackInfo> stackInfos = new ArrayList<>();
-
-        this.collectDockStacks(root, 0F, 0F, 1F, 1F, stackInfos);
-        this.applyPanelBoundsFromStacks(stackInfos);
-
-        if (!this.updateDockStackTabsBoundsOnly(stackInfos))
-        {
-            this.rebuildDockStackTabs(stackInfos);
-        }
-
-        this.splitterHandleInfos.clear();
-        EditorLayoutNode.computeSplitterHandles(root, 0F, 0F, 1F, 1F, this.splitterHandleInfos);
-        this.syncSplitterHandleBounds();
-        this.applyDragHandleBoundsFromStacks(stackInfos);
-        this.updateTabVisibility();
-    }
-
-    private void clearPanelDragState()
-    {
-        this.draggingPanelId = null;
-        this.dropTargetPanelId = null;
-        this.dropTargetZone = DROP_ZONE_CENTER;
-    }
-
-    private void applyPanelDropResult(String dragId, String targetId, int zone)
-    {
-        EditorLayoutNode root = this.getCurrentFilmLayoutRoot();
-        EditorLayoutNode newRoot = zone == DROP_ZONE_CENTER
-            ? EditorLayoutNode.copyWithInsertStackAt(root, targetId, dragId)
-            : EditorLayoutNode.copyWithInsertSplitAt(root, targetId, dragId, zone);
-
-        if (newRoot != null && newRoot != root)
-        {
-            this.beginLayoutTransitionCapture();
-            this.setCurrentFilmLayoutRoot(newRoot);
-            this.setupEditorFlex(true);
-            this.endLayoutTransitionCapture();
-        }
-    }
-
-    private UIDraggable createPanelDragHandle(String panelId)
-    {
-        UIDraggable handle = new UIDraggable((context) ->
-        {
-            if (this.draggingPanelId == null)
-            {
-                this.draggingPanelId = panelId;
-            }
-            this.dropTargetPanelId = null;
-            this.dropTargetZone = DROP_ZONE_CENTER;
-
-            for (UIDockStackTabs tabs : this.dockStackTabs)
-            {
-                if (tabs.isVisible() && tabs.area.isInside(context.mouseX, context.mouseY))
-                {
-                    String targetPanelId = tabs.getPanelIdAt(context.mouseX);
-
-                    if (targetPanelId != null)
-                    {
-                        this.dropTargetPanelId = targetPanelId;
-                        this.dropTargetZone = DROP_ZONE_CENTER;
-
-                        return;
-                    }
-
-                    break;
-                }
-            }
-
-            for (Map.Entry<String, UIElement> e : this.panelById.entrySet())
-            {
-                if (!e.getValue().isVisible())
-                {
-                    continue;
-                }
-
-                if (e.getValue().area.isInside(context.mouseX, context.mouseY))
-                {
-                    this.dropTargetPanelId = e.getKey();
-                    this.dropTargetZone = this.computeDropZone(e.getValue().area, context.mouseX, context.mouseY);
-                    break;
-                }
-            }
-        });
-        handle.dragEnd(() ->
-        {
-            String dragId = this.draggingPanelId;
-            String targetId = this.dropTargetPanelId;
-            int targetZone = this.dropTargetZone;
-
-            try
-            {
-                if (dragId == null || targetId == null || dragId.equals(targetId))
-                {
-                    return;
-                }
-
-                this.applyPanelDropResult(dragId, targetId, targetZone);
-            }
-            finally
-            {
-                this.clearPanelDragState();
-            }
-        });
-        handle.hoverOnly().rendering((context) -> this.renderPanelDragHandle(context, handle));
-        return handle;
-    }
-
-    private void renderPanelDragHandle(UIContext context, UIDraggable handle)
-    {
-        boolean active = handle.area.isInside(context) || handle.isDragging();
-
-        UIDockStyleRenderer.renderPanelDragHandle(context, handle.area, active);
-    }
-
-    private int computeDropZone(Area area, int mouseX, int mouseY)
-    {
-        int ax = area.x;
-        int ay = area.y;
-        int aw = area.w;
-        int ah = area.h;
-        float nx = aw <= 0 ? 0.5F : (mouseX - ax) / (float) aw;
-        float ny = ah <= 0 ? 0.5F : (mouseY - ay) / (float) ah;
-        if (nx < DROP_EDGE_MARGIN)
-        {
-            return EditorLayoutNode.EDGE_LEFT;
-        }
-        if (nx > 1F - DROP_EDGE_MARGIN)
-        {
-            return EditorLayoutNode.EDGE_RIGHT;
-        }
-        if (ny < DROP_EDGE_MARGIN)
-        {
-            return EditorLayoutNode.EDGE_TOP;
-        }
-        if (ny > 1F - DROP_EDGE_MARGIN)
-        {
-            return EditorLayoutNode.EDGE_BOTTOM;
-        }
-        return DROP_ZONE_CENTER;
-    }
-
-    private void renderDropZoneHighlight(UIContext context)
-    {
-        if (this.layoutLocked || this.draggingPanelId == null || this.dropTargetPanelId == null)
-        {
-            return;
-        }
-        UIElement target = this.panelById.get(this.dropTargetPanelId);
-        if (target == null)
-        {
-            return;
-        }
-        UIDockStyleRenderer.renderDropZone(context, target.area, this.dropTargetZone, DROP_EDGE_MARGIN);
-    }
-
-    private void renderSplitter(UIContext context, int index)
-    {
-        if (index < 0 || index >= this.splitterHandles.size() || index >= this.splitterHandleInfos.size())
-        {
-            return;
-        }
-        UIDraggable splitter = this.splitterHandles.get(index);
-        EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
-        boolean legacyVisible = splitter.isDragging() || this.draggedSplitterIndices.contains(index);
-        boolean active = legacyVisible || splitter.area.isInside(context);
-
-        if (BBSSettings.editorResizablePanels.get())
-        {
-            context.requestCursor(this.getSplitterCursor(index, context.mouseX, context.mouseY));
-        }
-
-        UIDockStyleRenderer.renderSplitter(context, splitter.area, info.horizontal, active, legacyVisible);
-    }
-
-    private int getSplitterCursor(int index, int mouseX, int mouseY)
-    {
-        if (index < 0 || index >= this.splitterHandleInfos.size())
-        {
-            return GLFW.GLFW_ARROW_CURSOR;
-        }
-
-        EditorLayoutNode.SplitterHandleInfo info = this.splitterHandleInfos.get(index);
-
-        return this.isInsideSplitterIntersection(index, mouseX, mouseY)
-            ? GLFW.GLFW_CROSSHAIR_CURSOR
-            : info.horizontal
-            ? GLFW.GLFW_VRESIZE_CURSOR
-            : GLFW.GLFW_HRESIZE_CURSOR;
-    }
-
-    private boolean isInsideSplitterIntersection(int index, int mouseX, int mouseY)
-    {
-        if (index < 0 || index >= this.splitterHandleInfos.size())
-        {
-            return false;
-        }
-
-        boolean horizontal = this.splitterHandleInfos.get(index).horizontal;
-
-        for (int i = 0; i < this.splitterHandles.size() && i < this.splitterHandleInfos.size(); i++)
-        {
-            if (i == index || this.splitterHandleInfos.get(i).horizontal == horizontal)
-            {
-                continue;
-            }
-
-            if (this.isInsideSplitterIntersectionHitbox(this.splitterHandles.get(i), mouseX, mouseY))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 
     private void fillFilmContextMenu(ContextMenuManager menu)
     {
@@ -2024,7 +789,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         menu.action(Icons.SAVED, UIKeys.GENERAL_SAVE, this::save);
         menu.action(Icons.LAYOUT, UIKeys.FILM_LAYOUT_PRESETS, this::openLayoutPresetsMenu);
         menu.action(Icons.REFRESH, UIKeys.FILM_LAYOUT_RESET, this::resetFilmLayout);
-        menu.action(this.layoutLocked ? Icons.UNLOCKED : Icons.LOCKED, this.layoutLocked ? UIKeys.FILM_LAYOUT_UNLOCK : UIKeys.FILM_LAYOUT_LOCK, this.layoutLocked, this::toggleLayoutLock);
+        boolean layoutLocked = this.dock.isLocked();
+        menu.action(layoutLocked ? Icons.UNLOCKED : Icons.LOCKED, layoutLocked ? UIKeys.FILM_LAYOUT_UNLOCK : UIKeys.FILM_LAYOUT_LOCK, layoutLocked, this::toggleLayoutLock);
 
         menu.action(Icons.LIST, UIKeys.FILM_OPEN_HISTORY, () ->
         {
@@ -2180,17 +946,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.resize();
         this.updateTabVisibility();
+        this.editor.resize();
 
-        if (this.editor.area.w >= EDITOR_MIN_SIZE_FOR_PX_HANDLES && this.editor.area.h >= EDITOR_MIN_SIZE_FOR_PX_HANDLES)
-        {
-            if (!this.layoutLocked && this.splitterHandles.size() == this.splitterHandleInfos.size())
-            {
-                this.syncSplitterHandleBounds();
-            }
-            this.editor.resize();
-        }
-
-        boolean anySplitterDragging = this.splitterHandles.stream().anyMatch(UIDraggable::isDragging);
+        boolean anySplitterDragging = this.dock.isSplitterDragging();
         if (!this.recorder.isExporting() && !anySplitterDragging
             && this.hasFilmInCurrentTab() && this.data != null
             && this.preview.area.w >= 2 && this.preview.area.h >= 2)
@@ -2389,14 +1147,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.captureTimelineViewport(this.panels.get(index));
         }
 
-        this.clearPanelDragState();
-        this.clearSplitterDragState();
-        this.beginLayoutTransitionCapture();
         this.selectedMainEditorPanel = element;
 
         if (previousRoot != this.getCurrentFilmLayoutRoot())
         {
-            this.setupEditorFlex(true);
+            this.dock.applyLayoutRoot(this.getCurrentFilmLayoutRoot());
         }
         else
         {
@@ -2412,7 +1167,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.toggleFlight();
         }
 
-        this.endLayoutTransitionCapture();
     }
 
     private void captureTimelineViewport(UIElement panel)
@@ -2834,6 +1588,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             return;
         }
 
+        if (this.data != null)
+        {
+            BBSModClient.getFilms().unfreeze(this.data.getId());
+        }
+
         this.lifecycleActive = true;
         BBSFilmCollaborationBridge.attach(this, this.getData());
         BBSRendering.setCustomSize(true);
@@ -2878,6 +1637,27 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.replayEditor.close();
 
         this.notifyServer(ActionState.STOP);
+        this.freezeFrame();
+    }
+
+    /** Keep the visible editor frame in the world after the active Film panel closes. */
+    private void freezeFrame()
+    {
+        if (this.data == null
+            || Minecraft.getInstance().level == null
+            || this.dashboard.getPanels().panel != this)
+        {
+            return;
+        }
+
+        if (BBSSettings.editorKeepFrameOnExit.get())
+        {
+            BBSModClient.getFilms().freeze(this.data, this.getCursor(), this.controller.isPaused());
+        }
+        else
+        {
+            BBSModClient.getFilms().unfreeze(this.data.getId());
+        }
     }
 
     @Override
@@ -3376,7 +2156,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         this.updateLogic(context);
-        this.advanceLayoutTransition();
 
         this.area.render(context.batcher, BBSSettings.baseSurface());
 
@@ -3419,52 +2198,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             }
 
             this.entered = false;
-        }
-    }
-
-    /**
-     * Paint the editor canvas behind the docked panels and give each panel a
-     * deeper surface, so they read as recessed wells inset into the frame.
-     */
-    private void renderPanelSurfaces(UIContext context)
-    {
-        this.editor.area.render(context.batcher, BBSSettings.baseSurface());
-
-        for (UIElement panel : this.panelById.values())
-        {
-            if (panel.isVisible() && panel != this.preview)
-            {
-                panel.area.render(context.batcher, BBSSettings.deepSurface());
-            }
-        }
-    }
-
-    /**
-     * Drawn on top of the panels so the inset shadow and border show even over
-     * panels that paint their own opaque content.
-     */
-    private void renderPanelBorders(UIContext context)
-    {
-        if (!BBSSettings.interfaceShadows.get())
-        {
-            return;
-        }
-
-        int fade = Colors.setA(Colors.A100, 0F);
-
-        for (UIElement panel : this.panelById.values())
-        {
-            if (!panel.isVisible() || panel == this.preview)
-            {
-                continue;
-            }
-
-            Area a = panel.area;
-
-            context.batcher.gradientVBox(a.x, a.y, a.ex(), a.y + 4, Colors.A25, fade);
-            context.batcher.gradientVBox(a.x, a.ey() - 4, a.ex(), a.ey(), fade, Colors.A25);
-            context.batcher.gradientHBox(a.x, a.y, a.x + 4, a.ey(), Colors.A25, fade);
-            context.batcher.gradientHBox(a.ex() - 4, a.y, a.ex(), a.ey(), fade, Colors.A25);
         }
     }
 
