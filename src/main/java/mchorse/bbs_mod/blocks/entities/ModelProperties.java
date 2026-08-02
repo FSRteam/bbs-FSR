@@ -178,10 +178,17 @@ public class ModelProperties implements IMapSerializable
     @Override
     public void fromData(MapType data)
     {
-        this.form = this.processForm(FormUtils.fromData(data.getMap("form")));
-        this.formThirdPerson = this.processForm(FormUtils.fromData(data.getMap("formThirdPerson")));
-        this.formInventory = this.processForm(FormUtils.fromData(data.getMap("formInventory")));
-        this.formFirstPerson = this.processForm(FormUtils.fromData(data.getMap("formFirstPerson")));
+        /* Unset display slots must stay null (mirroring toData writing null for
+         * them). MapType.getMap returns an empty non-null MapType for an absent
+         * key, and FormUtils.fromData turns an unparseable empty form into a
+         * non-null MissingForm placeholder; if those landed here, every unset
+         * context would override the default form with an empty placeholder and
+         * render nothing. Pass a null default so unset slots decode to null and
+         * keep falling back to the default form. */
+        this.form = this.processForm(FormUtils.fromData(data.getMap("form", null)));
+        this.formThirdPerson = this.processForm(FormUtils.fromData(data.getMap("formThirdPerson", null)));
+        this.formInventory = this.processForm(FormUtils.fromData(data.getMap("formInventory", null)));
+        this.formFirstPerson = this.processForm(FormUtils.fromData(data.getMap("formFirstPerson", null)));
 
         this.transform.fromData(data.getMap("transform"));
         this.transformThirdPerson.fromData(data.getMap("transformThirdPerson"));
