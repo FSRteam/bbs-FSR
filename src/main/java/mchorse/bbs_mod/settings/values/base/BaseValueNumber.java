@@ -7,6 +7,8 @@ public abstract class BaseValueNumber <T extends Number> extends BaseKeyframeFac
     protected T min;
     protected T max;
 
+    protected boolean slider;
+
     public BaseValueNumber(String id, IKeyframeFactory<T> factory, T defaultValue, T min, T max)
     {
         super(id, factory, defaultValue);
@@ -23,6 +25,24 @@ public abstract class BaseValueNumber <T extends Number> extends BaseKeyframeFac
     public T getMax()
     {
         return this.max;
+    }
+
+    public boolean isSlider()
+    {
+        return this.slider;
+    }
+
+    /**
+     * Offer this value as a track rather than a drag field. Worth it only when
+     * both ends are declared and the whole span fits the track with a useful
+     * step — a resolution or a tick count belongs in a field you type into,
+     * however finite its bounds happen to be.
+     */
+    public BaseValueNumber<T> slider()
+    {
+        this.slider = true;
+
+        return this;
     }
 
     @Override

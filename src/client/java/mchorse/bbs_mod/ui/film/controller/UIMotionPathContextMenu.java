@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -22,21 +23,21 @@ public class UIMotionPathContextMenu extends UIContextMenu
     public UIIcon around;
 
     public UIColor color;
-    public UITrackpad width;
+    public UISliderTrackpad width;
 
     public UIColor pastColor;
     public UIColor futureColor;
 
     public UIIcon frames;
-    public UITrackpad frameSize;
+    public UISliderTrackpad frameSize;
 
     public UIIcon keyframes;
     public UIColor keyframeColor;
-    public UITrackpad keyframeSize;
+    public UISliderTrackpad keyframeSize;
 
     public UIIcon current;
     public UIColor currentColor;
-    public UITrackpad currentSize;
+    public UISliderTrackpad currentSize;
 
     public UITrackpad before;
     public UITrackpad after;
@@ -62,7 +63,7 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
         this.color = new UIColor((c) -> this.motionPath.color.set(c));
         this.color.setColor(this.motionPath.color.get());
-        this.width = new UITrackpad((v) -> this.motionPath.width.set(v.floatValue()));
+        this.width = new UISliderTrackpad((v) -> this.motionPath.width.set(v.floatValue()));
         this.width.limit(0.005D, 0.5D, false).setValue(this.motionPath.width.get());
 
         this.pastColor = new UIColor((c) -> this.motionPath.pastColor.set(c));
@@ -72,21 +73,21 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
         this.frames = new UIIcon(() -> this.motionPath.frames.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.frames.toggle());
         this.frames.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_FRAMES);
-        this.frameSize = new UITrackpad((v) -> this.motionPath.frameSize.set(v.floatValue()));
+        this.frameSize = new UISliderTrackpad((v) -> this.motionPath.frameSize.set(v.floatValue()));
         this.frameSize.limit(0.005D, 0.5D, false).setValue(this.motionPath.frameSize.get());
 
         this.keyframes = new UIIcon(() -> this.motionPath.keyframes.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.keyframes.toggle());
         this.keyframes.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_KEYFRAMES);
         this.keyframeColor = new UIColor((c) -> this.motionPath.keyframeColor.set(c));
         this.keyframeColor.setColor(this.motionPath.keyframeColor.get());
-        this.keyframeSize = new UITrackpad((v) -> this.motionPath.keyframeSize.set(v.floatValue()));
+        this.keyframeSize = new UISliderTrackpad((v) -> this.motionPath.keyframeSize.set(v.floatValue()));
         this.keyframeSize.limit(0.005D, 0.5D, false).setValue(this.motionPath.keyframeSize.get());
 
         this.current = new UIIcon(() -> this.motionPath.current.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.current.toggle());
         this.current.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_CURRENT);
         this.currentColor = new UIColor((c) -> this.motionPath.currentColor.set(c));
         this.currentColor.setColor(this.motionPath.currentColor.get());
-        this.currentSize = new UITrackpad((v) -> this.motionPath.currentSize.set(v.floatValue()));
+        this.currentSize = new UISliderTrackpad((v) -> this.motionPath.currentSize.set(v.floatValue()));
         this.currentSize.limit(0.005D, 0.5D, false).setValue(this.motionPath.currentSize.get());
 
         this.before = new UITrackpad((v) -> this.motionPath.before.set(v.intValue()));

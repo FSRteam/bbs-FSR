@@ -71,6 +71,28 @@ public class ModelGroup implements IMapSerializable
     }
 
     /**
+     * The bone's evaluated local rotation as of this point in the pipeline — {@link #orient} when a layer
+     * or constraint stage has composed one, otherwise the rotation the renderer would reconstruct from the
+     * channels (mode-aware; cubic channels are degrees). THE read for every constraint-stack stage: blend
+     * bases, twist references, clamp inputs all start from this, so stages stack instead of overwriting
+     * each other. Returns a fresh instance safe to mutate.
+     */
+    public Quaternionf evaluatedRotation()
+    {
+        if (this.orient != null)
+        {
+            return new Quaternionf(this.orient);
+        }
+
+        if (this.current.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            return new Quaternionf(this.current.quat);
+        }
+
+        return Matrices.toLocalRotationZYXDegrees(this.current.rotate);
+    }
+
+    /**
      * Composes one rotation layer into {@link #orient}, the quaternion the renderer applies in place of the
      * euler triples. The FIRST layer on a bone seeds orient from the euler accumulated so far (this layer's
      * own {@code +=} included), so a single layer renders byte-identically to the euler path; every later
@@ -81,12 +103,7 @@ public class ModelGroup implements IMapSerializable
     {
         if (this.orient == null)
         {
-            this.orient = Matrices.toQuaternionZYXDegrees(this.current.rotate.x, this.current.rotate.y, this.current.rotate.z);
-
-            if (this.current.rotate2.x != 0F || this.current.rotate2.y != 0F || this.current.rotate2.z != 0F)
-            {
-                this.orient.mul(Matrices.toQuaternionZYXDegrees(this.current.rotate2.x, this.current.rotate2.y, this.current.rotate2.z));
-            }
+            this.orient = Matrices.toLocalRotationZYXDegrees(this.current.rotate);
         }
         else
         {

@@ -9,6 +9,7 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.items.GunProperties;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
+import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.network.FriendlyByteBuf;
 
 import java.io.ByteArrayOutputStream;
@@ -166,8 +167,8 @@ public final class NetworkDataDecoderTest
 
         expected.projectileTransform.translate.set(1.25F, -2.5F, 3.75F);
         expected.projectileTransform.scale.set(0.5F, 1.5F, 2.5F);
-        expected.projectileTransform.rotate.set(0.1F, 0.2F, 0.3F);
-        expected.projectileTransform.rotate2.set(-0.4F, -0.5F, -0.6F);
+        expected.projectileTransform.rotationMode = Transform.RotationMode.QUATERNION;
+        expected.projectileTransform.quat.set(0.1F, -0.2F, 0.3F, 0.9F).normalize();
         expected.useTarget = true;
         expected.lifeSpan = 321;
         expected.speed = 4.5F;

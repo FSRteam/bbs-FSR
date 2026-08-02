@@ -7,6 +7,8 @@ import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.AdditiveDrag;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
@@ -19,6 +21,9 @@ import org.lwjgl.glfw.GLFW;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -102,9 +107,68 @@ public final class GizmoInteractionGenerationTest
         ownership.cancel();
         setBoolean(interaction, "gizmoActive", false);
 
+        pendingPickBindsTargetBeforeGizmoStart();
         physicalReleaseCommitsAndLifecycleCancelRollsBack();
         buttonScopedCancellationHonorsOwnerAndGeneration();
         uniformScaleHasNoSingleAxisDebugGuide();
+    }
+
+    private static void pendingPickBindsTargetBeforeGizmoStart()
+    {
+        List<String> events = new ArrayList<>();
+        GizmoViewport viewport = new GizmoViewport()
+        {
+            @Override
+            public StencilFormFramebuffer getGizmoStencil()
+            {
+                return null;
+            }
+
+            @Override
+            public Matrix4f getGizmoProjection()
+            {
+                return null;
+            }
+
+            @Override
+            public Area getGizmoArea()
+            {
+                return null;
+            }
+
+            @Override
+            public boolean startGizmo(UIContext context, int stencilIndex)
+            {
+                events.add("start");
+
+                return false;
+            }
+
+            @Override
+            public void pickGizmoForm(UIContext context, Form form, String bone)
+            {
+                events.add("pick:" + bone);
+            }
+        };
+        GizmoInteraction interaction = new GizmoInteraction(viewport);
+        MouseGestureOwnership ownership = ownership(interaction);
+        long generation = ownership.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+
+        setLong(interaction, "gestureGeneration", generation);
+        setInt(interaction, "pendingButton", GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        setInt(interaction, "pendingDownX", 0);
+        setInt(interaction, "pendingDownY", 0);
+        setObject(interaction, "pendingPickForm", createHeadlessForm());
+        setObject(interaction, "pendingPickBone", "pole");
+
+        UIContext context = new UIContext(null);
+
+        context.setMouse(10, 0, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        invokePromotePendingPick(interaction, context);
+
+        check(events.equals(List.of("pick:pole", "start")),
+            "pending pick did not bind its target before the Gizmo captured the transform");
+        check(!ownership.isActive(), "failed promoted Gizmo retained its gesture owner");
     }
 
     private static void physicalReleaseCommitsAndLifecycleCancelRollsBack()
@@ -226,11 +290,11 @@ public final class GizmoInteractionGenerationTest
             UIPropTransform transform = allocate(UIPropTransform.class);
 
             setBoolean(transform, "editing", true);
-            setBoolean(transform, "scaleAll", true);
+            setObject(transform, "strategy", new AdditiveDrag(null, TransformOp.SCALE, Axis.X, null, true));
             check(transform.getDebugLineStencilIndex() == -1,
                 "uniform scale exposed its internal X sampling axis as a debug guide");
 
-            setBoolean(transform, "scaleAll", false);
+            setObject(transform, "strategy", new AdditiveDrag(null, TransformOp.SCALE, Axis.X, null, false));
             setObject(transform, "axis", Axis.X);
             check(transform.getDebugLineStencilIndex() == Gizmo.STENCIL_X,
                 "ordinary X-axis editing lost its debug guide");
@@ -313,6 +377,21 @@ public final class GizmoInteractionGenerationTest
         catch (ReflectiveOperationException exception)
         {
             throw new AssertionError("Could not inspect " + name, exception);
+        }
+    }
+
+    private static void invokePromotePendingPick(GizmoInteraction interaction, UIContext context)
+    {
+        try
+        {
+            Method method = GizmoInteraction.class.getDeclaredMethod("promotePendingPick", UIContext.class);
+
+            method.setAccessible(true);
+            method.invoke(interaction, context);
+        }
+        catch (ReflectiveOperationException exception)
+        {
+            throw new AssertionError("Could not promote pending Gizmo pick", exception);
         }
     }
 

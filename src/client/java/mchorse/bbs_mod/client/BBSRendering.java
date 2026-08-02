@@ -40,6 +40,7 @@ import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -84,6 +85,9 @@ public class BBSRendering
 
     private static int width;
     private static int height;
+
+    /* Re-armed by the orbit controller on every orthographic frame. */
+    private static float orthoDistance = -1F;
 
     private static boolean toggleFramebuffer;
     private static RenderTarget framebuffer;
@@ -377,6 +381,18 @@ public class BBSRendering
 
     public static void onWorldRenderBegin()
     {
+        if (orthoDistance > 0F)
+        {
+            Minecraft.getInstance().smartCull = true;
+
+            if (sodium)
+            {
+                SodiumUtils.restorePointCameraCulling();
+            }
+        }
+
+        orthoDistance = -1F;
+
         Minecraft mc = Minecraft.getInstance();
         BBSModClient.getFilms().startRenderFrame(getTickDelta(mc));
 
@@ -730,6 +746,44 @@ public class BBSRendering
     public static boolean isRenderingWorld()
     {
         return renderingWorld;
+    }
+
+    public static void setOrthoDistance(float distance)
+    {
+        orthoDistance = distance;
+
+        if (distance > 0F)
+        {
+            Minecraft.getInstance().smartCull = false;
+
+            if (sodium)
+            {
+                SodiumUtils.disablePointCameraCulling();
+            }
+        }
+    }
+
+    public static boolean isOrthoActive()
+    {
+        return orthoDistance > 0F;
+    }
+
+    /** Build a size-preserving orthographic projection for the active orbit. */
+    public static Matrix4f getOrthoProjection(GameRenderer renderer, Matrix4f perspective, float minHalfHeight)
+    {
+        if (orthoDistance <= 0F)
+        {
+            return perspective;
+        }
+
+        float tanHalfFov = 1F / perspective.m11();
+        float aspect = perspective.m11() / perspective.m00();
+        float halfHeight = Math.max(minHalfHeight, orthoDistance * tanHalfFov);
+        float halfWidth = halfHeight * aspect;
+        float near = -minHalfHeight;
+        float far = renderer.getDepthFar();
+
+        return new Matrix4f().setOrtho(-halfWidth, halfWidth, -halfHeight, halfHeight, near, far);
     }
 
     public static boolean isIrisShadersEnabled()

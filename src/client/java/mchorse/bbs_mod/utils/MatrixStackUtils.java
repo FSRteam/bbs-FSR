@@ -1,9 +1,9 @@
 package mchorse.bbs_mod.utils;
 
+import mchorse.bbs_mod.graphics.InverseView;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexSorting;
-import com.mojang.math.Axis;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Matrix3f;
@@ -18,6 +18,7 @@ public class MatrixStackUtils
 
     private static Matrix4f oldProjection = new Matrix4f();
     private static Matrix4f oldMV = new Matrix4f();
+    private static Matrix3f oldInverse = new Matrix3f();
 
     public static void scaleStack(PoseStack stack, float x, float y, float z)
     {
@@ -61,47 +62,32 @@ public class MatrixStackUtils
         /* Cache the global stuff */
         oldProjection.set(RenderSystem.getProjectionMatrix());
         oldMV.set(RenderSystem.getModelViewMatrix());
+        oldInverse.set(InverseView.get());
 
         Matrix4fStack renderStack = RenderSystem.getModelViewStack();
 
         renderStack.pushMatrix();
         renderStack.identity();
         RenderSystem.applyModelViewMatrix();
-        renderStack.popMatrix();
     }
 
     public static void restoreMatrices()
     {
         /* Return back to orthographic projection */
         RenderSystem.setProjectionMatrix(oldProjection, VertexSorting.ORTHOGRAPHIC_Z);
+        InverseView.set(oldInverse);
 
         Matrix4fStack renderStack = RenderSystem.getModelViewStack();
 
-        renderStack.pushMatrix();
-        renderStack.identity();
-        renderStack.mul(oldMV);
-        RenderSystem.applyModelViewMatrix();
         renderStack.popMatrix();
+        RenderSystem.applyModelViewMatrix();
     }
 
     public static void applyTransform(PoseStack stack, Transform transform)
     {
-        if (transform.translate.x != 0F || transform.translate.y != 0F || transform.translate.z != 0F)
-        {
-            stack.translate(transform.translate.x, transform.translate.y, transform.translate.z);
-        }
-
-        if (transform.rotate.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate.z));
-        if (transform.rotate.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate.y));
-        if (transform.rotate.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate.x));
-        if (transform.rotate2.z != 0F) stack.mulPose(Axis.ZP.rotation(transform.rotate2.z));
-        if (transform.rotate2.y != 0F) stack.mulPose(Axis.YP.rotation(transform.rotate2.y));
-        if (transform.rotate2.x != 0F) stack.mulPose(Axis.XP.rotation(transform.rotate2.x));
-
-        if (transform.scale.x != 1F || transform.scale.y != 1F || transform.scale.z != 1F)
-        {
-            scaleStack(stack, transform.scale.x, transform.scale.y, transform.scale.z);
-        }
+        stack.translate(transform.translate.x, transform.translate.y, transform.translate.z);
+        stack.mulPose(transform.createRotation());
+        scaleStack(stack, transform.scale.x, transform.scale.y, transform.scale.z);
     }
 
     public static void multiply(PoseStack stack, Matrix4f matrix)

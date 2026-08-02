@@ -23,6 +23,7 @@ import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -362,6 +363,8 @@ public class UIAnimationStateEditor extends UIElement
 
         if (form instanceof PoseForm)
         {
+            UIReplaysEditorUtils.addGlintControlSheet(form, this.state.properties, orderedFormSheets);
+
             List<UIKeyframeSheet> boneSheets = new ArrayList<>();
             Map<String, Integer> depthBySheetId = new HashMap<>();
 
@@ -428,6 +431,8 @@ public class UIAnimationStateEditor extends UIElement
 
         if (drag != null)
         {
+            drag.setGlobalAxes(this.editor.renderer.getSceneAxes());
+
             float tick = this.editor.getSamplingTick();
             Supplier<Matrix4f> rotationSampler = () ->
             {
@@ -435,7 +440,7 @@ public class UIAnimationStateEditor extends UIElement
 
                 Matrix4f origin = this.getOriginMatrix(transition);
 
-                return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(origin);
+                return origin == null ? new Matrix4f() : MatrixStackUtils.stripScale(this.editor.renderer.toSceneMatrix(origin));
             };
 
             this.editor.applyStateForSampling(tick);
@@ -453,7 +458,7 @@ public class UIAnimationStateEditor extends UIElement
 
                         Matrix4f origin = this.getOrigin(transition);
 
-                        return origin == null ? new Vector3f() : origin.getTranslation(new Vector3f());
+                        return origin == null ? new Vector3f() : this.editor.renderer.toSceneMatrix(origin).getTranslation(new Vector3f());
                     }
                 );
             }
@@ -507,6 +512,11 @@ public class UIAnimationStateEditor extends UIElement
         return this.getOriginInternal(transition, false);
     }
 
+    public TransformSpace getGizmoSpace()
+    {
+        return this.keyframeEditor == null ? TransformSpace.LOCAL : this.keyframeEditor.getBoneSpace();
+    }
+
     public Matrix4f getOriginMatrix(float transition)
     {
         return this.getOriginInternal(transition, true);
@@ -522,7 +532,7 @@ public class UIAnimationStateEditor extends UIElement
             return Matrices.EMPTY_4F;
         }
 
-        Matrix4f matrix = (!forceMatrix && bone.b) ? entry.origin() : entry.matrix();
+        Matrix4f matrix = (forceMatrix || bone.b) ? entry.matrix() : entry.origin();
 
         return matrix == null ? Matrices.EMPTY_4F : matrix;
     }

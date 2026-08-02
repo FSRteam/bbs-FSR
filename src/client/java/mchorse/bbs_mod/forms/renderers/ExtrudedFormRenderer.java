@@ -119,29 +119,61 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             float a = color.a * formColor.a;
             Matrix4f modelView = ModelVAORenderer.captureModelView(matrices);
             Matrix3f normalMat = new Matrix3f(matrices.last().normal());
+            boolean irisWorld = BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld();
+            boolean cutout = defer && irisWorld && textureObject != null && textureObject.hasTranslucency()
+                && a >= 1F && !this.form.additiveColor.get();
+            boolean queueWasActive = false;
 
-            if (defer && FormTranslucentQueue.needsSplit(finalShader, null, textureObject, a))
+            if (cutout)
             {
-                FormTranslucentQueue.setPassMode(finalShader, FormTranslucentQueue.PASS_OPAQUE);
-                ModelVAORenderer.render(finalShader, data, modelView, normalMat, r, g, b, a, light, overlay);
-                FormTranslucentQueue.setPassMode(finalShader, FormTranslucentQueue.PASS_SINGLE);
-                FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, textureObject,
-                    modelView, normalMat, r, g, b, a, light, overlay, true));
-            }
-            else if (defer && FormTranslucentQueue.needsWholeDefer(finalShader, null, textureObject, a))
-            {
-                FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, () -> finalShader,
-                    FormTranslucentQueue.PASS_SINGLE, true, textureObject, modelView, normalMat,
-                    r, g, b, a, light, overlay, true));
-            }
-            else
-            {
-                ModelVAORenderer.render(finalShader, data, matrices, r, g, b, a, light, overlay);
+                finalShader = GameRenderer.getRendertypeEntityCutoutShader();
+                RenderSystem.disableBlend();
             }
 
-            if (renderGlint)
+            if (irisWorld)
             {
-                FormGlintRenderer.render(this.form, data, modelView, normalMat, light, overlay);
+                queueWasActive = FormTranslucentQueue.suspend();
+            }
+
+            try
+            {
+                if (defer && FormTranslucentQueue.needsSplit(finalShader, null, textureObject, a))
+                {
+                    FormTranslucentQueue.setPassMode(finalShader, FormTranslucentQueue.PASS_OPAQUE);
+                    ModelVAORenderer.render(finalShader, data, modelView, normalMat, r, g, b, a, light, overlay);
+                    FormTranslucentQueue.setPassMode(finalShader, FormTranslucentQueue.PASS_SINGLE);
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, textureObject,
+                        modelView, normalMat, r, g, b, a, light, overlay, true));
+                }
+                else if (defer && FormTranslucentQueue.needsWholeDefer(finalShader, null, textureObject, a))
+                {
+                    ShaderInstance deferredShader = finalShader;
+
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, () -> deferredShader,
+                        FormTranslucentQueue.PASS_SINGLE, true, textureObject, modelView, normalMat,
+                        r, g, b, a, light, overlay, true));
+                }
+                else
+                {
+                    ModelVAORenderer.render(finalShader, data, matrices, r, g, b, a, light, overlay);
+                }
+
+                if (renderGlint)
+                {
+                    FormGlintRenderer.render(this.form, data, modelView, normalMat, light, overlay);
+                }
+            }
+            finally
+            {
+                if (cutout)
+                {
+                    RenderSystem.enableBlend();
+                }
+
+                if (irisWorld)
+                {
+                    FormTranslucentQueue.restore(queueWasActive);
+                }
             }
 
             RenderSystem.disableBlend();

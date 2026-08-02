@@ -2,6 +2,8 @@ package mchorse.bbs_mod.film.replays;
 
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.cubic.glint.GlintControl;
+import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
@@ -78,6 +80,11 @@ public class FormProperties extends ValueGroup
             return this.create(property);
         }
 
+        if (FormControlKeys.isGlintControlChannel(key))
+        {
+            return this.registerChannel(key, KeyframeFactories.GLINT);
+        }
+
         if (PerLimbService.isPoseBoneChannel(key))
         {
             return this.registerChannel(key, KeyframeFactories.POSE_TRANSFORM);
@@ -144,6 +151,7 @@ public class FormProperties extends ValueGroup
         float clampedBlend = MathUtils.clamp(blend, 0F, 1F);
         List<KeyframeChannel> poseBoneChannels = new ArrayList<>();
         List<KeyframeChannel> soundChannels = new ArrayList<>();
+        List<KeyframeChannel> glintChannels = new ArrayList<>();
 
         for (KeyframeChannel value : this.properties.values())
         {
@@ -165,6 +173,10 @@ public class FormProperties extends ValueGroup
                     SoundKeyframeValue.clearRuntime(sound, soundGroup);
                 }
             }
+            else if (FormControlKeys.isGlintControlChannel(value.getId()))
+            {
+                glintChannels.add(value);
+            }
             else if (PerLimbService.isPoseBoneChannel(value.getId()))
             {
                 poseBoneChannels.add(value);
@@ -174,6 +186,7 @@ public class FormProperties extends ValueGroup
         for (KeyframeChannel value : this.properties.values())
         {
             if (SoundKeyframeValue.groupFromChannel(value.getId()) == null
+                && !FormControlKeys.isGlintControlChannel(value.getId())
                 && !PerLimbService.isPoseBoneChannel(value.getId()))
             {
                 this.applyProperty(tick, form, value, clampedBlend);
@@ -214,6 +227,13 @@ public class FormProperties extends ValueGroup
             this.applyProperty(tick, form, value, clampedBlend);
         }
 
+        /* The dedicated enchantment layer overlays either pose representation and
+         * replaces only the four glint fields. */
+        for (KeyframeChannel value : glintChannels)
+        {
+            this.applyProperty(tick, form, value, clampedBlend);
+        }
+
         /* Grouped sound channels intentionally run last, so they win
          * deterministically when an older Film still contains legacy tracks. */
         for (KeyframeChannel value : soundChannels)
@@ -227,6 +247,13 @@ public class FormProperties extends ValueGroup
 
     private void applyProperty(float tick, Form form, KeyframeChannel value, float blend)
     {
+        if (FormControlKeys.isGlintControlChannel(value.getId()))
+        {
+            this.applyGlintProperty(tick, form, value, blend);
+
+            return;
+        }
+
         SoundKeyframeValue.Group soundGroup = SoundKeyframeValue.groupFromChannel(value.getId());
 
         if (soundGroup != null)
@@ -312,6 +339,90 @@ public class FormProperties extends ValueGroup
         }
     }
 
+    private void applyGlintProperty(float tick, Form root, KeyframeChannel value, float blend)
+    {
+        String formPath = FormControlKeys.parseGlintControlFormPath(value.getId());
+        Form target = FormUtils.getForm(root, formPath);
+
+        if (!(target instanceof PoseForm poseForm))
+        {
+            return;
+        }
+
+        ValuePose pose = poseForm.getPose();
+        KeyframeSegment segment = value.find(tick);
+        boolean otherPoseTracks = this.hasPoseTracks(formPath);
+
+        if (segment == null)
+        {
+            if (blend >= 1F && !otherPoseTracks)
+            {
+                pose.setRuntimeValue(null);
+            }
+
+            return;
+        }
+
+        /* Without an ordinary pose track there is no earlier stage rebuilding the
+         * runtime pose, so start from the static pose on every sample. */
+        if (!otherPoseTracks || pose.getRuntimeValue() == null)
+        {
+            pose.setRuntimeValue(pose.getOriginalValue().copy());
+        }
+
+        GlintControls current = this.captureGlintControls(pose.get(), value);
+        GlintControls controls = (GlintControls) this.interpolateValue(value, current, segment, blend);
+
+        for (Map.Entry<String, GlintControl> entry : controls.controls.entrySet())
+        {
+            entry.getValue().apply(pose.get().get(entry.getKey()));
+        }
+    }
+
+    private GlintControls captureGlintControls(Pose pose, KeyframeChannel value)
+    {
+        Set<String> bones = new HashSet<>();
+
+        for (Object object : value.getKeyframes())
+        {
+            Keyframe keyframe = (Keyframe) object;
+
+            if (keyframe.getValue() instanceof GlintControls controls)
+            {
+                bones.addAll(controls.controls.keySet());
+            }
+        }
+
+        GlintControls current = new GlintControls();
+
+        for (String bone : bones)
+        {
+            current.get(bone).copy(pose.get(bone));
+        }
+
+        return current;
+    }
+
+    private boolean hasPoseTracks(String formPath)
+    {
+        if (this.properties.containsKey(this.toPosePropertyKey(formPath)))
+        {
+            return true;
+        }
+
+        for (String id : this.properties.keySet())
+        {
+            PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(id);
+
+            if (path != null && path.formPath().equals(formPath))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     private void applySoundProperty(float tick, Form root, KeyframeChannel value,
         SoundKeyframeValue.Group group, float blend)
@@ -372,6 +483,18 @@ public class FormProperties extends ValueGroup
 
         for (KeyframeChannel value : this.properties.values())
         {
+            if (FormControlKeys.isGlintControlChannel(value.getId()))
+            {
+                Form target = FormUtils.getForm(form, FormControlKeys.parseGlintControlFormPath(value.getId()));
+
+                if (target instanceof PoseForm poseForm)
+                {
+                    poseForm.getPose().setRuntimeValue(null);
+                }
+
+                continue;
+            }
+
             SoundKeyframeValue.Group group = SoundKeyframeValue.groupFromChannel(value.getId());
 
             if (group != null)

@@ -261,6 +261,8 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
                         MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
                     }
 
+                    Gizmo.INSTANCE.reorientForSpace(stack, this.formEditor.getGizmoSpace(), this.camera.view, this.getSceneAxes());
+
                     Gizmo.INSTANCE.setViewport(this.area);
 
                     /* Skip the gizmo's pick stencil while the hide-gizmo key is held, so its handles can't be
@@ -307,6 +309,8 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         {
             MatrixStackUtils.multiply(stack, MatrixStackUtils.stripScale(matrix));
         }
+
+        Gizmo.INSTANCE.reorientForSpace(stack, this.formEditor.getGizmoSpace(), this.camera.view, this.getSceneAxes());
 
         Gizmo.INSTANCE.setViewport(this.area);
 

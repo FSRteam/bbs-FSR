@@ -24,6 +24,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.context.UIInterpolationContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -299,7 +300,7 @@ public class UIModelBlockEditorMenu extends UIBaseMenu
                 this.context.replaceContextMenu(new UIInterpolationContextMenu(gun.fovInterp));
             });
             UITrackpad fovDuration = new UITrackpad((v) -> gun.fovDuration = v.intValue());
-            UITrackpad fovTarget = new UITrackpad((v) -> gun.fovTarget = v.floatValue());
+            UISliderTrackpad fovTarget = new UISliderTrackpad((v) -> gun.fovTarget = v.floatValue());
 
             zoomForm.setForm(gun.getZoomForm());
             zoomTransform.setTransform(gun.zoomTransform);

@@ -21,14 +21,21 @@ public final class DockPanelDragFailureTest
             "src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockLayout.java",
             "UIDockLayout"
         );
-        assertWrapperClearsDragStateAfterDropFailure(
-            "src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java",
-            "UIFilmPanel"
-        );
+        assertFilmUsesSharedDockLayout();
         assertWrapperClearsDragStateAfterDropFailure(
             "src/client/java/mchorse/bbs_mod/ui/particles/UIParticleSchemePanel.java",
             "UIParticleSchemePanel"
         );
+    }
+
+    private static void assertFilmUsesSharedDockLayout()
+    {
+        String source = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
+
+        check(source.contains("private final UIDockLayout dock;")
+                && source.contains("this.dock = new UIDockLayout();")
+                && !source.contains("private UIDraggable createPanelDragHandle(String panelId)"),
+            "UIFilmPanel does not delegate panel dragging to the shared UIDockLayout");
     }
 
     private static void assertWrapperClearsDragStateAfterDropFailure(String path, String name)

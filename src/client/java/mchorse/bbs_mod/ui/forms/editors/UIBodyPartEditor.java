@@ -1,33 +1,39 @@
 package mchorse.bbs_mod.ui.forms.editors;
 
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.forms.forms.PoseForm;
-import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
+import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UIConstants;
-import mchorse.bbs_mod.ui.utils.UI;
-import mchorse.bbs_mod.ui.utils.pose.UIBoneHierarchyList;
+import mchorse.bbs_mod.ui.utils.bones.UIBonePicker;
 import mchorse.bbs_mod.utils.Pair;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
 public class UIBodyPartEditor extends UIScrollView
 {
     public UIButton pick;
     public UIToggle useTarget;
-    public UIStringList bone;
+    public UIBonePicker bone;
     public UIPropTransform transform;
 
     private final UIFormEditor editor;
 
     private BodyPart part;
+    private Form owner;
 
     public UIBodyPartEditor(UIFormEditor editor)
     {
@@ -43,9 +49,9 @@ public class UIBodyPartEditor extends UIScrollView
 
                 Form partForm = current.part.getForm();
 
-                if (partForm instanceof PoseForm poseForm)
+                if (partForm instanceof ModelForm modelForm)
                 {
-                    poseForm.getBoneTracks().set(false);
+                    modelForm.boneTracks.set(false);
                 }
 
                 if (partForm != null && partForm.getFormId().contains("particle"))
@@ -65,10 +71,60 @@ public class UIBodyPartEditor extends UIScrollView
             this.part.useTarget.set(b.getValue());
         });
 
-        this.bone = new UIBoneHierarchyList((l) -> this.part.bone.set(l.get(0)));
-        this.bone.background().h(UIConstants.LIST_ITEM_HEIGHT * 6);
+        this.bone = new UIBonePicker((b) ->
+        {
+            if (this.part == null)
+            {
+                return;
+            }
 
-        this.transform = new UIPropTransform().callbacks(() -> this.part.transform);
+            this.part.bone.set(b);
+            this.bone.setLabel(this.boneLabel(b));
+        });
+        this.bone.menu((picker) ->
+        {
+            if (this.part == null || this.owner == null)
+            {
+                return;
+            }
+
+            ModelInstance model = this.owner instanceof ModelForm modelForm ? ModelFormRenderer.getModel(modelForm) : null;
+
+            if (model != null && model.model != null)
+            {
+                picker.bones(model.model, BBSSettings.poseShowDisabledBones.get() ? null : model.getDisabledBones());
+            }
+            else
+            {
+                List<String> bones = new ArrayList<>(FormUtilsClient.getBones(this.owner));
+
+                bones.sort(String::compareToIgnoreCase);
+                picker.list(bones);
+            }
+
+            picker.none().set(this.part.bone.get());
+        });
+        this.bone.viewport(new UIBonePicker.Viewport()
+        {
+            @Override
+            public void startPicking(Consumer<String> callback)
+            {
+                UIBodyPartEditor.this.editor.startBonePicking((pair) ->
+                {
+                    BodyPart part = UIBodyPartEditor.this.part;
+
+                    callback.accept(pair != null && part != null && part.getManager().getOwner() == pair.a ? pair.b : null);
+                });
+            }
+
+            @Override
+            public void stopPicking()
+            {
+                UIBodyPartEditor.this.editor.stopBonePicking();
+            }
+        });
+
+        this.transform = new UIPropTransform().callbacks(() -> this.part.transform).barBackground();
         this.transform.enableHotkeys(this.editor::isBodyPartGizmoMode);
         this.transform.hotkeyDrag(() -> this.editor.buildHotkeyDrag(this.transform));
 
@@ -81,23 +137,16 @@ public class UIBodyPartEditor extends UIScrollView
     public void setPart(BodyPart part, Form form)
     {
         this.part = part;
+        this.owner = form;
 
         this.removeAll();
 
         this.useTarget.setValue(part.useTarget.get());
-        this.bone.clear();
-        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
+        this.bone.setLabel(this.boneLabel(part.bone.get()));
 
-        ((UIBoneHierarchyList) this.bone).setLabels(hierarchy.getLabels(false));
-        this.bone.add(hierarchy.getBoneIds());
-
-        String boneId = hierarchy.resolveId(part.bone.get());
-
-        this.bone.setCurrentScroll(boneId == null ? part.bone.get() : boneId);
-
-        if (!this.bone.getList().isEmpty())
+        if (!FormUtilsClient.getBones(form).isEmpty())
         {
-            this.add(this.pick, this.useTarget, UI.label(UIKeys.FORMS_EDITOR_BONE).marginTop(UIConstants.SECTION_GAP), this.bone, this.transform);
+            this.add(this.pick, this.bone, this.useTarget, this.transform);
         }
         else
         {
@@ -110,14 +159,19 @@ public class UIBodyPartEditor extends UIScrollView
         this.resize();
     }
 
+    private IKey boneLabel(String bone)
+    {
+        return bone == null || bone.isEmpty() ? UIKeys.MODEL_EDITOR_PICK_BONE : IKey.constant(bone);
+    }
+
     /** Attach the active body part to the clicked parent bone; returns whether it did. */
     public boolean pickBone(Pair<Form, String> pair)
     {
         /* Ctrl + clicking to pick the parent bone to attach to */
-        if (this.canBeSeen() && this.part != null && this.bone.getList().contains(pair.b) && this.part.getManager().getOwner() == pair.a)
+        if (this.part != null && !pair.b.isEmpty() && this.part.getManager().getOwner() == pair.a)
         {
             this.part.bone.set(pair.b);
-            this.bone.setCurrentScroll(pair.b);
+            this.bone.setLabel(this.boneLabel(pair.b));
 
             return true;
         }

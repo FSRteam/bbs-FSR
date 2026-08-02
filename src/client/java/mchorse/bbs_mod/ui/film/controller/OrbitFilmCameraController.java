@@ -3,16 +3,17 @@ package mchorse.bbs_mod.ui.film.controller;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.controller.ICameraController;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
+import mchorse.bbs_mod.forms.renderers.utils.FormFrameCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.Keys;
@@ -65,6 +66,8 @@ public class OrbitFilmCameraController implements ICameraController
 
     private boolean positioned;
     private boolean attached = true;
+    private boolean ortho;
+    private boolean autoOrtho;
     private Replay anchorReplay;
     private final Vector3d anchorPosition = new Vector3d();
     private float anchorYaw;
@@ -340,8 +343,12 @@ public class OrbitFilmCameraController implements ICameraController
     {
         Area viewport = this.controller.panel.preview.getViewport();
         Vector3d vector = new Vector3d();
-        Vector3d origin = new Vector3d(this.panState.camera.position).sub(this.panState.pivot.x, this.panState.pivot.y, this.panState.pivot.z);
-        Vector3d destination = new Vector3d(this.panState.camera.getMouseDirection(context.mouseX, context.mouseY, viewport.x, viewport.y, viewport.w, viewport.h))
+        Vector3f originOffset = new Vector3f();
+        Vector3f direction = this.panState.camera.getMouseRay(context.mouseX, context.mouseY, viewport.x, viewport.y, viewport.w, viewport.h, originOffset);
+        Vector3d origin = new Vector3d(this.panState.camera.position)
+            .add(originOffset.x, originOffset.y, originOffset.z)
+            .sub(this.panState.pivot.x, this.panState.pivot.y, this.panState.pivot.z);
+        Vector3d destination = new Vector3d(direction)
             .mul(Math.max(this.distance, MIN_DISTANCE) * 2F)
             .add(origin);
 
@@ -365,6 +372,7 @@ public class OrbitFilmCameraController implements ICameraController
     @Override
     public void setup(Camera camera, float transition)
     {
+        BBSRendering.setOrthoDistance(this.ortho ? this.distance : -1F);
         this.updateAnchor(transition);
 
         if (!this.positioned)
@@ -412,6 +420,17 @@ public class OrbitFilmCameraController implements ICameraController
             this.targetPivot.set(this.toLocal(replay));
             this.positioned = true;
         }
+    }
+
+    public boolean isOrtho()
+    {
+        return this.ortho;
+    }
+
+    public void toggleOrtho()
+    {
+        this.ortho = !this.ortho;
+        this.autoOrtho = false;
     }
 
     public boolean isAttached()
@@ -601,7 +620,19 @@ public class OrbitFilmCameraController implements ICameraController
 
             Anchor v = form.anchor.get();
             Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
-            Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(this.controller.getEntities(), v, defaultMatrix, x, y, z, transition, 0);
+            FormFrameCache frame = new FormFrameCache();
+            Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(
+                this.controller.getEntities(),
+                v,
+                defaultMatrix,
+                x,
+                y,
+                z,
+                transition,
+                0,
+                false,
+                frame
+            );
 
             if (totalMatrix.a != null)
             {
@@ -611,7 +642,9 @@ public class OrbitFilmCameraController implements ICameraController
             Matrix4f semanticBase = new Matrix4f()
                 .translation((float) x, (float) y, (float) z)
                 .mul(defaultMatrix);
-            MatrixCache map = FormUtilsClient.getRenderer(form).collectMatrices(
+            MatrixCache map = FormFrameCache.collect(
+                frame,
+                form,
                 entity,
                 entity,
                 semanticBase,
@@ -675,12 +708,56 @@ public class OrbitFilmCameraController implements ICameraController
         this.targetPivot.set(this.toLocal(pivot));
     }
 
-    private void rotate(int dx, int dy)
+    public void rotate(int dx, int dy)
     {
+        if (dx == 0 && dy == 0)
+        {
+            return;
+        }
+
         float orbitSpeed = this.controller.panel.dashboard.orbit.getAngleSpeed() * 4F;
 
         this.targetRotation.x = MathUtils.clamp(this.targetRotation.x - dy * orbitSpeed, -PITCH_LIMIT, PITCH_LIMIT);
         this.targetRotation.y -= dx * orbitSpeed;
+
+        if (this.autoOrtho)
+        {
+            this.ortho = false;
+            this.autoOrtho = false;
+        }
+    }
+
+    public void snapToAxis(int x, int y, int z)
+    {
+        float pitch;
+        float yaw;
+
+        if (y != 0)
+        {
+            pitch = y > 0 ? -PITCH_LIMIT : PITCH_LIMIT;
+            yaw = this.targetRotation.y;
+        }
+        else
+        {
+            float twoPi = MathUtils.PI * 2F;
+
+            pitch = 0F;
+            yaw = (float) Math.atan2(x, z);
+            yaw += Math.round((this.targetRotation.y - yaw) / twoPi) * twoPi;
+        }
+
+        this.targetRotation.set(pitch, yaw);
+
+        if (!this.ortho && BBSSettings.editorOrbitAxisOrtho.get())
+        {
+            this.ortho = true;
+            this.autoOrtho = true;
+        }
+    }
+
+    public float getAnchorYaw()
+    {
+        return this.anchorYaw;
     }
 
     private Vector3f getOffset()

@@ -8,8 +8,10 @@ import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.cubic.model.config.ArmorSlotValue;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
+import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.model.config.WeldValue;
 import mchorse.bbs_mod.cubic.weld.CubeFace;
+import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -45,6 +47,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UISimpleTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -52,6 +55,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.bones.UIBonePicker;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -1321,19 +1325,28 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         remove.tooltip(UIKeys.MODEL_EDITOR_WELD_REMOVE, Direction.LEFT);
         remove.wh(20, UIConstants.CONTROL_HEIGHT);
 
-        UIElement angle = new UIElement();
+        UIElement twist = new UIElement();
 
-        angle.row(UIConstants.MARGIN).preferred(0);
-        angle.add(this.weldAngle(weld), remove);
+        twist.row(UIConstants.MARGIN).preferred(0);
+        twist.add(this.weldTwist(weld), remove);
 
+        /* Bone/face changes can make the weld resolvable or not, so they refill the section to update the
+         * issue label; the trackpads can't, so they only re-resolve (a refill mid-drag would orphan them). */
         UIElement entry = UI.column(
-            UI.row(this.bonePicker(weld.sourceBone::get, weld.sourceBone::set, this::invalidateWelds), this.facePicker(weld.sourceFace, this::invalidateWelds)),
-            UI.row(this.bonePicker(weld.targetBone::get, weld.targetBone::set, this::invalidateWelds), this.facePicker(weld.targetFace, this::invalidateWelds)),
-            UI.label(UIKeys.MODEL_EDITOR_WELD_MAX_ANGLE),
-            angle,
-            UI.label(UIKeys.MODEL_EDITOR_WELD_SEAM_FALLOFF),
-            this.weldFalloff(weld)
+            UI.row(this.bonePicker(weld.sourceBone::get, weld.sourceBone::set, this::refreshWelds), this.facePicker(weld.sourceFace, this::refreshWelds)),
+            UI.row(this.bonePicker(weld.targetBone::get, weld.targetBone::set, this::refreshWelds), this.facePicker(weld.targetFace, this::refreshWelds)),
+            UI.labelRow(UIKeys.MODEL_EDITOR_WELD_MAX_ANGLE, this.weldAngle(weld)),
+            UI.labelRow(UIKeys.MODEL_EDITOR_WELD_SEAM_FALLOFF, this.weldFalloff(weld)),
+            UI.labelRow(UIKeys.MODEL_EDITOR_WELD_PARENT_SHARE, this.weldShare(weld)),
+            twist
         );
+
+        WeldBinding.Issue issue = this.diagnoseWeld(weld);
+
+        if (issue != null)
+        {
+            entry.prepend(UI.label(this.weldIssueText(issue)).color(Colors.NEGATIVE, true));
+        }
 
         entry.marginBottom(6);
         entry.context((menu) -> this.fillWeldMenu(menu,
@@ -1346,38 +1359,33 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         return entry;
     }
 
-    private UIButton bonePicker(Supplier<String> get, Consumer<String> set, Runnable onChange)
+    private UIBonePicker bonePicker(Supplier<String> get, Consumer<String> set, Runnable onChange)
     {
-        UIButton[] ref = new UIButton[1];
-        UIButton button = new UIButton(this.boneLabel(get.get()), (b) ->
+        UIBonePicker[] ref = new UIBonePicker[1];
+        UIBonePicker picker = new UIBonePicker((bone) -> this.pickBone(ref[0], set, onChange, bone));
+
+        picker.setLabel(this.boneLabel(get.get()));
+        picker.menu((menu) ->
         {
             if (this.bound == null)
             {
                 return;
             }
 
-            String current = get.get();
-
-            this.getContext().replaceContextMenu((menu) ->
-            {
-                menu.action(Icons.REMOVE, UIKeys.GENERAL_NONE, current == null || current.isEmpty(), () -> this.pickBone(ref[0], set, onChange, ""));
-
-                for (String bone : this.bound.getModel().getGroupKeysInHierarchyOrder())
-                {
-                    menu.action(Icons.LIMB, IKey.constant(bone), bone.equals(current), () -> this.pickBone(ref[0], set, onChange, bone));
-                }
-            });
+            /* Welds are model config, so hidden bones stay pickable — same as the old menu.
+             * No viewport hook: the model editor's preview has no stencil picking. */
+            menu.bones(this.bound.getModel(), null).none().set(get.get());
         });
 
-        ref[0] = button;
+        ref[0] = picker;
 
-        return button;
+        return picker;
     }
 
-    private void pickBone(UIButton button, Consumer<String> set, Runnable onChange, String bone)
+    private void pickBone(UIBonePicker picker, Consumer<String> set, Runnable onChange, String bone)
     {
         set.accept(bone);
-        button.label = this.boneLabel(bone);
+        picker.setLabel(this.boneLabel(bone));
         onChange.run();
     }
 
@@ -1422,9 +1430,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         return trackpad;
     }
 
-    private UITrackpad weldFalloff(WeldValue weld)
+    private UISliderTrackpad weldFalloff(WeldValue weld)
     {
-        UITrackpad trackpad = new UITrackpad((v) ->
+        UISliderTrackpad trackpad = new UISliderTrackpad((v) ->
         {
             weld.seamFalloff.set(v.floatValue());
             this.invalidateWelds();
@@ -1435,6 +1443,30 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         trackpad.delayedInput();
 
         return trackpad;
+    }
+
+    private UISliderTrackpad weldShare(WeldValue weld)
+    {
+        UISliderTrackpad trackpad = new UISliderTrackpad((v) ->
+        {
+            weld.parentShare.set(v.floatValue());
+            this.invalidateWelds();
+        });
+
+        trackpad.limit(0F, 1F).increment(0.05F);
+        trackpad.setValue(weld.parentShare.get());
+        trackpad.delayedInput();
+
+        return trackpad;
+    }
+
+    private UIToggle weldTwist(WeldValue weld)
+    {
+        return new UIToggle(UIKeys.MODEL_EDITOR_WELD_TWIST, weld.twist.get(), (t) ->
+        {
+            weld.twist.set(t.getValue());
+            this.invalidateWelds();
+        });
     }
 
     private void addWeld()
@@ -1512,6 +1544,36 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         if (this.bound != null)
         {
             this.bound.invalidateWelds();
+        }
+    }
+
+    /** Re-resolve AND refill the section — for edits that can change a weld's resolvability (bone/face picks). */
+    private void refreshWelds()
+    {
+        this.invalidateWelds();
+        this.fillWelds();
+    }
+
+    private WeldBinding.Issue diagnoseWeld(WeldValue weld)
+    {
+        if (this.bound == null || !(this.bound.getModel() instanceof Model model))
+        {
+            return null;
+        }
+
+        return WeldBinding.diagnose(model, weld.toWeld());
+    }
+
+    private IKey weldIssueText(WeldBinding.Issue issue)
+    {
+        switch (issue)
+        {
+            case SOURCE_BONE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_SOURCE_BONE;
+            case TARGET_BONE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_TARGET_BONE;
+            case SOURCE_FACE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_SOURCE_FACE;
+            case TARGET_FACE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_TARGET_FACE;
+            case SOURCE_CUBES: return UIKeys.MODEL_EDITOR_WELD_ISSUE_SOURCE_CUBES;
+            default: return UIKeys.MODEL_EDITOR_WELD_ISSUE_TARGET_CUBES;
         }
     }
 

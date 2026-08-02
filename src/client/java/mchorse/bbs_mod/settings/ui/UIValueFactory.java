@@ -7,9 +7,12 @@ import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.base.BaseValueNumber;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.UINumericInput;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
@@ -68,19 +71,30 @@ public class UIValueFactory
         return booleanToogle;
     }
 
-    public static UITrackpad intUI(ValueInt value, Consumer<Double> callback)
+    public static UINumericInput<?> intUI(ValueInt value, Consumer<Double> callback)
     {
-        UITrackpad trackpad = new UITrackpad(callback == null ? (v) -> value.set(v.intValue()) : (v) ->
+        UINumericInput<?> trackpad = numericUI(value, callback == null ? (v) -> value.set(v.intValue()) : (v) ->
         {
             value.set(v.intValue());
             callback.accept(v);
         });
 
-        trackpad.limit(value.getMin(), value.getMax(), true).delayedInput();
+        trackpad.limit(value.getMin(), value.getMax(), true);
+        trackpad.delayedInput();
         trackpad.setValue(value.get());
         trackpad.tooltip(L10n.lang(getValueCommentKey(value)));
 
         return trackpad;
+    }
+
+    /**
+     * The field a numeric setting is edited with. Values that declare
+     * themselves sliders get a track, the rest keep the drag field — see
+     * {@link BaseValueNumber#slider()} for what earns one.
+     */
+    private static UINumericInput<?> numericUI(BaseValueNumber<?> value, Consumer<Double> callback)
+    {
+        return value.isSlider() ? new UISliderTrackpad(callback) : new UITrackpad(callback);
     }
 
     public static UIColor colorUI(ValueInt value, Consumer<Integer> callback)
@@ -103,30 +117,32 @@ public class UIValueFactory
         return color;
     }
 
-    public static UITrackpad floatUI(ValueFloat value, Consumer<Double> callback)
+    public static UINumericInput<?> floatUI(ValueFloat value, Consumer<Double> callback)
     {
-        UITrackpad trackpad = new UITrackpad(callback == null ? (v) -> value.set(v.floatValue()) : (v) ->
+        UINumericInput<?> trackpad = numericUI(value, callback == null ? (v) -> value.set(v.floatValue()) : (v) ->
         {
             value.set(v.floatValue());
             callback.accept(v);
         });
 
-        trackpad.limit(value.getMin(), value.getMax()).delayedInput();
+        trackpad.limit(value.getMin(), value.getMax());
+        trackpad.delayedInput();
         trackpad.setValue(value.get());
         trackpad.tooltip(L10n.lang(getValueCommentKey(value)));
 
         return trackpad;
     }
 
-    public static UITrackpad doubleUI(ValueDouble value, Consumer<Double> callback)
+    public static UINumericInput<?> doubleUI(ValueDouble value, Consumer<Double> callback)
     {
-        UITrackpad trackpad = new UITrackpad(callback == null ? value::set : (v) ->
+        UINumericInput<?> trackpad = numericUI(value, callback == null ? value::set : (v) ->
         {
             value.set(v);
             callback.accept(v);
         });
 
-        trackpad.limit(value.getMin(), value.getMax()).delayedInput();
+        trackpad.limit(value.getMin(), value.getMax());
+        trackpad.delayedInput();
         trackpad.setValue(value.get().floatValue());
         trackpad.tooltip(L10n.lang(getValueCommentKey(value)));
 

@@ -1,7 +1,10 @@
 package mchorse.bbs_mod.ui.film;
 
 import mchorse.bbs_mod.forms.categories.RecentFormCategoryTest;
+import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.test.HeadlessClientTestBootstrap;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.factories.AnchorKeyframeFactory;
@@ -9,6 +12,7 @@ import mchorse.bbs_mod.utils.keyframes.factories.AnchorKeyframeFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
 
 public final class FilmEditorMigrationLogicTest
 {
@@ -22,6 +26,8 @@ public final class FilmEditorMigrationLogicTest
             testOccupiedLayerCentering();
             testPerFilmScrollIsolation();
             testAnchorTransformInterpolation();
+            testFilmControllerContextReset();
+            testValueOrderDefaultInsertion();
             FilmReplayFirstPersonSyncSourceTest.runAll();
             RenderRuntimeMigrationSourceTest.runAll();
             RecentFormCategoryTest.runAll();
@@ -97,6 +103,33 @@ public final class FilmEditorMigrationLogicTest
             "different targets must keep the destination transform for matrix crossfade");
         check(crossfade.previous != null && crossfade.previous.replay == 1 && crossfade.x == 0.5F,
             "different targets must preserve existing attachment crossfade state");
+    }
+
+    private static void testFilmControllerContextReset() throws Exception
+    {
+        FilmControllerContext context = FilmControllerContext.instance;
+        Method reset = FilmControllerContext.class.getDeclaredMethod("reset");
+
+        context.bone2 = "preview";
+        context.local2 = true;
+        reset.setAccessible(true);
+        reset.invoke(context);
+
+        check(context.bone2 == null && !context.local2,
+            "film render context leaked its secondary preview axis across setup calls");
+    }
+
+    private static void testValueOrderDefaultInsertion()
+    {
+        ValueOrder order = new ValueOrder("test", "translate", "scale", "rotate");
+        ListType saved = new ListType();
+
+        saved.addString("rotate");
+        saved.addString("translate");
+        order.fromData(saved);
+
+        check(order.get().equals(List.of("rotate", "scale", "translate")),
+            "a newly introduced order token was not inserted at its default position");
     }
 
     private static Anchor anchor(int replay, float translateX)

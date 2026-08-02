@@ -317,9 +317,23 @@ public class GizmoInteraction
         {
             int ownerButton = this.pendingButton;
             long generation = this.gestureGeneration;
+            Form form = this.pendingPickForm;
+            String bone = this.pendingPickBone;
 
             this.clearPending();
-            this.startOwnedGizmo(context, Gizmo.STENCIL_TRACKBALL, ownerButton, generation);
+
+            try
+            {
+                /* Bind the picked target before startGizmo snapshots its transform and origin. */
+                this.viewport.pickGizmoForm(context, form, bone);
+                this.startOwnedGizmo(context, Gizmo.STENCIL_TRACKBALL, ownerButton, generation);
+            }
+            catch (RuntimeException | Error exception)
+            {
+                this.retireGesture(ownerButton, generation);
+
+                throw exception;
+            }
         }
     }
 

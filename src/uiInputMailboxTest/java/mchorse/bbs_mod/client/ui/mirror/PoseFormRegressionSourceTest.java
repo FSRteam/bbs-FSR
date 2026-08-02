@@ -13,12 +13,20 @@ import java.nio.file.Path;
 public final class PoseFormRegressionSourceTest
 {
     private static final String POSE_EDITOR = "src/client/java/mchorse/bbs_mod/ui/utils/pose/UIPoseEditor.java";
+    private static final String POSE_FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIPoseForm.java";
+    private static final String MODEL_FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIModelForm.java";
     private static final String PROVIDER = "src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java";
     private static final String QUEUE = "src/client/java/mchorse/bbs_mod/forms/FormTranslucentQueue.java";
     private static final String MOB_RENDERER = "src/client/java/mchorse/bbs_mod/forms/renderers/MobFormRenderer.java";
     private static final String GIZMO_DRAG = "src/client/java/mchorse/bbs_mod/ui/utils/GizmoDrag.java";
     private static final String PROP_TRANSFORM = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java";
+    private static final String TRANSLATE_DRAG = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/TranslateDrag.java";
     private static final String POSE_KEYFRAME = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseKeyframeFactory.java";
+    private static final String GLINT_KEYFRAME = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIGlintKeyframeFactory.java";
+    private static final String GENERAL_FORM_PANEL = "src/client/java/mchorse/bbs_mod/ui/forms/editors/panels/UIGeneralFormPanel.java";
+    private static final String FORM = "src/main/java/mchorse/bbs_mod/forms/forms/Form.java";
+    private static final String TRANSFORM = "src/main/java/mchorse/bbs_mod/utils/pose/Transform.java";
+    private static final String FORM_PROPERTIES = "src/main/java/mchorse/bbs_mod/film/replays/FormProperties.java";
     private static final String FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/UIFormEditor.java";
     private static final String MOB_FORM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIMobForm.java";
     private static final String STATE_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/states/keyframes/UIAnimationStateEditor.java";
@@ -37,12 +45,20 @@ public final class PoseFormRegressionSourceTest
     {
         Path root = findProjectRoot();
         String editor = read(root.resolve(POSE_EDITOR));
+        String poseFormEditor = read(root.resolve(POSE_FORM_EDITOR));
+        String modelFormEditor = read(root.resolve(MODEL_FORM_EDITOR));
         String provider = read(root.resolve(PROVIDER));
         String queue = read(root.resolve(QUEUE));
         String renderer = read(root.resolve(MOB_RENDERER));
         String gizmoDrag = read(root.resolve(GIZMO_DRAG));
         String propTransform = read(root.resolve(PROP_TRANSFORM));
+        String translateDrag = read(root.resolve(TRANSLATE_DRAG));
         String poseKeyframe = read(root.resolve(POSE_KEYFRAME));
+        String glintKeyframe = read(root.resolve(GLINT_KEYFRAME));
+        String generalFormPanel = read(root.resolve(GENERAL_FORM_PANEL));
+        String form = read(root.resolve(FORM));
+        String transform = read(root.resolve(TRANSFORM));
+        String formProperties = read(root.resolve(FORM_PROPERTIES));
         String formEditor = read(root.resolve(FORM_EDITOR));
         String mobFormEditor = read(root.resolve(MOB_FORM_EDITOR));
         String stateEditor = read(root.resolve(STATE_EDITOR));
@@ -57,15 +73,17 @@ public final class PoseFormRegressionSourceTest
         gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmBase);
         hiddenAxesStillRefreshGizmoPlacement(formRenderer);
         filmBoneConsumersShareOnePlacementSample(filmBase, filmEditor);
+        proceduralPanelGizmoKeepsPoseSelection(editor, poseFormEditor, modelFormEditor);
         actorReplaysKeepCapturingGizmoPlacement(filmBase, filmContext);
         disabledReplayHidesGizmo(filmController);
         additiveBlendDoesNotLeak(renderer);
         pausedPreviewsKeepInterpolating(uiScreen);
-        mirrorEditingUsesSelectionDeltas(editor);
+        mirrorEditingUsesSelectionDeltas(editor, transform);
         filmPoseEditingUsesSelectionDeltas(poseKeyframe);
+        glintUsesDedicatedKeyframeTrack(editor, poseKeyframe, glintKeyframe, generalFormPanel, form, formProperties, filmEditor, stateEditor);
         deferredLayersCapturePreparation(provider, queue);
         matrixSamplingPreservesFeaturePreparation(renderer);
-        translationSamplingUsesLivePose(gizmoDrag, propTransform);
+        translationSamplingUsesLivePose(gizmoDrag, translateDrag);
         mobTranslationUsesStableModelPartBasis(formEditor, mobFormEditor, stateEditor, filmEditor);
         modelPartJacobianPreservesParentBasis();
         modelPartJacobianSurvivesConditioning();
@@ -88,6 +106,56 @@ public final class PoseFormRegressionSourceTest
             "MobForm death state regressed to an entity-type-specific clock");
         check(!renderer.contains("LivingEntityInvoker"),
             "MobFormRenderer still references the removed invoker");
+    }
+
+    /**
+     * IK, physics and constraints panels own one bone at a time, while the hidden pose editor can
+     * retain a multi-selection. Gizmo sampling and writes must follow the visible panel without
+     * rewriting that pose-list selection.
+     */
+    private static void proceduralPanelGizmoKeepsPoseSelection(
+        String poseEditor,
+        String poseFormEditor,
+        String modelFormEditor
+    )
+    {
+        String overrideSetter = section(
+            poseEditor,
+            "public void setTransformBoneOverride(String bone)",
+            "public String getTransformBone()"
+        );
+
+        check(overrideSetter.contains("this.transform.setTransform(this.pose.get(target))"),
+            "the procedural-panel Gizmo no longer binds its transform to the panel-owned bone");
+        check(!overrideSetter.contains("groups.list.setCurrent")
+                && !overrideSetter.contains("groups.list.setCurrentScroll")
+                && !overrideSetter.contains("selectBone("),
+            "binding a procedural-panel Gizmo mutates the hidden pose-list selection");
+
+        String edits = section(
+            poseEditor,
+            "public Map<String, BoneEdit> resolveBoneEdits(boolean mirror, boolean invert)",
+            "private String mirrorPartner(String bone)"
+        );
+
+        check(edits.contains("this.transformBoneOverride.isEmpty()")
+                && edits.contains("Collections.singletonList(this.transformBoneOverride)"),
+            "procedural-panel Gizmo writes no longer target only the panel-owned bone");
+
+        String editableTransform = section(
+            poseFormEditor,
+            "public UIPropTransform getEditableTransform()",
+            "public void collectUndoData(MapType data)"
+        );
+
+        assertOrdered(editableTransform,
+            "this.syncTransformBone()",
+            "return this.posePanel.poseEditor.transform");
+        check(poseFormEditor.contains("this.posePanel.poseEditor.getTransformBone()"),
+            "Gizmo origin sampling no longer follows the panel-owned bone override");
+        check(modelFormEditor.contains(
+                "return this.view == null || this.view == this.modelPanel ? \"\" : this.view.getSelectedBone();"),
+            "the visible model panel no longer supplies the Gizmo's bone owner");
     }
 
     /**
@@ -127,7 +195,7 @@ public final class PoseFormRegressionSourceTest
      */
     private static void gizmoPlacementIsIndependentOfCursorPosition(String gizmo, String filmController, String filmBase)
     {
-        check(filmBase.contains("renderPreviewAxes(context.bone2, context.local2, form, formContext, stack)"),
+        check(filmBase.contains("renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame)"),
             "the replay axes preview draws through renderAxes, so it snapshots gizmo placement over "
                 + "the bone the user actually drags");
         check(!section(filmBase, "private static void renderPreviewAxes", "private static void renderAnchorGizmo")
@@ -261,16 +329,20 @@ public final class PoseFormRegressionSourceTest
             "the paused-screen transition no longer advances from wall-clock time");
     }
 
-    private static void mirrorEditingUsesSelectionDeltas(String source)
+    private static void mirrorEditingUsesSelectionDeltas(String source, String transform)
     {
         check(source.contains("class UIPosePropTransform extends UIDeltaPropTransform"),
             "pose editing no longer applies transform-channel deltas to the selection");
         check(source.contains("resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert())"),
             "pose editing no longer dispatches mirror and alternate-invert bone edits");
-        check(source.contains("transform.rotate2.mul(1F, -1F, -1F)"),
-            "mirror editing no longer reflects secondary bone rotation");
-        check(source.contains("transform.rotate2.set(0F, 0F, 0F)"),
-            "pose reset no longer clears secondary bone rotation");
+        check(source.contains("pt.mirrorX()"),
+            "mirror editing no longer routes through the shared transform mirror");
+        check(source.contains("t.resetRotation()"),
+            "pose reset no longer clears the active Euler or quaternion rotation");
+        check(transform.contains("this.rotate.mul(1F, -1F, -1F)"),
+            "the shared mirror no longer reflects Euler rotation");
+        check(transform.contains("this.quat.set(this.quat.x, -this.quat.y, -this.quat.z, this.quat.w)"),
+            "the shared mirror no longer reflects quaternion rotation");
     }
 
     private static void deferredLayersCapturePreparation(String provider, String queue)
@@ -302,6 +374,43 @@ public final class PoseFormRegressionSourceTest
             "film pose mirror edits no longer support transform recording");
     }
 
+    private static void glintUsesDedicatedKeyframeTrack(
+        String poseEditor,
+        String poseKeyframe,
+        String glintKeyframe,
+        String generalFormPanel,
+        String form,
+        String formProperties,
+        String filmEditor,
+        String stateEditor
+    )
+    {
+        String poseLayout = section(poseKeyframe, "public void resize()", "public static class UIPoseFactoryEditor");
+
+        check(!poseLayout.contains("glintSection"),
+            "the pose keyframe panel still mounts the enchantment-layer controls");
+        check(generalFormPanel.contains("this.glintSection.setExpanded(false)"),
+            "the form editor's enchantment layer is not collapsed by default");
+        check(poseEditor.contains("this.glintSection.setExpanded(false)"),
+            "the per-bone form editor's enchantment layer is not collapsed by default");
+        check(form.contains("this.glintMode.invisible()")
+                && form.contains("this.glintColor.invisible()")
+                && form.contains("this.glintSpeed.invisible()")
+                && form.contains("this.glintTransform.invisible()"),
+            "the four low-level form glint properties are still exposed as separate timeline tracks");
+        check(glintKeyframe.contains("class UIGlintKeyframeFactory")
+                && glintKeyframe.contains("UIKeys.POSE_CONTEXT_GLINT_LAYER")
+                && glintKeyframe.contains("GlintControls"),
+            "the dedicated enchantment-layer keyframe editor is missing");
+        check(formProperties.contains("for (KeyframeChannel value : glintChannels)")
+                && formProperties.contains("entry.getValue().apply(pose.get().get(entry.getKey()))"),
+            "the dedicated enchantment layer no longer overlays the evaluated pose");
+        check(filmEditor.contains("addGlintControlSheet(form, properties, sheets)"),
+            "the Film editor no longer contributes the enchantment-layer sheet");
+        check(stateEditor.contains("addGlintControlSheet(form, this.state.properties, orderedFormSheets)"),
+            "animation states no longer contribute the enchantment-layer sheet");
+    }
+
     private static void matrixSamplingPreservesFeaturePreparation(String source)
     {
         String method = section(source, "private MatrixCache collectBoneMatrices", "private Runnable createWorldLayerPreparation");
@@ -312,7 +421,7 @@ public final class PoseFormRegressionSourceTest
             "MobForm matrix sampling no longer follows the complete bbs-fs entity render path");
     }
 
-    private static void translationSamplingUsesLivePose(String gizmoDrag, String propTransform)
+    private static void translationSamplingUsesLivePose(String gizmoDrag, String translateDrag)
     {
         String jacobian = section(gizmoDrag, "public static Matrix3f computeTranslateJacobian", "public static Matrix3f computeRotateAxes");
 
@@ -327,23 +436,10 @@ public final class PoseFormRegressionSourceTest
         check(!jacobian.contains("transform.translate.set(0F, 0F, 0F)"),
             "translation Jacobian samples from the rest pose and can diverge with equipment layers");
 
-        check(propTransform.contains("if (dx != 0 || dy != 0)"),
+        check(translateDrag.contains("if (mouseX == this.lastMouseX && mouseY == this.lastMouseY)"),
             "ray translation writes transform values before the cursor has moved");
-        check(propTransform.contains("GizmoDrag.resolveTranslateJacobian(this.drag.translateJacobian, this.drag.modelPartTranslate)"),
+        check(translateDrag.contains("GizmoDrag.resolveTranslateJacobian(jacobian, modelPart)"),
             "ray translation no longer routes its basis through the shared degenerate-Jacobian fallback");
-
-        /* Scoped to the method rather than matched as a multi-line literal: an embedded \n never
-         * matches a CRLF checkout, which made the negated form of this assertion pass on Windows no
-         * matter what the source said. beginRayTranslateScreen keeps its own early exits for a
-         * degenerate view matrix, so only the axis path is asserted here. */
-        String rayTranslate = section(propTransform,
-            "private void beginRayTranslate(int mouseX, int mouseY)",
-            "private void beginRayTranslateScreen(int mouseX, int mouseY)");
-
-        check(rayTranslate.contains("this.resolveTranslateJacobian()"),
-            "axis ray translation no longer resolves its basis through the shared fallback");
-        check(!rayTranslate.contains("this.dragHasStart = false"),
-            "a degenerate translate Jacobian silently cancels the drag instead of falling back");
     }
 
     private static void mobTranslationUsesStableModelPartBasis(

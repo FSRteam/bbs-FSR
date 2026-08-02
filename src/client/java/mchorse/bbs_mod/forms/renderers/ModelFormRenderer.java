@@ -23,6 +23,7 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsDebug;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -33,6 +34,7 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
+import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -203,15 +205,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             {
                 poseTransform.translate.lerp(value.translate, value.fix);
                 poseTransform.scale.lerp(value.scale, value.fix);
-                poseTransform.rotate.lerp(value.rotate, value.fix);
-                poseTransform.rotate2.lerp(value.rotate2, value.fix);
+                poseTransform.lerpRotation(value, value.fix);
             }
             else
             {
                 poseTransform.translate.add(value.translate);
                 poseTransform.scale.add(value.scale).sub(1, 1, 1);
-                poseTransform.rotate.add(value.rotate);
-                poseTransform.rotate2.add(value.rotate2);
+                poseTransform.addRotation(value);
             }
         }
     }
@@ -634,12 +634,18 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                  * the armor attachment. Putting it before the completed render matrix
                  * rotates camera-relative translation around the joint. */
                 Matrix4f lower = lowerStack == null ? null : lowerStack.last().pose();
+                Vector3f armorOrigin = stack.last().pose().getTranslation(new Vector3f());
+
+                FormTranslucentQueue.setSortOrigin(
+                    new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(armorOrigin)
+                );
 
                 ActorEntityRenderer.armorRenderer.renderArmorSlot(stack, lower, bendStart, bendEnd, consumers, target, type.slot, type, light);
-                consumers.draw();
+                consumers.endBatch();
             }
             finally
             {
+                FormTranslucentQueue.setSortOrigin(null);
                 CustomVertexConsumerProvider.clearRunnables();
                 stack.popPose();
                 RenderSystem.enableBlend();
@@ -719,6 +725,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                     MatrixStackUtils.applyTransform(stack, armorSlot.transform);
 
                     CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+                    Vector3f itemOrigin = stack.last().pose().getTranslation(new Vector3f());
+
+                    FormTranslucentQueue.setSortOrigin(
+                        new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(itemOrigin)
+                    );
                     consumers.setSubstitute(BBSRendering.getColorConsumer(color));
 
                     /* For some reason, due to Sodium and my color consumer, in some cases items like Trident,
@@ -731,7 +742,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                         {
                             stack.scale(0F, 0F, 0F);
                             Minecraft.getInstance().getItemRenderer().renderStatic(null, OAK_BUTTON_STACK, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
-                            consumers.draw();
+                            consumers.endBatch();
                         }
                         finally
                         {
@@ -740,10 +751,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                     }
 
                     Minecraft.getInstance().getItemRenderer().renderStatic(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
-                    consumers.draw();
+                    consumers.endBatch();
                 }
                 finally
                 {
+                    FormTranslucentQueue.setSortOrigin(null);
                     consumers.setSubstitute(null);
                     CustomVertexConsumerProvider.clearRunnables();
                     stack.popPose();
@@ -900,18 +912,51 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 context.world.mulPose(ROTATE_Y_180);
             }
 
-            BBSModClient.getTextures().bindTexture(texture);
+            Texture textureObject = BBSModClient.getTextures().getTexture(texture);
+            boolean irisWorld = BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld();
+            boolean cutout = irisWorld && textureObject != null && textureObject.hasTranslucency()
+                && color.a >= 1F && !this.form.additiveColor.get();
 
-            Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
-                ? GameRenderer::getRendertypeEntityTranslucentCullShader
-                : BBSShaders::getModel;
+            BBSModClient.getTextures().bindTexture(textureObject);
+
+            Supplier<ShaderInstance> mainShader = cutout
+                ? GameRenderer::getRendertypeEntityCutoutShader
+                : (irisWorld || !model.isVAORendered())
+                    ? GameRenderer::getRendertypeEntityTranslucentCullShader
+                    : BBSShaders::getModel;
             Supplier<ShaderInstance> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);
+            boolean queueWasActive = false;
 
-            this.renderModel(context.entity, context.simulationOwner, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world, context.allowWorldTargetOverrides, context.allowWorldCollisions, !reusePreviewPose);
-
-            if (context.modelRenderer && !context.isPicking())
+            if (irisWorld)
             {
-                this.previewPoseSnapshot.capture(context, model);
+                queueWasActive = FormTranslucentQueue.suspend();
+            }
+
+            if (cutout)
+            {
+                RenderSystem.disableBlend();
+            }
+
+            try
+            {
+                this.renderModel(context.entity, context.simulationOwner, shader, context.stack, model, context.light, context.overlay, color, false, context.stencilMap, context.getTransition(), context.world, context.allowWorldTargetOverrides, context.allowWorldCollisions, !reusePreviewPose);
+
+                if (context.modelRenderer && !context.isPicking())
+                {
+                    this.previewPoseSnapshot.capture(context, model);
+                }
+            }
+            finally
+            {
+                if (cutout)
+                {
+                    RenderSystem.enableBlend();
+                }
+
+                if (irisWorld)
+                {
+                    FormTranslucentQueue.restore(queueWasActive);
+                }
             }
         }
         else
@@ -1395,7 +1440,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                     stack.popPose();
                 }
 
-                matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), matrix, o);
+                matrices.put(
+                    StringUtils.combinePaths(prefix, entry.getKey()),
+                    matrix,
+                    o,
+                    entry.getValue().rotationOffset(),
+                    entry.getValue().evaluatedRotation()
+                );
             }
 
             int i = 0;

@@ -2,50 +2,64 @@ package mchorse.bbs_mod.ui.framework.elements.input;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiRemoteHeldState;
+import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.math.MathBuilder;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.events.UITrackpadDragEndEvent;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.DragContext;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.DragStrategy;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.DragStrategyFactory;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformNumericInput;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
+import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.keys.KeyAction;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.Minecraft;
-import org.joml.Intersectiond;
 import org.joml.Matrix3f;
-import org.joml.Matrix4f;
 import org.joml.Quaternionf;
-import org.joml.Vector2f;
-import org.joml.Vector3d;
 import org.joml.Vector3f;
-import org.joml.Vector4f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
+/**
+ * Transform editor that drives the gizmo and hotkey (G/S/R) edits. The
+ * editor itself is a thin coordinator: it owns the edit session (what is
+ * being edited, the start snapshot, accept/reject) while all per-gesture
+ * state and math live in the active {@link DragStrategy}, created through
+ * {@link DragStrategyFactory} when an edit starts and dropped when it ends.
+ */
 public class UIPropTransform extends UITransform
 {
     private static final double[] CURSOR_X = new double[1];
     private static final double[] CURSOR_Y = new double[1];
-    private static final float STEP_MODIFIER = 5F;
-    private static final float DEPTH_WHEEL_FACTOR = 0.05F;
-    private static final float TRACKBALL_WHEEL_DEG = 5F;
-    private static final float FINE_DRAG_FACTOR = 0.1F;
+
+    private static final Vector3f ZERO_RING_VEC = new Vector3f();
 
     private Transform transform;
     private Runnable preCallback;
@@ -53,133 +67,135 @@ public class UIPropTransform extends UITransform
     private Runnable endCallback;
 
     private boolean editing;
-    private int mode;
     private Axis axis = Axis.X;
     private Axis axis2;
-    private boolean hotkeyMode;
-    private boolean scaleAll;
-    private int lastX;
-    private int lastY;
     private Transform cache = new Transform();
     private Timer checker = new Timer(30);
 
     private boolean model;
-    private boolean local;
 
-    private UITransformHandler handler;
-    private boolean gesturePollOnly;
+    /** The reference frame the gizmo and constrained edits operate in. Replaces
+     *  the old local/global boolean; {@code space == LOCAL} is the former {@code local}. */
+    private TransformSpace space;
 
-    private Supplier<GizmoDrag> hotkeyDragSupplier;
-    private final Gizmo.DragContext gizmoDragContext = new Gizmo.DragContext();
-    private final Matrix4f gizmoDragModel = new Matrix4f();
+    /** Dropdown trigger for {@link #space}; shows the active frame's icon and name. */
+    private UISpaceButton spaceButton;
+
+    /* Quaternion rotation pads (w, x, y, z), shown in place of the euler x/y/z pads
+     * while the edited bone is in QUATERNION mode. Editing any of them rebuilds a
+     * normalised quaternion from all four and commits it through setRQuat. */
+    private UITrackpad qw;
+    private UITrackpad qx;
+    private UITrackpad qy;
+    private UITrackpad qz;
+
+    /** Whether the rotate row currently shows the four quaternion pads (vs the three euler pads). */
+    private boolean quatFields;
+
+    /** Drag snapshot the active gesture works against (kept for the gizmo's pie preview). */
     private GizmoDrag drag;
-    private final Matrix3f dragWorldBasis = new Matrix3f();
-    private final Matrix3f dragTranslateBasis = new Matrix3f();
-    private final Matrix3f dragScreenInverseJacobian = new Matrix3f();
-    private final Vector3f dragPlaneNormal = new Vector3f();
-    private final Vector3d dragStartHit = new Vector3d();
-    private final Vector3f dragStartTranslate = new Vector3f();
-    private final Vector3f dragStartScale = new Vector3f();
-    private final Vector3f dragStartRotateDeg = new Vector3f();
-    private final Vector3f initialDragRingVec = new Vector3f();
-    private float accumulatedRotateDeg;
-    private final Vector3f dragAxisDir = new Vector3f();
-    private final Vector2f dragScreenCenter = new Vector2f();
-    private float dragLastScreenAngle;
-    private float dragRotateSign = 1F;
-    private float viewGrabScreenAngle;
-    private boolean dragRotateGizmoSpace;
-    private boolean dragHasStart;
-    private final Vector3f viewLocalAxis = new Vector3f();
-    private final Vector3f trackballRightLocal = new Vector3f();
-    private final Vector3f trackballUpLocal = new Vector3f();
-    private final Vector3f trackballViewLocal = new Vector3f();
-    private Axis trackballAxis = Axis.X;
-    private int trackballLastX;
-    private int trackballLastY;
-    private float trackballAccumX;
-    private float trackballAccumY;
-    private float trackballRollDeg;
-    private final Vector3f arcballViewWorld = new Vector3f();
-    private final Matrix3f arcballParentInverse = new Matrix3f();
-    private final Vector3f arcballStartLocal = new Vector3f();
-    private final Vector3f arcballCurrentLocal = new Vector3f();
-    private final Quaternionf arcballAccum = new Quaternionf();
-    private float arcballRadius;
-    private boolean arcballAnchored;
-    private boolean gizmoDrag;
-    private final Matrix4f gizmoMvp = new Matrix4f();
-    private final Matrix4f gizmoInvMvp = new Matrix4f();
-    private int gizmoViewportX;
-    private int gizmoViewportY;
-    private int gizmoViewportW;
-    private int gizmoViewportH;
-    private final Vector2f gizmoOrigin2D = new Vector2f();
-    private final Vector2f gizmoAxisX = new Vector2f();
-    private final Vector2f gizmoAxisY = new Vector2f();
-    private final Vector2f gizmoAxisZ = new Vector2f();
-    private float gizmoAxisXLenSq;
-    private float gizmoAxisYLenSq;
-    private float gizmoAxisZLenSq;
-    private boolean gizmoInvReady;
-    private final Vector2f gizmoTmp2D = new Vector2f();
-    private final Vector4f gizmoTmp4D = new Vector4f();
-    private final Vector4f gizmoNear4D = new Vector4f();
-    private final Vector4f gizmoFar4D = new Vector4f();
-    private final Vector3d gizmoRayStart = new Vector3d();
-    private final Vector3d gizmoRayEnd = new Vector3d();
-    private final Vector3d gizmoP0 = new Vector3d();
-    private final Vector3d gizmoP1 = new Vector3d();
-    private final Vector3d gizmoCross = new Vector3d();
-    private final Vector3d gizmoTangent = new Vector3d();
-    private final Vector3d gizmoAxisNormal = new Vector3d();
-    private final Vector2f gizmoP2D = new Vector2f();
-    private final Vector2f gizmoP2DNext = new Vector2f();
-    private DragKind dragKind = DragKind.AXIS;
-    private final StringBuilder numericInput = new StringBuilder();
-    private boolean numericActive;
+    private boolean hotkeyMode;
+    private Supplier<GizmoDrag> hotkeyDragSupplier;
+
+    /** Whether the edited bone's rotation is owned by an enabled IK chain
+     *  (wired by hosts that have an IK concept; see {@link #rotationConstrained}). */
+    private Supplier<Boolean> rotationConstrainedSupplier;
+
+    /** The live gesture; non-null exactly while {@link #editing}. */
+    private DragStrategy strategy;
+    private final DragContext bridge = new Bridge();
+
+    private final TransformNumericInput numeric = new TransformNumericInput();
+
+    /* Fine-drag (Shift) precision: a virtual cursor that lags the real one,
+     * advancing at {@link DragStrategy#FINE_DRAG_FACTOR} speed while Shift is
+     * held, so every ray gesture slows uniformly without per-mode code. The
+     * lag is the accumulated offset between the two. */
     private float fineOffsetX;
     private float fineOffsetY;
     private int fineLastX;
     private int fineLastY;
     private boolean fineHasLast;
 
+    private UITransformHandler handler;
+
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.local = BBSSettings.defaultLocalTransform.get();
+        this.space = loadSpace();
+
+        this.buildQuaternionFields();
 
         this.context((menu) ->
         {
-            menu.action(
-                this.local ? Icons.FULLSCREEN : Icons.MINIMIZE,
-                this.local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL,
-                this::toggleLocal
-            );
+            /* Per-bone rotation mode (Blender's rotation_mode); the label names the
+             * mode the action switches TO, so the current one is always readable. */
+            if (this.transform != null)
+            {
+                boolean quat = this.transform.rotationMode == Transform.RotationMode.QUATERNION;
 
-            menu.actions.add(0, menu.actions.remove(menu.actions.size() - 1));
+                menu.action(
+                    Icons.CONVERT,
+                    quat ? UIKeys.TRANSFORMS_CONTEXT_MODE_EULER : UIKeys.TRANSFORMS_CONTEXT_MODE_QUATERNION,
+                    this::toggleRotationMode
+                );
+            }
         });
 
-        this.iconT.callback = (b) -> this.toggleLocal();
-        this.iconT.hoverColor = Colors.LIGHTEST_GRAY;
-        this.iconT.setEnabled(true);
-        this.updateLocalUI();
+        /* The rotation-row icon toggles the bone's rotation storage (euler / quaternion);
+         * the active state is drawn as a highlight in render(), like the other toggles.
+         * It keeps the base's CONTROL_HEIGHT box, same as the equally clickable
+         * uniform-scale icon next to it: an oversized box on this one alone made it
+         * bulge out of the set and pushed its row taller than the others. */
+        this.iconR.callback = (b) -> this.toggleRotationMode();
+        this.iconR.tooltip(UIKeys.TRANSFORMS_ROTATION_MODE_TOOLTIP);
+        this.iconR.setEnabled(true);
+
+        /* The space picker is a dropdown on its own row above T/S/R (it replaced the
+         * old click-to-cycle on the translate-row icon, which is decorative again). */
+        this.spaceButton = new UISpaceButton();
+        this.spaceButton.tooltip(UIKeys.TRANSFORMS_SPACE_TOOLTIP);
+        this.prepend(UI.labelRow(UIKeys.TRANSFORMS_SPACE_TITLE, this.spaceButton));
+        /* Four uniform rows: the space picker above translate / scale / rotate.
+         * (Was 3×CONTROL_HEIGHT + 20 — the 20 being the rotate row, which its
+         * oversized toggle icon pushed past the others.) */
+        this.h(4 * UIConstants.CONTROL_HEIGHT);
+        this.updateSpaceLabel();
 
         /* Each finished value-field drag closes the current undo block, so dragging a
          * field several times in a row undoes one drag at a time (see endGesture). */
-        for (UITrackpad field : new UITrackpad[]{this.tx, this.ty, this.tz, this.sx, this.sy, this.sz, this.rx, this.ry, this.rz, this.r2x, this.r2y, this.r2z})
+        for (UITrackpad field : new UITrackpad[]{this.tx, this.ty, this.tz, this.sx, this.sy, this.sz, this.rx, this.ry, this.rz, this.qw, this.qx, this.qy, this.qz})
         {
             field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.endGesture());
         }
 
-        /* Scale-row synchronization restructures the child list, so defer it until
-         * the trackpad has finished applying values from render(). */
+        /* The deferred uniform-scale row sync (see setTransform). Mouse events traverse
+         * children by index, so restructuring the row here is safe, unlike mid-render. */
         for (UITrackpad field : new UITrackpad[]{this.sx, this.sy, this.sz})
         {
             field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.syncUniformScaleRow());
         }
 
         this.noCulling();
+    }
+
+    /** Build the four quaternion pads mirrored on the rotate row in quaternion mode. */
+    private void buildQuaternionFields()
+    {
+        IKey raw = IKey.constant("%s (%s)");
+
+        this.qw = new UITrackpad((v) -> this.setQuatFromFields()).onlyNumbers().values(0.01D);
+        this.qw.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATION_QUATERNION, IKey.constant("W")));
+        this.qw.textbox.setColor(Colors.LIGHTEST_GRAY);
+        this.qx = new UITrackpad((v) -> this.setQuatFromFields()).onlyNumbers().values(0.01D);
+        this.qx.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATION_QUATERNION, UIKeys.GENERAL_X));
+        this.qx.textbox.setColor(Colors.RED);
+        this.qy = new UITrackpad((v) -> this.setQuatFromFields()).onlyNumbers().values(0.01D);
+        this.qy.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATION_QUATERNION, UIKeys.GENERAL_Y));
+        this.qy.textbox.setColor(Colors.GREEN);
+        this.qz = new UITrackpad((v) -> this.setQuatFromFields()).onlyNumbers().values(0.01D);
+        this.qz.tooltip(raw.format(UIKeys.TRANSFORMS_ROTATION_QUATERNION, UIKeys.GENERAL_Z));
+        this.qz.textbox.setColor(Colors.BLUE);
     }
 
     public UIPropTransform callbacks(Supplier<IValueNotifier> notifier)
@@ -238,34 +254,34 @@ public class UIPropTransform extends UITransform
         return this;
     }
 
-    public GizmoDrag getHotkeyDrag()
+    /** Wire the IK-ownership probe for the edited bone's rotation (hosts with an IK concept). */
+    public UIPropTransform rotationConstrained(Supplier<Boolean> supplier)
     {
-        return this.hotkeyDragSupplier == null ? null : this.hotkeyDragSupplier.get();
+        this.rotationConstrainedSupplier = supplier;
+
+        return this;
     }
 
-    public boolean isEditing()
+    /**
+     * Whether the edited bone's rotation is owned by an enabled IK chain: the
+     * render follows the solve there, so the rotation gestures refuse to start
+     * and the gizmo dims its rings (the value pads still edit the FK channels —
+     * the blend base and the pose IK falls back to).
+     */
+    public boolean isRotationConstrained()
     {
-        return this.editing;
-    }
-
-    public int getMode()
-    {
-        return this.mode;
-    }
-
-    public Axis getAxis()
-    {
-        return this.axis;
-    }
-
-    public Axis getAxis2()
-    {
-        return this.axis2;
+        return this.rotationConstrainedSupplier != null && Boolean.TRUE.equals(this.rotationConstrainedSupplier.get());
     }
 
     public boolean isLocal()
     {
-        return this.local;
+        return this.space == TransformSpace.LOCAL;
+    }
+
+    /** The reference frame the gizmo and constrained edits operate in. */
+    public TransformSpace getSpace()
+    {
+        return this.space;
     }
 
     @Override
@@ -274,137 +290,14 @@ public class UIPropTransform extends UITransform
         return this.transform;
     }
 
-    public boolean isTrackball()
+    public Axis getAxis2()
     {
-        return this.isSphereRotate();
+        return this.axis2;
     }
 
-    public boolean isSphereRotate()
+    public boolean isScreenTranslate()
     {
-        return this.dragKind == DragKind.TRACKBALL || this.dragKind == DragKind.ARCBALL;
-    }
-
-    public boolean isViewRotate()
-    {
-        return this.dragKind == DragKind.VIEW;
-    }
-
-    public Vector3f getInitialDragRingVec()
-    {
-        return this.initialDragRingVec;
-    }
-
-    public float getAccumulatedRotateDeg()
-    {
-        return this.accumulatedRotateDeg;
-    }
-
-    public float getViewGrabScreenAngle()
-    {
-        return this.viewGrabScreenAngle;
-    }
-
-    public float getViewScreenSweepRad()
-    {
-        return MathUtils.toRad(this.accumulatedRotateDeg) * this.dragRotateSign;
-    }
-
-    /** Short on-screen summary of the currently accumulated transform drag. */
-    public String getDragReadout()
-    {
-        if (!this.editing || this.transform == null)
-        {
-            return null;
-        }
-
-        if (this.mode == 2)
-        {
-            if (this.dragKind == DragKind.AXIS)
-            {
-                return String.format("%.1f°", this.accumulatedRotateDeg);
-            }
-
-            Vector3f start = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-            Vector3f now = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-
-            return String.format("X %+.1f°  Y %+.1f°  Z %+.1f°",
-                MathUtils.toDeg(now.x - start.x),
-                MathUtils.toDeg(now.y - start.y),
-                MathUtils.toDeg(now.z - start.z));
-        }
-
-        Vector3f delta;
-        boolean allAxes;
-
-        if (this.mode == 0)
-        {
-            delta = new Vector3f(this.transform.translate).sub(this.cache.translate);
-            allAxes = this.dragKind == DragKind.SCREEN;
-        }
-        else if (this.mode == 1)
-        {
-            delta = new Vector3f(this.transform.scale).sub(this.cache.scale);
-            allAxes = this.scaleAll;
-        }
-        else
-        {
-            return null;
-        }
-
-        StringBuilder builder = new StringBuilder();
-
-        if (allAxes || this.axis == Axis.X || this.axis2 == Axis.X) this.appendReadoutAxis(builder, "X", delta.x);
-        if (allAxes || this.axis == Axis.Y || this.axis2 == Axis.Y) this.appendReadoutAxis(builder, "Y", delta.y);
-        if (allAxes || this.axis == Axis.Z || this.axis2 == Axis.Z) this.appendReadoutAxis(builder, "Z", delta.z);
-
-        return builder.isEmpty() ? null : builder.toString();
-    }
-
-    private void appendReadoutAxis(StringBuilder builder, String label, float value)
-    {
-        if (!builder.isEmpty())
-        {
-            builder.append("  ");
-        }
-
-        builder.append(label).append(' ').append(String.format("%+.3f", value));
-    }
-
-    public GizmoDrag getDrag()
-    {
-        return this.drag;
-    }
-
-    public int getDebugLineStencilIndex()
-    {
-        if (!BBSSettings.hideInactiveHandles.get() || !this.editing || this.dragKind == DragKind.SCREEN)
-        {
-            return -1;
-        }
-
-        if (this.axis2 != null)
-        {
-            if ((this.axis == Axis.X && this.axis2 == Axis.Z) || (this.axis == Axis.Z && this.axis2 == Axis.X))
-            {
-                return Gizmo.STENCIL_XZ;
-            }
-
-            if ((this.axis == Axis.X && this.axis2 == Axis.Y) || (this.axis == Axis.Y && this.axis2 == Axis.X))
-            {
-                return Gizmo.STENCIL_XY;
-            }
-
-            if ((this.axis == Axis.Z && this.axis2 == Axis.Y) || (this.axis == Axis.Y && this.axis2 == Axis.Z))
-            {
-                return Gizmo.STENCIL_ZY;
-            }
-        }
-
-        if (this.axis == Axis.X) return Gizmo.STENCIL_X;
-        if (this.axis == Axis.Y) return Gizmo.STENCIL_Y;
-        if (this.axis == Axis.Z) return Gizmo.STENCIL_Z;
-
-        return -1;
+        return this.strategy != null && this.strategy.isScreenTranslate();
     }
 
     /** Old-logic no-op: kept so hosts that gave the spaces bar a backdrop still compile. */
@@ -428,27 +321,121 @@ public class UIPropTransform extends UITransform
         return BBSSettings.poseAlternateInvert.get();
     }
 
-    private void toggleLocal()
+    /** The space remembered from the last session, guarded against an out-of-range
+     *  or not-yet-implemented stored value (then falls back to the default: PARENT,
+     *  or LOCAL when the {@code default_local} toggle is on). */
+    private static TransformSpace loadSpace()
     {
-        this.local = !this.local;
+        TransformSpace[] values = TransformSpace.values();
+        TransformSpace space = values[MathUtils.clamp(BBSSettings.transformSpace.get(), 0, values.length - 1)];
 
-        if (!this.local && this.transform != null)
+        if (!space.implemented)
         {
-            this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
+            return BBSSettings.defaultLocalTransform.get() ? TransformSpace.LOCAL : TransformSpace.PARENT;
         }
 
-        this.updateLocalUI();
+        return space;
     }
 
-    private void updateLocalUI()
+    /** Switch to a specific frame (dropdown pick / hotkey) and remember it globally. */
+    private void selectSpace(TransformSpace space)
     {
-        this.tx.forcedLabel(this.local ? UIKeys.GENERAL_X : null);
-        this.ty.forcedLabel(this.local ? UIKeys.GENERAL_Y : null);
-        this.tz.forcedLabel(this.local ? UIKeys.GENERAL_Z : null);
-        this.tx.relative(this.local);
-        this.ty.relative(this.local);
-        this.tz.relative(this.local);
-        this.iconT.tooltip(this.local ? UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL : UIKeys.TRANSFORMS_CONTEXT_SWITCH_LOCAL);
+        if (space == null || !space.implemented)
+        {
+            return;
+        }
+
+        this.space = space;
+        BBSSettings.transformSpace.set(space.ordinal());
+        this.updateSpaceLabel();
+    }
+
+    /**
+     * Open the clip-style space list: each implemented frame with its icon and
+     * colour (a not-yet-implemented frame would show greyed out and inert), in
+     * the picker's own order ({@link TransformSpace#DISPLAY_ORDER}, PARENT
+     * first). The list is auto-keyed, so the hotkey that opens it at the cursor
+     * turns picking a frame into a two-stroke gesture (open, then press the
+     * frame's number).
+     */
+    private void openSpaceMenu()
+    {
+        UIContext context = this.getContext();
+
+        if (context == null)
+        {
+            return;
+        }
+
+        context.replaceContextMenu((menu) ->
+        {
+            menu.autoKeys();
+
+            for (TransformSpace space : TransformSpace.DISPLAY_ORDER)
+            {
+                if (space.implemented)
+                {
+                    menu.action(this.spaceIcon(space), this.spaceLabel(space), this.spaceColor(space), () -> this.selectSpace(space));
+                }
+                else
+                {
+                    menu.action(this.spaceIcon(space), UIKeys.TRANSFORMS_SPACE_WIP.format(this.spaceLabel(space)), Colors.GRAY & Colors.RGB, () -> {});
+                }
+            }
+        });
+    }
+
+    /** Refresh the space picker's label to the active frame. The translate pads
+     *  read and write {@code transform.translate} directly in every frame now,
+     *  like the scale and rotate pads (the former LOCAL relative-nudge fields are
+     *  gone; the gizmo still drags along the local axes). */
+    private void updateSpaceLabel()
+    {
+        if (this.spaceButton != null)
+        {
+            this.spaceButton.label = this.spaceLabel(this.space);
+        }
+    }
+
+    /** The dedicated icon for a space (used on the dropdown trigger and in its list). */
+    private Icon spaceIcon(TransformSpace space)
+    {
+        switch (space)
+        {
+            case GLOBAL: return Icons.SPACE_GLOBAL;
+            /* The globe: no dedicated space_* sprite exists for WORLD, and a
+             * globe reads as "the map itself" better than a new flat glyph. */
+            case WORLD: return Icons.GLOBE;
+            case VIEW: return Icons.SPACE_VIEW;
+            case PARENT: return Icons.SPACE_PARENT;
+            default: return Icons.SPACE_LOCAL;
+        }
+    }
+
+    /** The accent colour a space is tagged with in the picker. RGB only (no alpha):
+     *  the colourful menu action builds its own bar + gradient from it. */
+    private int spaceColor(TransformSpace space)
+    {
+        switch (space)
+        {
+            case GLOBAL: return 0x4C8DFF;
+            case WORLD: return 0x2FBFD9;
+            case VIEW: return 0x43C67A;
+            case PARENT: return 0xB27BE0;
+            default: return 0xF0A63C;
+        }
+    }
+
+    private IKey spaceLabel(TransformSpace space)
+    {
+        switch (space)
+        {
+            case GLOBAL: return UIKeys.TRANSFORMS_SPACE_GLOBAL;
+            case WORLD: return UIKeys.TRANSFORMS_SPACE_WORLD;
+            case VIEW: return UIKeys.TRANSFORMS_SPACE_VIEW;
+            case PARENT: return UIKeys.TRANSFORMS_SPACE_PARENT;
+            default: return UIKeys.TRANSFORMS_SPACE_LOCAL;
+        }
     }
 
     private Vector3f calculateLocalVector(double factor, Axis axis)
@@ -483,18 +470,15 @@ public class UIPropTransform extends UITransform
         IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
         Supplier<Boolean> active = () -> enabled.get() && this.editing;
 
-        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).active(enabled).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).active(enabled).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(TransformOp.TRANSLATE)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(TransformOp.SCALE)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(TransformOp.ROTATE)).active(enabled).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().active(enabled).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.setEditingAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.setEditingAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.setEditingAxis(Axis.Z)).active(active).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_LOCAL, () ->
-        {
-            this.toggleLocal();
-            UIUtils.playClick();
-        }).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_SPACE_MENU, this::openSpaceMenu).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_ROTATION_MODE, this::toggleRotationMode).active(enabled).category(category);
 
         return this;
     }
@@ -502,6 +486,128 @@ public class UIPropTransform extends UITransform
     public Transform getTransform()
     {
         return this.transform;
+    }
+
+    public boolean isEditing()
+    {
+        return this.editing;
+    }
+
+    public Axis getAxis()
+    {
+        return this.axis;
+    }
+
+    /** The active edit's operation, or {@code null} when nothing is being edited. */
+    public TransformOp getOp()
+    {
+        return this.strategy == null ? null : this.strategy.op();
+    }
+
+    /**
+     * The live gesture driving the edit, or {@code null}. Every (re)start —
+     * including an axis switch mid-edit — builds a fresh instance, so the
+     * gizmo uses its identity to scope per-gesture state (the ring freeze).
+     */
+    public DragStrategy getStrategy()
+    {
+        return this.strategy;
+    }
+
+    /** Whether the active rotation is one of the sphere's kinds (trackball or arcball). */
+    public boolean isSphereRotate()
+    {
+        return this.strategy != null && this.strategy.isSphere();
+    }
+
+    public boolean isViewRotate()
+    {
+        return this.strategy != null && this.strategy.isView();
+    }
+
+    /** Whether the active scale drives all three axes off one lever (centre scale
+     *  handle or an unconstrained S). Distinct from {@link #isUniformScale()}, which
+     *  is the trackpad's scale-field linking. */
+    public boolean isScaleAll()
+    {
+        return this.strategy != null && this.strategy.isScaleAll();
+    }
+
+    public Vector3f getInitialDragRingVec()
+    {
+        Vector3f vec = this.strategy == null ? null : this.strategy.initialRingVec();
+
+        return vec == null ? ZERO_RING_VEC : vec;
+    }
+
+    public float getAccumulatedRotateDeg()
+    {
+        return this.strategy == null ? 0F : this.strategy.accumulatedRotateDeg();
+    }
+
+    /** Screen-space start edge of the view sweep pie (radians, Y-down convention). */
+    public float getViewGrabScreenAngle()
+    {
+        return this.strategy == null ? 0F : this.strategy.viewGrabScreenAngle();
+    }
+
+    /** Signed screen-space span of the view sweep, in radians. */
+    public float getViewScreenSweepRad()
+    {
+        return this.strategy == null ? 0F : this.strategy.viewScreenSweepRad();
+    }
+
+    /**
+     * A short summary of what the active drag has changed so far, for the gizmo's
+     * on-screen readout: degrees for a rotation (axis or view ring by swept angle,
+     * the 3D sphere by net turn), the per-axis offset for a move, the per-axis
+     * factor delta for a scale. Returns {@code null} when there is nothing to show.
+     */
+    public String getDragReadout()
+    {
+        if (!this.editing || this.transform == null || this.strategy == null)
+        {
+            return null;
+        }
+
+        return this.strategy.readout();
+    }
+
+    public GizmoDrag getDrag()
+    {
+        return this.drag;
+    }
+
+    public int getDebugLineStencilIndex()
+    {
+        if (!this.editing || this.isScreenTranslate() || this.isScaleAll())
+        {
+            return -1;
+        }
+
+        if (this.axis2 != null)
+        {
+            if ((this.axis == Axis.X && this.axis2 == Axis.Z) || (this.axis == Axis.Z && this.axis2 == Axis.X))
+            {
+                return Gizmo.STENCIL_XZ;
+            }
+
+            if ((this.axis == Axis.X && this.axis2 == Axis.Y) || (this.axis == Axis.Y && this.axis2 == Axis.X))
+            {
+                return Gizmo.STENCIL_XY;
+            }
+
+            if ((this.axis == Axis.Z && this.axis2 == Axis.Y) || (this.axis == Axis.Y && this.axis2 == Axis.Z))
+            {
+                return Gizmo.STENCIL_ZY;
+            }
+        }
+
+        if (this.axis == Axis.X) return Gizmo.STENCIL_X;
+        if (this.axis == Axis.Y) return Gizmo.STENCIL_Y;
+        if (this.axis == Axis.Z) return Gizmo.STENCIL_Z;
+
+        return -1;
     }
 
     public void refillTransform()
@@ -514,6 +620,12 @@ public class UIPropTransform extends UITransform
         return this.sx.isDragging() || this.sy.isDragging() || this.sz.isDragging();
     }
 
+    /**
+     * Collapse the scale row when all three scale coordinates are equal, expand it when
+     * they differ (the {@link BBSSettings#uniformScale} option). Compared against the
+     * row's own state — not {@link #isUniformScale()}, which is the SPACE/RMB field
+     * linking — so matching states are a no-op instead of a blind toggle.
+     */
     private void syncUniformScaleRow()
     {
         if (this.transform == null || !BBSSettings.uniformScale.get())
@@ -533,20 +645,27 @@ public class UIPropTransform extends UITransform
     {
         this.transform = transform;
 
+        /* Match the rotate row to how the bone stores its rotation (three euler
+         * pads or four quaternion pads) before filling the fields below. */
+        this.syncRotationMode();
+
         if (transform == null)
         {
             this.disable();
             this.fillT(0, 0, 0);
             this.fillS(1, 1, 1);
             this.fillR(0, 0, 0);
-            this.fillR2(0, 0, 0);
 
             return;
         }
 
-        /* Rebuilding the scale row during a field drag mutates the UI tree from render()
-         * and can throw ConcurrentModificationException. Both hotkey/gizmo edits and
-         * scale-field drags synchronize once their gesture has ended. */
+        /* The uniform-scale auto-sync restructures the scale row (removeAll/add), and a
+         * scale trackpad applies its drag from inside render() (through the delta editor
+         * this loops right back here): mutating the element tree mid-traversal throws
+         * ConcurrentModificationException. So the sync is deferred past any live gesture —
+         * a gizmo/hotkey edit (editing) or a scale-field drag — and runs when a transform
+         * is loaded into the panel, plus once more when the gesture ends (disable() for
+         * hotkey edits, the drag-end listeners in the constructor for field drags). */
         if (!this.editing && !this.isScaleFieldDragging())
         {
             this.syncUniformScaleRow();
@@ -554,16 +673,155 @@ public class UIPropTransform extends UITransform
 
         this.fillT(transform.translate.x, transform.translate.y, transform.translate.z);
         this.fillS(transform.scale.x, transform.scale.y, transform.scale.z);
-        this.fillR(MathUtils.toDeg(transform.rotate.x), MathUtils.toDeg(transform.rotate.y), MathUtils.toDeg(transform.rotate.z));
-        this.fillR2(MathUtils.toDeg(transform.rotate2.x), MathUtils.toDeg(transform.rotate2.y), MathUtils.toDeg(transform.rotate2.z));
+
+        if (transform.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            this.fillQ(transform.quat.x, transform.quat.y, transform.quat.z, transform.quat.w);
+
+            /* Keep the (hidden) euler pads mirroring the quaternion's ZYX equivalent so
+             * the euler-based readers — clipboard copy, the drag value card — stay correct. */
+            Vector3f euler = Matrices.toEulerZYXRadians(transform.quat, new Vector3f());
+
+            this.fillR(MathUtils.toDeg(euler.x), MathUtils.toDeg(euler.y), MathUtils.toDeg(euler.z));
+        }
+        else
+        {
+            this.fillR(MathUtils.toDeg(transform.rotate.x), MathUtils.toDeg(transform.rotate.y), MathUtils.toDeg(transform.rotate.z));
+        }
     }
 
-    public void enableMode(int mode)
+    /**
+     * Show the rotate row in the mode the current transform stores its rotation in:
+     * three euler-degree pads, or four raw quaternion pads (with the toggle icon lit).
+     * Only rebuilds the row when the mode actually flips, so the per-frame
+     * {@link #setTransform} stays cheap.
+     */
+    private void syncRotationMode()
+    {
+        boolean quat = this.transform != null && this.transform.rotationMode == Transform.RotationMode.QUATERNION;
+
+        if (quat == this.quatFields)
+        {
+            return;
+        }
+
+        this.quatFields = quat;
+        this.rotateRow.removeAll();
+
+        if (quat)
+        {
+            this.rotateRow.add(this.iconR, this.qw, this.qx, this.qy, this.qz);
+        }
+        else
+        {
+            this.rotateRow.add(this.iconR, this.rx, this.ry, this.rz);
+        }
+
+        /* Re-lay the row's new children within the panel (same pattern as the
+         * uniform-scale swap); only runs on an actual mode flip, not per frame. */
+        UIElement parentContainer = this.getParentContainer();
+
+        if (parentContainer != null)
+        {
+            parentContainer.resize();
+        }
+    }
+
+    /** Fill the quaternion pads (raw x/y/z/w, as stored) without notifying the callback. */
+    private void fillQ(float x, float y, float z, float w)
+    {
+        this.qx.setValue(x);
+        this.qy.setValue(y);
+        this.qz.setValue(z);
+        this.qw.setValue(w);
+    }
+
+    /**
+     * Commit the four quaternion pads as one rotation: rebuild the quaternion from
+     * the fields, renormalise it (raw component edits drift off the unit sphere,
+     * exactly like Blender's W/X/Y/Z fields), and route it through the normal
+     * quaternion write so the delta editors still fan it across a selection.
+     */
+    private void setQuatFromFields()
+    {
+        if (this.transform == null)
+        {
+            return;
+        }
+
+        Quaternionf quat = new Quaternionf((float) this.qx.value, (float) this.qy.value, (float) this.qz.value, (float) this.qw.value);
+
+        if (quat.lengthSquared() < 1.0E-8F)
+        {
+            /* All-zero is not a rotation; ignore until the user types something real. */
+            return;
+        }
+
+        this.setRQuat(quat.normalize());
+    }
+
+    /**
+     * Flip the edited bone between euler and quaternion rotation storage
+     * (Blender's per-bone {@code rotation_mode}), converting its rotation data
+     * once. Quaternion mode is gimbal-free; euler keeps &gt;360° spins and
+     * per-component curves.
+     */
+    public void toggleRotationMode()
+    {
+        if (this.transform == null)
+        {
+            return;
+        }
+
+        boolean quaternion = this.transform.rotationMode != Transform.RotationMode.QUATERNION;
+
+        this.preCallback();
+        this.applyRotationMode(quaternion);
+        this.postCallback();
+        this.setTransform(this.transform);
+        this.endGesture();
+        UIUtils.playClick();
+    }
+
+    /**
+     * Apply the storage-mode flip of {@link #toggleRotationMode}. The base
+     * editor converts the single edited transform; the delta editors override
+     * this to fan the flip across the whole selection (selected keyframes of a
+     * limb track, selected bones with their mirror partners) — a bone's mode is
+     * a property of the TRACK, and leaving unselected keyframes behind in euler
+     * would quietly keep the track on mixed interpolation.
+     */
+    protected void applyRotationMode(boolean quaternion)
+    {
+        if (quaternion)
+        {
+            this.transform.setModeQuaternion();
+        }
+        else
+        {
+            this.transform.setModeEuler();
+        }
+    }
+
+    /* Edit entry points. The mouse path (a gizmo handle pick) supplies the
+     * axes directly and never switches the gizmo's display mode; the keyboard
+     * path walks the user-configured hotkey orders and switches the displayed
+     * handles on the first press. Both funnel into startEdit. */
+
+    public void enableMode(TransformOp op)
     {
         GizmoDrag drag = this.getHotkeyDrag();
         boolean ray = BBSSettings.transformHotkeys3dRay.get() && drag != null;
 
-        HotkeyTarget target = this.nextHotkeyTarget(mode, ray);
+        /* G/S/R walk their handles in the user-configured order (the
+         * *_hotkey_order settings), wrapping past the end back to the first
+         * step. Steps whose handle is unavailable drop out: the ray-driven
+         * ones without a rendered gizmo, the sphere when it's turned off.
+         * Scale's uniform three-axis lever is a step of that walk like any
+         * other (Blender's plain S, first in the default order) — it used to
+         * short-circuit the whole method, which left every repeat press of S
+         * restarting it and the scale order setting driving nothing. */
+        HotkeyTarget target = this.nextHotkeyTarget(op, ray);
 
         if (target == HotkeyTarget.VIEW)
         {
@@ -583,20 +841,24 @@ public class UIPropTransform extends UITransform
         }
         else
         {
-            this.enableHotkeyAxis(mode, target.axis, drag);
+            this.enableHotkeyAxis(op, target.axis, drag);
         }
     }
 
-    private HotkeyTarget currentHotkeyTarget(int mode)
+    /** The walk step the active edit corresponds to ({@code null} when not editing this op). */
+    private HotkeyTarget currentHotkeyTarget(TransformOp op)
     {
-        if (!this.editing || this.mode != mode)
+        if (!this.editing || this.getOp() != op)
         {
             return null;
         }
 
-        if (this.dragKind == DragKind.VIEW) return HotkeyTarget.VIEW;
+        if (this.isViewRotate()) return HotkeyTarget.VIEW;
         if (this.isSphereRotate()) return HotkeyTarget.SPHERE;
-        if (this.dragKind == DragKind.SCREEN) return HotkeyTarget.SCREEN;
+        if (this.isScreenTranslate()) return HotkeyTarget.SCREEN;
+        /* Before the axis checks: the uniform lever parks on Axis.X, so reading
+         * the axis alone would report it as the X step and the walk would skip
+         * straight past X on the next press. */
         if (this.isScaleAll()) return HotkeyTarget.ALL;
         if (this.axis == Axis.Y) return HotkeyTarget.Y;
         if (this.axis == Axis.Z) return HotkeyTarget.Z;
@@ -604,9 +866,9 @@ public class UIPropTransform extends UITransform
         return HotkeyTarget.X;
     }
 
-    private HotkeyTarget nextHotkeyTarget(int mode, boolean ray)
+    private HotkeyTarget nextHotkeyTarget(TransformOp op, boolean ray)
     {
-        ValueOrder order = mode == 0 ? BBSSettings.translateHotkeyOrder : (mode == 1 ? BBSSettings.scaleHotkeyOrder : BBSSettings.rotateHotkeyOrder);
+        ValueOrder order = op == TransformOp.TRANSLATE ? BBSSettings.translateHotkeyOrder : (op == TransformOp.SCALE ? BBSSettings.scaleHotkeyOrder : BBSSettings.rotateHotkeyOrder);
         List<HotkeyTarget> steps = new ArrayList<>();
 
         for (String token : order.get())
@@ -631,154 +893,59 @@ public class UIPropTransform extends UITransform
             return HotkeyTarget.X;
         }
 
-        int index = steps.indexOf(this.currentHotkeyTarget(mode));
+        int index = steps.indexOf(this.currentHotkeyTarget(op));
 
         return steps.get((index + 1) % steps.size());
     }
 
-    private void enableHotkeyAxis(int mode, Axis axis, GizmoDrag drag)
+    /**
+     * Start (or switch to) a hotkey-driven operation along a specific axis.
+     * Unlike the mouse path this keeps the hotkey semantics (numeric input,
+     * accept/reject overlay, the display-mode switch on the first press);
+     * the axis comes from the configured hotkey order rather than a fixed
+     * cycle.
+     */
+    private void enableHotkeyAxis(TransformOp op, Axis axis, GizmoDrag drag)
     {
-        if (Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
+        if (this.switchGizmoDisplayMode(op))
         {
             return;
         }
 
-        UIContext context = this.getContext();
-
-        if (context == null || this.transform == null)
-        {
-            return;
-        }
-
-        this.clearNumericInput();
-
-        if (this.editing)
-        {
-            this.restore(true);
-        }
-
-        this.clearGizmoDrag();
-        this.editing = true;
-        this.mode = mode;
-        this.dragKind = DragKind.AXIS;
-        this.axis = axis;
-        this.axis2 = null;
-        this.hotkeyMode = true;
-        this.drag = drag;
-        this.lastX = context.mouseX;
-        this.lastY = context.mouseY;
-
-        this.cache.copy(this.transform);
-        Gizmo.INSTANCE.trackTransform(this);
-
-        if (this.useRayDrag())
-        {
-            this.beginRayDrag(context.mouseX, context.mouseY);
-        }
-
-        if (!this.handler.hasParent())
-        {
-            context.menu.overlay.add(this.handler);
-        }
+        this.startEdit(op, axis, null, DragStrategyFactory.Variant.AXIS, drag, true);
     }
 
-    public void enableMode(int mode, Axis axis)
+    public void enableMode(TransformOp op, Axis axis)
     {
-        this.enableMode(mode, axis, null, null);
+        this.enableMode(op, axis, null, null);
     }
 
-    public void enableMode(int mode, Axis axis, Axis axis2, GizmoDrag drag)
+    public void enableMode(TransformOp op, Axis axis, Axis axis2)
     {
-        DragKind previousKind = this.dragKind;
+        this.enableMode(op, axis, axis2, null);
+    }
 
-        this.clearGizmoDrag();
+    /**
+     * Start an operation from a mouse handle pick: the axes come straight
+     * from the picked handle, so this never cycles and never switches the
+     * gizmo's display mode. The keyboard path goes through
+     * {@link #enableMode(TransformOp)} and the configured hotkey orders instead.
+     */
+    public void enableMode(TransformOp op, Axis axis, Axis axis2, GizmoDrag drag)
+    {
+        this.startEdit(op, axis == null ? Axis.X : axis, axis2, DragStrategyFactory.Variant.AXIS, drag, axis == null);
+    }
 
-        if (axis == null && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.values()[mode]))
-        {
-            return;
-        }
+    public void enableSphereRotate(GizmoDrag drag)
+    {
+        this.enableSphereRotate(drag, false);
+    }
 
-        UIContext context = this.getContext();
-
-        if (context == null)
-        {
-            return;
-        }
-
-        if (this.transform == null)
-        {
-            return;
-        }
-
-        this.clearNumericInput();
-
-        if (this.editing)
-        {
-            if (axis == null)
-            {
-                if (previousKind == DragKind.SCREEN)
-                {
-                    this.axis = Axis.X;
-                }
-                else
-                {
-                    Axis[] values = Axis.values();
-
-                    this.axis = values[MathUtils.cycler(this.axis != null ? this.axis.ordinal() + 1 : 0, 0, values.length - 1)];
-                }
-
-                this.axis2 = null;
-            }
-            else
-            {
-                this.axis = axis;
-                this.axis2 = axis2;
-            }
-
-            this.dragKind = DragKind.AXIS;
-            this.drag = drag;
-            this.restore(true);
-        }
-        else
-        {
-            if (axis == null && mode == 0 && BBSSettings.transformHotkeys3dRay.get() && drag != null)
-            {
-                this.axis = Axis.X;
-                this.axis2 = Axis.Y;
-                this.dragKind = DragKind.SCREEN;
-            }
-            else
-            {
-                this.axis = axis == null ? Axis.X : axis;
-                this.axis2 = axis2;
-                this.dragKind = DragKind.AXIS;
-            }
-
-            this.drag = drag;
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
-        }
-
-        this.editing = true;
-        this.mode = mode;
-        this.hotkeyMode = axis == null;
-
-        this.cache.copy(this.transform);
-        Gizmo.INSTANCE.trackTransform(this);
-
-        if (this.useRayDrag())
-        {
-            this.beginRayDrag(context.mouseX, context.mouseY);
-        }
-        else if (drag != null && !this.hotkeyMode)
-        {
-            this.beginGizmoDrag(drag);
-        }
-
-        if (!this.handler.hasParent())
-        {
-            context.menu.overlay.add(this.handler);
-        }
+    /** Start whichever free rotation the sphere is configured to drive. */
+    public void enableSphereRotate(GizmoDrag drag, boolean hotkeyMode)
+    {
+        if (BBSSettings.rotate3dSphereMode.get() == 1) this.enableArcball(drag, hotkeyMode);
+        else this.enableTrackball(drag, hotkeyMode);
     }
 
     public void enableTrackball(GizmoDrag drag)
@@ -788,48 +955,12 @@ public class UIPropTransform extends UITransform
 
     public void enableTrackball(GizmoDrag drag, boolean hotkeyMode)
     {
-        UIContext context = this.getContext();
-
-        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.ROTATE))
         {
             return;
         }
 
-        if (context == null || this.transform == null)
-        {
-            return;
-        }
-
-        this.clearNumericInput();
-
-        if (this.editing)
-        {
-            this.restore(true);
-        }
-
-        this.clearGizmoDrag();
-        this.editing = true;
-        this.mode = 2;
-        this.axis = null;
-        this.axis2 = null;
-        this.dragKind = DragKind.TRACKBALL;
-        this.trackballAxis = Axis.X;
-        this.hotkeyMode = hotkeyMode;
-        this.drag = drag;
-        this.lastX = context.mouseX;
-        this.lastY = context.mouseY;
-        this.cache.copy(this.transform);
-        Gizmo.INSTANCE.trackTransform(this);
-
-        this.trackballAccumX = 0F;
-        this.trackballAccumY = 0F;
-        this.trackballRollDeg = 0F;
-        this.beginRayRotateTrackball(context.mouseX, context.mouseY);
-
-        if (!this.handler.hasParent())
-        {
-            context.menu.overlay.add(this.handler);
-        }
+        this.startEdit(TransformOp.ROTATE, null, null, DragStrategyFactory.Variant.TRACKBALL, drag, hotkeyMode);
     }
 
     public void enableArcball(GizmoDrag drag)
@@ -839,48 +970,12 @@ public class UIPropTransform extends UITransform
 
     public void enableArcball(GizmoDrag drag, boolean hotkeyMode)
     {
-        UIContext context = this.getContext();
-
-        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.ROTATE))
         {
             return;
         }
 
-        if (context == null || this.transform == null)
-        {
-            return;
-        }
-
-        this.clearNumericInput();
-
-        if (this.editing)
-        {
-            this.restore(true);
-        }
-
-        this.clearGizmoDrag();
-        this.editing = true;
-        this.mode = 2;
-        this.axis = null;
-        this.axis2 = null;
-        this.dragKind = DragKind.ARCBALL;
-        this.trackballAxis = Axis.X;
-        this.hotkeyMode = hotkeyMode;
-        this.drag = drag;
-        this.lastX = context.mouseX;
-        this.lastY = context.mouseY;
-        this.cache.copy(this.transform);
-        Gizmo.INSTANCE.trackTransform(this);
-
-        this.trackballRollDeg = 0F;
-        this.arcballAccum.identity();
-        this.arcballAnchored = false;
-        this.beginRayRotateArcball(context.mouseX, context.mouseY);
-
-        if (!this.handler.hasParent())
-        {
-            context.menu.overlay.add(this.handler);
-        }
+        this.startEdit(TransformOp.ROTATE, null, null, DragStrategyFactory.Variant.ARCBALL, drag, hotkeyMode);
     }
 
     public void enableViewRotate(GizmoDrag drag)
@@ -890,97 +985,42 @@ public class UIPropTransform extends UITransform
 
     public void enableViewRotate(GizmoDrag drag, boolean hotkeyMode)
     {
-        UIContext context = this.getContext();
-
-        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.ROTATE))
+        if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.ROTATE))
         {
             return;
         }
 
-        if (context == null || this.transform == null)
-        {
-            return;
-        }
-
-        this.clearNumericInput();
-
-        if (this.editing)
-        {
-            this.restore(true);
-        }
-
-        this.clearGizmoDrag();
-        this.editing = true;
-        this.mode = 2;
-        this.axis = null;
-        this.axis2 = null;
-        this.dragKind = DragKind.VIEW;
-        this.hotkeyMode = hotkeyMode;
-        this.drag = drag;
-        this.lastX = context.mouseX;
-        this.lastY = context.mouseY;
-        this.cache.copy(this.transform);
-        Gizmo.INSTANCE.trackTransform(this);
-        this.beginRayRotateView(context.mouseX, context.mouseY);
-
-        if (!this.handler.hasParent())
-        {
-            context.menu.overlay.add(this.handler);
-        }
+        this.startEdit(TransformOp.ROTATE, null, null, DragStrategyFactory.Variant.VIEW, drag, hotkeyMode);
     }
 
+    /**
+     * Start a uniform (three-axis) scale: one lever axis drives all three, the
+     * same math Ctrl+axis-scale uses. A mouse pick ({@code hotkeyMode == false})
+     * never switches the gizmo's display mode; as the S-key walk step it switches
+     * to scale mode on the first press like the other hotkey starters.
+     */
     public void enableUniformScale(GizmoDrag drag)
     {
         this.enableUniformScale(drag, false);
     }
 
-    /** Start a uniform three-axis scale from the center gizmo handle. */
     public void enableUniformScale(GizmoDrag drag, boolean hotkeyMode)
     {
-        if (hotkeyMode && Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(Gizmo.Mode.SCALE))
+        if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.SCALE))
         {
             return;
         }
 
-        UIContext context = this.getContext();
-
-        if (context == null || this.transform == null)
-        {
-            return;
-        }
-
-        this.clearNumericInput();
-
-        if (this.editing)
-        {
-            this.restore(true);
-        }
-
-        this.clearGizmoDrag();
-        this.editing = true;
-        this.mode = 1;
-        this.dragKind = DragKind.AXIS;
-        this.scaleAll = true;
-        this.axis = Axis.X;
-        this.axis2 = null;
-        this.hotkeyMode = hotkeyMode;
-        this.drag = drag;
-        this.lastX = context.mouseX;
-        this.lastY = context.mouseY;
-        this.cache.copy(this.transform);
-        Gizmo.INSTANCE.trackTransform(this);
-
-        if (!this.handler.hasParent())
-        {
-            context.menu.overlay.add(this.handler);
-        }
+        this.startEdit(TransformOp.SCALE, Axis.X, null, DragStrategyFactory.Variant.UNIFORM_SCALE, drag, hotkeyMode);
     }
 
-    public boolean isScaleAll()
-    {
-        return this.scaleAll;
-    }
-
+    /**
+     * Start a screen-space (view-plane) translate: the object moves along the
+     * camera's right/up axes in the plane facing the camera. Grabbing the
+     * centre cube with the mouse never switches the gizmo's display mode
+     * (like the other handle picks); as a hotkey walk step the first press
+     * switches it like the rest of the hotkey starters.
+     */
     public void enableScreenTranslate(GizmoDrag drag)
     {
         this.enableScreenTranslate(drag, false);
@@ -988,6 +1028,35 @@ public class UIPropTransform extends UITransform
 
     public void enableScreenTranslate(GizmoDrag drag, boolean hotkeyMode)
     {
+        if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.TRANSLATE))
+        {
+            return;
+        }
+
+        this.startEdit(TransformOp.TRANSLATE, Axis.X, Axis.Y, DragStrategyFactory.Variant.SCREEN, drag, hotkeyMode);
+    }
+
+    /**
+     * The hotkey starters switch the gizmo's displayed handles to their
+     * operation on the first press; when that happens the press is consumed
+     * by the switch and no edit starts. In combined mode there is nothing to
+     * switch, so the edit always starts.
+     */
+    private boolean switchGizmoDisplayMode(TransformOp op)
+    {
+        Gizmo.Mode target = op == TransformOp.TRANSLATE ? Gizmo.Mode.TRANSLATE : (op == TransformOp.SCALE ? Gizmo.Mode.SCALE : Gizmo.Mode.ROTATE);
+
+        return Gizmo.INSTANCE.getMode() != Gizmo.Mode.COMBINED && Gizmo.INSTANCE.setMode(target);
+    }
+
+    /**
+     * The one edit-start ritual every entry point funnels into: close any
+     * previous edit, snapshot the transform, build the strategy for the
+     * request and anchor it at the cursor, then raise the accept/reject
+     * overlay.
+     */
+    private void startEdit(TransformOp op, Axis axis, Axis axis2, DragStrategyFactory.Variant variant, GizmoDrag drag, boolean hotkeyMode)
+    {
         UIContext context = this.getContext();
 
         if (context == null || this.transform == null)
@@ -995,34 +1064,28 @@ public class UIPropTransform extends UITransform
             return;
         }
 
-        this.clearNumericInput();
+        this.numeric.clear();
 
         if (this.editing)
         {
-            this.restore(true);
+            this.restore();
         }
 
-        this.clearGizmoDrag();
         this.editing = true;
-        this.mode = 0;
-        this.axis = Axis.X;
-        this.axis2 = Axis.Y;
-        this.dragKind = DragKind.SCREEN;
+        this.axis = axis;
+        this.axis2 = axis2;
         this.hotkeyMode = hotkeyMode;
         this.drag = drag;
-        this.lastX = context.mouseX;
-        this.lastY = context.mouseY;
+
+        /* Scope the IK solve dump to this gesture — the log then holds exactly
+         * the drag being investigated (see ModelIKRuntime#logGesture). */
+        ModelIKRuntime.logGesture(true);
+
         this.cache.copy(this.transform);
         Gizmo.INSTANCE.trackTransform(this);
 
-        if (this.useRayDrag())
-        {
-            this.beginRayDrag(context.mouseX, context.mouseY);
-        }
-        else if (drag != null && !this.hotkeyMode)
-        {
-            this.beginGizmoDrag(drag);
-        }
+        this.strategy = DragStrategyFactory.create(this.bridge, op, axis, axis2, variant, hotkeyMode);
+        this.strategy.begin(context.mouseX, context.mouseY);
 
         if (!this.handler.hasParent())
         {
@@ -1030,83 +1093,93 @@ public class UIPropTransform extends UITransform
         }
     }
 
+    private GizmoDrag getHotkeyDrag()
+    {
+        return this.hotkeyDragSupplier == null ? null : this.hotkeyDragSupplier.get();
+    }
+
+    /**
+     * Constrain the live edit to an axis (or, with Shift, to the plane
+     * perpendicular to it): rewind to the start values and rebuild the
+     * gesture as a plain axis drag of the same operation.
+     */
     private void setEditingAxis(Axis axis)
     {
-        this.axis = axis;
-        this.axis2 = null;
-        this.dragKind = DragKind.AXIS;
-        this.scaleAll = false;
+        if (Window.isShiftPressed())
+        {
+            switch (axis)
+            {
+                case X:
+                    this.axis = Axis.Y;
+                    this.axis2 = Axis.Z;
+                    break;
+                case Y:
+                    this.axis = Axis.Z;
+                    this.axis2 = Axis.X;
+                    break;
+                case Z:
+                    this.axis = Axis.X;
+                    this.axis2 = Axis.Y;
+                    break;
+            }
+        }
+        else
+        {
+            this.axis = axis;
+            this.axis2 = null;
+        }
 
         if (!this.editing)
         {
             return;
         }
 
-        this.restore(true);
+        TransformOp op = this.getOp();
 
-        if (this.useRayDrag())
+        this.restore();
+
+        UIContext context = this.getContext();
+
+        if (context != null && op != null)
         {
-            UIContext context = this.getContext();
-
-            if (context != null)
-            {
-                this.beginRayDrag(context.mouseX, context.mouseY);
-            }
+            this.strategy = DragStrategyFactory.create(this.bridge, op, this.axis, this.axis2, DragStrategyFactory.Variant.AXIS, this.hotkeyMode);
+            this.strategy.begin(context.mouseX, context.mouseY);
         }
 
-        if (this.numericActive)
+        /* Re-route an in-progress typed amount onto the freshly picked axis. */
+        if (this.numeric.isActive())
         {
             this.applyNumericInput();
         }
     }
 
-    public void enableSphereRotate(GizmoDrag drag)
+    /** Rewind every channel to the values captured when the edit began. */
+    private void restore()
     {
-        this.enableSphereRotate(drag, false);
-    }
+        this.setT(null, this.cache.translate.x, this.cache.translate.y, this.cache.translate.z);
+        this.setS(null, this.cache.scale.x, this.cache.scale.y, this.cache.scale.z);
 
-    public void enableSphereRotate(GizmoDrag drag, boolean hotkeyMode)
-    {
-        if (BBSSettings.rotate3dSphereMode.get() == 1) this.enableArcball(drag, hotkeyMode);
-        else this.enableTrackball(drag, hotkeyMode);
-    }
-
-    private Vector3f getValue()
-    {
-        if (this.transform == null)
+        if (this.cache.rotationMode == Transform.RotationMode.QUATERNION)
         {
-            return new Vector3f();
+            this.setRQuat(new Quaternionf(this.cache.quat));
         }
-
-        if (this.mode == 1)
-        {
-            return this.transform.scale;
-        }
-        else if (this.mode == 2)
-        {
-            return this.local && BBSSettings.gizmos.get() ? this.transform.rotate2 : this.transform.rotate;
-        }
-
-        return this.transform.translate;
-    }
-
-    private void restore(boolean fully)
-    {
-        if (this.mode == 0 || fully) this.setT(null, this.cache.translate.x, this.cache.translate.y, this.cache.translate.z);
-        if (this.mode == 1 || fully) this.setS(null, this.cache.scale.x, this.cache.scale.y, this.cache.scale.z);
-        if (this.mode == 2 || fully)
+        else
         {
             this.setR(null, MathUtils.toDeg(this.cache.rotate.x), MathUtils.toDeg(this.cache.rotate.y), MathUtils.toDeg(this.cache.rotate.z));
-            this.setR2(null, MathUtils.toDeg(this.cache.rotate2.x), MathUtils.toDeg(this.cache.rotate2.y), MathUtils.toDeg(this.cache.rotate2.z));
         }
     }
 
     private void disable()
     {
+        ModelIKRuntime.logGesture(false);
+
         this.editing = false;
+        this.axis2 = null;
         this.hotkeyMode = false;
-        this.clearGizmoDrag();
-        this.clearNumericInput();
+        this.strategy = null;
+        this.drag = null;
+        this.fineHasLast = false;
+        this.numeric.clear();
         Gizmo.INSTANCE.clearTrackedTransform(this);
 
         if (this.handler.hasParent())
@@ -1124,34 +1197,49 @@ public class UIPropTransform extends UITransform
 
     public void rejectChanges()
     {
-        this.disable();
-
         if (this.transform == null)
         {
+            this.disable();
+
             return;
         }
 
-        this.restore(true);
+        /* Rewind BEFORE tearing down: restore() routes a pivot-session revert
+         * through the session's per-bone snapshots, and disable() nulls that
+         * session. Do it the other way round and the rewind falls back to the
+         * per-channel path, which fans the primary's values onto the whole
+         * selection — the bones come back crooked instead of where they were. */
+        this.restore();
+        this.disable();
         this.setTransform(this.transform);
     }
 
-    private void clearNumericInput()
+    /** Route a wheel event into the live gesture (depth move, sphere roll). */
+    public boolean scrollDrag(UIContext context)
     {
-        this.numericInput.setLength(0);
-        this.numericActive = false;
+        return this.editing && this.transform != null && this.strategy != null && this.strategy.scroll(context);
     }
 
-    private void stopNumericInput(UIContext context)
-    {
-        this.clearNumericInput();
-        this.restore(true);
+    /* Numeric (keyboard) input for hotkey-driven transforms */
 
-        this.lastX = context.mouseX;
-        this.lastY = context.mouseY;
-        this.resetFineCursor(context.mouseX, context.mouseY);
-        this.setTransform(this.transform);
+    /**
+     * Numeric input only rides on the GSR keyboard operations ({@link #hotkeyMode}),
+     * never on a mouse handle drag; the active gesture additionally has a say
+     * (the screen-space grab spreads one drag across two camera axes, so a
+     * single typed scalar is ambiguous there).
+     */
+    private boolean acceptsNumericInput()
+    {
+        return this.editing && this.hotkeyMode && this.transform != null
+            && this.strategy != null && this.strategy.acceptsNumeric();
     }
 
+    /**
+     * Feed one key into the live numeric buffer: digits and the decimal point
+     * extend it, {@code -} flips the sign, backspace trims it (and hands control
+     * back to the cursor once everything is erased). Returns whether the key was
+     * consumed as numeric input.
+     */
     private boolean handleNumericInputKey(UIContext context)
     {
         if (!this.acceptsNumericInput())
@@ -1159,283 +1247,78 @@ public class UIPropTransform extends UITransform
             return false;
         }
 
-        if (this.mode == 2 && this.isSphereRotate())
+        KeyAction action = context.getKeyAction();
+
+        if (action != KeyAction.PRESSED && action != KeyAction.REPEAT)
         {
-            if (context.isPressed(GLFW.GLFW_KEY_X) || context.isRepeated(GLFW.GLFW_KEY_X))
-            {
-                this.trackballAxis = Axis.X;
-
-                if (this.numericActive)
-                {
-                    this.applyNumericInput();
-                }
-
-                return true;
-            }
-
-            if (context.isPressed(GLFW.GLFW_KEY_Y) || context.isRepeated(GLFW.GLFW_KEY_Y))
-            {
-                this.trackballAxis = Axis.Y;
-
-                if (this.numericActive)
-                {
-                    this.applyNumericInput();
-                }
-
-                return true;
-            }
+            return false;
         }
 
-        if (context.isPressed(GLFW.GLFW_KEY_BACKSPACE) || context.isRepeated(GLFW.GLFW_KEY_BACKSPACE))
+        int key = context.getKeyCode();
+
+        /* While typing on the sphere, X/Y aim the typed angle at the
+         * horizontal (screen-up axis) or vertical (screen-right axis) turn.
+         * Without typed digits they must fall through to the axis keybinds
+         * and constrain to a ring — otherwise they read as dead keys. */
+        if (this.numeric.isActive() && this.strategy.handleNumericAxisKey(key))
         {
-            if (!this.numericActive)
-            {
-                return false;
-            }
-
-            if (this.numericInput.length() > 0)
-            {
-                this.numericInput.deleteCharAt(this.numericInput.length() - 1);
-            }
-
-            if (this.numericInput.length() == 0)
-            {
-                this.stopNumericInput(context);
-            }
-            else
-            {
-                this.applyNumericInput();
-            }
+            this.applyNumericInput();
 
             return true;
         }
 
-        return false;
-    }
-
-    private boolean isNumericInputCharacter(char character)
-    {
-        return (character >= '0' && character <= '9')
-            || character == '.'
-            || character == '-'
-            || character == '+'
-            || character == '*'
-            || character == '/'
-            || character == '('
-            || character == ')';
-    }
-
-    private boolean acceptsNumericInput()
-    {
-        if (!this.editing || !this.hotkeyMode || this.transform == null)
+        switch (this.numeric.feedKey(key))
         {
-            return false;
-        }
+            case EMPTIED:
+                this.stopNumericInput(context);
 
-        if (this.dragKind == DragKind.SCREEN)
-        {
-            return false;
-        }
+                return true;
 
-        return this.mode != 2 || this.dragKind != DragKind.AXIS || this.axis != null;
-    }
+            case CHANGED:
+                this.applyNumericInput();
 
-    private Double evaluateNumericInput()
-    {
-        String text = this.numericInput.toString().trim();
+                return true;
 
-        if (text.isEmpty())
-        {
-            return null;
-        }
+            case CONSUMED:
+                return true;
 
-        try
-        {
-            MathBuilder builder = new MathBuilder();
-
-            return builder.parse(text).get().doubleValue();
-        }
-        catch (Exception e)
-        {
-            return null;
+            default:
+                return false;
         }
     }
 
-    private String numericInputDisplay()
+    /**
+     * Erasing the whole buffer cancels numeric mode: rewind to the operation's
+     * start and re-anchor the cursor drag at the current pointer so mouse
+     * control resumes without a jump.
+     */
+    private void stopNumericInput(UIContext context)
     {
-        return this.numericInput.length() == 0 ? "0" : this.numericInput.toString();
-    }
+        this.numeric.clear();
+        this.restore();
 
-    private void applyNumericInput()
-    {
-        if (this.transform == null)
-        {
-            return;
-        }
+        /* The cursor was free to roam while typing; re-anchor the precision
+         * tracking here so the resumed drag doesn't inherit a stale lag. */
+        this.resetFineCursor(context.mouseX, context.mouseY);
 
-        Double value = this.evaluateNumericInput();
-
-        if (value == null || !Double.isFinite(value))
+        if (this.strategy != null)
         {
-            return;
-        }
-
-        if (this.mode == 0)
-        {
-            this.applyNumericTranslate(value);
-        }
-        else if (this.mode == 1)
-        {
-            this.applyNumericScale(value);
-        }
-        else if (this.mode == 2)
-        {
-            if (this.dragKind == DragKind.VIEW)
-            {
-                this.applyNumericAxisRotation(value, this.viewLocalAxis);
-            }
-            else if (this.isSphereRotate())
-            {
-                this.applyNumericAxisRotation(value, this.trackballAxis == Axis.Y ? this.trackballRightLocal : this.trackballUpLocal);
-            }
-            else
-            {
-                this.applyNumericRotate(value);
-            }
+            this.strategy.begin(context.mouseX, context.mouseY);
         }
 
         this.setTransform(this.transform);
     }
 
-    private void applyNumericTranslate(double value)
+    /** Recompute the transform from the start snapshot plus the typed amount. */
+    private void applyNumericInput()
     {
-        if (this.local)
-        {
-            Vector3f offset = this.calculateLocalVector(value, this.axis);
-
-            if (this.axis2 != null)
-            {
-                offset.add(this.calculateLocalVector(value, this.axis2));
-            }
-
-            this.setT(null,
-                this.cache.translate.x + offset.x,
-                this.cache.translate.y + offset.y,
-                this.cache.translate.z + offset.z
-            );
-
-            return;
-        }
-
-        Vector3f translate = new Vector3f(this.cache.translate);
-
-        if (this.axis == Axis.X || this.axis2 == Axis.X) translate.x = this.cache.translate.x + (float) (double) value;
-        if (this.axis == Axis.Y || this.axis2 == Axis.Y) translate.y = this.cache.translate.y + (float) (double) value;
-        if (this.axis == Axis.Z || this.axis2 == Axis.Z) translate.z = this.cache.translate.z + (float) (double) value;
-
-        this.setT(null, translate.x, translate.y, translate.z);
-    }
-
-    private void applyNumericScale(double value)
-    {
-        boolean all = this.scaleAll || Window.isCtrlPressed();
-        Vector3f scale = new Vector3f(this.cache.scale);
-
-        if (all || this.axis == Axis.X || this.axis2 == Axis.X) scale.x = (float) (this.cache.scale.x * value);
-        if (all || this.axis == Axis.Y || this.axis2 == Axis.Y) scale.y = (float) (this.cache.scale.y * value);
-        if (all || this.axis == Axis.Z || this.axis2 == Axis.Z) scale.z = (float) (this.cache.scale.z * value);
-
-        this.setS(null, scale.x, scale.y, scale.z);
-    }
-
-    private void applyNumericRotate(double value)
-    {
-        boolean gizmoSpace = this.local && BBSSettings.gizmos.get();
-        Vector3f source = gizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-        float x = MathUtils.toDeg(source.x);
-        float y = MathUtils.toDeg(source.y);
-        float z = MathUtils.toDeg(source.z);
-
-        if (this.axis == Axis.X || this.axis2 == Axis.X) x += value;
-        if (this.axis == Axis.Y || this.axis2 == Axis.Y) y += value;
-        if (this.axis == Axis.Z || this.axis2 == Axis.Z) z += value;
-
-        if (gizmoSpace) this.setR2(null, x, y, z);
-        else this.setR(null, x, y, z);
-    }
-
-    private void applyNumericAxisRotation(double degrees, Vector3f localAxis)
-    {
-        if (localAxis.lengthSquared() < 1.0E-8F)
+        if (this.transform == null || this.strategy == null)
         {
             return;
         }
 
-        boolean gizmoSpace = this.dragRotateGizmoSpace;
-        Vector3f source = gizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-        Vector3f total = this.toTotalRotation(source, new Vector3f());
-        Vector3f euler = new Matrix3f()
-            .rotation(MathUtils.toRad((float) degrees), localAxis)
-            .mul(new Matrix3f().rotationZ(total.z).rotateY(total.y).rotateX(total.x))
-            .getEulerAnglesZYX(new Vector3f());
-        Vector3f stored = this.toStoredRotation(euler, new Vector3f());
-        float x = unwrapDeg(MathUtils.toDeg(stored.x), MathUtils.toDeg(source.x));
-        float y = unwrapDeg(MathUtils.toDeg(stored.y), MathUtils.toDeg(source.y));
-        float z = unwrapDeg(MathUtils.toDeg(stored.z), MathUtils.toDeg(source.z));
-
-        if (gizmoSpace) this.setR2(null, x, y, z);
-        else this.setR(null, x, y, z);
-    }
-
-    private boolean shouldSnap(int mode)
-    {
-        return this.editing && this.mode == mode && Window.isCtrlPressed() && !this.numericActive;
-    }
-
-    private static double snap(double value, float step)
-    {
-        return step <= 0F ? value : Math.round(value / step) * (double) step;
-    }
-
-    private double snapGizmoValue(double value)
-    {
-        if (this.dragKind != DragKind.AXIS || !this.shouldSnap(2))
-        {
-            return value;
-        }
-
-        return snap(value, BBSSettings.snapRotate.get());
-    }
-
-    @Override
-    protected void internalSetT(double x, Axis axis)
-    {
-        if (this.transform == null)
-        {
-            return;
-        }
-
-        if (this.local)
-        {
-            try
-            {
-                Vector3f vector3f = this.calculateLocalVector(x, axis);
-
-                this.setT(null,
-                    this.transform.translate.x + vector3f.x,
-                    this.transform.translate.y + vector3f.y,
-                    this.transform.translate.z + vector3f.z
-                );
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
-        }
-        else
-        {
-            super.internalSetT(x, axis);
-        }
+        this.strategy.applyNumeric(this.numeric.value());
+        this.setTransform(this.transform);
     }
 
     @Override
@@ -1473,12 +1356,28 @@ public class UIPropTransform extends UITransform
         }
 
         this.preCallback();
-        this.transform.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
+
+        /* A quaternion-mode bone has no euler channel to write, so typed angles
+         * fold straight into its quaternion (leaving it gimbal-free storage). */
+        if (this.transform.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            this.transform.quat.set(Matrices.toQuaternionZYXDegrees((float) x, (float) y, (float) z));
+        }
+        else
+        {
+            this.transform.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
+        }
+
         this.postCallback();
     }
 
+    /**
+     * Store a full rotation as a quaternion (the gizmo drag's gimbal-free commit
+     * path for a quaternion-mode bone). Overridden by the delta editors to fan a
+     * quaternion delta across the selection.
+     */
     @Override
-    public void setR2(Axis axis, double x, double y, double z)
+    public void setRQuat(Quaternionf quat)
     {
         if (this.transform == null)
         {
@@ -1486,7 +1385,8 @@ public class UIPropTransform extends UITransform
         }
 
         this.preCallback();
-        this.transform.rotate2.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), MathUtils.toRad((float) z));
+        this.transform.quat.set(quat);
+        this.transform.rotationMode = Transform.RotationMode.QUATERNION;
         this.postCallback();
     }
 
@@ -1516,28 +1416,93 @@ public class UIPropTransform extends UITransform
         return super.subKeyPressed(context);
     }
 
-    @Override
-    protected boolean subTextInput(UIContext context)
+    /** Short label of what the active drag grabs: axis letters, the screen
+     *  plane, the view ring, or one of the sphere's rotations. */
+    private String editingTargetLabel()
     {
-        if (!this.acceptsNumericInput())
+        String special = this.strategy == null ? null : this.strategy.editingTargetLabel();
+
+        if (special != null)
         {
-            return super.subTextInput(context);
+            return special;
         }
 
-        char character = context.getInputCharacter();
-
-        if (!this.isNumericInputCharacter(character))
+        if (this.getOp() == TransformOp.SCALE && (this.isScaleAll() || Window.isCtrlPressed()))
         {
-            return super.subTextInput(context);
+            return "XYZ";
         }
 
-        this.numericInput.append(character);
-        this.numericActive = true;
-        this.applyNumericInput();
+        String label = this.axis == null ? "" : this.axis.name();
 
-        return true;
+        if (this.axis2 != null)
+        {
+            label += this.axis2.name();
+        }
+
+        return label;
     }
 
+    /** Axis letters tint to their gizmo colors; everything else stays white. */
+    private int editingTargetColor()
+    {
+        boolean singleAxis = this.axis != null && this.axis2 == null
+            && !this.isScreenTranslate()
+            && !(this.getOp() == TransformOp.SCALE && (this.isScaleAll() || Window.isCtrlPressed()));
+
+        if (!singleAxis)
+        {
+            return Colors.WHITE;
+        }
+
+        if (this.axis == Axis.X) return Colors.A100 | Colors.RED;
+        if (this.axis == Axis.Y) return Colors.A100 | Colors.GREEN;
+
+        return Colors.A100 | Colors.BLUE;
+    }
+
+    /** Space chip; scale ignores the space toggle, so it gets none. */
+    private String editingSpaceLabel()
+    {
+        if (this.getOp() == TransformOp.SCALE)
+        {
+            return null;
+        }
+
+        return this.spaceLabel(this.space).get();
+    }
+
+    /** The live vector of the edited channel, for the cursor's value card. */
+    private Vector3f getValue()
+    {
+        if (this.transform == null)
+        {
+            return new Vector3f();
+        }
+
+        TransformOp op = this.getOp();
+
+        if (op == TransformOp.SCALE)
+        {
+            return this.transform.scale;
+        }
+        else if (op == TransformOp.ROTATE)
+        {
+            /* A quaternion bone's channels are stale; show its live rotation. */
+            return this.transform.rotationMode == Transform.RotationMode.QUATERNION
+                ? this.transform.getEulerRotation(new Vector3f())
+                : this.transform.rotate;
+        }
+
+        return this.transform.translate;
+    }
+
+    /**
+     * Maintain the virtual cursor for the current frame. While Shift is held it
+     * advances at {@link DragStrategy#FINE_DRAG_FACTOR} of the real cursor — the
+     * rest of the motion piles into the lag offset; released, it tracks the
+     * cursor 1:1 again with no jump. Ray gestures read {@link #fineX}/{@link #fineY}
+     * so they all slow uniformly without any per-mode code.
+     */
     private void updateFineCursor(int mouseX, int mouseY)
     {
         if (!this.fineHasLast)
@@ -1549,7 +1514,7 @@ public class UIPropTransform extends UITransform
 
         if (Window.isShiftPressed())
         {
-            float keep = 1F - FINE_DRAG_FACTOR;
+            float keep = 1F - DragStrategy.FINE_DRAG_FACTOR;
 
             this.fineOffsetX += (mouseX - this.fineLastX) * keep;
             this.fineOffsetY += (mouseY - this.fineLastY) * keep;
@@ -1578,1598 +1543,224 @@ public class UIPropTransform extends UITransform
         return Math.round(mouseY - this.fineOffsetY);
     }
 
-    @Override
-    public void render(UIContext context)
+    /**
+     * Advance the live gesture: wrap the cursor at the window edges (re-anchoring
+     * the strategy at the teleported position) and feed the strategy the cursor —
+     * virtual (Shift-slowed) for ray gestures, raw for the additive fallback,
+     * which damps Shift through its step factor instead.
+     */
+    private void updateDrag(UIContext context)
     {
-        if (this.editing && !this.numericActive && this.checker.isTime())
+        /* UIContext.mouseX can't be used because when cursor is outside of window
+         * its position stops being updated. That's why it has to be queried manually
+         * through GLFW...
+         *
+         * It gets updated outside the window only when one of mouse buttons is
+         * being held! */
+        boolean remoteInput = BBSUiRemoteHeldState.isActive();
+
+        if (!remoteInput)
         {
-            /* UIContext.mouseX can't be used because when cursor is outside of window
-             * its position stops being updated. That's why it has to be queried manually
-             * through GLFW...
-             *
-             * It gets updated outside the window only when one of mouse buttons is
-             * being held! */
-            boolean remoteInput = BBSUiRemoteHeldState.isActive();
+            GLFW.glfwGetCursorPos(Window.getWindow(), CURSOR_X, CURSOR_Y);
+        }
 
-            if (!remoteInput)
+        Minecraft mc = Minecraft.getInstance();
+        int w = mc.getWindow().getScreenWidth();
+        int h = mc.getWindow().getScreenHeight();
+
+        double rawX = remoteInput ? w / 2D : CURSOR_X[0];
+        double rawY = remoteInput ? h / 2D : CURSOR_Y[0];
+        double fx = Math.ceil(w / (double) context.menu.width);
+        double fy = Math.ceil(h / (double) context.menu.height);
+        int border = 5;
+        int borderPadding = border + 1;
+
+        this.updateFineCursor(context.mouseX, context.mouseY);
+
+        int wrapX = context.mouseX;
+        int wrapY = context.mouseY;
+        boolean wrapped = true;
+
+        if (!remoteInput && rawX <= border)
+        {
+            Window.moveCursor(w - borderPadding, (int) mc.mouseHandler.ypos());
+            wrapX = context.menu.width - (int) (borderPadding / fx);
+        }
+        else if (!remoteInput && rawX >= w - border)
+        {
+            Window.moveCursor(borderPadding, (int) mc.mouseHandler.ypos());
+            wrapX = (int) (borderPadding / fx);
+        }
+        else if (!remoteInput && rawY <= border)
+        {
+            Window.moveCursor((int) mc.mouseHandler.xpos(), h - borderPadding);
+            wrapY = context.menu.height - (int) (borderPadding / fy);
+        }
+        else if (!remoteInput && rawY >= h - border)
+        {
+            Window.moveCursor((int) mc.mouseHandler.xpos(), borderPadding);
+            wrapY = (int) (borderPadding / fy);
+        }
+        else
+        {
+            wrapped = false;
+        }
+
+        if (wrapped)
+        {
+            this.checker.mark();
+
+            /* The wrap re-anchors the drag at the teleported position, so the
+             * virtual cursor resets there too - no lag carries across the seam. */
+            this.resetFineCursor(wrapX, wrapY);
+
+            if (this.strategy != null)
             {
-                GLFW.glfwGetCursorPos(Window.getWindow(), CURSOR_X, CURSOR_Y);
+                this.strategy.begin(wrapX, wrapY);
             }
 
-            Minecraft mc = Minecraft.getInstance();
-            int w = mc.getWindow().getScreenWidth();
-            int h = mc.getWindow().getScreenHeight();
+            return;
+        }
 
-            double rawX = remoteInput ? w / 2D : CURSOR_X[0];
-            double rawY = remoteInput ? h / 2D : CURSOR_Y[0];
-            double fx = Math.ceil(w / (double) context.menu.width);
-            double fy = Math.ceil(h / (double) context.menu.height);
-            int border = 5;
-            int borderPadding = border + 1;
-
-            this.updateFineCursor(context.mouseX, context.mouseY);
-
-            if (!remoteInput && rawX <= border)
+        if (this.strategy != null)
+        {
+            if (this.strategy.usesFineCursor())
             {
-                Window.moveCursor(w - borderPadding, (int) mc.mouseHandler.ypos());
-
-                this.lastX = context.menu.width - (int) (borderPadding / fx);
-                this.checker.mark();
-                this.resetFineCursor(this.lastX, context.mouseY);
-
-                if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
-            }
-            else if (!remoteInput && rawX >= w - border)
-            {
-                Window.moveCursor(borderPadding, (int) mc.mouseHandler.ypos());
-
-                this.lastX = (int) (borderPadding / fx);
-                this.checker.mark();
-                this.resetFineCursor(this.lastX, context.mouseY);
-
-                if (this.useRayDrag()) this.beginRayDrag(this.lastX, context.mouseY);
-            }
-            else if (!remoteInput && rawY <= border)
-            {
-                Window.moveCursor((int) mc.mouseHandler.xpos(), h - borderPadding);
-
-                this.lastY = context.menu.height - (int) (borderPadding / fy);
-                this.checker.mark();
-                this.resetFineCursor(context.mouseX, this.lastY);
-
-                if (this.useRayDrag()) this.beginRayDrag(context.mouseX, this.lastY);
-            }
-            else if (!remoteInput && rawY >= h - border)
-            {
-                Window.moveCursor((int) mc.mouseHandler.xpos(), borderPadding);
-
-                this.lastY = (int) (borderPadding / fy);
-                this.checker.mark();
-                this.resetFineCursor(context.mouseX, this.lastY);
-
-                if (this.useRayDrag()) this.beginRayDrag(context.mouseX, this.lastY);
+                this.strategy.update(this.fineX(context.mouseX), this.fineY(context.mouseY));
             }
             else
             {
-                int dx = context.mouseX - this.lastX;
-                int dy = context.mouseY - this.lastY;
-                Vector3f vector = this.getValue();
-                boolean all = this.mode == 1 && (this.scaleAll || Window.isCtrlPressed());
-                UITrackpad reference = this.mode == 0 ? this.tx : (this.mode == 1 ? this.sx : this.rx);
-                float factor = (float) reference.getValueModifier() * (Window.isShiftPressed() ? FINE_DRAG_FACTOR : 1F);
-
-                if (this.useRayDrag())
-                {
-                    int mouseX = this.fineX(context.mouseX);
-                    int mouseY = this.fineY(context.mouseY);
-
-                    if (dx != 0 || dy != 0)
-                    {
-                        this.applyRayDrag(mouseX, mouseY);
-                        this.setTransform(this.transform);
-                    }
-                }
-                else if (this.mode == 0 && this.applyGizmoTranslate(dx, dy, factor))
-                {
-                    this.setTransform(this.transform);
-                }
-                else if (this.mode == 1 && this.applyGizmoScale(dx, dy, factor, all))
-                {
-                    this.setTransform(this.transform);
-                }
-                else if (this.mode == 2 && this.applyGizmoRotate(context.mouseX, context.mouseY, this.lastX, this.lastY, factor))
-                {
-                    this.setTransform(this.transform);
-                }
-                else if (this.local && this.mode == 0)
-                {
-                    Vector3f vector3f = this.calculateLocalVector(factor * dx, this.axis);
-
-                    if (this.axis2 != null)
-                    {
-                        vector3f.add(this.calculateLocalVector(factor * dx, this.axis2));
-                    }
-
-                    float x = vector.x + vector3f.x;
-                    float y = vector.y + vector3f.y;
-                    float z = vector.z + vector3f.z;
-
-                    if (this.shouldSnap(0))
-                    {
-                        x = (float) snap(x, BBSSettings.snapTranslate.get());
-                        y = (float) snap(y, BBSSettings.snapTranslate.get());
-                        z = (float) snap(z, BBSSettings.snapTranslate.get());
-                    }
-
-                    this.setT(null, x, y, z);
-                    this.setTransform(this.transform);
-                }
-                else
-                {
-                    Vector3f vector3f = new Vector3f(vector);
-
-                    if (this.mode == 2)
-                    {
-                        vector3f.mul(180F / MathUtils.PI);
-                    }
-
-                    if (this.axis == Axis.X || all) vector3f.x += factor * dx;
-                    if (this.axis == Axis.Y || all) vector3f.y += factor * dx;
-                    if (this.axis == Axis.Z || all) vector3f.z += factor * dx;
-                    if (!all && this.axis2 == Axis.X) vector3f.x += factor * dx;
-                    if (!all && this.axis2 == Axis.Y) vector3f.y += factor * dx;
-                    if (!all && this.axis2 == Axis.Z) vector3f.z += factor * dx;
-
-                    if (this.shouldSnap(this.mode))
-                    {
-                        float step = this.mode == 0 ? BBSSettings.snapTranslate.get()
-                            : this.mode == 1 ? BBSSettings.snapScale.get()
-                            : BBSSettings.snapRotate.get();
-
-                        vector3f.x = (float) snap(vector3f.x, step);
-                        vector3f.y = (float) snap(vector3f.y, step);
-                        vector3f.z = (float) snap(vector3f.z, step);
-                    }
-
-                    if (this.mode == 0) this.setT(null, vector3f.x, vector3f.y, vector3f.z);
-                    if (this.mode == 1) this.setS(null, vector3f.x, vector3f.y, vector3f.z);
-                    if (this.mode == 2)
-                    {
-                        if (this.local && BBSSettings.gizmos.get()) this.setR2(null, vector3f.x, vector3f.y, vector3f.z);
-                        else this.setR(null, vector3f.x, vector3f.y, vector3f.z);
-                    }
-
-                    this.setTransform(this.transform);
-                }
-
-                this.lastX = context.mouseX;
-                this.lastY = context.mouseY;
+                this.strategy.update(context.mouseX, context.mouseY);
             }
+
+            this.strategy.logDrag();
         }
 
-        if (this.gesturePollOnly)
+        this.setTransform(this.transform);
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        if (this.editing && !this.numeric.isActive() && this.checker.isTime())
         {
-            return;
+            this.updateDrag(context);
+        }
+
+        /* Quaternion mode lights up the rotation-row icon with the standard toggle
+         * highlight, as a gradient down the icon's left edge. */
+        if (this.transform != null && this.transform.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            UIDashboardPanels.renderHighlight(context.batcher, this.iconR.area, Direction.LEFT);
         }
 
         super.render(context);
 
         if (this.editing)
         {
-            String label = UIKeys.TRANSFORMS_EDITING.get();
             FontRenderer font = context.batcher.getFont();
-            int x = this.area.mx(font.getWidth(label));
+            TransformOp editOp = this.getOp();
+            String op = (editOp == TransformOp.TRANSLATE ? UIKeys.TRANSFORMS_TRANSLATE : editOp == TransformOp.SCALE ? UIKeys.TRANSFORMS_SCALE : UIKeys.TRANSFORMS_ROTATE).get();
+            String target = this.editingTargetLabel();
+            String space = this.editingSpaceLabel();
+
+            /* Chip row: the operation on the primary color, then what is
+             * grabbed (axis letters in their gizmo colors), then the editing
+             * space. The 5s account for textCard's box overhang at the
+             * default card offset. */
+            int gap = 2;
+            int rowWidth = font.getWidth(op) + 5 + gap + font.getWidth(target) + 5;
+
+            if (space != null)
+            {
+                rowWidth += gap + font.getWidth(space) + 5;
+            }
+
+            int x = this.area.mx(rowWidth) + 3;
             int y = this.area.my(font.getHeight());
 
-            context.batcher.textCard(label, x, y, BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A50));
+            context.batcher.textCard(op, x, y, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
+            x += font.getWidth(op) + 5 + gap;
+            context.batcher.textCard(target, x, y, this.editingTargetColor(), Colors.A50);
 
-            if (this.numericActive)
+            if (space != null)
             {
-                String numericLabel = this.numericInputDisplay();
+                x += font.getWidth(target) + 5 + gap;
+                context.batcher.textCard(space, x, y, Colors.LIGHTEST_GRAY, Colors.A50);
+            }
+
+            /* Label echoed both at the cursor and (when typing) under the info row. */
+            String numericLabel = null;
+
+            if (this.axis != null)
+            {
+                Vector3f v = this.getValue();
+                float val = this.axis == Axis.X ? v.x : (this.axis == Axis.Y ? v.y : v.z);
+
+                if (editOp == TransformOp.ROTATE)
+                {
+                    val = MathUtils.toDeg(val);
+                }
+
+                String valueLabel = String.format(java.util.Locale.US, "%.2f", val);
+
+                if (this.axis2 != null)
+                {
+                    float val2 = this.axis2 == Axis.X ? v.x : (this.axis2 == Axis.Y ? v.y : v.z);
+
+                    if (editOp == TransformOp.ROTATE)
+                    {
+                        val2 = MathUtils.toDeg(val2);
+                    }
+
+                    valueLabel += ", " + String.format(java.util.Locale.US, "%.2f", val2);
+                }
+
+                /* While typing, lead with the raw input so the user sees exactly
+                 * what they've entered, with the resulting value in parentheses. */
+                String cursorLabel = this.numeric.isActive()
+                    ? this.numeric.display() + " (" + valueLabel + ")"
+                    : valueLabel;
+
+                if (this.numeric.isActive())
+                {
+                    numericLabel = cursorLabel;
+                }
+
+                context.batcher.textCard(cursorLabel, context.mouseX + 12, context.mouseY + 12, Colors.WHITE, Colors.A50);
+            }
+            else if (this.numeric.isActive())
+            {
+                /* The view ring and the sphere have no single axis component to
+                 * echo, so show the typed angle, plus the aimed direction. */
+                String prefix = this.strategy == null ? "" : this.strategy.numericPrefix();
+
+                numericLabel = prefix + this.numeric.display() + "°";
+
+                context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, Colors.WHITE, Colors.A50);
+            }
+
+            /* Mirror the live numeric input on its own card right under the info row. */
+            if (numericLabel != null)
+            {
                 int nx = this.area.mx(font.getWidth(numericLabel));
                 int ny = y + font.getHeight() + 8;
 
-                context.batcher.textCard(numericLabel, nx, ny, BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A50));
-                context.batcher.textCard(numericLabel, context.mouseX + 12, context.mouseY + 12, BBSSettings.textColor(), Colors.A50);
+                context.batcher.textCard(numericLabel, nx, ny, Colors.WHITE, BBSSettings.primaryColor(Colors.A50));
             }
         }
-    }
-
-    /** Poll an active modal transform even when its property panel is hidden or clipped. */
-    private void pollGesture(UIContext context)
-    {
-        this.gesturePollOnly = true;
-
-        try
-        {
-            this.render(context);
-        }
-        finally
-        {
-            this.gesturePollOnly = false;
-        }
-    }
-
-    public void beginGizmoDrag(Gizmo.DragContext context)
-    {
-        this.gizmoDrag = false;
-        this.gizmoInvReady = false;
-
-        if (context == null || !context.ready)
-        {
-            return;
-        }
-
-        this.gizmoViewportX = context.viewportX;
-        this.gizmoViewportY = context.viewportY;
-        this.gizmoViewportW = context.viewportW;
-        this.gizmoViewportH = context.viewportH;
-
-        this.gizmoMvp.set(context.projection).mul(context.modelView);
-        this.gizmoMvp.invert(this.gizmoInvMvp);
-        this.gizmoInvReady = true;
-
-        if (!this.projectGizmoPoint(0F, 0F, 0F, this.gizmoOrigin2D))
-        {
-            return;
-        }
-
-        if (this.projectGizmoPoint(1F, 0F, 0F, this.gizmoTmp2D))
-        {
-            this.gizmoAxisX.set(this.gizmoTmp2D).sub(this.gizmoOrigin2D);
-            this.gizmoAxisXLenSq = this.gizmoAxisX.lengthSquared();
-        }
-        else
-        {
-            this.gizmoAxisXLenSq = 0F;
-        }
-
-        if (this.projectGizmoPoint(0F, 1F, 0F, this.gizmoTmp2D))
-        {
-            this.gizmoAxisY.set(this.gizmoTmp2D).sub(this.gizmoOrigin2D);
-            this.gizmoAxisYLenSq = this.gizmoAxisY.lengthSquared();
-        }
-        else
-        {
-            this.gizmoAxisYLenSq = 0F;
-        }
-
-        if (this.projectGizmoPoint(0F, 0F, 1F, this.gizmoTmp2D))
-        {
-            this.gizmoAxisZ.set(this.gizmoTmp2D).sub(this.gizmoOrigin2D);
-            this.gizmoAxisZLenSq = this.gizmoAxisZ.lengthSquared();
-        }
-        else
-        {
-            this.gizmoAxisZLenSq = 0F;
-        }
-
-        this.gizmoDrag = true;
-    }
-
-    public void beginGizmoDrag(GizmoDrag drag)
-    {
-        if (drag == null)
-        {
-            this.clearGizmoDrag();
-
-            return;
-        }
-
-        this.drag = drag;
-
-        UIContext context = this.getContext();
-
-        if (context != null)
-        {
-            this.beginRayDrag(context.mouseX, context.mouseY);
-        }
-    }
-
-    private void clearGizmoDrag()
-    {
-        this.gizmoDrag = false;
-        this.gizmoInvReady = false;
-        this.drag = null;
-        this.dragHasStart = false;
-        this.arcballAnchored = false;
-        this.fineHasLast = false;
-        this.scaleAll = false;
-        this.axis2 = null;
-        this.dragKind = DragKind.AXIS;
-    }
-
-    private boolean useRayDrag()
-    {
-        if (this.hotkeyMode && !BBSSettings.transformHotkeys3dRay.get())
-        {
-            return false;
-        }
-
-        if (this.scaleAll)
-        {
-            return false;
-        }
-
-        return this.editing
-            && this.transform != null
-            && this.drag != null
-            && (this.mode != 2 || this.axis2 == null || this.isSphereRotate());
-    }
-
-    public boolean isScreenTranslate()
-    {
-        return this.mode == 0 && this.dragKind == DragKind.SCREEN;
-    }
-
-    private void beginRayDrag(int mouseX, int mouseY)
-    {
-        if (this.drag == null || this.transform == null)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        if (this.mode == 0)
-        {
-            this.beginRayTranslate(mouseX, mouseY);
-        }
-        else if (this.mode == 1)
-        {
-            this.beginRayScale(mouseX, mouseY);
-        }
-        else if (this.mode == 2)
-        {
-            if (this.dragKind == DragKind.TRACKBALL) this.beginRayRotateTrackball(mouseX, mouseY);
-            else if (this.dragKind == DragKind.ARCBALL) this.beginRayRotateArcball(mouseX, mouseY);
-            else if (this.dragKind == DragKind.VIEW) this.beginRayRotateView(mouseX, mouseY);
-            else this.beginRayRotate(mouseX, mouseY);
-        }
-        else
-        {
-            this.dragHasStart = false;
-        }
-    }
-
-    private void applyRayDrag(int mouseX, int mouseY)
-    {
-        if (!this.dragHasStart || this.transform == null)
-        {
-            return;
-        }
-
-        if (this.mode == 2)
-        {
-            if (this.dragKind == DragKind.TRACKBALL) this.applyRayRotateTrackball(mouseX, mouseY);
-            else if (this.dragKind == DragKind.ARCBALL) this.applyRayRotateArcball(mouseX, mouseY);
-            else if (this.dragKind == DragKind.VIEW) this.applyRayRotateView(mouseX, mouseY);
-            else this.applyScreenRotate(mouseX, mouseY);
-
-            return;
-        }
-
-        Vector3d hit = new Vector3d();
-
-        if (!this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, hit))
-        {
-            return;
-        }
-
-        if (this.mode == 0)
-        {
-            this.applyRayTranslate(hit);
-        }
-        else if (this.mode == 1)
-        {
-            this.applyRayScale(hit);
-        }
-    }
-
-    private void beginRayTranslate(int mouseX, int mouseY)
-    {
-        if (this.isScreenTranslate())
-        {
-            this.beginRayTranslateScreen(mouseX, mouseY);
-
-            return;
-        }
-
-        Matrix3f jacobian = this.resolveTranslateJacobian();
-
-        if (this.local)
-        {
-            Matrix3f rotation = new Matrix3f()
-                .rotateX(this.model ? MathUtils.PI : 0F)
-                .mul(this.transform.createRotationMatrix());
-
-            this.dragTranslateBasis.set(rotation);
-            this.dragWorldBasis.set(jacobian).mul(rotation);
-        }
-        else
-        {
-            Matrix3f inverse = new Matrix3f(jacobian).invert();
-
-            this.dragTranslateBasis.set(inverse).mul(this.drag.gizmoWorldAxes);
-            this.dragWorldBasis.set(this.drag.gizmoWorldAxes);
-        }
-
-        if (this.axis2 == null) this.drag.planeNormalForAxis(mouseX, mouseY, this.dragWorldBasis, this.axis, this.dragPlaneNormal);
-        else this.drag.planeNormalForPlane(this.dragWorldBasis, this.axis, this.axis2, this.dragPlaneNormal);
-
-        this.dragStartTranslate.set(this.transform.translate);
-        this.dragHasStart = this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit);
-    }
-
-    private void beginRayTranslateScreen(int mouseX, int mouseY)
-    {
-        Matrix3f invView = this.drag.view.get3x3(new Matrix3f());
-
-        if (Math.abs(invView.determinant()) < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        invView.invert();
-
-        Vector3f right = invView.getColumn(0, new Vector3f());
-        Vector3f up = invView.getColumn(1, new Vector3f());
-        Vector3f forward = invView.getColumn(2, new Vector3f());
-
-        if (right.lengthSquared() < 1.0E-8F || up.lengthSquared() < 1.0E-8F || forward.lengthSquared() < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        right.normalize();
-        up.normalize();
-        forward.normalize();
-
-        Matrix3f cameraBasis = new Matrix3f();
-
-        cameraBasis.setColumn(0, right);
-        cameraBasis.setColumn(1, up);
-        cameraBasis.setColumn(2, forward);
-
-        Matrix3f inverse = this.resolveTranslateJacobian().invert();
-
-        this.dragTranslateBasis.set(inverse).mul(cameraBasis);
-        this.dragScreenInverseJacobian.set(inverse);
-        this.dragWorldBasis.set(cameraBasis);
-        this.dragPlaneNormal.set(forward);
-
-        this.dragStartTranslate.set(this.transform.translate);
-        this.dragHasStart = this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit);
     }
 
     /**
-     * The basis a translate drag maps the cursor through. A sampled Jacobian that came back
-     * unusable &mdash; the film pose track can hand out a flat one when the bone matrix is missing or
-     * when keyframe interpolation flattens the perturbation &mdash; degrades to a rest basis in the
-     * same units rather than cancelling the drag: an approximate handle beats a dead one, and an
-     * ill-conditioned inverse is what used to send the value to six figures.
+     * A step of a transform hotkey's walk. Tokens match the entries of the
+     * translate/scale/rotate hotkey order settings.
      */
-    private Matrix3f resolveTranslateJacobian()
-    {
-        return GizmoDrag.resolveTranslateJacobian(this.drag.translateJacobian, this.drag.modelPartTranslate);
-    }
-
-    private void applyRayTranslate(Vector3d hit)
-    {
-        Vector3f delta = new Vector3f(
-            (float) (hit.x - this.dragStartHit.x),
-            (float) (hit.y - this.dragStartHit.y),
-            (float) (hit.z - this.dragStartHit.z)
-        );
-        Vector3f result = new Vector3f();
-
-        this.accumulateAlongAxis(delta, this.axis, result);
-
-        if (this.axis2 != null)
-        {
-            this.accumulateAlongAxis(delta, this.axis2, result);
-        }
-
-        float x = this.dragStartTranslate.x + result.x;
-        float y = this.dragStartTranslate.y + result.y;
-        float z = this.dragStartTranslate.z + result.z;
-
-        if (this.shouldSnap(0))
-        {
-            x = (float) snap(x, BBSSettings.snapTranslate.get());
-            y = (float) snap(y, BBSSettings.snapTranslate.get());
-            z = (float) snap(z, BBSSettings.snapTranslate.get());
-        }
-
-        this.setT(null, x, y, z);
-    }
-
-    private void accumulateAlongAxis(Vector3f delta, Axis axis, Vector3f out)
-    {
-        Vector3f worldAxis = this.dragWorldBasis.getColumn(axis.ordinal(), new Vector3f());
-        float lenSq = worldAxis.lengthSquared();
-
-        if (lenSq < 1.0E-12F)
-        {
-            return;
-        }
-
-        float t = worldAxis.dot(delta) / lenSq;
-        Vector3f translateAxis = this.dragTranslateBasis.getColumn(axis.ordinal(), new Vector3f());
-
-        out.add(translateAxis.mul(t));
-    }
-
-    private void beginRayScale(int mouseX, int mouseY)
-    {
-        this.dragWorldBasis.set(this.drag.gizmoWorldAxes);
-
-        if (this.axis2 == null) this.drag.planeNormalForAxis(mouseX, mouseY, this.dragWorldBasis, this.axis, this.dragPlaneNormal);
-        else this.drag.planeNormalForPlane(this.dragWorldBasis, this.axis, this.axis2, this.dragPlaneNormal);
-
-        if (!this.drag.intersectPlane(mouseX, mouseY, this.dragPlaneNormal, this.dragStartHit))
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.dragStartScale.set(this.transform.scale);
-        this.dragHasStart = true;
-    }
-
-    private void applyRayScale(Vector3d hit)
-    {
-        boolean all = this.scaleAll || Window.isCtrlPressed();
-        Vector3f scale = new Vector3f(this.dragStartScale);
-
-        this.applyRayScaleAxis(hit, this.axis, all, scale);
-
-        if (this.axis2 != null)
-        {
-            this.applyRayScaleAxis(hit, this.axis2, all, scale);
-        }
-
-        if (this.shouldSnap(1))
-        {
-            scale.x = (float) snap(scale.x, BBSSettings.snapScale.get());
-            scale.y = (float) snap(scale.y, BBSSettings.snapScale.get());
-            scale.z = (float) snap(scale.z, BBSSettings.snapScale.get());
-        }
-
-        this.setS(null, scale.x, scale.y, scale.z);
-    }
-
-    private void applyRayScaleAxis(Vector3d hit, Axis currentAxis, boolean all, Vector3f scale)
-    {
-        Vector3f axisDir = this.dragWorldBasis.getColumn(currentAxis.ordinal(), new Vector3f());
-
-        if (axisDir.lengthSquared() < 1.0E-8F)
-        {
-            return;
-        }
-
-        axisDir.normalize();
-
-        float currentProj = (float) ((hit.x - this.drag.gizmoOrigin.x) * axisDir.x
-            + (hit.y - this.drag.gizmoOrigin.y) * axisDir.y
-            + (hit.z - this.drag.gizmoOrigin.z) * axisDir.z);
-        float startProj = (float) ((this.dragStartHit.x - this.drag.gizmoOrigin.x) * axisDir.x
-            + (this.dragStartHit.y - this.drag.gizmoOrigin.y) * axisDir.y
-            + (this.dragStartHit.z - this.drag.gizmoOrigin.z) * axisDir.z);
-        float delta = currentProj - startProj;
-
-        if (Math.abs(startProj) < 1.0E-4F)
-        {
-            if (all || currentAxis == Axis.X) scale.x += delta;
-            if (all || currentAxis == Axis.Y) scale.y += delta;
-            if (all || currentAxis == Axis.Z) scale.z += delta;
-        }
-        else
-        {
-            float ratio = currentProj / startProj;
-
-            if (all || currentAxis == Axis.X) scale.x *= ratio;
-            if (all || currentAxis == Axis.Y) scale.y *= ratio;
-            if (all || currentAxis == Axis.Z) scale.z *= ratio;
-        }
-    }
-
-    private void beginRayRotate(int mouseX, int mouseY)
-    {
-        if (this.axis == null)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-
-        Vector3f axisDir = this.getActiveRotateAxes().getColumn(this.axis.ordinal(), new Vector3f());
-
-        if (axisDir.lengthSquared() < 1.0E-8F || !this.drag.projectToScreen(this.drag.gizmoOrigin, this.dragScreenCenter))
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        axisDir.normalize();
-        this.dragAxisDir.set(axisDir);
-        this.dragLastScreenAngle = this.screenAngle(mouseX, mouseY);
-
-        Vector3f intoScreen = new Vector3f(
-            (float) (this.drag.gizmoOrigin.x - this.drag.cameraOrigin.x),
-            (float) (this.drag.gizmoOrigin.y - this.drag.cameraOrigin.y),
-            (float) (this.drag.gizmoOrigin.z - this.drag.cameraOrigin.z)
-        );
-
-        this.dragRotateSign = Math.signum(axisDir.dot(intoScreen));
-
-        if (this.dragRotateSign == 0F)
-        {
-            this.dragRotateSign = 1F;
-        }
-
-        this.initialDragRingVec.set(this.computeStartRingVec(mouseX, mouseY, axisDir));
-        this.accumulatedRotateDeg = 0F;
-        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-
-        this.dragStartRotateDeg.set(
-            MathUtils.toDeg(source.x),
-            MathUtils.toDeg(source.y),
-            MathUtils.toDeg(source.z)
-        );
-        this.dragHasStart = true;
-    }
-
-    private void applyScreenRotate(int mouseX, int mouseY)
-    {
-        float current = this.screenAngle(mouseX, mouseY);
-        float delta = current - this.dragLastScreenAngle;
-
-        if (delta > MathUtils.PI) delta -= MathUtils.PI * 2F;
-        else if (delta < -MathUtils.PI) delta += MathUtils.PI * 2F;
-
-        this.dragLastScreenAngle = current;
-
-        float angleDeg = MathUtils.toDeg(delta) * this.dragRotateSign;
-        this.accumulatedRotateDeg += angleDeg;
-        float x = this.dragStartRotateDeg.x;
-        float y = this.dragStartRotateDeg.y;
-        float z = this.dragStartRotateDeg.z;
-
-        if (this.axis == Axis.X) x += angleDeg;
-        else if (this.axis == Axis.Y) y += angleDeg;
-        else if (this.axis == Axis.Z) z += angleDeg;
-
-        this.dragStartRotateDeg.set(x, y, z);
-
-        if (this.axis != null)
-        {
-            switch (this.axis)
-            {
-                case X: x = (float) this.snapGizmoValue(x); break;
-                case Y: y = (float) this.snapGizmoValue(y); break;
-                case Z: z = (float) this.snapGizmoValue(z); break;
-            }
-        }
-
-        if (this.dragRotateGizmoSpace) this.setR2(null, x, y, z);
-        else this.setR(null, x, y, z);
-    }
-
-    private void beginRayRotateView(int mouseX, int mouseY)
-    {
-        if (this.drag == null)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        Vector3f viewAxis = new Vector3f(
-            (float) (this.drag.cameraOrigin.x - this.drag.gizmoOrigin.x),
-            (float) (this.drag.cameraOrigin.y - this.drag.gizmoOrigin.y),
-            (float) (this.drag.cameraOrigin.z - this.drag.gizmoOrigin.z)
-        );
-
-        if (viewAxis.lengthSquared() < 1.0E-8F || !this.drag.projectToScreen(this.drag.gizmoOrigin, this.dragScreenCenter))
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.dragAxisDir.set(viewAxis.normalize());
-        this.dragLastScreenAngle = this.screenAngle(mouseX, mouseY);
-        this.viewGrabScreenAngle = this.dragLastScreenAngle;
-        this.dragRotateSign = -1F;
-        this.accumulatedRotateDeg = 0F;
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-
-        Matrix3f parentInverse = this.computeParentInverse();
-
-        if (parentInverse == null)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        parentInverse.transform(this.dragAxisDir, this.viewLocalAxis);
-
-        if (this.viewLocalAxis.lengthSquared() < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.viewLocalAxis.normalize();
-        this.dragHasStart = true;
-    }
-
-    private void applyRayRotateView(int mouseX, int mouseY)
-    {
-        float current = this.screenAngle(mouseX, mouseY);
-        float delta = current - this.dragLastScreenAngle;
-
-        if (delta > MathUtils.PI) delta -= MathUtils.PI * 2F;
-        else if (delta < -MathUtils.PI) delta += MathUtils.PI * 2F;
-
-        this.dragLastScreenAngle = current;
-        float angle = delta * this.dragRotateSign;
-
-        if (angle == 0F)
-        {
-            return;
-        }
-
-        this.accumulatedRotateDeg += MathUtils.toDeg(angle);
-        this.applyAxisRotationRadians(angle, this.viewLocalAxis);
-    }
-
-    private void beginRayRotateTrackball(int mouseX, int mouseY)
-    {
-        if (this.drag == null)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-        Matrix3f parentInverse = this.computeParentInverse();
-        Matrix3f invView = this.drag.view.get3x3(new Matrix3f());
-
-        if (parentInverse == null || Math.abs(invView.determinant()) < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        invView.invert();
-        parentInverse.transform(invView.getColumn(0, new Vector3f()).normalize(), this.trackballRightLocal);
-        parentInverse.transform(invView.getColumn(1, new Vector3f()).normalize(), this.trackballUpLocal);
-        parentInverse.transform(invView.getColumn(2, new Vector3f()).normalize(), this.trackballViewLocal);
-
-        if (this.trackballRightLocal.lengthSquared() < 1.0E-8F || this.trackballUpLocal.lengthSquared() < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.trackballRightLocal.normalize();
-        this.trackballUpLocal.normalize();
-        this.trackballViewLocal.normalize();
-        this.trackballLastX = mouseX;
-        this.trackballLastY = mouseY;
-        this.dragHasStart = true;
-    }
-
-    private void applyRayRotateTrackball(int mouseX, int mouseY)
-    {
-        int dx = mouseX - this.trackballLastX;
-        int dy = mouseY - this.trackballLastY;
-
-        this.trackballLastX = mouseX;
-        this.trackballLastY = mouseY;
-
-        if (dx == 0 && dy == 0)
-        {
-            return;
-        }
-
-        this.trackballAccumX += dx;
-        this.trackballAccumY += dy;
-        this.updateTrackballRotation();
-    }
-
-    private void updateTrackballRotation()
-    {
-        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-        Vector3f total = this.toTotalRotation(source, new Vector3f());
-        Matrix3f startRotation = new Matrix3f()
-            .rotationZ(total.z)
-            .rotateY(total.y)
-            .rotateX(total.x);
-        float sensitivity = BBSSettings.trackballSensitivity.get();
-        float yaw = MathUtils.toRad(this.trackballAccumX * sensitivity);
-        float pitch = MathUtils.toRad(this.trackballAccumY * sensitivity);
-        float roll = MathUtils.toRad(this.trackballRollDeg);
-        Vector3f euler = new Matrix3f()
-            .rotation(roll, this.trackballViewLocal)
-            .rotate(yaw, this.trackballUpLocal.x, this.trackballUpLocal.y, this.trackballUpLocal.z)
-            .rotate(pitch, this.trackballRightLocal.x, this.trackballRightLocal.y, this.trackballRightLocal.z)
-            .mul(startRotation)
-            .getEulerAnglesZYX(new Vector3f());
-        Vector3f live = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-        Vector3f stored = this.toStoredRotation(euler, new Vector3f());
-        float x = unwrapDeg(MathUtils.toDeg(stored.x), MathUtils.toDeg(live.x));
-        float y = unwrapDeg(MathUtils.toDeg(stored.y), MathUtils.toDeg(live.y));
-        float z = unwrapDeg(MathUtils.toDeg(stored.z), MathUtils.toDeg(live.z));
-
-        if (this.dragRotateGizmoSpace) this.setR2(null, x, y, z);
-        else this.setR(null, x, y, z);
-    }
-
-    private float getSphereWorldRadius()
-    {
-        if (this.drag == null)
-        {
-            return 0F;
-        }
-
-        double dx = this.drag.gizmoOrigin.x - this.drag.cameraOrigin.x;
-        double dy = this.drag.gizmoOrigin.y - this.drag.cameraOrigin.y;
-        double dz = this.drag.gizmoOrigin.z - this.drag.cameraOrigin.z;
-        float distance = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-        return 0.22F * BBSSettings.axesScale.get() * BBSSettings.getAxesDistanceScale(distance);
-    }
-
-    private void beginRayRotateArcball(int mouseX, int mouseY)
-    {
-        if (this.arcballAnchored)
-        {
-            this.arcballAccum.premul(new Quaternionf().rotationTo(this.arcballStartLocal, this.arcballCurrentLocal));
-            this.arcballAnchored = false;
-        }
-
-        this.dragRotateGizmoSpace = this.local && BBSSettings.gizmos.get();
-
-        Matrix3f parentInverse = this.computeParentInverse();
-        float radius = this.getSphereWorldRadius();
-
-        if (parentInverse == null || radius <= 0F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        Vector3f view = new Vector3f(
-            (float) (this.drag.cameraOrigin.x - this.drag.gizmoOrigin.x),
-            (float) (this.drag.cameraOrigin.y - this.drag.gizmoOrigin.y),
-            (float) (this.drag.cameraOrigin.z - this.drag.gizmoOrigin.z)
-        );
-
-        if (view.lengthSquared() < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.arcballViewWorld.set(view.normalize());
-        this.arcballRadius = radius;
-        this.arcballParentInverse.set(parentInverse);
-
-        Matrix3f invView = this.drag.view.get3x3(new Matrix3f());
-
-        if (Math.abs(invView.determinant()) < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        invView.invert();
-        parentInverse.transform(invView.getColumn(0, new Vector3f()).normalize(), this.trackballRightLocal);
-        parentInverse.transform(invView.getColumn(1, new Vector3f()).normalize(), this.trackballUpLocal);
-        parentInverse.transform(invView.getColumn(2, new Vector3f()).normalize(), this.trackballViewLocal);
-
-        if (this.trackballRightLocal.lengthSquared() < 1.0E-8F || this.trackballUpLocal.lengthSquared() < 1.0E-8F)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.trackballRightLocal.normalize();
-        this.trackballUpLocal.normalize();
-        this.trackballViewLocal.normalize();
-
-        Vector3f grab = this.mapArcball(mouseX, mouseY, new Vector3f());
-
-        if (grab == null)
-        {
-            this.dragHasStart = false;
-
-            return;
-        }
-
-        this.arcballParentInverse.transform(grab, this.arcballStartLocal).normalize();
-        this.arcballCurrentLocal.set(this.arcballStartLocal);
-        this.arcballAnchored = true;
-        this.dragHasStart = true;
-    }
-
-    private Vector3f mapArcball(int mouseX, int mouseY, Vector3f out)
-    {
-        Vector3d hit = new Vector3d();
-
-        if (!this.drag.intersectPlane(mouseX, mouseY, this.arcballViewWorld, hit))
-        {
-            return null;
-        }
-
-        float px = (float) (hit.x - this.drag.gizmoOrigin.x);
-        float py = (float) (hit.y - this.drag.gizmoOrigin.y);
-        float pz = (float) (hit.z - this.drag.gizmoOrigin.z);
-        float r = this.arcballRadius;
-        float dSq = px * px + py * py + pz * pz;
-        float z = dSq < r * r / 2F
-            ? (float) Math.sqrt(r * r - dSq)
-            : r * r / (2F * (float) Math.sqrt(dSq));
-
-        out.set(this.arcballViewWorld).mul(z).add(px, py, pz);
-
-        return out.normalize();
-    }
-
-    private void applyRayRotateArcball(int mouseX, int mouseY)
-    {
-        Vector3f current = this.mapArcball(mouseX, mouseY, new Vector3f());
-
-        if (current == null)
-        {
-            return;
-        }
-
-        this.arcballParentInverse.transform(current, this.arcballCurrentLocal).normalize();
-        this.updateArcballRotation();
-    }
-
-    private void updateArcballRotation()
-    {
-        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-        Vector3f total = this.toTotalRotation(source, new Vector3f());
-        Matrix3f startRotation = new Matrix3f()
-            .rotationZ(total.z)
-            .rotateY(total.y)
-            .rotateX(total.x);
-        Quaternionf arc = new Quaternionf()
-            .rotationTo(this.arcballStartLocal, this.arcballCurrentLocal)
-            .mul(this.arcballAccum);
-        Vector3f euler = new Matrix3f()
-            .rotation(MathUtils.toRad(this.trackballRollDeg), this.trackballViewLocal)
-            .rotate(arc)
-            .mul(startRotation)
-            .getEulerAnglesZYX(new Vector3f());
-        Vector3f live = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-        Vector3f stored = this.toStoredRotation(euler, new Vector3f());
-        float x = unwrapDeg(MathUtils.toDeg(stored.x), MathUtils.toDeg(live.x));
-        float y = unwrapDeg(MathUtils.toDeg(stored.y), MathUtils.toDeg(live.y));
-        float z = unwrapDeg(MathUtils.toDeg(stored.z), MathUtils.toDeg(live.z));
-
-        if (this.dragRotateGizmoSpace) this.setR2(null, x, y, z);
-        else this.setR(null, x, y, z);
-    }
-
-    private void applyAxisRotationRadians(float radians, Vector3f localAxis)
-    {
-        if (localAxis.lengthSquared() < 1.0E-8F)
-        {
-            return;
-        }
-
-        Vector3f source = this.dragRotateGizmoSpace ? this.transform.rotate2 : this.transform.rotate;
-        Vector3f total = this.toTotalRotation(source, new Vector3f());
-        Vector3f euler = new Matrix3f()
-            .rotation(radians, localAxis)
-            .mul(new Matrix3f().rotationZ(total.z).rotateY(total.y).rotateX(total.x))
-            .getEulerAnglesZYX(new Vector3f());
-        Vector3f stored = this.toStoredRotation(euler, new Vector3f());
-        float x = unwrapDeg(MathUtils.toDeg(stored.x), MathUtils.toDeg(source.x));
-        float y = unwrapDeg(MathUtils.toDeg(stored.y), MathUtils.toDeg(source.y));
-        float z = unwrapDeg(MathUtils.toDeg(stored.z), MathUtils.toDeg(source.z));
-
-        if (this.dragRotateGizmoSpace) this.setR2(null, x, y, z);
-        else this.setR(null, x, y, z);
-    }
-
-    private Matrix3f computeParentInverse()
-    {
-        if (this.drag == null)
-        {
-            return null;
-        }
-
-        if (this.dragRotateGizmoSpace && this.drag.hasRotate2ParentInverse)
-        {
-            return new Matrix3f(this.drag.rotate2ParentInverse);
-        }
-
-        if (!this.dragRotateGizmoSpace && this.drag.hasRotateParentInverse)
-        {
-            return new Matrix3f(this.drag.rotateParentInverse);
-        }
-
-        Matrix3f rotateAxesInverse = new Matrix3f(this.getActiveRotateAxes());
-
-        if (Math.abs(rotateAxesInverse.determinant()) < 1.0E-4F)
-        {
-            return null;
-        }
-
-        Vector3f source = this.dragRotateGizmoSpace ? this.cache.rotate2 : this.cache.rotate;
-
-        return this.eulerAxes(this.toTotalRotation(source, new Vector3f())).mul(rotateAxesInverse.invert());
-    }
-
-    private Matrix3f getActiveRotateAxes()
-    {
-        return this.dragRotateGizmoSpace ? this.drag.rotate2Axes : this.drag.rotateAxes;
-    }
-
-    private Vector3f toTotalRotation(Vector3f stored, Vector3f out)
-    {
-        out.set(stored);
-
-        if (!this.dragRotateGizmoSpace && this.drag != null)
-        {
-            out.add(this.drag.rotationOffset);
-        }
-
-        return out;
-    }
-
-    private Vector3f toStoredRotation(Vector3f total, Vector3f out)
-    {
-        out.set(total);
-
-        if (!this.dragRotateGizmoSpace && this.drag != null)
-        {
-            out.sub(this.drag.rotationOffset);
-        }
-
-        return out;
-    }
-
-    private Matrix3f eulerAxes(Vector3f rotateRadians)
-    {
-        Matrix3f axes = new Matrix3f();
-
-        axes.setColumn(0, new Matrix3f().rotationZ(rotateRadians.z).rotateY(rotateRadians.y).transform(new Vector3f(1F, 0F, 0F)));
-        axes.setColumn(1, new Matrix3f().rotationZ(rotateRadians.z).transform(new Vector3f(0F, 1F, 0F)));
-        axes.setColumn(2, new Vector3f(0F, 0F, 1F));
-
-        return axes;
-    }
-
-    private float screenAngle(int mouseX, int mouseY)
-    {
-        return (float) Math.atan2(mouseY - this.dragScreenCenter.y, mouseX - this.dragScreenCenter.x);
-    }
-
-    private static float unwrapDeg(float valueDeg, float referenceDeg)
-    {
-        return valueDeg + Math.round((referenceDeg - valueDeg) / 360F) * 360F;
-    }
-
-    private Vector3f computeStartRingVec(int mouseX, int mouseY, Vector3f axisDir)
-    {
-        Vector3f ring = new Vector3f();
-        Vector3d hit = new Vector3d();
-
-        if (this.drag.intersectPlane(mouseX, mouseY, axisDir, hit))
-        {
-            ring.set(
-                (float) (hit.x - this.drag.gizmoOrigin.x),
-                (float) (hit.y - this.drag.gizmoOrigin.y),
-                (float) (hit.z - this.drag.gizmoOrigin.z)
-            );
-
-            float along = ring.dot(axisDir);
-
-            ring.sub(new Vector3f(axisDir).mul(along));
-        }
-
-        if (ring.lengthSquared() < 1.0E-8F)
-        {
-            Vector3f fallback = Math.abs(axisDir.y) < 0.9F ? new Vector3f(0F, 1F, 0F) : new Vector3f(1F, 0F, 0F);
-
-            axisDir.cross(fallback, ring);
-        }
-
-        return ring.normalize();
-    }
-
-    private static float applyStepModifiers(float step)
-    {
-        if (Window.isAltPressed()) step /= STEP_MODIFIER;
-        if (Window.isCtrlPressed()) step *= STEP_MODIFIER;
-
-        return step;
-    }
-
-    public boolean scrollDepth(UIContext context)
-    {
-        if (!this.editing || !this.isScreenTranslate() || !this.dragHasStart || this.transform == null)
-        {
-            return false;
-        }
-
-        GizmoDrag fresh = this.getHotkeyDrag();
-
-        if (fresh != null)
-        {
-            this.drag = fresh;
-            this.beginRayTranslateScreen(context.mouseX, context.mouseY);
-        }
-
-        if (this.drag == null)
-        {
-            return true;
-        }
-
-        Vector3d ray = new Vector3d(this.drag.gizmoOrigin).sub(this.drag.cameraOrigin);
-        double distance = ray.length();
-
-        if (distance < 1.0E-4)
-        {
-            return true;
-        }
-
-        ray.div(distance);
-
-        float step = applyStepModifiers((float) (context.mouseWheel * distance * DEPTH_WHEEL_FACTOR));
-        Vector3f translateStep = this.dragScreenInverseJacobian.transform(
-            new Vector3f((float) (ray.x * step), (float) (ray.y * step), (float) (ray.z * step))
-        );
-
-        this.setT(null,
-            this.transform.translate.x + translateStep.x,
-            this.transform.translate.y + translateStep.y,
-            this.transform.translate.z + translateStep.z
-        );
-
-        this.drag.gizmoOrigin.add(ray.x * step, ray.y * step, ray.z * step);
-        this.dragStartTranslate.set(this.transform.translate);
-        this.drag.intersectPlane(context.mouseX, context.mouseY, this.dragPlaneNormal, this.dragStartHit);
-        this.setTransform(this.transform);
-
-        return true;
-    }
-
-    public boolean scrollTrackballRoll(UIContext context)
-    {
-        if (!this.editing || !this.isSphereRotate() || !this.dragHasStart || this.transform == null)
-        {
-            return false;
-        }
-
-        this.trackballRollDeg += applyStepModifiers((float) (context.mouseWheel * TRACKBALL_WHEEL_DEG));
-
-        if (this.dragKind == DragKind.ARCBALL) this.updateArcballRotation();
-        else this.updateTrackballRotation();
-
-        this.setTransform(this.transform);
-
-        return true;
-    }
-
-    private boolean applyGizmoTranslate(int dx, int dy, float factor)
-    {
-        if (!this.gizmoDrag || this.mode != 0)
-        {
-            return false;
-        }
-
-        if (dx == 0 && dy == 0)
-        {
-            return true;
-        }
-
-        Float units = this.getGizmoAxisDelta(dx, dy, this.axis, factor);
-        Float units2 = this.axis2 == null ? null : this.getGizmoAxisDelta(dx, dy, this.axis2, factor);
-
-        if (units == null)
-        {
-            return false;
-        }
-
-        Vector3f vector3f = new Vector3f(this.transform.translate);
-
-        this.applyTranslateDelta(vector3f, this.axis, units);
-
-        if (this.axis2 != null && units2 != null)
-        {
-            this.applyTranslateDelta(vector3f, this.axis2, units2);
-        }
-
-        if (this.shouldSnap(0))
-        {
-            vector3f.x = (float) snap(vector3f.x, BBSSettings.snapTranslate.get());
-            vector3f.y = (float) snap(vector3f.y, BBSSettings.snapTranslate.get());
-            vector3f.z = (float) snap(vector3f.z, BBSSettings.snapTranslate.get());
-        }
-
-        this.setT(null, vector3f.x, vector3f.y, vector3f.z);
-
-        return true;
-    }
-
-    private boolean applyGizmoScale(int dx, int dy, float factor, boolean all)
-    {
-        if (!this.gizmoDrag || this.mode != 1)
-        {
-            return false;
-        }
-
-        if (dx == 0 && dy == 0)
-        {
-            return true;
-        }
-
-        Float delta = this.getGizmoAxisDelta(dx, dy, this.axis, factor);
-
-        if (delta == null)
-        {
-            return false;
-        }
-
-        Vector3f vector3f = new Vector3f(this.transform.scale);
-
-        if (all)
-        {
-            vector3f.x += delta;
-            vector3f.y += delta;
-            vector3f.z += delta;
-        }
-        else if (this.axis == Axis.X)
-        {
-            vector3f.x += delta;
-        }
-        else if (this.axis == Axis.Y)
-        {
-            vector3f.y += delta;
-        }
-        else if (this.axis == Axis.Z)
-        {
-            vector3f.z += delta;
-        }
-
-        if (!all && this.axis2 != null)
-        {
-            Float delta2 = this.getGizmoAxisDelta(dx, dy, this.axis2, factor);
-
-            if (delta2 != null)
-            {
-                if (this.axis2 == Axis.X) vector3f.x += delta2;
-                else if (this.axis2 == Axis.Y) vector3f.y += delta2;
-                else if (this.axis2 == Axis.Z) vector3f.z += delta2;
-            }
-        }
-
-        if (this.shouldSnap(1))
-        {
-            vector3f.x = (float) snap(vector3f.x, BBSSettings.snapScale.get());
-            vector3f.y = (float) snap(vector3f.y, BBSSettings.snapScale.get());
-            vector3f.z = (float) snap(vector3f.z, BBSSettings.snapScale.get());
-        }
-
-        this.setS(null, vector3f.x, vector3f.y, vector3f.z);
-
-        return true;
-    }
-
-    private boolean applyGizmoRotate(int mouseX, int mouseY, int lastX, int lastY, float factor)
-    {
-        if (!this.gizmoDrag || !this.gizmoInvReady || this.mode != 2)
-        {
-            return false;
-        }
-
-        if (mouseX == lastX && mouseY == lastY)
-        {
-            return true;
-        }
-
-        if (this.isSphereRotate() || this.dragKind == DragKind.VIEW)
-        {
-            return this.applySpecialGizmoRotate(mouseX, mouseY, lastX, lastY, factor);
-        }
-
-        Axis axis = this.axis;
-
-        if (!this.intersectGizmoPlane(lastX, lastY, axis, this.gizmoP0) || !this.intersectGizmoPlane(mouseX, mouseY, axis, this.gizmoP1))
-        {
-            return false;
-        }
-
-        if (this.gizmoP0.lengthSquared() < 1e-6 || this.gizmoP1.lengthSquared() < 1e-6)
-        {
-            return false;
-        }
-
-        this.gizmoCross.set(this.gizmoP0).cross(this.gizmoP1);
-
-        double dot = this.gizmoP0.dot(this.gizmoP1);
-        double axisDot = this.getGizmoAxisNormal(axis).dot(this.gizmoCross);
-        double angleRad = Math.atan2(axisDot, dot);
-        float dragSign = this.getAxisDragDirectionSign(axis, this.gizmoP1, mouseX, mouseY, lastX, lastY);
-
-        if (dragSign == 0F)
-        {
-            return true;
-        }
-
-        float deltaDeg = MathUtils.toDeg((float) Math.abs(angleRad)) * factor * dragSign;
-        Vector3f current = this.local && BBSSettings.gizmos.get() ? this.transform.rotate2 : this.transform.rotate;
-        Vector3f rotDeg = new Vector3f(
-            MathUtils.toDeg(current.x),
-            MathUtils.toDeg(current.y),
-            MathUtils.toDeg(current.z)
-        );
-
-        if (axis == Axis.X) rotDeg.x += deltaDeg;
-        else if (axis == Axis.Y) rotDeg.y += deltaDeg;
-        else if (axis == Axis.Z) rotDeg.z += deltaDeg;
-
-        if (this.shouldSnap(2))
-        {
-            rotDeg.x = (float) snap(rotDeg.x, BBSSettings.snapRotate.get());
-            rotDeg.y = (float) snap(rotDeg.y, BBSSettings.snapRotate.get());
-            rotDeg.z = (float) snap(rotDeg.z, BBSSettings.snapRotate.get());
-        }
-
-        if (this.local && BBSSettings.gizmos.get()) this.setR2(null, rotDeg.x, rotDeg.y, rotDeg.z);
-        else this.setR(null, rotDeg.x, rotDeg.y, rotDeg.z);
-
-        return true;
-    }
-
-    private void applyTranslateDelta(Vector3f vector, Axis axis, float units)
-    {
-        if (this.local)
-        {
-            float localUnits = axis == Axis.Z ? -units : units;
-
-            vector.add(this.calculateLocalVector(localUnits, axis));
-        }
-        else if (axis == Axis.X)
-        {
-            vector.x += units;
-        }
-        else if (axis == Axis.Y)
-        {
-            vector.y += units;
-        }
-        else if (axis == Axis.Z)
-        {
-            vector.z -= units;
-        }
-    }
-
-    private boolean applySpecialGizmoRotate(int mouseX, int mouseY, int lastX, int lastY, float factor)
-    {
-        Vector3f current = this.local && BBSSettings.gizmos.get() ? this.transform.rotate2 : this.transform.rotate;
-        Vector3f rotDeg = new Vector3f(
-            MathUtils.toDeg(current.x),
-            MathUtils.toDeg(current.y),
-            MathUtils.toDeg(current.z)
-        );
-
-        int dx = mouseX - lastX;
-        int dy = mouseY - lastY;
-
-        if (this.dragKind == DragKind.VIEW)
-        {
-            rotDeg.z += dx * factor;
-        }
-        else
-        {
-            rotDeg.y += dx * factor;
-            rotDeg.x += dy * factor;
-        }
-
-        if (this.shouldSnap(2))
-        {
-            rotDeg.x = (float) snap(rotDeg.x, BBSSettings.snapRotate.get());
-            rotDeg.y = (float) snap(rotDeg.y, BBSSettings.snapRotate.get());
-            rotDeg.z = (float) snap(rotDeg.z, BBSSettings.snapRotate.get());
-        }
-
-        if (this.local && BBSSettings.gizmos.get()) this.setR2(null, rotDeg.x, rotDeg.y, rotDeg.z);
-        else this.setR(null, rotDeg.x, rotDeg.y, rotDeg.z);
-
-        return true;
-    }
-
-    private Float getGizmoAxisDelta(int dx, int dy, Axis axis, float factor)
-    {
-        Vector2f vector = this.getGizmoAxis(axis);
-        float lenSq = this.getGizmoAxisLenSq(axis);
-        float len = (float) Math.sqrt(lenSq);
-
-        if (len < 1e-3F)
-        {
-            return null;
-        }
-
-        float units = (dx * vector.x + dy * vector.y) / len;
-        units *= factor;
-
-        return Float.isFinite(units) ? units : null;
-    }
-
-    private Vector2f getGizmoAxis(Axis axis)
-    {
-        if (axis == Axis.X) return this.gizmoAxisX;
-        if (axis == Axis.Y) return this.gizmoAxisY;
-
-        return this.gizmoAxisZ;
-    }
-
-    private float getGizmoAxisLenSq(Axis axis)
-    {
-        if (axis == Axis.X) return this.gizmoAxisXLenSq;
-        if (axis == Axis.Y) return this.gizmoAxisYLenSq;
-
-        return this.gizmoAxisZLenSq;
-    }
-
-    private Vector3d getGizmoAxisNormal(Axis axis)
-    {
-        if (axis == Axis.X) return this.gizmoAxisNormal.set(1, 0, 0);
-        if (axis == Axis.Y) return this.gizmoAxisNormal.set(0, 1, 0);
-
-        return this.gizmoAxisNormal.set(0, 0, 1);
-    }
-
-    private float getAxisDragDirectionSign(Axis axis, Vector3d pointOnRing, int mouseX, int mouseY, int lastX, int lastY)
-    {
-        this.gizmoTangent.set(this.getGizmoAxisNormal(axis)).cross(pointOnRing);
-
-        if (this.gizmoTangent.lengthSquared() < 1e-8)
-        {
-            return 0F;
-        }
-
-        this.gizmoTangent.normalize().mul(0.25D);
-
-        if (!this.projectGizmoPoint((float) pointOnRing.x, (float) pointOnRing.y, (float) pointOnRing.z, this.gizmoP2D))
-        {
-            return 0F;
-        }
-
-        if (!this.projectGizmoPoint(
-            (float) (pointOnRing.x + this.gizmoTangent.x),
-            (float) (pointOnRing.y + this.gizmoTangent.y),
-            (float) (pointOnRing.z + this.gizmoTangent.z),
-            this.gizmoP2DNext
-        ))
-        {
-            return 0F;
-        }
-
-        float tangentX = this.gizmoP2DNext.x - this.gizmoP2D.x;
-        float tangentY = this.gizmoP2D.y - this.gizmoP2DNext.y;
-        float dragX = mouseX - lastX;
-        float dragY = lastY - mouseY;
-        float alignment = dragX * tangentX + dragY * tangentY;
-
-        if (Math.abs(alignment) < 1e-6F)
-        {
-            return 0F;
-        }
-
-        float sign = Math.signum(alignment);
-
-        if (axis == Axis.X || axis == Axis.Z)
-        {
-            sign = -sign;
-        }
-
-        return sign;
-    }
-
-    private boolean intersectGizmoPlane(int mouseX, int mouseY, Axis axis, Vector3d out)
-    {
-        if (this.gizmoViewportW <= 0 || this.gizmoViewportH <= 0)
-        {
-            return false;
-        }
-
-        float ndcX = (mouseX - this.gizmoViewportX) / (float) this.gizmoViewportW * 2F - 1F;
-        float ndcY = 1F - (mouseY - this.gizmoViewportY) / (float) this.gizmoViewportH * 2F;
-
-        this.gizmoNear4D.set(ndcX, ndcY, -1F, 1F);
-        this.gizmoFar4D.set(ndcX, ndcY, 1F, 1F);
-
-        this.gizmoInvMvp.transform(this.gizmoNear4D);
-        this.gizmoInvMvp.transform(this.gizmoFar4D);
-
-        if (this.gizmoNear4D.w == 0F || this.gizmoFar4D.w == 0F)
-        {
-            return false;
-        }
-
-        this.gizmoNear4D.div(this.gizmoNear4D.w);
-        this.gizmoFar4D.div(this.gizmoFar4D.w);
-
-        this.gizmoRayStart.set(this.gizmoNear4D.x, this.gizmoNear4D.y, this.gizmoNear4D.z);
-        this.gizmoRayEnd.set(this.gizmoFar4D.x, this.gizmoFar4D.y, this.gizmoFar4D.z);
-
-        double a = 0;
-        double b = 0;
-        double c = 0;
-
-        if (axis == Axis.X) a = 1;
-        else if (axis == Axis.Y) b = 1;
-        else if (axis == Axis.Z) c = 1;
-
-        return Intersectiond.intersectLineSegmentPlane(
-            this.gizmoRayStart.x, this.gizmoRayStart.y, this.gizmoRayStart.z,
-            this.gizmoRayEnd.x, this.gizmoRayEnd.y, this.gizmoRayEnd.z,
-            a, b, c, 0, out
-        );
-    }
-
-    private boolean projectGizmoPoint(float x, float y, float z, Vector2f out)
-    {
-        if (this.gizmoViewportW <= 0 || this.gizmoViewportH <= 0)
-        {
-            return false;
-        }
-
-        this.gizmoTmp4D.set(x, y, z, 1F);
-        this.gizmoMvp.transform(this.gizmoTmp4D);
-
-        if (this.gizmoTmp4D.w == 0F)
-        {
-            return false;
-        }
-
-        float ndcX = this.gizmoTmp4D.x / this.gizmoTmp4D.w;
-        float ndcY = this.gizmoTmp4D.y / this.gizmoTmp4D.w;
-
-        out.x = this.gizmoViewportX + (ndcX * 0.5F + 0.5F) * this.gizmoViewportW;
-        out.y = this.gizmoViewportY + (1F - (ndcY * 0.5F + 0.5F)) * this.gizmoViewportH;
-
-        return true;
-    }
-
-    private enum DragKind
-    {
-        AXIS, SCREEN, TRACKBALL, ARCBALL, VIEW
-    }
-
     public enum HotkeyTarget
     {
         VIEW("view", null, true),
         SPHERE("sphere", null, true),
         SCREEN("screen", null, true),
+        /** Scale's non-axis step: one lever drives all three axes (Blender's plain S). */
         ALL("all", null, false),
         X("x", Axis.X, false),
         Y("y", Axis.Y, false),
@@ -3177,6 +1768,7 @@ public class UIPropTransform extends UITransform
 
         public final String token;
         public final Axis axis;
+        /** Whether the step is driven by the 3D ray and so needs a rendered gizmo. */
         public final boolean needsRay;
 
         HotkeyTarget(String token, Axis axis, boolean needsRay)
@@ -3200,6 +1792,156 @@ public class UIPropTransform extends UITransform
         }
     }
 
+    /**
+     * Bridge the active {@link DragStrategy} works through: it exposes the
+     * edit session's state and funnels every write back through the editor's
+     * virtual {@code setT/setS/setR/setR2}, so the delta editors keep fanning
+     * edits onto their selections.
+     */
+    private class Bridge implements DragContext
+    {
+        @Override
+        public Transform transform()
+        {
+            return UIPropTransform.this.transform;
+        }
+
+        @Override
+        public Transform cache()
+        {
+            return UIPropTransform.this.cache;
+        }
+
+        @Override
+        public GizmoDrag drag()
+        {
+            return UIPropTransform.this.drag;
+        }
+
+        @Override
+        public void setDrag(GizmoDrag drag)
+        {
+            UIPropTransform.this.drag = drag;
+        }
+
+        @Override
+        public GizmoDrag freshHotkeyDrag()
+        {
+            return UIPropTransform.this.getHotkeyDrag();
+        }
+
+        @Override
+        public boolean isLocal()
+        {
+            return UIPropTransform.this.isLocal();
+        }
+
+        @Override
+        public TransformSpace space()
+        {
+            return UIPropTransform.this.space;
+        }
+
+        @Override
+        public boolean isModel()
+        {
+            return UIPropTransform.this.model;
+        }
+
+        @Override
+        public boolean rotationConstrained()
+        {
+            return UIPropTransform.this.isRotationConstrained();
+        }
+
+        /* Blender-style snapping: every gesture is free by default and snaps to
+         * the configured step only while Ctrl is held. Typed numeric input is
+         * exact already, so it never snaps. */
+        @Override
+        public boolean shouldSnap(TransformOp op)
+        {
+            return UIPropTransform.this.editing && UIPropTransform.this.getOp() == op
+                && Window.isCtrlPressed() && !UIPropTransform.this.numeric.isActive();
+        }
+
+        @Override
+        public float additiveFactor(TransformOp op)
+        {
+            UITrackpad reference = op == TransformOp.TRANSLATE ? UIPropTransform.this.tx : (op == TransformOp.SCALE ? UIPropTransform.this.sx : UIPropTransform.this.rx);
+
+            return (float) reference.getValueModifier();
+        }
+
+        @Override
+        public Vector3f localTranslateVector(double factor, Axis axis)
+        {
+            return UIPropTransform.this.calculateLocalVector(factor, axis);
+        }
+
+        @Override
+        public float sphereWorldRadius()
+        {
+            return Gizmo.INSTANCE.getSphereWorldRadius();
+        }
+
+        @Override
+        public void refreshFields()
+        {
+            UIPropTransform.this.setTransform(UIPropTransform.this.transform);
+        }
+
+        @Override
+        public void writeTranslate(float x, float y, float z)
+        {
+            UIPropTransform.this.setT(null, x, y, z);
+        }
+
+        @Override
+        public void writeScale(float x, float y, float z)
+        {
+            UIPropTransform.this.setS(null, x, y, z);
+        }
+
+        @Override
+        public void writeRotateDeg(float xDeg, float yDeg, float zDeg)
+        {
+            UIPropTransform.this.setR(null, xDeg, yDeg, zDeg);
+        }
+
+        @Override
+        public void writeRotationQuat(Quaternionf quat)
+        {
+            UIPropTransform.this.setRQuat(quat);
+        }
+    }
+
+    /**
+     * Dropdown trigger for the transform space: a normal button whose label is the
+     * active frame's name (kept current by {@link #updateSpaceLabel}), with that frame's
+     * coloured icon drawn on the left. Clicking opens the clip-style space list.
+     */
+    private class UISpaceButton extends UIButton
+    {
+        public UISpaceButton()
+        {
+            super(UIKeys.TRANSFORMS_SPACE_LOCAL, (b) -> UIPropTransform.this.openSpaceMenu());
+        }
+
+        @Override
+        protected void renderSkin(UIContext context)
+        {
+            super.renderSkin(context);
+
+            /* The frame's icon, left-aligned and left in the default white — the colour
+             * cue lives in the dropdown list, not on the trigger. */
+            context.batcher.icon(
+                UIPropTransform.this.spaceIcon(UIPropTransform.this.space),
+                Colors.WHITE,
+                this.area.x + 4, this.area.my(), 0F, 0.5F
+            );
+        }
+    }
+
     public static class UITransformHandler extends UIElement
     {
         private UIPropTransform transform;
@@ -3207,13 +1949,6 @@ public class UIPropTransform extends UITransform
         public UITransformHandler(UIPropTransform transform)
         {
             this.transform = transform;
-            this.noCulling();
-        }
-
-        @Override
-        public void render(UIContext context)
-        {
-            this.transform.pollGesture(context);
         }
 
         @Override
@@ -3234,19 +1969,17 @@ public class UIPropTransform extends UITransform
                     return true;
                 }
             }
-            
+
             return super.subMouseClicked(context);
         }
 
         @Override
         protected boolean subMouseScrolled(UIContext context)
         {
-            if (this.transform.scrollTrackballRoll(context))
-            {
-                return true;
-            }
-
-            if (this.transform.scrollDepth(context))
+            /* While sphere-dragging the wheel rolls about the view axis; during a
+             * screen-space grab it drives depth; otherwise it keeps adjusting
+             * the drag sensitivity amplifier as before. */
+            if (this.transform.scrollDrag(context))
             {
                 return true;
             }
