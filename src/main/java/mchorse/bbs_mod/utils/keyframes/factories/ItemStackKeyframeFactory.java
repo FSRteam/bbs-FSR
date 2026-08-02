@@ -88,6 +88,17 @@ public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
         return provider == null ? NbtOps.INSTANCE : provider.createSerializationContext(NbtOps.INSTANCE);
     }
 
+    /**
+     * The {@code DynamicOps} for the current thread's registry context, falling
+     * back to a plain {@link NbtOps} when no registry is available. Client UI
+     * panels use this so item NBT display and editing handle registry-held
+     * components such as enchantments.
+     */
+    public static DynamicOps<Tag> currentOps()
+    {
+        return ops(currentRegistry());
+    }
+
     @Override
     public ItemStack fromData(BaseType data)
     {

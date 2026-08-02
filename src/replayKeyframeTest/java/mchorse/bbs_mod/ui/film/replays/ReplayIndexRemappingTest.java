@@ -48,6 +48,8 @@ import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.EquipmentSlotGroup;
@@ -84,6 +86,7 @@ public final class ReplayIndexRemappingTest
             testReplayTrackCategories();
             testGlintLayerKeyframes();
             testEnchantedEquipmentSerializationRoundTrip();
+            testEnchantedItemPickerNbtRoundTrip();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
             KeyframeInteractionTest.run();
@@ -206,6 +209,50 @@ public final class ReplayIndexRemappingTest
             assertTrue(
                 body.getEnchantmentLevel(enchantments.getHolderOrThrow(Enchantments.PROTECTION)) == 4,
                 "armor enchantment level lost after film serialization"
+            );
+        }
+        finally
+        {
+            ItemStackKeyframeFactory.setClientRegistryAccess(null);
+        }
+    }
+
+    /**
+     * The item picker panels ({@code UIUnifiedPickOverlayPanel} /
+     * {@code UIItemStackOverlayPanel}) display and edit item NBT through
+     * {@code ItemStack.CODEC} with {@link ItemStackKeyframeFactory#currentOps()}.
+     * A plain {@code NbtOps} — the 94be896c blind spot — made enchanted items
+     * display as "{}" and degrade to air the moment their NBT was edited.
+     */
+    private static void testEnchantedItemPickerNbtRoundTrip()
+    {
+        MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
+        enchantments.register(Enchantments.SHARPNESS, enchantment(Enchantments.SHARPNESS.location()), RegistrationInfo.BUILT_IN);
+        HolderLookup.Provider provider = new RegistryAccess.ImmutableRegistryAccess(List.of(enchantments));
+
+        ItemStackKeyframeFactory.setClientRegistryAccess(() -> provider);
+
+        try
+        {
+            ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+            sword.enchant(enchantments.getHolderOrThrow(Enchantments.SHARPNESS), 5);
+
+            // The picker's updateNbt()/updateItemNbt() shows encodeStart(...).orElse("{}").
+            Tag displayed = ItemStack.CODEC.encodeStart(ItemStackKeyframeFactory.currentOps(), sword)
+                .result()
+                .orElseThrow(() -> new AssertionError("enchanted item failed to encode with currentOps()"));
+
+            assertTrue(!((CompoundTag) displayed).isEmpty(), "enchanted item NBT displayed as {} in the item picker");
+
+            // The picker's NBT field parses that text back; a plain NbtOps would yield ItemStack.EMPTY,
+            // turning the selected item into air on the first edit.
+            ItemStack parsed = ItemStack.CODEC.parse(ItemStackKeyframeFactory.currentOps(), displayed)
+                .result()
+                .orElse(ItemStack.EMPTY);
+
+            assertTrue(
+                ItemStack.isSameItemSameComponents(sword, parsed),
+                "editing enchanted item NBT in the picker lost its components"
             );
         }
         finally
