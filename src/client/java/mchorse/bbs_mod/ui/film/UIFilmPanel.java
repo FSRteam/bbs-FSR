@@ -201,6 +201,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.panelById.put(PANEL_PREVIEW_ID, this.preview);
         this.panelById.put(PANEL_EDIT_AREA_ID, this.editArea);
 
+        /* The dock must be constructed before the editors below: the replay
+         * editors query its lock state (edit panel top offset) from their own
+         * constructors, and this final field cannot be left unassigned when
+         * getEditPanelTopOffsetPx() runs during their construction. The layout
+         * wiring further down configures and mounts it afterwards. */
+        this.dock = new UIDockLayout();
+
         /* Editors */
         this.cameraEditor = new UIClipsPanel(this, BBSMod.getFactoryCameraClips()).target(this.editArea);
         this.cameraEditor.full(this.main);
@@ -249,7 +256,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.tabBar.add(this.topBarActions);
 
         /* Setup elements */
-        this.dock = new UIDockLayout();
         this.dock.relative(this.editor).w(1F).h(1F);
         this.dock.source(this.createFilmLayoutSource())
             .frameless(PANEL_PREVIEW_ID)
