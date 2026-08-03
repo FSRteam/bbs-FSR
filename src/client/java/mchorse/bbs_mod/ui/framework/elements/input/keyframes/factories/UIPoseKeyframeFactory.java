@@ -6,6 +6,7 @@ import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -57,10 +58,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         }
         else if (FormUtils.getForm(sheet.property) instanceof MobForm mobForm)
         {
-            List<String> bones = FormUtilsClient.getRenderer(mobForm).getBones();
+            /* The mob form's own bone hierarchy, so the list matches the form panel's
+             * 2.5 tree style instead of a flat alphabetical list. */
+            BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(mobForm);
 
             this.poseEditor.setPose(keyframe.getValue(), "");
-            this.poseEditor.fillGroups(bones, false);
+            this.poseEditor.fillGroups(hierarchy, false);
         }
 
         this.scroll.add(this.poseEditor);

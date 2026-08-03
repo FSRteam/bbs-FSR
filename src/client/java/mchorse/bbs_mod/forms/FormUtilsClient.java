@@ -237,7 +237,7 @@ public class FormUtilsClient
         BoneHierarchy hierarchy = getBoneHierarchy(form);
         String resolved = hierarchy.resolveId(bone);
 
-        return hierarchy.getLabels(false).getOrDefault(resolved, bone);
+        return hierarchy.getLabels().getOrDefault(resolved, bone);
     }
 
     public static interface IFormRendererFactory <T extends Form>

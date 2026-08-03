@@ -178,7 +178,7 @@ public class UIReplaysEditorUtils
         }
 
         Map<String, Integer> parentToColor = new HashMap<>();
-        Map<String, String> labels = hierarchy.getLabels(false);
+        Map<String, String> labels = hierarchy.getLabels();
         int[] hueIndex = {0};
 
         for (BoneHierarchy.Bone bone : hierarchy.getBones())
@@ -1560,7 +1560,7 @@ public class UIReplaysEditorUtils
 
             context.replaceContextMenu((menu) ->
             {
-                Map<String, String> labels = hierarchy.getLabels(false);
+                Map<String, String> labels = hierarchy.getLabels();
 
                 for (BoneHierarchy.Bone adjacent : hierarchy.getAdjacent(bone))
                 {
@@ -1590,7 +1590,7 @@ public class UIReplaysEditorUtils
 
             context.replaceContextMenu((menu) ->
             {
-                Map<String, String> labels = hierarchy.getLabels(false);
+                Map<String, String> labels = hierarchy.getLabels();
 
                 for (BoneHierarchy.Bone ancestor : hierarchy.getAncestors(bone))
                 {

@@ -5,6 +5,7 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -13,6 +14,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -102,6 +104,25 @@ public class UIBoneTreeList extends UIStringList
         if (model != null)
         {
             this.emit(boneNodes(model, model.getRootGroupKeys(), hidden), 0, 0, false);
+        }
+    }
+
+    /**
+     * Set only the hierarchy metadata from a renderer-independent bone hierarchy (mob
+     * forms' vanilla model parts, pose form bones), leaving the list contents to the
+     * host. Layer roots and orphaned ids become separate roots; ids missing from the
+     * label map fall back to their raw id. Passing a null hierarchy clears the metadata
+     * (every row renders flat).
+     */
+    public void setHierarchy(BoneHierarchy hierarchy, Predicate<String> hidden, Map<String, String> labels)
+    {
+        this.metas.clear();
+
+        if (hierarchy != null)
+        {
+            Map<String, String> labelMap = labels == null ? Collections.emptyMap() : labels;
+
+            this.emit(boneHierarchyRoots(hierarchy, labelMap, hidden), 0, 0, false);
         }
     }
 
@@ -211,6 +232,62 @@ public class UIBoneTreeList extends UIStringList
         }
 
         return nodes;
+    }
+
+    /**
+     * A renderer-independent hierarchy in its stored pre-order (mob forms' vanilla
+     * model parts across every layer): children of a parent keep their list order, and
+     * bones whose parent is absent — layer roots, or orphans of a pruned hierarchy —
+     * become roots. A hidden bone dissolves into its children in place, like
+     * {@link #boneNodes}.
+     */
+    private static List<Node> boneHierarchyRoots(BoneHierarchy hierarchy, Map<String, String> labels, Predicate<String> hidden)
+    {
+        Map<String, List<BoneHierarchy.Bone>> childrenByParent = new HashMap<>();
+        Set<String> ids = new HashSet<>(hierarchy.getBoneIds());
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            childrenByParent.computeIfAbsent(bone.parentId(), (k) -> new ArrayList<>()).add(bone);
+        }
+
+        List<Node> roots = new ArrayList<>();
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            String parent = bone.parentId();
+
+            if (parent != null && !parent.isEmpty() && ids.contains(parent))
+            {
+                continue;
+            }
+
+            roots.addAll(boneHierarchyNode(bone, childrenByParent, labels, hidden));
+        }
+
+        return roots;
+    }
+
+    private static List<Node> boneHierarchyNode(BoneHierarchy.Bone bone, Map<String, List<BoneHierarchy.Bone>> childrenByParent, Map<String, String> labels, Predicate<String> hidden)
+    {
+        List<Node> children = new ArrayList<>();
+
+        for (BoneHierarchy.Bone child : childrenByParent.getOrDefault(bone.id(), Collections.emptyList()))
+        {
+            children.addAll(boneHierarchyNode(child, childrenByParent, labels, hidden));
+        }
+
+        if (hidden != null && hidden.test(bone.id()))
+        {
+            return children;
+        }
+
+        String label = labels.getOrDefault(bone.id(), bone.id());
+        Node node = new Node(bone.id(), label, label);
+
+        node.children.addAll(children);
+
+        return new ArrayList<>(List.of(node));
     }
 
     /**
