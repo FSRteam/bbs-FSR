@@ -334,16 +334,17 @@ public class UIPoseEditor extends UIElement
 
     public void fillGroups(BoneHierarchy hierarchy, boolean reset)
     {
-        this.fillGroups(hierarchy, reset, false);
-    }
-
-    public void fillGroups(BoneHierarchy hierarchy, boolean reset, boolean hierarchicalLabels)
-    {
         this.model = null;
         this.hierarchy = hierarchy == null ? BoneHierarchy.EMPTY : hierarchy;
         this.flippedParts = this.createHierarchyFlipMap(this.hierarchy);
-        this.groups.list.setHierarchy(null, null);
-        this.groups.setSource(this.hierarchy.getBoneIds(), this.hierarchy.getLabels(hierarchicalLabels), false);
+
+        /* The renderer-independent hierarchy rides along so the list renders as a tree,
+         * the same outliner style the model path gets below. The labels double as the
+         * tree labels (the raw ids are path-like, e.g. inner_armor#/root/rightArm). */
+        Map<String, String> labels = this.hierarchy.getLabels();
+
+        this.groups.list.setHierarchy(this.hierarchy, null, labels);
+        this.groups.setSource(this.hierarchy.getBoneIds(), labels, false);
         this.groups.filter(reset);
     }
 
@@ -372,7 +373,7 @@ public class UIPoseEditor extends UIElement
             List<String> bones = new ArrayList<>(this.hierarchy.getBoneIds());
 
             bones.removeIf((bone) -> PoseBones.isHidden(disabledBones, bone));
-            this.groups.setSource(bones, this.hierarchy.getLabels(false), false);
+            this.groups.setSource(bones, this.hierarchy.getLabels(), false);
             this.groups.filter(reset);
 
             return;
