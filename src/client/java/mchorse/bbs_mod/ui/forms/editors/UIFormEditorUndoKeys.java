@@ -13,8 +13,8 @@ public class UIFormEditorUndoKeys extends UIElement
     public UIFormEditorUndoKeys(UIFormEditor editor)
     {
         this.keys().ignoreFocus();
-        this.keys().register(Keys.UNDO, editor::undo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
-        this.keys().register(Keys.REDO, editor::redo).category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
+        this.keys().register(Keys.UNDO, editor::undo).strict().category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
+        this.keys().register(Keys.REDO, editor::redo).strict().category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
         this.noCulling();
     }
 }

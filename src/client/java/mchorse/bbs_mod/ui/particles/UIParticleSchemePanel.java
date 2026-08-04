@@ -71,6 +71,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
@@ -207,6 +208,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.dock = new UIDockLayout();
         this.dock.relative(this.editor).w(1F).h(1F);
         this.dock.source(this.createLayoutSource())
+            .locked(!BBSSettings.editorLayoutSettings.isDockUnlocked(ValueEditorLayout.PARTICLE))
             .frameless(PANEL_PREVIEW_ID)
             .gate(() -> this.data != null)
             .ensure(this::ensureParticleLayoutPanels)
@@ -214,7 +216,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
         {
-            this.dock.addPanel(entry.getKey(), entry.getValue(), this.getPanelIcon(entry.getKey()));
+            this.dock.addPanel(entry.getKey(), entry.getValue(), this.getPanelIcon(entry.getKey()), this.getPanelLabel(entry.getKey()));
         }
 
         this.dock.mount();
@@ -241,10 +243,15 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             UIContext ctx = this.getContext();
             this.layoutPresetsController.openPresets(ctx, ctx.mouseX, ctx.mouseY);
         });
-        this.layoutPresetsButton.context((menu) -> menu.action(Icons.REFRESH, UIKeys.PARTICLE_EDITOR_LAYOUT_RESET, this::resetLayout));
+        this.layoutPresetsButton.context((menu) ->
+        {
+            menu.action(Icons.REFRESH, UIKeys.PARTICLE_EDITOR_LAYOUT_RESET, this::resetLayout);
+            this.dock.fillHiddenPanelsMenu(menu);
+        });
         this.layoutPresetsButton.tooltip(UIKeys.PARTICLE_EDITOR_LAYOUT_PRESETS, Direction.LEFT);
         this.iconBar.add(this.layoutPresetsButton);
 
+        /* Ctrl+Tab / Ctrl+Shift+Tab cycle the tabs of the dock stack under the cursor (like the film editor). */
         this.keys().register(Keys.FILM_CONTROLLER_NEXT_DOCK_TAB, () ->
         {
             if (this.dock.cycleDockStackTab(1))
@@ -255,6 +262,20 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.keys().register(Keys.FILM_CONTROLLER_PREV_DOCK_TAB, () ->
         {
             if (this.dock.cycleDockStackTab(-1))
+            {
+                UIUtils.playClick();
+            }
+        }).category(UIKeys.PARTICLE_EDITOR_TITLE);
+        this.keys().register(Keys.DOCK_MAXIMIZE, () ->
+        {
+            if (this.dock.toggleMaximizeUnderCursor())
+            {
+                UIUtils.playClick();
+            }
+        }).category(UIKeys.PARTICLE_EDITOR_TITLE);
+        this.keys().register(Keys.DOCK_UNDO_LAYOUT, () ->
+        {
+            if (this.dock.undoLayout())
             {
                 UIUtils.playClick();
             }
@@ -314,6 +335,18 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
             public EditorLayoutNode getDefault()
             {
                 return EditorLayoutNode.defaultParticleLayout();
+            }
+
+            @Override
+            public Set<String> getHiddenPanels()
+            {
+                return layout.getHiddenPanels(ValueEditorLayout.PARTICLE);
+            }
+
+            @Override
+            public void setHiddenPanels(Set<String> hidden)
+            {
+                layout.setHiddenPanels(ValueEditorLayout.PARTICLE, hidden);
             }
         };
     }
@@ -967,6 +1000,13 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         }
     }
 
+    private IKey getPanelLabel(String panelId)
+    {
+        IKey key = this.getPanelTooltip(panelId);
+
+        return key == null ? IKey.EMPTY : key;
+    }
+
     private static class DockStackInfo
     {
         public final List<String> panelIds;
@@ -1353,6 +1393,7 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     private void toggleLayoutLock()
     {
         this.dock.toggleLock();
+        BBSSettings.editorLayoutSettings.setDockUnlocked(ValueEditorLayout.PARTICLE, !this.dock.isLocked());
         this.updateLayoutLockTooltip();
     }
 
@@ -1403,10 +1444,8 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
             if (this.dock.isLocked() != locked)
             {
-                this.dock.toggleLock();
+                this.toggleLayoutLock();
             }
-
-            this.updateLayoutLockTooltip();
         }
 
         this.dock.refresh();
@@ -1423,10 +1462,8 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
 
         if (!this.dock.isLocked())
         {
-            this.dock.toggleLock();
+            this.toggleLayoutLock();
         }
-
-        this.updateLayoutLockTooltip();
         this.dock.resetLayout();
     }
 

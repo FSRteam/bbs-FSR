@@ -2,13 +2,17 @@ package mchorse.bbs_mod.ui.framework.elements.layout;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
@@ -27,6 +31,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
@@ -45,6 +50,8 @@ public class UIDockLayout extends UIElement
 {
     private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
     private static final float DRAG_HANDLE_TOP_OFFSET_NORM = 0.01F;
+    /** Space a panel's content leaves at the top while unlocked; the drag strip fills all of it. */
+    private static final int DRAG_STRIP_HEIGHT_PX = 20;
     private static final int SPLITTER_HANDLE_PX = 14;
     private static final int SPLITTER_LINK_HITBOX_PADDING_PX = 8;
     private static final int DROP_ZONE_CENTER = -1;
@@ -53,13 +60,27 @@ public class UIDockLayout extends UIElement
     private static final float DROP_PANEL_EDGE_MAX = 0.25F;
     private static final float DROP_ROOT_RATIO = 0.25F;
     private static final int EDITOR_MIN_SIZE_FOR_PX_HANDLES = 10;
+    /** Solid outline on the highlighted edge; a wash alone would sink into the 3D viewport. */
+    private static final int DROP_OUTLINE_PX = 2;
+    /** Share of the target the highlight covers. It marks the zone, not the size the panel ends up. */
+    private static final float DROP_HIGHLIGHT_RATIO = 0.2F;
     private static final int DOCK_STACK_TABS_HEIGHT_PX = 20;
+    /** Splitter drags stop where a side would become too small to use, measured in pixels. */
+    private static final int MIN_PANEL_SIZE_PX = 80;
+    /** Movement (px, manhattan) before a pressed tab turns into a panel drag instead of a click. */
+    private static final int DRAG_START_THRESHOLD_PX = 4;
+    /** Dwell time over another stack's tab, mid-drag, before that tab is flipped open. */
+    private static final long SPRING_LOAD_DELAY_MS = 500;
+    private static final int LAYOUT_UNDO_CAP = 32;
+    /** Two clicks on a seam within this window even the split back out. */
+    private static final long SPLITTER_DOUBLE_CLICK_MS = 300;
     private static final int PANEL_GAP_PX = 4;
     private static final float PANEL_EDGE_EPS = 0.001F;
 
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
     private final Map<String, Icon> iconById = new HashMap<>();
     private final Map<String, UIDraggable> dragHandlesById = new LinkedHashMap<>();
+    private final Map<String, IKey> labelById = new HashMap<>();
     private final List<UIDraggable> splitterHandles = new ArrayList<>();
     private final List<EditorLayoutNode.SplitterHandleInfo> splitterHandleInfos = new ArrayList<>();
     private final List<UIDockStackTabs> dockStackTabs = new ArrayList<>();
@@ -70,6 +91,13 @@ public class UIDockLayout extends UIElement
     private final Map<String, float[]> transitionFromHandles = new HashMap<>();
     private final Map<String, float[]> transitionToHandles = new HashMap<>();
     private final UITween layoutTransition = new UITween();
+    /** Undo history of structural layout changes; snapshots are cheap because the tree is immutable. */
+    private final List<LayoutSnapshot> layoutUndo = new ArrayList<>();
+    /** The tree as it stood when a splitter drag began, pushed as one undo entry at drag end. */
+    private EditorLayoutNode splitterDragUndoRoot;
+    private int lastSplitterClickIndex = -1;
+    private long lastSplitterClickTime;
+    private boolean splitterDragChanged;
 
     private final UIRenderable surfaces = new UIRenderable(this::renderPanelSurfaces);
     private final UIRenderable borders = new UIRenderable(this::renderPanelBorders);
@@ -82,13 +110,29 @@ public class UIDockLayout extends UIElement
     private int dropTargetZone = DROP_ZONE_CENTER;
     private boolean layoutTransitioning;
     private boolean transitionCapturePending;
+    /** Tab strip and tab the drag is over, for the insertion caret between tabs. */
+    private UIDockStackTabs dropTargetTabStrip;
+    private int dropTargetTabIndex = -1;
+    /** Session-only: which panel is blown up to the whole dock; the stored tree is untouched. */
+    private String maximizedPanelId;
+    /* A pressed tab is a click until it moves DRAG_START_THRESHOLD_PX, then it is a panel drag. */
+    private String tabPressPanelId;
+    private int tabPressX;
+    private int tabPressY;
+    private boolean dragFromTab;
+    /** Set by Esc: the in-flight drag is dead, ignore it until the mouse is released. */
+    private boolean panelDragCancelled;
+    private String springTabPanelId;
+    private long springTabSince;
+    /** Spring-load fires from inside a render pass, so the actual flip waits for the next one. */
+    private String pendingSpringPanelId;
 
     /* Configuration */
     private ILayoutSource source;
     private String framelessPanelId;
     private Supplier<Boolean> gate = () -> true;
     private Runnable onChanged = () -> {};
-    private Runnable onSplitterDragEnd = () -> {};
+    private Runnable onLayoutSettled = () -> {};
     private Runnable beforeLayoutChange = () -> {};
     private Runnable afterLayoutChange = () -> {};
     private UnaryOperator<EditorLayoutNode> ensureFn = UnaryOperator.identity();
@@ -105,6 +149,14 @@ public class UIDockLayout extends UIElement
     public UIDockLayout source(ILayoutSource source)
     {
         this.source = source;
+
+        return this;
+    }
+
+    /** Initial lock state, e.g. restored from settings; the default is locked. */
+    public UIDockLayout locked(boolean locked)
+    {
+        this.layoutLocked = locked;
 
         return this;
     }
@@ -132,9 +184,9 @@ public class UIDockLayout extends UIElement
         return this;
     }
 
-    public UIDockLayout onSplitterDragEnd(Runnable onSplitterDragEnd)
+    public UIDockLayout onLayoutSettled(Runnable onLayoutSettled)
     {
-        this.onSplitterDragEnd = onSplitterDragEnd;
+        this.onLayoutSettled = onLayoutSettled == null ? () -> {} : onLayoutSettled;
 
         return this;
     }
@@ -175,9 +227,18 @@ public class UIDockLayout extends UIElement
      */
     public UIDockLayout addPanel(String id, UIElement panel, Icon icon)
     {
+        return this.addPanel(id, panel, icon, IKey.EMPTY);
+    }
+
+    public UIDockLayout addPanel(String id, UIElement panel, Icon icon, IKey label)
+    {
         this.panelById.put(id, panel);
         this.iconById.put(id, icon == null ? Icons.FILE : icon);
-        this.dragHandlesById.put(id, this.createPanelDragHandle(id));
+        this.labelById.put(id, label == null ? IKey.EMPTY : label);
+        UIDraggable handle = this.createPanelDragHandle(id);
+
+        handle.context((menu) -> this.fillSlotContextMenu(menu, id));
+        this.dragHandlesById.put(id, handle);
 
         return this;
     }
@@ -200,6 +261,15 @@ public class UIDockLayout extends UIElement
         }
 
         this.setupFlex(false);
+    }
+
+    /**
+     * Space the drag strip occupies at the top of an unlocked panel. Panel content that would sit
+     * underneath it has to be pushed down by this much.
+     */
+    public static int dragStripHeightPx()
+    {
+        return DRAG_STRIP_HEIGHT_PX;
     }
 
     public UIElement getPanel(String id)
@@ -234,6 +304,11 @@ public class UIDockLayout extends UIElement
         return this.iconById.getOrDefault(panelId, Icons.FILE);
     }
 
+    public IKey getPanelLabel(String panelId)
+    {
+        return this.labelById.getOrDefault(panelId, IKey.EMPTY);
+    }
+
     /* Layout settings access */
 
     private EditorLayoutNode layoutRoot()
@@ -258,8 +333,11 @@ public class UIDockLayout extends UIElement
 
     /* Public actions */
 
+    /** Full re-read for a source switch: drag state, undo history and maximize don't carry over. */
     public void refresh()
     {
+        this.layoutUndo.clear();
+        this.maximizedPanelId = null;
         this.clearPanelDragState();
         this.clearSplitterDragState();
         this.setupFlex(true);
@@ -289,13 +367,28 @@ public class UIDockLayout extends UIElement
 
     public void resetLayout()
     {
-        this.applyLayoutRoot(this.source.getDefault());
+        this.beginLayoutChange();
+
+        try
+        {
+            this.pushLayoutUndo(this.layoutRoot());
+            this.maximizedPanelId = null;
+            this.source.setHiddenPanels(new HashSet<>());
+            this.setLayoutRoot(this.source.getDefault());
+            this.clearPanelDragState();
+            this.clearSplitterDragState();
+            this.setupFlex(true);
+        }
+        finally
+        {
+            this.endLayoutChange();
+        }
     }
 
     /** Current layout tree (with all required panels ensured), e.g. for serializing into a preset. */
     public EditorLayoutNode getLayoutRoot()
     {
-        return this.ensureFn.apply(this.layoutRoot());
+        return this.ensureLayoutPanels(this.layoutRoot());
     }
 
     public void applyLayoutRoot(EditorLayoutNode root)
@@ -306,6 +399,8 @@ public class UIDockLayout extends UIElement
 
             try
             {
+                this.pushLayoutUndo(this.layoutRoot());
+                this.maximizedPanelId = null;
                 this.setLayoutRoot(root);
                 this.clearPanelDragState();
                 this.clearSplitterDragState();
@@ -354,6 +449,7 @@ public class UIDockLayout extends UIElement
             && !hasChangedBounds(this.transitionFromHandles, this.transitionToHandles))
         {
             this.clearLayoutTransition();
+
             return;
         }
 
@@ -399,6 +495,67 @@ public class UIDockLayout extends UIElement
                 {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    /** Steps the layout back to how it stood before the last structural change. */
+    public boolean undoLayout()
+    {
+        if (this.layoutUndo.isEmpty())
+        {
+            return false;
+        }
+
+        LayoutSnapshot snapshot = this.layoutUndo.remove(this.layoutUndo.size() - 1);
+
+        this.beginLayoutChange();
+
+        try
+        {
+            this.maximizedPanelId = null;
+            this.clearPanelDragState();
+            this.clearSplitterDragState();
+            this.source.setHiddenPanels(snapshot.hidden);
+            this.setLayoutRoot(snapshot.root);
+            this.setupFlex(true);
+        }
+        finally
+        {
+            this.endLayoutChange();
+        }
+
+        return true;
+    }
+
+    /** Blow the hovered panel up to the whole dock, or restore if one already is. */
+    public boolean toggleMaximizeUnderCursor()
+    {
+        UIContext context = this.getContext();
+
+        if (context == null || !this.gate.get())
+        {
+            return false;
+        }
+
+        if (this.maximizedPanelId != null)
+        {
+            this.toggleMaximizePanel(this.maximizedPanelId);
+
+            return true;
+        }
+
+        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
+        {
+            UIElement panel = entry.getValue();
+
+            if (panel.isVisible() && panel.area.isInside(context.mouseX, context.mouseY))
+            {
+                this.toggleMaximizePanel(entry.getKey());
+
+                return true;
             }
         }
 
@@ -460,11 +617,36 @@ public class UIDockLayout extends UIElement
         this.transitionToHandles.clear();
     }
 
-    @Override
-    public void render(UIContext context)
+    private void toggleMaximizePanel(String panelId)
     {
-        this.advanceLayoutTransition();
-        super.render(context);
+        this.beginLayoutChange();
+
+        try
+        {
+            this.maximizedPanelId = panelId.equals(this.maximizedPanelId) ? null : panelId;
+            this.clearPanelDragState();
+            this.clearSplitterDragState();
+            this.setupFlex(true);
+        }
+        finally
+        {
+            this.endLayoutChange();
+        }
+    }
+
+    private void pushLayoutUndo(EditorLayoutNode root)
+    {
+        this.layoutUndo.add(new LayoutSnapshot(copyLayoutTree(root), this.source.getHiddenPanels()));
+
+        while (this.layoutUndo.size() > LAYOUT_UNDO_CAP)
+        {
+            this.layoutUndo.remove(0);
+        }
+    }
+
+    private static EditorLayoutNode copyLayoutTree(EditorLayoutNode root)
+    {
+        return root == null ? null : EditorLayoutNode.fromData(root.toData());
     }
 
     public boolean cycleDockStackTab(int offset)
@@ -563,33 +745,78 @@ public class UIDockLayout extends UIElement
 
     /* Layout build */
 
+    /** Drop what this dock cannot show, apply the host's placement hints, then backstop the rest. */
+    private EditorLayoutNode ensureLayoutPanels(EditorLayoutNode root)
+    {
+        EditorLayoutNode out = this.ensureRegisteredPanels(this.ensureFn.apply(this.pruneUnknownPanels(root)));
+
+        this.reconcileHiddenPanels(out);
+
+        return out;
+    }
+
+    /**
+     * A hidden panel that made it back into the tree anyway — through a preset or an older save —
+     * is visibly there, so the hidden flag has to yield, or the panels menu would lie about it.
+     */
+    private void reconcileHiddenPanels(EditorLayoutNode root)
+    {
+        Set<String> hidden = this.source.getHiddenPanels();
+
+        if (hidden.isEmpty())
+        {
+            return;
+        }
+
+        HashSet<String> present = new HashSet<>();
+
+        EditorLayoutNode.collectPanelIds(root, present);
+
+        if (hidden.removeAll(present))
+        {
+            this.source.setHiddenPanels(hidden);
+        }
+    }
+
+    /**
+     * Panel ids with no registered panel — a layout from another editor, or one renamed since it was
+     * saved — would otherwise keep their share of the space as a hole that nothing can be dropped
+     * into and only a reset can clear.
+     */
+    private EditorLayoutNode pruneUnknownPanels(EditorLayoutNode root)
+    {
+        HashSet<String> ids = new HashSet<>();
+
+        EditorLayoutNode.collectPanelIds(root, ids);
+
+        EditorLayoutNode out = root;
+
+        for (String id : ids)
+        {
+            if (!this.panelById.containsKey(id))
+            {
+                out = EditorLayoutNode.copyWithRemovedPanel(out, id);
+            }
+        }
+
+        return out;
+    }
+
     private EditorLayoutNode ensureRegisteredPanels(EditorLayoutNode root)
     {
         HashSet<String> ids = new HashSet<>();
         this.collectPanelIds(root, ids);
 
+        Set<String> hidden = this.source.getHiddenPanels();
         EditorLayoutNode out = root;
-        String anchor = null;
-
-        for (String id : ids)
-        {
-            anchor = id;
-            break;
-        }
 
         for (String id : this.panelById.keySet())
         {
-            if (!ids.contains(id))
+            if (!ids.contains(id) && !hidden.contains(id))
             {
-                if (anchor == null)
-                {
-                    out = new EditorLayoutNode.PanelNode(id);
-                    anchor = id;
-                }
-                else
-                {
-                    out = EditorLayoutNode.copyWithInsertSplitAt(out, anchor, id, EditorLayoutNode.EDGE_RIGHT);
-                }
+                /* Root-level append: a missing panel comes back as a side column, not as half of
+                 * whatever leaf happened to be first in the tree. */
+                out = EditorLayoutNode.copyWithInsertSplitAtRoot(out, id, EditorLayoutNode.EDGE_RIGHT, DROP_ROOT_RATIO);
             }
         }
 
@@ -617,27 +844,36 @@ public class UIDockLayout extends UIElement
     public void setupFlex(boolean resize)
     {
         EditorLayoutNode originalRoot = this.layoutRoot();
-        EditorLayoutNode root = this.ensureFn.apply(originalRoot);
+        EditorLayoutNode root = this.ensureLayoutPanels(originalRoot);
 
         if (root != originalRoot)
         {
             this.setLayoutRoot(root);
         }
 
-        List<EditorLayoutNode.SplitterNode> splitters = this.layoutSplitters();
+        EditorLayoutNode effectiveRoot = this.effectiveLayoutTree(root);
+        List<EditorLayoutNode.SplitterNode> splitters = new ArrayList<>();
+
+        EditorLayoutNode.collectSplitters(effectiveRoot, splitters);
 
         if (resize && splitters.size() == this.splitterHandles.size())
         {
-            this.updateFlexBoundsOnly(root);
+            this.updateFlexBoundsOnly(effectiveRoot);
             this.resize();
             this.resize();
+
+            if (this.draggedSplitterIndices.isEmpty())
+            {
+                this.onLayoutSettled.run();
+            }
+
             return;
         }
 
         this.clearSplitterDragState();
 
         List<DockStackInfo> stackInfos = new ArrayList<>();
-        this.collectDockStacks(root, 0F, 0F, 1F, 1F, stackInfos);
+        this.collectDockStacks(effectiveRoot, 0F, 0F, 1F, 1F, stackInfos);
 
         for (UIElement el : this.panelById.values())
         {
@@ -668,7 +904,7 @@ public class UIDockLayout extends UIElement
         this.rebuildDockStackTabs(stackInfos);
 
         this.splitterHandleInfos.clear();
-        EditorLayoutNode.computeSplitterHandles(root, 0F, 0F, 1F, 1F, this.splitterHandleInfos);
+        EditorLayoutNode.computeSplitterHandles(effectiveRoot, 0F, 0F, 1F, 1F, this.splitterHandleInfos);
 
         for (int i = 0; i < splitters.size(); i++)
         {
@@ -695,6 +931,11 @@ public class UIDockLayout extends UIElement
         {
             this.resize();
             this.resize();
+
+            if (this.draggedSplitterIndices.isEmpty())
+            {
+                this.onLayoutSettled.run();
+            }
         }
     }
 
@@ -799,6 +1040,13 @@ public class UIDockLayout extends UIElement
             @Override
             protected boolean subMouseClicked(UIContext context)
             {
+                if (context.mouseButton == 0 && this.area.isInside(context)
+                    && BBSSettings.editorResizablePanels.get()
+                    && UIDockLayout.this.consumeSplitterDoubleClick(index))
+                {
+                    return true;
+                }
+
                 UIDockLayout.this.beginSplitterDrag(index, context.mouseX, context.mouseY);
                 boolean handled = super.subMouseClicked(context);
 
@@ -816,8 +1064,13 @@ public class UIDockLayout extends UIElement
 
         handle.dragEnd(() ->
         {
+            if (this.splitterDragUndoRoot != null && this.splitterDragChanged)
+            {
+                this.pushLayoutUndo(this.splitterDragUndoRoot);
+            }
+
             this.clearSplitterDragState();
-            this.onSplitterDragEnd.run();
+            this.onLayoutSettled.run();
         });
         handle.reference(() -> this.getSplitterHandleReferencePosition(index))
             .referenceAxis(!this.splitterHandleInfos.get(index).horizontal, this.splitterHandleInfos.get(index).horizontal);
@@ -825,6 +1078,39 @@ public class UIDockLayout extends UIElement
         this.applySplitterHandleBounds(handle, this.splitterHandleInfos.get(index));
 
         return handle;
+    }
+
+    /**
+     * Double-clicking a seam evens its two sides out. Returns true when this click completed a pair,
+     * in which case it must not also start a drag.
+     */
+    private boolean consumeSplitterDoubleClick(int index)
+    {
+        long now = System.currentTimeMillis();
+        boolean paired = index == this.lastSplitterClickIndex && now - this.lastSplitterClickTime <= SPLITTER_DOUBLE_CLICK_MS;
+
+        /* Reset rather than keep the index, so a third click starts a fresh pair. */
+        this.lastSplitterClickIndex = paired ? -1 : index;
+        this.lastSplitterClickTime = now;
+
+        if (!paired || index < 0 || index >= this.splitterHandleInfos.size())
+        {
+            return false;
+        }
+
+        Map<EditorLayoutNode.SplitterNode, Float> ratios = new HashMap<>();
+
+        ratios.put(this.splitterHandleInfos.get(index).node, EditorLayoutNode.SPLIT_RATIO);
+
+        EditorLayoutNode root = this.layoutRoot();
+        EditorLayoutNode next = EditorLayoutNode.copyWithSplitterRatios(root, ratios);
+
+        if (next != root)
+        {
+            this.applyLayoutRoot(next);
+        }
+
+        return true;
     }
 
     private void beginSplitterDrag(int index, int mouseX, int mouseY)
@@ -835,6 +1121,8 @@ public class UIDockLayout extends UIElement
             return;
         }
 
+        this.splitterDragUndoRoot = copyLayoutTree(this.layoutRoot());
+        this.splitterDragChanged = false;
         this.draggedSplitterIndices.clear();
         this.draggedSplitterIndices.add(index);
         boolean horizontal = this.splitterHandleInfos.get(index).horizontal;
@@ -868,6 +1156,8 @@ public class UIDockLayout extends UIElement
     private void clearSplitterDragState()
     {
         this.draggedSplitterIndices.clear();
+        this.splitterDragUndoRoot = null;
+        this.splitterDragChanged = false;
     }
 
     private void applySplitterDrag(int mouseX, int mouseY)
@@ -901,7 +1191,13 @@ public class UIDockLayout extends UIElement
 
         if (ratio >= 0F)
         {
-            splitters.get(index).setRatio(ratio);
+            EditorLayoutNode.SplitterNode splitter = splitters.get(index);
+
+            if (splitter.getRatio() != ratio)
+            {
+                splitter.setRatio(ratio);
+                this.splitterDragChanged = true;
+            }
         }
     }
 
@@ -920,8 +1216,21 @@ public class UIDockLayout extends UIElement
         float ratio = info.horizontal
             ? (mouseY - (ey + info.py * eh)) / (info.ph * eh)
             : (mouseX - (ex + info.px * ew)) / (info.pw * ew);
+        float lo = EditorLayoutNode.MIN_RATIO;
+        float hi = EditorLayoutNode.MAX_RATIO;
+        float lengthPx = info.horizontal ? info.ph * eh : info.pw * ew;
+        float need = lengthPx > 0 ? MIN_PANEL_SIZE_PX / lengthPx : 1F;
 
-        return MathUtils.clamp(ratio, 0.05F, 0.95F);
+        /* Keep both sides usable in pixels, not in shares; deep in the tree a share of a share can
+         * shrink a panel to nothing. When the pair is too small even for that, the model's own
+         * clamp is all that is left. */
+        if (need <= 0.5F)
+        {
+            lo = Math.max(lo, need);
+            hi = Math.min(hi, 1F - need);
+        }
+
+        return MathUtils.clamp(ratio, lo, hi);
     }
 
     private Vector2i getSplitterHandleReferencePosition(int index)
@@ -1240,6 +1549,11 @@ public class UIDockLayout extends UIElement
     private void clearPanelDragState()
     {
         this.draggingPanelId = null;
+        this.tabPressPanelId = null;
+        this.dragFromTab = false;
+        this.panelDragCancelled = false;
+        this.clearSpringLoad();
+        this.pendingSpringPanelId = null;
         this.clearDropTarget();
     }
 
@@ -1248,6 +1562,8 @@ public class UIDockLayout extends UIElement
         this.dropTargetPanelId = null;
         this.dropTargetIsRoot = false;
         this.dropTargetZone = DROP_ZONE_CENTER;
+        this.dropTargetTabStrip = null;
+        this.dropTargetTabIndex = -1;
     }
 
     private boolean hasDropTarget()
@@ -1263,6 +1579,11 @@ public class UIDockLayout extends UIElement
         if (targetId == null)
         {
             newRoot = EditorLayoutNode.copyWithInsertSplitAtRoot(root, dragId, zone, DROP_ROOT_RATIO);
+        }
+        else if (zone == DROP_ZONE_CENTER && Window.isShiftPressed())
+        {
+            /* Shift turns the stack drop into an exchange: both panels keep their stacks/splits. */
+            newRoot = EditorLayoutNode.copyWithSwappedPanels(root, dragId, targetId);
         }
         else if (zone == DROP_ZONE_CENTER)
         {
@@ -1283,81 +1604,395 @@ public class UIDockLayout extends UIElement
     {
         UIDraggable handle = new UIDraggable((context) ->
         {
+            if (this.panelDragCancelled)
+            {
+                return;
+            }
+
             if (this.draggingPanelId == null)
             {
                 this.draggingPanelId = panelId;
             }
 
-            this.clearDropTarget();
+            this.updateDropTarget(context.mouseX, context.mouseY);
+        });
 
-            for (UIDockStackTabs tabs : this.dockStackTabs)
+        handle.dragEnd(this::finishPanelDrag);
+        handle.hoverOnly().cursors(GLFW.GLFW_HAND_CURSOR, GLFW.GLFW_HAND_CURSOR).rendering((context) -> this.renderPanelDragHandle(context, handle));
+
+        return handle;
+    }
+
+    /** Recomputes what the dragged panel would land on. Runs every frame while a drag is live. */
+    private void updateDropTarget(int mouseX, int mouseY)
+    {
+        this.clearDropTarget();
+
+        /* While maximized the tree on screen is not the tree being edited, so drops are disabled. */
+        if (this.maximizedPanelId != null)
+        {
+            this.clearSpringLoad();
+
+            return;
+        }
+
+        /* Tabs are the smallest target, so they win over the bands around them. */
+        for (UIDockStackTabs tabs : this.dockStackTabs)
+        {
+            if (!tabs.isVisible() || !tabs.area.isInside(mouseX, mouseY))
             {
-                if (tabs.isVisible() && tabs.area.isInside(context.mouseX, context.mouseY))
-                {
-                    String targetPanelId = tabs.getPanelIdAt(context.mouseX);
-
-                    if (targetPanelId != null)
-                    {
-                        this.dropTargetPanelId = targetPanelId;
-                        this.dropTargetZone = DROP_ZONE_CENTER;
-
-                        return;
-                    }
-
-                    break;
-                }
+                continue;
             }
 
-            int editorEdge = nearestEdge(this.area, context.mouseX, context.mouseY, DROP_EDITOR_EDGE_PX, DROP_EDITOR_EDGE_PX);
+            int index = tabs.getTabIndex(mouseX);
 
-            if (editorEdge != DROP_ZONE_CENTER)
+            if (index >= 0)
             {
-                this.dropTargetIsRoot = true;
-                this.dropTargetZone = editorEdge;
+                String targetPanelId = tabs.panelIds.get(index);
+
+                this.dropTargetPanelId = targetPanelId;
+                this.dropTargetTabStrip = tabs;
+                this.dropTargetTabIndex = index;
+                this.updateSpringLoad(targetPanelId);
 
                 return;
             }
 
-            for (Map.Entry<String, UIElement> e : this.panelById.entrySet())
-            {
-                if (!e.getValue().isVisible())
-                {
-                    continue;
-                }
+            break;
+        }
 
-                if (e.getValue().area.isInside(context.mouseX, context.mouseY))
-                {
-                    this.dropTargetPanelId = e.getKey();
-                    this.dropTargetZone = this.computeDropZone(e.getValue().area, context.mouseX, context.mouseY);
-                    break;
-                }
-            }
-        });
+        this.clearSpringLoad();
 
-        handle.dragEnd(() ->
+        /* The dock's own rim comes next: right at the screen edge you dock against everything,
+         * a little further in against the panel you are over. */
+        int editorEdge = nearestEdge(this.area, mouseX, mouseY, DROP_EDITOR_EDGE_PX, DROP_EDITOR_EDGE_PX);
+
+        if (editorEdge != DROP_ZONE_CENTER)
         {
-            String dragId = this.draggingPanelId;
-            String targetId = this.dropTargetPanelId;
-            int targetZone = this.dropTargetZone;
-            boolean hasTarget = this.hasDropTarget();
+            this.dropTargetIsRoot = true;
+            this.dropTargetZone = editorEdge;
 
-            try
+            return;
+        }
+
+        /* Panels never overlap outside stacks, so the first visible hit is the only hit. */
+        for (Map.Entry<String, UIElement> e : this.panelById.entrySet())
+        {
+            UIElement panel = e.getValue();
+
+            if (panel.isVisible() && panel.area.isInside(mouseX, mouseY))
             {
-                if (dragId == null || !hasTarget || dragId.equals(targetId))
-                {
-                    return;
-                }
+                int zone = this.computeDropZone(panel.area, mouseX, mouseY);
 
-                this.applyPanelDropResult(dragId, targetId, targetZone);
+                this.dropTargetPanelId = this.resolveEdgeDropTarget(e.getKey(), zone);
+                this.dropTargetZone = zone;
+
+                break;
             }
-            finally
+        }
+    }
+
+    /**
+     * Dropping a stack's own tab onto an edge of the slot it already lives in means "pull it out and
+     * put it on that side". The split has to be built against a panel that stays behind, otherwise
+     * the target and the dragged panel are the same one and the drop is discarded as a no-op.
+     */
+    private String resolveEdgeDropTarget(String panelId, int zone)
+    {
+        if (zone == DROP_ZONE_CENTER || !panelId.equals(this.draggingPanelId))
+        {
+            return panelId;
+        }
+
+        DockStackInfo stack = this.dockStackByPanelId.get(panelId);
+
+        if (stack == null || !stack.isStacked())
+        {
+            return panelId;
+        }
+
+        for (String id : stack.panelIds)
+        {
+            if (!id.equals(this.draggingPanelId))
             {
-                this.clearPanelDragState();
+                return id;
             }
-        });
-        handle.hoverOnly().cursors(GLFW.GLFW_HAND_CURSOR, GLFW.GLFW_HAND_CURSOR).rendering((context) -> this.renderPanelDragHandle(context, handle));
+        }
 
-        return handle;
+        return panelId;
+    }
+
+    /** Dwelling on another stack's tab mid-drag flips to it, so covered panels can be aimed into. */
+    private void updateSpringLoad(String tabPanelId)
+    {
+        if (tabPanelId.equals(this.draggingPanelId))
+        {
+            this.clearSpringLoad();
+
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+
+        if (!tabPanelId.equals(this.springTabPanelId))
+        {
+            this.springTabPanelId = tabPanelId;
+            this.springTabSince = now;
+
+            return;
+        }
+
+        if (now - this.springTabSince >= SPRING_LOAD_DELAY_MS)
+        {
+            /* Deferred: this runs while the dock's children are being iterated, and flipping a tab
+             * rebuilds the tab strips. */
+            this.pendingSpringPanelId = tabPanelId;
+            this.clearSpringLoad();
+        }
+    }
+
+    private void clearSpringLoad()
+    {
+        this.springTabPanelId = null;
+        this.springTabSince = 0L;
+    }
+
+    private void finishPanelDrag()
+    {
+        boolean ontoItself = this.draggingPanelId != null && this.draggingPanelId.equals(this.dropTargetPanelId);
+
+        if (!this.panelDragCancelled && this.draggingPanelId != null && this.hasDropTarget() && !ontoItself)
+        {
+            this.applyPanelDropResult(this.draggingPanelId, this.dropTargetPanelId, this.dropTargetZone);
+        }
+
+        this.clearPanelDragState();
+    }
+
+    /** Kills the in-flight drag; the cancelled flag mutes the drag until the mouse is released. */
+    private void cancelPanelDrag()
+    {
+        this.draggingPanelId = null;
+        this.tabPressPanelId = null;
+        this.dragFromTab = false;
+        this.panelDragCancelled = true;
+        this.clearSpringLoad();
+        this.clearDropTarget();
+    }
+
+    /* Dragging by a stack tab: press arms it, movement past the threshold starts the drag,
+     * release either drops the panel or, if it never moved, activates the tab as a click. */
+
+    private void onTabPressed(String panelId, int mouseX, int mouseY)
+    {
+        this.tabPressPanelId = panelId;
+        this.tabPressX = mouseX;
+        this.tabPressY = mouseY;
+        this.panelDragCancelled = false;
+    }
+
+    private void onTabsReleased()
+    {
+        String pressed = this.tabPressPanelId;
+
+        if (pressed == null)
+        {
+            /* A cancelled press keeps its flag until release; this is the release. */
+            if (this.draggingPanelId == null)
+            {
+                this.panelDragCancelled = false;
+            }
+
+            return;
+        }
+
+        if (this.dragFromTab && this.draggingPanelId != null)
+        {
+            this.finishPanelDrag();
+
+            return;
+        }
+
+        boolean cancelled = this.panelDragCancelled;
+
+        this.tabPressPanelId = null;
+        this.panelDragCancelled = false;
+
+        if (!cancelled)
+        {
+            this.activateDockStackTab(pressed, pressed);
+        }
+    }
+
+    /**
+     * Runs at the top of {@link #render}, before the children are walked, so the layout rebuilds it
+     * can trigger are safe here.
+     */
+    private void updateTabDrag(UIContext context)
+    {
+        if (this.tabPressPanelId == null || this.panelDragCancelled)
+        {
+            return;
+        }
+
+        /* The release event can miss us when the strip it started on was rebuilt mid-drag, which
+         * would leave the press armed and turn the next mouse move into a phantom drag. */
+        if (!Window.isMouseButtonPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT))
+        {
+            this.onTabsReleased();
+
+            return;
+        }
+
+        if (this.draggingPanelId == null)
+        {
+            if (this.layoutLocked)
+            {
+                return;
+            }
+
+            int moved = Math.abs(context.mouseX - this.tabPressX) + Math.abs(context.mouseY - this.tabPressY);
+
+            if (moved < DRAG_START_THRESHOLD_PX)
+            {
+                return;
+            }
+
+            this.draggingPanelId = this.tabPressPanelId;
+            this.dragFromTab = true;
+        }
+
+        if (this.dragFromTab)
+        {
+            context.requestCursor(GLFW.GLFW_HAND_CURSOR);
+            this.updateDropTarget(context.mouseX, context.mouseY);
+        }
+    }
+
+    /* Hiding and showing panels */
+
+    private boolean canHidePanel(String panelId)
+    {
+        HashSet<String> present = new HashSet<>();
+
+        EditorLayoutNode.collectPanelIds(this.layoutRoot(), present);
+
+        return present.contains(panelId) && present.size() > 1;
+    }
+
+    private void hidePanel(String panelId)
+    {
+        if (!this.canHidePanel(panelId))
+        {
+            return;
+        }
+
+        EditorLayoutNode root = this.layoutRoot();
+
+        this.beginLayoutChange();
+
+        try
+        {
+            this.pushLayoutUndo(root);
+
+            Set<String> hidden = this.source.getHiddenPanels();
+
+            hidden.add(panelId);
+            this.source.setHiddenPanels(hidden);
+
+            if (panelId.equals(this.maximizedPanelId))
+            {
+                this.maximizedPanelId = null;
+            }
+
+            this.setLayoutRoot(EditorLayoutNode.copyWithRemovedPanel(root, panelId));
+            this.setupFlex(true);
+        }
+        finally
+        {
+            this.endLayoutChange();
+        }
+    }
+
+    private void showPanel(String panelId)
+    {
+        Set<String> hidden = this.source.getHiddenPanels();
+
+        if (!hidden.remove(panelId))
+        {
+            return;
+        }
+
+        this.beginLayoutChange();
+
+        try
+        {
+            this.pushLayoutUndo(this.layoutRoot());
+            this.source.setHiddenPanels(hidden);
+            this.setupFlex(true);
+        }
+        finally
+        {
+            this.endLayoutChange();
+        }
+    }
+
+    /**
+     * Menu entries that bring hidden panels back. Hosts surface these in their own menus too, so a
+     * panel hidden while unlocked can still be recovered after the layout is locked again.
+     */
+    public void fillHiddenPanelsMenu(ContextMenuManager menu)
+    {
+        Set<String> hidden = this.source.getHiddenPanels();
+
+        for (String id : this.panelById.keySet())
+        {
+            if (hidden.contains(id))
+            {
+                menu.action(Icons.VISIBLE, UIKeys.DOCK_SHOW.format(this.getPanelLabel(id).get()), () -> this.showPanel(id));
+            }
+        }
+    }
+
+    /** Right-click menu of a panel's drag strip: maximize, hide, bring hidden panels back. */
+    private void fillSlotContextMenu(ContextMenuManager menu, String panelId)
+    {
+        if (this.layoutLocked || !this.gate.get())
+        {
+            return;
+        }
+
+        boolean maximized = panelId.equals(this.maximizedPanelId);
+
+        menu.action(maximized ? Icons.MINIMIZE : Icons.MAXIMIZE, maximized ? UIKeys.DOCK_RESTORE : UIKeys.DOCK_MAXIMIZE, () -> this.toggleMaximizePanel(panelId));
+
+        if (this.canHidePanel(panelId))
+        {
+            menu.action(Icons.INVISIBLE, UIKeys.DOCK_HIDE.format(this.getPanelLabel(panelId).get()), () -> this.hidePanel(panelId));
+        }
+
+        this.fillHiddenPanelsMenu(menu);
+    }
+
+    /** The tree the layout pass actually renders: the stored one, or a single maximized panel. */
+    private EditorLayoutNode effectiveLayoutTree(EditorLayoutNode root)
+    {
+        if (this.maximizedPanelId != null
+            && (!this.panelById.containsKey(this.maximizedPanelId) || this.source.getHiddenPanels().contains(this.maximizedPanelId)))
+        {
+            this.maximizedPanelId = null;
+        }
+
+        return this.maximizedPanelId == null ? root : new EditorLayoutNode.PanelNode(this.maximizedPanelId);
+    }
+
+    private boolean isSwapDrop()
+    {
+        return !this.dropTargetIsRoot
+            && this.dropTargetPanelId != null
+            && this.draggingPanelId != null
+            && !this.draggingPanelId.equals(this.dropTargetPanelId)
+            && Window.isShiftPressed();
     }
 
     private void renderPanelDragHandle(UIContext context, UIDraggable handle)
@@ -1467,6 +2102,69 @@ public class UIDockLayout extends UIElement
         }
     }
 
+    @Override
+    public void render(UIContext context)
+    {
+        if (this.pendingSpringPanelId != null)
+        {
+            String panelId = this.pendingSpringPanelId;
+
+            this.pendingSpringPanelId = null;
+            this.activateDockStackTab(panelId, panelId);
+        }
+
+        this.updateTabDrag(context);
+        this.advanceLayoutTransition();
+
+        super.render(context);
+
+        this.renderDragOverlay(context);
+    }
+
+    @Override
+    protected boolean subKeyPressed(UIContext context)
+    {
+        if (context.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && (this.draggingPanelId != null || this.tabPressPanelId != null))
+        {
+            this.cancelPanelDrag();
+
+            return true;
+        }
+
+        return super.subKeyPressed(context);
+    }
+
+    /** Insertion caret between tabs plus the ghost of the dragged panel, on top of everything. */
+    private void renderDragOverlay(UIContext context)
+    {
+        if (this.draggingPanelId == null || this.panelDragCancelled || this.maximizedPanelId != null)
+        {
+            return;
+        }
+
+        if (this.dropTargetTabStrip != null && this.dropTargetTabStrip.isVisible() && this.dropTargetTabIndex >= 0)
+        {
+            UIDockStackTabs strip = this.dropTargetTabStrip;
+            int x = Math.min(strip.area.x + (this.dropTargetTabIndex + 1) * strip.getTabSize(), strip.area.ex() - 1);
+
+            context.batcher.box(x - 1, strip.area.y, x + 1, strip.area.ey(), BBSSettings.primaryColor(Colors.A100));
+        }
+
+        String label = this.getPanelLabel(this.draggingPanelId).get();
+
+        context.batcher.icon(this.getDockPanelIcon(this.draggingPanelId), Colors.WHITE, context.mouseX + 16, context.mouseY + 16, 0.5F, 0.5F);
+
+        if (!label.isEmpty())
+        {
+            context.batcher.textCard(label, context.mouseX + 26, context.mouseY + 12);
+        }
+    }
+
+    /**
+     * Marks where the panel would land: a band along the edge it will dock to, densest at that edge
+     * and thinning inwards, so it reads as the panel being pulled to that side while leaving the
+     * content it passes over legible. Centre drops have no direction, so they get a feathered rim.
+     */
     private void renderDropZoneHighlight(UIContext context)
     {
         if (this.layoutLocked || this.draggingPanelId == null || !this.hasDropTarget())
@@ -1491,10 +2189,34 @@ public class UIDockLayout extends UIElement
         }
 
         UIDockStyleRenderer.renderDropZone(context, area, this.dropTargetZone, ratio);
+
+        if (this.isSwapDrop())
+        {
+            UIElement dragged = this.panelById.get(this.draggingPanelId);
+
+            if (dragged != null && dragged.isVisible())
+            {
+                UIDockStyleRenderer.renderDropZone(context, dragged.area, DROP_ZONE_CENTER, EditorLayoutNode.SPLIT_RATIO);
+            }
+
+            context.batcher.icon(Icons.EXCHANGE, Colors.WHITE, area.mx(), area.my(), 0.5F, 0.5F);
+        }
     }
 
     /* Helper types */
 
+    /** One undo step: the tree plus the hidden set that went with it. */
+    private static class LayoutSnapshot
+    {
+        public final EditorLayoutNode root;
+        public final Set<String> hidden;
+
+        public LayoutSnapshot(EditorLayoutNode root, Set<String> hidden)
+        {
+            this.root = root;
+            this.hidden = hidden;
+        }
+    }
     private static class DockStackInfo
     {
         public final List<String> panelIds;
@@ -1563,12 +2285,21 @@ public class UIDockLayout extends UIElement
 
             if (index >= 0 && index < this.panelIds.size())
             {
-                this.layout.activateDockStackTab(this.anchorPanelId, this.panelIds.get(index));
+                /* Activation waits for the release: the same press may grow into a drag. */
+                this.layout.onTabPressed(this.panelIds.get(index), context.mouseX, context.mouseY);
 
                 return true;
             }
 
             return super.subMouseClicked(context);
+        }
+
+        @Override
+        protected boolean subMouseReleased(UIContext context)
+        {
+            this.layout.onTabsReleased();
+
+            return super.subMouseReleased(context);
         }
 
         @Override
@@ -1613,6 +2344,20 @@ public class UIDockLayout extends UIElement
                 context.batcher.icon(icon, Colors.WHITE, (x + ex) / 2, (y + ey) / 2, 0.5F, 0.5F);
             }
 
+            int hovered = this.area.isInside(context) ? this.getTabIndex(context.mouseX) : -1;
+
+            if (hovered >= 0 && this.layout.draggingPanelId == null && this.layout.tabPressPanelId == null)
+            {
+                String label = this.layout.getPanelLabel(this.panelIds.get(hovered)).get();
+
+                if (!label.isEmpty())
+                {
+                    int ty = this.area.y - 14;
+
+                    context.batcher.textCard(label, context.mouseX + 6, ty < 2 ? this.area.ey() + 4 : ty);
+                }
+            }
+
             super.render(context);
         }
 
@@ -1633,21 +2378,5 @@ public class UIDockLayout extends UIElement
             return index;
         }
 
-        public String getPanelIdAt(int mouseX)
-        {
-            if (this.panelIds.isEmpty())
-            {
-                return this.anchorPanelId;
-            }
-
-            int index = this.getTabIndex(mouseX);
-
-            if (index < 0)
-            {
-                return null;
-            }
-
-            return this.panelIds.get(index);
-        }
     }
 }

@@ -258,17 +258,18 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         /* Setup elements */
         this.dock.relative(this.editor).w(1F).h(1F);
         this.dock.source(this.createFilmLayoutSource())
+            .locked(!BBSSettings.editorLayoutSettings.isDockUnlocked(ValueEditorLayout.FILM))
             .frameless(PANEL_PREVIEW_ID)
             .gate(this::hasFilmInCurrentTab)
             .ensure(this::ensureFilmLayoutPanels)
             .icons(this::getDockPanelIcon)
             .onChanged(this::onDockVisibilityChanged)
-            .onSplitterDragEnd(() -> this.applyPreviewSizeToBBS("splitterDragEnd"))
+            .onLayoutSettled(() -> this.applyPreviewSizeToBBS("layoutSettled"))
             .animateLayoutChanges(BBSSettings::filmEditorLayoutTransitionEnabled);
 
         for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
         {
-            this.dock.addPanel(entry.getKey(), entry.getValue(), this.getDockPanelIcon(entry.getKey()));
+            this.dock.addPanel(entry.getKey(), entry.getValue(), this.getDockPanelIcon(entry.getKey()), this.getDockPanelLabel(entry.getKey()));
         }
 
         this.dock.mount();
@@ -320,6 +321,20 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.keys().register(Keys.FILM_CONTROLLER_PREV_DOCK_TAB, () ->
         {
             if (this.dock.cycleDockStackTab(-1))
+            {
+                UIUtils.playClick();
+            }
+        }).active(active).category(editor);
+        this.keys().register(Keys.DOCK_MAXIMIZE, () ->
+        {
+            if (this.dock.toggleMaximizeUnderCursor())
+            {
+                UIUtils.playClick();
+            }
+        }).active(active).category(editor);
+        this.keys().register(Keys.DOCK_UNDO_LAYOUT, () ->
+        {
+            if (this.dock.undoLayout())
             {
                 UIUtils.playClick();
             }
@@ -596,6 +611,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private void toggleLayoutLock()
     {
         this.dock.toggleLock();
+        this.getFilmLayoutSettings().setDockUnlocked(ValueEditorLayout.FILM, !this.dock.isLocked());
         this.refreshEditPanelOffsets();
     }
 
@@ -609,6 +625,19 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             case PANEL_REPLAY_PROPS_ID: return Icons.PROPERTIES;
             case PANEL_MAIN_ID: return Icons.FILM;
             default: return Icons.FILE;
+        }
+    }
+
+    private IKey getDockPanelLabel(String panelId)
+    {
+        switch (panelId)
+        {
+            case PANEL_PREVIEW_ID: return UIKeys.FILM_PANELS_PREVIEW;
+            case PANEL_EDIT_AREA_ID: return UIKeys.FILM_PANELS_EDIT_AREA;
+            case PANEL_REPLAYS_LIST_ID: return UIKeys.FILM_PANELS_REPLAYS_LIST;
+            case PANEL_REPLAY_PROPS_ID: return UIKeys.FILM_PANELS_REPLAY_PROPS;
+            case PANEL_MAIN_ID: return UIKeys.FILM_PANELS_MAIN;
+            default: return IKey.EMPTY;
         }
     }
 
@@ -678,6 +707,18 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             {
                 return EditorLayoutNode.defaultFilmLayout();
             }
+
+            @Override
+            public Set<String> getHiddenPanels()
+            {
+                return UIFilmPanel.this.getFilmLayoutSettings().getHiddenPanels(UIFilmPanel.this.currentLayoutId());
+            }
+
+            @Override
+            public void setHiddenPanels(Set<String> hidden)
+            {
+                UIFilmPanel.this.getFilmLayoutSettings().setHiddenPanels(UIFilmPanel.this.currentLayoutId(), hidden);
+            }
         };
     }
 
@@ -699,6 +740,15 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private List<EditorLayoutNode.SplitterNode> getCurrentFilmSplittersForWrite()
     {
         return this.getFilmLayoutSettings().getFilmSplittersForWrite(this.getCurrentFilmLayoutEditor());
+    }
+
+    private String currentLayoutId()
+    {
+        ValueEditorLayout.FilmEditor editor = this.getCurrentFilmLayoutEditor();
+
+        return this.getFilmLayoutSettings().isFilmLayoutBound(editor)
+            ? ValueEditorLayout.filmLayoutId(editor)
+            : ValueEditorLayout.FILM;
     }
 
     private MapType getFilmLayoutPresetData()
@@ -732,8 +782,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         HashSet<String> ids = new HashSet<>();
         this.collectPanelIds(root, ids);
 
-        boolean hasList = ids.contains(PANEL_REPLAYS_LIST_ID);
-        boolean hasProps = ids.contains(PANEL_REPLAY_PROPS_ID);
+        Set<String> hidden = this.getFilmLayoutSettings().getHiddenPanels(this.currentLayoutId());
+        boolean hasList = ids.contains(PANEL_REPLAYS_LIST_ID) || hidden.contains(PANEL_REPLAYS_LIST_ID);
+        boolean hasProps = ids.contains(PANEL_REPLAY_PROPS_ID) || hidden.contains(PANEL_REPLAY_PROPS_ID);
 
         if (hasList && hasProps)
         {
@@ -795,6 +846,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         menu.action(Icons.SAVED, UIKeys.GENERAL_SAVE, this::save);
         menu.action(Icons.LAYOUT, UIKeys.FILM_LAYOUT_PRESETS, this::openLayoutPresetsMenu);
         menu.action(Icons.REFRESH, UIKeys.FILM_LAYOUT_RESET, this::resetFilmLayout);
+        this.dock.fillHiddenPanelsMenu(menu);
         boolean layoutLocked = this.dock.isLocked();
         menu.action(layoutLocked ? Icons.UNLOCKED : Icons.LOCKED, layoutLocked ? UIKeys.FILM_LAYOUT_UNLOCK : UIKeys.FILM_LAYOUT_LOCK, layoutLocked, this::toggleLayoutLock);
 
