@@ -184,6 +184,7 @@ public class UIDockLayout extends UIElement
         return this;
     }
 
+    /** Run after the layout has received settled bounds, including drops, reset, maximize and undo. */
     public UIDockLayout onLayoutSettled(Runnable onLayoutSettled)
     {
         this.onLayoutSettled = onLayoutSettled == null ? () -> {} : onLayoutSettled;
