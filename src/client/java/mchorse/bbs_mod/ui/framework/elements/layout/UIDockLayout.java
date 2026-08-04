@@ -1099,11 +1099,19 @@ public class UIDockLayout extends UIElement
             return false;
         }
 
+        EditorLayoutNode root = this.layoutRoot();
+        List<EditorLayoutNode.SplitterNode> splitters = new ArrayList<>();
+        EditorLayoutNode.collectSplitters(root, splitters);
+
+        if (index >= splitters.size())
+        {
+            return false;
+        }
+
         Map<EditorLayoutNode.SplitterNode, Float> ratios = new HashMap<>();
 
-        ratios.put(this.splitterHandleInfos.get(index).node, EditorLayoutNode.SPLIT_RATIO);
+        ratios.put(splitters.get(index), EditorLayoutNode.SPLIT_RATIO);
 
-        EditorLayoutNode root = this.layoutRoot();
         EditorLayoutNode next = EditorLayoutNode.copyWithSplitterRatios(root, ratios);
 
         if (next != root)
