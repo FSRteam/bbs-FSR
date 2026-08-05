@@ -2,9 +2,12 @@ package mchorse.bbs_mod.ui.utils.bones;
 
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.PoseForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
@@ -13,6 +16,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -105,6 +109,25 @@ public class UIBoneTreeList extends UIStringList
         }
     }
 
+    /**
+     * Set only the hierarchy metadata from a renderer-independent bone hierarchy (mob
+     * forms' vanilla model parts, pose form bones), leaving the list contents to the
+     * host. Layer roots and orphaned ids become separate roots; ids missing from the
+     * label map fall back to their raw id. Passing a null hierarchy clears the metadata
+     * (every row renders flat).
+     */
+    public void setHierarchy(BoneHierarchy hierarchy, Predicate<String> hidden, Map<String, String> labels)
+    {
+        this.metas.clear();
+
+        if (hierarchy != null)
+        {
+            Map<String, String> labelMap = labels == null ? Collections.emptyMap() : labels;
+
+            this.emit(boneHierarchyRoots(hierarchy, labelMap, hidden), 0, 0, false);
+        }
+    }
+
     /** Optional labels for flat/stable ids such as vanilla model-part hierarchy keys. */
     public void setLabels(Map<String, String> labels)
     {
@@ -183,6 +206,18 @@ public class UIBoneTreeList extends UIStringList
         missed.sort(String::compareToIgnoreCase);
         this.list.addAll(missed);
 
+        /* Flat leftovers (extra attachment points, exotic renderers) at least show a
+         * readable last path segment instead of the full internal matrix key. */
+        for (String key : missed)
+        {
+            if (!this.labels.containsKey(key))
+            {
+                int separator = key.lastIndexOf('/');
+
+                this.labels.put(key, separator >= 0 ? key.substring(separator + 1) : key);
+            }
+        }
+
         this.update();
     }
 
@@ -214,6 +249,62 @@ public class UIBoneTreeList extends UIStringList
     }
 
     /**
+     * A renderer-independent hierarchy in its stored pre-order (mob forms' vanilla
+     * model parts across every layer): children of a parent keep their list order, and
+     * bones whose parent is absent — layer roots, or orphans of a pruned hierarchy —
+     * become roots. A hidden bone dissolves into its children in place, like
+     * {@link #boneNodes}.
+     */
+    private static List<Node> boneHierarchyRoots(BoneHierarchy hierarchy, Map<String, String> labels, Predicate<String> hidden)
+    {
+        Map<String, List<BoneHierarchy.Bone>> childrenByParent = new HashMap<>();
+        Set<String> ids = new HashSet<>(hierarchy.getBoneIds());
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            childrenByParent.computeIfAbsent(bone.parentId(), (k) -> new ArrayList<>()).add(bone);
+        }
+
+        List<Node> roots = new ArrayList<>();
+
+        for (BoneHierarchy.Bone bone : hierarchy.getBones())
+        {
+            String parent = bone.parentId();
+
+            if (parent != null && !parent.isEmpty() && ids.contains(parent))
+            {
+                continue;
+            }
+
+            roots.addAll(boneHierarchyNode(bone, childrenByParent, labels, hidden));
+        }
+
+        return roots;
+    }
+
+    private static List<Node> boneHierarchyNode(BoneHierarchy.Bone bone, Map<String, List<BoneHierarchy.Bone>> childrenByParent, Map<String, String> labels, Predicate<String> hidden)
+    {
+        List<Node> children = new ArrayList<>();
+
+        for (BoneHierarchy.Bone child : childrenByParent.getOrDefault(bone.id(), Collections.emptyList()))
+        {
+            children.addAll(boneHierarchyNode(child, childrenByParent, labels, hidden));
+        }
+
+        if (hidden != null && hidden.test(bone.id()))
+        {
+            return children;
+        }
+
+        String label = labels.getOrDefault(bone.id(), bone.id());
+        Node node = new Node(bone.id(), label, label);
+
+        node.children.addAll(children);
+
+        return new ArrayList<>(List.of(node));
+    }
+
+    /**
      * A form's representation at its parent's level: the form row (when its own key is
      * in the set) with its model bones and sub-forms nested under it — or, for a form
      * the matrix cache doesn't list, those children hoisted in place. The body part
@@ -232,6 +323,14 @@ public class UIBoneTreeList extends UIStringList
             {
                 children.addAll(formBoneNodes(form, instance.model, instance.model.getRootGroupKeys(), path, keys));
             }
+        }
+        else if (form instanceof PoseForm)
+        {
+            /* Mob forms and pose forms have no IModel; their bones come from the
+             * renderer's BoneHierarchy (vanilla model parts). Without this branch every
+             * bone key fell through to the flat safety net below — raw ids in
+             * alphabetical order, instead of the 2.5 hierarchy tree with display names. */
+            children.addAll(formBoneHierarchyNodes(FormUtilsClient.getBoneHierarchy(form), path, keys));
         }
 
         int i = 0;
@@ -285,6 +384,49 @@ public class UIBoneTreeList extends UIStringList
         }
 
         return nodes;
+    }
+
+    /**
+     * A pose form's bones (mob forms' vanilla model parts) in their hierarchy's stored
+     * pre-order, nested under the form's own matrix path. The tree itself comes from
+     * {@link #boneHierarchyRoots} (display-name labels included); this pass remaps each
+     * id to its matrix key and keeps only ids the matrix cache actually lists — a missing
+     * one dissolves into its children, like {@link #formBoneNodes} — so the picker never
+     * exposes raw internal ids.
+     */
+    private static List<Node> formBoneHierarchyNodes(BoneHierarchy hierarchy, String formPath, Set<String> keys)
+    {
+        if (hierarchy == null || hierarchy.getBones().isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        return remapFormKeys(boneHierarchyRoots(hierarchy, hierarchy.getLabels(), null), formPath, keys);
+    }
+
+    private static List<Node> remapFormKeys(List<Node> nodes, String formPath, Set<String> keys)
+    {
+        List<Node> out = new ArrayList<>();
+
+        for (Node node : nodes)
+        {
+            List<Node> children = remapFormKeys(node.children, formPath, keys);
+            String key = StringUtils.combinePaths(formPath, node.id);
+
+            if (keys.contains(key))
+            {
+                Node remapped = new Node(key, node.treeLabel, node.fullLabel);
+
+                remapped.children.addAll(children);
+                out.add(remapped);
+            }
+            else
+            {
+                out.addAll(children);
+            }
+        }
+
+        return out;
     }
 
     /**
