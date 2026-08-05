@@ -177,11 +177,16 @@ public class FormUtilsClient
 
     public static void renderUI(Form form, UIContext context, int x1, int y1, int x2, int y2)
     {
+        renderUI(form, context, x1, y1, x2, y2, false);
+    }
+
+    public static void renderUI(Form form, UIContext context, int x1, int y1, int x2, int y2, boolean selected)
+    {
         FormRenderer renderer = getRenderer(form);
 
         if (renderer != null)
         {
-            renderer.renderUI(context, x1, y1, x2, y2);
+            renderer.renderUI(context, x1, y1, x2, y2, selected);
         }
     }
 

@@ -351,8 +351,13 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
     {
         super.update();
 
-        if (this.update && this.form != null)
+        if (this.form != null && (this.update || this.target == null))
         {
+            /* Someone has to advance this preview's animation clock. The palette says so
+             * explicitly via updatable(); otherwise the only other candidate is a world
+             * target that the world already ticks (the model block editor), so a preview
+             * without one - the entity selector's - must drive itself rather than depend on
+             * whatever else happens to share this form's cached renderer. */
             this.form.update(this.entity);
         }
     }

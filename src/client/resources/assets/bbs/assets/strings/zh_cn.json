@@ -12,6 +12,8 @@
     "bbs.config.appearance.fov-comment": "此选项控制世界菜单和动画面板中相机的 FOV（视野）",
     "bbs.config.appearance.freeze_models": "冻结模型",
     "bbs.config.appearance.freeze_models-comment": "启用时，形态选择器中的模型不再会跟随鼠标转动",
+    "bbs.config.appearance.freeze_form_animations": "冻结形态动画",
+    "bbs.config.appearance.freeze_form_animations-comment": "启用时，选择器列表中的形态不再播放动画；在列表中选中某个形态后，该形态恢复正常播放",
     "bbs.config.appearance.list_model_preview": "列表中的模型预览",
     "bbs.config.appearance.list_model_preview-comment": "启用时，回放、选择器和形态部件列表中的条目会显示模型的 3D 小预览。关闭可让列表更简洁并节省性能。",
     "bbs.config.appearance.gizmos": "操控器",

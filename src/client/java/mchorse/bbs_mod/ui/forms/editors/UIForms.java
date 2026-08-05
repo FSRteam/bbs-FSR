@@ -83,7 +83,7 @@ public class UIForms extends UIList<UIForms.FormEntry>
 
             y -= 10;
 
-            FormUtilsClient.renderUI(form, context, x, y, x + 40, y + 40);
+            FormUtilsClient.renderUI(form, context, x, y, x + 40, y + 40, selected);
 
             context.batcher.unclip(context);
         }
