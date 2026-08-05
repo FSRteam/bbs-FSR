@@ -169,6 +169,7 @@ client-only API 位于 `src/client/java/mchorse/bbs_mod/api/client/BBSClientApi.
 - HUD render hook；
 - client tick、world tick、disconnect、started、stopping hook；
 - entity renderer 和 block entity renderer 注册；
+- host-owned 自定义 Dashboard 面板注册；
 - 固定原生 Dashboard 打开、UI Mirror/输入、Render Surface 与 Film 语义协作等
   API 2.0 增量 client-only 合同。
 
@@ -188,6 +189,82 @@ descriptor-aware 注册在 `REGISTER_CLIENT` 被接受时只表示成功入队�
 `CLIENT_SETUP` 实际消费成功后状态才可进入 `REGISTERED_CLIENT`，随后 common setup
 最终进入 `READY`。单个 renderer 或 key binding 失败只附加 phase/source 到该
 addon 的 diagnostics，不会替换已接受的 common winner 或伪造成功状态。
+
+### 自定义 Dashboard 面板
+
+声明 `BBSAddonCapability.CLIENT_UI` 的 Addon API 2.0 addon 可以在 client bootstrap
+期间注册面板。公开合同只接收描述和内容工厂，不暴露 `UIDashboard` 或
+`UIDashboardPanel`：
+
+```java
+BBSDashboardPanelSpec spec = BBSDashboardPanelSpec.builder("tools")
+    .title(IKey.raw("Example tools"))
+    .icon(Icons.GEAR)
+    .build();
+
+BBSRegistrationResult result = BBSClientApi.registerDashboardPanel(DESCRIPTOR, spec, () ->
+{
+    UIText status = new UIText("Ready").padding(0, 0);
+    UIButton run = new UIButton(IKey.raw("Run action"), (button) ->
+        status.text("Action completed"));
+    UIElement root = UI.column(8, 12,
+        new UIText("Content created by the addon").padding(0, 0),
+        status,
+        run
+    );
+
+    return new BBSDashboardPanelContent()
+    {
+        @Override
+        public UIElement root()
+        {
+            return root;
+        }
+
+        @Override
+        public void onOpen()
+        {
+            status.text("Dashboard opened");
+        }
+
+        @Override
+        public void onAppear()
+        {
+            status.text("Panel selected");
+        }
+
+        @Override
+        public void onDisappear()
+        {
+            status.text("Panel hidden");
+        }
+
+        @Override
+        public void onClose()
+        {
+            status.text("Dashboard closed");
+        }
+    };
+});
+```
+
+`"tools"` 是 owner 内的 local id，必须匹配
+`[a-z0-9][a-z0-9_.-]{0,63}`。宿主最终使用
+`<addonId>:<localId>`，插件不能传完整 id 来冒充其他 owner。同一完整 id 采用
+first-wins，后续注册返回 `DUPLICATE`；descriptor、`CLIENT_UI`、spec、title、icon
+或 factory 无效时返回 `REJECTED`，并把 `REGISTER_CLIENT` 结果写入 API 2.0
+diagnostics。
+
+factory 在 Dashboard 第一次需要投影该贡献时运行，必须返回一个尚未挂到其他父节点的
+非空 `UIElement` 根。宿主把根节点铺满内容区域，并在 Minecraft client thread 调用
+`onOpen -> onAppear -> onUpdate* -> onDisappear -> onClose`。Dashboard 对象会在多次打开
+之间复用，所以插件应把一次 screen session 的资源放在 `onOpen/onClose`，把当前选择态
+资源放在 `onAppear/onDisappear`；不要在回调里阻塞、做文件 IO 或切换 screen。单个
+factory、生命周期回调或布尔能力查询抛出 `Exception`/`LinkageError` 时会记入
+`CLIENT_SETUP` 并隔离，不会阻止 Dashboard 和其他面板工作。
+
+Addon 面板是启动期注册，没有运行期注销 API；更新 Addon JAR 仍需重启。旧的
+`RegisterDashboardPanelsEvent` 继续发出，直接监听旧事件的 addon 不需要迁移。
 
 ### UI Mirror（API 2.0 增量扩展）
 
@@ -459,7 +536,11 @@ API 2.0 addon 仍由 NeoForge 在启动期发现和初始化。它的 registrati
 
 FSR Hot Plugin Runtime 是另一条 additive SPI，使用 `BBSPlugin`、`BBSPluginContext` 和 `META-INF/bbs-plugin.json`。把 JAR 放入 `config/bbs/plugins/` 可以触发运行期安装、同 id generation replacement 和删除卸载，具体格式和 side/capability 限制见 [`hot-plugin-runtime.md`](hot-plugin-runtime.md)。现有 NeoForge addon 不会因为实现 API 2.0 而自动变成 hot plugin，也不会共享热插件的 classloader 或生命周期。
 
-只有通过 host-owned hot SPI 的事件、broker、资源和 client subscriptions 才在 hot contract 内。Forms、clips、particles、Minecraft registries、Mixins、access transformers、coremods 和 native libraries 仍要求重启；hot plugins 是完全信任的 JVM 代码，不是安全沙箱。
+只有通过 host-owned hot SPI facade 注册的贡献才在 hot contract 内。当前 forms、clips、
+particles、key mappings、已有 entity/block-entity renderer 覆盖以及 Dashboard panels
+支持 generation-scoped 热替换；Minecraft registries、Mixins、access transformers、
+coremods 和 native libraries 仍要求重启。hot plugins 是完全信任的 JVM 代码，不是
+安全沙箱。
 
 ## 诊断
 

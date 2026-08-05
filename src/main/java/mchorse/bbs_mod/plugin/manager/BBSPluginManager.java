@@ -714,7 +714,8 @@ public final class BBSPluginManager implements AutoCloseable
                     descriptor,
                     owner,
                     ledger,
-                    structuralRegistrations
+                    structuralRegistrations,
+                    sink
                 )
             );
             generation = new PluginRuntimeGeneration(
@@ -1311,7 +1312,8 @@ public final class BBSPluginManager implements AutoCloseable
         BBSPluginDescriptor descriptor,
         PluginOwner owner,
         PluginContributionLedger ledger,
-        PluginStructuralRegistrationWindow structuralRegistrations
+        PluginStructuralRegistrationWindow structuralRegistrations,
+        BBSPluginDiagnosticSink diagnostics
     )
     {
         if (!this.physicalClient)
@@ -1333,8 +1335,9 @@ public final class BBSPluginManager implements AutoCloseable
                 BBSPluginDescriptor.class,
                 PluginOwner.class,
                 PluginContributionLedger.class,
-                PluginStructuralRegistrationWindow.class
-            ).invoke(null, extensionType, descriptor, owner, ledger, structuralRegistrations);
+                PluginStructuralRegistrationWindow.class,
+                BBSPluginDiagnosticSink.class
+            ).invoke(null, extensionType, descriptor, owner, ledger, structuralRegistrations, diagnostics);
         }
         catch (ClassNotFoundException ignored)
         {
