@@ -2030,5 +2030,12 @@
     "bbs.ui.transforms.space.wip": "%s (尚未实现)",
     "bbs.ui.transforms.rotation.quaternion": "四元数",
     "bbs.ui.transforms.rotation.mode_tooltip": "旋转存储方式(点击切换欧拉角/四元数)。\n\n四元数可避免万向节锁;欧拉角可保留超过 360 度的旋转和逐分量曲线。",
+    "bbs.ui.dock.hide": "隐藏面板: %s",
+    "bbs.ui.dock.show": "显示面板: %s",
+    "bbs.ui.dock.maximize": "最大化面板",
+    "bbs.ui.dock.restore": "恢复面板",
+    "bbs.ui.dock.undo_layout": "撤销布局变更",
+    "bbs.ui.dock.keys.maximize": "最大化鼠标下的面板",
+    "bbs.ui.film.layout_bind_to_editor": "绑定到编辑器布局",
     "interpolations.step_tick": "按游戏刻阶跃"
 }

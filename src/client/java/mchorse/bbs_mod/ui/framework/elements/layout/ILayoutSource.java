@@ -4,6 +4,7 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Pluggable storage for a {@link UIDockLayout}. Decouples the docking component from any
@@ -24,4 +25,9 @@ public interface ILayoutSource
     List<EditorLayoutNode.SplitterNode> getSplittersForWrite();
 
     EditorLayoutNode getDefault();
+
+    /** Panels the user hid; the dock's ensure pass must not re-add them. Returns a copy. */
+    Set<String> getHiddenPanels();
+
+    void setHiddenPanels(Set<String> hidden);
 }

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public abstract class EditorLayoutNode
 {
@@ -322,6 +323,68 @@ public abstract class EditorLayoutNode
             out.add(s);
             collectSplitters(s.first, out);
             collectSplitters(s.second, out);
+        }
+    }
+
+    /**
+     * Returns a new tree where each splitter present in {@code ratios} takes its new ratio. Targets
+     * are matched by node identity against {@code root}, so all of them must be applied in this one
+     * call because rebuilding one path replaces the splitters along it.
+     */
+    public static EditorLayoutNode copyWithSplitterRatios(EditorLayoutNode root, Map<SplitterNode, Float> ratios)
+    {
+        if (root == null || ratios == null || ratios.isEmpty())
+        {
+            return root;
+        }
+
+        if (!(root instanceof SplitterNode))
+        {
+            return root;
+        }
+
+        SplitterNode splitter = (SplitterNode) root;
+        Float ratio = ratios.get(splitter);
+        EditorLayoutNode first = copyWithSplitterRatios(splitter.first, ratios);
+        EditorLayoutNode second = copyWithSplitterRatios(splitter.second, ratios);
+        float newRatio = ratio == null ? splitter.ratio : MathUtils.clamp(ratio, MIN_RATIO, MAX_RATIO);
+
+        if (newRatio == splitter.ratio && first == splitter.first && second == splitter.second)
+        {
+            return root;
+        }
+
+        return new SplitterNode(splitter.horizontal, newRatio, first, second);
+    }
+
+    /** Returns a new tree with the two panel ids exchanged, wherever they sit (splits or stacks). */
+    public static EditorLayoutNode copyWithSwappedPanels(EditorLayoutNode root, String id1, String id2)
+    {
+        if (root == null || id1 == null || id2 == null || id1.equals(id2))
+        {
+            return root;
+        }
+
+        return root.copyWithSwappedIds(id1, id2);
+    }
+
+    /** Collect the ids of every panel the tree places, including the inactive tabs of stacks. */
+    public static void collectPanelIds(EditorLayoutNode node, Set<String> out)
+    {
+        if (node instanceof PanelNode)
+        {
+            out.add(((PanelNode) node).getPanelId());
+        }
+        else if (node instanceof StackNode)
+        {
+            out.addAll(((StackNode) node).getPanelIds());
+        }
+        else if (node instanceof SplitterNode)
+        {
+            SplitterNode splitter = (SplitterNode) node;
+
+            collectPanelIds(splitter.first, out);
+            collectPanelIds(splitter.second, out);
         }
     }
 

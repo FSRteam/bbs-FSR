@@ -40,6 +40,18 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
         this.add(this.clips.full(this));
     }
 
+    /** The clip panel is parented to {@link #target}, so it has to be taken down together with this. */
+    @Override
+    public void removeFromParent()
+    {
+        super.removeFromParent();
+
+        if (this.panel != null)
+        {
+            this.panel.removeFromParent();
+        }
+    }
+
     public UIClipsPanel target(UIElement target)
     {
         this.target = target;
