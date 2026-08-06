@@ -307,6 +307,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.animator != null && model != null)
         {
+            /* A thumbnail that owns its pose must also own its animation clock: nothing calls
+             * Form#update on this path, so without this the animator stays on one keyframe pair
+             * and applyActions re-samples it across the partial tick's 0..1 sweep every frame.
+             * Previews that reuse a caller's pose (film, model block) keep their own pacing. */
+            if (sourceOwner == null)
+            {
+                this.advanceUIAnimation(context);
+            }
+
             boolean reusePreviewPose = sourceOwner != null
                 && this.previewPoseSnapshot.consume(sourceOwner, sourceEntity, model, context.getTransition());
             PoseStack stack = context.batcher.getContext().pose();
@@ -327,9 +336,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
                 if (!reusePreviewPose)
                 {
+                    /* A stopped clock is not a still pose while the partial tick keeps sweeping
+                     * the animator across its current keyframe pair - pin it so the pose holds. */
+                    float poseTransition = this.isUIAnimationFrozen() ? UI_FROZEN_TRANSITION : context.getTransition();
+
                     model.model.resetPose();
 
-                    this.animator.applyActions(null, model, context.getTransition());
+                    this.animator.applyActions(null, model, poseTransition);
                     model.model.applyPose(this.getPose(this.renderPose));
                 }
 
@@ -1609,7 +1622,23 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.animator != null)
         {
+            this.recordExternalTick();
             this.animator.update(entity);
         }
+    }
+
+    /**
+     * Run the list thumbnail's owed animation ticks through the animator, the same path the
+     * editor's 3D preview uses via {@link #tick(IEntity)}.
+     */
+    private void advanceUIAnimation(UIContext context)
+    {
+        StubEntity source = this.getUITickEntity();
+
+        this.driveUIAnimation(this.pollUIAnimationTicks(context), () ->
+        {
+            source.update();
+            this.tick(source);
+        });
     }
 }

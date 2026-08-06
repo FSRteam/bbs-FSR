@@ -345,7 +345,7 @@ public class UIFormCategory extends UIElement
                     context.batcher.outline(cx, cy, cx + CELL_WIDTH, cy + CELL_HEIGHT, Colors.A50 | BBSSettings.accentColorRGB(), 2);
                 }
 
-                FormUtilsClient.renderUI(form, context, cx, cy, cx + CELL_WIDTH, cy + CELL_HEIGHT);
+                FormUtilsClient.renderUI(form, context, cx, cy, cx + CELL_WIDTH, cy + CELL_HEIGHT, isSelected);
 
                 context.batcher.unclip(context);
 
