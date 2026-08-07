@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public abstract class EditorLayoutNode
 {
@@ -17,6 +18,13 @@ public abstract class EditorLayoutNode
     public static final String TYPE_STACK = "stack";
     public static final String DIR_V = "v";
     public static final String DIR_H = "h";
+
+    /** A split never collapses a side entirely, so every panel keeps a grabbable sliver. */
+    public static final float MIN_RATIO = 0.05F;
+    public static final float MAX_RATIO = 0.95F;
+
+    /** Share a panel takes when it is split off against another panel. */
+    public static final float SPLIT_RATIO = 0.5F;
 
     /** Drop zone edges for split (left/right = vertical split, top/bottom = horizontal). */
     public static final int EDGE_LEFT = 0;
@@ -213,6 +221,28 @@ public abstract class EditorLayoutNode
         return copyWithInsertedSplitAroundTarget(root2, targetPanelId, droppedPanelId, horizontal, droppedFirst);
     }
 
+    /**
+     * Returns a new tree with droppedPanel split off against the layout as a whole, so it spans the
+     * full width or height of that edge instead of only the panel it was dropped on.
+     */
+    public static EditorLayoutNode copyWithInsertSplitAtRoot(EditorLayoutNode root, String droppedPanelId, int edge, float ratio)
+    {
+        EditorLayoutNode rest = copyWithRemovedPanel(root, droppedPanelId);
+        EditorLayoutNode dropped = new PanelNode(droppedPanelId);
+
+        if (rest == null)
+        {
+            return dropped;
+        }
+
+        boolean horizontal = edge == EDGE_TOP || edge == EDGE_BOTTOM;
+        boolean droppedFirst = edge == EDGE_LEFT || edge == EDGE_TOP;
+
+        return droppedFirst
+            ? new SplitterNode(horizontal, ratio, dropped, rest)
+            : new SplitterNode(horizontal, 1F - ratio, rest, dropped);
+    }
+
     /** Returns a new tree with droppedPanel added into target panel's stack (center drop behavior). */
     public static EditorLayoutNode copyWithInsertStackAt(EditorLayoutNode root, String targetPanelId, String droppedPanelId)
     {
@@ -293,6 +323,68 @@ public abstract class EditorLayoutNode
             out.add(s);
             collectSplitters(s.first, out);
             collectSplitters(s.second, out);
+        }
+    }
+
+    /**
+     * Returns a new tree where each splitter present in {@code ratios} takes its new ratio. Targets
+     * are matched by node identity against {@code root}, so all of them must be applied in this one
+     * call because rebuilding one path replaces the splitters along it.
+     */
+    public static EditorLayoutNode copyWithSplitterRatios(EditorLayoutNode root, Map<SplitterNode, Float> ratios)
+    {
+        if (root == null || ratios == null || ratios.isEmpty())
+        {
+            return root;
+        }
+
+        if (!(root instanceof SplitterNode))
+        {
+            return root;
+        }
+
+        SplitterNode splitter = (SplitterNode) root;
+        Float ratio = ratios.get(splitter);
+        EditorLayoutNode first = copyWithSplitterRatios(splitter.first, ratios);
+        EditorLayoutNode second = copyWithSplitterRatios(splitter.second, ratios);
+        float newRatio = ratio == null ? splitter.ratio : MathUtils.clamp(ratio, MIN_RATIO, MAX_RATIO);
+
+        if (newRatio == splitter.ratio && first == splitter.first && second == splitter.second)
+        {
+            return root;
+        }
+
+        return new SplitterNode(splitter.horizontal, newRatio, first, second);
+    }
+
+    /** Returns a new tree with the two panel ids exchanged, wherever they sit (splits or stacks). */
+    public static EditorLayoutNode copyWithSwappedPanels(EditorLayoutNode root, String id1, String id2)
+    {
+        if (root == null || id1 == null || id2 == null || id1.equals(id2))
+        {
+            return root;
+        }
+
+        return root.copyWithSwappedIds(id1, id2);
+    }
+
+    /** Collect the ids of every panel the tree places, including the inactive tabs of stacks. */
+    public static void collectPanelIds(EditorLayoutNode node, Set<String> out)
+    {
+        if (node instanceof PanelNode)
+        {
+            out.add(((PanelNode) node).getPanelId());
+        }
+        else if (node instanceof StackNode)
+        {
+            out.addAll(((StackNode) node).getPanelIds());
+        }
+        else if (node instanceof SplitterNode)
+        {
+            SplitterNode splitter = (SplitterNode) node;
+
+            collectPanelIds(splitter.first, out);
+            collectPanelIds(splitter.second, out);
         }
     }
 

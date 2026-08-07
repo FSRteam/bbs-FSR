@@ -2,6 +2,7 @@ package mchorse.bbs_mod.forms;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import net.minecraft.client.renderer.RenderType;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -27,8 +28,10 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
     public static boolean drawLayer(RenderType layer, MeshData meshData)
     {
         Vector3f origin = FormTranslucentQueue.getSortOrigin();
+        boolean textLayer = FormTranslucentQueue.isGroupOpen()
+            && layer.format() == DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP;
 
-        if (origin == null || !FormTranslucentQueue.isActive() || !isDeferrableTranslucent(layer))
+        if (origin == null || !FormTranslucentQueue.isActive() || !(textLayer || isDeferrableTranslucent(layer)))
         {
             return false;
         }
@@ -42,7 +45,7 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
             buffer,
             new Matrix4f(RenderSystem.getModelViewMatrix()),
             new Vector3f(origin),
-            false,
+            textLayer,
             captureLayerPreparation(layer)
         ));
         return true;

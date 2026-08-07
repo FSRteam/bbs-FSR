@@ -31,6 +31,12 @@ public class UIOrbitCamera implements IUIElement
         if (!control)
         {
             this.cancelGesture();
+
+            /* Key events only reach the camera while control is on, so a flight
+             * toggle with WASD still held never sees the release and the velocity
+             * stays latched - the camera would resume drifting in that direction
+             * the next time flight is enabled. */
+            this.orbit.reset();
         }
 
         this.control = control;
@@ -41,6 +47,7 @@ public class UIOrbitCamera implements IUIElement
         if (!enabled)
         {
             this.cancelGesture();
+            this.orbit.reset();
         }
 
         this.enabled = enabled;

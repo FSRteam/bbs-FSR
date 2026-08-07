@@ -7,6 +7,7 @@ import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
@@ -37,9 +38,21 @@ public abstract class FormRenderer <T extends Form>
     private static final Vector3f UI_LIGHT_A = new Vector3f(0F, 1F, -0.2F).normalize();
     private static final Vector3f UI_LIGHT_B = new Vector3f(-0.85F, 0.85F, 1F).normalize();
 
+    /** Partial tick a list thumbnail holds while its animation clock is frozen. */
+    protected static final float UI_FROZEN_TRANSITION = 1F;
+
     protected T form;
     private final Transform combinedTransform = new Transform();
     private final Matrix4f transformMatrix = new Matrix4f();
+    private boolean uiSelected;
+    private StubEntity uiTickEntity;
+    private long lastUITick = Long.MIN_VALUE;
+    private boolean uiAnimationFrozen;
+    private long lastSelectedTick = Long.MIN_VALUE;
+    private long currentUITick;
+    private long externalTickCount;
+    private long lastExternalTickCount;
+    private boolean drivingUIAnimation;
 
     public FormRenderer(T form)
     {
@@ -67,9 +80,216 @@ public abstract class FormRenderer <T extends Form>
 
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        this.beginRenderUI();
-        this.renderInUI(context, x1, y1, x2, y2);
-        this.finishRenderUI(context, x1, y1, x2, y2);
+        this.renderUI(context, x1, y1, x2, y2, false);
+    }
+
+    /**
+     * Render this form's list thumbnail, telling the renderer whether the form is
+     * the one currently selected in that list. Only the freeze-animation exemption
+     * reads the flag; every other preview passes {@code false}.
+     */
+    public final void renderUI(UIContext context, int x1, int y1, int x2, int y2, boolean selected)
+    {
+        long tick = context.getTick();
+
+        if (selected && this.lastSelectedTick != tick)
+        {
+            /* This form was just selected in a list during this UI tick. Mark it so the freeze
+             * check sees a consistent answer across all draw paths this tick - the preview, any
+             * list thumbnails, and the parts-list thumbnail all share one renderer. */
+            this.lastSelectedTick = tick;
+        }
+
+        this.uiSelected = selected;
+
+        try
+        {
+            this.beginRenderUI();
+            this.renderInUI(context, x1, y1, x2, y2);
+            this.finishRenderUI(context, x1, y1, x2, y2);
+        }
+        finally
+        {
+            this.uiSelected = false;
+        }
+    }
+
+    /** Whether the list currently being rendered has this form selected. */
+    protected final boolean isUISelected()
+    {
+        return this.uiSelected;
+    }
+
+    /**
+     * How many animation ticks the list thumbnail owes since it was last drawn, and the
+     * throwaway entity to drive them with.
+     *
+     * <p>List thumbnails never reach {@link Form#update(IEntity)}, so nothing advances the
+     * state that ticking produces - vanilla {@code AnimationState}s never start, per-tick
+     * fields (a parrot's {@code flap}, a dragon's {@code flapTime}, a guardian's tail) keep
+     * their spawn values, and a model form's animator stays on one keyframe pair. Rendering
+     * then re-samples that frozen state across the partial tick's 0..1 sweep every frame,
+     * which is the twitch this pacing fixes.</p>
+     *
+     * <p>Paced by {@link UIContext#getTick()}, never by the render call: a thumbnail redraws
+     * at 3-12x the tick rate, so per-frame stepping would run animations that much too fast
+     * and tie their speed to the framerate. Mirrors {@code UIModelRenderer#updateLogic},
+     * down to its ten-tick catch-up ceiling for when the screen falls behind.</p>
+     *
+     * <p>Renderers are cached on the form and therefore shared, so one form can be drawn
+     * several times in a frame - a picker cell, the editor's parts list, the 3D preview - and
+     * each of those draws calls this. The clock is therefore resolved once per UI tick: the
+     * first caller of a tick decides how far to advance and whether the form is frozen, and
+     * every later caller in that same tick gets {@code 0} and reads the same frozen flag.
+     * Without that, whichever draw happened to run first would consume the tick and the others
+     * would stutter, and a thumbnail drawn as unselected could freeze a form that another list
+     * is drawing as selected.</p>
+     *
+     * <p>Ticks already spent by {@link Form#update(IEntity)} (the 3D preview, a world entity)
+     * are subtracted, so the two paths cannot compound into a double-speed animation.</p>
+     *
+     * @return ticks to advance, {@code 0} when the clock is frozen, already resolved this
+     *         tick, or fully accounted for by another path
+     */
+    protected final int pollUIAnimationTicks(UIContext context)
+    {
+        long tick = context.getTick();
+
+        if (this.lastUITick == tick)
+        {
+            /* Already resolved for this tick by an earlier draw of the same form. */
+            return 0;
+        }
+
+        long externallyTicked = Math.max(0L, this.externalTickCount - this.lastExternalTickCount);
+
+        /* Settle the external count on every resolved tick, not only on the ones that advance:
+         * a form that skipped a tick (frozen, offscreen, first draw) would otherwise bank the
+         * preview's ticks and sit still for that many ticks once it resumes. */
+        this.lastExternalTickCount = this.externalTickCount;
+        this.currentUITick = tick;
+        this.uiAnimationFrozen = !this.shouldAdvanceUIAnimation();
+
+        if (this.lastUITick == Long.MIN_VALUE)
+        {
+            /* First draw only aligns the clock - catching up from Long.MIN_VALUE would
+             * otherwise burn the whole ten-tick ceiling on a form nobody has seen yet. */
+            this.lastUITick = tick;
+
+            return 0;
+        }
+
+        long elapsed = Math.min(tick - this.lastUITick, 10L);
+
+        this.lastUITick = tick;
+
+        if (elapsed <= 0L || this.uiAnimationFrozen)
+        {
+            return 0;
+        }
+
+        return (int) Math.max(0L, elapsed - externallyTicked);
+    }
+
+    /**
+     * Record that something outside the thumbnail path advanced this renderer, so
+     * {@link #pollUIAnimationTicks(UIContext)} does not spend that tick a second time.
+     * Subclasses implementing {@code ITickable} call this from their {@code tick} method.
+     */
+    protected final void recordExternalTick()
+    {
+        if (!this.drivingUIAnimation)
+        {
+            this.externalTickCount += 1;
+        }
+    }
+
+    /**
+     * Run {@code ticks} animation ticks that this thumbnail owes, without counting them as
+     * external ticks - they are the budget {@link #pollUIAnimationTicks(UIContext)} just
+     * handed out.
+     */
+    protected final void driveUIAnimation(int ticks, Runnable step)
+    {
+        if (ticks <= 0)
+        {
+            return;
+        }
+
+        this.drivingUIAnimation = true;
+
+        try
+        {
+            for (int i = 0; i < ticks; i++)
+            {
+                step.run();
+            }
+        }
+        finally
+        {
+            this.drivingUIAnimation = false;
+        }
+    }
+
+    /**
+     * Source entity for the ticks {@link #pollUIAnimationTicks(UIContext)} hands out.
+     *
+     * <p>Built on first use rather than with the renderer: {@link StubEntity}'s no-argument
+     * constructor reads {@code ItemStack.EMPTY}, which pulls in the vanilla registries, and
+     * renderers are constructed in headless tests that never bootstrap them.</p>
+     */
+    protected final StubEntity getUITickEntity()
+    {
+        if (this.uiTickEntity == null)
+        {
+            this.uiTickEntity = new StubEntity();
+        }
+
+        return this.uiTickEntity;
+    }
+
+    /**
+     * Whether the freeze setting is currently holding this thumbnail still. Callers must
+     * also pin the partial tick they render with: a stopped clock is not a still pose while
+     * {@code ageInTicks} keeps sweeping {@code tickCount..tickCount + 1} each frame.
+     */
+    protected final boolean isUIAnimationFrozen()
+    {
+        return this.uiAnimationFrozen;
+    }
+
+    /**
+     * Whether any list drew this form as its selection recently.
+     *
+     * <p>Reads one tick back as well as the current one: the clock is resolved by the first
+     * draw of a tick, which may well be a list that does not own the selection (the entity
+     * selector's row list draws before the picker's grid). Accepting the previous tick lets
+     * that ordering settle without the form flickering between frozen and running.</p>
+     */
+    protected final boolean isRecentlySelected()
+    {
+        if (this.lastSelectedTick == Long.MIN_VALUE)
+        {
+            /* Never selected. Subtracting the sentinel here would overflow into a negative
+             * difference and read as "just selected". */
+            return false;
+        }
+
+        return this.currentUITick - this.lastSelectedTick <= 1L;
+    }
+
+    /**
+     * Whether this form's thumbnail clock may run. Frozen lists exempt the form the user
+     * selected; subclasses extend this with their own pause state.
+     */
+    protected boolean shouldAdvanceUIAnimation()
+    {
+        if (!BBSSettings.freezeFormAnimations.get())
+        {
+            return true;
+        }
+
+        return this.isRecentlySelected();
     }
 
     protected final void beginRenderUI()
@@ -266,8 +486,7 @@ public abstract class FormRenderer <T extends Form>
     {
         transform.translate.add(overlay.translate);
         transform.scale.add(overlay.scale).sub(1, 1, 1);
-        transform.rotate.add(overlay.rotate);
-        transform.rotate2.add(overlay.rotate2);
+        transform.addRotation(overlay);
     }
 
     /**

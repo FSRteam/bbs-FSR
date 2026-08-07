@@ -19,12 +19,12 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.context.ContextAction;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.keyframes.factories.ItemStackKeyframeFactory;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
@@ -272,7 +272,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             try
             {
                 CompoundTag nbt = TagParser.parseTag(v.toString());
-                ItemStack parsed = ItemStack.CODEC.parse(NbtOps.INSTANCE, nbt).result().orElse(ItemStack.EMPTY);
+                ItemStack parsed = ItemStack.CODEC.parse(ItemStackKeyframeFactory.currentOps(), nbt).result().orElse(ItemStack.EMPTY);
 
                 this.acceptItem(parsed);
 
@@ -437,7 +437,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
     private void updateItemNbt()
     {
-        this.itemNbt.setText(ItemStack.CODEC.encodeStart(NbtOps.INSTANCE, this.itemStack).result().map(Tag::getAsString).orElse("{}"));
+        this.itemNbt.setText(ItemStack.CODEC.encodeStart(ItemStackKeyframeFactory.currentOps(), this.itemStack).result().map(Tag::getAsString).orElse("{}"));
     }
 
     private void fillBlockProperties(BlockState state)

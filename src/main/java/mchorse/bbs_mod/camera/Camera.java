@@ -52,6 +52,15 @@ public class Camera
         return CameraUtils.getMouseDirection(this.projection, this.view, mx, my);
     }
 
+    /**
+     * Projection-agnostic picking ray; see {@link CameraUtils#getMouseRay}.
+     * The origin offset is relative to {@link #position}.
+     */
+    public Vector3f getMouseRay(int mx, int my, int vx, int vy, int w, int h, Vector3f originOffset)
+    {
+        return CameraUtils.getMouseRay(this.projection, this.view, mx, my, vx, vy, w, h, originOffset);
+    }
+
     public Vector3f getRelative(Vector3d vector)
     {
         return this.getRelative(vector.x, vector.y, vector.z);

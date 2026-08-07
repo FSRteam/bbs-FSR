@@ -104,11 +104,15 @@ public class ValueOrder extends BaseValueBasic<List<String>>
             }
         }
 
-        for (String token : this.tokens)
+        /* A token added after this value was saved belongs at its default
+         * position, not unconditionally at the end of the user's order. */
+        for (int i = 0; i < this.tokens.size(); i++)
         {
+            String token = this.tokens.get(i);
+
             if (!order.contains(token))
             {
-                order.add(token);
+                order.add(Math.min(i, order.size()), token);
             }
         }
 

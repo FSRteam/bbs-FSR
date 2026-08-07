@@ -24,8 +24,10 @@ public final class OrbitFilmCameraMissingRendererSourceTest
             "orbit target no longer resolves an optional form renderer");
         check(orbitTarget.contains("if (renderer != null)"),
             "orbit target no longer handles missing plugin form renderers");
-        check(orbitTarget.contains("MatrixCache map = renderer.collectMatrices("),
-            "orbit target bypasses the guarded renderer when collecting matrices");
+        check(orbitTarget.contains("MatrixCache map = FormFrameCache.collect("),
+            "orbit target bypasses the frame cache when collecting matrices");
+        check(orbitTarget.indexOf("if (renderer != null)") < orbitTarget.indexOf("MatrixCache map = FormFrameCache.collect("),
+            "orbit target uses the frame cache before guarding the optional renderer");
         check(!orbitTarget.contains("FormUtilsClient.getRenderer(form).collectMatrices("),
             "orbit target directly dereferences a possibly missing form renderer");
     }

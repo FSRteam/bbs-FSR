@@ -93,13 +93,15 @@ public final class ModelPivotFrames
 
             if (frame == null)
             {
-                frame = new CubicRenderer.PivotFrame(new Vector3f(), new Quaternionf(), new Quaternionf());
+                frame = new CubicRenderer.PivotFrame(new Vector3f(), new Quaternionf(), new Quaternionf(), new Vector3f());
                 out.put(bone.name, frame);
             }
 
             Vector3f position = bone.originMat.getTranslation(frame.position());
             Quaternionf parentRotation = bone.originMat.getUnnormalizedRotation(frame.parentRotation());
             Quaternionf worldRotation = bone.mat.getUnnormalizedRotation(frame.worldRotation());
+
+            bone.originMat.getScale(frame.scale());
 
             if (baseRotation != null && baseTranslation != null)
             {

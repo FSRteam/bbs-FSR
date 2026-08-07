@@ -84,6 +84,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.Level;
 import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 public class UIReplaysEditor extends UIElement {
 
@@ -1411,22 +1412,13 @@ public class UIReplaysEditor extends UIElement {
         } else if (context.mouseButton == 1 && this.isVisible()) {
             Level world = Minecraft.getInstance().level;
             Camera camera = this.filmPanel.getCamera();
+            Vector3f rayOffset = new Vector3f();
+            Vector3f rayDirection = CameraUtils.getMouseRay(camera.projection, camera.view, context.mouseX, context.mouseY, area.x, area.y, area.w, area.h, rayOffset);
 
             BlockHitResult blockHitResult = RayTracing.rayTrace(
                     world,
-                    RayTracing.fromVector3d(camera.position),
-                    RayTracing.fromVector3f(
-                            CameraUtils.getMouseDirection(
-                                    camera.projection,
-                                    camera.view,
-                                    context.mouseX,
-                                    context.mouseY,
-                                    area.x,
-                                    area.y,
-                                    area.w,
-                                    area.h
-                            )
-                    ),
+                    RayTracing.fromVector3d(new Vector3d(camera.position).add(rayOffset.x, rayOffset.y, rayOffset.z)),
+                    RayTracing.fromVector3f(rayDirection),
                     256F
             );
 

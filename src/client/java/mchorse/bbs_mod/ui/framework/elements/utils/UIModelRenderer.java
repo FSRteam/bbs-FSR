@@ -1,12 +1,19 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import mchorse.bbs_mod.graphics.InverseView;
+import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
-import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -15,14 +22,7 @@ import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import net.minecraft.client.Minecraft;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.platform.Lighting;
 import net.minecraft.client.renderer.GameRenderer;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Intersectiond;
 import org.joml.Matrix3d;
 import org.joml.Matrix3f;
@@ -77,6 +77,43 @@ public abstract class UIModelRenderer extends UIElement
     public void setTransform(Matrix4f transform)
     {
         this.transform = transform;
+    }
+
+    /**
+     * The orthonormal axes of the frame the preview is actually drawn in &mdash;
+     * what {@link mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace#GLOBAL}
+     * means for anything rendered here. {@link #transform} is multiplied onto the
+     * stack before the model AND before the grid ({@link #renderModel}), so it is
+     * that frame, not the camera's, that reads as "the world" to the user: the
+     * floor grid turns with it. Identity in a plain preview, so GLOBAL stays the
+     * flat scene axes there; the model block's immersive editing sets it to the
+     * BLOCK's own transform, and then GLOBAL follows the block the way the film's
+     * follows the replay. Scale is divided out &mdash; these are directions, and
+     * a scaled block must not stretch the gizmo's frame.
+     */
+    public Matrix3f getSceneAxes()
+    {
+        return MatrixStackUtils.stripScale(this.transform).get3x3(new Matrix3f());
+    }
+
+    /**
+     * Lift a matrix out of the previewed form's own frame into the frame the
+     * preview is drawn in &mdash; i.e. apply {@link #transform}, exactly as
+     * {@link #renderModel} does before the model reaches the stack.
+     *
+     * <p>The gizmo needs this because its two halves are recovered from
+     * different places: the drawn origin and axes come back out of the RENDER
+     * matrix (so they already carry the transform), while the drag's Jacobian
+     * and rotation axes are SAMPLED from the editor's own bone matrices (which
+     * do not). With a plain preview the transform is the identity and the two
+     * agree by accident; inside a rotated model block they would disagree by
+     * the block's rotation, and every drag would run off the handles. Scale is
+     * deliberately kept &mdash; a Jacobian must map local units to the scene's
+     * real distances.
+     */
+    public Matrix4f toSceneMatrix(Matrix4f matrix)
+    {
+        return new Matrix4f(this.transform).mul(matrix);
     }
 
     public void setRotation(float yaw, float pitch)
@@ -135,21 +172,30 @@ public abstract class UIModelRenderer extends UIElement
             }
 
             this.dragGeneration = generation;
-            this.dragging = Window.isShiftPressed() || context.mouseButton == 2 ? 2 : 1;
-            this.lastX = context.mouseX;
-            this.lastY = context.mouseY;
 
-            this.cachedPos.set(this.pos);
-            this.cachedCamera.copy(this.camera);
-            this.plane.set(0, 0, 1);
-            this.rotateVector(this.plane);
+            try
+            {
+                this.dragging = Window.isShiftPressed() || context.mouseButton == 2 ? 2 : 1;
+                this.lastX = context.mouseX;
+                this.lastY = context.mouseY;
 
-            this.cachedPlaneIntersection = this.calculateOnPlane(context);
+                this.cachedPos.set(this.pos);
+                this.cachedCamera.copy(this.camera);
+                this.plane.set(0, 0, 1);
+                this.rotateVector(this.plane);
 
-            /* The renderer owns the press even though the drag is updated from
-             * render().  Returning false here used to make the root re-hit-test
-             * the release, so moving outside the viewport left this state live. */
-            return true;
+                this.cachedPlaneIntersection = this.calculateOnPlane(context);
+
+                return true;
+            }
+            catch (RuntimeException | Error exception)
+            {
+                this.dragOwnership.release(context.mouseButton, generation);
+                this.dragGeneration = 0L;
+                this.dragging = 0;
+
+                throw exception;
+            }
         }
 
         return false;
@@ -197,6 +243,8 @@ public abstract class UIModelRenderer extends UIElement
             this.dragGeneration = 0L;
             this.dragging = 0;
         }
+
+        super.subMouseCanceled(context);
     }
 
     @Override
@@ -360,8 +408,6 @@ public abstract class UIModelRenderer extends UIElement
     {
         GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
 
-        Minecraft mc = Minecraft.getInstance();
-
         int[] viewport = UIUtils.viewportArea(this.area);
 
         this.camera.updatePerspectiveProjection(viewport[2], viewport[3]);
@@ -380,10 +426,9 @@ public abstract class UIModelRenderer extends UIElement
     protected void renderGrid(UIContext context)
     {
         Matrix4f matrix4f = context.batcher.getContext().pose().last().pose();
-        BufferBuilder builder;
 
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
         for (int x = 0; x <= 10; x ++)
         {
@@ -413,6 +458,6 @@ public abstract class UIModelRenderer extends UIElement
             }
         }
 
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        { com.mojang.blaze3d.vertex.MeshData __bbsBuilt = builder.build(); if (__bbsBuilt != null) BufferUploader.drawWithShader(__bbsBuilt); }
     }
 }

@@ -11,6 +11,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Angle;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;
 
@@ -125,6 +126,13 @@ public class Draw
         fillBox(builder, stack, x1, y1, z1, x2, y2, z2, r, g, b, 1F);
     }
 
+    public static void fillBox(BufferBuilder builder, PoseStack stack, float x1, float y1, float z1, float x2, float y2, float z2, int color)
+    {
+        float alpha = Colors.getA(color);
+
+        fillBox(builder, stack, x1, y1, z1, x2, y2, z2, Colors.getR(color), Colors.getG(color), Colors.getB(color), alpha <= 0F ? 1F : alpha);
+    }
+
     public static void fillBox(BufferBuilder builder, PoseStack stack, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a)
     {
         /* X */
@@ -166,6 +174,11 @@ public class Draw
         RenderSystem.disableDepthTest();
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    public static void coolerAxes(PoseStack stack, float axisSize, float axisOffset)
+    {
+        coolerAxes(stack, axisSize, axisOffset, axisSize + 0.01F, axisOffset + 0.01F);
     }
 
     public static void arc3D(BufferBuilder builder, PoseStack stack, Axis axis, float radius, float thickness, float r, float g, float b)

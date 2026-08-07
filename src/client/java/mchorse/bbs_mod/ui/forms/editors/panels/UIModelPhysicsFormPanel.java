@@ -14,11 +14,15 @@ import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIDebugOverlayContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
+import mchorse.bbs_mod.ui.utils.PickedBone;
+import mchorse.bbs_mod.ui.utils.bones.UIBonePicker;
+import mchorse.bbs_mod.ui.utils.bones.UIBonePickerContextMenu;
+import mchorse.bbs_mod.ui.utils.bones.UIBoneTreeList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
@@ -29,8 +33,10 @@ import mchorse.bbs_mod.utils.pose.ModelPhysicsManager;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
@@ -41,28 +47,29 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
     private static final int DEFAULT_ITERATIONS = 4;
     private static final float DEFAULT_RADIUS = 0.1F;
 
-    public UIButton end;
-    public UIButton targetBone;
-    public UIStringList bones;
     public UIToggle debug;
+    public UIBonePicker end;
+    public UIBonePicker targetBone;
+    public UIBoneTreeList bones;
+    public UISearchList<String> bonesSearch;
     public UIToggle enabled;
-    public UITrackpad gravity;
+    public UISliderTrackpad gravity;
     public UIToggle relativeGravity;
-    public UITrackpad relativeGravityRotateX;
-    public UITrackpad relativeGravityRotateY;
-    public UITrackpad relativeGravityRotateZ;
-    public UITrackpad stiffness;
-    public UITrackpad damping;
+    public UISliderTrackpad relativeGravityRotateX;
+    public UISliderTrackpad relativeGravityRotateY;
+    public UISliderTrackpad relativeGravityRotateZ;
+    public UISliderTrackpad stiffness;
+    public UISliderTrackpad damping;
     public UITrackpad iterations;
     public UIToggle collisions;
-    public UITrackpad radius;
-    public UITrackpad windStrength;
+    public UISliderTrackpad radius;
+    public UISliderTrackpad windStrength;
     public UITrackpad windX;
     public UITrackpad windY;
     public UITrackpad windZ;
-    public UITrackpad windTurbulence;
-    public UITrackpad windTurbulenceSpeed;
-    public UITrackpad windTurbulenceScale;
+    public UISliderTrackpad windTurbulence;
+    public UISliderTrackpad windTurbulenceSpeed;
+    public UISliderTrackpad windTurbulenceScale;
     public UIToggle windLocal;
 
     private List<String> availableBones = Collections.emptyList();
@@ -124,12 +131,17 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         IKey axis = IKey.constant("%s (%s)");
 
-        this.bones = new UIStringList((l) ->
+        this.bones = new UIBoneTreeList((l) ->
         {
             this.selectedBone = l.isEmpty() ? "" : l.get(0);
+
+            PickedBone.set(this.selectedBone);
             this.updateFields();
         });
-        this.bones.background().h(UIConstants.LIST_ITEM_HEIGHT * 8);
+        this.bones.background();
+        this.bonesSearch = new UISearchList<>(this.bones);
+        this.bonesSearch.label(UIKeys.GENERAL_SEARCH);
+        this.bonesSearch.h(20 + UIConstants.LIST_ITEM_HEIGHT * 8);
         this.bones.context(() -> new UIDataContextMenu(ModelPhysicsManager.INSTANCE, this.presetGroup, this::toPresetData, this::applyPresetData).tooltips("_CopyModelPhysics",
             UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_COPY,
             UIKeys.FORMS_EDITORS_MODEL_PHYSICS_CONTEXT_PASTE,
@@ -167,7 +179,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.commitChanges();
         });
 
-        this.gravity = new UITrackpad((v) ->
+        this.gravity = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -247,7 +259,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             }
         }, Colors.BLUE, axis.format(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RELATIVE_GRAVITY_ROTATION, UIKeys.GENERAL_Z));
 
-        this.stiffness = new UITrackpad((v) ->
+        this.stiffness = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -265,7 +277,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.stiffness.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
         this.stiffness.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_STIFFNESS);
 
-        this.damping = new UITrackpad((v) ->
+        this.damping = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -317,7 +329,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             }
         });
 
-        this.radius = new UITrackpad((v) ->
+        this.radius = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -335,7 +347,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.radius.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
         this.radius.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_RADIUS);
 
-        this.windStrength = new UITrackpad((v) ->
+        this.windStrength = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -379,7 +391,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.commitChanges();
         }, Colors.BLUE);
 
-        this.windTurbulence = new UITrackpad((v) ->
+        this.windTurbulence = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -392,7 +404,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.windTurbulence.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.05D).limit(0D, 1D);
         this.windTurbulence.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE);
 
-        this.windTurbulenceSpeed = new UITrackpad((v) ->
+        this.windTurbulenceSpeed = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -405,7 +417,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.windTurbulenceSpeed.onlyNumbers().values(0.1D, 0.05D, 0.5D).increment(0.1D).limit(0D, 10D);
         this.windTurbulenceSpeed.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED);
 
-        this.windTurbulenceScale = new UITrackpad((v) ->
+        this.windTurbulenceScale = new UISliderTrackpad((v) ->
         {
             if (this.syncingUI)
             {
@@ -430,7 +442,23 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         });
         this.windLocal.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL_TOOLTIP);
 
-        this.end = new UIButton(IKey.EMPTY, (b) ->
+        this.end = new UIBonePicker((bone) ->
+        {
+            BoneData d = this.getSelectedData();
+
+            if (d == null || !this.isEndCandidate(bone))
+            {
+                return;
+            }
+
+            d.end = bone;
+            this.updateFields();
+            this.commitChanges();
+        });
+        this.end.menu(this::fillEndMenu);
+        this.end.viewport(this.viewportBonePicking());
+
+        this.targetBone = new UIBonePicker((bone) ->
         {
             BoneData d = this.getSelectedData();
 
@@ -439,46 +467,24 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                 return;
             }
 
-            this.openEndMenu(d.end, (bone) ->
-            {
-                d.end = bone;
-                this.updateFields();
-                this.commitChanges();
-            });
+            d.targetBone = bone;
+            this.updateFields();
+            this.commitChanges();
         });
-
-        this.targetBone = new UIButton(IKey.EMPTY, (b) ->
+        this.targetBone.menu((picker) ->
         {
             BoneData d = this.getSelectedData();
 
-            if (d == null)
+            if (d == null || this.modelInstance == null || this.modelInstance.model == null)
             {
                 return;
             }
 
-            this.getContext().replaceContextMenu((menu) ->
-            {
-                menu.action(Icons.CLOSE, UIKeys.GENERAL_NONE, d.targetBone.isEmpty(), () ->
-                {
-                    d.targetBone = "";
-                    this.updateFields();
-                    this.commitChanges();
-                });
-
-                for (String bone : this.availableBones)
-                {
-                    boolean selected = bone.equals(d.targetBone);
-                    menu.action(Icons.LIMB, IKey.constant(bone), selected, () ->
-                    {
-                        d.targetBone = bone;
-                        this.updateFields();
-                        this.commitChanges();
-                    });
-                }
-            });
+            picker.bones(this.modelInstance.model, this.modelInstance.getDisabledBones()).none().set(d.targetBone);
         });
+        this.targetBone.viewport(this.viewportBonePicking());
 
-        UISection settings = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS);
+        UISection settings = this.section(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_SETTINGS, "physics.settings", true);
 
         settings.fields.add(
             this.enabled,
@@ -493,7 +499,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_ITERATIONS, this.iterations)
         );
 
-        UISection collisionsSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_COLLISIONS);
+        UISection collisionsSection = this.section(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_COLLISIONS, "physics.collisions", true);
 
         collisionsSection.fields.add(
             this.collisions,
@@ -502,7 +508,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         /* Wind is one field for the whole model's physics, not bound to any bone, so the section is always
          * editable and does not depend on which bone is selected in the list. */
-        UISection windSection = new UISection(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND);
+        UISection windSection = this.section(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND, "physics.wind", true);
 
         windSection.fields.add(
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH, this.windStrength),
@@ -526,7 +532,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
         this.options.add(
             debugRow,
-            this.bones,
+            this.bonesSearch,
             settings,
             collisionsSection,
             windSection
@@ -549,8 +555,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             this.availableBones = Collections.emptyList();
             this.data.clear();
             this.wind.set(ModelPhysicsConfig.Wind.NONE);
-            this.bones.setList(Collections.emptyList());
-            this.bones.deselect();
+            this.bones.clear();
             this.selectedBone = "";
             this.setElementsEnabled(false);
             this.updateWindFields();
@@ -563,10 +568,11 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
             this.setElementsEnabled(true);
             this.load();
-            this.bones.setList(this.availableBones);
+            this.bones.fillBones(model.model, model.getDisabledBones());
+            this.bones.filter(this.bonesSearch.search.getText());
             this.updateWindFields();
 
-            if (!this.availableBones.isEmpty())
+            if (!this.pickBoneInList(PickedBone.get()) && !this.availableBones.isEmpty())
             {
                 this.selectBone(this.availableBones.get(0));
             }
@@ -577,6 +583,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
 
     private void setElementsEnabled(boolean enabled)
     {
+        this.bonesSearch.setEnabled(enabled);
         this.bones.setEnabled(enabled);
         this.enabled.setEnabled(enabled);
         this.end.setEnabled(enabled);
@@ -613,6 +620,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         this.updateFields();
     }
 
+    @Override
     public boolean pickBoneInList(String bone)
     {
         if (bone == null || bone.isEmpty() || !this.availableBones.contains(bone))
@@ -621,6 +629,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         }
 
         this.selectBone(bone);
+        PickedBone.set(bone);
 
         return true;
     }
@@ -660,8 +669,8 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         {
             if (d == null)
             {
-                this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format("-");
-                this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format("-");
+                this.end.setLabel(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format("-"));
+                this.targetBone.setLabel(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format("-"));
                 this.gravity.setValue(DEFAULT_GRAVITY);
                 this.relativeGravity.setValue(false);
                 this.relativeGravityRotateX.setValue(0);
@@ -675,8 +684,8 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             }
             else
             {
-                this.end.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format(d.end == null || d.end.isEmpty() ? "-" : d.end);
-                this.targetBone.label = UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format(d.targetBone == null || d.targetBone.isEmpty() ? "-" : d.targetBone);
+                this.end.setLabel(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_END.format(d.end == null || d.end.isEmpty() ? "-" : d.end));
+                this.targetBone.setLabel(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_TARGET.format(d.targetBone == null || d.targetBone.isEmpty() ? "-" : d.targetBone));
                 this.gravity.setValue(d.gravity);
                 this.relativeGravity.setValue(d.relativeGravity);
                 this.relativeGravityRotateX.setValue(d.relativeGravityRotateX);
@@ -716,28 +725,33 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         }
     }
 
-    private void openEndMenu(String current, Consumer<String> callback)
+    private void fillEndMenu(UIBonePickerContextMenu picker)
     {
-        if (this.availableBones.isEmpty() || this.selectedBone.isEmpty())
+        BoneData d = this.getSelectedData();
+
+        if (d == null || this.availableBones.isEmpty() || this.selectedBone.isEmpty() || this.modelInstance == null || this.modelInstance.model == null)
         {
             return;
         }
 
-        this.getContext().replaceContextMenu((menu) ->
+        List<String> candidates = this.getEndCandidates(this.selectedBone);
+
+        if (candidates.isEmpty())
         {
-            List<String> candidates = this.getEndCandidates(this.selectedBone);
+            candidates = this.availableBones;
+        }
 
-            if (candidates.isEmpty())
-            {
-                candidates = this.availableBones;
-            }
+        Set<String> hidden = new HashSet<>(this.modelInstance.model.getAllGroupKeys());
 
-            for (String bone : candidates)
-            {
-                boolean selected = bone.equals(current);
-                menu.action(Icons.LIMB, IKey.constant(bone), selected, () -> callback.accept(bone));
-            }
-        });
+        candidates.forEach(hidden::remove);
+        picker.bones(this.modelInstance.model, hidden).set(d.end);
+    }
+
+    private boolean isEndCandidate(String bone)
+    {
+        List<String> candidates = this.getEndCandidates(this.selectedBone);
+
+        return candidates.isEmpty() ? this.availableBones.contains(bone) : candidates.contains(bone);
     }
 
     private void load()
@@ -982,9 +996,9 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         return out;
     }
 
-    private static UITrackpad axisTrackpad(Consumer<Double> callback, int color, IKey tooltip)
+    private static UISliderTrackpad axisTrackpad(Consumer<Double> callback, int color, IKey tooltip)
     {
-        UITrackpad t = new UITrackpad(callback).degrees().onlyNumbers().limit(-180D, 180D);
+        UISliderTrackpad t = new UISliderTrackpad(callback).degrees().onlyNumbers().limit(-180D, 180D);
         t.textbox.setColor(color);
         t.tooltip(tooltip);
         return t;

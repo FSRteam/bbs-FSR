@@ -7,6 +7,7 @@ import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.utils.joml.Matrices;
+import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -239,22 +240,16 @@ public final class ModelRotationBlender
             return out.set(bone.orient);
         }
 
-        out.rotationZYX(
+        if (bone.current.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            return out.set(bone.current.quat);
+        }
+
+        return out.rotationZYX(
             (float) Math.toRadians(bone.current.rotate.z),
             (float) Math.toRadians(bone.current.rotate.y),
             (float) Math.toRadians(bone.current.rotate.x)
         );
-
-        if (bone.current.rotate2.x != 0F || bone.current.rotate2.y != 0F || bone.current.rotate2.z != 0F)
-        {
-            out.mul(secondary.rotationZYX(
-                (float) Math.toRadians(bone.current.rotate2.z),
-                (float) Math.toRadians(bone.current.rotate2.y),
-                (float) Math.toRadians(bone.current.rotate2.x)
-            ));
-        }
-
-        return out;
     }
 
     private static Quaternionf bobjLocal(BOBJBone bone, Quaternionf out, Quaternionf secondary)
@@ -264,14 +259,12 @@ public final class ModelRotationBlender
             return out.set(bone.orient);
         }
 
-        out.rotationZYX(bone.transform.rotate.z, bone.transform.rotate.y, bone.transform.rotate.x);
-
-        if (bone.transform.rotate2.x != 0F || bone.transform.rotate2.y != 0F || bone.transform.rotate2.z != 0F)
+        if (bone.transform.rotationMode == Transform.RotationMode.QUATERNION)
         {
-            out.mul(secondary.rotationZYX(bone.transform.rotate2.z, bone.transform.rotate2.y, bone.transform.rotate2.x));
+            return out.set(bone.transform.quat);
         }
 
-        return out;
+        return out.rotationZYX(bone.transform.rotate.z, bone.transform.rotate.y, bone.transform.rotate.x);
     }
 
     private static void blend(Quaternionf out, Quaternionf base, Quaternionf solved, float factor)

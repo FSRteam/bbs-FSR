@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
 import mchorse.bbs_mod.ui.utils.IFileDropListener;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.FFMpegUtils;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -48,6 +49,8 @@ public class UIScreen extends Screen implements IFileDropListener
     private boolean mirrorInputAttached;
     private boolean removing;
     private boolean removed;
+    /** Wall-clock time of the last screen tick, used to derive an advancing partial tick while paused. */
+    private long lastTickMillis = -1L;
     private final Map<Integer, LocalHeldMouse> localHeldMouseButtons = new LinkedHashMap<>();
     private final Map<Integer, LocalHeldKey> localHeldKeys = new LinkedHashMap<>();
     private boolean releasingLocalInputGestures;
@@ -90,6 +93,7 @@ public class UIScreen extends Screen implements IFileDropListener
 
     public void update()
     {
+        this.lastTickMillis = Util.getMillis();
         this.menu.update();
     }
 
@@ -581,11 +585,30 @@ public class UIScreen extends Screen implements IFileDropListener
      * only advance once per tick regardless of frame rate. Read the partial tick the
      * world render path uses instead, so both paths interpolate identically.
      */
-    private static float resolveTransition(float delta)
+    private float resolveTransition(float delta)
     {
+        Minecraft mc = Minecraft.getInstance();
+
         try
         {
-            return Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
+            float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(false);
+
+            if (!mc.isPaused())
+            {
+                return partialTick;
+            }
+
+            /* The game timer freezes its partial tick while paused (the residual is
+             * snapshotted), so preview animations that advance at the screen tick
+             * rate (e.g. the form editor's 3D preview) render with a fixed
+             * interpolation offset and visibly step. Derive an advancing partial
+             * tick from wall-clock time between screen ticks to keep them smooth. */
+            if (this.lastTickMillis < 0L)
+            {
+                return 0F;
+            }
+
+            return Math.min((Util.getMillis() - this.lastTickMillis) / 50F, 1F);
         }
         catch (Exception ignored)
         {}
@@ -624,7 +647,7 @@ public class UIScreen extends Screen implements IFileDropListener
             }
 
             this.context.setContext(context);
-            this.menu.context.setTransition(resolveTransition(delta));
+            this.menu.context.setTransition(this.resolveTransition(delta));
 
             if (recording && BBSRendering.isWorldReplayActive())
             {

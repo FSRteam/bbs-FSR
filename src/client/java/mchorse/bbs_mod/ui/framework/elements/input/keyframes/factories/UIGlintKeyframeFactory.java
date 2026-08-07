@@ -27,6 +27,7 @@ import mchorse.bbs_mod.utils.pose.Transform;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /** Dedicated per-bone enchantment-layer editor, separate from the pose keyframe panel. */
@@ -58,7 +59,11 @@ public class UIGlintKeyframeFactory extends UIKeyframeFactory<GlintControls>
 
         this.bones = new UIBoneList((selected) -> this.display());
         this.bones.list.h(UIConstants.LIST_ITEM_HEIGHT * 7);
-        this.bones.setSource(this.hierarchy.getBoneIds(), this.hierarchy.getLabels(false), false);
+
+        Map<String, String> labels = this.hierarchy.getLabels();
+
+        this.bones.list.setHierarchy(this.hierarchy, null, labels);
+        this.bones.setSource(this.hierarchy.getBoneIds(), labels, false);
         this.bones.onFiltered = (reset) ->
         {
             List<String> visible = this.bones.list.getList();

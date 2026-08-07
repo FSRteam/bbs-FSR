@@ -31,6 +31,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.events.UIRemovedEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -59,7 +60,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import com.mojang.blaze3d.vertex.PoseStack;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -67,7 +67,6 @@ import org.joml.Vector3f;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Supplier;
 
 public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSupported, GizmoViewport
 {
@@ -313,37 +312,26 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             return null;
         }
 
-        BlockPos pos = this.modelBlock.getBlockPos();
+        GizmoDrag drag = GizmoDrag.fromRenderedGizmo(this.gizmoCamera, this.getGizmoArea());
         Transform transform = this.modelBlock.getProperties().getTransform();
-        GizmoDrag drag = new GizmoDrag().setup(
-            this.gizmoCamera,
-            this.getGizmoArea(),
-            pos.getX() + 0.5D + transform.translate.x,
-            pos.getY() + transform.translate.y,
-            pos.getZ() + 0.5D + transform.translate.z
-        );
 
-        Matrix3f axes = new Matrix3f();
-
-        if (this.transform.isLocal())
+        if (drag != null && transform != null)
         {
-            axes.set(transform.createRotationMatrix());
+            BlockPos pos = this.modelBlock.getBlockPos();
+
+            drag.setJacobian(GizmoDrag.computeTranslateJacobian(
+                transform,
+                () -> new Vector3f(
+                    pos.getX() + 0.5F + transform.translate.x,
+                    pos.getY() + transform.translate.y,
+                    pos.getZ() + 0.5F + transform.translate.z
+                )
+            ));
+            drag.setRotateAxes(GizmoDrag.computeRotateAxes(
+                transform,
+                () -> MatrixStackUtils.stripScale(transform.createMatrix())
+            ));
         }
-
-        drag.gizmoWorldAxes.set(axes);
-        drag.setJacobian(GizmoDrag.computeTranslateJacobian(
-            transform,
-            () -> new Vector3f(
-                pos.getX() + 0.5F + transform.translate.x,
-                pos.getY() + transform.translate.y,
-                pos.getZ() + 0.5F + transform.translate.z
-            )
-        ));
-        Supplier<Matrix4f> rotationSampler = () -> MatrixStackUtils.stripScale(new Matrix4f(transform.createMatrix()));
-
-        drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform, rotationSampler));
-        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform, true, rotationSampler));
-        drag.setRotationParents(transform, null, rotationSampler);
 
         return drag;
     }
@@ -388,6 +376,14 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         {
             this.applyGizmoOrigin(stack, cameraPos);
             Gizmo.INSTANCE.setViewport(this.getGizmoArea());
+            TransformSpace space = this.transform.getSpace();
+
+            Gizmo.INSTANCE.reorientForSpace(
+                stack,
+                space == TransformSpace.PARENT ? TransformSpace.GLOBAL : space,
+                this.gizmoCamera.view,
+                null
+            );
             Gizmo.INSTANCE.captureVisual(stack);
         }
         finally

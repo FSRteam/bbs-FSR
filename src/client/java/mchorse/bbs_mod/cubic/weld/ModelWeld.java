@@ -22,7 +22,19 @@ public class ModelWeld
      */
     public final float seamFalloff;
 
-    public ModelWeld(String sourceBone, String sourceFace, String targetBone, String targetFace, float maxAngle, float seamFalloff)
+    /**
+     * The PARENT bone's share (0..1) of the joint's deformation — anchored to the model hierarchy, not to
+     * the weld's source/target roles, so the knob means the same thing however the weld was authored. 0.5
+     * puts the seam on the bisector — both cubes crease equally. 0 keeps the parent rigid (an elbow: the
+     * upper arm stays hard, the forearm takes the whole fold); 1 is the mirror case. The other bone always
+     * takes the remainder, so the joint stays sealed.
+     */
+    public final float parentShare;
+
+    /** Whether the seam also distributes TWIST (rotation about the bone axis, e.g. a turning wrist) across the band. */
+    public final boolean twist;
+
+    public ModelWeld(String sourceBone, String sourceFace, String targetBone, String targetFace, float maxAngle, float seamFalloff, float parentShare, boolean twist)
     {
         this.sourceBone = sourceBone;
         this.sourceFace = sourceFace;
@@ -30,5 +42,7 @@ public class ModelWeld
         this.targetFace = targetFace;
         this.maxAngle = maxAngle;
         this.seamFalloff = seamFalloff;
+        this.parentShare = parentShare;
+        this.twist = twist;
     }
 }

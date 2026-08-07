@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.utils.keyframes;
 
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.interps.IInterp;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 
 /**
@@ -75,7 +76,19 @@ public class KeyframeSegment <T>
             return factory.copy(this.a.getValue());
         }
 
-        return factory.copy(factory.interpolate(this.preA, this.a, this.b, this.postB, this.a.getInterpolation(), this.x));
+        double duration = IInterp.context.duration;
+        double startTick = IInterp.context.startTick;
+
+        IInterp.context.segment(this.duration, this.a.getTick());
+
+        try
+        {
+            return factory.copy(factory.interpolate(this.preA, this.a, this.b, this.postB, this.a.getInterpolation(), this.x));
+        }
+        finally
+        {
+            IInterp.context.segment(duration, startTick);
+        }
     }
 
     public boolean isSame()

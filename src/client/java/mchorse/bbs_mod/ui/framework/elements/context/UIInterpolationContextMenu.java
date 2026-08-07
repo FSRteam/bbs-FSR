@@ -55,6 +55,7 @@ public class UIInterpolationContextMenu extends UIContextMenu
         INTERP_ICON_MAP.put(Interpolations.LINEAR, Icons.INTERP_LINEAR);
         INTERP_ICON_MAP.put(Interpolations.CONST, Icons.INTERP_CONST);
         INTERP_ICON_MAP.put(Interpolations.STEP, Icons.INTERP_STEP);
+        INTERP_ICON_MAP.put(Interpolations.STEP_TICK, Icons.INTERP_STEP);
         INTERP_ICON_MAP.put(Interpolations.QUAD_IN, Icons.INTERP_QUAD_IN);
         INTERP_ICON_MAP.put(Interpolations.QUAD_OUT, Icons.INTERP_QUAD_OUT);
         INTERP_ICON_MAP.put(Interpolations.QUAD_INOUT, Icons.INTERP_QUAD_INOUT);
@@ -230,7 +231,7 @@ public class UIInterpolationContextMenu extends UIContextMenu
     {
         super.renderBackground(context);
 
-        int color = BBSSettings.accentColorRGB();
+        int color = BBSSettings.primaryColor.get();
         IInterp interp = this.interpolation.getInterp();
         UIIcon icon = this.icons.get(interp);
         Color fg = new Color().set(color);

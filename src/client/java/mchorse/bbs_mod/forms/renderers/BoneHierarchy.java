@@ -84,8 +84,9 @@ public final class BoneHierarchy
      * Builds stable editor labels while retaining mapping-independent IDs as list values. Main
      * model fields use lower camel case; feature model fields use a snake-case layer namespace and
      * retain lower camel case for the Java-style field suffix (for example inner_armor_rightArm).
+     * Hierarchy indentation is drawn by the tree list itself (see UIBoneTreeList), not here.
      */
-    public Map<String, String> getLabels(boolean indent)
+    public Map<String, String> getLabels()
     {
         Map<String, String> labels = new LinkedHashMap<>();
         Map<String, Integer> suffixes = new HashMap<>();
@@ -106,12 +107,6 @@ public final class BoneHierarchy
             }
 
             label = makeUnique(label, suffixes, usedLabels);
-
-            if (indent)
-            {
-                label = "  ".repeat(bone.depth()) + label;
-            }
-
             labels.put(bone.id(), label);
         }
 

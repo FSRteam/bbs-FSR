@@ -3,7 +3,6 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.replays.Replay;
-import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -19,13 +18,14 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.ui.utils.bones.UIBonePickerContextMenu;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Transform;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
@@ -76,39 +76,19 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
         }
 
         Form form = entity.getForm();
-        List<String> attachments = new ArrayList<>(FormUtilsClient.getRenderer(form).collectMatrices(entity, 0F).keySet());
-
-        attachments.sort(String::compareToIgnoreCase);
-
-        /* Collect labels (substitute track names) */
-        List<String> labels = new ArrayList<>(attachments);
-
-        for (int i = 0; i < labels.size(); i++)
-        {
-            String label = labels.get(i);
-            Form path = FormUtils.getForm(form, label);
-
-            if (path != null)
-            {
-                labels.set(i, path.getTrackName(label));
-            }
-        }
+        Set<String> attachments = FormUtilsClient.getRenderer(form).collectMatrices(entity, 0F).keySet();
 
         if (attachments.isEmpty())
         {
             return;
         }
 
-        panel.getContext().replaceContextMenu((menu) ->
-        {
-            for (int i = 0; i < attachments.size(); i++)
-            {
-                String attachment = attachments.get(i);
-                String label = labels.get(i);
+        /* The picker groups attachments by their form (body part tree) instead of the
+         * old alphabetical strip that shuffled every part's bones together. */
+        UIBonePickerContextMenu picker = new UIBonePickerContextMenu(consumer);
 
-                menu.action(Icons.LIMB, IKey.constant(label), attachment.equals(value), () -> consumer.accept(attachment));
-            }
-        });
+        picker.attachments(form, attachments).set(value);
+        panel.getContext().replaceContextMenu(picker);
     }
 
     public UIAnchorKeyframeFactory(Keyframe<Anchor> keyframe, UIKeyframes editor)

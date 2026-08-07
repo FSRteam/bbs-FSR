@@ -1,56 +1,62 @@
 package mchorse.bbs_mod.ui.framework.elements.input;
 
+import java.util.function.Consumer;
+
+import org.lwjgl.glfw.GLFW;
+
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
-import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.settings.values.numeric.ValueDouble;
-import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
-import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
-import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import org.lwjgl.glfw.GLFW;
 
-import java.util.function.Consumer;
-
-public class UISliderTrackpad extends UIElement
+/**
+ * A numeric field for a value with both ends: instead of a relative drag it
+ * lays the value out along a track, so where you are within the range is
+ * visible at a glance.
+ *
+ * Pressing the track puts the value under the cursor at once and keeps it there
+ * for the rest of the drag, while pressing the handle itself grabs it where it
+ * stands. Since the left button is spent on that, the value is typed by hand
+ * through the middle button instead, which brings it up selected. Modifiers
+ * refine the travel rather than scale a step: shift slows it down, alt slows it
+ * further, and ctrl snaps onto {@link #increment}. Arrow keys and the wheel
+ * still move by the step fields.
+ *
+ * Given no finite limits there is no track to travel along, so the drag falls
+ * back to a trackpad's relative one rather than leaving the element inert.
+ */
+public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
 {
     private static final float VALUE_ALPHA = 0.75F;
     private static final float DRAG_VALUE_ALPHA = 0.92F;
     private static final float HANDLE_ALPHA = 0.8F;
     private static final float HANDLE_HOVER_ALPHA = 0.95F;
     private static final float MARKER_ALPHA = 0.55F;
-    private static final long DRAG_DELAY = 150L;
 
-    public Consumer<Double> callback;
+    /** How much travel the modifiers shave off a positional drag. */
+    private static final double SLOW_DRAG = 0.25D;
+    private static final double PRECISE_DRAG = 0.05D;
 
-    protected double value;
-
-    public double strong = 1D;
-    public double normal = 0.25D;
-    public double weak = 0.05D;
-    public double increment = 1D;
-    public double min = Float.NEGATIVE_INFINITY;
-    public double max = Float.POSITIVE_INFINITY;
-    public boolean integer;
-    public boolean delayedInput;
-    public boolean relative;
-    public boolean allowCanceling = true;
-    public IKey forcedLabel;
+    /** Dead zone of an unbounded drag, matching {@link UITrackpad}'s. */
+    private static final int DRAG_THRESHOLD = 3;
 
     protected final Area handleArea = new Area();
 
+    protected boolean wasInside;
     protected boolean dragging;
     private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
     private long dragGeneration;
+    protected int initialX;
+
+    /** The value the gesture began with, restored when it gets cancelled. */
     protected double startValue;
-    protected long dragTime;
-    protected int dragOffsetX;
+
+    /** The value the drag travels from — a press on the track moves it under the cursor. */
+    protected double anchorValue;
 
     public UISliderTrackpad()
     {
@@ -59,179 +65,21 @@ public class UISliderTrackpad extends UIElement
 
     public UISliderTrackpad(Consumer<Double> callback)
     {
-        this.callback = callback;
-
-        this.setValue(0D);
-        this.h(UIConstants.CONTROL_HEIGHT);
+        super(callback);
     }
 
-    public UISliderTrackpad max(double max)
-    {
-        this.max = max;
-
-        return this;
-    }
-
-    public UISliderTrackpad limit(double min)
-    {
-        this.min = min;
-
-        return this;
-    }
-
-    public UISliderTrackpad limit(double min, double max)
-    {
-        this.min = min;
-        this.max = max;
-
-        return this;
-    }
-
-    public UISliderTrackpad limit(ValueInt value)
-    {
-        return this.limit(value.getMin(), value.getMax(), true);
-    }
-
-    public UISliderTrackpad limit(ValueFloat value)
-    {
-        return this.limit(value.getMin(), value.getMax(), false);
-    }
-
-    public UISliderTrackpad limit(ValueDouble value)
-    {
-        return this.limit(value.getMin(), value.getMax(), false);
-    }
-
-    public UISliderTrackpad limit(double min, double max, boolean integer)
-    {
-        this.integer = integer;
-
-        return this.limit(min, max);
-    }
-
-    public UISliderTrackpad integer()
-    {
-        this.integer = true;
-
-        return this;
-    }
-
-    public UISliderTrackpad increment(double increment)
-    {
-        this.increment = increment;
-
-        return this;
-    }
-
-    public UISliderTrackpad values(double normal)
-    {
-        this.normal = normal;
-        this.weak = normal / 5F;
-        this.strong = normal * 5F;
-
-        return this;
-    }
-
-    public UISliderTrackpad values(double normal, double weak, double strong)
-    {
-        this.normal = normal;
-        this.weak = weak;
-        this.strong = strong;
-
-        return this;
-    }
-
-    public UISliderTrackpad delayedInput()
-    {
-        this.delayedInput = true;
-
-        return this;
-    }
-
-    public UISliderTrackpad relative(boolean relative)
-    {
-        this.relative = relative;
-
-        return this;
-    }
-
-    public UISliderTrackpad forcedLabel(IKey label)
-    {
-        this.forcedLabel = label;
-
-        return this;
-    }
-
-    public UISliderTrackpad disableCanceling()
-    {
-        this.allowCanceling = false;
-
-        return this;
-    }
-
-    public UISliderTrackpad degrees()
-    {
-        return this.increment(15D).values(1D, 0.1D, 5D);
-    }
-
-    public UISliderTrackpad block()
-    {
-        return this.increment(1 / 16D).values(1 / 32D, 1 / 128D, 1 / 2D);
-    }
-
-    public UISliderTrackpad metric()
-    {
-        return this.values(0.1D, 0.01D, 1D);
-    }
-
+    @Override
     public boolean isDragging()
     {
         return this.dragging && this.dragOwnership.isActive();
     }
 
-    public boolean isDraggingTime()
-    {
-        return this.isDragging() && System.currentTimeMillis() - this.dragTime > DRAG_DELAY;
-    }
+    /* Geometry */
 
-    public double getValue()
-    {
-        return this.value;
-    }
-
-    public void setValue(double value)
-    {
-        this.setValueInternal(value);
-    }
-
-    public void setValueAndNotify(double value)
-    {
-        double oldValue = this.value;
-
-        this.setValue(value);
-        this.accept(this.value, oldValue);
-    }
-
-    protected void setValueInternal(double value)
-    {
-        value = MathUtils.clamp(value, this.min, this.max);
-
-        if (this.integer)
-        {
-            value = (int) value;
-        }
-
-        this.value = value;
-    }
-
-    protected void accept(double value, double oldValue)
-    {
-        if (this.callback != null)
-        {
-            this.callback.accept(this.relative ? value - oldValue : this.value);
-        }
-    }
-
+    /**
+     * Whether the value has both ends, i.e. whether it can be laid out along a
+     * track at all.
+     */
     protected boolean hasSliderRange()
     {
         return Double.isFinite(this.min) && Double.isFinite(this.max) && this.max > this.min;
@@ -247,6 +95,11 @@ public class UISliderTrackpad extends UIElement
         return this.getHandleWidth() / 2;
     }
 
+    protected int getTrackWidth()
+    {
+        return Math.max(this.area.w - this.getHandlePadding() * 2, 1);
+    }
+
     protected float getProgress()
     {
         if (!this.hasSliderRange())
@@ -259,12 +112,9 @@ public class UISliderTrackpad extends UIElement
 
     protected int getHandleCenter()
     {
-        int handlePadding = this.getHandlePadding();
-        int handleMinX = this.area.x + handlePadding;
-        int handleMaxX = this.area.ex() - handlePadding;
-        int handleRange = Math.max(handleMaxX - handleMinX, 0);
+        int handleMinX = this.area.x + this.getHandlePadding();
 
-        return handleMinX + Math.round(handleRange * this.getProgress());
+        return handleMinX + Math.round(this.getTrackWidth() * this.getProgress());
     }
 
     protected void updateHandleArea()
@@ -282,19 +132,70 @@ public class UISliderTrackpad extends UIElement
         this.handleArea.set(handleCenter - handleWidth / 2, this.area.y, handleWidth, this.area.h);
     }
 
+    /* Dragging */
+
+    /**
+     * The value the given spot on the track stands for.
+     */
     protected double getValueFromMouse(int mouseX)
     {
-        int centerX = mouseX - this.dragOffsetX;
-        int handlePadding = this.getHandlePadding();
-        int left = this.area.x + handlePadding;
-        int width = Math.max(this.area.w - handlePadding * 2, 1);
-        double factor = MathUtils.clamp((centerX - left) / (double) width, 0D, 1D);
+        int left = this.area.x + this.getHandlePadding();
+        double factor = MathUtils.clamp((mouseX - left) / (double) this.getTrackWidth(), 0D, 1D);
 
         return this.min + factor * (this.max - this.min);
     }
 
-    protected void applySliderValue(double value)
+    /**
+     * The value the current drag has travelled to. Bounded drags map the
+     * cursor's travel onto the track, unbounded ones multiply it by the step,
+     * the way a trackpad does.
+     */
+    protected double getDraggedValue(int mouseX)
     {
+        int dx = mouseX - this.initialX;
+
+        if (!this.hasSliderRange())
+        {
+            double diff = (Math.abs(dx) - DRAG_THRESHOLD) * this.getValueModifier();
+
+            return diff < 0D ? this.anchorValue : this.anchorValue + (dx < 0 ? -diff : diff);
+        }
+
+        double value = this.anchorValue + (dx / (double) this.getTrackWidth()) * (this.max - this.min) * this.getDragPrecision();
+
+        if (Window.isCtrlPressed() && this.increment > 0D)
+        {
+            value = Math.round(value / this.increment) * this.increment;
+        }
+
+        return value;
+    }
+
+    protected double getDragPrecision()
+    {
+        if (Window.isAltPressed())
+        {
+            return PRECISE_DRAG;
+        }
+        else if (Window.isShiftPressed())
+        {
+            return SLOW_DRAG;
+        }
+
+        return 1D;
+    }
+
+    /**
+     * Move the value, but only when it actually moves — otherwise a drag held
+     * still would write it every single frame.
+     */
+    protected void applyValue(double value)
+    {
+        if (this.value == this.normalize(value))
+        {
+            return;
+        }
+
         if (this.delayedInput)
         {
             this.setValue(value);
@@ -307,9 +208,41 @@ public class UISliderTrackpad extends UIElement
 
     protected void updateDragging(int mouseX)
     {
-        if (this.hasSliderRange())
+        this.applyValue(this.getDraggedValue(mouseX));
+    }
+
+    protected void beginDragging(UIContext context)
+    {
+        this.dragGeneration = this.dragOwnership.acquireToken(context.mouseButton);
+
+        if (this.dragGeneration == 0L)
         {
-            this.applySliderValue(this.getValueFromMouse(mouseX));
+            return;
+        }
+
+        this.dragging = true;
+        this.initialX = context.mouseX;
+        this.startValue = this.value;
+
+        /* Grabbing the handle takes the value as it stands, pressing anywhere
+         * else on the track puts it under the cursor first */
+        if (this.hasSliderRange() && !this.handleArea.isInside(context))
+        {
+            this.applyValue(this.getValueFromMouse(context.mouseX));
+        }
+
+        this.anchorValue = this.value;
+
+        try
+        {
+            this.emitDragStart();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            this.stopDragging();
+            this.setValue(this.startValue);
+
+            throw exception;
         }
     }
 
@@ -318,7 +251,7 @@ public class UISliderTrackpad extends UIElement
         this.dragOwnership.release(0, this.dragGeneration);
         this.dragGeneration = 0L;
         this.dragging = false;
-        this.dragOffsetX = 0;
+        this.wasInside = false;
     }
 
     protected void cancelDragging()
@@ -334,38 +267,7 @@ public class UISliderTrackpad extends UIElement
         this.setValueAndNotify(restoreValue);
     }
 
-    protected void finishDragging(int mouseX)
-    {
-        double gestureStart = this.startValue;
-        double finalValue = this.hasSliderRange() ? this.getValueFromMouse(mouseX) : this.value;
-
-        this.stopDragging();
-        this.applySliderValue(finalValue);
-        this.updateHandleArea();
-
-        if (this.delayedInput)
-        {
-            this.accept(this.value, gestureStart);
-        }
-    }
-
-    protected void beginDragging(UIContext context)
-    {
-        this.dragGeneration = this.dragOwnership.acquireToken(context.mouseButton);
-
-        if (this.dragGeneration == 0L)
-        {
-            return;
-        }
-
-        this.dragging = true;
-        this.startValue = this.value;
-        this.dragTime = System.currentTimeMillis();
-        this.dragOffsetX = this.handleArea.isInside(context) ? context.mouseX - this.handleArea.mx() : 0;
-
-        this.updateDragging(context.mouseX);
-        this.updateHandleArea();
-    }
+    /* Input */
 
     @Override
     public void resize()
@@ -377,49 +279,81 @@ public class UISliderTrackpad extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        /* The left button belongs to the track, so typing the value by hand
+         * lives on the middle one. The number comes up selected: reaching for
+         * this button means replacing it, not editing a digit of it */
         if (context.mouseButton == 2 && !this.isDragging() && this.area.isInside(context))
         {
-            this.setValueAndNotify(-this.value);
+            context.focus(this);
+            this.selectAll(context);
 
             return true;
         }
 
-        if (context.mouseButton != 0)
+        if (context.mouseButton == 0)
         {
-            return false;
-        }
+            this.wasInside = this.area.isInside(context);
+            this.updateHandleArea();
 
-        this.updateHandleArea();
-
-        if (!this.isDragging() && this.hasSliderRange() && this.area.isInside(context))
-        {
-            if (Window.isCtrlPressed())
+            if (this.textbox.isFocused())
             {
-                this.setValueAndNotify(Math.round(this.value));
+                if (this.wasInside)
+                {
+                    /* The track owns the left button even while the value is
+                     * being typed — submit the text and take the click */
+                    context.focus(null);
+                }
+                else
+                {
+                    this.textbox.mouseClicked(context.mouseX, context.mouseY, context.mouseButton);
 
-                return true;
+                    if (!this.textbox.isFocused())
+                    {
+                        context.focus(null);
+                    }
+                }
             }
 
-            this.beginDragging(context);
-
-            return true;
+            if (this.wasInside && !this.textbox.isFocused() && !this.isDragging())
+            {
+                this.beginDragging(context);
+            }
         }
 
-        return false;
+        return context.mouseButton == 0 && this.wasInside;
     }
 
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        if (context.mouseButton == 0
-            && this.dragOwnership.isOwnedBy(context.mouseButton, this.dragGeneration))
-        {
-            this.finishDragging(context.mouseX);
+        boolean wasDragging = this.isDragging();
+        long releasedGeneration = this.dragGeneration;
 
-            return true;
+        if (wasDragging && !this.dragOwnership.isOwnedBy(context.mouseButton, releasedGeneration))
+        {
+            return false;
         }
 
-        return false;
+        if (wasDragging)
+        {
+            this.stopDragging();
+        }
+
+        this.textbox.mouseReleased(context.mouseX, context.mouseY, context.mouseButton);
+
+        /* Not gated on drag time like a trackpad's: a press alone already moves
+         * the value here, so even the shortest click has something to submit */
+        if (this.delayedInput && wasDragging)
+        {
+            this.accept(this.value, this.startValue);
+        }
+
+        if (wasDragging)
+        {
+            this.emitDragEnd();
+        }
+
+        return wasDragging || super.subMouseReleased(context);
     }
 
     @Override
@@ -438,6 +372,8 @@ public class UISliderTrackpad extends UIElement
     {
         if (this.isDragging() && context.mouseWheel != 0D)
         {
+            updateAmplifier(context);
+
             return true;
         }
 
@@ -456,7 +392,7 @@ public class UISliderTrackpad extends UIElement
             return true;
         }
 
-        return false;
+        return super.subMouseScrolled(context);
     }
 
     @Override
@@ -469,106 +405,78 @@ public class UISliderTrackpad extends UIElement
             return true;
         }
 
-        if (this.area.isInside(context))
-        {
-            if (context.isHeld(GLFW.GLFW_KEY_UP))
-            {
-                this.setValueAndNotify(this.value + this.getValueModifier());
-
-                return true;
-            }
-            else if (context.isHeld(GLFW.GLFW_KEY_DOWN))
-            {
-                this.setValueAndNotify(this.value - this.getValueModifier());
-
-                return true;
-            }
-            else if (!Window.isCtrlPressed() && (context.isPressed(GLFW.GLFW_KEY_MINUS) || context.isPressed(GLFW.GLFW_KEY_KP_SUBTRACT)))
-            {
-                this.setValueAndNotify(-this.value);
-
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    @Override
-    protected boolean subTextInput(UIContext context)
-    {
-        return false;
-    }
-
-    protected double getValueModifier()
-    {
-        double value = this.normal;
-
-        if (Window.isShiftPressed())
-        {
-            value = this.strong;
-        }
-        else if (Window.isAltPressed())
-        {
-            value = this.weak;
-        }
-        else if (Window.isCtrlPressed())
-        {
-            value = this.increment;
-        }
-
-        return value;
+        return super.subKeyPressed(context);
     }
 
     @Override
     public void render(UIContext context)
     {
-        this.updateHandleArea();
-
         if (this.isDragging())
         {
+            if (this.isFocused())
+            {
+                context.unfocus();
+            }
+
             this.updateDragging(context.mouseX);
-            this.updateHandleArea();
         }
 
-        int primary = BBSSettings.accentColorRGB();
-        int fillX = MathUtils.clamp(this.getHandleCenter(), this.area.x, this.area.ex());
-        int fillColor = Colors.setA(primary, this.dragging ? DRAG_VALUE_ALPHA : VALUE_ALPHA);
-        int handleColor = this.dragging ? Colors.WHITE : Colors.setA(Colors.WHITE, this.handleArea.isInside(context) ? HANDLE_HOVER_ALPHA : HANDLE_ALPHA);
-        int radius = BBSSettings.cornerWidget();
+        this.updateHandleArea();
 
-        if (radius > 0)
+        if (this.textbox.isFocused())
         {
-            context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.inputSurface());
+            this.textbox.render(context);
+
+            if (BBSSettings.cornerWidget() <= 0)
+            {
+                context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), Colors.opaque(BBSSettings.accentColorRGB()));
+            }
         }
         else
         {
-            this.area.render(context.batcher, BBSSettings.inputSurface());
-        }
+            int primary = BBSSettings.accentColorRGB();
+            int fillX = MathUtils.clamp(this.getHandleCenter(), this.area.x, this.area.ex());
+            int fillColor = Colors.setA(primary, this.dragging ? DRAG_VALUE_ALPHA : VALUE_ALPHA);
+            int handleColor = this.dragging ? Colors.WHITE : Colors.setA(Colors.WHITE, this.handleArea.isInside(context) ? HANDLE_HOVER_ALPHA : HANDLE_ALPHA);
+            int radius = BBSSettings.cornerWidget();
 
-        if (this.hasSliderRange())
-        {
             if (radius > 0)
             {
-                context.batcher.roundedBox(this.area.x, this.area.y, fillX - this.area.x, this.area.h, radius, fillColor);
-                context.batcher.roundedBox(fillX - 1, this.area.y, 2, this.area.h, 1F, Colors.setA(primary, MARKER_ALPHA));
-                context.batcher.roundedBox(this.handleArea.x, this.handleArea.y, this.handleArea.w, this.handleArea.h, radius, handleColor);
+                context.batcher.roundedBox(this.area.x, this.area.y, this.area.w, this.area.h, radius, BBSSettings.inputSurface());
             }
             else
             {
-                context.batcher.box(this.area.x, this.area.y, fillX, this.area.ey(), fillColor);
-                context.batcher.box(fillX - 1, this.area.y, fillX + 1, this.area.ey(), Colors.setA(primary, MARKER_ALPHA));
-                context.batcher.box(this.handleArea.x, this.handleArea.y, this.handleArea.ex(), this.handleArea.ey(), handleColor);
+                this.area.render(context.batcher, BBSSettings.inputSurface());
             }
+
+            if (this.hasSliderRange())
+            {
+                if (radius > 0)
+                {
+                    context.batcher.roundedBox(this.area.x, this.area.y, fillX - this.area.x, this.area.h, radius, fillColor);
+                    context.batcher.roundedBox(fillX - 1, this.area.y, 2, this.area.h, 1F, Colors.setA(primary, MARKER_ALPHA));
+                    context.batcher.roundedBox(this.handleArea.x, this.handleArea.y, this.handleArea.w, this.handleArea.h, radius, handleColor);
+                }
+                else
+                {
+                    context.batcher.box(this.area.x, this.area.y, fillX, this.area.ey(), fillColor);
+                    context.batcher.box(fillX - 1, this.area.y, fillX + 1, this.area.ey(), Colors.setA(primary, MARKER_ALPHA));
+                    context.batcher.box(this.handleArea.x, this.handleArea.y, this.handleArea.ex(), this.handleArea.ey(), handleColor);
+                }
+            }
+
+            FontRenderer font = context.batcher.getFont();
+            String label = this.forcedLabel == null ? format(this.value) : this.forcedLabel.get();
+
+            /* The value text follows the textbox's color (white by default), so a
+             * caller can axis-tint a slider the way transform trackpads are tinted. */
+            int base = this.textbox.getColor();
+            int textColor = this.dragging ? Colors.opaque(base) : Colors.setA(base, VALUE_ALPHA);
+            int lx = this.area.ex() - 6 - font.getWidth(label);
+            int ly = this.area.my() - font.getHeight() / 2;
+
+            context.batcher.text(label, lx, ly, textColor);
         }
-
-        FontRenderer font = context.batcher.getFont();
-        String label = this.forcedLabel == null ? UITrackpad.format(this.value) : this.forcedLabel.get();
-        int textColor = this.dragging ? Colors.WHITE : Colors.setA(Colors.WHITE, VALUE_ALPHA);
-        int lx = this.area.ex() - 6 - font.getWidth(label);
-        int ly = this.area.my() - font.getHeight() / 2;
-
-        context.batcher.text(label, lx, ly, textColor);
 
         this.renderLockedArea(context);
 

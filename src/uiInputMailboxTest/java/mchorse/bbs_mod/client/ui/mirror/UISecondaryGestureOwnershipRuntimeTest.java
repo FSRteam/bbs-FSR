@@ -781,10 +781,6 @@ public final class UISecondaryGestureOwnershipRuntimeTest
         @Override
         public void setR(mchorse.bbs_mod.utils.Axis axis, double x, double y, double z)
         {}
-
-        @Override
-        public void setR2(mchorse.bbs_mod.utils.Axis axis, double x, double y, double z)
-        {}
     }
 
     private static final class TestParticleSection extends UIParticleSchemeSection

@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -19,11 +20,15 @@ final class ModelIKCache
     {
     }
 
-    public record CompiledChain(String tip, String target, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean tipRotation, boolean stretch, List<String> chainRootToEffector, List<String> workRootToEffector, String tailId, Set<String> wantedBones, int rootDepth)
+    public record CompiledChain(String tip, String target, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean tipRotation, boolean stretch, boolean classic, List<String> chainRootToEffector, List<String> workRootToEffector, String tailId, Set<String> wantedBones, int rootDepth)
     {
+        public CompiledChain(String tip, String target, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean tipRotation, boolean stretch, List<String> chainRootToEffector, List<String> workRootToEffector, String tailId, Set<String> wantedBones, int rootDepth)
+        {
+            this(tip, target, pole, poleTarget, poleAngle, softness, weight, tipRotation, stretch, false, chainRootToEffector, workRootToEffector, tailId, wantedBones, rootDepth);
+        }
     }
 
-    public record Compiled(List<CompiledChain> chains, List<String> controllers, List<String> poleControllers)
+    public record Compiled(List<CompiledChain> chains, Map<String, ModelIKConfig.JointDoF> bones, List<String> controllers, List<String> poleControllers)
     {
     }
 
@@ -52,20 +57,21 @@ final class ModelIKCache
             return cached.compiled;
         }
 
-        ModelIKConfig config = ModelIKIO.fromData(data);
-        Compiled compiled = compile(model, config);
+        Compiled compiled = compile(model, ModelIKIO.fromData(data));
 
-        EmbeddedCompiled next = new EmbeddedCompiled(model, compiled);
-        EMBEDDED.put(data, next);
+        EMBEDDED.put(data, new EmbeddedCompiled(model, compiled));
 
         return compiled;
     }
 
     private static Compiled compile(IModel model, ModelIKConfig config)
     {
+        Map<String, ModelIKConfig.JointDoF> bones = config == null || config.bones().isEmpty()
+            ? Collections.emptyMap() : Map.copyOf(config.bones());
+
         if (config == null || config.chains() == null || config.chains().isEmpty())
         {
-            return new Compiled(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+            return new Compiled(Collections.emptyList(), bones, Collections.emptyList(), Collections.emptyList());
         }
 
         List<CompiledChain> out = new ArrayList<>(config.chains().size());
@@ -74,12 +80,7 @@ final class ModelIKCache
 
         for (ModelIKConfig.Chain chain : config.chains())
         {
-            if (chain == null)
-            {
-                continue;
-            }
-
-            if (!chain.enabled())
+            if (chain == null || !chain.enabled())
             {
                 continue;
             }
@@ -91,19 +92,17 @@ final class ModelIKCache
 
             List<String> chainIds = buildChainIds(model, chain.tip(), chain.chainLength());
 
-            if (chainIds.size() < 2)
+            if (chainIds.size() < 2 || chainIds.contains(chain.target()))
             {
                 continue;
             }
 
             chainIds = Collections.unmodifiableList(chainIds);
 
-            /* A pole target that does not resolve to a real bone falls back to
-             * the automatic hinge (an empty pole target), so a stale reference
-             * never breaks the chain. */
             String poleTarget = chain.poleTarget();
 
-            if (poleTarget != null && !poleTarget.isEmpty() && !model.getAllGroupKeys().contains(poleTarget))
+            if (poleTarget != null && !poleTarget.isEmpty()
+                && (!model.getAllGroupKeys().contains(poleTarget) || chainIds.contains(poleTarget)))
             {
                 poleTarget = "";
             }
@@ -127,19 +126,28 @@ final class ModelIKCache
             }
 
             controllers.add(chain.target());
-            out.add(new CompiledChain(chain.tip(), chain.target(), chain.pole(), poleTarget, chain.poleAngle(), chain.softness(), chain.weight(), chain.tipRotation(), chain.stretch(), chainIds, workIds, tailId, Collections.unmodifiableSet(wanted), rootDepth(model, workIds)));
+            out.add(new CompiledChain(
+                chain.tip(), chain.target(), chain.pole(), poleTarget, chain.poleAngle(), chain.softness(), chain.weight(),
+                chain.tipRotation(), chain.stretch(), chain.classic(), chainIds, workIds, tailId,
+                Collections.unmodifiableSet(wanted), rootDepth(model, workIds)
+            ));
         }
 
         out.sort(Comparator.comparingInt(CompiledChain::rootDepth));
 
         return new Compiled(
             Collections.unmodifiableList(out),
+            bones,
             Collections.unmodifiableList(new ArrayList<>(controllers)),
             Collections.unmodifiableList(new ArrayList<>(poleControllers))
         );
     }
 
-    /** Depth of the chain's solve root, used once at compile time for ancestor-first ordering. */
+    public static List<String> chainIdsFor(IModel model, String tip, int chainLength)
+    {
+        return buildChainIds(model, tip, chainLength);
+    }
+
     private static int rootDepth(IModel model, List<String> ids)
     {
         String group = ids.isEmpty() ? null : ids.get(0);
@@ -161,7 +169,6 @@ final class ModelIKCache
         return depth;
     }
 
-    /** Detects the bare cubic tail marker once while compiling the chain topology. */
     private static String autoTailId(IModel model, List<String> chainIds)
     {
         if (chainIds.size() < 4 || !(model instanceof Model cubic))
@@ -180,11 +187,6 @@ final class ModelIKCache
         return lastId;
     }
 
-    /**
-     * Walks up the hierarchy from {@code tip}, collecting up to {@code chainLength}
-     * bones ({@code 0} = all the way to the root), and returns them ordered
-     * root-to-tip.
-     */
     private static List<String> buildChainIds(IModel model, String tip, int chainLength)
     {
         List<String> list = new ArrayList<>();

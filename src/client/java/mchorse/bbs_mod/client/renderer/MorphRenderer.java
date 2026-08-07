@@ -7,6 +7,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
+import mchorse.bbs_mod.forms.renderers.MobRenderContext;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.selectors.ISelectorOwnerProvider;
 import mchorse.bbs_mod.selectors.SelectorOwner;
@@ -97,6 +98,15 @@ public class MorphRenderer
     public static boolean renderLivingEntity(LivingEntity livingEntity, float f, float g, PoseStack matrixStack, MultiBufferSource vertexConsumerProvider, int i, int o)
     {
         if (FormUtilsClient.getCurrentForm() != null)
+        {
+            return false;
+        }
+
+        /* A MobForm renders its entity through EntityRenderDispatcher. That reaches this
+         * hook, and without this guard a matching entity selector would draw its own form
+         * over the MobForm with the world camera - a duplicate render in editor previews,
+         * where the current-form stack is not what routes the call. */
+        if (MobRenderContext.isActive())
         {
             return false;
         }

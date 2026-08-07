@@ -4,12 +4,14 @@ import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.MultiBufferSource;
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.joml.Matrix4f;
 
 public class FilmControllerContext
 {
@@ -30,6 +32,9 @@ public class FilmControllerContext
     public String bone;
     public boolean local;
 
+    public TransformSpace space = TransformSpace.LOCAL;
+    public Matrix4f gizmoView;
+
     public String bone2;
     public boolean local2;
 
@@ -41,6 +46,8 @@ public class FilmControllerContext
     public FormProperties timelineProperties;
     public float timelineTick;
     public boolean timelinePlaying;
+    /** Skip the visible form render but still capture gizmo placement. */
+    public boolean gizmoOnly;
 
     private FilmControllerContext()
     {}
@@ -52,6 +59,10 @@ public class FilmControllerContext
         this.color = Colors.WHITE;
         this.bone = null;
         this.local = false;
+        this.space = TransformSpace.LOCAL;
+        this.gizmoView = null;
+        this.bone2 = null;
+        this.local2 = false;
         this.anchorGizmo = false;
         this.anchorLocal = false;
         this.nameTag = "";
@@ -59,6 +70,7 @@ public class FilmControllerContext
         this.timelineProperties = null;
         this.timelineTick = Float.NaN;
         this.timelinePlaying = false;
+        this.gizmoOnly = false;
     }
 
     public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, IBbsWorldRenderContext context)
@@ -134,6 +146,14 @@ public class FilmControllerContext
         return this;
     }
 
+    public FilmControllerContext gizmoSpace(TransformSpace space, Matrix4f view)
+    {
+        this.space = space;
+        this.gizmoView = view;
+
+        return this;
+    }
+
     public FilmControllerContext bone2(String bone, boolean local)
     {
         this.bone2 = bone;
@@ -169,6 +189,13 @@ public class FilmControllerContext
         this.timelineProperties = properties;
         this.timelineTick = tick;
         this.timelinePlaying = playing;
+
+        return this;
+    }
+
+    public FilmControllerContext gizmoOnly(boolean gizmoOnly)
+    {
+        this.gizmoOnly = gizmoOnly;
 
         return this;
     }

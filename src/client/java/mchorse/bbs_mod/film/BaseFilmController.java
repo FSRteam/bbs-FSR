@@ -29,12 +29,14 @@ import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
+import mchorse.bbs_mod.forms.renderers.utils.FormFrameCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.utils.CollectionUtils;
@@ -182,6 +184,8 @@ public abstract class BaseFilmController
             formContext.semanticWorldFromCameraRelative(target, cx, cy, cz);
         }
 
+        FormFrameCache gizmoFrame = null;
+
         stack.pushPose();
         try
         {
@@ -195,13 +199,24 @@ public abstract class BaseFilmController
             }
 
             MatrixStackUtils.multiply(stack, target);
-            FormUtilsClient.render(form, formContext);
+
+            /* Gizmo-only pass: an actor replay renders the world ActorEntity
+             * instead of the editor entity, but the gizmo placement still needs
+             * this frame's snapshot, so skip the visible form (and its shadow /
+             * name tag below) while keeping renderAxes / renderAnchorGizmo. */
+            if (!context.gizmoOnly)
+            {
+                FormUtilsClient.render(form, formContext);
+            }
+
+            gizmoFrame = UIBaseMenu.shouldRenderAxes() ? new FormFrameCache() : null;
 
             if (UIBaseMenu.shouldRenderAxes())
             {
-                if (context.bone != null) renderAxes(context.bone, context.local, context.map, form, formContext, stack);
-                if (context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack);
+                if (context.bone != null) renderAxes(context.bone, context.local, context.space, context.gizmoView, context.map, form, formContext, stack, gizmoFrame);
+                if (!context.gizmoOnly && context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame);
             }
+
         }
         finally
         {
@@ -210,10 +225,10 @@ public abstract class BaseFilmController
 
         if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)
         {
-            renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorLocal, context.map, stack);
+            renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorLocal, context.space, context.gizmoView, context.map, stack, gizmoFrame);
         }
 
-        if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
+        if (!relative && context.map == null && !context.gizmoOnly && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
         {
             /* Skip the shadow when the form is hidden (form.visible, animatable via keyframes): the form
              * itself renders nothing then - see FormRenderer.render - so its shadow must vanish too.
@@ -270,7 +285,7 @@ public abstract class BaseFilmController
             }
         }
 
-        if (!relative && !context.nameTag.isEmpty() && context.map == null && form.visible.get())
+        if (!relative && !context.gizmoOnly && !context.nameTag.isEmpty() && context.map == null && form.visible.get())
         {
             /* Hide the name tag along with the form (form.visible, animatable via keyframes): when the
              * form renders nothing, its name tag must vanish too - same reasoning as the shadow above. */
@@ -289,11 +304,13 @@ public abstract class BaseFilmController
         RenderSystem.enableDepthTest();
     }
 
-    private static void renderAxes(String bone, boolean local, StencilMap stencilMap, Form form, FormRenderingContext context, PoseStack stack)
+    private static void renderAxes(String bone, boolean local, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+        MatrixCache map = FormFrameCache.collect(
+            frame,
+            root,
             context.entity,
             context.simulationOwner,
             context.world == null ? null : new Matrix4f(context.world.last().pose()),
@@ -309,6 +326,7 @@ public abstract class BaseFilmController
             try
             {
                 MatrixStackUtils.multiply(stack, matrix);
+                Gizmo.INSTANCE.reorientForSpace(stack, space, gizmoView, getReplayWorldAxes(context.entity, context.getTransition()));
 
                 if (stencilMap == null)
                 {
@@ -336,11 +354,13 @@ public abstract class BaseFilmController
      * user actually drags ({@link Gizmo#captureVisual}), and the preview runs after it in the same
      * pass, so sharing the method would leave every drag anchored on the preview bone instead.</p>
      */
-    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack)
+    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
-        MatrixCache map = FormUtilsClient.getRenderer(root).collectMatrices(
+        MatrixCache map = FormFrameCache.collect(
+            frame,
+            root,
             context.entity,
             context.simulationOwner,
             context.world == null ? null : new Matrix4f(context.world.last().pose()),
@@ -382,7 +402,7 @@ public abstract class BaseFilmController
     }
 
     /** Capture or stencil the whole-form gizmo at the resolved anchor transform. */
-    private static void renderAnchorGizmo(IntObjectMap<IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, boolean local, StencilMap stencilMap, PoseStack stack)
+    private static void renderAnchorGizmo(IntObjectMap<IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, boolean local, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, PoseStack stack, FormFrameCache frame)
     {
         Form form = entity.getForm();
 
@@ -399,7 +419,7 @@ public abstract class BaseFilmController
         }
         else
         {
-            Matrix4f parent = getEntityMatrix(entities, cx, cy, cz, form.anchor.get(), defaultMatrix, transition, 0, true);
+            Matrix4f parent = getEntityMatrix(entities, cx, cy, cz, form.anchor.get(), defaultMatrix, transition, 0, true, frame);
 
             matrix = MatrixStackUtils.stripScale(parent);
             matrix.setTranslation(full.getTranslation(new Vector3f()));
@@ -409,6 +429,7 @@ public abstract class BaseFilmController
         try
         {
             MatrixStackUtils.multiply(stack, matrix);
+            Gizmo.INSTANCE.reorientForSpace(stack, space, gizmoView, getReplayWorldAxes(entity, transition));
 
             if (stencilMap == null)
             {
@@ -433,10 +454,20 @@ public abstract class BaseFilmController
 
     public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix)
     {
-        return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, true);
+        return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, true, null);
+    }
+
+    public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, FormFrameCache frame)
+    {
+        return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, true, frame);
     }
 
     private static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware)
+    {
+        return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, placementAware, null);
+    }
+
+    private static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware, FormFrameCache frame)
     {
         /* Stupid recursion stop, I don't think anyone would need more than that */
         if (i > 5)
@@ -451,7 +482,7 @@ public abstract class BaseFilmController
         if (same || only)
         {
             Anchor anchor = same ? value : value.previous;
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, anchor, defaultMatrix, transition, i, fullMatrix, placementAware);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, anchor, defaultMatrix, transition, i, fullMatrix, placementAware, frame);
 
             if (!isRelativeAnchorTarget(entities, anchor))
             {
@@ -466,8 +497,8 @@ public abstract class BaseFilmController
         }
         else
         {
-            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i, fullMatrix, placementAware);
-            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i, fullMatrix, placementAware);
+            Matrix4f matrix = getEntityMatrix(entities, cx, cy, cz, value, defaultMatrix, transition, i, fullMatrix, placementAware, frame);
+            Matrix4f lastMatrix = getEntityMatrix(entities, cx, cy, cz, value.previous, defaultMatrix, transition, i, fullMatrix, placementAware, frame);
 
             if (!isRelativeAnchorTarget(entities, value))
             {
@@ -528,10 +559,20 @@ public abstract class BaseFilmController
 
     public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix)
     {
-        return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, true);
+        return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, true, null);
+    }
+
+    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, FormFrameCache frame)
+    {
+        return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, true, frame);
     }
 
     private static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, boolean placementAware)
+    {
+        return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, placementAware, null);
+    }
+
+    private static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, boolean placementAware, FormFrameCache frame)
     {
         IEntity entity = entities.get(anchor.replay);
 
@@ -546,7 +587,7 @@ public abstract class BaseFilmController
 
             if (form != null)
             {
-                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1, fullMatrix, placementAware);
+                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1, fullMatrix, placementAware, frame);
 
                 if (totalMatrix.a != null)
                 {
@@ -559,7 +600,7 @@ public abstract class BaseFilmController
                 {
                     Matrix4f semanticBase = absoluteSemanticMatrix(basic, cameraX, cameraY, cameraZ);
 
-                    map = FormUtilsClient.getRenderer(form).collectMatrices(entity, entity, semanticBase, true, true, transition);
+                    map = FormFrameCache.collect(frame, form, entity, entity, semanticBase, true, true, transition);
                 }
                 else
                 {
@@ -567,7 +608,9 @@ public abstract class BaseFilmController
                      * the frame's absolute target maps are still being assembled. It uses
                      * the deterministic animation/local-IK attachment pose; placement and
                      * visual consumers use the full path above after target setup finishes. */
-                    map = FormUtilsClient.getRenderer(form).collectMatrices(
+                    map = FormFrameCache.collect(
+                        frame,
+                        form,
                         entity,
                         targetResolutionOwner(entity),
                         null,
@@ -609,6 +652,20 @@ public abstract class BaseFilmController
         }
 
         return defaultMatrix;
+    }
+
+    public static Matrix3f getReplayWorldAxes(IEntity entity, float tickDelta)
+    {
+        Matrix3f axes = new Matrix3f();
+
+        if (entity == null)
+        {
+            return axes;
+        }
+
+        float bodyYaw = Lerps.lerp(entity.getPrevBodyYaw(), entity.getBodyYaw(), tickDelta);
+
+        return axes.rotateY(MathUtils.toRad(-bodyYaw));
     }
 
     public static Matrix4f getMatrixForRenderWithRotation(IEntity entity, double cameraX, double cameraY, double cameraZ, float tickDelta)
@@ -665,6 +722,23 @@ public abstract class BaseFilmController
         Vector3f offset = placement == null ? null : placement.entry().rotationOffset();
 
         return offset == null ? new Vector3f() : new Vector3f(offset);
+    }
+
+    public static Vector3f getGizmoBoneEvaluatedRotation(
+        IntObjectMap<IEntity> entities,
+        IEntity entity,
+        Replay replay,
+        double cameraX,
+        double cameraY,
+        double cameraZ,
+        float transition,
+        String bonePath
+    )
+    {
+        BonePlacement placement = sampleBonePlacement(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath);
+        Vector3f rotation = placement == null ? null : placement.entry().evaluatedRotation();
+
+        return rotation == null ? null : new Vector3f(rotation);
     }
 
     /**
@@ -1046,11 +1120,14 @@ public abstract class BaseFilmController
 
                         Vec3 pos = player.position();
 
-                        player.move(MoverType.SELF, new Vec3(x - pos.x, y - pos.y, z - pos.z));
+                        double dY = y - pos.y - (grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D);
+
+                        player.move(MoverType.SELF, new Vec3(x - pos.x, dY, z - pos.z));
                         player.setPos(x, y, z);
 
                         player.setShiftKeyDown(sneaking);
                         player.setOnGround(grounded);
+                        player.setSprinting(replay.keyframes.sprinting.interpolate(replayTick) > 0);
 
                         /* First person teleports the player from keyframes instead of walking it, so vanilla's
                          * bob amplitude (the view-bobbing stride) is computed from a zero velocity and stays
@@ -1700,16 +1777,24 @@ public abstract class BaseFilmController
 
     protected void renderEntity(IBbsWorldRenderContext context, Replay replay, IEntity entity)
     {
-        if (!replay.actor.get())
+        FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
+        float transition = getTransition(entity, context.tickDelta());
+
+        filmContext.transition = transition;
+        filmContext.timeline(replay.properties, replay.getTick(this.getTick()) + transition, this.isTimelinePlaying());
+
+        if (replay.actor.get())
         {
-            FilmControllerContext filmContext = getFilmControllerContext(context, replay, entity);
-            float transition = getTransition(entity, context.tickDelta());
-
-            filmContext.transition = transition;
-            filmContext.timeline(replay.properties, replay.getTick(this.getTick()) + transition, this.isTimelinePlaying());
-
-            renderEntity(filmContext);
+            /* Actor replays render the world ActorEntity instead of the editor
+             * entity. The editor entity is still the gizmo's placement source,
+             * so keep capturing this frame's transform/pose/anchor matrices
+             * (Gizmo#captureVisual) without drawing the editor form on top of
+             * the actor — otherwise the gizmo sits on a stale matrix and stops
+             * following the replayed form's anchor. */
+            filmContext.gizmoOnly(true);
         }
+
+        renderEntity(filmContext);
     }
 
     protected FilmControllerContext getFilmControllerContext(IBbsWorldRenderContext context, Replay replay, IEntity entity)

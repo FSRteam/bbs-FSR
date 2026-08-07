@@ -10,7 +10,7 @@ import mchorse.bbs_mod.ui.dashboard.textures.UITexturePainter;
 import mchorse.bbs_mod.ui.dashboard.textures.data.TextureLayer;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -25,7 +25,7 @@ public class UILayersPanel extends UIElement
     private UITexturePainter painter;
     private UIScrollView list;
     private UIIcon addLayer;
-    private UITrackpad opacity;
+    private UISliderTrackpad opacity;
     public UITextureEditor currentEditor;
 
     public UILayersPanel(UITexturePainter painter)
@@ -44,7 +44,7 @@ public class UILayersPanel extends UIElement
         this.addLayer.tooltip(UIKeys.TEXTURES_LAYERS_ADD);
         this.addLayer.h(UIConstants.CONTROL_HEIGHT);
 
-        this.opacity = new UITrackpad((v) ->
+        this.opacity = new UISliderTrackpad((v) ->
         {
             Document document = this.document();
             TextureLayer active = document == null ? null : document.getActiveLayer();

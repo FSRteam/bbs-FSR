@@ -1,14 +1,17 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -138,15 +141,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 {
                     target.translate.lerp(value.translate, value.fix);
                     target.scale.lerp(value.scale, value.fix);
-                    target.rotate.lerp(value.rotate, value.fix);
-                    target.rotate2.lerp(value.rotate2, value.fix);
+                    target.lerpRotation(value, value.fix);
                 }
                 else
                 {
                     target.translate.add(value.translate);
                     target.scale.add(value.scale).sub(1F, 1F, 1F);
-                    target.rotate.add(value.rotate);
-                    target.rotate2.add(value.rotate2);
+                    target.addRotation(value);
                 }
             }
         }
@@ -225,6 +226,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             compound.putString("id", id);
             this.entity.load(compound);
+            this.refreshDeathState();
             this.entity.noPhysics = true;
         }
     }
@@ -236,6 +238,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         if (this.entity != null)
         {
             this.ensureAnimationInitialized(null);
+            this.advanceUIAnimation(context);
 
             PoseStack stack = context.batcher.getContext().pose();
 
@@ -273,12 +276,22 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 }
 
                 RenderSystem.enableBlend();
+                this.applyAdditiveBlend();
             });
 
             consumers.setUI(true);
             Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
 
             float transition = this.getUIAnimationTransition(context.getTransition());
+
+            if (this.isUIAnimationFrozen())
+            {
+                /* A stopped clock alone is not a still pose: `ageInTicks` is
+                 * `tickCount + partialTick`, so leaving the partial tick free would keep
+                 * sampling the animation across a one-tick window every frame - which is
+                 * the very twitch this path is fixing. Pin it so the pose holds. */
+                transition = UI_FROZEN_TRANSITION;
+            }
 
             this.prepareRenderLook(null, context.getTransition());
             this.recordRenderSample(transition, PAUSE_SAMPLE_UI);
@@ -418,6 +431,12 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             {
                 FormTranslucentQueue.setSortOrigin(null);
                 CustomVertexConsumerProvider.clearRunnables();
+
+                /* An additive form leaves its (SRC_ALPHA, ONE) function behind when the last
+                 * layer it drew was opaque (its clear is a no-op for blend). Restore the default
+                 * here so later forms in the frame do not inherit it. Deferred translucent layers
+                 * re-apply their own preparation at queue draw time, so this does not disturb them. */
+                RenderSystem.defaultBlendFunc();
 
                 context.stack.popPose();
 
@@ -572,7 +591,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             Matrix4f boneMatrix = new Matrix4f(stack.last().pose()).mul(entry.getValue().matrix());
             Matrix4f boneOrigin = new Matrix4f(stack.last().pose()).mul(entry.getValue().origin());
 
-            matrices.put(StringUtils.combinePaths(prefix, entry.getKey()), boneMatrix, boneOrigin, entry.getValue().rotationOffset());
+            matrices.put(
+                StringUtils.combinePaths(prefix, entry.getKey()),
+                boneMatrix,
+                boneOrigin,
+                entry.getValue().rotationOffset(),
+                entry.getValue().evaluatedRotation()
+            );
         }
 
         int i = 0;
@@ -696,7 +721,42 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             }
 
             RenderSystem.enableBlend();
+            this.applyAdditiveBlend();
         };
+    }
+
+    /**
+     * True additive blending (GL_SRC_ALPHA, GL_ONE) when the form's additive
+     * color flag is on. The vertex-color BRIGHTEN path in {@link FormColorBlend}
+     * is clamped by byte vertex formats, so an actual blend-function switch is
+     * required for the glow effect - the same approach ParticleEmitter uses for
+     * {@code ParticleMaterial.ADD}.
+     *
+     * <p>Called from the layer preparation hooks, which run after the vanilla
+     * {@code RenderType#setupRenderState()} and before the draw - the state is
+     * cleared back by the layer's {@code clearRenderState()} afterwards.</p>
+     */
+    private void applyAdditiveBlend()
+    {
+        if (this.form.additiveColor.get())
+        {
+            RenderSystem.blendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA,
+                GlStateManager.DestFactor.ONE,
+                GlStateManager.SourceFactor.ONE,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA
+            );
+        }
+        else
+        {
+            /* Opaque (NO_TRANSPARENCY) layers leave the blend function untouched on
+             * clear, so an additive form drawn earlier in the frame can leak its
+             * (SRC_ALPHA, ONE) function into the RenderSystem state. The layer
+             * preparation then re-enables blend with that leaked function, tinting
+             * every later non-additive form. Reset to the default function here so
+             * each form draws with its own blend, not the previous form's. */
+            RenderSystem.defaultBlendFunc();
+        }
     }
 
     @Override
@@ -708,6 +768,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             return;
         }
+
+        this.recordExternalTick();
 
         boolean initialized = this.animationInitialized;
 
@@ -889,6 +951,15 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         }
 
         this.entity.noPhysics = true;
+        this.refreshDeathState();
+    }
+
+    private void refreshDeathState()
+    {
+        if (this.entity instanceof LivingEntity living && living.getHealth() <= 0F)
+        {
+            living.setPose(net.minecraft.world.entity.Pose.DYING);
+        }
     }
 
     private void ensureAnimationInitialized(IEntity source)
@@ -1212,6 +1283,47 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             livingEntity.yHeadRotO = relativeHeadYaw;
             livingEntity.setYHeadRot(relativeHeadYaw);
         }
+    }
+
+    /**
+     * Run the list thumbnail's owed animation ticks through the real entity and renderer.
+     *
+     * <p>Vanilla models read per-tick state that only the entity's own {@code tick()} produces:
+     * bats and axolotls call {@code setupAnimationStates()} to start their {@code AnimationState}s,
+     * parrots and dragons update interpolation endpoints ({@code flap}, {@code flapTime}), and
+     * guardians advance the tail position the model lerps. Faking {@code tickCount} alone produces
+     * none of it; the entity must tick.</p>
+     *
+     * <p>The entity here is a rendering puppet ({@code noPhysics = true}, never added to a world),
+     * so its AI and pathfinding operate on a stub with no real side effects.</p>
+     */
+    private void advanceUIAnimation(UIContext context)
+    {
+        StubEntity source = this.getUITickEntity();
+
+        this.driveUIAnimation(this.pollUIAnimationTicks(context), () ->
+        {
+            /* The stub stands in for the world entity a thumbnail does not have: it carries the
+             * age and limb state tick(IEntity) synchronizes from, and standing still is the idle
+             * pose a picker cell wants. tick() ticks the mob itself from there. */
+            source.update();
+            this.tick(source);
+        });
+    }
+
+    /**
+     * The form's own pause value wins over the freeze setting, which in turn exempts the
+     * form the list has selected.
+     */
+    @Override
+    protected boolean shouldAdvanceUIAnimation()
+    {
+        if (this.form.paused.get())
+        {
+            return false;
+        }
+
+        return super.shouldAdvanceUIAnimation();
     }
 
     private static class BooleanHolder

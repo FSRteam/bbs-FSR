@@ -30,6 +30,7 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.FriendlyByteBuf;
 import org.joml.Matrix3f;
+import org.joml.Quaternionf;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -404,6 +405,35 @@ public class DataStorageUtils
         if (element != null && element.size() >= 3)
         {
             return new Vector3f(element.getFloat(0), element.getFloat(1), element.getFloat(2));
+        }
+
+        return defaultValue;
+    }
+
+    /* Quaternionf (stored x, y, z, w) */
+
+    public static ListType quaternionfToData(Quaternionf quaternion)
+    {
+        ListType list = new ListType();
+
+        list.addFloat(quaternion.x);
+        list.addFloat(quaternion.y);
+        list.addFloat(quaternion.z);
+        list.addFloat(quaternion.w);
+
+        return list;
+    }
+
+    public static Quaternionf quaternionfFromData(ListType element)
+    {
+        return quaternionfFromData(element, new Quaternionf());
+    }
+
+    public static Quaternionf quaternionfFromData(ListType element, Quaternionf defaultValue)
+    {
+        if (element != null && element.size() >= 4)
+        {
+            return new Quaternionf(element.getFloat(0), element.getFloat(1), element.getFloat(2), element.getFloat(3));
         }
 
         return defaultValue;
