@@ -381,6 +381,18 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
         this.sort();
     }
 
+    /** Remove adjacent keys carrying the same value (used for stepped item tracks). */
+    public void dropRepeats()
+    {
+        for (int i = this.list.size() - 1; i > 0; i--)
+        {
+            if (this.factory.compare(this.list.get(i).getValue(), this.list.get(i - 1).getValue()))
+            {
+                this.list.remove(i);
+            }
+        }
+    }
+
     public void copyOver(KeyframeChannel channel, int tick)
     {
         if (this.factory != channel.factory || channel.isEmpty())

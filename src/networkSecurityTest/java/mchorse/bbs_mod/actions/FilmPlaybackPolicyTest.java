@@ -78,8 +78,8 @@ public final class FilmPlaybackPolicyTest
             "overwriting the active first-person replay did not refresh the player display");
         check(FilmPlaybackPolicy.affectsFirstPersonDisplay(film, first, first, film.hp),
             "editing an allowed first-person player setting did not refresh the player display");
-        check(FilmPlaybackPolicy.affectsFirstPersonDisplay(film, first, first, film.inventory),
-            "editing the Film inventory did not refresh the real player's projection");
+        check(FilmPlaybackPolicy.affectsFirstPersonDisplay(film, first, first, first.keyframes.hotbar.get(0)),
+            "editing the first-person hotbar did not refresh the real player's projection");
         check(!FilmPlaybackPolicy.affectsFirstPersonDisplay(film, first, first, second.form),
             "editing an inactive replay form refreshed the real player's display");
         check(!FilmPlaybackPolicy.affectsFirstPersonDisplay(film, first, null, first.enabled),

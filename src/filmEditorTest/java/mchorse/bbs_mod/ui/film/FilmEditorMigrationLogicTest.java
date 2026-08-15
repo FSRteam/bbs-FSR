@@ -29,6 +29,7 @@ public final class FilmEditorMigrationLogicTest
             testFilmControllerContextReset();
             testValueOrderDefaultInsertion();
             FilmReplayFirstPersonSyncSourceTest.runAll();
+            HotbarFilmMigrationTest.runAll();
             OrbitFilmCameraMissingRendererSourceTest.runAll();
             RenderRuntimeMigrationSourceTest.runAll();
             RecentFormCategoryTest.runAll();

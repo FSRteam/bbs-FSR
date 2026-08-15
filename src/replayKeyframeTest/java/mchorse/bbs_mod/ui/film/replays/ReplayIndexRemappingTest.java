@@ -182,7 +182,7 @@ public final class ReplayIndexRemappingTest
             sword.enchant(enchantments.getHolderOrThrow(Enchantments.SHARPNESS), 5);
             chest.enchant(enchantments.getHolderOrThrow(Enchantments.PROTECTION), 4);
 
-            source.mainHand.insert(0F, sword);
+            source.hotbar.get(0).insert(0F, sword);
             source.armorChest.insert(0F, chest);
 
             BaseType data = source.toData();
@@ -191,7 +191,7 @@ public final class ReplayIndexRemappingTest
 
             copy.fromData(loaded);
 
-            ItemStack hand = copy.mainHand.interpolate(0F);
+            ItemStack hand = copy.hotbar.get(0).interpolate(0F);
             ItemStack body = copy.armorChest.interpolate(0F);
 
             assertTrue(
