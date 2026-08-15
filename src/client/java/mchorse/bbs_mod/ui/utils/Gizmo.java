@@ -129,6 +129,9 @@ public class Gizmo
     private final Matrix4f bakedRotationMatrix = new Matrix4f();
     private DragStrategy bakedGesture;
 
+    /** Last transform space applied to the drawing frame. Drag math keeps its own basis. */
+    private TransformSpace lastSpace;
+
     /* VBO caching for rotation rings to save resources */
     private VertexBuffer rotateRingVbo;
     private VertexBuffer rotateSphereVbo;
@@ -735,34 +738,59 @@ public class Gizmo
     {
         this.applyBakedRotation(stack);
 
+        float distanceScale = this.getAxesDistanceScale(stack);
+
+        stack.pushPose();
+        this.applyViewShear(stack);
+        stack.scale(distanceScale, distanceScale, distanceScale);
+
         if (BBSSettings.gizmos.get())
         {
-            float distanceScale = this.getAxesDistanceScale(stack);
-
             /* Cache the sphere's effective world radius (in
              * {@link #lastRenderMatrix}'s coordinate frame) so
              * {@link #computeScreenRadius} can report the real on-screen
              * pixel size for hover/pick distance checks. */
             this.lastSphereLocalRadius = 0.22F * BBSSettings.axesScale.get() * distanceScale;
 
-            stack.pushPose();
-            stack.scale(distanceScale, distanceScale, distanceScale);
             this.lastSphereMatrix.set(modelView(stack));
             this.hasLastSphereMatrix = true;
             this.drawOccludedGizmo(stack);
-            stack.popPose();
         }
         else
         {
-            float distanceScale = this.getAxesDistanceScale(stack);
-
-            stack.pushPose();
-            stack.scale(distanceScale, distanceScale, distanceScale);
             Draw.coolerAxes(stack, 0.25F, 0.008F);
-            stack.popPose();
         }
 
+        stack.popPose();
+
+        /* The guide shows the real drag axis, so it stays outside the drawing-only shear. */
         this.drawInfiniteLine(stack);
+    }
+
+    /**
+     * In VIEW space, replace the drawing frame's third column with the unit ray from the
+     * gizmo to the eye. This affects only the visual and stencil passes; the captured matrix
+     * and {@link GizmoDrag} basis remain orthonormal for dragging.
+     */
+    private void applyViewShear(PoseStack stack)
+    {
+        if (this.lastSpace != TransformSpace.VIEW)
+        {
+            return;
+        }
+
+        Matrix4f matrix = stack.last().pose();
+        Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
+
+        if (toCamera.lengthSquared() < 1.0E-8F)
+        {
+            return;
+        }
+
+        toCamera.normalize();
+        matrix.m20(toCamera.x);
+        matrix.m21(toCamera.y);
+        matrix.m22(toCamera.z);
     }
 
     /**
@@ -1620,6 +1648,7 @@ public class Gizmo
         float distanceScale = this.getAxesDistanceScale(stack);
 
         stack.pushPose();
+        this.applyViewShear(stack);
         stack.scale(distanceScale, distanceScale, distanceScale);
         /* Same axisOffset as the visual pass (Gizmo#drawGizmo) so the pick hitbox
          * matches the drawn handles instead of overhanging them. */
@@ -1704,6 +1733,8 @@ public class Gizmo
      */
     public void reorientForSpace(PoseStack stack, TransformSpace space, Matrix4f cameraView, Matrix3f globalAxes)
     {
+        this.lastSpace = cameraView == null ? null : space;
+
         if (space == null || space == TransformSpace.LOCAL || space == TransformSpace.PARENT || cameraView == null)
         {
             return;

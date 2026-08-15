@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.client.ui.mirror;
 
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -32,6 +33,7 @@ public final class PoseFormRegressionSourceTest
     private static final String STATE_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/states/keyframes/UIAnimationStateEditor.java";
     private static final String FILM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditorUtils.java";
     private static final String GIZMO = "src/client/java/mchorse/bbs_mod/ui/utils/Gizmo.java";
+    private static final String TRANSFORM_SPACE = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/TransformSpace.java";
     private static final String FILM_CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
     private static final String FILM_BASE = "src/client/java/mchorse/bbs_mod/film/BaseFilmController.java";
     private static final String FILM_CONTEXT = "src/client/java/mchorse/bbs_mod/film/FilmControllerContext.java";
@@ -64,6 +66,7 @@ public final class PoseFormRegressionSourceTest
         String stateEditor = read(root.resolve(STATE_EDITOR));
         String filmEditor = read(root.resolve(FILM_EDITOR));
         String gizmo = read(root.resolve(GIZMO));
+        String transformSpace = read(root.resolve(TRANSFORM_SPACE));
         String filmController = read(root.resolve(FILM_CONTROLLER));
         String filmBase = read(root.resolve(FILM_BASE));
         String filmContext = read(root.resolve(FILM_CONTEXT));
@@ -71,6 +74,7 @@ public final class PoseFormRegressionSourceTest
         String formRenderer = read(root.resolve(FORM_RENDERER));
 
         gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmBase);
+        viewSpaceGizmoFacesCamera(gizmo, gizmoDrag, transformSpace);
         hiddenAxesStillRefreshGizmoPlacement(formRenderer);
         filmBoneConsumersShareOnePlacementSample(filmBase, filmEditor);
         proceduralPanelGizmoKeepsPoseSelection(editor, poseFormEditor, modelFormEditor);
@@ -440,6 +444,69 @@ public final class PoseFormRegressionSourceTest
             "ray translation writes transform values before the cursor has moved");
         check(translateDrag.contains("GizmoDrag.resolveTranslateJacobian(jacobian, modelPart)"),
             "ray translation no longer routes its basis through the shared degenerate-Jacobian fallback");
+    }
+
+    private static void viewSpaceGizmoFacesCamera(String gizmo, String gizmoDrag, String transformSpace)
+    {
+        String draw = compact(section(
+            gizmo,
+            "private void drawGizmo(PoseStack stack)",
+            "private void applyViewShear(PoseStack stack)"
+        ));
+        String shear = compact(section(
+            gizmo,
+            "private void applyViewShear(PoseStack stack)",
+            "private void drawOccludedGizmo(PoseStack stack)"
+        ));
+        String stencil = compact(section(
+            gizmo,
+            "private void drawStencilAxes(PoseStack stack, StencilMap map)",
+            "public void renderStencilInterface(UIContext context, Matrix4f projection, Area area, StencilMap map)"
+        ));
+        String reorient = compact(section(
+            gizmo,
+            "public void reorientForSpace(PoseStack stack, TransformSpace space, Matrix4f cameraView, Matrix3f globalAxes)",
+            "private void applyBakedRotation(PoseStack stack)"
+        ));
+
+        assertOrdered(draw,
+            "float distanceScale = this.getAxesDistanceScale(stack);",
+            "stack.pushPose();",
+            "this.applyViewShear(stack);",
+            "stack.scale(distanceScale, distanceScale, distanceScale);",
+            "stack.popPose();",
+            "this.drawInfiniteLine(stack);");
+        assertOrdered(stencil,
+            "stack.pushPose();",
+            "this.applyViewShear(stack);",
+            "stack.scale(distanceScale, distanceScale, distanceScale);");
+        check(shear.contains("this.lastSpace != TransformSpace.VIEW")
+                && shear.contains("matrix.getTranslation(new Vector3f()).negate()")
+                && shear.contains("toCamera.lengthSquared() < 1.0E-8F")
+                && shear.contains("matrix.m20(toCamera.x)")
+                && shear.contains("matrix.m21(toCamera.y)")
+                && shear.contains("matrix.m22(toCamera.z)"),
+            "VIEW gizmo drawing no longer replaces its third column with the eye ray");
+        assertOrdered(reorient,
+            "this.lastSpace = cameraView == null ? null : space;",
+            "if (space == null || space == TransformSpace.LOCAL || space == TransformSpace.PARENT || cameraView == null)");
+        check(transformSpace.contains("Handles are drawn facing the eye, while drag math keeps the camera basis."),
+            "TransformSpace no longer documents the VIEW draw/drag split");
+
+        Matrix4f view = new Matrix4f().rotateXYZ(0.31F, -0.47F, 0.19F);
+        GizmoDrag drag = new GizmoDrag();
+
+        drag.view.set(view);
+
+        Matrix3f expectedDragBasis = view.get3x3(new Matrix3f()).invert();
+
+        check(drag.frameBasis(TransformSpace.VIEW).equals(expectedDragBasis, 1.0E-6F),
+            "VIEW drag basis changed with the drawing-only shear");
+        check(GizmoDrag.stackBasisForSpace(TransformSpace.VIEW, view, null).equals(new Matrix3f(), 1.0E-6F),
+            "VIEW placement basis is no longer the unsheared camera-frame identity");
+        check(gizmoDrag.contains("draw passes may shear that VIEW frame toward")
+                && gizmoDrag.contains("the eye, but this method and the drag basis remain orthonormal"),
+            "GizmoDrag no longer records that VIEW shear is drawing-only");
     }
 
     private static void mobTranslationUsesStableModelPartBasis(
