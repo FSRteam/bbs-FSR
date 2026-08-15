@@ -109,7 +109,7 @@ public class UIButton extends UIClickable<UIButton> implements ITextColoring
             }
             else
             {
-                context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color | Colors.A100, true, false);
+                context.batcher.surfaceBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color | Colors.A100, true, false);
             }
         }
 

@@ -36,6 +36,7 @@ import java.util.function.Supplier;
 
 public class Batcher2D
 {
+    private static final float HIGHLIGHT_STRENGTH = 0.15F;
     private static final float TEXT_ALPHA_SKIP_THRESHOLD = 0.03F;
     private static final int ROUNDED_CORNER_STEPS = 8;
     private static final float[] ROUNDED_RECT_ARC_SIN = new float[ROUNDED_CORNER_STEPS + 1];
@@ -557,7 +558,8 @@ public class Batcher2D
         this.restoreDepth();
     }
 
-    public void bevelBox(int x1, int y1, int x2, int y2, int fill, boolean shadow, boolean border)
+    /** Draw a filled surface with optional lit edges, bottom shadow and border. */
+    public void surfaceBox(int x1, int y1, int x2, int y2, int fill, boolean shadow, boolean border)
     {
         if (border)
         {
@@ -571,17 +573,15 @@ public class Batcher2D
 
         this.box(x1, y1, x2, y2, fill);
 
-        if (!BBSSettings.interfaceShadows.get())
+        if (BBSSettings.interfaceHighlights != null && BBSSettings.interfaceHighlights.get())
         {
-            return;
+            int light = Colors.lerp(fill, Colors.WHITE, HIGHLIGHT_STRENGTH);
+
+            this.box(x1, y1, x2, y1 + 1, light);
+            this.box(x1, y1, x1 + 1, y2, light);
         }
 
-        int light = Colors.lerp(fill, Colors.WHITE, 0.35F);
-
-        this.box(x1, y1, x2, y1 + 1, light);
-        this.box(x1, y1, x1 + 1, y2, light);
-
-        if (shadow)
+        if (shadow && BBSSettings.interfaceShadows != null && BBSSettings.interfaceShadows.get())
         {
             this.box(x1, y2 - 2, x2, y2, Colors.lerp(fill, Colors.A100, 0.4F));
         }
