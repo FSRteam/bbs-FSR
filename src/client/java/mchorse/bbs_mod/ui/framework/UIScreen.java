@@ -18,6 +18,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UIBaseTextbox;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
+import mchorse.bbs_mod.ui.utils.IFileDropConsumer;
 import mchorse.bbs_mod.ui.utils.IFileDropListener;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.FFMpegUtils;
@@ -257,7 +258,7 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button)
     {
-        if (this.removing || this.removed || this.releasingLocalInputGestures || this.hasRemoteInputLease())
+        if (!this.prepareLocalInput())
         {
             return true;
         }
@@ -283,7 +284,7 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount)
     {
-        if (this.removing || this.removed || this.releasingLocalInputGestures || this.hasRemoteInputLease())
+        if (!this.prepareLocalInput())
         {
             return true;
         }
@@ -304,17 +305,20 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button)
     {
+        /* The physical button is up regardless of who owns the screen; drop
+         * the held record before any ownership guard can swallow the event,
+         * or a stale entry blocks remote acquisition forever. */
         LocalHeldMouse held = this.localHeldMouseButtons.remove(button);
+
+        if (!this.prepareLocalInput())
+        {
+            return true;
+        }
 
         if (this.removed && !this.removing)
         {
             return true;
         }
-        if (this.hasRemoteInputLease())
-        {
-            return true;
-        }
-
         try
         {
             return this.dispatchRemoteMouseReleased(mouseX, mouseY, button);
@@ -413,7 +417,7 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers)
     {
-        if (this.removing || this.removed || this.releasingLocalInputGestures || this.hasRemoteInputLease())
+        if (!this.prepareLocalInput())
         {
             return true;
         }
@@ -477,17 +481,19 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers)
     {
+        /* Mirror mouseReleased: clear the held key before ownership guards so
+         * a swallowed release cannot leave hasLocalInputGestures() stuck. */
         LocalHeldKey held = this.localHeldKeys.remove(keyCode);
+
+        if (!this.prepareLocalInput())
+        {
+            return true;
+        }
 
         if (this.removed && !this.removing)
         {
             return true;
         }
-        if (this.hasRemoteInputLease())
-        {
-            return true;
-        }
-
         try
         {
             return this.menu.handleKey(keyCode, scanCode, GLFW.GLFW_RELEASE, modifiers);
@@ -504,7 +510,7 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean charTyped(char chr, int modifiers)
     {
-        if (this.removing || this.removed || this.releasingLocalInputGestures || this.hasRemoteInputLease())
+        if (!this.prepareLocalInput())
         {
             return true;
         }
@@ -534,6 +540,27 @@ public class UIScreen extends Screen implements IFileDropListener
     private boolean hasRemoteInputLease()
     {
         return BBSUiRemoteHeldState.isActive(this.mirrorSessionId);
+    }
+
+    private boolean prepareLocalInput()
+    {
+        if (this.removing || this.removed || this.releasingLocalInputGestures)
+        {
+            return false;
+        }
+        if (this.hasRemoteInputLease()
+            && !BBSUiInputDispatcher.preemptForLocalInput(this, this.mirrorSessionId))
+        {
+            return false;
+        }
+
+        return !this.removing && !this.removed && !this.releasingLocalInputGestures;
+    }
+
+    /** Returns whether physical input currently owns an in-progress gesture. */
+    public boolean hasLocalInputGestures()
+    {
+        return !this.localHeldMouseButtons.isEmpty() || !this.localHeldKeys.isEmpty();
     }
 
     /**
@@ -815,6 +842,24 @@ public class UIScreen extends Screen implements IFileDropListener
     {
         if (this.menu != null)
         {
+            List<IFileDropConsumer> consumers = this.menu.getRoot().getChildren(IFileDropConsumer.class);
+
+            for (int i = consumers.size() - 1; i >= 0; i -= 1)
+            {
+                try
+                {
+                    if (consumers.get(i).consumeFilePaths(paths))
+                    {
+                        return;
+                    }
+                }
+                catch (Exception | LinkageError e)
+                {
+                    LOGGER.warn("[BBS-SEM] topic=ui.file_drop phase=consumer result=failed error_class={}",
+                        e.getClass().getName());
+                }
+            }
+
             File directory = null;
             boolean open = true;
 

@@ -22,6 +22,7 @@ import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
@@ -87,6 +88,7 @@ public final class ReplayIndexRemappingTest
             testGlintLayerKeyframes();
             testEnchantedEquipmentSerializationRoundTrip();
             testEnchantedItemPickerNbtRoundTrip();
+            testDeathKeyframeChannel();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
             KeyframeInteractionTest.run();
@@ -734,6 +736,39 @@ public final class ReplayIndexRemappingTest
         {
             throw new AssertionError(message);
         }
+    }
+
+    private static void testDeathKeyframeChannel()
+    {
+        ReplayKeyframes keyframes = new ReplayKeyframes("keyframes");
+        StubEntity entity = new StubEntity();
+
+        assertTrue(keyframes.getChannels().stream().anyMatch(c -> c.getId().equals("death")),
+            "death channel is not registered in ReplayKeyframes");
+        assertTrue(keyframes.CURATED_CHANNELS.contains("death"),
+            "death channel is missing from CURATED_CHANNELS");
+
+        /* Empty channel must not touch the entity's death state (backward compatibility). */
+        keyframes.applyDeath(5, entity);
+        assertTrue(!entity.isDead(), "empty death channel marked the entity as dead");
+        assertEquals(0D, entity.getDeath(), "empty death channel wrote a non-zero death");
+
+        /* A recorded death (1) maps onto the 0..20 death-time range. */
+        keyframes.death.insert(0, 1D);
+        keyframes.applyDeath(0, entity);
+        assertEquals(20D, entity.getDeath(), "death 1 did not map to death-time 20");
+        assertTrue(entity.isDead(), "applied death did not flag the entity as dead");
+
+        /* A mid-ramp value (0.5) maps to an intermediate topple progress. */
+        entity.setDeath(0F);
+        keyframes.death.insert(10, 0D);
+        keyframes.death.insert(11, 1D);
+        keyframes.applyDeath(10, entity);
+        assertEquals(0D, entity.getDeath(), "death 0 should map to no topple");
+        keyframes.applyDeath(11, entity);
+        assertEquals(20D, entity.getDeath(), "death 1 after a ramp did not map to 20");
+
+        assertTrue(entity.getHurtTimer() >= 1, "applied death did not keep the red flash active");
     }
 
     private static final class NestedTargetClip extends Clip

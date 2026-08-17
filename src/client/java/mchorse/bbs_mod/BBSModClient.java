@@ -664,18 +664,32 @@ public class BBSModClient
     {
         UIFilmPanel filmPanel = getFilmPanelForLifecycle("client-player clone");
 
+        /* A death-respawn replaces the player instance. Keep an active Film recording
+         * alive across it so the death animation is captured, instead of tearing down the
+         * whole Films owner like a genuine disconnect (LoggingOut) still does. */
+        Recorder activeRecorder = films == null ? null : films.getRecorder();
+        boolean surviveDeathRespawn = activeRecorder != null
+            && oldPlayer != null
+            && oldPlayer.isDeadOrDying();
+
         runClientLifecycleStep("cancel microphone recording for client-player clone",
             () -> UIAudioRecorder.cancelActive(filmPanel));
         runClientLifecycleStep("replace exact client network player scope",
             () -> ClientNetwork.onClientPlayerClone(connection, oldPlayer, newPlayer));
         runClientLifecycleStep("reset Film controller state for client-player clone", () ->
         {
-            if (films != null)
+            if (!surviveDeathRespawn && films != null)
             {
                 films.reset();
             }
         });
-        runClientLifecycleStep("replace Film controller for client-player clone", () -> films = new Films());
+        runClientLifecycleStep("replace Film controller for client-player clone", () ->
+        {
+            if (!surviveDeathRespawn)
+            {
+                films = new Films();
+            }
+        });
         resetCameraControllersForLifecycle("client-player clone");
         runClientLifecycleStep("release OpenAL audio resources for client-player clone", () ->
         {
@@ -684,6 +698,11 @@ public class BBSModClient
                 sounds.deleteSounds();
             }
         });
+
+        if (surviveDeathRespawn)
+        {
+            activeRecorder.surviveRespawn();
+        }
     }
 
     private static void resetCameraControllersForLifecycle(String lifecycle)

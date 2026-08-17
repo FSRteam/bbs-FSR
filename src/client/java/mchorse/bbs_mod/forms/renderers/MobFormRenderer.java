@@ -380,6 +380,16 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                     int v = context.overlay >> 16 & '\uffff';
 
                     entity.hurtTime = v != 10 ? 100 : 0;
+
+                    /* Drive the vanilla death topple + red overlay from the replay's death
+                     * channel. The vanilla entity renderer applies the topple rotation itself
+                     * from deathTime, so the same value that renders the red flash also makes
+                     * the model fall over. Always sync (including zero) so a reused cached
+                     * entity cannot keep a stale topple after the death channel ends. */
+                    if (context.entity != null)
+                    {
+                        entity.deathTime = (int) context.entity.getDeath();
+                    }
                 }
 
                 Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);

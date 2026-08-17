@@ -17,14 +17,21 @@ public abstract class BaseValueGroup extends BaseValue
 
     public BaseValue findRecursively(DataPath path)
     {
-        BaseValue value = this.get(path.size() <= 0 ? "" : path.strings.get(0));
-
-        if (value == null && !path.strings.isEmpty())
+        if (path == null || path.strings.isEmpty())
         {
-            value = this.searchRecursively(path);
+            return null;
         }
 
-        return value;
+        BaseValue value = this;
+        int index = path.strings.get(0).equals(this.getId()) ? 1 : 0;
+
+        while (value instanceof BaseValueGroup group && index < path.size())
+        {
+            value = group.get(path.strings.get(index));
+            index += 1;
+        }
+
+        return index == path.size() ? value : null;
     }
 
     public BaseValue getRecursively(DataPath path)
@@ -37,32 +44,6 @@ public abstract class BaseValueGroup extends BaseValue
         }
 
         return value;
-    }
-
-    private BaseValue searchRecursively(DataPath splits)
-    {
-        int i = 0;
-        BaseValue current = this;
-
-        while (current != null && i < splits.size() - 1)
-        {
-            if (current instanceof BaseValueGroup)
-            {
-                i += 1;
-                current = ((BaseValueGroup) current).get(splits.strings.get(i));
-            }
-            else
-            {
-                current = null;
-            }
-        }
-
-        if (current == null)
-        {
-            return null;
-        }
-
-        return current;
     }
 
     public abstract void copy(BaseValueGroup group);

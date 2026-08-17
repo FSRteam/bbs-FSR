@@ -25,6 +25,7 @@ import mchorse.bbs_mod.film.FrozenFilmController;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -206,7 +207,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
          * constructors, and this final field cannot be left unassigned when
          * getEditPanelTopOffsetPx() runs during their construction. The layout
          * wiring further down configures and mounts it afterwards. */
-        this.dock = new UIDockLayout();
+        this.dock = new UIDockLayout()
+            .locked(!BBSSettings.editorLayoutSettings.isDockUnlocked(ValueEditorLayout.FILM));
 
         /* Editors */
         this.cameraEditor = new UIClipsPanel(this, BBSMod.getFactoryCameraClips()).target(this.editArea);
@@ -258,7 +260,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         /* Setup elements */
         this.dock.relative(this.editor).w(1F).h(1F);
         this.dock.source(this.createFilmLayoutSource())
-            .locked(!BBSSettings.editorLayoutSettings.isDockUnlocked(ValueEditorLayout.FILM))
             .frameless(PANEL_PREVIEW_ID)
             .gate(this::hasFilmInCurrentTab)
             .ensure(this::ensureFilmLayoutPanels)
@@ -852,7 +853,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         menu.action(Icons.LIST, UIKeys.FILM_OPEN_HISTORY, () ->
         {
-            UIOverlay.addOverlay(this.getContext(), new UIUndoHistoryOverlay(UIKeys.FILM_HISTORY_TITLE, this.getUndoHandler().getUndoManager(), this::getData, null), 200, 0.6F);
+            UIOverlay.addOverlay(this.getContext(), new UIUndoHistoryOverlay(this), 200, 0.6F);
         });
 
         menu.action(Icons.FILM, UIKeys.FILM_RENDER_QUEUE, this::startQueueExportFromOpenTabs);
@@ -2579,7 +2580,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.showPanel(data.getInt("panel"));
         this.setCursor(data.getInt("tick"));
-        this.controller.createEntities();
     }
 
     @Override

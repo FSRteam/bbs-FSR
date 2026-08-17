@@ -65,7 +65,7 @@ public final class BBSUiLifecycleSourceTest
                 && dataPanel.contains("int contentTop = tabsHeight - tabsSlide"),
             "dashboard auto-hide must slide only the bottom taskbar and top data-panel chrome, never the active panel itself");
         check(film.contains("private final UIDockLayout dock;")
-                && film.contains("this.dock = new UIDockLayout();")
+                && film.contains("this.dock = new UIDockLayout()")
                 && film.contains("this.editor.add(this.dock);")
                 && dock.contains("UIDockStyleRenderer.renderPanelDragHandle")
                 && dock.contains("UIDockStyleRenderer.renderSplitter")
@@ -128,8 +128,10 @@ public final class BBSUiLifecycleSourceTest
         check(occurrences(screen, "if (this.removed && !this.removing)") >= 4
                 && screen.contains("if (failure != exception)"),
             "UIScreen allows completed-screen releases or can abort teardown through self-suppression");
-        check(dispatcher.contains("this.screen.releaseLocalInputGestures()"),
-            "remote lease acquisition does not release all local input gestures");
+        check(screen.contains("BBSUiInputDispatcher.preemptForLocalInput(this, this.mirrorSessionId)")
+                && dispatcher.contains("return !this.screen.hasLocalInputGestures();")
+                && dispatcher.contains("local FSR input is active; remote input cannot take ownership"),
+            "physical FSR input is not prioritized over remote input ownership");
         check(modelBlocks.contains("scaleCoordinate(context.mouseX, context.menu.width, w)")
                 && modelBlocks.contains("screen.getOwnerFramebufferMouseX()")
                 && modelBlocks.contains("screen.getOwnerFramebufferMouseY()"),

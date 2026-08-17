@@ -53,6 +53,12 @@ public class Recorder extends WorldFilmController
     public float xpProgress;
 
     private static Matrix4f perspective = new Matrix4f();
+    /**
+     * Set when this recorder survives a death-respawn player clone. The new client player
+     * is a different instance, so {@link #isInCurrentLevel()} must not reject it; genuine
+     * disconnect or dimension change still terminates the recording.
+     */
+    private boolean cloneSurvived;
 
     public Form lastForm;
     public Vector3d lastPosition;
@@ -174,7 +180,15 @@ public class Recorder extends WorldFilmController
         return this.initialLevel != null
             && this.initialPlayer != null
             && client.level == this.initialLevel
-            && client.player == this.initialPlayer;
+            /* A death-respawn replaces the client player instance; after surviving that
+             * clone the new player is an acceptable continuation of the same recording. */
+            && (client.player == this.initialPlayer || this.cloneSurvived);
+    }
+
+    /** Marks this recording as having survived a death-respawn player clone. */
+    public void surviveRespawn()
+    {
+        this.cloneSurvived = true;
     }
 
     public boolean hasNotStarted()

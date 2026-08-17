@@ -17,6 +17,8 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.LivingEntity;
 
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,12 @@ public class FilmEditorController extends BaseFilmController
     public int getTick()
     {
         return this.controller.panel.getCursor();
+    }
+
+    @Override
+    protected LivingEntity resolvePreviewLivingEntity()
+    {
+        return Minecraft.getInstance().player;
     }
 
     @Override

@@ -17,6 +17,7 @@ public class ValueChangeUndo extends FilmEditorUndo
     public MapType uiAfter;
 
     private boolean mergable = true;
+    private boolean invalid;
 
     public ValueChangeUndo(DataPath name, BaseType oldValue, BaseType newValue)
     {
@@ -56,7 +57,7 @@ public class ValueChangeUndo extends FilmEditorUndo
     @Override
     public boolean isMergeable(IUndo<ValueGroup> undo)
     {
-        if (!this.mergable)
+        if (!this.mergable || this.invalid)
         {
             return false;
         }
@@ -65,7 +66,7 @@ public class ValueChangeUndo extends FilmEditorUndo
         {
             ValueChangeUndo valueUndo = (ValueChangeUndo) undo;
 
-            return this.name.equals(valueUndo.getName());
+            return !valueUndo.invalid && this.name.equals(valueUndo.getName());
         }
 
         return false;
@@ -74,20 +75,48 @@ public class ValueChangeUndo extends FilmEditorUndo
     @Override
     public void merge(IUndo<ValueGroup> undo)
     {
+        if (this.invalid)
+        {
+            return;
+        }
+
         if (undo instanceof ValueChangeUndo)
         {
             ValueChangeUndo prop = (ValueChangeUndo) undo;
 
-            this.newValue = prop.newValue;
+            if (!prop.invalid)
+            {
+                this.newValue = prop.newValue;
+            }
         }
+    }
+
+    private BaseValue resolveValue(ValueGroup context)
+    {
+        if (this.invalid)
+        {
+            return null;
+        }
+
+        BaseValue value = context.findRecursively(this.name);
+
+        if (value == null || !value.getPath().equals(this.name))
+        {
+            this.invalid = true;
+            this.mergable = false;
+
+            return null;
+        }
+
+        return value;
     }
 
     @Override
     public void undo(ValueGroup context)
     {
-        BaseValue value = context.getRecursively(this.name);
+        BaseValue value = this.resolveValue(context);
 
-        if (value.getPath().equals(this.name))
+        if (value != null)
         {
             value.fromData(this.oldValue);
         }
@@ -96,9 +125,9 @@ public class ValueChangeUndo extends FilmEditorUndo
     @Override
     public void redo(ValueGroup context)
     {
-        BaseValue value = context.getRecursively(this.name);
+        BaseValue value = this.resolveValue(context);
 
-        if (value.getPath().equals(this.name))
+        if (value != null)
         {
             value.fromData(this.newValue);
         }

@@ -149,6 +149,11 @@ public class FormUtils
 
     public static Form copy(Form form)
     {
+        if (form instanceof MissingForm missing)
+        {
+            return new MissingForm(missing.sourceData());
+        }
+
         if (form != null)
         {
             FormArchitect forms = BBSMod.getForms();

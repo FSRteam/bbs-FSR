@@ -277,6 +277,10 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
         {
             return BBSSettings.editorPreviewSizeMode.get() == 2;
         }
+        else if (value == BBSSettings.scrollingMotionEasing)
+        {
+            return !BBSSettings.scrollingUseThemeCurve.get();
+        }
 
         return true;
     }

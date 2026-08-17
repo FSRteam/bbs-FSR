@@ -1,11 +1,14 @@
 package mchorse.bbs_mod.ui.film;
 
 import mchorse.bbs_mod.forms.categories.RecentFormCategoryTest;
-import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.test.HeadlessClientTestBootstrap;
+import mchorse.bbs_mod.ui.film.replays.PoseNavigationLogicTest;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.factories.AnchorKeyframeFactory;
 
@@ -28,6 +31,9 @@ public final class FilmEditorMigrationLogicTest
             testAnchorTransformInterpolation();
             testFilmControllerContextReset();
             testValueOrderDefaultInsertion();
+            FilmDockInitialStateSourceTest.runAll();
+            testLenientPresetComparison();
+            PoseNavigationLogicTest.runAll();
             FilmReplayFirstPersonSyncSourceTest.runAll();
             OrbitFilmCameraMissingRendererSourceTest.runAll();
             RenderRuntimeMigrationSourceTest.runAll();
@@ -140,6 +146,30 @@ public final class FilmEditorMigrationLogicTest
         anchor.transform.translate.x = translateX;
 
         return anchor;
+    }
+
+    private static void testLenientPresetComparison()
+    {
+        MapType live = new MapType();
+        MapType stored = new MapType();
+        ListType liveValues = new ListType();
+        ListType storedValues = new ListType();
+
+        liveValues.addFloat(0.5F);
+        storedValues.addDouble(0.5D);
+        live.put("values", liveValues);
+        stored.put("values", storedValues);
+
+        check(BaseType.equals(live, stored),
+            "preset comparison must ignore equivalent numeric wrapper types");
+
+        ListType differentValues = new ListType();
+
+        differentValues.addDouble(0.75D);
+        stored.put("values", differentValues);
+
+        check(!BaseType.equals(live, stored),
+            "preset comparison must still reject different numeric values");
     }
 
     private static void testCompiledMigrationHooks() throws Exception

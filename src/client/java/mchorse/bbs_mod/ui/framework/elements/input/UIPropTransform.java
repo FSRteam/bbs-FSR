@@ -810,6 +810,11 @@ public class UIPropTransform extends UITransform
 
     public void enableMode(TransformOp op)
     {
+        if (op == TransformOp.ROTATE && this.isRotationConstrained())
+        {
+            return;
+        }
+
         GizmoDrag drag = this.getHotkeyDrag();
         boolean ray = BBSSettings.transformHotkeys3dRay.get() && drag != null;
 
@@ -907,6 +912,11 @@ public class UIPropTransform extends UITransform
      */
     private void enableHotkeyAxis(TransformOp op, Axis axis, GizmoDrag drag)
     {
+        if (op == TransformOp.ROTATE && this.isRotationConstrained())
+        {
+            return;
+        }
+
         if (this.switchGizmoDisplayMode(op))
         {
             return;
@@ -955,6 +965,11 @@ public class UIPropTransform extends UITransform
 
     public void enableTrackball(GizmoDrag drag, boolean hotkeyMode)
     {
+        if (this.isRotationConstrained())
+        {
+            return;
+        }
+
         if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.ROTATE))
         {
             return;
@@ -970,6 +985,11 @@ public class UIPropTransform extends UITransform
 
     public void enableArcball(GizmoDrag drag, boolean hotkeyMode)
     {
+        if (this.isRotationConstrained())
+        {
+            return;
+        }
+
         if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.ROTATE))
         {
             return;
@@ -985,6 +1005,11 @@ public class UIPropTransform extends UITransform
 
     public void enableViewRotate(GizmoDrag drag, boolean hotkeyMode)
     {
+        if (this.isRotationConstrained())
+        {
+            return;
+        }
+
         if (hotkeyMode && this.switchGizmoDisplayMode(TransformOp.ROTATE))
         {
             return;
@@ -1059,7 +1084,7 @@ public class UIPropTransform extends UITransform
     {
         UIContext context = this.getContext();
 
-        if (context == null || this.transform == null)
+        if (context == null || this.transform == null || (op == TransformOp.ROTATE && this.isRotationConstrained()))
         {
             return;
         }

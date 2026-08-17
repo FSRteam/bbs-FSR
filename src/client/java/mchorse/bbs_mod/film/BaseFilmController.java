@@ -59,6 +59,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.chat.Component;
@@ -159,7 +160,7 @@ public abstract class BaseFilmController
         int sky = entity.level().getBrightness(LightLayer.SKY, pos);
         int torch = entity.level().getBrightness(LightLayer.BLOCK, pos);
         int light = LightTexture.pack(torch, sky);
-        int overlay = OverlayTexture.pack(OverlayTexture.u(0F), OverlayTexture.v(entity.getHurtTimer() > 0));
+        int overlay = OverlayTexture.pack(OverlayTexture.u(0F), OverlayTexture.v(entity.getHurtTimer() > 0 || entity.isDead()));
 
         FormRenderingContext formContext = new FormRenderingContext()
             .set(FormRenderType.ENTITY, entity, stack, light, overlay, transition)
@@ -976,6 +977,11 @@ public abstract class BaseFilmController
                 IEntity entity = new StubEntity(world);
                 int ticks = replay.getTick(this.getTick());
 
+                if (entity instanceof StubEntity stub)
+                {
+                    stub.setEntityOverride(this.resolvePreviewLivingEntity());
+                }
+
                 entity.setForm(FormUtils.copy(replay.form.get()));
                 replay.keyframes.apply(ticks, entity);
                 entity.setPrevX(entity.getX());
@@ -992,6 +998,18 @@ public abstract class BaseFilmController
 
             i += 1;
         }
+
+    }
+
+    /**
+     * Returns the backing {@link LivingEntity} used by preview entities so modded armor can
+     * resolve its custom model through {@code IClientItemExtensions}. Defaults to
+     * {@code null} (world playback keeps the vanilla model path); the Film editor overrides
+     * this to return the local player.
+     */
+    protected LivingEntity resolvePreviewLivingEntity()
+    {
+        return null;
     }
 
     public abstract Map<String, Integer> getActors();
@@ -1183,6 +1201,11 @@ public abstract class BaseFilmController
         replay.keyframes.apply(ticks, actorEntity, List.of(ReplayKeyframes.GROUP_POSITION));
         actorEntity.setHurtTimer(Math.max(hurtTimer, actorEntity.getHurtTimer()));
 
+        /* The death channel drives the actor's topple rotation and red overlay. ActorEntity
+         * is a real LivingEntity, so writing deathTime here lets ActorEntityRenderer apply
+         * the same fall-over it already uses for vanilla knockback deaths. */
+        replay.keyframes.applyDeath(ticks, actorEntity);
+
         if (this.getTransition(editorEntity, 1F) == 0F)
         {
             actorEntity.setPrevX(actorEntity.getX());
@@ -1315,6 +1338,7 @@ public abstract class BaseFilmController
                 }
             }
         }
+
     }
 
     private Entity getReplayActor(Replay replay)

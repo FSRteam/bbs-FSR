@@ -212,6 +212,32 @@ public class MCEntity implements IEntity
     }
 
     @Override
+    public boolean isDead()
+    {
+        return this.mcEntity instanceof LivingEntity living && living.isDeadOrDying();
+    }
+
+    @Override
+    public float getDeath()
+    {
+        if (this.mcEntity instanceof LivingEntity living)
+        {
+            return living.deathTime;
+        }
+
+        return 0F;
+    }
+
+    @Override
+    public void setDeath(float deathTime)
+    {
+        if (this.mcEntity instanceof LivingEntity living)
+        {
+            living.deathTime = (int) deathTime;
+        }
+    }
+
+    @Override
     public double getX()
     {
         return this.mcEntity.getX();

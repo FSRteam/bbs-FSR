@@ -651,7 +651,7 @@ public class Scroll
             return;
         }
 
-        this.scrollTween.to((float) this.targetScroll, motion);
+        this.scrollTween.to((float) this.targetScroll, motion, UIMotions.scrollType(motion), UIMotions.scrollEasing(motion));
 
         float maximum = Math.max(0, this.scrollSize - this.direction.getSide(this.area));
 
@@ -680,7 +680,7 @@ public class Scroll
         }
         else
         {
-            this.scrollbarFade.to(0F, spec);
+            this.scrollbarFade.to(0F, spec, UIMotions.scrollType(spec), UIMotions.scrollEasing(spec));
         }
 
         return this.scrollbarFade.update();

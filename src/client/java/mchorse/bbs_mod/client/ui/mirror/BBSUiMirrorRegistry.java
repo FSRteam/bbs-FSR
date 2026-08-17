@@ -27,6 +27,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -45,6 +46,10 @@ public final class BBSUiMirrorRegistry
     private static final Map<String, ListenerEntry> LISTENERS_BY_ADDON = new ConcurrentHashMap<>();
     private static final CopyOnWriteArrayList<ListenerEntry> LISTENERS = new CopyOnWriteArrayList<>();
     private static final AtomicInteger WORKER_SEQUENCE = new AtomicInteger();
+    private static final AtomicLong FRAMES_SKIPPED_NO_DEMAND = new AtomicLong();
+    private static final AtomicLong FRAMES_SKIPPED_QUARANTINED = new AtomicLong();
+    private static final AtomicLong CALLBACK_ERRORS = new AtomicLong();
+    private static final AtomicLong WORKER_RESTARTS = new AtomicLong();
     private static volatile BBSUiSessionInfo currentSession;
 
     private BBSUiMirrorRegistry()
@@ -135,6 +140,17 @@ public final class BBSUiMirrorRegistry
         }
 
         return false;
+    }
+
+    /** Constant-space accounting of silent frame skips, callback failures, and worker deaths. */
+    public static Diagnostics diagnostics()
+    {
+        return new Diagnostics(
+            FRAMES_SKIPPED_NO_DEMAND.get(),
+            FRAMES_SKIPPED_QUARANTINED.get(),
+            CALLBACK_ERRORS.get(),
+            WORKER_RESTARTS.get()
+        );
     }
 
     static boolean needsAsset(String assetId)
@@ -311,6 +327,11 @@ public final class BBSUiMirrorRegistry
         {
             entry.forceShutdown();
         }
+
+        FRAMES_SKIPPED_NO_DEMAND.set(0L);
+        FRAMES_SKIPPED_QUARANTINED.set(0L);
+        CALLBACK_ERRORS.set(0L);
+        WORKER_RESTARTS.set(0L);
     }
 
     private static long failureBackoff(int failures)
@@ -324,6 +345,15 @@ public final class BBSUiMirrorRegistry
 
         return backoff;
     }
+
+    /** Read-only snapshot of the mirror handoff drop/skip/restart counters. */
+    public record Diagnostics(
+        long framesSkippedNoDemand,
+        long framesSkippedQuarantined,
+        long callbackErrors,
+        long workerRestarts
+    )
+    {}
 
     private static final class Registration
     {
@@ -515,13 +545,31 @@ public final class BBSUiMirrorRegistry
 
             if (!this.captureEnabled(now))
             {
+                if (this.active())
+                {
+                    FRAMES_SKIPPED_QUARANTINED.incrementAndGet();
+                }
+                else
+                {
+                    FRAMES_SKIPPED_NO_DEMAND.incrementAndGet();
+                }
+
                 return;
             }
 
             synchronized (this.lock)
             {
-                if (!this.active() || now - this.quarantineUntilNanos < 0L)
+                if (!this.active())
                 {
+                    FRAMES_SKIPPED_NO_DEMAND.incrementAndGet();
+
+                    return;
+                }
+
+                if (now - this.quarantineUntilNanos < 0L)
+                {
+                    FRAMES_SKIPPED_QUARANTINED.incrementAndGet();
+
                     return;
                 }
 
@@ -689,6 +737,50 @@ public final class BBSUiMirrorRegistry
 
         private void drain()
         {
+            boolean completedNormally = false;
+
+            try
+            {
+                this.drainLoop();
+                completedNormally = true;
+            }
+            finally
+            {
+                if (!completedNormally)
+                {
+                    this.recoverAfterWorkerFailure();
+                }
+            }
+        }
+
+        /**
+         * A Throwable escaping the drain loop (e.g. a fatal Error rethrown by
+         * deliver) kills the worker thread. Without this recovery the stuck
+         * drainScheduled flag would suppress all future scheduling and stall
+         * this listener's deliveries forever.
+         */
+        private void recoverAfterWorkerFailure()
+        {
+            WORKER_RESTARTS.incrementAndGet();
+
+            synchronized (this.lock)
+            {
+                this.drainScheduled = false;
+                this.lock.notifyAll();
+
+                if (!this.pending.isEmpty())
+                {
+                    this.scheduleDrainLocked();
+                }
+                else if (this.shutdownAfterDrain)
+                {
+                    this.executor.shutdown();
+                }
+            }
+        }
+
+        private void drainLoop()
+        {
             while (true)
             {
                 Delivery delivery;
@@ -757,42 +849,59 @@ public final class BBSUiMirrorRegistry
             this.callbackPhase = delivery.phase();
             this.callbackStartedNanos = started;
 
+            /* Any Throwable escaping this reset would latch captureEnabled()
+             * false forever and stall all UI capture with no self-healing, so
+             * even Errors are accounted and quarantined. Truly fatal errors
+             * are rethrown below, after the bookkeeping is consistent. */
             try
             {
                 delivery.invoke(this.listener);
             }
-            catch (Exception | LinkageError e)
+            catch (Throwable e)
             {
                 failure = e;
+            }
+            finally
+            {
+                this.callbackStartedNanos = 0L;
+                this.callbackPhase = null;
             }
 
             long finished = System.nanoTime();
             long elapsed = finished - started;
 
-            this.callbackStartedNanos = 0L;
-            this.callbackPhase = null;
+            try
+            {
+                if (delivery instanceof AssetDelivery asset)
+                {
+                    this.finishAsset(asset, failure == null);
+                }
 
-            if (delivery instanceof AssetDelivery asset)
+                if (failure != null)
+                {
+                    CALLBACK_ERRORS.incrementAndGet();
+                    this.recordProblem(delivery.phase(), failure, elapsed, finished);
+                }
+                else if (elapsed >= SLOW_CALLBACK_NANOS)
+                {
+                    this.markSlowCallback(started, delivery.phase(), elapsed, finished);
+                }
+                else
+                {
+                    this.recordFastSuccess();
+                }
+            }
+            finally
             {
-                this.finishAsset(asset, failure == null);
+                synchronized (this.lock)
+                {
+                    this.lock.notifyAll();
+                }
             }
 
-            if (failure != null)
+            if (failure instanceof OutOfMemoryError || failure instanceof StackOverflowError)
             {
-                this.recordProblem(delivery.phase(), failure, elapsed, finished);
-            }
-            else if (elapsed >= SLOW_CALLBACK_NANOS)
-            {
-                this.markSlowCallback(started, delivery.phase(), elapsed, finished);
-            }
-            else
-            {
-                this.recordFastSuccess();
-            }
-
-            synchronized (this.lock)
-            {
-                this.lock.notifyAll();
+                throw (Error) failure;
             }
         }
 

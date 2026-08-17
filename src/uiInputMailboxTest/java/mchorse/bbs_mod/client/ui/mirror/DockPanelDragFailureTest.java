@@ -108,7 +108,7 @@ public final class DockPanelDragFailureTest
         String source = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
 
         check(source.contains("private final UIDockLayout dock;")
-                && source.contains("this.dock = new UIDockLayout();")
+                && source.contains("this.dock = new UIDockLayout()")
                 && !source.contains("private UIDraggable createPanelDragHandle(String panelId)"),
             "UIFilmPanel does not delegate panel dragging to the shared UIDockLayout");
     }

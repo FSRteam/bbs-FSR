@@ -391,6 +391,9 @@ public final class PoseFormRegressionSourceTest
             "the pose keyframe panel still mounts the enchantment-layer controls");
         check(generalFormPanel.contains("this.glintSection.setExpanded(false)"),
             "the form editor's enchantment layer is not collapsed by default");
+        check(generalFormPanel.contains("this.glintSection.removeFromParent()")
+                && generalFormPanel.contains("this.options.addBefore(this.tracksSection, this.glintSection)"),
+            "forms without whole-form glint still reserve space for the enchantment-layer section");
         check(poseEditor.contains("this.glintSection.setExpanded(false)"),
             "the per-bone form editor's enchantment layer is not collapsed by default");
         check(form.contains("this.glintMode.invisible()")

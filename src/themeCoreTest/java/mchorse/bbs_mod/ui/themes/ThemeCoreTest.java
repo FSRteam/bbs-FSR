@@ -98,6 +98,8 @@ public final class ThemeCoreTest
         assertTrue(amber.accentPrimary != dark.accentPrimary, "amber recolors the accent");
         assertTrue(!amber.bevel && !amber.panelShadow && !amber.textShadow, "amber flattens the style toggles");
         assertTrue(amber.overlay.easing != dark.overlay.easing || amber.overlay.duration != dark.overlay.duration, "amber changes motion");
+        assertEquals(350, amber.scrollSmooth.duration, "amber provides its slow scroll curve");
+        assertEquals(Interpolations.SINE_INOUT, amber.scrollSmooth.easing, "amber scroll curve parses");
 
         UITheme refreshed = parseFile("refreshed", themes.resolve("refreshed/theme.json"), dark);
 
@@ -143,6 +145,8 @@ public final class ThemeCoreTest
         UITheme strawberry = parseFile("strawberry", themes.resolve("strawberry/theme.json"), dark);
 
         assertTrue(strawberry.dragFollow.enabled, "strawberry demonstrates drag follow");
+        assertEquals(UIThemeMotion.MotionType.SPRING, strawberry.scrollbar.type, "strawberry scrollbar fade uses spring motion");
+        assertEquals(UIThemeMotion.MotionType.SPRING, strawberry.scrollSmooth.type, "strawberry smooth scrolling uses spring motion");
     }
 
     private static void testThemeTemplateExport() throws Exception

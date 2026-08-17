@@ -109,6 +109,8 @@ public class BBSSettings {
 	public static ValueFloat scrollingSensitivityHorizontal;
 	public static ValueBoolean scrollingSmoothness;
 	public static ValueBoolean scrollingDisableSmoothnessInEditors;
+	public static ValueBoolean scrollingUseThemeCurve;
+	public static ValueString scrollingMotionEasing;
 
 	public static ValueBoolean multiskinMultiThreaded;
 
@@ -787,6 +789,8 @@ public class BBSSettings {
 		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 3F, 0F, 10F).slider();
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", false);
+		scrollingUseThemeCurve = builder.getBoolean("use_theme_curve", true);
+		scrollingMotionEasing = builder.getString("motion_easing", DEFAULT_MOTION_EASING);
 
 		builder.category("multiskin", Icons.USER);
 		multiskinMultiThreaded = builder.getBoolean("multithreaded", true);

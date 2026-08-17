@@ -879,7 +879,11 @@ public class UIReplaysEditorUtils
 
         ModelInstance instance = ModelFormRenderer.getModel(modelForm);
 
-        return instance != null && ModelIKRuntime.isRotationConstrained(instance.model, modelForm, StringUtils.fileName(bone.a));
+        return instance != null && ModelIKRuntime.isRotationConstrained(
+            instance.model,
+            modelForm,
+            StringUtils.fileName(bone.a)
+        );
     }
 
     public static GizmoDrag buildFilmGizmoDrag(
@@ -1216,6 +1220,20 @@ public class UIReplaysEditorUtils
 
         if (insert)
         {
+            UIKeyframeSheet sheet = resolveBoneSheet(keyframeEditor, boneKey, path);
+
+            if (sheet == null)
+            {
+                return;
+            }
+
+            if (isPoseSheet(sheet, path))
+            {
+                insertIntoPoseSheet(keyframeEditor, cursor, bone, sheet);
+
+                return;
+            }
+
             IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
             Keyframe selected = graph.getSelected();
             UIKeyframeSheet currentSheet = selected != null ? graph.getSheet(selected) : null;
@@ -1225,7 +1243,8 @@ public class UIReplaysEditorUtils
                 return;
             }
 
-            pickProperty(keyframeEditor, cursor, bone, boneKey, true);
+            pickProperty(keyframeEditor, cursor, bone, sheet, true);
+
             return;
         }
 
@@ -1239,74 +1258,84 @@ public class UIReplaysEditorUtils
 
     private static UIKeyframeSheet resolveBoneSheet(UIKeyframeEditor keyframeEditor, String boneKey, String formPath)
     {
-        IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+        return resolveBoneSheet(keyframeEditor.view.getGraph(), boneKey, formPath);
+    }
+
+    static UIKeyframeSheet resolveBoneSheet(IUIKeyframeGraph graph, String boneKey, String formPath)
+    {
         UIKeyframeSheet sheet = graph.getSheet(boneKey);
+
+        if (sheet == null)
+        {
+            UIKeyframeSheet caseInsensitive = null;
+
+            for (UIKeyframeSheet candidate : graph.getSheets())
+            {
+                if (candidate.id != null && candidate.id.equalsIgnoreCase(boneKey))
+                {
+                    if (caseInsensitive != null)
+                    {
+                        caseInsensitive = null;
+
+                        break;
+                    }
+
+                    caseInsensitive = candidate;
+                }
+            }
+
+            sheet = caseInsensitive;
+        }
 
         if (sheet != null)
         {
+            if (sheet.channel.isEmpty())
+            {
+                UIKeyframeSheet poseSheet = getPreferredPoseSheet(graph, formPath);
+
+                if (poseSheet != null)
+                {
+                    return poseSheet;
+                }
+            }
+
             return sheet;
         }
 
-        UIKeyframeSheet caseInsensitive = null;
-
-        for (UIKeyframeSheet s : graph.getSheets())
-        {
-            if (s.id != null && s.id.equalsIgnoreCase(boneKey))
-            {
-                if (caseInsensitive != null)
-                {
-                    caseInsensitive = null;
-                    break;
-                }
-
-                caseInsensitive = s;
-            }
-        }
-
-        if (caseInsensitive != null)
-        {
-            return caseInsensitive;
-        }
-
-        return getActivePoseSheet(keyframeEditor, formPath);
+        return getPreferredPoseSheet(graph, formPath);
     }
 
-    private static UIKeyframeSheet getActivePoseSheet(UIKeyframeEditor keyframeEditor, String formPath)
+    private static UIKeyframeSheet getPoseSheet(IUIKeyframeGraph graph, String formPath)
     {
-        IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        Keyframe selected = graph.getSelected();
-        UIKeyframeSheet sheet = selected != null ? graph.getSheet(selected) : graph.getLastSheet();
-
-        if (sheet == null || sheet.id == null)
+        for (UIKeyframeSheet sheet : graph.getSheets())
         {
-            return null;
-        }
-
-        String name = StringUtils.fileName(sheet.id);
-
-        if (!name.startsWith("pose"))
-        {
-            return null;
-        }
-
-        if (sheet.property != null)
-        {
-            Form sheetForm = FormUtils.getForm(sheet.property);
-
-            if (sheetForm != null)
+            if (isPoseSheet(sheet, formPath))
             {
-                return FormUtils.getPath(sheetForm).equals(formPath) ? sheet : null;
+                return sheet;
             }
         }
 
-        if (formPath.isEmpty())
+        return null;
+    }
+
+    private static UIKeyframeSheet getPreferredPoseSheet(IUIKeyframeGraph graph, String formPath)
+    {
+        Keyframe selected = graph.getSelected();
+        UIKeyframeSheet current = selected != null ? graph.getSheet(selected) : null;
+
+        if (isPoseSheet(current, formPath))
         {
-            return sheet.id.contains(FormUtils.PATH_SEPARATOR) ? null : sheet;
+            return current;
         }
 
-        String prefix = formPath + FormUtils.PATH_SEPARATOR;
+        UIKeyframeSheet last = graph.getLastSheet();
 
-        return sheet.id.startsWith(prefix) ? sheet : null;
+        if (isPoseSheet(last, formPath))
+        {
+            return last;
+        }
+
+        return getPoseSheet(graph, formPath);
     }
 
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, String key, boolean insert)
@@ -1358,7 +1387,45 @@ public class UIReplaysEditorUtils
         return segment != null ? segment.getClosest() : null;
     }
 
-    private static boolean isPoseSheet(UIKeyframeSheet sheet, String formPath)
+    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, int tick)
+    {
+        for (Object object : sheet.channel.getKeyframes())
+        {
+            Keyframe keyframe = (Keyframe) object;
+
+            if ((int) keyframe.getTick() == tick)
+            {
+                return keyframe;
+            }
+        }
+
+        return null;
+    }
+
+    private static void insertIntoPoseSheet(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, UIKeyframeSheet poseSheet)
+    {
+        IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+        int tick = cursor.getCursor();
+        Keyframe existing = getKeyframeAt(poseSheet, tick);
+
+        if (existing != null)
+        {
+            if (poseSheet.selection.getSelected().size() <= 1)
+            {
+                forceSelectInSheet(graph, poseSheet, existing);
+            }
+        }
+        else
+        {
+            Keyframe keyframe = graph.addKeyframe(poseSheet, tick, null);
+
+            graph.selectKeyframe(keyframe);
+        }
+
+        updatePoseEditorBoneSelection(keyframeEditor, bone);
+    }
+
+    static boolean isPoseSheet(UIKeyframeSheet sheet, String formPath)
     {
         if (sheet == null || sheet.id == null)
         {

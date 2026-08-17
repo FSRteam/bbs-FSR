@@ -12,6 +12,7 @@ import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.FormRenderSpace;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderer;
@@ -48,6 +49,7 @@ public final class IKPhysicsConsistencyTest
         testSolverWorkspaceReuseAndRewind();
         testStraightRestoreAndBendHysteresis();
         testPoleBindingLifecycle();
+        testIKRotationOwnership();
         testRealPoleDelta();
         testCubicShortChainTipLimit();
         testBobjShortChainTipLimit();
@@ -133,26 +135,7 @@ public final class IKPhysicsConsistencyTest
 
     private static void testRendererCleanupOnEarlyReturnAndFailure()
     {
-        ValueInt oldOverlayCount = BBSSettings.recordingPoseTransformOverlays;
-
-        if (oldOverlayCount == null)
-        {
-            BBSSettings.recordingPoseTransformOverlays = new ValueInt("test_pose_transform_overlays", 0);
-        }
-
-        TrackingForm form;
-
-        try
-        {
-            form = new TrackingForm();
-        }
-        finally
-        {
-            if (oldOverlayCount == null)
-            {
-                BBSSettings.recordingPoseTransformOverlays = null;
-            }
-        }
+        TrackingForm form = createFormWithSettings(TrackingForm::new);
 
         TrackingRenderer renderer = new TrackingRenderer(form);
         FormRenderingContext context = new FormRenderingContext()
@@ -422,6 +405,61 @@ public final class IKPhysicsConsistencyTest
             "pole movement was not applied as the signed relative angular delta");
     }
 
+    private static void testIKRotationOwnership()
+    {
+        CubicFixture fixture = cubicFixture();
+        ModelForm form = createFormWithSettings(ModelForm::new);
+        ModelIKConfig.Chain chain = new ModelIKConfig.Chain(
+            "tip", "target", 0, true, "pole", 0F, 0F, 1F, true, false, false, false
+        );
+
+        form.ik.set(ModelIKIO.toData(new ModelIKConfig(List.of(chain), Collections.emptyMap())));
+
+        require(ModelIKRuntime.isRotationConstrained(fixture.model, form, "root"),
+            "an enabled IK chain must own its directed parent rotation");
+        require(!ModelIKRuntime.isRotationConstrained(fixture.model, form, "tip"),
+            "a tip without tipRotation must remain FK-rotatable");
+
+        IKControl override = new IKControl();
+        override.enabled = false;
+        form.ikControlOverrides.put("tip", override);
+
+        require(!ModelIKRuntime.isRotationConstrained(fixture.model, form, "root"),
+            "a film-disabled IK chain must release FK rotation");
+
+        form.ikControlOverrides.clear();
+        ModelIKConfig.Chain rotatingTip = new ModelIKConfig.Chain(
+            "tip", "target", 0, true, "pole", 0F, 0F, 1F, true, true, false, false
+        );
+
+        form.ik.set(ModelIKIO.toData(new ModelIKConfig(List.of(rotatingTip), Collections.emptyMap())));
+
+        require(ModelIKRuntime.isRotationConstrained(fixture.model, form, "tip"),
+            "tipRotation must transfer tip rotation ownership to IK");
+    }
+
+    private static <T> T createFormWithSettings(java.util.function.Supplier<T> factory)
+    {
+        ValueInt oldOverlayCount = BBSSettings.recordingPoseTransformOverlays;
+
+        if (oldOverlayCount == null)
+        {
+            BBSSettings.recordingPoseTransformOverlays = new ValueInt("test_pose_transform_overlays", 0);
+        }
+
+        try
+        {
+            return factory.get();
+        }
+        finally
+        {
+            if (oldOverlayCount == null)
+            {
+                BBSSettings.recordingPoseTransformOverlays = null;
+            }
+        }
+    }
+
     private static void testCubicShortChainTipLimit()
     {
         CubicFixture fixture = cubicFixture();
@@ -616,6 +654,13 @@ public final class IKPhysicsConsistencyTest
             controls,
             limits
         );
+    }
+
+    private static boolean sameRotation(Quaternionf a, Quaternionf b)
+    {
+        float dot = Math.abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);
+
+        return dot >= 1F - EPS;
     }
 
     private static ModelIKCache.CompiledChain compiledChain(boolean pole)

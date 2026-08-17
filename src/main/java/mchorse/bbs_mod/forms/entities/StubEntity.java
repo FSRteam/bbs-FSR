@@ -5,6 +5,7 @@ import mchorse.bbs_mod.utils.AABB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.WalkAnimationState;
 import net.minecraft.world.item.ItemStack;
@@ -25,6 +26,7 @@ public class StubEntity implements IEntity
     private boolean onGround = true;
     private float fallDistance;
     private int hurtTimer;
+    private float death;
 
     private double prevX;
     private double prevY;
@@ -54,6 +56,33 @@ public class StubEntity implements IEntity
 
     private WalkAnimationState limbAnimator = new WalkAnimationState();
     private final Map<EquipmentSlot, ItemStack> items = new HashMap<>();
+
+    /**
+     * Optional backing {@link LivingEntity} for preview/editor scenes where a real entity
+     * is unavailable. Lets modded armor resolve its custom {@code HumanoidModel} through
+     * the standard NeoForge {@code IClientItemExtensions} hook.
+     */
+    private LivingEntity entityOverride;
+
+    public void setEntityOverride(LivingEntity entity)
+    {
+        this.entityOverride = entity;
+    }
+
+    public LivingEntity getEntityOverride()
+    {
+        return this.entityOverride;
+    }
+
+    public boolean isMcEntity()
+    {
+        return this.entityOverride != null;
+    }
+
+    public LivingEntity getMcEntity()
+    {
+        return this.entityOverride;
+    }
 
     public StubEntity(Level world)
     {
@@ -210,6 +239,24 @@ public class StubEntity implements IEntity
     public void setHurtTimer(int hurtTimer)
     {
         this.hurtTimer = hurtTimer;
+    }
+
+    @Override
+    public boolean isDead()
+    {
+        return this.death > 0F;
+    }
+
+    @Override
+    public float getDeath()
+    {
+        return this.death;
+    }
+
+    @Override
+    public void setDeath(float deathTime)
+    {
+        this.death = deathTime;
     }
 
     @Override
