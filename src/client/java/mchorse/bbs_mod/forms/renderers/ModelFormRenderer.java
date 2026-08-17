@@ -89,7 +89,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private ActionsConfig lastConfigs;
     private IAnimator animator;
     private ModelInstance lastModel;
-    private final ModelIKRuntime ikRuntime = new ModelIKRuntime();
     private final ModelPhysicsRuntime physicsRuntime = new ModelPhysicsRuntime();
     private final Matrix4f ikInverseBase = new Matrix4f();
     private final Map<String, Vector3f> ikLocalTargets = new HashMap<>();
@@ -431,7 +430,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             if (solvePose)
             {
                 this.applyConstraintsOnce(model);
-                this.applyIKOnce(model, simulationOwner == null ? target : simulationOwner, baseTransform, allowWorldTargetOverrides);
+                this.applyIKOnce(model, baseTransform, allowWorldTargetOverrides);
                 this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
             }
 
@@ -518,7 +517,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyIKOnce(ModelInstance model, Object simulationOwner, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
+    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         if (this.ikAppliedThisRender)
         {
@@ -526,10 +525,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.ikAppliedThisRender = true;
-        this.applyIK(model, simulationOwner, baseTransform, allowWorldTargetOverrides);
+        this.applyIK(model, baseTransform, allowWorldTargetOverrides);
     }
 
-    private void applyIK(ModelInstance model, Object simulationOwner, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
+    private void applyIK(ModelInstance model, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         model.form = this.form;
 
@@ -538,7 +537,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (!hasOverrides)
         {
-            this.ikRuntime.apply(simulationOwner, model, null, null);
+            ModelIKRuntime.apply(model, null, null);
             return;
         }
 
@@ -549,11 +548,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.ikLocalTargets.isEmpty() && this.ikLocalPoles.isEmpty())
         {
-            this.ikRuntime.apply(simulationOwner, model, null, null);
+            ModelIKRuntime.apply(model, null, null);
             return;
         }
 
-        this.ikRuntime.apply(simulationOwner, model, this.ikLocalTargets.isEmpty() ? null : this.ikLocalTargets, this.ikLocalPoles.isEmpty() ? null : this.ikLocalPoles);
+        ModelIKRuntime.apply(model, this.ikLocalTargets.isEmpty() ? null : this.ikLocalTargets, this.ikLocalPoles.isEmpty() ? null : this.ikLocalPoles);
     }
 
     /** World-space target overrides into the model's local space (the space the solver and pivot frames use). */
@@ -1414,7 +1413,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                     ModelConstraintsRuntime.apply(model);
 
-                    this.applyIK(model, owner, modelSemanticBase, allowWorldTargetOverrides);
+                    this.applyIK(model, modelSemanticBase, allowWorldTargetOverrides);
 
                     if (modelSemanticBase != null)
                     {

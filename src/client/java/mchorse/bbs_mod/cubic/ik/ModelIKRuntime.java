@@ -14,62 +14,23 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.HashMap;
-import java.util.WeakHashMap;
 
 public final class ModelIKRuntime
 {
-    private static final class InstanceState
-    {
-        public ModelIKCache.Compiled compiled;
-        public final List<ModelIKApplier.ChainWorkspace> workspaces = new ArrayList<>();
-    }
-
-    private static final Set<ModelIKRuntime> RUNTIMES = Collections.newSetFromMap(new WeakHashMap<>());
-
-    private final WeakHashMap<Object, Map<String, InstanceState>> states = new WeakHashMap<>();
-
-    public ModelIKRuntime()
-    {
-        synchronized (RUNTIMES)
-        {
-            RUNTIMES.add(this);
-        }
-    }
+    private ModelIKRuntime()
+    {}
 
     public static void clearCache()
     {
         ModelIKCache.clear();
-
-        synchronized (RUNTIMES)
-        {
-            for (ModelIKRuntime runtime : RUNTIMES)
-            {
-                runtime.states.clear();
-            }
-        }
     }
 
     public static void invalidate(String modelId)
     {
-        ModelIKCache.clear();
-
-        synchronized (RUNTIMES)
-        {
-            for (ModelIKRuntime runtime : RUNTIMES)
-            {
-                for (Map<String, InstanceState> byModel : runtime.states.values())
-                {
-                    if (byModel != null)
-                    {
-                        byModel.remove(modelId);
-                    }
-                }
-            }
-        }
+        clearCache();
     }
 
-    public void apply(Object simulationOwner, ModelInstance instance, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets)
+    public static void apply(ModelInstance instance, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets)
     {
         if (instance == null || instance.model == null)
         {
@@ -108,60 +69,11 @@ public final class ModelIKRuntime
             poleWeights = form.poleTargetWeights;
         }
 
-        Object owner = simulationOwner == null ? instance : simulationOwner;
-        Map<String, InstanceState> byModel = this.states.computeIfAbsent(owner, (key) -> new HashMap<>());
-        InstanceState state = byModel.computeIfAbsent(instance.id, (key) -> new InstanceState());
-
-        if (state.compiled != compiled)
-        {
-            state.compiled = compiled;
-            state.workspaces.clear();
-
-            for (int i = 0; i < chains.size(); i++)
-            {
-                state.workspaces.add(new ModelIKApplier.ChainWorkspace());
-            }
-        }
-
-        if (requiresDls(chains, compiled.bones()))
-        {
-            ModelIKDlsApplier.apply(model, chains, compiled.bones(), controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, state.workspaces, boneLimits);
-        }
-        else
-        {
-            ModelIKApplier.apply(model, chains, state.workspaces, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, boneLimits);
-        }
-    }
-
-    private static boolean requiresDls(List<ModelIKCache.CompiledChain> chains, Map<String, ModelIKConfig.JointDoF> bones)
-    {
-        if (bones != null && !bones.isEmpty())
-        {
-            return true;
-        }
-
-        for (int i = 0; i < chains.size(); i++)
-        {
-            ModelIKCache.CompiledChain a = chains.get(i);
-
-            if (a.classic())
-            {
-                return true;
-            }
-
-            for (int j = i + 1; j < chains.size(); j++)
-            {
-                for (String bone : a.chainRootToEffector())
-                {
-                    if (chains.get(j).chainRootToEffector().contains(bone))
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
+        /* FS resolves target and pole positions from the current frame every time.
+         * Passing no persistent workspace keeps undo, redo and history jumps a pure
+         * function of the restored keyframe data. */
+        ModelIKDlsApplier.apply(model, chains, compiled.bones(), controllerTargets, poleTargets,
+            targetWeights, poleWeights, controlOverrides, null, boneLimits);
     }
 
     /**
