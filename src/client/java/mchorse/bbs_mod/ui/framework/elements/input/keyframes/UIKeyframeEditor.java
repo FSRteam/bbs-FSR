@@ -54,6 +54,22 @@ public class UIKeyframeEditor extends UIElement
         this.add(this.view.full(this).w(1F, -140));
     }
 
+    /**
+     * The parameters panel is parented to {@link #target}, not to this editor, so nothing would take
+     * it down when this editor is dropped &mdash; it would stay in the edit area, clickable, and the
+     * next editor would stack its own panel on top of it.
+     */
+    @Override
+    public void removeFromParent()
+    {
+        super.removeFromParent();
+
+        if (this.editor != null)
+        {
+            this.editor.removeFromParent();
+        }
+    }
+
     public UIKeyframeEditor target(UIElement target)
     {
         this.target = target;

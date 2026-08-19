@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.settings.values.ui;
 
 import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -8,11 +9,18 @@ import mchorse.bbs_mod.utils.MathUtils;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class ValueEditorLayout extends BaseValue
 {
+    public static final String FILM = "film";
+    public static final String PARTICLE = "particle";
+
     public enum FilmEditor
     {
         CAMERA("camera"),
@@ -26,6 +34,11 @@ public class ValueEditorLayout extends BaseValue
             this.id = id;
         }
     }
+
+    /** Panels the user hid, per layout id; hidden ids are not re-added by the dock's ensure pass. */
+    private final Map<String, Set<String>> hiddenByLayout = new LinkedHashMap<>();
+    /** Docks left in layout-editing mode, so unlock survives a restart. */
+    private final Set<String> unlockedDocks = new HashSet<>();
 
     private static class LayoutState
     {
@@ -258,6 +271,50 @@ public class ValueEditorLayout extends BaseValue
         });
     }
 
+    public Set<String> getHiddenPanels(String id)
+    {
+        Set<String> hidden = this.hiddenByLayout.get(id);
+
+        return hidden == null ? new HashSet<>() : new HashSet<>(hidden);
+    }
+
+    public void setHiddenPanels(String id, Set<String> hidden)
+    {
+        BaseValue.edit(this, (v) ->
+        {
+            if (hidden == null || hidden.isEmpty())
+            {
+                this.hiddenByLayout.remove(id);
+            }
+            else
+            {
+                this.hiddenByLayout.put(id, new HashSet<>(hidden));
+            }
+        });
+    }
+
+    public boolean isDockUnlocked(String dockId)
+    {
+        return this.unlockedDocks.contains(dockId);
+    }
+
+    public void setDockUnlocked(String dockId, boolean unlocked)
+    {
+        BaseValue.edit(this, (v) ->
+        {
+            if (unlocked)
+            {
+                this.unlockedDocks.add(dockId);
+            }
+            else
+            {
+                this.unlockedDocks.remove(dockId);
+            }
+        });
+    }
+
+    /* Editor sizes that are not layout trees, kept here because they ship in the same settings key */
+
     public void setStateEditorSizeH(float stateEditorSizeH)
     {
         BaseValue.edit(this, (v) -> this.stateEditorSizeH = stateEditorSizeH);
@@ -323,6 +380,37 @@ public class ValueEditorLayout extends BaseValue
             data.put("film_editor_layout_bindings", filmEditorBindings);
         }
 
+        MapType hidden = new MapType();
+
+        for (Map.Entry<String, Set<String>> entry : this.hiddenByLayout.entrySet())
+        {
+            ListType ids = new ListType();
+
+            for (String id : entry.getValue())
+            {
+                ids.addString(id);
+            }
+
+            hidden.put(entry.getKey(), ids);
+        }
+
+        if (!hidden.isEmpty())
+        {
+            data.put("hidden", hidden);
+        }
+
+        ListType unlocked = new ListType();
+
+        for (String id : this.unlockedDocks)
+        {
+            unlocked.addString(id);
+        }
+
+        if (!unlocked.isEmpty())
+        {
+            data.put("unlocked_docks", unlocked);
+        }
+
         data.putFloat("state_editor_size_h", this.stateEditorSizeH);
         data.putFloat("state_editor_size_v", this.stateEditorSizeV);
         data.putInt("keyframe_label_width", this.keyframeLabelWidth);
@@ -334,6 +422,8 @@ public class ValueEditorLayout extends BaseValue
     {
         this.resetFilmLayouts();
         this.particleLayout.setRoot(EditorLayoutNode.defaultParticleLayout());
+        this.hiddenByLayout.clear();
+        this.unlockedDocks.clear();
 
         if (data.isMap())
         {
@@ -402,10 +492,43 @@ public class ValueEditorLayout extends BaseValue
                 }
             }
 
+            MapType hiddenMap = map.getMap("hidden");
+
+            for (String id : hiddenMap.keys())
+            {
+                Set<String> ids = new HashSet<>();
+
+                for (BaseType panelId : hiddenMap.getList(id))
+                {
+                    if (panelId != null && panelId.isString())
+                    {
+                        ids.add(panelId.asString());
+                    }
+                }
+
+                if (!ids.isEmpty())
+                {
+                    this.hiddenByLayout.put(id, ids);
+                }
+            }
+
+            for (BaseType id : map.getList("unlocked_docks"))
+            {
+                if (id != null && id.isString())
+                {
+                    this.unlockedDocks.add(id.asString());
+                }
+            }
+
             this.stateEditorSizeH = map.getFloat("state_editor_size_h", 0.7F);
             this.stateEditorSizeV = map.getFloat("state_editor_size_v", 0.25F);
             this.keyframeLabelWidth = map.getInt("keyframe_label_width", 120);
         }
+    }
+
+    public static String filmLayoutId(FilmEditor editor)
+    {
+        return editor == null ? FILM : FILM + "." + editor.id;
     }
 
     private LayoutState getFilmLayoutState(FilmEditor editor, boolean forWrite)

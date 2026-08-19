@@ -4,12 +4,14 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -236,6 +238,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         if (this.entity != null)
         {
             this.ensureAnimationInitialized(null);
+            this.advanceUIAnimation(context);
 
             PoseStack stack = context.batcher.getContext().pose();
 
@@ -280,6 +283,15 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             Object renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(this.entity);
 
             float transition = this.getUIAnimationTransition(context.getTransition());
+
+            if (this.isUIAnimationFrozen())
+            {
+                /* A stopped clock alone is not a still pose: `ageInTicks` is
+                 * `tickCount + partialTick`, so leaving the partial tick free would keep
+                 * sampling the animation across a one-tick window every frame - which is
+                 * the very twitch this path is fixing. Pin it so the pose holds. */
+                transition = UI_FROZEN_TRANSITION;
+            }
 
             this.prepareRenderLook(null, context.getTransition());
             this.recordRenderSample(transition, PAUSE_SAMPLE_UI);
@@ -756,6 +768,8 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         {
             return;
         }
+
+        this.recordExternalTick();
 
         boolean initialized = this.animationInitialized;
 
@@ -1269,6 +1283,47 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             livingEntity.yHeadRotO = relativeHeadYaw;
             livingEntity.setYHeadRot(relativeHeadYaw);
         }
+    }
+
+    /**
+     * Run the list thumbnail's owed animation ticks through the real entity and renderer.
+     *
+     * <p>Vanilla models read per-tick state that only the entity's own {@code tick()} produces:
+     * bats and axolotls call {@code setupAnimationStates()} to start their {@code AnimationState}s,
+     * parrots and dragons update interpolation endpoints ({@code flap}, {@code flapTime}), and
+     * guardians advance the tail position the model lerps. Faking {@code tickCount} alone produces
+     * none of it; the entity must tick.</p>
+     *
+     * <p>The entity here is a rendering puppet ({@code noPhysics = true}, never added to a world),
+     * so its AI and pathfinding operate on a stub with no real side effects.</p>
+     */
+    private void advanceUIAnimation(UIContext context)
+    {
+        StubEntity source = this.getUITickEntity();
+
+        this.driveUIAnimation(this.pollUIAnimationTicks(context), () ->
+        {
+            /* The stub stands in for the world entity a thumbnail does not have: it carries the
+             * age and limb state tick(IEntity) synchronizes from, and standing still is the idle
+             * pose a picker cell wants. tick() ticks the mob itself from there. */
+            source.update();
+            this.tick(source);
+        });
+    }
+
+    /**
+     * The form's own pause value wins over the freeze setting, which in turn exempts the
+     * form the list has selected.
+     */
+    @Override
+    protected boolean shouldAdvanceUIAnimation()
+    {
+        if (this.form.paused.get())
+        {
+            return false;
+        }
+
+        return super.shouldAdvanceUIAnimation();
     }
 
     private static class BooleanHolder
