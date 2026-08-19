@@ -1,8 +1,14 @@
 package mchorse.bbs_mod.api.client;
 
+import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.api.addon.BBSAddonCapability;
 import mchorse.bbs_mod.client.compat.ClientApiCompat;
 import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
 import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
+import mchorse.bbs_mod.api.addon.BBSAddonDescriptorValidator;
+import mchorse.bbs_mod.api.addon.BBSAddonPhase;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec;
 import mchorse.bbs_mod.api.client.film.BBSFilmApplyResult;
 import mchorse.bbs_mod.api.client.film.BBSFilmCollaborationListener;
 import mchorse.bbs_mod.api.client.film.BBSFilmCollaborationSubscription;
@@ -26,6 +32,8 @@ import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRegistry;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
 import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceRegistry;
 import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationRegistry;
+import mchorse.bbs_mod.client.dashboard.BBSDashboardPanelHostRegistry;
+import mchorse.bbs_mod.client.dashboard.DashboardPanelContribution;
 import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -40,6 +48,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -62,6 +71,127 @@ public final class BBSClientApi
     public static KeyMapping registerKeyBinding(BBSAddonDescriptor descriptor, KeyMapping keyBinding)
     {
         return ClientApiCompat.registerKeyBinding(descriptor, keyBinding);
+    }
+
+    /** Register one host-owned Dashboard panel backed by addon-owned content. */
+    public static BBSRegistrationResult registerDashboardPanel(
+        BBSAddonDescriptor descriptor,
+        BBSDashboardPanelSpec spec,
+        BBSDashboardPanelFactory factory
+    )
+    {
+        String addonId = descriptor == null ? "<unknown>" : descriptor.addonId();
+        String localId = spec == null ? "<unknown>" : spec.id();
+        String resultId = addonId == null || addonId.isBlank()
+            ? "<blank>"
+            : addonId + ":" + (localId == null || localId.isBlank() ? "<blank>" : localId);
+        BBSRegistrationResult rejected = validateDashboardPanel(descriptor, spec, factory, resultId);
+
+        if (rejected != null)
+        {
+            recordDashboardDiagnostic(descriptor, BBSAddonPhase.REGISTER_CLIENT, rejected, null);
+            return rejected;
+        }
+
+        AtomicBoolean setupRecorded = new AtomicBoolean();
+        DashboardPanelContribution contribution = new DashboardPanelContribution(
+            addonId,
+            descriptor,
+            descriptor.displayName(),
+            spec,
+            factory,
+            (failed, phase, error) -> recordDashboardDiagnostic(
+                descriptor,
+                BBSAddonPhase.CLIENT_SETUP,
+                BBSRegistrationResult.rejected(failed.fullId(), "Dashboard panel " + phase + " failed"),
+                error
+            ),
+            () ->
+            {
+                if (setupRecorded.compareAndSet(false, true))
+                {
+                    recordDashboardDiagnostic(
+                        descriptor,
+                        BBSAddonPhase.CLIENT_SETUP,
+                        BBSRegistrationResult.accepted(resultId),
+                        null
+                    );
+                }
+            }
+        );
+        BBSRegistrationResult result;
+
+        try
+        {
+            result = BBSDashboardPanelHostRegistry.install(contribution, false);
+        }
+        catch (Exception | LinkageError error)
+        {
+            result = BBSRegistrationResult.rejected(resultId, "Dashboard panel projection failed");
+        }
+
+        recordDashboardDiagnostic(descriptor, BBSAddonPhase.REGISTER_CLIENT, result, null);
+
+        return result;
+    }
+
+    private static BBSRegistrationResult validateDashboardPanel(
+        BBSAddonDescriptor descriptor,
+        BBSDashboardPanelSpec spec,
+        BBSDashboardPanelFactory factory,
+        String resultId
+    )
+    {
+        if (descriptor == null)
+        {
+            return BBSRegistrationResult.rejected(resultId, "addon descriptor is null");
+        }
+
+        java.util.List<String> descriptorIssues = BBSAddonDescriptorValidator.validate(descriptor, (id) -> true);
+
+        if (!descriptorIssues.isEmpty())
+        {
+            return BBSRegistrationResult.rejected(resultId, descriptorIssues.get(0));
+        }
+        if (!descriptor.capabilities().contains(BBSAddonCapability.CLIENT_UI))
+        {
+            return BBSRegistrationResult.rejected(resultId, "addon did not declare CLIENT_UI capability");
+        }
+        if (spec == null)
+        {
+            return BBSRegistrationResult.rejected(resultId, "Dashboard panel spec is null");
+        }
+        if (!BBSDashboardPanelSpec.isValidId(spec.id()))
+        {
+            return BBSRegistrationResult.rejected(resultId, "Dashboard panel id is invalid");
+        }
+        if (spec.title() == null)
+        {
+            return BBSRegistrationResult.rejected(resultId, "Dashboard panel title is null");
+        }
+        if (spec.icon() == null)
+        {
+            return BBSRegistrationResult.rejected(resultId, "Dashboard panel icon is null");
+        }
+        if (factory == null)
+        {
+            return BBSRegistrationResult.rejected(resultId, "Dashboard panel factory is null");
+        }
+
+        return null;
+    }
+
+    private static void recordDashboardDiagnostic(
+        BBSAddonDescriptor descriptor,
+        BBSAddonPhase phase,
+        BBSRegistrationResult result,
+        Throwable error
+    )
+    {
+        if (descriptor != null)
+        {
+            BBSMod.recordAddonClientDiagnostic(descriptor, phase, BBSClientApi.class.getName(), result, error);
+        }
     }
 
     public static void onAfterEntities(WorldRenderHandler handler)

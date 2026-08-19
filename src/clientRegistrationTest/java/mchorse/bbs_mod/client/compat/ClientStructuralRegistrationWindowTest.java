@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.client.compat;
 
+import mchorse.bbs_mod.client.dashboard.DashboardPanelRegistryTest;
 import mchorse.bbs_mod.test.ExpectedErrorLogCapture;
+import mchorse.bbs_mod.ui.dashboard.DashboardPanelLifecycleTest;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,6 +34,8 @@ public final class ClientStructuralRegistrationWindowTest
             CameraControllerResetTest.runAll();
             ModelBlockItemRendererSourceTest.runAll();
             MissingClipTimelineFallbackTest.runAll();
+            DashboardPanelRegistryTest.runAll();
+            DashboardPanelLifecycleTest.runAll();
             acceptsBeforeEventAndRejectsLateCalls();
             closesBeforeInvokingNeoForgeRegistrations();
             isolatesRegistrationFailures();
@@ -188,10 +192,15 @@ public final class ClientStructuralRegistrationWindowTest
                 "BBSPluginClientStructuralBridge.runBlockingShutdown(BBSMod::stopHotPluginRuntime)"),
             "client shutdown no longer enters the blocking structural-shutdown mode");
         check(bridge.contains(
-                "if (minecraft == null || minecraft.isSameThread() || blockingShutdown) { operation.run();"),
+                "if (minecraft == null || minecraft.isSameThread() || blockingShutdown) "
+                    + "{ runStructuralOperation(operation, !blockingShutdown);"),
             "blocking shutdown no longer bypasses client-thread safepoint scheduling");
-        check(bridge.contains("if (!blockingShutdown) { refreshProjection(); }"),
+        check(bridge.contains("if (refresh) { refreshProjection(); }"),
             "blocking shutdown can refresh client projections while the render thread is stopping");
+        check(bridge.contains(
+                "BBSDashboardPanelHostRegistry.beginProjectionBatch(); try { operation.run(); } finally "
+                    + "{ BBSDashboardPanelHostRegistry.endProjectionBatch(); }"),
+            "structural safepoint no longer closes Dashboard projection batches deterministically");
         check(bridge.contains(
                 "if (BLOCKING_CLIENT_SHUTDOWN.get()) { return false; } if (BBSModClient.getVideoRecorder()"),
             "blocking shutdown can still be rejected by the recording/export busy guard");

@@ -72,7 +72,7 @@ entrypoint. Both entrypoints implement `BBSPlugin`.
   "commonEntrypoint": "example.ExamplePlugin",
   "clientEntrypoint": "example.client.ExampleClientPlugin",
   "side": "common",
-  "capabilities": ["events"],
+  "capabilities": ["events", "dashboard_panels"],
   "dependencies": [],
   "reload": "hot"
 }
@@ -118,6 +118,59 @@ generation ledger. Registration remains open through `prepare()` and
 `start()`, then is sealed before the generation becomes active.
 `context.own(...)` records additional
 `AutoCloseable` resources for reverse-order, idempotent cleanup.
+
+### Dashboard panel client entrypoint
+
+Dashboard panels are client-only. Declare `dashboard_panels` in the manifest,
+resolve `BBSPluginClientContext` during `prepare`, and register through its
+host-owned facade:
+
+```java
+public final class ExampleClientPlugin implements BBSPlugin {
+    @Override
+    public void prepare(BBSPluginContext context) {
+        BBSPluginClientContext client =
+            context.extension(BBSPluginClientContext.class);
+
+        BBSRegistrationResult result = client.dashboardPanels().register(
+            BBSDashboardPanelSpec.builder("tools")
+                .title(IKey.raw("Hot tools"))
+                .icon(Icons.GEAR)
+                .build(),
+            () -> {
+                UIText status = new UIText("Generation is active").padding(0, 0);
+                UIButton action = new UIButton(IKey.raw("Run action"),
+                    button -> status.text("Action completed"));
+
+                return BBSDashboardPanelContent.of(UI.column(8, 12,
+                    new UIText("Hot plugin Dashboard panel").padding(0, 0),
+                    status,
+                    action
+                ));
+            }
+        );
+
+        if (!result.accepted()) {
+            throw new IllegalStateException("Dashboard panel rejected: " + result);
+        }
+    }
+}
+```
+
+The local id follows `[a-z0-9][a-z0-9_.-]{0,63}` and becomes
+`<pluginId>:<localId>`. Registration is staged: a candidate generation is not
+visible before commit. Reusing the same id in the next generation replaces the
+panel at its current button position; if selected, the old content receives
+`onDisappear/onClose` before the new content receives `onOpen/onAppear`.
+Deleting or disabling the plugin switches a selected plugin panel to a host
+fallback before releasing the old content and factory. Old-generation ledger
+cleanup uses contribution identity and cannot remove the replacement.
+
+Factories and lifecycle callbacks run on the Minecraft client thread. Keep
+them short and do not retain the Dashboard, the host wrapper, or UI roots in
+static fields after unload. Callback failures are diagnosed and isolated.
+The production-shaped v1/v2 example is under `src/pluginSmokeFixture/` and is
+packaged by `gradlew buildSmokeFixturePlugins`.
 
 ### Content plugin
 
@@ -182,10 +235,9 @@ an entrypoint is loaded.
 ## Capability Matrix
 
 `BBSPluginCapability.hotSafe()` is the host's classification. A hot-safe
-capability is still subject to the staged-context contract. The current public
-`BBSPluginContext` exposes `EVENTS` and `own(...)` directly; the other
-host-owned adapters are internal integration points until a context method is
-provided.
+capability is still subject to the staged-context contract. Common structural
+facades live on `BBSPluginContext`; client-only facades live on
+`BBSPluginClientContext`, resolved through `context.extension(...)`.
 
 | Manifest capability | Classification | Current boundary |
 | --- | --- | --- |
@@ -195,7 +247,9 @@ provided.
 | `settings` | Hot-safe | Host-owned declarative values only; plugin `BaseValue` objects are not a hot contract. |
 | `ui_mirror`, `render_surface`, `film_collaboration` | Hot-safe | Client registries use owner and generation fences; use only a host adapter. |
 | `executors` | Hot-safe | Managed resources use `PluginContributionLedger`, `ManagedPluginExecutor`, and `ManagedPluginScheduledExecutor`. |
-| `forms`, `clips`, `particles`, `key_mappings`, `entity_renderer`, `block_entity_renderer` | Restart-only | Structural registration is rejected with `RESTART_REQUIRED`. |
+| `forms`, `clips`, `particles` | Hot-safe | Generation-owned common registries with snapshot/rebuild or refresh. |
+| `key_mappings`, `entity_renderer`, `block_entity_renderer` | Hot-safe | Client safepoint replay; renderers may only override existing Minecraft types. |
+| `dashboard_panels` | Hot-safe | Staged host-owned Dashboard content with identity-safe replace/remove. |
 | `minecraft_registry`, `mixin`, `access_transformer`, `coremod`, `jni`, `native_library` | Restart-only | Rejected before class loading or hot contribution publication. |
 
 The host-owned runtime types `PluginOwner`, `PluginGenerationFence`,

@@ -23,7 +23,8 @@ public enum BBSPluginCapability
     ACCESS_TRANSFORMER("access_transformer", false),
     COREMOD("coremod", false),
     JNI("jni", false),
-    NATIVE_LIBRARY("native_library", false);
+    NATIVE_LIBRARY("native_library", false),
+    DASHBOARD_PANELS("dashboard_panels", true);
 
     private final String wireName;
     private final boolean hotSafe;
@@ -66,6 +67,7 @@ public enum BBSPluginCapability
             case "key_mapping", "keybindings" -> KEY_MAPPINGS;
             case "entity_renderers" -> ENTITY_RENDERER;
             case "block_entity_renderers" -> BLOCK_ENTITY_RENDERER;
+            case "dashboard_panel" -> DASHBOARD_PANELS;
             default -> throw new IllegalArgumentException("unknown plugin capability '" + value + "'");
         };
     }

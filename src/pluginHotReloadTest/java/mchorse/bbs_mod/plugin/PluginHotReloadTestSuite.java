@@ -6,6 +6,7 @@ import mchorse.bbs_mod.network.compat.AddonPayloadBrokerHotRouteTest;
 import mchorse.bbs_mod.plugin.artifact.PluginArtifactContractTest;
 import mchorse.bbs_mod.plugin.hotreload.phase0.Phase0HotReloadTest;
 import mchorse.bbs_mod.plugin.manager.BBSPluginManagerIntegrationTest;
+import mchorse.bbs_mod.plugin.manager.DashboardPanelStructuralRegistrationTest;
 import mchorse.bbs_mod.plugin.manager.PluginStructuralCapabilitiesE2ETest;
 import mchorse.bbs_mod.plugin.manager.PluginStructuralRebuildFailureTest;
 import mchorse.bbs_mod.plugin.manager.PluginStructuralReloadBusyRejectionTest;
@@ -25,6 +26,7 @@ public final class PluginHotReloadTestSuite
         PluginArtifactContractTest.main(args);
         PluginRuntimePrimitivesTest.main(args);
         PluginStructuralRegistriesTest.main(args);
+        DashboardPanelStructuralRegistrationTest.main(args);
         PluginContentWatcherTest.main(args);
         AddonPayloadBrokerHotRouteTest.main(args);
         BBSPluginManagerIntegrationTest.main(args);

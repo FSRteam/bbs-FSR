@@ -37,6 +37,7 @@ public class UIDashboardPanels extends UIElement
 
     /** Whether the current panel owns its transient screen resources. */
     private boolean panelAppeared;
+    private boolean opened;
 
     private final UITween switchVeil = new UITween();
     private final UITween taskbarHide = new UITween();
@@ -166,6 +167,7 @@ public class UIDashboardPanels extends UIElement
     public void open()
     {
         this.resetTaskbarAutoHide();
+        this.opened = true;
 
         for (UIDashboardPanel panel : this.panels)
         {
@@ -201,6 +203,8 @@ public class UIDashboardPanels extends UIElement
         {
             panel.close();
         }
+
+        this.opened = false;
     }
 
     public void setPanel(UIDashboardPanel panel)
@@ -246,7 +250,7 @@ public class UIDashboardPanels extends UIElement
 
         this.getEvents().emit(new PanelEvent(this, lastPanel, panel));
 
-        if (this.panel != null)
+        if (this.panel != null && this.opened)
         {
             this.setPanelPlacement(panel);
 
@@ -280,14 +284,175 @@ public class UIDashboardPanels extends UIElement
 
     public UIIcon registerPanel(UIDashboardPanel panel, IKey tooltip, Icon icon)
     {
+        return this.registerPanel(this.panels.size(), panel, tooltip, icon);
+    }
+
+    public UIIcon replacePanel(UIDashboardPanel current, UIDashboardPanel replacement, IKey tooltip, Icon icon)
+    {
+        int index = this.panels.indexOf(current);
+
+        if (index < 0)
+        {
+            return this.registerPanel(replacement, tooltip, icon);
+        }
+
+        UIIcon oldButton = (UIIcon) this.panelButtons.getChildren().get(index);
+        UIIcon newButton = this.createPanelButton(replacement, tooltip, icon);
+        boolean selected = this.panel == current;
+
+        this.panelButtons.addBefore(oldButton, newButton);
+        this.panels.set(index, replacement);
+
+        if (selected)
+        {
+            if (this.panelAppeared)
+            {
+                current.disappear();
+                this.panelAppeared = false;
+            }
+
+            current.removeFromParent();
+
+            if (this.opened)
+            {
+                current.close();
+                replacement.open();
+            }
+
+            this.panel = replacement;
+            this.getEvents().emit(new PanelEvent(this, current, replacement));
+
+            if (this.opened)
+            {
+                this.setPanelPlacement(replacement);
+                this.prepend(replacement);
+                replacement.appear();
+                this.panelAppeared = true;
+                replacement.resize();
+            }
+        }
+        else
+        {
+            current.removeFromParent();
+
+            if (this.opened)
+            {
+                current.close();
+                replacement.open();
+            }
+        }
+
+        oldButton.removeFromParent();
+
+        return newButton;
+    }
+
+    public boolean removePanel(UIDashboardPanel removed, UIDashboardPanel preferredFallback)
+    {
+        int index = this.panels.indexOf(removed);
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        UIIcon button = (UIIcon) this.panelButtons.getChildren().get(index);
+        boolean selected = this.panel == removed;
+        UIDashboardPanel fallback = this.findFallback(removed, preferredFallback);
+
+        if (selected)
+        {
+            if (this.panelAppeared)
+            {
+                removed.disappear();
+                this.panelAppeared = false;
+            }
+
+            removed.removeFromParent();
+
+            if (this.opened)
+            {
+                removed.close();
+            }
+
+            this.panel = fallback;
+            this.getEvents().emit(new PanelEvent(this, removed, fallback));
+
+            if (fallback != null && this.opened)
+            {
+                this.setPanelPlacement(fallback);
+                this.prepend(fallback);
+                fallback.appear();
+                this.panelAppeared = true;
+                fallback.resize();
+            }
+        }
+        else
+        {
+            removed.removeFromParent();
+
+            if (this.opened)
+            {
+                removed.close();
+            }
+        }
+
+        this.panels.remove(index);
+        button.removeFromParent();
+
+        return true;
+    }
+
+    private UIIcon registerPanel(int index, UIDashboardPanel panel, IKey tooltip, Icon icon)
+    {
+        UIIcon button = this.createPanelButton(panel, tooltip, icon);
+
+        if (index >= this.panels.size())
+        {
+            this.panels.add(panel);
+            this.panelButtons.add(button);
+        }
+        else
+        {
+            UIIcon next = (UIIcon) this.panelButtons.getChildren().get(index);
+
+            this.panels.add(index, panel);
+            this.panelButtons.addBefore(next, button);
+        }
+
+        if (this.opened)
+        {
+            panel.open();
+        }
+
+        return button;
+    }
+
+    private UIIcon createPanelButton(UIDashboardPanel panel, IKey tooltip, Icon icon)
+    {
         UIIcon button = new UIIcon(icon, (b) -> this.setPanel(panel));
 
         button.tooltip(tooltip, Direction.TOP);
 
-        this.panels.add(panel);
-        this.panelButtons.add(button);
-
         return button;
+    }
+
+    private UIDashboardPanel findFallback(UIDashboardPanel removed, UIDashboardPanel preferred)
+    {
+        if (preferred != null && preferred != removed && this.panels.contains(preferred))
+        {
+            return preferred;
+        }
+
+        for (UIDashboardPanel panel : this.panels)
+        {
+            if (panel != removed)
+            {
+                return panel;
+            }
+        }
+
+        return null;
     }
 
     protected void renderBackground(UIContext context)

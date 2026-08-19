@@ -4,7 +4,14 @@ import com.mojang.blaze3d.platform.InputConstants;
 import mchorse.bbs_mod.api.plugin.BBSPlugin;
 import mchorse.bbs_mod.api.plugin.BBSPluginContext;
 import mchorse.bbs_mod.api.plugin.client.BBSPluginClientContext;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelContent;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec;
 import mchorse.bbs_mod.api.registry.BBSRegistrationResult;
+import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
+import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -60,6 +67,29 @@ public final class ClientPlugin implements BBSPlugin
 
         BBSRegistrationResult formRenderer = client.forms().registerRenderer(SmokeForm.class, SmokeFormRenderer::new);
         require(formRenderer, "form renderer");
+
+        BBSRegistrationResult dashboardPanel = client.dashboardPanels().register(
+            BBSDashboardPanelSpec.builder("smoke")
+                .title(IKey.raw("Smoke fixture 1.0"))
+                .icon(Icons.GEAR)
+                .build(),
+            ClientPlugin::createDashboardContent
+        );
+        require(dashboardPanel, "Dashboard panel");
+    }
+
+    private static BBSDashboardPanelContent createDashboardContent()
+    {
+        UIText status = new UIText("The 1.0 panel button has not been pressed.").padding(0, 0);
+        UIButton button = new UIButton(IKey.raw("Activate 1.0 panel"), (b) ->
+            status.text("Button pressed in smoke fixture 1.0."));
+
+        return BBSDashboardPanelContent.of(UI.column(10, 16,
+            new UIText("FSR Dashboard API smoke fixture 1.0").padding(0, 0),
+            new UIText("This content was created through BBSPluginClientContext.dashboardPanels().").padding(0, 0),
+            status,
+            button
+        ));
     }
 
     private static void require(BBSRegistrationResult result, String what)
