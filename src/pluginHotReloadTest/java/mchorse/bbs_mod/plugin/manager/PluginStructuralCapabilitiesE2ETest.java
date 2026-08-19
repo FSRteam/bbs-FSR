@@ -44,8 +44,8 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
 /**
- * Real fixture-jar, end-to-end coverage for the six FSR structural capabilities
- * (forms/clips/particles/key_mappings/entity_renderer/block_entity_renderer)
+ * Real fixture-jar, end-to-end coverage for the seven FSR structural capabilities
+ * (forms/clips/particles/key_mappings/entity_renderer/block_entity_renderer/dashboard_panels)
  * across install, override and delete against the real {@link BBSPluginManager}
  * and the real host registries in {@link BBSMod}.
  *
@@ -87,7 +87,7 @@ public final class PluginStructuralCapabilitiesE2ETest
             await(() -> Files.isDirectory(directory), 3_000L, "plugin directory was not created");
             Path artifact = directory.resolve(PLUGIN_ID + ".jar");
 
-            /* Acceptance #1: a fixture declaring all six structural capabilities is
+            /* Acceptance #1: a fixture declaring all seven structural capabilities is
              * dropped in while the runtime is already active and reaches ACTIVE with
              * every registration face committed. */
             install(buildArtifact(root, "1.0.0", "v1"), artifact);
@@ -188,7 +188,7 @@ public final class PluginStructuralCapabilitiesE2ETest
             check(!(recoveredClip instanceof MissingClip), "reinstalling the plugin did not lazily recover the missing clip");
             check(recoveredClip.tick.get() == 37, "lazy clip recovery lost the original keyframe data");
 
-            System.out.println("PluginStructuralCapabilitiesE2ETest: forms/clips/particles/client-facade lifecycle passed");
+            System.out.println("PluginStructuralCapabilitiesE2ETest: forms/clips/particles/dashboard-panels/client-facade lifecycle passed");
         }
         finally
         {
@@ -300,7 +300,7 @@ public final class PluginStructuralCapabilitiesE2ETest
         String manifest = "{\"schema\":1,\"kind\":\"code\",\"id\":\"" + PLUGIN_ID + "\",\"version\":\""
             + version + "\",\"commonEntrypoint\":\"structuralfixture.CommonPlugin\","
             + "\"clientEntrypoint\":\"structuralfixture.ClientPlugin\",\"api\":\"[1.0,2.0)\",\"side\":\"common\","
-            + "\"capabilities\":[\"forms\",\"clips\",\"particles\",\"key_mappings\",\"entity_renderer\",\"block_entity_renderer\"],"
+            + "\"capabilities\":[\"forms\",\"clips\",\"particles\",\"key_mappings\",\"entity_renderer\",\"block_entity_renderer\",\"dashboard_panels\"],"
             + "\"dependencies\":[],\"reload\":\"hot\"}";
 
         return jar(root.resolve(PLUGIN_ID + "-" + version + "-" + System.nanoTime() + ".jar"), manifest, classes);
@@ -519,7 +519,7 @@ public final class PluginStructuralCapabilitiesE2ETest
                 BBSPluginClientContext client = context.extension(BBSPluginClientContext.class);
 
                 if (client == null || client.keyMappings() == null || client.renderers() == null
-                    || client.forms() == null || client.clips() == null)
+                    || client.forms() == null || client.clips() == null || client.dashboardPanels() == null)
                 {
                     throw new IllegalStateException("client structural context facade was not fully wired");
                 }

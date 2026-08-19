@@ -14,9 +14,15 @@ import mchorse.bbs_mod.api.BBSApiVersion;
 import mchorse.bbs_mod.api.addon.BBSAddon;
 import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
 import mchorse.bbs_mod.api.client.BBSClientApi;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelContent;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelRegistry;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec;
 import mchorse.bbs_mod.api.network.BBSAddonClientNetworkReceiver;
 import mchorse.bbs_mod.api.network.BBSAddonServerNetworkReceiver;
 import mchorse.bbs_mod.client.compat.ClientApiCompat;
+import mchorse.bbs_mod.api.plugin.BBSPluginCapability;
+import mchorse.bbs_mod.api.plugin.client.BBSPluginClientContext;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.events.BBSAddonMod;
@@ -139,7 +145,14 @@ public final class LegacyPublicDescriptorCompatibilityTest
         requireSam(ClientApiCompat.DisconnectHandler.class, "onDisconnect", void.class, Minecraft.class);
         requireSam(ClientApiCompat.HudRenderHandler.class, "render", void.class, GuiGraphics.class, float.class);
         requireSam(ClientApiCompat.WorldRenderHandler.class, "render", void.class, BBSWorldRenderContext.class);
+        requireSam(BBSDashboardPanelContent.class, "root", mchorse.bbs_mod.ui.framework.elements.UIElement.class);
+        requireSam(BBSDashboardPanelFactory.class, "create", BBSDashboardPanelContent.class);
+        requireSam(BBSDashboardPanelRegistry.class, "register", mchorse.bbs_mod.api.registry.BBSRegistrationResult.class,
+            BBSDashboardPanelSpec.class, BBSDashboardPanelFactory.class);
         requirePublicStatic(BBSClientApi.class, "registerKeyBinding", KeyMapping.class, KeyMapping.class);
+        requirePublicStatic(BBSClientApi.class, "registerDashboardPanel", mchorse.bbs_mod.api.registry.BBSRegistrationResult.class,
+            BBSAddonDescriptor.class, BBSDashboardPanelSpec.class, BBSDashboardPanelFactory.class);
+        requirePublic(BBSPluginClientContext.class, "dashboardPanels", BBSDashboardPanelRegistry.class);
         requirePublicStatic(BBSClientApi.class, "registerEntityRenderer", void.class,
             EntityType.class, EntityRendererProvider.class);
         requirePublicStatic(BBSClientApi.class, "registerBlockEntityRenderer", void.class,
@@ -149,6 +162,8 @@ public final class LegacyPublicDescriptorCompatibilityTest
             EntityType.class, EntityRendererProvider.class);
         requirePublicStatic(ClientApiCompat.class, "registerBlockEntityRenderer", void.class,
             BlockEntityType.class, BlockEntityRendererProvider.class);
+        check(BBSPluginCapability.NATIVE_LIBRARY.ordinal() == 19, "existing plugin capability ordinals changed");
+        check(BBSPluginCapability.DASHBOARD_PANELS.ordinal() == 20, "dashboard capability was not appended");
     }
 
     private static void clientRuntimeDescriptors()
