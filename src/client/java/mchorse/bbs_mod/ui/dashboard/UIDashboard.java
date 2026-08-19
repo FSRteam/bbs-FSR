@@ -9,6 +9,8 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.OrbitCamera;
 import mchorse.bbs_mod.camera.controller.OrbitCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.dashboard.BBSDashboardPanelHostRegistry;
+import mchorse.bbs_mod.client.dashboard.DashboardPanelContribution;
 import mchorse.bbs_mod.events.register.RegisterDashboardPanelsEvent;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -57,6 +59,8 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class UIDashboard extends UIBaseMenu
 {
@@ -75,6 +79,7 @@ public class UIDashboard extends UIBaseMenu
     private CameraType lastPerspective = CameraType.FIRST_PERSON;
 
     private UIChalkboard chalkboard;
+    private final Map<String, UIExtensionDashboardPanel> extensionPanels = new LinkedHashMap<>();
 
     public UIDashboard()
     {
@@ -90,6 +95,7 @@ public class UIDashboard extends UIBaseMenu
         });
         this.panels.full(this.viewport);
         this.registerPanels();
+        BBSDashboardPanelHostRegistry.installAll(this);
 
         BBSMod.events.post(new RegisterDashboardPanelsEvent(this));
 
@@ -334,6 +340,36 @@ public class UIDashboard extends UIBaseMenu
     public void setPanel(UIDashboardPanel panel)
     {
         this.panels.setPanel(panel);
+    }
+
+    public void installDashboardPanel(DashboardPanelContribution contribution) throws Exception
+    {
+        UIExtensionDashboardPanel replacement = new UIExtensionDashboardPanel(this, contribution);
+        UIExtensionDashboardPanel current = this.extensionPanels.get(contribution.fullId());
+
+        if (current == null)
+        {
+            this.panels.registerPanel(replacement, contribution.spec().title(), contribution.spec().icon());
+        }
+        else
+        {
+            this.panels.replacePanel(current, replacement, contribution.spec().title(), contribution.spec().icon());
+        }
+
+        this.extensionPanels.put(contribution.fullId(), replacement);
+    }
+
+    public void removeDashboardPanel(DashboardPanelContribution contribution)
+    {
+        UIExtensionDashboardPanel panel = this.extensionPanels.get(contribution.fullId());
+
+        if (panel == null || panel.contribution() != contribution)
+        {
+            return;
+        }
+
+        this.extensionPanels.remove(contribution.fullId());
+        this.panels.removePanel(panel, this.getPanel(UIFilmPanel.class));
     }
 
     @Override

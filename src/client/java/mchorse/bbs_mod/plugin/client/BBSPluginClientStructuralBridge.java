@@ -3,6 +3,10 @@ package mchorse.bbs_mod.plugin.client;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.api.plugin.BBSPluginDescriptor;
 import mchorse.bbs_mod.api.plugin.BBSPluginCapability;
+import mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSink;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelRegistry;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec;
 import mchorse.bbs_mod.api.plugin.client.BBSPluginClientContext;
 import mchorse.bbs_mod.api.plugin.client.BBSPluginClipClientRegistry;
 import mchorse.bbs_mod.api.plugin.client.BBSPluginFormClientRegistry;
@@ -20,6 +24,8 @@ import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.plugin.manager.PluginStructuralRegistrationWindow;
 import mchorse.bbs_mod.plugin.runtime.PluginContributionLedger;
 import mchorse.bbs_mod.plugin.runtime.PluginOwner;
+import mchorse.bbs_mod.client.dashboard.BBSDashboardPanelHostRegistry;
+import mchorse.bbs_mod.client.dashboard.DashboardPanelContribution;
 import mchorse.bbs_mod.ui.film.clips.UIClip;
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
@@ -59,6 +65,7 @@ public final class BBSPluginClientStructuralBridge
     private static final Map<Object, PluginOwner> ENTITY_RENDERER_OWNERS = new ConcurrentHashMap<>();
     private static final Map<Object, PluginOwner> BLOCK_RENDERER_OWNERS = new ConcurrentHashMap<>();
     private static final AtomicBoolean BLOCKING_CLIENT_SHUTDOWN = new AtomicBoolean();
+    private static final BBSPluginDiagnosticSink NOOP_DIAGNOSTICS = (severity, code, message) -> {};
 
     private BBSPluginClientStructuralBridge() {}
 
@@ -69,12 +76,7 @@ public final class BBSPluginClientStructuralBridge
 
         if (minecraft == null || minecraft.isSameThread() || blockingShutdown)
         {
-            operation.run();
-
-            if (!blockingShutdown)
-            {
-                refreshProjection();
-            }
+            runStructuralOperation(operation, !blockingShutdown);
 
             return;
         }
@@ -84,8 +86,7 @@ public final class BBSPluginClientStructuralBridge
         {
             try
             {
-                operation.run();
-                refreshProjection();
+                runStructuralOperation(operation, true);
                 completion.complete(null);
             }
             catch (Throwable error)
@@ -183,12 +184,43 @@ public final class BBSPluginClientStructuralBridge
         PluginStructuralRegistrationWindow window
     )
     {
+        return createExtension(extensionType, descriptor, owner, ledger, window, NOOP_DIAGNOSTICS);
+    }
+
+    public static Object createExtension(
+        Class<?> extensionType,
+        BBSPluginDescriptor descriptor,
+        PluginOwner owner,
+        PluginContributionLedger ledger,
+        PluginStructuralRegistrationWindow window,
+        BBSPluginDiagnosticSink diagnostics
+    )
+    {
         if (extensionType != BBSPluginClientContext.class)
         {
             return null;
         }
 
-        return new ClientContext(descriptor, owner, ledger, window);
+        return new ClientContext(descriptor, owner, ledger, window, diagnostics);
+    }
+
+    private static void runStructuralOperation(Runnable operation, boolean refresh)
+    {
+        BBSDashboardPanelHostRegistry.beginProjectionBatch();
+
+        try
+        {
+            operation.run();
+        }
+        finally
+        {
+            BBSDashboardPanelHostRegistry.endProjectionBatch();
+        }
+
+        if (refresh)
+        {
+            refreshProjection();
+        }
     }
 
     private static void refreshProjection()
@@ -211,22 +243,26 @@ public final class BBSPluginClientStructuralBridge
         private final PluginOwner owner;
         private final PluginContributionLedger ledger;
         private final PluginStructuralRegistrationWindow window;
+        private final BBSPluginDiagnosticSink diagnostics;
         private final BBSPluginKeyMappingRegistry keyMappings = this::registerKeyMapping;
         private final BBSPluginRendererRegistry renderers = new Renderers();
         private final BBSPluginFormClientRegistry forms = new Forms();
         private final BBSPluginClipClientRegistry clips = new Clips();
+        private final BBSDashboardPanelRegistry dashboardPanels = this::registerDashboardPanel;
 
         private ClientContext(
             BBSPluginDescriptor descriptor,
             PluginOwner owner,
             PluginContributionLedger ledger,
-            PluginStructuralRegistrationWindow window
+            PluginStructuralRegistrationWindow window,
+            BBSPluginDiagnosticSink diagnostics
         )
         {
             this.descriptor = Objects.requireNonNull(descriptor, "descriptor");
             this.owner = Objects.requireNonNull(owner, "owner");
             this.ledger = Objects.requireNonNull(ledger, "ledger");
             this.window = Objects.requireNonNull(window, "window");
+            this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         }
 
         @Override
@@ -251,6 +287,84 @@ public final class BBSPluginClientStructuralBridge
         public BBSPluginClipClientRegistry clips()
         {
             return this.clips;
+        }
+
+        @Override
+        public BBSDashboardPanelRegistry dashboardPanels()
+        {
+            return this.dashboardPanels;
+        }
+
+        private BBSRegistrationResult registerDashboardPanel(
+            BBSDashboardPanelSpec spec,
+            BBSDashboardPanelFactory factory
+        )
+        {
+            this.requireCapability(BBSPluginCapability.DASHBOARD_PANELS, "Dashboard panels");
+            String localId = spec == null ? null : spec.id();
+            String fullId = this.owner.pluginId() + ":" + (localId == null || localId.isBlank() ? "<blank>" : localId);
+
+            if (spec == null)
+            {
+                return BBSRegistrationResult.rejected(fullId, "Dashboard panel spec is null");
+            }
+            if (!BBSDashboardPanelSpec.isValidId(localId))
+            {
+                return BBSRegistrationResult.rejected(fullId, "Dashboard panel id is invalid");
+            }
+            if (spec.title() == null)
+            {
+                return BBSRegistrationResult.rejected(fullId, "Dashboard panel title is null");
+            }
+            if (spec.icon() == null)
+            {
+                return BBSRegistrationResult.rejected(fullId, "Dashboard panel icon is null");
+            }
+            if (factory == null)
+            {
+                return BBSRegistrationResult.rejected(fullId, "Dashboard panel factory is null");
+            }
+
+            String structuralKey = "dashboard-panel:" + fullId;
+            boolean replace = this.window.canReplace(structuralKey);
+            DashboardPanelContribution contribution = new DashboardPanelContribution(
+                this.owner.pluginId(),
+                this.owner,
+                this.owner.toString(),
+                spec,
+                factory,
+                (failed, phase, error) -> this.diagnostics.error(
+                    "DASHBOARD_PANEL_CALLBACK_FAILED",
+                    "Dashboard panel '" + failed.fullId() + "' failed during " + phase + " ("
+                        + error.getClass().getName() + ": " + String.valueOf(error.getMessage()) + ")"
+                ),
+                () -> {}
+            );
+            BBSRegistrationResult preflight = BBSDashboardPanelHostRegistry.preflight(contribution, replace);
+
+            if (!preflight.accepted())
+            {
+                return preflight;
+            }
+
+            this.window.stage(
+                structuralKey,
+                PluginStructuralRegistrationWindow.Kind.CLIENT,
+                null,
+                this.ledger,
+                () ->
+                {
+                    BBSRegistrationResult installed = BBSDashboardPanelHostRegistry.install(contribution, replace);
+
+                    if (!installed.accepted())
+                    {
+                        throw new IllegalStateException("Dashboard panel registration failed: " + installed);
+                    }
+                },
+                () -> BBSDashboardPanelHostRegistry.remove(contribution)
+            );
+
+            return BBSRegistrationResult.accepted(fullId);
         }
 
         private BBSRegistrationResult registerKeyMapping(KeyMapping mapping)
