@@ -20,10 +20,16 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path LABEL_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/LabelFormRenderer.java");
     private static final Path MODEL_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/ModelFormRenderer.java");
     private static final Path EXTRUDED_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/ExtrudedFormRenderer.java");
+    private static final Path BILLBOARD_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/BillboardFormRenderer.java");
+    private static final Path TRANSLUCENT_QUEUE = Path.of("src/client/java/mchorse/bbs_mod/forms/FormTranslucentQueue.java");
+    private static final Path VERTEX_CONSUMERS = Path.of("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
+    private static final Path MODEL_INSTANCE = Path.of("src/client/java/mchorse/bbs_mod/cubic/ModelInstance.java");
+    private static final Path KEYFRAME_EDITOR = Path.of("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/UIKeyframeEditor.java");
+    private static final Path NESTED_EDIT = Path.of("src/client/java/mchorse/bbs_mod/ui/forms/UINestedEdit.java");
     private static final Path RENDER_LAYER_MIXIN = Path.of("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
     private static final Path CLIENT_MIXINS = Path.of("src/client/resources/bbs.client.mixins.json");
     private static final Path ICONS = Path.of("src/client/resources/assets/bbs/assets/textures/icons.png");
-    private static final String ICONS_SHA256 = "40619773701c732f991faa4cd6a47ac3a58cff0705c2dec2553a69422aa40109";
+    private static final String ICONS_SHA256 = "c07f2b7db84e1e0afb7623126ef88744b6d0ec804cee78f6ff4ebbfb9b9bfe3b";
 
     private static final String[] MIGRATED_LANGUAGE_KEYS = {
         "bbs.config.editor.keep_frame_on_exit",
@@ -137,6 +143,7 @@ public final class RenderRuntimeMigrationSourceTest
 
         checkFormFrameCacheWiring(root);
         checkTranslucentRenderWiring(root);
+        checkSmallUiFixes(root);
         checkResources(root);
         checkSliderWiring(root);
     }
@@ -167,6 +174,11 @@ public final class RenderRuntimeMigrationSourceTest
         String label = compact(Files.readString(root.resolve(LABEL_RENDERER)));
         String model = compact(Files.readString(root.resolve(MODEL_RENDERER)));
         String extruded = compact(Files.readString(root.resolve(EXTRUDED_RENDERER)));
+        String billboard = compact(Files.readString(root.resolve(BILLBOARD_RENDERER)));
+        String framebuffer = compact(Files.readString(root.resolve(FRAMEBUFFER_RENDERER)));
+        String queue = compact(Files.readString(root.resolve(TRANSLUCENT_QUEUE)));
+        String consumers = compact(Files.readString(root.resolve(VERTEX_CONSUMERS)));
+        String modelInstance = compact(Files.readString(root.resolve(MODEL_INSTANCE)));
         String mixin = compact(Files.readString(root.resolve(RENDER_LAYER_MIXIN)));
         String mixins = compact(Files.readString(root.resolve(CLIENT_MIXINS)));
 
@@ -189,6 +201,20 @@ public final class RenderRuntimeMigrationSourceTest
                 && extruded.contains("queueWasActive = FormTranslucentQueue.suspend();")
                 && extruded.contains("FormTranslucentQueue.restore(queueWasActive);"),
             "extruded forms no longer use the Iris immediate/cutout fallback");
+        check(queue.contains("public RenderLayerCommand( RenderType layer, VertexBuffer buffer, Matrix4f modelView, Vector3f origin, Runnable prepare )")
+                && queue.contains("super(origin, true, true);")
+                && consumers.contains("new Vector3f(origin), captureLayerPreparation(layer)")
+                && !consumers.contains("textLayer,"),
+            "deferred vanilla render layers stopped writing depth unconditionally, so item and block forms pile their faces");
+        check(queue.contains("this(vao, BBSShaders::getModel, PASS_TRANSLUCENT, true, texture, modelView, normalMat,")
+                && queue.contains("this(vao, BBSShaders::getModel, PASS_TRANSLUCENT, true, armatureSnapshot, uploadCount,")
+                && modelInstance.contains("VertexBufferCommand(buffer, () -> shader, true, texture, modelView, normalMat, origin, this.isCulling(), null, null)"),
+            "split-pass solid geometry stopped writing depth in the deferred replay, so fully translucent textures self-blend");
+        check(queue.contains("this(buffer, shader, false, texture, modelView, normalMat, origin, cull, preDraw, postDraw);")
+                && billboard.contains("VertexBufferCommand(buffer, () -> capturedShader, texture,")
+                && framebuffer.contains("VertexBufferCommand(buffer, () -> capturedShader, texture,")
+                && label.contains("VertexBufferCommand(buffer, GameRenderer::getPositionColorShader, null,"),
+            "flat billboard/framebuffer/label forms no longer use the depth-write-free deferred replay");
     }
 
     private static void checkResources(Path root) throws IOException, NoSuchAlgorithmException
@@ -210,6 +236,25 @@ public final class RenderRuntimeMigrationSourceTest
 
         check(ICONS_SHA256.equals(HexFormat.of().formatHex(digest)),
             "the migrated transform-space icon atlas changed unexpectedly");
+    }
+
+    private static void checkSmallUiFixes(Path root) throws IOException
+    {
+        String keyframeEditor = compact(Files.readString(root.resolve(KEYFRAME_EDITOR)));
+        String nestedEdit = compact(Files.readString(root.resolve(NESTED_EDIT)));
+        String replacement = section(
+            keyframeEditor,
+            "private void replaceEditor(",
+            "public void setTimelineVisible(boolean visible)"
+        );
+        int mounted = replacement.indexOf("this.add(replacement);");
+        int targetResize = replacement.indexOf("this.target.resize();");
+        int editorResize = replacement.indexOf("this.resize();");
+
+        check(mounted >= 0 && targetResize > mounted && editorResize > targetResize,
+            "keyframe replacement no longer resizes its target before the editor recursively resizes the mounted panel");
+        check(nestedEdit.contains("this.h(UIConstants.CONTROL_HEIGHT).row(UIConstants.MARGIN);"),
+            "nested form pick/edit buttons lost their standard spacing");
     }
 
     private static void checkSliderWiring(Path root) throws IOException

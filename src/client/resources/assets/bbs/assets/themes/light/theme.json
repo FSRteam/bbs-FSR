@@ -7,11 +7,11 @@
     "variant": "light",
     "colors": {
         "surface": {
-            "chrome": "#E6E9EF",
-            "base": "#F1F4F8",
-            "raised": "#F8FAFD",
-            "deep": "#DEE4ED",
-            "divider": "#C2CBD8"
+            "chrome": "#EBEBEB",
+            "base": "#F3F3F3",
+            "raised": "#FAFAFA",
+            "deep": "#E4E4E4",
+            "divider": "#D9D9D9"
         }
     },
     "style": {

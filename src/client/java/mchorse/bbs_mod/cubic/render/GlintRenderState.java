@@ -66,10 +66,17 @@ public class GlintRenderState
                  * canonical tint/opacity input; shader packs may additionally consume
                  * the NEW_ENTITY color carried by BBS' compatibility geometry. */
                 RenderSystem.setShaderColor(color.r, color.g, color.b, color.a);
+                ModelVAORenderer.render(shader, vao, transformedModelView, transformedNormal,
+                    color.r, color.g, color.b, color.a, light, overlay);
             }
-
-            ModelVAORenderer.render(shader, vao, transformedModelView, transformedNormal,
-                color.r, color.g, color.b, color.a, light, overlay);
+            else
+            {
+                /* energySwirl blends additively and its shader never folds the vertex alpha
+                 * into RGB, so a plain alpha would be dropped. Premultiply the opacity into
+                 * RGB for a strength control that actually scales the additive output. */
+                ModelVAORenderer.render(shader, vao, transformedModelView, transformedNormal,
+                    color.r * color.a, color.g * color.a, color.b * color.a, 1F, light, overlay);
+            }
         }
         finally
         {

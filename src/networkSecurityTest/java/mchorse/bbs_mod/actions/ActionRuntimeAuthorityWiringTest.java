@@ -1042,13 +1042,14 @@ public final class ActionRuntimeAuthorityWiringTest
 
         assertOrdered(applyState,
             "!this.firstPersonLease.acquire()",
-            "this.cachedInventory.clear()",
+            "this.cachedHotbar.clear()",
             "this.cachedSelectedSlot = this.serverPlayer.getInventory().selected",
             "this.cachedFoodData = new CompoundTag()",
             "this.serverPlayer.getFoodData().addAdditionalSaveData(this.cachedFoodData)",
             "this.cacheTotalExperience = this.serverPlayer.totalExperience",
             "this.firstPersonStateApplied = true",
-            "FirstPersonInventoryProjection.apply(this.serverPlayer, this.film.inventory.getStacks())");
+            "this.clearFirstPersonEquipment()",
+            "this.applyFirstPersonFrame(fpReplay, this.tick)");
         check(player.contains("this.canApplyFirstPersonState() && this.firstPersonLease.isHeld()"),
             "a first-person replay can bind the real player without owning its lease");
         String constructor = section(player, "ActionPlayer(", "static boolean hasRequiredDeliveryTarget");
@@ -1081,7 +1082,7 @@ public final class ActionRuntimeAuthorityWiringTest
             "!this.firstPersonStateApplied",
             "!this.firstPersonLease.isHeld()",
             "FilmPlaybackPolicy.findEnabledFirstPersonReplay(this.film) != fpReplay",
-            "FirstPersonInventoryProjection.apply(this.serverPlayer, this.film.inventory.getStacks())",
+            "this.applyFirstPersonFrame(fpReplay, this.tick)",
             "ServerNetwork.sendMorphToTracked(this.serverPlayer, fpReplay.form.get())",
             "applyFilmPlayerSettingsTo(");
         check(!refreshState.contains("cachedInventory")
@@ -1121,7 +1122,7 @@ public final class ActionRuntimeAuthorityWiringTest
             "this.serverPlayer.setExperienceLevels(this.cacheXpLevel)",
             "ActionTeardown.throwIfFailed(failure)",
             "this.firstPersonStateApplied = false",
-            "this.cachedInventory.clear()",
+            "this.cachedHotbar.clear()",
             "this.cachedFoodData = null",
             "this.firstPersonLease.release()");
         check(selectedSlotRestore.contains("failure = ActionTeardown.append(failure, e)"),
@@ -1219,7 +1220,7 @@ public final class ActionRuntimeAuthorityWiringTest
             "this.firstPersonLease.transfer(original, replacement)",
             "this.serverPlayer = replacement");
         assertOrdered(abandon,
-            "this.cachedInventory.clear()",
+            "this.cachedHotbar.clear()",
             "this.cachedForm = null",
             "this.cachedFoodData = null",
             "this.firstPersonLease.release()");

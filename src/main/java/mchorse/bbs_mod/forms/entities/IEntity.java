@@ -30,6 +30,17 @@ public interface IEntity
 
     public void setEquipmentStack(EquipmentSlot slot, ItemStack stack);
 
+    /** Read/write a hotbar cell. Entities without a native hotbar expose slot 0 as main hand. */
+    public ItemStack getHotbarStack(int slot);
+
+    public void setHotbarStack(int slot, ItemStack stack);
+
+    /** Players derive main hand from their selected hotbar cell; other entities have a separate hand slot. */
+    public default boolean isMainHandInHotbar()
+    {
+        return false;
+    }
+
     public int getSelectedSlot();
 
     public boolean isSneaking();

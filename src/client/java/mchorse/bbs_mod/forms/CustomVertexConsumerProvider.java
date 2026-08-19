@@ -28,6 +28,9 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
     public static boolean drawLayer(RenderType layer, MeshData meshData)
     {
         Vector3f origin = FormTranslucentQueue.getSortOrigin();
+
+        /* Text layers defer only inside a recorded group (labels), where the group preserves
+         * the text-over-background order. */
         boolean textLayer = FormTranslucentQueue.isGroupOpen()
             && layer.format() == DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP;
 
@@ -45,7 +48,6 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
             buffer,
             new Matrix4f(RenderSystem.getModelViewMatrix()),
             new Vector3f(origin),
-            textLayer,
             captureLayerPreparation(layer)
         ));
         return true;

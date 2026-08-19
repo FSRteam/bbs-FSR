@@ -90,7 +90,6 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
     {
         return "";
     }
-
     protected UIBonePicker.Viewport viewportBonePicking()
     {
         return new UIBonePicker.Viewport()

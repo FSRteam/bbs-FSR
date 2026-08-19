@@ -687,8 +687,10 @@ public class ModelInstance implements IModelInstance
         VertexBuffer.unbind();
 
         Vector3f origin = modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f()));
+        /* Depth stays on: this is solid geometry, so its semi-transparent texels must occlude
+         * the ones behind them inside the same model — see the split constructors' note. */
         FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
-            texture, modelView, normalMat, origin, this.isCulling(), null, null));
+            true, texture, modelView, normalMat, origin, this.isCulling(), null, null));
     }
 
     /**

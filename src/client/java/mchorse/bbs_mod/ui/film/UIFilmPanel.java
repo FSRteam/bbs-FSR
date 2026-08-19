@@ -922,7 +922,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         menu.action(Icons.GEAR, UIKeys.FILM_PLAYER_SETTINGS, () ->
         {
-            UIOverlay.addOverlay(this.getContext(), new UIFilmPlayerSettingsOverlayPanel(this.getData()), 280, 0.4F);
+            UIOverlay.addOverlay(this.getContext(), new UIFilmPlayerSettingsOverlayPanel(this.getData(), this.getCursor()), 280, 0.4F);
         });
 
         menu.action(Icons.HELP, L10n.lang("bbs.ui.film.details.button"), () ->
@@ -1571,6 +1571,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         int replayId = recorder.getRecordingReplayId();
         Replay rp = CollectionUtils.getSafe(film.replays.getList(), replayId);
 
+        recorder.keyframes.compressItemChannels();
+
         if (rp != null)
         {
             BaseValue.edit(film, (f) ->
@@ -1592,7 +1594,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                     }
                 }
 
-                f.inventory.fromData(recorder.inventory.toData());
                 f.hp.set(recorder.hp);
                 f.hunger.set(recorder.hunger);
                 f.xpLevel.set(recorder.xpLevel);
@@ -1615,6 +1616,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             for (Recorder.RecordedMob mob : recorder.mobs)
             {
                 Replay replay = f.replays.addReplay();
+
+                mob.keyframes.compressItemChannels();
 
                 replay.category.set("");
                 replay.form.set(mob.form);

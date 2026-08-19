@@ -169,7 +169,7 @@ public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
     {
         if (a instanceof ItemStack itemA && b instanceof ItemStack itemB)
         {
-            return ItemStack.isSameItemSameComponents(itemA, itemB);
+            return ItemStack.matches(itemA, itemB);
         }
 
         return false;

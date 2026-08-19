@@ -196,6 +196,9 @@ public class BBSSettings {
 
 	public static ValueFloat backgroundBrightness;
 	public static ValueBoolean interfaceShadows;
+	public static ValueBoolean interfaceHighlights;
+	public static ValueFloat overlayBackgroundOpacity;
+	public static ValueBoolean overlayGradientBorder;
 
 	public static ValueBoolean shaderCurvesEnabled;
 
@@ -217,6 +220,7 @@ public class BBSSettings {
 	private static final float IDENTITY_BRIGHTNESS = 1F;
 	private static final float BRIGHTNESS_EPSILON = 0.001F;
 	private static final int DEFAULT_PRIMARY_COLOR = 0xff3242;
+	private static final float DEFAULT_OVERLAY_BACKGROUND_OPACITY = 0.5F;
 	private static final String DEFAULT_MOTION_EASING = "sine_out";
 	private static final String[] LEGACY_MOTION_EASINGS = {
 		"sine_out", "sine_out", "linear", "sine_out", "exp_out"
@@ -489,6 +493,17 @@ public class BBSSettings {
 		return Colors.setA(primaryColorBase(), 0F);
 	}
 
+	/** Dimming behind an overlay panel; zero keeps the underlying UI fully visible. */
+	public static int overlayBackground() {
+		float opacity = overlayBackgroundOpacity == null ? DEFAULT_OVERLAY_BACKGROUND_OPACITY : overlayBackgroundOpacity.get();
+
+		return Colors.a(MathUtils.clamp(opacity, 0F, 1F));
+	}
+
+	public static boolean hasOverlayGradientBorder() {
+		return overlayGradientBorder == null || overlayGradientBorder.get();
+	}
+
 	public static int getDefaultDuration() {
 		return duration == null ? 30 : duration.get();
 	}
@@ -688,8 +703,8 @@ public class BBSSettings {
 		builder.register(language = new ValueLanguage("language"));
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
-		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F).slider();
-		fov = builder.getFloat("fov", 40, 0, 180).slider();
+		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F).slider(0.25D);
+		fov = builder.getFloat("fov", 40, 0, 180);
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
 		freezeModels = builder.getBoolean("freeze_models", false);
@@ -712,6 +727,9 @@ public class BBSSettings {
 		builder.category("personalization", Icons.COLOR);
 		backgroundBrightness = builder.getFloat("background_brightness", DEFAULT_BACKGROUND_BRIGHTNESS, MIN_BACKGROUND_BRIGHTNESS, MAX_BACKGROUND_BRIGHTNESS).slider();
 		interfaceShadows = builder.getBoolean("interface_shadows", true);
+		interfaceHighlights = builder.getBoolean("interface_highlights", false);
+		overlayBackgroundOpacity = builder.getFloat("overlay_background_opacity", DEFAULT_OVERLAY_BACKGROUND_OPACITY, 0F, 1F).slider();
+		overlayGradientBorder = builder.getBoolean("overlay_gradient_border", true);
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
 		stencilHighlightColor = builder.getInt("stencil_highlight_color", 0x2EFFFFFF).colorAlpha();
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();

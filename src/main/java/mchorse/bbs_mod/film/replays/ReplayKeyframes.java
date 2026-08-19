@@ -1,8 +1,10 @@
 package mchorse.bbs_mod.film.replays;
 
+import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.IInterp;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -32,7 +34,14 @@ public class ReplayKeyframes extends ValueGroup
      * keyframe playback snaps an entity to its exact recorded position. */
     public static final double GRAVITY_PROBE = 0.0784D;
 
-    public static final List<String> CURATED_CHANNELS = Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw", "sneaking", "sprinting", "item_main_hand", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "grounded", "damage", "vX", "vY", "vZ");
+    public static final int HOTBAR_SIZE = 9;
+
+    public static String hotbarChannelId(int slot)
+    {
+        return "item_slot_" + slot;
+    }
+
+    public static final List<String> CURATED_CHANNELS = Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw", "sneaking", "sprinting", "item_slot_0", "item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4", "item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "grounded", "damage", "vX", "vY", "vZ");
 
     public final KeyframeChannel<Double> x = new KeyframeChannel<>("x", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> y = new KeyframeChannel<>("y", KeyframeFactories.DOUBLE);
@@ -66,7 +75,7 @@ public class ReplayKeyframes extends ValueGroup
     public final KeyframeChannel<Double> extra2X = new KeyframeChannel<>("extra2_x", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> extra2Y = new KeyframeChannel<>("extra2_y", KeyframeFactories.DOUBLE);
 
-    public final KeyframeChannel<ItemStack> mainHand = new KeyframeChannel<>("item_main_hand", KeyframeFactories.ITEM_STACK);
+    public final List<KeyframeChannel<ItemStack>> hotbar = new ArrayList<>();
     public final KeyframeChannel<ItemStack> offHand = new KeyframeChannel<>("item_off_hand", KeyframeFactories.ITEM_STACK);
     public final KeyframeChannel<ItemStack> armorHead = new KeyframeChannel<>("item_head", KeyframeFactories.ITEM_STACK);
     public final KeyframeChannel<ItemStack> armorChest = new KeyframeChannel<>("item_chest", KeyframeFactories.ITEM_STACK);
@@ -104,13 +113,145 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.extra2X);
         this.add(this.extra2Y);
 
-        this.add(this.mainHand);
+        for (int i = 0; i < HOTBAR_SIZE; i++)
+        {
+            KeyframeChannel<ItemStack> slot = new KeyframeChannel<>(hotbarChannelId(i), KeyframeFactories.ITEM_STACK);
+
+            this.hotbar.add(slot);
+            this.add(slot);
+        }
+
         this.add(this.offHand);
         this.add(this.armorHead);
         this.add(this.armorChest);
         this.add(this.armorLegs);
         this.add(this.armorFeet);
         this.add(this.selectedSlot);
+    }
+
+    /** Equipment channels besides the nine hotbar slots. */
+    public static final EquipmentSlot[] DRESS_SLOTS = {
+        EquipmentSlot.OFFHAND,
+        EquipmentSlot.HEAD,
+        EquipmentSlot.CHEST,
+        EquipmentSlot.LEGS,
+        EquipmentSlot.FEET
+    };
+
+    public KeyframeChannel<ItemStack> getEquipmentChannel(EquipmentSlot slot)
+    {
+        return switch (slot)
+        {
+            case OFFHAND -> this.offHand;
+            case HEAD -> this.armorHead;
+            case CHEST -> this.armorChest;
+            case LEGS -> this.armorLegs;
+            case FEET -> this.armorFeet;
+            default -> null;
+        };
+    }
+
+    public int getSelectedSlot(float tick)
+    {
+        return MathUtils.clamp(this.selectedSlot.interpolate(tick), 0, HOTBAR_SIZE - 1);
+    }
+
+    /** Main hand is derived from the currently selected hotbar cell. */
+    public ItemStack getMainHandStack(float tick)
+    {
+        return this.hotbar.get(this.getSelectedSlot(tick)).interpolate(tick, ItemStack.EMPTY);
+    }
+
+    /** Apply only channels which have a key. Empty channels are intentionally silent. */
+    public void applyEquipment(float tick, IEntity entity)
+    {
+        for (int i = 0; i < HOTBAR_SIZE; i++)
+        {
+            KeyframeChannel<ItemStack> channel = this.hotbar.get(i);
+
+            if (!channel.isEmpty())
+            {
+                entity.setHotbarStack(i, channel.interpolate(tick, ItemStack.EMPTY));
+            }
+        }
+
+        if (!entity.isMainHandInHotbar())
+        {
+            entity.setEquipmentStack(EquipmentSlot.MAINHAND, this.getMainHandStack(tick));
+        }
+
+        for (EquipmentSlot slot : DRESS_SLOTS)
+        {
+            KeyframeChannel<ItemStack> channel = this.getEquipmentChannel(slot);
+
+            if (!channel.isEmpty())
+            {
+                entity.setEquipmentStack(slot, channel.interpolate(tick, ItemStack.EMPTY));
+            }
+        }
+    }
+
+    public boolean drivesHotbarSlot(int slot)
+    {
+        return slot >= 0 && slot < HOTBAR_SIZE && !this.hotbar.get(slot).isEmpty();
+    }
+
+    /** Data representation used by the s14 player-settings packet. */
+    public ListType packEquipment(float tick)
+    {
+        ListType list = new ListType();
+
+        for (int i = 0; i < HOTBAR_SIZE; i++)
+        {
+            list.add(KeyframeFactories.ITEM_STACK.toData(this.hotbar.get(i).interpolate(tick, ItemStack.EMPTY)));
+        }
+
+        for (EquipmentSlot slot : DRESS_SLOTS)
+        {
+            list.add(KeyframeFactories.ITEM_STACK.toData(this.getEquipmentChannel(slot).interpolate(tick, ItemStack.EMPTY)));
+        }
+
+        return list;
+    }
+
+    public static void applyPackedEquipment(IEntity entity, ListType list)
+    {
+        if (entity == null || list == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < HOTBAR_SIZE && i < list.size(); i++)
+        {
+            ItemStack stack = KeyframeFactories.ITEM_STACK.fromData(list.get(i));
+            entity.setHotbarStack(i, stack == null ? ItemStack.EMPTY : stack.copy());
+        }
+
+        for (int i = 0; i < DRESS_SLOTS.length; i++)
+        {
+            int index = HOTBAR_SIZE + i;
+
+            if (index >= list.size())
+            {
+                break;
+            }
+
+            ItemStack stack = KeyframeFactories.ITEM_STACK.fromData(list.get(index));
+            entity.setEquipmentStack(DRESS_SLOTS[i], stack == null ? ItemStack.EMPTY : stack.copy());
+        }
+    }
+
+    public void compressItemChannels()
+    {
+        for (KeyframeChannel<ItemStack> channel : this.hotbar)
+        {
+            channel.dropRepeats();
+        }
+
+        for (EquipmentSlot slot : DRESS_SLOTS)
+        {
+            this.getEquipmentChannel(slot).dropRepeats();
+        }
     }
 
     public List<KeyframeChannel<?>> getChannels()
@@ -224,7 +365,11 @@ public class ReplayKeyframes extends ValueGroup
 
         if (empty)
         {
-            this.mainHand.insert(tick, entity.getEquipmentStack(EquipmentSlot.MAINHAND).copy());
+            for (int i = 0; i < HOTBAR_SIZE; i++)
+            {
+                this.hotbar.get(i).insert(tick, entity.getHotbarStack(i).copy());
+            }
+
             this.offHand.insert(tick, entity.getEquipmentStack(EquipmentSlot.OFFHAND).copy());
             this.armorHead.insert(tick, entity.getEquipmentStack(EquipmentSlot.HEAD).copy());
             this.armorChest.insert(tick, entity.getEquipmentStack(EquipmentSlot.CHEST).copy());
@@ -331,12 +476,7 @@ public class ReplayKeyframes extends ValueGroup
             sticks[9] = this.extra2Y.interpolate(tick).floatValue();
         }
 
-        entity.setEquipmentStack(EquipmentSlot.MAINHAND, this.mainHand.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.OFFHAND, this.offHand.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.HEAD, this.armorHead.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.CHEST, this.armorChest.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.LEGS, this.armorLegs.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.FEET, this.armorFeet.interpolate(tick));
+        this.applyEquipment(tick, entity);
     }
 
     /**

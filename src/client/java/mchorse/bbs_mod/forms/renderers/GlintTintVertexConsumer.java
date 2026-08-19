@@ -26,8 +26,19 @@ public class GlintTintVertexConsumer implements VertexConsumer
     public GlintTintVertexConsumer(VertexConsumer target, Color color, int mode)
     {
         this.target = target;
-        this.color = color.getARGBColor();
         this.mode = mode;
+
+        /* energySwirl blends additively and never folds the vertex alpha into RGB, so a
+         * plain alpha would be dropped. Premultiply the opacity into RGB; the alpha byte
+         * is left for the geometric edge mask (255 while any opacity remains, 0 when fully
+         * transparent so the fragment discards). */
+        int argb = color.getARGBColor();
+        int a = argb >>> 24 & 0xFF;
+        int r = (argb >>> 16 & 0xFF) * a / 255;
+        int g = (argb >>> 8 & 0xFF) * a / 255;
+        int b = (argb & 0xFF) * a / 255;
+
+        this.color = (a == 0 ? 0 : 0xFF000000) | r << 16 | g << 8 | b;
         this.viewOrigin = GlintRenderState.getViewOrigin(RenderSystem.getModelViewMatrix());
     }
 

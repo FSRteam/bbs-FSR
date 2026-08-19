@@ -62,6 +62,7 @@ public class UIPoseEditor extends UIElement
     protected IModel model;
     protected Map<String, String> flippedParts;
     private BoneHierarchy hierarchy = BoneHierarchy.EMPTY;
+    /* A procedural panel may own the gizmo without changing the hidden pose-list selection. */
     private String transformBoneOverride = "";
 
     public UIPoseEditor()

@@ -90,6 +90,17 @@ public class UIReplaysEditor extends UIElement {
 
     private static final Map<String, Integer> COLORS = new HashMap<>();
     private static final Map<String, Icon> ICONS = new HashMap<>();
+
+    /* Item channel families: the nine hotbar tracks form a warm gradient, while
+     * armor tracks use a cool top-to-bottom scale. */
+    private static final int HOTBAR_FIRST = Colors.ORANGE;
+    private static final int HOTBAR_LAST = 0xe0245e;
+    private static final int OFF_HAND = 0xff3a74;
+    private static final int ARMOR_HEAD = 0x8fd0ff;
+    private static final int ARMOR_CHEST = 0x6fb4f0;
+    private static final int ARMOR_LEGS = 0x5698db;
+    private static final int ARMOR_FEET = 0x407cc0;
+
     private static String lastFilm = "";
     private static int lastReplay;
 
@@ -145,12 +156,12 @@ public class UIReplaysEditor extends UIElement {
                 L10n.lang("bbs.ui.film.replays.category.pose.tooltip")
         ),
         IK(
-                Icons.LIMB,
+                Icons.IK,
                 L10n.lang("bbs.ui.film.replays.category.ik"),
                 L10n.lang("bbs.ui.film.replays.category.ik.tooltip")
         ),
         PHYSICS(
-                Icons.DROP,
+                Icons.PHYSICS,
                 L10n.lang("bbs.ui.film.replays.category.physics"),
                 L10n.lang("bbs.ui.film.replays.category.physics.tooltip")
         );
@@ -198,12 +209,7 @@ public class UIReplaysEditor extends UIElement {
         COLORS.put("shape_keys", Colors.PINK);
         COLORS.put("actions", Colors.MAGENTA);
 
-        COLORS.put("item_main_hand", Colors.ORANGE);
-        COLORS.put("item_off_hand", Colors.ORANGE);
-        COLORS.put("item_head", Colors.ORANGE);
-        COLORS.put("item_chest", Colors.ORANGE);
-        COLORS.put("item_legs", Colors.ORANGE);
-        COLORS.put("item_feet", Colors.ORANGE);
+        setupItemColors();
 
         COLORS.put("user1", Colors.RED);
         COLORS.put("user2", Colors.ORANGE);
@@ -242,7 +248,13 @@ public class UIReplaysEditor extends UIElement {
         ICONS.put("trigger_l", Icons.TRIGGER);
         ICONS.put("extra1_x", Icons.CURVES);
         ICONS.put("extra2_x", Icons.CURVES);
-        ICONS.put("item_main_hand", Icons.LIMB);
+        /* Mark only the first slot: the icon denotes where the hotbar starts. */
+        ICONS.put(ReplayKeyframes.hotbarChannelId(0), Icons.HOTBAR);
+        ICONS.put("item_off_hand", Icons.LIMB);
+        ICONS.put("item_head", Icons.ARMOR_HELMET);
+        ICONS.put("item_chest", Icons.ARMOR_CHESTPLATE);
+        ICONS.put("item_legs", Icons.ARMOR_LEGGINGS);
+        ICONS.put("item_feet", Icons.ARMOR_BOOTS);
 
         ICONS.put("user1", Icons.PARTICLE);
 
@@ -251,6 +263,27 @@ public class UIReplaysEditor extends UIElement {
         ICONS.put("count", Icons.BUCKET);
 
         ICONS.put("settings", Icons.GEAR);
+        ICONS.put("physics_targets", Icons.PHYSICS);
+    }
+
+    private static void setupItemColors()
+    {
+        int last = ReplayKeyframes.HOTBAR_SIZE - 1;
+
+        for (int i = 0; i <= last; i++)
+        {
+            COLORS.put(
+                    ReplayKeyframes.hotbarChannelId(i),
+                    Colors.lerp(HOTBAR_FIRST, HOTBAR_LAST, i / (float) last) & Colors.RGB
+            );
+        }
+
+        COLORS.put("item_off_hand", OFF_HAND);
+        COLORS.put("item_head", ARMOR_HEAD);
+        COLORS.put("item_chest", ARMOR_CHEST);
+        COLORS.put("item_legs", ARMOR_LEGS);
+        COLORS.put("item_feet", ARMOR_FEET);
+        COLORS.put("selected_slot", Colors.WHITE & Colors.RGB);
     }
 
     public static Icon getIcon(String key) {

@@ -8,10 +8,12 @@ import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.FormFrameCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
@@ -604,65 +606,70 @@ public class OrbitFilmCameraController implements ICameraController
 
         if (form != null && !relative && !BaseFilmController.isRelativeReplayEntity(entity))
         {
-            String group = "anchor";
+            FormRenderer<?> renderer = FormUtilsClient.getRenderer(form);
 
-            if (form instanceof ModelForm modelForm)
+            if (renderer != null)
             {
-                ModelInstance model = ModelFormRenderer.getModel(modelForm);
+                String group = "anchor";
 
-                if (model != null)
+                if (form instanceof ModelForm modelForm)
                 {
-                    String anchor = model.getAnchor();
+                    ModelInstance model = ModelFormRenderer.getModel(modelForm);
 
-                    group = anchor.isEmpty() ? group : anchor;
+                    if (model != null)
+                    {
+                        String anchor = model.getAnchor();
+
+                        group = anchor.isEmpty() ? group : anchor;
+                    }
                 }
-            }
 
-            Anchor v = form.anchor.get();
-            Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
-            FormFrameCache frame = new FormFrameCache();
-            Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(
-                this.controller.getEntities(),
-                v,
-                defaultMatrix,
-                x,
-                y,
-                z,
-                transition,
-                0,
-                false,
-                frame
-            );
+                Anchor v = form.anchor.get();
+                Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
+                FormFrameCache frame = new FormFrameCache();
+                Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(
+                    this.controller.getEntities(),
+                    v,
+                    defaultMatrix,
+                    x,
+                    y,
+                    z,
+                    transition,
+                    0,
+                    false,
+                    frame
+                );
 
-            if (totalMatrix.a != null)
-            {
-                defaultMatrix = totalMatrix.a;
-            }
+                if (totalMatrix.a != null)
+                {
+                    defaultMatrix = totalMatrix.a;
+                }
 
-            Matrix4f semanticBase = new Matrix4f()
-                .translation((float) x, (float) y, (float) z)
-                .mul(defaultMatrix);
-            MatrixCache map = FormFrameCache.collect(
-                frame,
-                form,
-                entity,
-                entity,
-                semanticBase,
-                true,
-                true,
-                transition
-            );
-            Matrix4f anchor = map.get(group).matrix();
+                Matrix4f semanticBase = new Matrix4f()
+                    .translation((float) x, (float) y, (float) z)
+                    .mul(defaultMatrix);
+                MatrixCache map = FormFrameCache.collect(
+                    frame,
+                    form,
+                    entity,
+                    entity,
+                    semanticBase,
+                    true,
+                    true,
+                    transition
+                );
+                Matrix4f anchor = map.get(group).matrix();
 
-            if (anchor != null)
-            {
-                defaultMatrix.mul(anchor);
+                if (anchor != null)
+                {
+                    defaultMatrix.mul(anchor);
 
-                Vector3f translate = defaultMatrix.getTranslation(Vectors.TEMP_3F);
+                    Vector3f translate = defaultMatrix.getTranslation(Vectors.TEMP_3F);
 
-                x += translate.x;
-                y += translate.y;
-                z += translate.z;
+                    x += translate.x;
+                    y += translate.y;
+                    z += translate.z;
+                }
             }
         }
 

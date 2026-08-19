@@ -141,7 +141,7 @@ public class UICirculate extends UIClickable<UICirculate>
         }
         else
         {
-            context.batcher.bevelBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
+            context.batcher.surfaceBox(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color, true, false);
         }
 
         FontRenderer font = context.batcher.getFont();

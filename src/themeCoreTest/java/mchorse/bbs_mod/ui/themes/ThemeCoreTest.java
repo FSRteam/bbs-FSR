@@ -558,11 +558,11 @@ public final class ThemeCoreTest
         UITheme dark = parseFile("dark", Path.of("src/client/resources/assets/bbs/assets/themes/dark/theme.json"), ThemeParser.defaultDark("dark"));
 
         assertTrue(!dark.light, "dark variant");
-        assertEquals(0xff111316, dark.surfaceChrome, "dark chrome == DARK_CHROME_SURFACE");
-        assertEquals(0xff171a1f, dark.surfaceBase, "dark base == DARK_BASE_SURFACE");
-        assertEquals(0xff1d2127, dark.surfaceRaised, "dark raised == DARK_RAISED_SURFACE");
-        assertEquals(0xff0f1217, dark.surfaceDeep, "dark deep == DARK_DEEP_SURFACE");
-        assertEquals(0xff30353d, dark.surfaceDivider, "dark divider == DARK_DIVIDER_COLOR");
+        assertEquals(0xff181818, dark.surfaceChrome, "dark chrome == DARK_CHROME_SURFACE");
+        assertEquals(0xff1d1d1d, dark.surfaceBase, "dark base == DARK_BASE_SURFACE");
+        assertEquals(0xff222222, dark.surfaceRaised, "dark raised == DARK_RAISED_SURFACE");
+        assertEquals(0xff131313, dark.surfaceDeep, "dark deep == DARK_DEEP_SURFACE");
+        assertEquals(0xff2a2a2a, dark.surfaceDivider, "dark divider == DARK_DIVIDER_COLOR");
         assertEquals(0xffff3242, dark.accentPrimary, "dark accent == DEFAULT_PRIMARY_COLOR");
         assertEquals(0xffffffff, dark.textPrimary, "dark text == Colors.WHITE");
         assertEquals(0xffaaaaaa, dark.textMuted, "dark muted == Colors.LIGHTER_GRAY");
@@ -572,8 +572,8 @@ public final class ThemeCoreTest
         assertEquals(0xff0088ff, dark.stateActive, "dark active == Colors.ACTIVE opaque");
         assertEquals(0xffddddff, dark.stateHighlight, "dark highlight == Colors.HIGHLIGHT opaque");
         assertEquals(0xff57f52a, dark.stateCursor, "dark cursor == Colors.CURSOR");
-        assertEquals(0xff0f1217, dark.fieldFill, "dark field fill == input surface");
-        assertEquals(0xff30353d, dark.fieldBorder, "dark field border == divider");
+        assertEquals(0xff131313, dark.fieldFill, "dark field fill == input surface");
+        assertEquals(0xff2a2a2a, dark.fieldBorder, "dark field border == divider");
         assertEquals(0xffff3242, dark.tabActiveLine, "dark tab line == accent");
         assertEquals(0, dark.tabActiveGradient, "dark tab gradient keeps old path");
         assertEquals(0, dark.areaTint, "dark area tint keeps old path");
@@ -613,11 +613,11 @@ public final class ThemeCoreTest
 
         assertTrue(light.light, "light variant");
         assertTrue(!light.textShadow, "light disables text shadow (mirrors the old hardcoded light branch)");
-        assertEquals(0xffe6e9ef, light.surfaceChrome, "light chrome == LIGHT_CHROME_SURFACE");
-        assertEquals(0xfff1f4f8, light.surfaceBase, "light base == LIGHT_BASE_SURFACE");
-        assertEquals(0xfff8fafd, light.surfaceRaised, "light raised == LIGHT_RAISED_SURFACE");
-        assertEquals(0xffdee4ed, light.surfaceDeep, "light deep == LIGHT_DEEP_SURFACE");
-        assertEquals(0xffc2cbd8, light.surfaceDivider, "light divider == LIGHT_DIVIDER_COLOR");
+        assertEquals(0xffebebeb, light.surfaceChrome, "light chrome == LIGHT_CHROME_SURFACE");
+        assertEquals(0xfff3f3f3, light.surfaceBase, "light base == LIGHT_BASE_SURFACE");
+        assertEquals(0xfffafafa, light.surfaceRaised, "light raised == LIGHT_RAISED_SURFACE");
+        assertEquals(0xffe4e4e4, light.surfaceDeep, "light deep == LIGHT_DEEP_SURFACE");
+        assertEquals(0xffd9d9d9, light.surfaceDivider, "light divider == LIGHT_DIVIDER_COLOR");
         assertEquals(dark.accentPrimary, light.accentPrimary, "light inherits dark accent (status quo)");
         assertEquals(dark.textPrimary, light.textPrimary, "light inherits dark text (status quo)");
     }

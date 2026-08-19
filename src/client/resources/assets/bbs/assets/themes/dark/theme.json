@@ -6,11 +6,11 @@
     "variant": "dark",
     "colors": {
         "surface": {
-            "chrome": "#111316",
-            "base": "#171A1F",
-            "raised": "#1D2127",
-            "deep": "#0F1217",
-            "divider": "#30353D"
+            "chrome": "#181818",
+            "base": "#1D1D1D",
+            "raised": "#222222",
+            "deep": "#131313",
+            "divider": "#2A2A2A"
         },
         "accent": {
             "primary": "#FF3242"

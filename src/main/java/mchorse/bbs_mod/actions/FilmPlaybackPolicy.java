@@ -135,13 +135,30 @@ public final class FilmPlaybackPolicy
         return previousFirstPerson != nextFirstPerson
             || mutation == film
             || mutation == film.replays
-            || mutation == film.inventory
             || mutation == nextFirstPerson
             || mutation == nextFirstPerson.form
+            || isOwnedByReplay(mutation, nextFirstPerson)
             || mutation == film.hp
             || mutation == film.hunger
             || mutation == film.xpLevel
             || mutation == film.xpProgress;
+    }
+
+    private static boolean isOwnedByReplay(BaseValue mutation, Replay replay)
+    {
+        BaseValue current = mutation;
+
+        while (current != null)
+        {
+            if (current == replay)
+            {
+                return true;
+            }
+
+            current = current.getParent();
+        }
+
+        return false;
     }
 
     /** Validate everything that can create/move replay actors or fake players. */
