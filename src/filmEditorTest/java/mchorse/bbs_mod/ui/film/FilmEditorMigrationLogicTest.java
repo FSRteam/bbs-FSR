@@ -35,6 +35,7 @@ public final class FilmEditorMigrationLogicTest
             testLenientPresetComparison();
             PoseNavigationLogicTest.runAll();
             FilmReplayFirstPersonSyncSourceTest.runAll();
+            HotbarFilmMigrationTest.runAll();
             OrbitFilmCameraMissingRendererSourceTest.runAll();
             RenderRuntimeMigrationSourceTest.runAll();
             RecentFormCategoryTest.runAll();

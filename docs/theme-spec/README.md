@@ -60,11 +60,11 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 
 | key | 默认(dark) | 用在哪 |
 |---|---|---|
-| `colors.surface.chrome` | `#111316` | 最外层镶边:顶栏、侧栏、面板骨架 |
-| `colors.surface.base` | `#171A1F` | 面板主体底色 |
-| `colors.surface.raised` | `#1D2127` | 浮起元素:卡片、行悬浮底、弹层内容 |
-| `colors.surface.deep` | `#0F1217` | 凹陷区域:输入框、列表容器内衬 |
-| `colors.surface.divider` | `#30353D` | 分隔线、描边 |
+| `colors.surface.chrome` | `#181818` | 最外层镶边:顶栏、侧栏、面板骨架 |
+| `colors.surface.base` | `#1D1D1D` | 面板主体底色 |
+| `colors.surface.raised` | `#222222` | 浮起元素:卡片、行悬浮底、弹层内容 |
+| `colors.surface.deep` | `#131313` | 凹陷区域:输入框、列表容器内衬 |
+| `colors.surface.divider` | `#2A2A2A` | 分隔线、描边 |
 
 > 用户设置里的"背景亮度"(background_brightness)会在这些表面色上做后处理,主题无需关心。
 
@@ -89,8 +89,8 @@ FSR(BBS mod NeoForge 版)的 UI 支持以"主题包"方式高度自定义:颜色
 
 | key | 默认(dark) | 用在哪 |
 |---|---|---|
-| `colors.field_fill` | `#0F1217` | 文本输入框填充 |
-| `colors.field_border` | `#30353D` | 文本输入框边框 |
+| `colors.field_fill` | `#131313` | 文本输入框填充 |
+| `colors.field_border` | `#2A2A2A` | 文本输入框边框 |
 | `colors.tab_active_line` | `#FF3242` | 活跃标签下划线 |
 | `colors.tab_active_gradient` | `#00000000` | 活跃标签/图标的可选背景渐变 |
 | `colors.area_tint` | `#00000000` | 区域着色 |

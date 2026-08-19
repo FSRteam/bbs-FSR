@@ -41,6 +41,12 @@ public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
     private static final double SLOW_DRAG = 0.25D;
     private static final double PRECISE_DRAG = 0.05D;
 
+    /** Modifiers also divide the snap grid, keeping coarse stops on the fine grid. */
+    private static final double SLOW_STEPS = 5D;
+    private static final double PRECISE_STEPS = 25D;
+    private static final double AUTO_STEPS = 100D;
+    private static final double CLEAN_LIMIT = 0.000001D;
+
     /** Dead zone of an unbounded drag, matching {@link UITrackpad}'s. */
     private static final int DRAG_THRESHOLD = 3;
 
@@ -51,6 +57,9 @@ public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
     private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
     private long dragGeneration;
     protected int initialX;
+
+    /** Explicit drag grid; zero derives a rounded grid from the slider range. */
+    public double snap;
 
     /** The value the gesture began with, restored when it gets cancelled. */
     protected double startValue;
@@ -66,6 +75,13 @@ public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
     public UISliderTrackpad(Consumer<Double> callback)
     {
         super(callback);
+    }
+
+    public UISliderTrackpad snap(double snap)
+    {
+        this.snap = snap;
+
+        return this;
     }
 
     @Override
@@ -132,6 +148,77 @@ public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
         this.handleArea.set(handleCenter - handleWidth / 2, this.area.y, handleWidth, this.area.h);
     }
 
+    /* Drag snap grid */
+
+    protected static double niceStep(double raw)
+    {
+        if (!(raw > 0D) || !Double.isFinite(raw))
+        {
+            return 0D;
+        }
+
+        double decade = Math.pow(10D, Math.floor(Math.log10(raw)));
+        double mantissa = raw / decade;
+        double nice = mantissa <= 1.000001D ? 1D : (mantissa <= 2.000001D ? 2D : (mantissa <= 5.000001D ? 5D : 10D));
+
+        return nice * decade;
+    }
+
+    protected static double clean(double value)
+    {
+        if (!Double.isFinite(value) || Math.abs(value) >= 1e9D)
+        {
+            return value;
+        }
+
+        return Math.rint(value * 1e6D) / 1e6D;
+    }
+
+    protected double getBaseStep()
+    {
+        if (this.snap > 0D)
+        {
+            return this.snap;
+        }
+
+        return this.hasSliderRange() ? niceStep((this.max - this.min) / AUTO_STEPS) : 0D;
+    }
+
+    protected double getStep()
+    {
+        double base = this.getBaseStep();
+
+        if (base <= 0D)
+        {
+            return 0D;
+        }
+
+        if (Window.isAltPressed())
+        {
+            base /= PRECISE_STEPS;
+        }
+        else if (Window.isShiftPressed())
+        {
+            base /= SLOW_STEPS;
+        }
+
+        return this.integer ? Math.max(1D, Math.rint(base)) : base;
+    }
+
+    protected double snapValue(double value)
+    {
+        double step = Window.isCtrlPressed() && this.increment > 0D ? this.increment : this.getStep();
+
+        if (step <= 0D)
+        {
+            return value;
+        }
+
+        double snapped = Math.rint(value / step) * step;
+
+        return step >= CLEAN_LIMIT ? clean(snapped) : snapped;
+    }
+
     /* Dragging */
 
     /**
@@ -142,7 +229,7 @@ public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
         int left = this.area.x + this.getHandlePadding();
         double factor = MathUtils.clamp((mouseX - left) / (double) this.getTrackWidth(), 0D, 1D);
 
-        return this.min + factor * (this.max - this.min);
+        return this.snapValue(this.min + factor * (this.max - this.min));
     }
 
     /**
@@ -158,17 +245,12 @@ public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
         {
             double diff = (Math.abs(dx) - DRAG_THRESHOLD) * this.getValueModifier();
 
-            return diff < 0D ? this.anchorValue : this.anchorValue + (dx < 0 ? -diff : diff);
+            return diff < 0D ? this.anchorValue : this.snapValue(this.anchorValue + (dx < 0 ? -diff : diff));
         }
 
         double value = this.anchorValue + (dx / (double) this.getTrackWidth()) * (this.max - this.min) * this.getDragPrecision();
 
-        if (Window.isCtrlPressed() && this.increment > 0D)
-        {
-            value = Math.round(value / this.increment) * this.increment;
-        }
-
-        return value;
+        return this.snapValue(value);
     }
 
     protected double getDragPrecision()

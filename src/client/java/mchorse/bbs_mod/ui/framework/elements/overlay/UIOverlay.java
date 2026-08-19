@@ -22,7 +22,8 @@ public class UIOverlay extends UIElement
 {
     private static final Map<String, Vector2i> offsets = new HashMap<>();
 
-    private int background = Colors.A50;
+    /** Null means the user-configured dimming; a set value overrides it. */
+    private Integer background;
 
     private final UITween appear = new UITween();
 
@@ -284,11 +285,13 @@ public class UIOverlay extends UIElement
             return;
         }
 
+        int background = this.background == null ? BBSSettings.overlayBackground() : this.background;
+
         if (this.appear.isSettled())
         {
-            if (Colors.getA(this.background) > 0F)
+            if (Colors.getA(background) > 0F)
             {
-                this.area.render(context.batcher, this.background);
+                this.area.render(context.batcher, background);
             }
 
             super.render(context);
@@ -296,9 +299,9 @@ public class UIOverlay extends UIElement
             return;
         }
 
-        if (Colors.getA(this.background) > 0F)
+        if (Colors.getA(background) > 0F)
         {
-            this.area.render(context.batcher, Colors.mulA(this.background, factor));
+            this.area.render(context.batcher, Colors.mulA(background, factor));
         }
 
         UIThemeMotion spec = UIMotions.overlay();

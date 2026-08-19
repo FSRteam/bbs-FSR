@@ -37,7 +37,8 @@ public enum TransformSpace
      *  to face (form editor, model blocks) keep the plain world axes. */
     GLOBAL(true),
 
-    /** The camera's right/up/forward — a constrained edit runs in screen space. */
+    /** The camera's right/up/forward — a constrained edit runs in screen space.
+     *  Handles are drawn facing the eye, while drag math keeps the camera basis. */
     VIEW(true),
 
     /** The parent's frame — the frame the bone's own channels compose in.

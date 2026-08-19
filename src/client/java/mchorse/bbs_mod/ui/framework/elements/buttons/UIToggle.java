@@ -91,9 +91,10 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
         return this;
     }
 
-    private static final int TRACK_W = 22;
-    private static final int TRACK_H = 10;
-    private static final int KNOB = 12;
+    private static final int TRACK_W = 20;
+    private static final int TRACK_H = 8;
+    private static final int KNOB = 10;
+    private static final int KNOB_COLOR = 0xffc4c4c4;
 
     @Override
     protected void renderSkin(UIContext context)
@@ -162,18 +163,18 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
         int my = this.area.my();
         int trackRight = this.area.ex() - 2;
         int trackLeft = trackRight - TRACK_W;
-        int trackTop = my + KNOB / 2 - TRACK_H;
-        int trackBottom = my + KNOB / 2;
+        int knobTop = my - KNOB / 2;
+        int trackBottom = knobTop + KNOB;
+        int trackTop = trackBottom - TRACK_H;
 
-        int trackOff = 0xff3a3d41;
+        int trackOff = BBSSettings.deepSurface();
         int trackOn = Colors.A100 | BBSSettings.accentColorRGB();
         int trackFill = this.valueTween.isSettled() ? (this.value ? trackOn : trackOff) : Colors.lerp(trackOff, trackOn, visualValue);
 
-        context.batcher.bevelBox(trackLeft, trackTop, trackRight, trackBottom, trackFill, false, true);
+        context.batcher.box(trackLeft, trackTop, trackRight, trackBottom, trackFill);
 
         int knobLeft = trackLeft + Math.round((TRACK_W - KNOB) * visualValue);
-        int knobTop = my - KNOB / 2;
-        int knobOff = 0xffc9cdd2;
+        int knobOff = KNOB_COLOR;
         int knobBase = themedToggle ? Colors.lerp(knobOff, Colors.WHITE, visualValue) : knobOff;
         int knobColor;
 
@@ -186,7 +187,7 @@ public class UIToggle extends UIClickable<UIToggle> implements ITextColoring
             knobColor = Colors.lerp(knobBase, Colors.lerp(knobBase, Colors.WHITE, 0.2F), hoverFactor);
         }
 
-        context.batcher.bevelBox(knobLeft, knobTop, knobLeft + KNOB, knobTop + KNOB, knobColor, true, true);
+        context.batcher.surfaceBox(knobLeft, knobTop, knobLeft + KNOB, knobTop + KNOB, knobColor, true, false);
 
         if (!this.isEnabled())
         {

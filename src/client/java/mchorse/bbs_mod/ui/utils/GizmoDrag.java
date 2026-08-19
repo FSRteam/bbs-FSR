@@ -357,7 +357,8 @@ public class GizmoDrag
      * spelled out: {@link TransformSpace#GLOBAL} is {@code view · globalAxes},
      * {@link TransformSpace#WORLD} the view rotation itself
      * ({@code view · identity}) and {@link TransformSpace#VIEW} the identity
-     * ({@code view · view⁻¹}).
+     * ({@code view · view⁻¹}). The draw passes may shear that VIEW frame toward
+     * the eye, but this method and the drag basis remain orthonormal.
      * {@code globalAxes} is the drawn twin of {@link #globalWorldAxes} and must
      * come from the same source the drag's does &mdash; {@code null} means the
      * plain world axes. {@link TransformSpace#LOCAL} and

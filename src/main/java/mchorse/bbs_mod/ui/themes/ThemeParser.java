@@ -542,11 +542,11 @@ public class ThemeParser
         builder.description = "";
         builder.light = false;
 
-        builder.surfaceChrome = 0xff111316;
-        builder.surfaceBase = 0xff171a1f;
-        builder.surfaceRaised = 0xff1d2127;
-        builder.surfaceDeep = 0xff0f1217;
-        builder.surfaceDivider = 0xff30353d;
+        builder.surfaceDeep = 0xff131313;
+        builder.surfaceChrome = 0xff181818;
+        builder.surfaceBase = 0xff1d1d1d;
+        builder.surfaceRaised = 0xff222222;
+        builder.surfaceDivider = 0xff2a2a2a;
         builder.accentPrimary = 0xffff3242;
         builder.textPrimary = 0xffffffff;
         builder.textMuted = 0xffaaaaaa;

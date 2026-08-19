@@ -253,7 +253,6 @@ public class ArmorRenderer
             this.uploadGhost(mesh),
             new Matrix4f(RenderSystem.getModelViewMatrix()),
             new Vector3f(origin),
-            true,
             null
         ));
     }

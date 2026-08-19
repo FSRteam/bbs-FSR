@@ -79,8 +79,51 @@ public class MCEntity implements IEntity
     {
         if (this.mcEntity instanceof LivingEntity living)
         {
-            living.setItemSlot(slot, stack == null ? ItemStack.EMPTY : stack);
+            ItemStack next = stack == null ? ItemStack.EMPTY : stack;
+
+            if (!ItemStack.matches(living.getItemBySlot(slot), next))
+            {
+                living.setItemSlot(slot, next.copy());
+            }
         }
+    }
+
+    @Override
+    public ItemStack getHotbarStack(int slot)
+    {
+        if (this.mcEntity instanceof Player player)
+        {
+            return slot >= 0 && slot < player.getInventory().getContainerSize()
+                ? player.getInventory().getItem(slot)
+                : ItemStack.EMPTY;
+        }
+
+        return slot == 0 ? this.getEquipmentStack(EquipmentSlot.MAINHAND) : ItemStack.EMPTY;
+    }
+
+    @Override
+    public void setHotbarStack(int slot, ItemStack stack)
+    {
+        ItemStack next = stack == null ? ItemStack.EMPTY : stack;
+
+        if (this.mcEntity instanceof Player player)
+        {
+            if (slot >= 0 && slot < player.getInventory().getContainerSize()
+                && !ItemStack.matches(player.getInventory().getItem(slot), next))
+            {
+                player.getInventory().setItem(slot, next.copy());
+            }
+        }
+        else if (slot == 0)
+        {
+            this.setEquipmentStack(EquipmentSlot.MAINHAND, next);
+        }
+    }
+
+    @Override
+    public boolean isMainHandInHotbar()
+    {
+        return this.mcEntity instanceof Player;
     }
 
     @Override

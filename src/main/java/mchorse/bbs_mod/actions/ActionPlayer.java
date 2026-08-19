@@ -8,12 +8,13 @@ import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.DataPath;
-import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -61,7 +63,10 @@ public class ActionPlayer
     private final ActionRetirementQueue<LivingEntity> actorRetirements = new ActionRetirementQueue<>();
     private final Map<Replay, BreakProgressContext.Session> breakProgressSessions = new IdentityHashMap<>();
 
-    private List<ItemStack> cachedInventory = new ArrayList<>();
+    /** Snapshot only the equipment the first-person replay is allowed to borrow. */
+    private List<ItemStack> cachedHotbar = new ArrayList<>();
+    private Map<EquipmentSlot, ItemStack> cachedEquipment = new EnumMap<>(EquipmentSlot.class);
+    private IEntity firstPersonEntity;
     private Form cachedForm;
     private CompoundTag cachedFoodData;
 
@@ -71,6 +76,7 @@ public class ActionPlayer
     private int cacheTotalExperience;
     private int cachedSelectedSlot;
     private boolean firstPersonStateApplied;
+    private boolean borrowedEquipment;
     private boolean restoreServerForm;
     private boolean currentTickActionApplied;
     private boolean actorRetirementWarningLogged;
@@ -267,13 +273,21 @@ public class ActionPlayer
 
         try
         {
-            this.cachedInventory.clear();
+            this.cachedHotbar.clear();
+            this.cachedEquipment.clear();
             this.cachedSelectedSlot = this.serverPlayer.getInventory().selected;
 
-            for (int i = 0; i < this.serverPlayer.getInventory().getContainerSize(); i++)
+            for (int i = 0; i < ReplayKeyframes.HOTBAR_SIZE; i++)
             {
-                this.cachedInventory.add(this.serverPlayer.getInventory().getItem(i).copy());
+                this.cachedHotbar.add(this.serverPlayer.getInventory().getItem(i).copy());
             }
+
+            for (EquipmentSlot slot : ReplayKeyframes.DRESS_SLOTS)
+            {
+                this.cachedEquipment.put(slot, this.serverPlayer.getItemBySlot(slot).copy());
+            }
+
+            this.firstPersonEntity = new MCEntity(this.serverPlayer);
 
             this.cachedForm = null;
 
@@ -290,9 +304,11 @@ public class ActionPlayer
             this.cacheXpLevel = this.serverPlayer.experienceLevel;
             this.cacheXpProgress = this.serverPlayer.experienceProgress;
             this.cacheTotalExperience = this.serverPlayer.totalExperience;
+            this.borrowedEquipment = true;
             this.firstPersonStateApplied = true;
 
-            FirstPersonInventoryProjection.apply(this.serverPlayer, this.film.inventory.getStacks());
+            this.clearFirstPersonEquipment();
+            this.applyFirstPersonFrame(fpReplay, this.tick);
 
             ServerNetwork.sendMorphToTracked(this.serverPlayer, fpReplay.form.get());
             applyFilmPlayerSettingsTo(this.serverPlayer, this.film.hp.get(), this.film.hunger.get(), this.film.xpLevel.get(), this.film.xpProgress.get());
@@ -312,7 +328,9 @@ public class ActionPlayer
             }
             else
             {
-                this.cachedInventory.clear();
+                this.cachedHotbar.clear();
+                this.cachedEquipment.clear();
+                this.firstPersonEntity = null;
                 this.cachedFoodData = null;
                 this.firstPersonLease.release();
             }
@@ -334,7 +352,7 @@ public class ActionPlayer
             throw new IllegalStateException("First-person player state is not owned by this replay runtime");
         }
 
-        FirstPersonInventoryProjection.apply(this.serverPlayer, this.film.inventory.getStacks());
+        this.applyFirstPersonFrame(fpReplay, this.tick);
         ServerNetwork.sendMorphToTracked(this.serverPlayer, fpReplay.form.get());
         applyFilmPlayerSettingsTo(
             this.serverPlayer,
@@ -343,6 +361,42 @@ public class ActionPlayer
             this.film.xpLevel.get(),
             this.film.xpProgress.get()
         );
+    }
+
+    /** Clear borrowed cells once when playback starts; empty migrated channels stay silent later. */
+    private void clearFirstPersonEquipment()
+    {
+        if (this.serverPlayer == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < ReplayKeyframes.HOTBAR_SIZE; i++)
+        {
+            this.serverPlayer.getInventory().setItem(i, ItemStack.EMPTY);
+        }
+
+        for (EquipmentSlot slot : ReplayKeyframes.DRESS_SLOTS)
+        {
+            this.serverPlayer.setItemSlot(slot, ItemStack.EMPTY);
+        }
+    }
+
+    private void applyFirstPersonFrame(Replay replay, float tick)
+    {
+        if (this.firstPersonEntity == null || replay == null)
+        {
+            return;
+        }
+
+        int slot = replay.keyframes.getSelectedSlot(tick);
+
+        if (this.serverPlayer.getInventory().selected != slot)
+        {
+            ServerNetwork.sendSelectedSlot(this.serverPlayer, slot);
+        }
+
+        replay.keyframes.applyEquipment(tick, this.firstPersonEntity);
     }
 
     /** Retained for binary compatibility with addons compiled against the original API. */
@@ -592,8 +646,11 @@ public class ActionPlayer
     void abandonFirstPersonState()
     {
         this.firstPersonStateApplied = false;
+        this.borrowedEquipment = false;
         this.restoreServerForm = false;
-        this.cachedInventory.clear();
+        this.cachedHotbar.clear();
+        this.cachedEquipment.clear();
+        this.firstPersonEntity = null;
         this.cachedForm = null;
         this.cachedFoodData = null;
         this.firstPersonLease.release();
@@ -671,45 +728,25 @@ public class ActionPlayer
             this.isRequesterAuthorized()
         );
 
-        actor.setItemSlot(
-            EquipmentSlot.OFFHAND,
-            applyServerEquipment ? replay.keyframes.offHand.interpolate(tick, ItemStack.EMPTY) : ItemStack.EMPTY
-        );
-        actor.setItemSlot(
-            EquipmentSlot.HEAD,
-            applyServerEquipment ? replay.keyframes.armorHead.interpolate(tick, ItemStack.EMPTY) : ItemStack.EMPTY
-        );
-        actor.setItemSlot(
-            EquipmentSlot.CHEST,
-            applyServerEquipment ? replay.keyframes.armorChest.interpolate(tick, ItemStack.EMPTY) : ItemStack.EMPTY
-        );
-        actor.setItemSlot(
-            EquipmentSlot.LEGS,
-            applyServerEquipment ? replay.keyframes.armorLegs.interpolate(tick, ItemStack.EMPTY) : ItemStack.EMPTY
-        );
-        actor.setItemSlot(
-            EquipmentSlot.FEET,
-            applyServerEquipment ? replay.keyframes.armorFeet.interpolate(tick, ItemStack.EMPTY) : ItemStack.EMPTY
-        );
-
         if (actor instanceof ServerPlayer player)
         {
-            int selectedSlot = player.getInventory().selected;
-            int slot = MathUtils.clamp(replay.keyframes.selectedSlot.interpolate(this.tick), 0, 8);
-
-            if (selectedSlot != slot)
+            if (this.borrowedEquipment && player == this.serverPlayer)
             {
-                ServerNetwork.sendSelectedSlot(player, slot);
+                this.applyFirstPersonFrame(replay, tick);
             }
-
-            actor.setItemSlot(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
+        }
+        else if (applyServerEquipment)
+        {
+            replay.keyframes.applyEquipment(tick, new MCEntity(actor));
         }
         else
         {
-            actor.setItemSlot(
-                EquipmentSlot.MAINHAND,
-                applyServerEquipment ? replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY) : ItemStack.EMPTY
-            );
+            actor.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            actor.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            actor.setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY);
+            actor.setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
+            actor.setItemSlot(EquipmentSlot.LEGS, ItemStack.EMPTY);
+            actor.setItemSlot(EquipmentSlot.FEET, ItemStack.EMPTY);
         }
 
         actor.setDeltaMovement(vx, vy, vz);
@@ -1106,7 +1143,10 @@ public class ActionPlayer
     {
         if (!this.firstPersonStateApplied)
         {
-            this.cachedInventory.clear();
+            this.cachedHotbar.clear();
+            this.cachedEquipment.clear();
+            this.firstPersonEntity = null;
+            this.borrowedEquipment = false;
             this.cachedForm = null;
             this.cachedFoodData = null;
             this.firstPersonLease.release();
@@ -1117,8 +1157,11 @@ public class ActionPlayer
         if (!this.firstPersonLease.isHeld())
         {
             this.firstPersonStateApplied = false;
+            this.borrowedEquipment = false;
             this.restoreServerForm = false;
-            this.cachedInventory.clear();
+            this.cachedHotbar.clear();
+            this.cachedEquipment.clear();
+            this.firstPersonEntity = null;
             this.cachedForm = null;
             this.cachedFoodData = null;
             this.firstPersonLease.release();
@@ -1127,22 +1170,23 @@ public class ActionPlayer
         }
 
         Throwable failure = null;
-        int slots = 0;
-
-        try
-        {
-            slots = Math.min(this.serverPlayer.getInventory().getContainerSize(), this.cachedInventory.size());
-        }
-        catch (RuntimeException | LinkageError e)
-        {
-            failure = e;
-        }
-
-        for (int i = 0; i < slots; i++)
+        for (int i = 0; i < this.cachedHotbar.size(); i++)
         {
             try
             {
-                this.serverPlayer.getInventory().setItem(i, this.cachedInventory.get(i).copy());
+                this.serverPlayer.getInventory().setItem(i, this.cachedHotbar.get(i).copy());
+            }
+            catch (RuntimeException | LinkageError e)
+            {
+                failure = ActionTeardown.append(failure, e);
+            }
+        }
+
+        for (Map.Entry<EquipmentSlot, ItemStack> entry : this.cachedEquipment.entrySet())
+        {
+            try
+            {
+                this.serverPlayer.setItemSlot(entry.getKey(), entry.getValue().copy());
             }
             catch (RuntimeException | LinkageError e)
             {
@@ -1233,8 +1277,11 @@ public class ActionPlayer
         ActionTeardown.throwIfFailed(failure);
 
         this.firstPersonStateApplied = false;
+        this.borrowedEquipment = false;
         this.restoreServerForm = false;
-        this.cachedInventory.clear();
+        this.cachedHotbar.clear();
+        this.cachedEquipment.clear();
+        this.firstPersonEntity = null;
         this.cachedForm = null;
         this.cachedFoodData = null;
         this.firstPersonLease.release();

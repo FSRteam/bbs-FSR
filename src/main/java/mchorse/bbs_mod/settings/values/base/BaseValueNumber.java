@@ -8,6 +8,7 @@ public abstract class BaseValueNumber <T extends Number> extends BaseKeyframeFac
     protected T max;
 
     protected boolean slider;
+    protected double sliderStep;
 
     public BaseValueNumber(String id, IKeyframeFactory<T> factory, T defaultValue, T min, T max)
     {
@@ -32,6 +33,12 @@ public abstract class BaseValueNumber <T extends Number> extends BaseKeyframeFac
         return this.slider;
     }
 
+    /** The absolute grid a slider drag lands on, or 0 to derive it from the range. */
+    public double getSliderStep()
+    {
+        return this.sliderStep;
+    }
+
     /**
      * Offer this value as a track rather than a drag field. Worth it only when
      * both ends are declared and the whole span fits the track with a useful
@@ -43,6 +50,14 @@ public abstract class BaseValueNumber <T extends Number> extends BaseKeyframeFac
         this.slider = true;
 
         return this;
+    }
+
+    /** Configure an explicit slider grid while retaining the fluent subtype API. */
+    public BaseValueNumber<T> slider(double step)
+    {
+        this.sliderStep = step;
+
+        return this.slider();
     }
 
     @Override

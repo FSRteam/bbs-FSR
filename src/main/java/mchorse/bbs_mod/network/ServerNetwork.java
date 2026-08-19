@@ -4,7 +4,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.ActionManager;
 import mchorse.bbs_mod.actions.ActionPlayer;
 import mchorse.bbs_mod.actions.AuthorizedCommandExecutor;
-import mchorse.bbs_mod.film.replays.Inventory;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.actions.ActionRecorder;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.actions.FilmActionAuthorityPolicy;
@@ -27,9 +27,11 @@ import mchorse.bbs_mod.items.GunProjectileBudget;
 import mchorse.bbs_mod.items.GunPropertiesPolicy;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.utils.DataPath;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.PermissionUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
+import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import mchorse.bbs_mod.network.compat.NetworkCompat;
 import net.minecraft.core.component.DataComponents;
@@ -66,8 +68,8 @@ import java.util.concurrent.TimeUnit;
 public class ServerNetwork
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-network");
-    public static final int APPLY_FILM_PLAYER_SETTINGS_FIXED_BYTES = Float.BYTES * 3 + Integer.BYTES * 2;
-    public static final int MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES = NetworkCompat.MAX_SERVERBOUND_RAW_PAYLOAD_BYTES - APPLY_FILM_PLAYER_SETTINGS_FIXED_BYTES;
+    public static final int APPLY_FILM_PLAYER_SETTINGS_FIXED_BYTES = Float.BYTES * 3 + Integer.BYTES * 3;
+    public static final int MAX_APPLY_FILM_PLAYER_SETTINGS_EQUIPMENT_BYTES = NetworkCompat.MAX_SERVERBOUND_RAW_PAYLOAD_BYTES - APPLY_FILM_PLAYER_SETTINGS_FIXED_BYTES;
     public static final int MAX_ACTOR_ENTRIES = 4_096;
     public static final int MAX_MODEL_BLOCK_REFRESH_TICKS = 20 * 60;
     public static final double MAX_SHARED_FORM_DISTANCE_SQR = 64D * 64D;
@@ -1823,64 +1825,65 @@ public class ServerNetwork
         float hunger = buf.readFloat();
         int xpLevel = buf.readInt();
         float xpProgress = buf.readFloat();
-        int invSize = buf.readInt();
+        int selectedSlot = buf.readInt();
+        int dressSize = buf.readInt();
 
         if (!NetworkMutationPolicy.arePlayerSettingsAllowed(hp, player.getMaxHealth(), hunger, xpLevel, xpProgress))
         {
             return;
         }
 
-        if (invSize < 0 || invSize > MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES)
+        if (dressSize < 0 || dressSize > MAX_APPLY_FILM_PLAYER_SETTINGS_EQUIPMENT_BYTES)
         {
-            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=invalid_inventory_size player={} size={} max={}",
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=invalid_equipment_size player={} size={} max={}",
                 player.getGameProfile().getName(),
-                invSize,
-                MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES);
+                dressSize,
+                MAX_APPLY_FILM_PLAYER_SETTINGS_EQUIPMENT_BYTES);
             return;
         }
 
-        if (invSize > buf.readableBytes())
+        if (dressSize > buf.readableBytes())
         {
-            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=truncated_inventory player={} size={} readable={}",
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=truncated_equipment player={} size={} readable={}",
                 player.getGameProfile().getName(),
-                invSize,
+                dressSize,
                 buf.readableBytes());
             return;
         }
 
-        if (invSize != buf.readableBytes())
+        if (dressSize != buf.readableBytes())
         {
             LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=receive result=drop reason=trailing_bytes player={} size={} trailing={}",
                 player.getGameProfile().getName(),
-                invSize,
-                buf.readableBytes() - invSize);
+                dressSize,
+                buf.readableBytes() - dressSize);
             return;
         }
 
-        byte[] invBytes = invSize > 0 ? new byte[invSize] : null;
+        byte[] dressBytes = dressSize > 0 ? new byte[dressSize] : null;
 
-        if (invBytes != null)
+        if (dressBytes != null)
         {
-            buf.readBytes(invBytes);
+            buf.readBytes(dressBytes);
         }
 
-        ListType inventory = null;
+        ListType equipment = null;
 
-        if (invBytes != null)
+        if (dressBytes != null)
         {
-            BaseType decoded = NetworkDataDecoder.decode(invBytes);
+            BaseType decoded = NetworkDataDecoder.decode(dressBytes);
 
             if (!(decoded instanceof ListType list))
             {
-                LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=decode result=drop reason=invalid_inventory_payload player={}",
+                LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=decode result=drop reason=invalid_equipment_payload player={}",
                     player.getGameProfile().getName());
                 return;
             }
 
-            inventory = list;
+            equipment = list;
         }
 
-        final ListType finalInventory = inventory;
+        final ListType finalEquipment = equipment;
 
         server.execute(() ->
         {
@@ -1891,25 +1894,26 @@ public class ServerNetwork
                 return;
             }
 
-            List<ItemStack> stagedInventory = null;
-            List<ItemStack> previousInventory = null;
+            List<ItemStack> stagedEquipment = null;
+            List<ItemStack> previousEquipment = null;
 
-            if (finalInventory != null)
+            if (finalEquipment != null)
             {
                 try
                 {
-                    stagedInventory = Inventory.stageForPlayer(player, finalInventory);
-                    previousInventory = Inventory.snapshotPlayer(player, stagedInventory.size());
+                    stagedEquipment = stageEquipmentForPlayer(player, finalEquipment);
+                    previousEquipment = snapshotEquipment(player);
                 }
                 catch (RuntimeException e)
                 {
-                    LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=stage result=drop reason=invalid_inventory_data player={}",
+                    LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=stage result=drop reason=invalid_equipment_data player={}",
                         player.getGameProfile().getName(),
                         e);
                     return;
                 }
             }
 
+            int previousSelectedSlot = player.getInventory().selected;
             float previousHealth = player.getHealth();
             int previousHunger = player.getFoodData().getFoodLevel();
             int previousXpLevel = player.experienceLevel;
@@ -1917,9 +1921,9 @@ public class ServerNetwork
 
             try
             {
-                if (stagedInventory != null)
+                if (stagedEquipment != null)
                 {
-                    Inventory.applyStagedToPlayer(player, stagedInventory);
+                    applyStagedEquipment(player, stagedEquipment, MathUtils.clamp(selectedSlot, 0, ReplayKeyframes.HOTBAR_SIZE - 1));
                 }
 
                 /* Staged equipment/components can change max health. Recheck
@@ -1934,7 +1938,7 @@ public class ServerNetwork
                     xpProgress
                 ))
                 {
-                    throw new IllegalStateException("Staged inventory invalidated film player settings");
+                    throw new IllegalStateException("Staged equipment invalidated film player settings");
                 }
 
                 ActionPlayer.applyFilmPlayerSettingsTo(player, hp, hunger, xpLevel, xpProgress);
@@ -1942,11 +1946,11 @@ public class ServerNetwork
             }
             catch (RuntimeException e)
             {
-                if (previousInventory != null)
+                if (previousEquipment != null)
                 {
                     try
                     {
-                        Inventory.applyStagedToPlayer(player, previousInventory);
+                        applyStagedEquipment(player, previousEquipment, previousSelectedSlot);
                     }
                     catch (RuntimeException rollbackError)
                     {
@@ -2004,6 +2008,69 @@ public class ServerNetwork
                     e);
             }
         });
+    }
+
+    /** Decode every submitted equipment item before touching the live player. */
+    private static List<ItemStack> stageEquipmentForPlayer(ServerPlayer player, ListType data)
+    {
+        int expected = ReplayKeyframes.HOTBAR_SIZE + ReplayKeyframes.DRESS_SLOTS.length;
+
+        if (player == null || data == null || data.size() != expected)
+        {
+            throw new IllegalArgumentException("Film equipment must contain exactly " + expected + " slots");
+        }
+
+        List<ItemStack> staged = new ArrayList<>(expected);
+
+        for (int i = 0; i < expected; i++)
+        {
+            ItemStack stack = KeyframeFactories.ITEM_STACK.tryFromData(data.get(i), player.registryAccess())
+                .orElseThrow(() -> new IllegalArgumentException("Film equipment contains an invalid item stack"));
+
+            staged.add(stack.copy());
+        }
+
+        return List.copyOf(staged);
+    }
+
+    private static List<ItemStack> snapshotEquipment(ServerPlayer player)
+    {
+        List<ItemStack> snapshot = new ArrayList<>(ReplayKeyframes.HOTBAR_SIZE + ReplayKeyframes.DRESS_SLOTS.length);
+
+        for (int i = 0; i < ReplayKeyframes.HOTBAR_SIZE; i++)
+        {
+            snapshot.add(player.getInventory().getItem(i).copy());
+        }
+
+        for (EquipmentSlot slot : ReplayKeyframes.DRESS_SLOTS)
+        {
+            snapshot.add(player.getItemBySlot(slot).copy());
+        }
+
+        return List.copyOf(snapshot);
+    }
+
+    private static void applyStagedEquipment(ServerPlayer player, List<ItemStack> staged, int selectedSlot)
+    {
+        int expected = ReplayKeyframes.HOTBAR_SIZE + ReplayKeyframes.DRESS_SLOTS.length;
+
+        if (player == null || staged == null || staged.size() != expected)
+        {
+            throw new IllegalArgumentException("Staged film equipment is invalid");
+        }
+
+        for (int i = 0; i < ReplayKeyframes.HOTBAR_SIZE; i++)
+        {
+            player.getInventory().setItem(i, staged.get(i).copy());
+        }
+
+        for (int i = 0; i < ReplayKeyframes.DRESS_SLOTS.length; i++)
+        {
+            player.setItemSlot(ReplayKeyframes.DRESS_SLOTS[i], staged.get(ReplayKeyframes.HOTBAR_SIZE + i).copy());
+        }
+
+        player.getInventory().selected = MathUtils.clamp(selectedSlot, 0, ReplayKeyframes.HOTBAR_SIZE - 1);
+        sendSelectedSlot(player, player.getInventory().selected);
     }
 
     private static void syncPlayerInventory(ServerPlayer player)

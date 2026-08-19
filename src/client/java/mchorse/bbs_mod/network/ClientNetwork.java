@@ -13,6 +13,7 @@ import mchorse.bbs_mod.entity.IEntityFormProvider;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.film.Recorder;
+import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.items.GunProperties;
@@ -1243,15 +1244,19 @@ public class ClientNetwork
         NetworkCompatClient.sendToServer(ServerNetwork.SERVER_PAUSE_FILM, buf);
     }
 
-    public static void sendApplyFilmPlayerSettingsToPlayer(Film film)
+    /** Send first-person replay equipment at the editor cursor to the server. */
+    public static void sendApplyFilmPlayerSettingsToPlayer(Film film, int tick)
     {
-        byte[] invBytes = DataStorageUtils.writeToBytes(film.inventory.toData());
+        Replay replay = film == null ? null : film.getFirstPersonReplay();
+        byte[] dressBytes = replay == null
+            ? new byte[0]
+            : DataStorageUtils.writeToBytes(replay.keyframes.packEquipment(tick));
 
-        if (invBytes.length > ServerNetwork.MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES)
+        if (dressBytes.length > ServerNetwork.MAX_APPLY_FILM_PLAYER_SETTINGS_EQUIPMENT_BYTES)
         {
-            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=send result=reject reason=inventory_size size={} max={}",
-                invBytes.length,
-                ServerNetwork.MAX_APPLY_FILM_PLAYER_SETTINGS_INVENTORY_BYTES);
+            LOGGER.warn("[BBS-SEM] topic=net.apply_player_settings phase=send result=reject reason=equipment_size size={} max={}",
+                dressBytes.length,
+                ServerNetwork.MAX_APPLY_FILM_PLAYER_SETTINGS_EQUIPMENT_BYTES);
             return;
         }
 
@@ -1261,8 +1266,9 @@ public class ClientNetwork
         buf.writeFloat(film.hunger.get());
         buf.writeInt(film.xpLevel.get());
         buf.writeFloat(film.xpProgress.get());
-        buf.writeInt(invBytes.length);
-        buf.writeBytes(invBytes);
+        buf.writeInt(replay == null ? 0 : replay.keyframes.getSelectedSlot(tick));
+        buf.writeInt(dressBytes.length);
+        buf.writeBytes(dressBytes);
 
         NetworkCompatClient.sendToServer(ServerNetwork.SERVER_APPLY_FILM_PLAYER_SETTINGS, buf);
     }
