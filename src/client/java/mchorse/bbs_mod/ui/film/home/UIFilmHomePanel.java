@@ -103,7 +103,7 @@ public class UIFilmHomePanel extends UIElement
 
     /* Content sections */
     private final UINewsStrip newsStrip = new UINewsStrip();
-    private final UICommissionBoard board = new UICommissionBoard();
+    private final UIAdBoard board = new UIAdBoard();
 
     /* Toolbar */
     private final UITextbox search;
@@ -297,9 +297,10 @@ public class UIFilmHomePanel extends UIElement
     {
         FilmHomeContent.INSTANCE.load();
         this.newsStrip.fill(FilmHomeContent.INSTANCE.news);
-        this.board.fill(FilmHomeContent.INSTANCE.commissions);
+        this.board.fill(FilmHomeContent.INSTANCE.ads);
         this.newsStrip.setVisible(!FilmHomeContent.INSTANCE.news.isEmpty());
-        this.board.setVisible(!FilmHomeContent.INSTANCE.commissions.items.isEmpty());
+        /* The rent slot keeps the ad board present even without paid ads. */
+        this.board.setVisible(true);
         this.relayout();
     }
 

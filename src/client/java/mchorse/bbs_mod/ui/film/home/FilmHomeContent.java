@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.film.home;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -18,10 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Loader for the film home's editorial content (news items and the commission
- * board). Content lives in {@code config/bbs/assets/film_home/*.json} so it can
- * be edited without rebuilding; missing files fall back to the copies bundled
- * in the jar. Everything degrades silently: malformed JSON or missing files
+ * Loader for the film home's editorial content (news items and the ad board).
+ * Content lives in {@code config/bbs/assets/film_home/*.json} so it can be
+ * edited without rebuilding; missing files fall back to the copies bundled in
+ * the jar. Everything degrades silently: malformed JSON or missing files
  * simply yield empty lists, and the UI hides sections without content.
  */
 public class FilmHomeContent
@@ -31,7 +30,7 @@ public class FilmHomeContent
     public static final FilmHomeContent INSTANCE = new FilmHomeContent();
 
     public List<NewsItem> news = new ArrayList<>();
-    public CommissionBoard commissions = new CommissionBoard();
+    public List<AdItem> ads = new ArrayList<>();
 
     public static class NewsItem
     {
@@ -51,45 +50,18 @@ public class FilmHomeContent
         }
     }
 
-    public static class CommissionBoard
+    /**
+     * One ad tile of the bottom-left ad board: a 4:3 image plus the link
+     * string offered for copying in the detail overlay.
+     */
+    public static class AdItem
     {
-        public String displayName = "";
-        public String contact = "";
-        public List<CommissionItem> items = new ArrayList<>();
+        public String image = "";
+        public String link = "";
 
-        public int countByStatus(String status)
+        public Link imageLink()
         {
-            int count = 0;
-
-            for (CommissionItem item : this.items)
-            {
-                if (item.status.equals(status))
-                {
-                    count += 1;
-                }
-            }
-
-            return count;
-        }
-    }
-
-    public static class CommissionItem
-    {
-        public String id = "";
-        public String title = "";
-        public String cover = "";
-        /** open | queued | working | done | closed */
-        public String status = "open";
-        /** [total, taken]; negative total means hidden. */
-        public int[] slots = null;
-        public String price = "";
-        /** 0..1, negative hides the progress bar. */
-        public float progress = -1F;
-        public String note = "";
-
-        public Link coverLink()
-        {
-            return this.cover.isEmpty() ? null : Link.assets("film_home/images/" + this.cover);
+            return this.image.isEmpty() ? null : Link.assets("film_home/" + this.image);
         }
     }
 
@@ -98,7 +70,7 @@ public class FilmHomeContent
     public synchronized void load()
     {
         this.news = new ArrayList<>();
-        this.commissions = new CommissionBoard();
+        this.ads = new ArrayList<>();
         this.loaded = true;
 
         JsonObject news = readJson("news.json");
@@ -130,46 +102,26 @@ public class FilmHomeContent
             }
         }
 
-        JsonObject board = readJson("commissions.json");
+        JsonObject ads = readJson("ads.json");
 
-        if (board != null)
+        if (ads != null && ads.has("items") && ads.get("items").isJsonArray())
         {
-            this.commissions.displayName = string(board, "display_name");
-            this.commissions.contact = string(board, "contact");
-
-            if (board.has("items") && board.get("items").isJsonArray())
+            for (JsonElement element : ads.getAsJsonArray("items"))
             {
-                for (JsonElement element : board.getAsJsonArray("items"))
+                if (!element.isJsonObject())
                 {
-                    if (!element.isJsonObject())
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    JsonObject object = element.getAsJsonObject();
-                    CommissionItem item = new CommissionItem();
+                JsonObject object = element.getAsJsonObject();
+                AdItem item = new AdItem();
 
-                    item.id = string(object, "id");
-                    item.title = string(object, "title");
-                    item.cover = string(object, "cover");
-                    item.status = string(object, "status", "open");
-                    item.price = string(object, "price");
-                    item.note = string(object, "note");
-                    item.progress = object.has("progress") && object.get("progress").isJsonPrimitive()
-                        ? object.get("progress").getAsFloat()
-                        : -1F;
+                item.image = string(object, "image");
+                item.link = string(object, "link");
 
-                    if (object.has("slots") && object.get("slots").isJsonArray() && object.getAsJsonArray("slots").size() == 2)
-                    {
-                        JsonArray slots = object.getAsJsonArray("slots");
-
-                        item.slots = new int[] {slots.get(0).getAsInt(), slots.get(1).getAsInt()};
-                    }
-
-                    if (!item.title.isEmpty())
-                    {
-                        this.commissions.items.add(item);
-                    }
+                if (!item.image.isEmpty())
+                {
+                    this.ads.add(item);
                 }
             }
         }

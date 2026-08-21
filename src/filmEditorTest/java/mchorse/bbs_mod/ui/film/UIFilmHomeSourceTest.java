@@ -45,8 +45,8 @@ public final class UIFilmHomeSourceTest
             "home must format timestamps through RelativeTime");
         check(home.contains("UINewsStrip"),
             "home must host the news strip section");
-        check(home.contains("UICommissionBoard"),
-            "home must host the commission board column");
+        check(home.contains("UIAdBoard"),
+            "home must host the bottom-left ad board");
         check(home.contains("FilmThumbnails.getCached"),
             "film cards must render cached first-frame thumbnails");
         check(home.contains("FilmThumbnails.invalidate"),
