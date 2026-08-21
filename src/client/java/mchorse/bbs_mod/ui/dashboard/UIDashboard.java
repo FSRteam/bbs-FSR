@@ -4,13 +4,21 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchors;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelIds;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.OrbitCamera;
 import mchorse.bbs_mod.camera.controller.OrbitCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.dashboard.BBSDashboardPanelHostRegistry;
+import mchorse.bbs_mod.client.dashboard.BBSDashboardOverlayHostRegistry;
 import mchorse.bbs_mod.client.dashboard.DashboardPanelContribution;
+import mchorse.bbs_mod.client.dashboard.DashboardOverlayContribution;
 import mchorse.bbs_mod.events.register.RegisterDashboardPanelsEvent;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -30,7 +38,10 @@ import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIRenderingContext;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIViewportStack;
+import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.model_blocks.UIModelBlockPanel;
@@ -40,6 +51,7 @@ import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
 import mchorse.bbs_mod.ui.selectors.UISelectorsOverlayPanel;
 import mchorse.bbs_mod.ui.utility.UIUtilityOverlayPanel;
 import mchorse.bbs_mod.ui.utility.audio.UIAudioEditorPanel;
+import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIChalkboard;
 import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -61,6 +73,7 @@ import org.joml.Vector3f;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public class UIDashboard extends UIBaseMenu
 {
@@ -79,7 +92,12 @@ public class UIDashboard extends UIBaseMenu
     private CameraType lastPerspective = CameraType.FIRST_PERSON;
 
     private UIChalkboard chalkboard;
+    private final UIElement addonOverlayLayer = new UIElement();
+    private final Map<String, UIDashboardPanel> builtInPanels = new LinkedHashMap<>();
     private final Map<String, UIExtensionDashboardPanel> extensionPanels = new LinkedHashMap<>();
+    private final Map<String, UIExtensionDashboardOverlay> extensionOverlays = new LinkedHashMap<>();
+    private final Map<String, AnchorTarget> dashboardAnchors = new LinkedHashMap<>();
+    private boolean dashboardOpen;
 
     public UIDashboard()
     {
@@ -100,6 +118,9 @@ public class UIDashboard extends UIBaseMenu
         BBSMod.events.post(new RegisterDashboardPanelsEvent(this));
 
         this.main.add(this.panels);
+        this.addonOverlayLayer.full(this.getRoot()).eventPropagataion(EventPropagation.PASS);
+        this.getRoot().addBefore(this.overlay, this.addonOverlayLayer);
+        BBSDashboardOverlayHostRegistry.installAll(this);
 
         this.settingsPanel = new UISettingsOverlayPanel();
 
@@ -113,6 +134,8 @@ public class UIDashboard extends UIBaseMenu
             UIOverlay.addOverlayRight(this.context, new UISelectorsOverlayPanel(), 240);
         });
         this.selectors.tooltip(UIKeys.SELECTORS_TITLE, Direction.TOP);
+        this.registerAnchor(BBSDashboardAnchors.SETTINGS, null, () -> this.settings);
+        this.registerAnchor(BBSDashboardAnchors.SELECTORS, null, () -> this.selectors);
         this.chalkboard = new UIChalkboard();
         this.chalkboard.full(this.getRoot());
 
@@ -264,6 +287,13 @@ public class UIDashboard extends UIBaseMenu
             this.restoreCurrentPanelControls();
         }
 
+        this.dashboardOpen = true;
+
+        for (UIExtensionDashboardOverlay overlay : this.extensionOverlays.values())
+        {
+            overlay.open();
+        }
+
         BBSModClient.getCameraController().add(this.camera);
     }
 
@@ -274,6 +304,13 @@ public class UIDashboard extends UIBaseMenu
 
         if (nextMenu != this)
         {
+            this.dashboardOpen = false;
+
+            for (UIExtensionDashboardOverlay overlay : this.extensionOverlays.values())
+            {
+                overlay.close();
+            }
+
             this.panels.close();
         }
 
@@ -314,15 +351,20 @@ public class UIDashboard extends UIBaseMenu
 
     protected void registerPanels()
     {
-        this.panels.registerPanel(new UIMorphingPanel(this), UIKeys.MORPHING_TITLE, Icons.MORPH);
-        this.panels.registerPanel(new UIFilmPanel(this), UIKeys.FILM_TITLE, Icons.FILM);
-        this.panels.registerPanel(new UIModelBlockPanel(this), UIKeys.MODEL_BLOCKS_TITLE, Icons.BLOCK);
-        this.panels.registerPanel(new UIParticleSchemePanel(this), UIKeys.PANELS_PARTICLES, Icons.PARTICLE).marginLeft(10);
-        this.panels.registerPanel(new UIModelEditorPanel(this), UIKeys.MODEL_EDITOR_TITLE, Icons.POSE);
-        this.panels.registerPanel(new UITextureManagerPanel(this), UIKeys.TEXTURES_TOOLTIP, Icons.MATERIAL);
-        this.panels.registerPanel(new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND);
-        this.panels.registerPanel(new UIGraphPanel(this), UIKeys.GRAPH_TOOLTIP, Icons.GRAPH);
-        this.panels.registerPanel(new UIPluginsPanel(this), UIKeys.PLUGINS_TITLE, Icons.PROCESSOR);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.MORPHING, new UIMorphingPanel(this), UIKeys.MORPHING_TITLE, Icons.MORPH);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.FILM, new UIFilmPanel(this), UIKeys.FILM_TITLE, Icons.FILM);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_BLOCKS, new UIModelBlockPanel(this), UIKeys.MODEL_BLOCKS_TITLE, Icons.BLOCK);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.PARTICLES, new UIParticleSchemePanel(this), UIKeys.PANELS_PARTICLES, Icons.PARTICLE).marginLeft(10);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_EDITOR, new UIModelEditorPanel(this), UIKeys.MODEL_EDITOR_TITLE, Icons.POSE);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.TEXTURES, new UITextureManagerPanel(this), UIKeys.TEXTURES_TOOLTIP, Icons.MATERIAL);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.AUDIO, new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.GRAPH, new UIGraphPanel(this), UIKeys.GRAPH_TOOLTIP, Icons.GRAPH);
+        this.registerBuiltInPanel(BBSDashboardPanelIds.PLUGINS, new UIPluginsPanel(this), UIKeys.PLUGINS_TITLE, Icons.PROCESSOR);
+
+        if (!List.copyOf(this.builtInPanels.keySet()).equals(BBSDashboardPanelIds.BUILT_IN))
+        {
+            throw new IllegalStateException("Dashboard built-in panel ids do not match the taskbar registration order");
+        }
 
         if (LoaderAccessHolder.get().isDevelopmentEnvironment())
         {
@@ -330,6 +372,28 @@ public class UIDashboard extends UIBaseMenu
         }
 
         this.setPanel(this.getPanel(UIFilmPanel.class));
+    }
+
+    private UIIcon registerBuiltInPanel(String id, UIDashboardPanel panel, IKey title, mchorse.bbs_mod.ui.utils.icons.Icon icon)
+    {
+        if (!BBSDashboardPanelIds.isBuiltIn(id) || this.builtInPanels.putIfAbsent(id, panel) != null)
+        {
+            throw new IllegalStateException("Invalid or duplicate built-in Dashboard panel id: " + id);
+        }
+
+        UIIcon button = this.panels.registerPanel(panel, title, icon);
+
+        this.registerAnchor(BBSDashboardAnchors.panelButton(id), null, () -> button);
+        this.registerAnchor(BBSDashboardAnchors.panelContent(id), id, () -> panel);
+
+        if (panel instanceof UIMorphingPanel morphing)
+        {
+            this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE, id, () -> morphing.palette);
+            this.registerAnchor(BBSDashboardAnchors.MORPHING_DEMORPH, id, () -> morphing.demorph);
+            this.registerAnchor(BBSDashboardAnchors.MORPHING_FROM_MOB, id, () -> morphing.fromMob);
+        }
+
+        return button;
     }
 
     public <T> T getPanel(Class<T> clazz)
@@ -342,21 +406,147 @@ public class UIDashboard extends UIBaseMenu
         this.panels.setPanel(panel);
     }
 
+    public BBSDashboardNavigationResult navigateDashboardPanel(String requestedId)
+    {
+        String panelId = requestedId == null ? "" : requestedId.trim();
+
+        if (panelId.isEmpty())
+        {
+            return new BBSDashboardNavigationResult(
+                BBSDashboardNavigationStatus.REJECTED, panelId, "Dashboard panel id is blank"
+            );
+        }
+
+        UIDashboardPanel target = this.builtInPanels.get(panelId);
+
+        if (target == null)
+        {
+            target = this.extensionPanels.get(panelId);
+        }
+        if (target == null)
+        {
+            return new BBSDashboardNavigationResult(
+                BBSDashboardNavigationStatus.PANEL_NOT_FOUND, panelId, "Dashboard panel id is not registered"
+            );
+        }
+        if (this.panels.panel == target)
+        {
+            return new BBSDashboardNavigationResult(
+                BBSDashboardNavigationStatus.ALREADY_ACTIVE, panelId, "Dashboard panel is already active"
+            );
+        }
+
+        this.setPanel(target);
+
+        if (this.panels.panel != target)
+        {
+            return new BBSDashboardNavigationResult(
+                BBSDashboardNavigationStatus.FAILED, panelId, "Dashboard panel switch did not complete"
+            );
+        }
+
+        return new BBSDashboardNavigationResult(
+            BBSDashboardNavigationStatus.NAVIGATED, panelId, "Dashboard panel switch completed"
+        );
+    }
+
+    public BBSDashboardAnchorResult resolveDashboardAnchor(String requestedId)
+    {
+        String anchorId = requestedId == null ? "" : requestedId.trim();
+
+        if (anchorId.isEmpty())
+        {
+            return this.unavailableAnchor(BBSDashboardAnchorStatus.REJECTED, anchorId,
+                "Dashboard anchor id is blank");
+        }
+
+        AnchorTarget target = this.dashboardAnchors.get(anchorId);
+
+        if (target == null)
+        {
+            return this.unavailableAnchor(BBSDashboardAnchorStatus.CONTROL_NOT_FOUND, anchorId,
+                "Dashboard anchor id is not registered");
+        }
+        if (target.panelId() != null && !target.panelId().equals(this.activePanelId()))
+        {
+            return this.unavailableAnchor(BBSDashboardAnchorStatus.PANEL_NOT_MOUNTED, anchorId,
+                "Dashboard anchor panel is not active");
+        }
+
+        UIElement element = target.element().get();
+
+        if (element == null)
+        {
+            return this.unavailableAnchor(BBSDashboardAnchorStatus.CONTROL_NOT_FOUND, anchorId,
+                "Dashboard anchor control is not available");
+        }
+        if (!element.canBeSeen())
+        {
+            return this.unavailableAnchor(BBSDashboardAnchorStatus.CONTROL_HIDDEN, anchorId,
+                "Dashboard anchor control is hidden");
+        }
+
+        UIViewportStack stack = UIViewportStack.fromElement(element);
+        Area viewport = stack.getViewport();
+
+        if (viewport == null || !element.canBeRendered(viewport))
+        {
+            return this.unavailableAnchor(BBSDashboardAnchorStatus.OUTSIDE_VIEWPORT, anchorId,
+                "Dashboard anchor control is outside its viewport");
+        }
+
+        Area screenArea = new Area(
+            stack.globalX(element.area.x),
+            stack.globalY(element.area.y),
+            element.area.w,
+            element.area.h
+        );
+        Area screenViewport = new Area(
+            stack.globalX(viewport.x),
+            stack.globalY(viewport.y),
+            viewport.w,
+            viewport.h
+        );
+
+        if (!screenViewport.intersects(screenArea))
+        {
+            return this.unavailableAnchor(BBSDashboardAnchorStatus.OUTSIDE_VIEWPORT, anchorId,
+                "Dashboard anchor control is outside its viewport");
+        }
+
+        return new BBSDashboardAnchorResult(
+            BBSDashboardAnchorStatus.AVAILABLE,
+            anchorId,
+            screenArea.x,
+            screenArea.y,
+            screenArea.w,
+            screenArea.h,
+            true,
+            this.isAnchorHittable(element),
+            "Dashboard anchor resolved"
+        );
+    }
+
     public void installDashboardPanel(DashboardPanelContribution contribution) throws Exception
     {
         UIExtensionDashboardPanel replacement = new UIExtensionDashboardPanel(this, contribution);
         UIExtensionDashboardPanel current = this.extensionPanels.get(contribution.fullId());
+        UIIcon button;
 
         if (current == null)
         {
-            this.panels.registerPanel(replacement, contribution.spec().title(), contribution.spec().icon());
+            button = this.panels.registerPanel(replacement, contribution.spec().title(), contribution.spec().icon());
         }
         else
         {
-            this.panels.replacePanel(current, replacement, contribution.spec().title(), contribution.spec().icon());
+            button = this.panels.replacePanel(current, replacement, contribution.spec().title(), contribution.spec().icon());
         }
 
         this.extensionPanels.put(contribution.fullId(), replacement);
+        this.dashboardAnchors.remove(BBSDashboardAnchors.panelButton(contribution.fullId()));
+        this.dashboardAnchors.remove(BBSDashboardAnchors.panelContent(contribution.fullId()));
+        this.registerAnchor(BBSDashboardAnchors.panelButton(contribution.fullId()), null, () -> button);
+        this.registerAnchor(BBSDashboardAnchors.panelContent(contribution.fullId()), contribution.fullId(), () -> replacement);
     }
 
     public void removeDashboardPanel(DashboardPanelContribution contribution)
@@ -369,7 +559,117 @@ public class UIDashboard extends UIBaseMenu
         }
 
         this.extensionPanels.remove(contribution.fullId());
+        this.dashboardAnchors.remove(BBSDashboardAnchors.panelButton(contribution.fullId()));
+        this.dashboardAnchors.remove(BBSDashboardAnchors.panelContent(contribution.fullId()));
         this.panels.removePanel(panel, this.getPanel(UIFilmPanel.class));
+    }
+
+    public void installDashboardOverlay(DashboardOverlayContribution contribution) throws Exception
+    {
+        UIExtensionDashboardOverlay current = this.extensionOverlays.get(contribution.ownerId());
+
+        if (current != null)
+        {
+            current.unmount();
+        }
+
+        UIExtensionDashboardOverlay replacement = new UIExtensionDashboardOverlay(
+            this.addonOverlayLayer,
+            contribution
+        );
+
+        this.extensionOverlays.put(contribution.ownerId(), replacement);
+
+        if (this.dashboardOpen)
+        {
+            replacement.open();
+        }
+    }
+
+    public void setDashboardOverlayVisible(DashboardOverlayContribution contribution, boolean visible)
+    {
+        UIExtensionDashboardOverlay overlay = this.extensionOverlays.get(contribution.ownerId());
+
+        if (overlay != null && overlay.contribution() == contribution)
+        {
+            overlay.setAddonVisible(visible);
+        }
+    }
+
+    public void removeDashboardOverlay(DashboardOverlayContribution contribution)
+    {
+        UIExtensionDashboardOverlay overlay = this.extensionOverlays.get(contribution.ownerId());
+
+        if (overlay == null || overlay.contribution() != contribution)
+        {
+            return;
+        }
+
+        this.extensionOverlays.remove(contribution.ownerId());
+        overlay.unmount();
+    }
+
+    private void registerAnchor(String anchorId, String panelId, Supplier<UIElement> element)
+    {
+        AnchorTarget previous = this.dashboardAnchors.putIfAbsent(anchorId, new AnchorTarget(panelId, element));
+
+        if (previous != null)
+        {
+            throw new IllegalStateException("Duplicate Dashboard anchor id: " + anchorId);
+        }
+    }
+
+    private String activePanelId()
+    {
+        UIDashboardPanel active = this.panels.panel;
+
+        for (Map.Entry<String, UIDashboardPanel> entry : this.builtInPanels.entrySet())
+        {
+            if (entry.getValue() == active)
+            {
+                return entry.getKey();
+            }
+        }
+        for (Map.Entry<String, UIExtensionDashboardPanel> entry : this.extensionPanels.entrySet())
+        {
+            if (entry.getValue() == active)
+            {
+                return entry.getKey();
+            }
+        }
+
+        return null;
+    }
+
+    private BBSDashboardAnchorResult unavailableAnchor(
+        BBSDashboardAnchorStatus status,
+        String anchorId,
+        String message
+    )
+    {
+        return new BBSDashboardAnchorResult(status, anchorId, 0, 0, 0, 0, false, false, message);
+    }
+
+    private boolean isAnchorHittable(UIElement element)
+    {
+        if (UIOverlay.has(this.context))
+        {
+            return false;
+        }
+
+        UIElement current = element;
+
+        while (current != null)
+        {
+            if (!current.isEnabled())
+            {
+                return false;
+            }
+
+            current = current.getParent();
+        }
+
+        return true;
     }
 
     @Override
@@ -441,4 +741,7 @@ public class UIDashboard extends UIBaseMenu
             this.panels.panel.renderInWorld(context);
         }
     }
+
+    private record AnchorTarget(String panelId, Supplier<UIElement> element)
+    {}
 }

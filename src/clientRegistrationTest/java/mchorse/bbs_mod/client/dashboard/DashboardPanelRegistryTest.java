@@ -8,6 +8,8 @@ import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
 import mchorse.bbs_mod.api.client.BBSClientApi;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelContent;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayContent;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlaySubscription;
 import mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics;
 import mchorse.bbs_mod.api.registry.BBSRegistrationResult;
 import mchorse.bbs_mod.api.registry.BBSRegistrationStatus;
@@ -27,8 +29,42 @@ public final class DashboardPanelRegistryTest
     public static void runAll()
     {
         addonValidationAndFirstWins();
+        overlayValidationAndFirstWins();
         addonDiagnosticsRecordRegistrationOutcomes();
         generationCleanupUsesContributionIdentity();
+    }
+
+    private static void overlayValidationAndFirstWins()
+    {
+        BBSDashboardOverlayHostRegistry.clearForTests();
+        BBSAddonDescriptor missingCapability = BBSAddonDescriptor.builder("overlay_missing_capability").build();
+        BBSAddonDescriptor descriptor = BBSAddonDescriptor.builder("overlay_addon_test")
+            .capability(BBSAddonCapability.CLIENT_UI)
+            .build();
+
+        checkStatus(BBSClientApi.registerDashboardOverlay(null,
+            () -> BBSDashboardOverlayContent.of(new UIElement())).registration(),
+            BBSRegistrationStatus.REJECTED, "null overlay descriptor was accepted");
+        checkStatus(BBSClientApi.registerDashboardOverlay(missingCapability,
+            () -> BBSDashboardOverlayContent.of(new UIElement())).registration(),
+            BBSRegistrationStatus.REJECTED, "overlay without CLIENT_UI was accepted");
+        checkStatus(BBSClientApi.registerDashboardOverlay(descriptor, null).registration(),
+            BBSRegistrationStatus.REJECTED, "null overlay factory was accepted");
+
+        BBSDashboardOverlaySubscription first = BBSClientApi.registerDashboardOverlay(
+            descriptor, () -> BBSDashboardOverlayContent.of(new UIElement())
+        );
+        BBSDashboardOverlaySubscription duplicate = BBSClientApi.registerDashboardOverlay(
+            descriptor, () -> BBSDashboardOverlayContent.of(new UIElement())
+        );
+
+        checkStatus(first.registration(), BBSRegistrationStatus.ACCEPTED, "valid addon overlay was rejected");
+        checkStatus(duplicate.registration(), BBSRegistrationStatus.DUPLICATE,
+            "duplicate addon overlay was not first-wins");
+        first.close();
+        check(BBSDashboardOverlayHostRegistry.snapshot().isEmpty(),
+            "closing addon overlay left a registry contribution behind");
+        BBSDashboardOverlayHostRegistry.clearForTests();
     }
 
     private static void addonValidationAndFirstWins()
