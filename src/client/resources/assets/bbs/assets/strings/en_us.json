@@ -650,6 +650,7 @@
 	"bbs.ui.film.home.contact_copied": "Contact copied to clipboard",
 	"bbs.ui.film.home.refresh_cover": "Refresh cover",
 	"bbs.ui.film.home.refresh_scheduled": "Cover will refresh next time this film is opened",
+	"bbs.ui.film.home.card_size": "Card size",
 	"bbs.ui.film.groups.all": "All groups",
 	"bbs.ui.film.groups.extra_1": "Extra 1",
 	"bbs.ui.film.groups.extra_2": "Extra 2",

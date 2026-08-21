@@ -592,6 +592,7 @@
 	"bbs.ui.film.home.contact_copied": "Контакт скопирован",
 	"bbs.ui.film.home.refresh_cover": "Обновить обложку",
 	"bbs.ui.film.home.refresh_scheduled": "Обложка обновится при следующем открытии фильма",
+	"bbs.ui.film.home.card_size": "Размер карточек",
 	"bbs.ui.film.groups.all": "Все группы",
 	"bbs.ui.film.groups.extra_1": "Экстра 1",
 	"bbs.ui.film.groups.extra_2": "Экстра 2",

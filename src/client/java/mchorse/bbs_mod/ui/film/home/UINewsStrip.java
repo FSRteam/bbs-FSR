@@ -237,7 +237,7 @@ public class UINewsStrip extends UIElement
 
         if (textX == x + GAP)
         {
-            context.batcher.icon(Icons.IMAGE, Colors.A50 | BBSSettings.accentColorRGB(), x + GAP + (THUMB - 16) / 2, y + GAP + (THUMB - 16) / 2);
+            context.batcher.iconArea(Icons.IMAGE, Colors.A50 | BBSSettings.accentColorRGB(), x + GAP + (THUMB - 12) / 2, y + GAP + (THUMB - 12) / 2, 12, 12);
             textX += THUMB + GAP;
         }
 

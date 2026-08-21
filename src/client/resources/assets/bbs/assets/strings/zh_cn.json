@@ -715,6 +715,7 @@
     "bbs.ui.film.home.contact_copied": "联系方式已复制到剪贴板",
     "bbs.ui.film.home.refresh_cover": "刷新封面",
     "bbs.ui.film.home.refresh_scheduled": "封面将在下次打开该影片时刷新",
+    "bbs.ui.film.home.card_size": "卡片大小",
     "bbs.ui.film.groups.all": "所有组",
     "bbs.ui.film.groups.extra_1": "附加 1",
     "bbs.ui.film.groups.extra_2": "附加 2",

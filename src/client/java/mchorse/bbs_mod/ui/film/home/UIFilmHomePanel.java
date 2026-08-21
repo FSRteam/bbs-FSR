@@ -20,6 +20,7 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.grid.UICardGrid;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -122,6 +123,7 @@ public class UIFilmHomePanel extends UIElement
 
     private boolean gridMode = true;
     private SortMode sortMode = SortMode.UPDATED;
+    private float cardScale = 1F;
     private final Map<String, MapType> metaById = new HashMap<>();
     private int metaGeneration;
     private String filter = "";
@@ -145,11 +147,7 @@ public class UIFilmHomePanel extends UIElement
 
         this.stats.relative(banner).xy(12, BANNER_H - 38).w(1F, -160).h(12);
 
-        UIButton newFilm = new UIButton(L10n.lang("bbs.ui.film.home.new_film"), (b) -> this.addNewFilm());
-
-        newFilm.relative(banner).x(1F, -12).y(BANNER_H - 42).anchor(1F, 0F).wh(120, 20);
-
-        banner.add(new UIRenderable((ctx) -> this.renderBanner(ctx, banner.area)), title, this.stats, newFilm);
+        banner.add(new UIRenderable((ctx) -> this.renderBanner(ctx, banner.area)), title, this.stats);
 
         /* Toolbar */
         this.bar = new UIElement();
@@ -167,7 +165,7 @@ public class UIFilmHomePanel extends UIElement
         this.search.relative(bar).xy(8, 4).wh(180, 20);
 
         this.sortButton = new UIButton(this.getSortLabel(), (b) -> this.cycleSort());
-        this.sortButton.relative(bar).xy(196, 4).wh(140, 20);
+        this.sortButton.relative(bar).x(1F, -296).y(4).wh(140, 20);
 
         this.gridView = new UIIcon(Icons.LAYOUT, (b) -> this.setView(true));
         this.gridView.wh(20, 20);
@@ -184,13 +182,13 @@ public class UIFilmHomePanel extends UIElement
         this.rename = new UIIcon(Icons.EDIT, (b) -> this.renameSelected());
         this.remove = new UIIcon(Icons.REMOVE, (b) -> this.removeSelected());
 
-        this.gridView.relative(bar).xy(344, 4);
-        this.listView.relative(bar).xy(368, 4);
-        this.breadcrumb.relative(bar).xy(396, 9).w(1F, -396 - 104).h(14);
-        this.add.relative(bar).x(1F, -100).y(4);
-        this.dupe.relative(bar).x(1F, -76).y(4);
-        this.rename.relative(bar).x(1F, -52).y(4);
-        this.remove.relative(bar).x(1F, -28).y(4);
+        this.gridView.relative(bar).x(1F, -128).y(4);
+        this.listView.relative(bar).x(1F, -152).y(4);
+        this.breadcrumb.relative(bar).xy(196, 9).w(1F, -606).h(14);
+        this.add.relative(bar).x(1F, -104).y(4);
+        this.dupe.relative(bar).x(1F, -80).y(4);
+        this.rename.relative(bar).x(1F, -56).y(4);
+        this.remove.relative(bar).x(1F, -32).y(4);
 
         bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.add, this.dupe, this.rename, this.remove);
 
@@ -216,6 +214,19 @@ public class UIFilmHomePanel extends UIElement
         this.grid.keys().register(new KeyCombo(UIKeys.GENERAL_RENAME, GLFW.GLFW_KEY_F2), this::renameSelected).active(this::canUseGridKeys);
         this.grid.keys().register(new KeyCombo(UIKeys.PANELS_CONTEXT_OPEN, GLFW.GLFW_KEY_ENTER), this.grid::activateSelection).active(this::canUseGridKeys);
         this.grid.keys().register(new KeyCombo(UIKeys.KEYFRAMES_CONTEXT_SELECT_ALL, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_CONTROL), this.grid::selectAll).active(this::canUseGridKeys);
+
+        /* Card size slider (right cluster, left of the sort button) */
+        UISliderTrackpad sizeSlider = new UISliderTrackpad((v) ->
+        {
+            this.cardScale = (float) v.doubleValue();
+            this.grid.resize();
+        });
+
+        sizeSlider.limit(0.6D, 1.6D).increment(0.05D);
+        sizeSlider.setValue(1F);
+        sizeSlider.relative(this.bar).x(1F, -394).y(4).wh(90, 20);
+        sizeSlider.tooltip(L10n.lang("bbs.ui.film.home.card_size"));
+        this.bar.add(sizeSlider);
 
         /* Content: list (secondary view) */
         this.names = new UISearchList<>(new UIDataPathList((list) -> this.panel.pickData(list.get(0).toString())));
@@ -1039,13 +1050,13 @@ public class UIFilmHomePanel extends UIElement
         @Override
         public int cardHeight()
         {
-            return CARD_H;
+            return (int) (CARD_H * cardScale);
         }
 
         @Override
         public int preferredCardWidth()
         {
-            return CARD_W;
+            return (int) (CARD_W * cardScale);
         }
 
         @Override
@@ -1055,12 +1066,12 @@ public class UIFilmHomePanel extends UIElement
             int tx = area.x + pad;
             int ty = area.y + pad;
             int tw = area.w - pad * 2;
-            int th = THUMB_H;
+            int th = (int) (THUMB_H * cardScale);
 
             if (card.folder)
             {
                 context.batcher.box(tx, ty, tx + tw, ty + th, BBSSettings.chromeSurface());
-                context.batcher.icon(Icons.FOLDER, tx + tw / 2, ty + th / 2, 0.5F, 0.5F);
+                context.batcher.iconArea(Icons.FOLDER, Colors.WHITE, tx + tw / 2 - 6, ty + th / 2 - 6, 12, 12);
             }
             else
             {
@@ -1076,7 +1087,7 @@ public class UIFilmHomePanel extends UIElement
                     int[] colors = THUMB_COLORS[index];
 
                     context.batcher.gradientVBox(tx, ty, tx + tw, ty + th, colors[0], colors[1]);
-                    context.batcher.icon(Icons.FILM, Colors.WHITE, tx + tw / 2 - 8, ty + th / 2 - 8);
+                    context.batcher.iconArea(Icons.FILM, Colors.WHITE, tx + tw / 2 - 6, ty + th / 2 - 6, 12, 12);
                 }
 
                 if (card.duration > 0)
@@ -1100,8 +1111,8 @@ public class UIFilmHomePanel extends UIElement
 
             if (card.folder)
             {
-                context.batcher.icon(Icons.FOLDER, area.x + pad, textY - 1);
-                context.batcher.textShadow(card.renderedTitle, area.x + pad + 12, textY, BBSSettings.textColor());
+                context.batcher.iconArea(Icons.FOLDER, Colors.WHITE, area.x + pad, textY - 1, 12, 12);
+                context.batcher.textShadow(card.renderedTitle, area.x + pad + 15, textY, BBSSettings.textColor());
             }
             else
             {

@@ -296,7 +296,7 @@ public class UICommissionBoard extends UIElement
         int[] colors = UIFilmHomePanel.THUMB_COLORS[index];
 
         context.batcher.gradientVBox(x, y, x + w, y + h, colors[0], colors[1]);
-        context.batcher.icon(Icons.BRUSH, Colors.WHITE, x + w / 2 - 8, y + h / 2 - 8);
+        context.batcher.iconArea(Icons.BRUSH, Colors.WHITE, x + w / 2 - 6, y + h / 2 - 6, 12, 12);
     }
 
     private static int statusColor(String status)
