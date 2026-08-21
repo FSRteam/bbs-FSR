@@ -69,7 +69,7 @@ public class UIFilmHomePanel extends UIElement
     private static final Link BANNER = Link.assets("textures/banners/bg.png");
 
     /** Muted color pairs for procedural thumbnails, indexed by film id hash (content coding, not semantic). */
-    private static final int[][] THUMB_COLORS = {
+    static final int[][] THUMB_COLORS = {
         {0xff31415c, 0xff46587a}, {0xff46345c, 0xff5d4878}, {0xff2f4a44, 0xff40625a},
         {0xff553a34, 0xff6e4c42}, {0xff4c4230, 0xff635640}, {0xff37474f, 0xff4a5e68},
         {0xff4a3550, 0xff604768}, {0xff3d4a2f, 0xff52603f}
@@ -98,6 +98,11 @@ public class UIFilmHomePanel extends UIElement
 
     /* Banner */
     private final UILabel stats;
+    private final UIElement bar;
+
+    /* Content sections */
+    private final UINewsStrip newsStrip = new UINewsStrip();
+    private final UICommissionBoard board = new UICommissionBoard();
 
     /* Toolbar */
     private final UITextbox search;
@@ -125,6 +130,8 @@ public class UIFilmHomePanel extends UIElement
     {
         this.panel = panel;
 
+        FilmThumbnails.setPanel(panel);
+
         /* Banner */
         UIElement banner = new UIElement();
 
@@ -145,9 +152,9 @@ public class UIFilmHomePanel extends UIElement
         banner.add(new UIRenderable((ctx) -> this.renderBanner(ctx, banner.area)), title, this.stats, newFilm);
 
         /* Toolbar */
-        UIElement bar = new UIElement();
+        this.bar = new UIElement();
 
-        bar.relative(this).xy(0, BANNER_H).w(1F).h(BAR_H);
+        this.bar.relative(this).xy(0, BANNER_H).w(1F).h(BAR_H);
 
         this.search = new UITextbox((t) ->
         {
@@ -202,6 +209,7 @@ public class UIFilmHomePanel extends UIElement
             if (this.getSelectedFiles().size() == 1)
             {
                 menu.action(Icons.COPY, UIKeys.PANELS_CONTEXT_COPY, this::copySelected);
+                menu.action(Icons.CAMERA, L10n.lang("bbs.ui.film.home.refresh_cover"), this::refreshCover);
             }
         });
         this.grid.keys().register(Keys.DELETE, this::removeSelected).active(this::canUseGridKeys);
@@ -230,10 +238,66 @@ public class UIFilmHomePanel extends UIElement
             }
         });
 
-        this.add(new UIRenderable((ctx) -> this.renderEmptyState(ctx)), banner, bar, this.grid, this.names);
+        this.newsStrip.setVisible(false);
+        this.board.setVisible(false);
+
+        this.add(new UIRenderable((ctx) -> this.renderEmptyState(ctx)), banner, bar, this.grid, this.names, this.newsStrip, this.board);
 
         this.setView(true);
+        this.relayout();
         this.updateActionButtons();
+    }
+
+    /**
+     * Repositions every section below the banner. The news strip collapses
+     * when empty; the commission board takes a ~30% column next to the film
+     * area when it has content.
+     */
+    private void relayout()
+    {
+        int y = BANNER_H;
+
+        if (this.newsStrip.isVisible())
+        {
+            int stripH = this.newsStrip.getPreferredHeight();
+
+            this.newsStrip.relative(this).xy(0, y).w(1F).h(stripH);
+            y += stripH;
+        }
+
+        this.bar.relative(this).xy(0, y).w(1F).h(BAR_H);
+
+        int contentY = y + BAR_H + 6;
+        boolean hasBoard = this.board.isVisible();
+        int boardW = Math.max(220, Math.min(300, this.area.w * 3 / 10));
+
+        if (hasBoard)
+        {
+            this.board.relative(this).xy(8, contentY).w(boardW).h(1F, -contentY - 8);
+        }
+
+        int left = 8 + (hasBoard ? boardW + 10 : 0);
+
+        this.grid.relative(this).xy(left, contentY).w(1F, -left - 8).h(1F, -contentY - 8);
+    }
+
+    /** Reloads editorial content from config/jar and shows or hides the sections. */
+    private void applyContent()
+    {
+        FilmHomeContent.INSTANCE.load();
+        this.newsStrip.fill(FilmHomeContent.INSTANCE.news);
+        this.board.fill(FilmHomeContent.INSTANCE.commissions);
+        this.newsStrip.setVisible(!FilmHomeContent.INSTANCE.news.isEmpty());
+        this.board.setVisible(!FilmHomeContent.INSTANCE.commissions.items.isEmpty());
+        this.relayout();
+    }
+
+    @Override
+    public void resize()
+    {
+        super.resize();
+
+        this.relayout();
     }
 
     /* View switching & sorting */
@@ -681,6 +745,30 @@ public class UIFilmHomePanel extends UIElement
         });
     }
 
+    /** Drops the selected film's cover; re-captures immediately when it's open, otherwise on next open/save. */
+    private void refreshCover()
+    {
+        List<DataPath> files = this.getSelectedFiles();
+
+        if (files.size() != 1)
+        {
+            return;
+        }
+
+        String id = files.get(0).toString();
+
+        FilmThumbnails.invalidate(id);
+
+        if (this.panel.getData() != null && id.equals(this.panel.getData().getId()))
+        {
+            FilmThumbnails.requestCapture(id, 10);
+        }
+        else
+        {
+            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.refresh_scheduled"));
+        }
+    }
+
     private void dupeSelected()
     {
         List<DataPath> files = this.getSelectedFiles();
@@ -870,6 +958,7 @@ public class UIFilmHomePanel extends UIElement
             this.search.setText("");
             this.filter = "";
             this.grid.deselect();
+            this.applyContent();
             this.panel.requestNames();
         }
     }
@@ -975,11 +1064,20 @@ public class UIFilmHomePanel extends UIElement
             }
             else
             {
-                int index = Math.abs(card.path.toString().hashCode()) % THUMB_COLORS.length;
-                int[] colors = THUMB_COLORS[index];
+                Texture thumb = FilmThumbnails.getCached(card.path.toString());
 
-                context.batcher.gradientVBox(tx, ty, tx + tw, ty + th, colors[0], colors[1]);
-                context.batcher.icon(Icons.FILM, tx + tw / 2, ty + th / 2, 0.5F, 0.5F, Colors.WHITE);
+                if (thumb != null)
+                {
+                    UINewsStrip.drawCover(context.batcher, thumb, tx, ty, tw, th);
+                }
+                else
+                {
+                    int index = Math.abs(card.path.toString().hashCode()) % THUMB_COLORS.length;
+                    int[] colors = THUMB_COLORS[index];
+
+                    context.batcher.gradientVBox(tx, ty, tx + tw, ty + th, colors[0], colors[1]);
+                    context.batcher.icon(Icons.FILM, Colors.WHITE, tx + tw / 2 - 8, ty + th / 2 - 8);
+                }
 
                 if (card.duration > 0)
                 {

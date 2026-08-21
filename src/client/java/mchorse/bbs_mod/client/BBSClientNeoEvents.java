@@ -198,6 +198,7 @@ public final class BBSClientNeoEvents
     private static void onClientTickPost(ClientTickEvent.Post event)
     {
         BBSModClient.onClientTickPost();
+        mchorse.bbs_mod.ui.film.home.FilmThumbnails.clientTick();
     }
 
     private static void onLevelTickPost(LevelTickEvent.Post event)

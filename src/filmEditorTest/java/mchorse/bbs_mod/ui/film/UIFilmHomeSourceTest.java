@@ -43,8 +43,25 @@ public final class UIFilmHomeSourceTest
             "home must consume the batched film metadata pipeline");
         check(home.contains("RelativeTime.describe"),
             "home must format timestamps through RelativeTime");
+        check(home.contains("UINewsStrip"),
+            "home must host the news strip section");
+        check(home.contains("UICommissionBoard"),
+            "home must host the commission board column");
+        check(home.contains("FilmThumbnails.getCached"),
+            "film cards must render cached first-frame thumbnails");
+        check(home.contains("FilmThumbnails.invalidate"),
+            "the refresh-cover action must invalidate cached thumbnails");
 
-        int paletteStart = home.indexOf("private static final int[][] THUMB_COLORS");
+        String events = Files.readString(
+            Path.of("src/client/java/mchorse/bbs_mod/client/BBSClientNeoEvents.java")
+        );
+
+        check(events.contains("FilmThumbnails.clientTick()"),
+            "thumbnail capture must advance on the client tick");
+        check(panel.contains("FilmThumbnails.requestCapture"),
+            "the film panel must schedule cover captures");
+
+        int paletteStart = home.indexOf("static final int[][] THUMB_COLORS");
         int paletteEnd = home.indexOf("};", paletteStart);
 
         check(paletteStart >= 0 && paletteEnd > paletteStart,

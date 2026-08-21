@@ -1,0 +1,249 @@
+package mchorse.bbs_mod.ui.film.home;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.resources.Link;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Loader for the film home's editorial content (news items and the commission
+ * board). Content lives in {@code config/bbs/assets/film_home/*.json} so it can
+ * be edited without rebuilding; missing files fall back to the copies bundled
+ * in the jar. Everything degrades silently: malformed JSON or missing files
+ * simply yield empty lists, and the UI hides sections without content.
+ */
+public class FilmHomeContent
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-film-home");
+
+    public static final FilmHomeContent INSTANCE = new FilmHomeContent();
+
+    public List<NewsItem> news = new ArrayList<>();
+    public CommissionBoard commissions = new CommissionBoard();
+
+    public static class NewsItem
+    {
+        public String id = "";
+        /** update | notice | tutorial */
+        public String tag = "update";
+        public String date = "";
+        public String title = "";
+        public String summary = "";
+        /** Optional file name under film_home/images/, resolved through Link.assets. */
+        public String image = "";
+        public String url = "";
+
+        public Link imageLink()
+        {
+            return this.image.isEmpty() ? null : Link.assets("film_home/images/" + this.image);
+        }
+    }
+
+    public static class CommissionBoard
+    {
+        public String displayName = "";
+        public String contact = "";
+        public List<CommissionItem> items = new ArrayList<>();
+
+        public int countByStatus(String status)
+        {
+            int count = 0;
+
+            for (CommissionItem item : this.items)
+            {
+                if (item.status.equals(status))
+                {
+                    count += 1;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    public static class CommissionItem
+    {
+        public String id = "";
+        public String title = "";
+        public String cover = "";
+        /** open | queued | working | done | closed */
+        public String status = "open";
+        /** [total, taken]; negative total means hidden. */
+        public int[] slots = null;
+        public String price = "";
+        /** 0..1, negative hides the progress bar. */
+        public float progress = -1F;
+        public String note = "";
+
+        public Link coverLink()
+        {
+            return this.cover.isEmpty() ? null : Link.assets("film_home/images/" + this.cover);
+        }
+    }
+
+    private boolean loaded;
+
+    public synchronized void load()
+    {
+        this.news = new ArrayList<>();
+        this.commissions = new CommissionBoard();
+        this.loaded = true;
+
+        JsonObject news = readJson("news.json");
+
+        if (news != null && news.has("items") && news.get("items").isJsonArray())
+        {
+            for (JsonElement element : news.getAsJsonArray("items"))
+            {
+                if (!element.isJsonObject())
+                {
+                    continue;
+                }
+
+                JsonObject object = element.getAsJsonObject();
+                NewsItem item = new NewsItem();
+
+                item.id = string(object, "id");
+                item.tag = string(object, "tag", "update");
+                item.date = string(object, "date");
+                item.title = string(object, "title");
+                item.summary = string(object, "summary");
+                item.image = string(object, "image");
+                item.url = string(object, "url");
+
+                if (!item.title.isEmpty())
+                {
+                    this.news.add(item);
+                }
+            }
+        }
+
+        JsonObject board = readJson("commissions.json");
+
+        if (board != null)
+        {
+            this.commissions.displayName = string(board, "display_name");
+            this.commissions.contact = string(board, "contact");
+
+            if (board.has("items") && board.get("items").isJsonArray())
+            {
+                for (JsonElement element : board.getAsJsonArray("items"))
+                {
+                    if (!element.isJsonObject())
+                    {
+                        continue;
+                    }
+
+                    JsonObject object = element.getAsJsonObject();
+                    CommissionItem item = new CommissionItem();
+
+                    item.id = string(object, "id");
+                    item.title = string(object, "title");
+                    item.cover = string(object, "cover");
+                    item.status = string(object, "status", "open");
+                    item.price = string(object, "price");
+                    item.note = string(object, "note");
+                    item.progress = object.has("progress") && object.get("progress").isJsonPrimitive()
+                        ? object.get("progress").getAsFloat()
+                        : -1F;
+
+                    if (object.has("slots") && object.get("slots").isJsonArray() && object.getAsJsonArray("slots").size() == 2)
+                    {
+                        JsonArray slots = object.getAsJsonArray("slots");
+
+                        item.slots = new int[] {slots.get(0).getAsInt(), slots.get(1).getAsInt()};
+                    }
+
+                    if (!item.title.isEmpty())
+                    {
+                        this.commissions.items.add(item);
+                    }
+                }
+            }
+        }
+    }
+
+    public synchronized void ensureLoaded()
+    {
+        if (!this.loaded)
+        {
+            this.load();
+        }
+    }
+
+    /**
+     * User override first ({@code config/bbs/assets/film_home/<name>}), then
+     * the jar-bundled default. Returns null when neither exists.
+     */
+    private static JsonObject readJson(String name)
+    {
+        byte[] bytes = readOverride(name);
+
+        if (bytes == null)
+        {
+            try (InputStream stream = FilmHomeContent.class.getResourceAsStream("/assets/bbs/assets/film_home/" + name))
+            {
+                if (stream != null)
+                {
+                    bytes = stream.readAllBytes();
+                }
+            }
+            catch (Exception e)
+            {
+                LOGGER.warn("[BBS-SEM] topic=film_home phase=load result=skip reason=bundled_read_failed file={}", name);
+            }
+        }
+
+        if (bytes == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        }
+        catch (Exception e)
+        {
+            LOGGER.warn("[BBS-SEM] topic=film_home phase=parse result=drop reason=malformed_json file={}", name);
+
+            return null;
+        }
+    }
+
+    private static byte[] readOverride(String name)
+    {
+        try
+        {
+            File file = BBSMod.getAssetsPath("film_home/" + name);
+
+            return file != null && file.isFile() ? Files.readAllBytes(file.toPath()) : null;
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    private static String string(JsonObject object, String key)
+    {
+        return string(object, key, "");
+    }
+
+    private static String string(JsonObject object, String key, String fallback)
+    {
+        return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsString() : fallback;
+    }
+}

@@ -50,6 +50,7 @@ import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.dashboard.utils.IUIOrbitKeysHandler;
 import mchorse.bbs_mod.ui.film.audio.UIAudioRecorder;
 import mchorse.bbs_mod.ui.film.controller.UIFilmController;
+import mchorse.bbs_mod.ui.film.home.FilmThumbnails;
 import mchorse.bbs_mod.ui.film.home.UIFilmHomePanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.UIFilmUndoHandler;
@@ -1665,6 +1666,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.setFlight(false);
         cameraController.add(this.runner);
 
+        if (this.data != null)
+        {
+            /* First-frame cover capture once the preview has settled. */
+            FilmThumbnails.requestCapture(this.data.getId(), 30);
+        }
+
         this.getContext().menu.getRoot().add(this.secretPlay);
     }
 
@@ -1851,6 +1858,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 /* Single last-modified chokepoint: every persisted save
                  * (manual, periodic, close, pre-pick) flows through here. */
                 this.data.stampUpdatedTimeNow();
+                FilmThumbnails.requestCapture(this.data.getId(), 15);
             }
 
             /* The base panel owns the repository selected when this Film data
