@@ -44,6 +44,8 @@ public class Film extends ValueGroup
     public final ValueString description = new ValueString("description", "");
     /** UTC instant as ISO-8601 ({@link Instant#toString()}), set when the film is first created. */
     public final ValueString createdAt = new ValueString("created_at", "");
+    /** UTC instant as ISO-8601 ({@link Instant#toString()}), set when the film is last saved. */
+    public final ValueString updatedAt = new ValueString("updated_at", "");
     /** Time spent editing with recent input (excludes AFK idle in the film editor). */
     public final ValueLong timeSpentActive = new ValueLong("time_spent_active", 0L);
 
@@ -64,12 +66,40 @@ public class Film extends ValueGroup
         
         this.add(this.description);
         this.add(this.createdAt);
+        this.add(this.updatedAt);
         this.add(this.timeSpentActive);
     }
 
     public void stampCreationTimeNow()
     {
         this.createdAt.set(Instant.now().toString());
+    }
+
+    public void stampUpdatedTimeNow()
+    {
+        this.updatedAt.set(Instant.now().toString());
+    }
+
+    /**
+     * Parse an ISO-8601 instant as stored by {@link #createdAt}/{@link #updatedAt}.
+     *
+     * @return the parsed instant, or {@code null} for missing or malformed values.
+     */
+    public static Instant parseTimestamp(String iso)
+    {
+        if (iso == null || iso.isEmpty())
+        {
+            return null;
+        }
+
+        try
+        {
+            return Instant.parse(iso);
+        }
+        catch (DateTimeException e)
+        {
+            return null;
+        }
     }
 
     /**

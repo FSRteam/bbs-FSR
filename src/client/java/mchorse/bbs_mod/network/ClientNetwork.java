@@ -49,7 +49,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -1094,6 +1096,38 @@ public class ClientNetwork
 
         mapType.putString("id", id);
         ClientNetwork.sendManagerData(RepositoryOperation.LOAD, mapType, consumer);
+    }
+
+    /**
+     * Request the film home metadata list from the server. Every entry is a
+     * map with {@code id}, {@code created_at}, {@code updated_at},
+     * {@code description} (already truncated server-side) and {@code duration}
+     * (camera ticks). Malformed entries are skipped rather than failing the
+     * whole batch; the consumer always receives a list (empty when the server
+     * response was not a list).
+     */
+    public static void requestFilmMeta(Consumer<List<MapType>> consumer)
+    {
+        ClientNetwork.sendManagerData(RepositoryOperation.FILM_META, new MapType(), (data) ->
+        {
+            List<MapType> list = new ArrayList<>();
+
+            if (data != null && data.isList())
+            {
+                for (BaseType element : data.asList())
+                {
+                    if (element != null && element.isMap())
+                    {
+                        list.add(element.asMap());
+                    }
+                }
+            }
+
+            if (consumer != null)
+            {
+                consumer.accept(list);
+            }
+        });
     }
 
     public static void sendManagerData(RepositoryOperation op, BaseType data, Consumer<BaseType> consumer)

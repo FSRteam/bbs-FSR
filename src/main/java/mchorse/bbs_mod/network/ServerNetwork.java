@@ -775,6 +775,10 @@ public class ServerNetwork
 
                         sendManagerData(player, callbackId, op, list);
                     }
+                    else if (op == RepositoryOperation.FILM_META)
+                    {
+                        sendFilmMetaData(player, callbackId, op, films);
+                    }
                     else if (op == RepositoryOperation.ADD_FOLDER)
                     {
                         String folder = data.getString("folder");
@@ -2609,6 +2613,123 @@ public class ServerNetwork
             packetByteBuf.writeInt(callbackId);
             packetByteBuf.writeInt(op.ordinal());
         });
+    }
+
+    /**
+     * Batch film metadata for the client's film home list: one
+     * {@code {id, created_at, updated_at, description, duration}} entry per film.
+     *
+     * <p>Deliberately uses {@link FilmManager#loadRaw(String)} instead of
+     * {@code create}: raw maps must never reach addon clip factories here, and
+     * metadata extraction needs only plain map leaves. loadRaw is disk IO plus
+     * decompression, so a repository with several hundred films is scanned on
+     * the server thread inside the caller's {@code server.execute(...)}; per-film
+     * failures are skipped and counted (one bounded warn, no per-film logging).
+     */
+    private static void sendFilmMetaData(ServerPlayer player, int callbackId, RepositoryOperation op, FilmManager films)
+    {
+        ListType list = new ListType();
+        int skipped = 0;
+
+        for (String id : films.getKeys())
+        {
+            if (id == null || id.endsWith("/"))
+            {
+                continue;
+            }
+
+            try
+            {
+                MapType raw = films.loadRaw(id);
+                MapType meta = raw == null ? null : filmMetaData(id, raw);
+
+                if (meta == null)
+                {
+                    skipped += 1;
+                    continue;
+                }
+
+                list.add(meta);
+            }
+            catch (Exception | LinkageError e)
+            {
+                skipped += 1;
+            }
+        }
+
+        if (skipped > 0)
+        {
+            LOGGER.warn("[BBS-SEM] topic=net.film_repository phase=meta result=partial reason=unreadable_films player={} skipped={} total={}",
+                player.getGameProfile().getName(),
+                skipped,
+                list.size());
+        }
+
+        sendManagerData(player, callbackId, op, list);
+    }
+
+    /** Description is truncated to keep one metadata packet bounded for large repositories. */
+    private static final int FILM_META_MAX_DESCRIPTION_CHARS = 120;
+
+    /**
+     * Extract one film's metadata from its raw persisted map without invoking
+     * Film or addon clip factories. Duration is derived from the camera clip
+     * list's {@code tick + duration} leaves (mirrors
+     * {@link Clips#calculateDuration()}); if the camera data is missing or has
+     * no readable clips, duration is 0.
+     */
+    private static MapType filmMetaData(String id, MapType raw)
+    {
+        MapType meta = new MapType();
+
+        meta.putString("id", id);
+        meta.putString("created_at", raw.getString("created_at"));
+        meta.putString("updated_at", raw.getString("updated_at"));
+
+        String description = raw.getString("description");
+        int length = description.length();
+
+        meta.putString("description", length > FILM_META_MAX_DESCRIPTION_CHARS
+            ? description.substring(0, FILM_META_MAX_DESCRIPTION_CHARS)
+            : description);
+        meta.putInt("duration", rawCameraDuration(raw));
+
+        return meta;
+    }
+
+    /**
+     * Max {@code tick + duration} over the raw camera clip list. Reads only
+     * integer leaves from already-deserialized maps, so it stays side-effect
+     * free and factory free.
+     */
+    private static int rawCameraDuration(MapType raw)
+    {
+        BaseType camera = raw.get("camera");
+
+        if (!BaseType.isList(camera))
+        {
+            return 0;
+        }
+
+        int max = 0;
+
+        for (BaseType element : camera.asList())
+        {
+            if (!BaseType.isMap(element))
+            {
+                continue;
+            }
+
+            MapType clip = element.asMap();
+            int end = clip.getInt("tick") + clip.getInt("duration");
+
+            if (end > max)
+            {
+                max = end;
+            }
+        }
+
+        return max;
     }
 
     private static void sendRecordingStartRejected(ServerPlayer player, String filmId, int replayId, int tick)
