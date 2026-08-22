@@ -104,7 +104,6 @@ public class UIFilmHomePanel extends UIElement
     /* Content sections */
     private final UINewsStrip newsStrip = new UINewsStrip();
     private final UIAdBoard board = new UIAdBoard();
-    private final UIIcon camBatch = new UIIcon(Icons.CAMERA, (b) -> this.startMissingCaptures());
 
     /* Toolbar */
     private final UITextbox search;
@@ -186,13 +185,12 @@ public class UIFilmHomePanel extends UIElement
         this.gridView.relative(bar).x(1F, -128).y(4);
         this.listView.relative(bar).x(1F, -152).y(4);
         this.breadcrumb.relative(bar).xy(196, 9).w(1F, -606).h(14);
-        this.camBatch.relative(bar).x(1F, -176).y(4);
         this.add.relative(bar).x(1F, -104).y(4);
         this.dupe.relative(bar).x(1F, -80).y(4);
         this.rename.relative(bar).x(1F, -56).y(4);
         this.remove.relative(bar).x(1F, -32).y(4);
 
-        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.camBatch, this.add, this.dupe, this.rename, this.remove);
+        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.add, this.dupe, this.rename, this.remove);
 
         /* Content: grid */
         this.grid = new UICardGrid<>(this::activateCard, new FilmCardRenderer());
@@ -209,7 +207,6 @@ public class UIFilmHomePanel extends UIElement
             if (this.getSelectedFiles().size() == 1)
             {
                 menu.action(Icons.COPY, UIKeys.PANELS_CONTEXT_COPY, this::copySelected);
-                menu.action(Icons.CAMERA, L10n.lang("bbs.ui.film.home.refresh_cover"), this::refreshCover);
             }
         });
         this.grid.keys().register(Keys.DELETE, this::removeSelected).active(this::canUseGridKeys);
@@ -259,8 +256,6 @@ public class UIFilmHomePanel extends UIElement
         this.setView(true);
         this.relayout();
         this.updateActionButtons();
-
-        this.camBatch.tooltip(L10n.lang("bbs.ui.film.home.generate_covers"));
     }
 
     /**
@@ -394,7 +389,43 @@ public class UIFilmHomePanel extends UIElement
             }
 
             this.syncCards();
+            this.autoGenerateCovers();
         });
+    }
+
+    /**
+     * Covers are fully automatic: whenever the home learns the film list and
+     * some films lack a thumbnail, generation starts on its own — no button,
+     * no context menu.
+     */
+    private void autoGenerateCovers()
+    {
+        if (FilmThumbnails.isBatchRunning())
+        {
+            return;
+        }
+
+        List<String> missing = new ArrayList<>();
+
+        for (String id : this.metaById.keySet())
+        {
+            if (!FilmThumbnails.hasThumbnail(id))
+            {
+                missing.add(id);
+            }
+        }
+
+        if (missing.isEmpty())
+        {
+            return;
+        }
+
+        int queued = FilmThumbnails.startBatch(missing);
+
+        if (queued > 0)
+        {
+            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.covers_running").format(queued));
+        }
     }
 
     /** Project the currently visible data paths into sorted/filtered grid cards. */
@@ -762,45 +793,6 @@ public class UIFilmHomePanel extends UIElement
                 Window.setClipboard(data.toData().asMap(), "_ContentType_" + this.panel.getType().getId());
             }
         });
-    }
-
-    /** Drops the selected film's cover; re-captures immediately when it's open, otherwise on next open/save. */
-    private void refreshCover()
-    {
-        List<DataPath> files = this.getSelectedFiles();
-
-        if (files.size() != 1)
-        {
-            return;
-        }
-
-        String id = files.get(0).toString();
-
-        FilmThumbnails.invalidate(id);
-
-        if (this.panel.getData() != null && id.equals(this.panel.getData().getId()))
-        {
-            FilmThumbnails.requestCapture(id, 10);
-        }
-        else
-        {
-            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.refresh_scheduled"));
-        }
-    }
-
-    /** Kicks off automatic cover generation for every film that lacks one. */
-    private void startMissingCaptures()
-    {
-        int count = FilmThumbnails.startBatch(this.metaById.keySet());
-
-        if (count == 0)
-        {
-            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.covers_none"));
-        }
-        else
-        {
-            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.covers_running").format(count));
-        }
     }
 
     private void dupeSelected()
