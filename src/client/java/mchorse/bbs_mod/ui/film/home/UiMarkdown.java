@@ -241,7 +241,8 @@ public class UiMarkdown
     private static int appendSegments(Batcher2D batcher, Layout layout, List<Segment> segments, int indent, int cy, int w, int lineH)
     {
         List<Run> words = flatten(segments);
-        Line line = new Line(cy, lineH);
+        int ly = cy;
+        Line line = new Line(ly, lineH);
 
         layout.lines.add(line);
 
@@ -262,7 +263,8 @@ public class UiMarkdown
 
                     if (cx + cw > indent + w && cx > indent)
                     {
-                        line = new Line(cy, lineH);
+                        ly += lineH;
+                        line = new Line(ly, lineH);
                         layout.lines.add(line);
                         cx = indent;
                     }
@@ -276,7 +278,8 @@ public class UiMarkdown
 
             if (cx + width > indent + w && cx > indent)
             {
-                line = new Line(cy, lineH);
+                ly += lineH;
+                line = new Line(ly, lineH);
                 layout.lines.add(line);
                 cx = indent;
             }
@@ -285,7 +288,7 @@ public class UiMarkdown
             cx += width;
         }
 
-        return cy + lineH;
+        return ly + lineH;
     }
 
     private static List<Run> flatten(List<Segment> segments)

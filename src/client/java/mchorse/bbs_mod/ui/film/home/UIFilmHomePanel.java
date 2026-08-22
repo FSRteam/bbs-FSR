@@ -104,6 +104,7 @@ public class UIFilmHomePanel extends UIElement
     /* Content sections */
     private final UINewsStrip newsStrip = new UINewsStrip();
     private final UIAdBoard board = new UIAdBoard();
+    private final UIIcon camBatch = new UIIcon(Icons.CAMERA, (b) -> this.startMissingCaptures());
 
     /* Toolbar */
     private final UITextbox search;
@@ -185,12 +186,13 @@ public class UIFilmHomePanel extends UIElement
         this.gridView.relative(bar).x(1F, -128).y(4);
         this.listView.relative(bar).x(1F, -152).y(4);
         this.breadcrumb.relative(bar).xy(196, 9).w(1F, -606).h(14);
+        this.camBatch.relative(bar).x(1F, -176).y(4);
         this.add.relative(bar).x(1F, -104).y(4);
         this.dupe.relative(bar).x(1F, -80).y(4);
         this.rename.relative(bar).x(1F, -56).y(4);
         this.remove.relative(bar).x(1F, -32).y(4);
 
-        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.add, this.dupe, this.rename, this.remove);
+        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.camBatch, this.add, this.dupe, this.rename, this.remove);
 
         /* Content: grid */
         this.grid = new UICardGrid<>(this::activateCard, new FilmCardRenderer());
@@ -257,6 +259,8 @@ public class UIFilmHomePanel extends UIElement
         this.setView(true);
         this.relayout();
         this.updateActionButtons();
+
+        this.camBatch.tooltip(L10n.lang("bbs.ui.film.home.generate_covers"));
     }
 
     /**
@@ -781,6 +785,21 @@ public class UIFilmHomePanel extends UIElement
         else
         {
             this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.refresh_scheduled"));
+        }
+    }
+
+    /** Kicks off automatic cover generation for every film that lacks one. */
+    private void startMissingCaptures()
+    {
+        int count = FilmThumbnails.startBatch(this.metaById.keySet());
+
+        if (count == 0)
+        {
+            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.covers_none"));
+        }
+        else
+        {
+            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.covers_running").format(count));
         }
     }
 

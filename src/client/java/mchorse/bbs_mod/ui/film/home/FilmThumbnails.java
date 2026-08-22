@@ -54,12 +54,60 @@ public class FilmThumbnails
     private static String pendingFilmId;
     private static int pendingTicks = -1;
 
-    private FilmThumbnails()
-    {}
+    /* Batch generation: sequentially opens films that lack covers so their
+     * monitor frame can be captured without any manual steps */
+    private static java.util.ArrayDeque<String> batchQueue;
+    private static String batchCurrent;
+    private static int batchTimer;
+    private static int batchCooldown;
+    private static int batchTotal;
+    private static int batchDone;
 
     public static void setPanel(UIFilmPanel filmPanel)
     {
         panel = filmPanel;
+    }
+
+    /** Whether a cover file already exists for this film. */
+    public static boolean hasThumbnail(String filmId)
+    {
+        return filmId != null && fileFor(filmId).isFile();
+    }
+
+    /**
+     * Queues films for automatic cover generation: each one is opened in the
+     * editor, its scheduled first-frame capture runs, then it is unloaded
+     * again. Returns how many films actually need generation.
+     */
+    public static int startBatch(java.util.Collection<String> filmIds)
+    {
+        java.util.ArrayDeque<String> queue = new java.util.ArrayDeque<>();
+
+        for (String id : filmIds)
+        {
+            if (!hasThumbnail(id))
+            {
+                queue.add(id);
+            }
+        }
+
+        if (queue.isEmpty())
+        {
+            return 0;
+        }
+
+        batchQueue = queue;
+        batchTotal = queue.size();
+        batchDone = 0;
+        batchCurrent = null;
+        batchCooldown = 0;
+
+        return queue.size();
+    }
+
+    public static boolean isBatchRunning()
+    {
+        return batchQueue != null;
     }
 
     /**
@@ -81,6 +129,8 @@ public class FilmThumbnails
     /** Client tick hook (render thread). */
     public static void clientTick()
     {
+        tickBatch();
+
         if (pendingTicks < 0)
         {
             return;
@@ -100,6 +150,95 @@ public class FilmThumbnails
                 capture(filmId);
             }
         }
+    }
+
+    /**
+     * Batch state machine, all on the render thread: open the next film,
+     * poll for its captured cover (bounded by a timeout), unload back to the
+     * home, brief cooldown, repeat. The batch aborts silently if the user
+     * opens a different film themselves.
+     */
+    private static void tickBatch()
+    {
+        if (batchCooldown > 0)
+        {
+            batchCooldown -= 1;
+
+            return;
+        }
+
+        if (batchCurrent == null)
+        {
+            if (batchQueue == null || batchQueue.isEmpty())
+            {
+                if (batchTotal > 0)
+                {
+                    finishBatch();
+                }
+
+                return;
+            }
+
+            if (panel == null || panel.getData() != null || Minecraft.getInstance().level == null)
+            {
+                return;
+            }
+
+            batchCurrent = batchQueue.poll();
+            panel.pickData(batchCurrent);
+            batchTimer = 200;
+
+            return;
+        }
+
+        /* A film is open and we're waiting for its cover to land */
+        String expected = panel.getData() == null ? null : panel.getData().getId();
+
+        if (expected == null || !expected.equals(batchCurrent))
+        {
+            /* User navigated away themselves - give up on the whole run */
+            abortBatch();
+
+            return;
+        }
+
+        boolean captured = hasThumbnail(batchCurrent);
+
+        batchTimer -= 1;
+
+        if (captured || batchTimer <= 0)
+        {
+            batchDone += 1;
+            batchCurrent = null;
+            batchTimer = 0;
+            panel.fill(null);
+            batchCooldown = 15;
+        }
+    }
+
+    private static void finishBatch()
+    {
+        int done = batchDone;
+
+        batchQueue = null;
+        batchTotal = 0;
+        batchDone = 0;
+
+        Minecraft mc = Minecraft.getInstance();
+
+        if (mc != null && mc.player != null && panel != null && panel.getContext() != null)
+        {
+            panel.getContext().notifyInfo(mchorse.bbs_mod.l10n.L10n.lang("bbs.ui.film.home.covers_done").format(done));
+        }
+    }
+
+    private static void abortBatch()
+    {
+        batchQueue = null;
+        batchCurrent = null;
+        batchTimer = 0;
+        batchTotal = 0;
+        batchDone = 0;
     }
 
     private static void capture(String filmId)
