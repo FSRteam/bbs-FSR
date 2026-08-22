@@ -218,18 +218,10 @@ public class FilmThumbnails
 
     private static void finishBatch()
     {
-        int done = batchDone;
-
+        /* Silent completion - covers simply appear in the grid */
         batchQueue = null;
         batchTotal = 0;
         batchDone = 0;
-
-        Minecraft mc = Minecraft.getInstance();
-
-        if (mc != null && mc.player != null && panel != null && panel.getContext() != null)
-        {
-            panel.getContext().notifyInfo(mchorse.bbs_mod.l10n.L10n.lang("bbs.ui.film.home.covers_done").format(done));
-        }
     }
 
     private static void abortBatch()

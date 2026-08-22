@@ -420,12 +420,8 @@ public class UIFilmHomePanel extends UIElement
             return;
         }
 
-        int queued = FilmThumbnails.startBatch(missing);
-
-        if (queued > 0)
-        {
-            this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.covers_running").format(queued));
-        }
+        /* Silent: the batch runs in the background, no toasts */
+        FilmThumbnails.startBatch(missing);
     }
 
     /** Project the currently visible data paths into sorted/filtered grid cards. */
