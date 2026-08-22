@@ -361,13 +361,17 @@ public class UIAdBoard extends UIElement
     {
         UIOverlayPanel panel = new UIOverlayPanel(IKey.EMPTY);
 
-        final int imageW = 288;
+        /* All geometry is fixed from the top-left of the content area. The
+         * content is 20px narrower than the panel (right strip hosts the
+         * close button), so every width stays clear of it. */
+        final int imageW = 248;
         final int imageH = imageW * 3 / 4;
-        final int overlayH = imageH + 178;
+        final int bodyH = 130;
+        final int buttonsY = 4 + imageH + 10 + bodyH + 8;
 
         UIElement imageBox = new UIElement();
 
-        imageBox.relative(panel.content).xy(6, 6).wh(imageW, imageH);
+        imageBox.relative(panel.content).xy(6, 4).wh(imageW, imageH);
         imageBox.add(new UIRenderable((ctx) ->
         {
             Texture texture = WebImages.resolve(ad.image);
@@ -385,20 +389,11 @@ public class UIAdBoard extends UIElement
 
         MarkdownBody body = new MarkdownBody(ad.markdown);
 
-        body.relative(panel.content).xy(6, imageH + 14).w(1F, -12).h(1F, -imageH - 46);
+        body.relative(panel.content).xy(6, 4 + imageH + 10).w(imageW).h(bodyH);
 
         panel.content.add(imageBox, body);
 
         boolean web = ad.link.startsWith("http://") || ad.link.startsWith("https://");
-
-        if (web)
-        {
-            UIIcon open = new UIIcon(Icons.HELP, (b) -> UIUtils.openWebLink(ad.link));
-
-            open.relative(panel.content).x(1F, -116).y(1F, -26).wh(20, 20);
-            open.tooltip(L10n.lang("bbs.ui.film.home.open_url"));
-            panel.content.add(open);
-        }
 
         UIButton copy = new UIButton(L10n.lang("bbs.ui.film.home.copy_link"), (b) ->
         {
@@ -406,9 +401,18 @@ public class UIAdBoard extends UIElement
             this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.link_copied"));
         });
 
-        copy.relative(panel.content).x(1F, -6).y(1F, -26).anchor(1F, 0F).wh(104, 20);
+        copy.relative(panel.content).xy(6, buttonsY).wh(120, 20);
         panel.content.add(copy);
 
-        UIOverlay.addOverlay(this.getContext(), panel, imageW + 12, overlayH);
+        if (web)
+        {
+            UIIcon open = new UIIcon(Icons.HELP, (b) -> UIUtils.openWebLink(ad.link));
+
+            open.relative(panel.content).xy(132, buttonsY).wh(20, 20);
+            open.tooltip(L10n.lang("bbs.ui.film.home.open_url"));
+            panel.content.add(open);
+        }
+
+        UIOverlay.addOverlay(this.getContext(), panel, 280, buttonsY + 20 + 18);
     }
 }
