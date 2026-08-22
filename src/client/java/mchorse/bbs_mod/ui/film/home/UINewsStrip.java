@@ -169,7 +169,7 @@ public class UINewsStrip extends UIElement
             panel.content.add(copy);
         }
 
-        UIOverlay.addOverlay(this.getContext(), panel);
+        UIOverlay.addOverlay(this.getContext(), panel, 320, 280);
     }
 
     private void renderStrip(UIContext context)

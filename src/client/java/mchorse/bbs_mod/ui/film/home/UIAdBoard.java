@@ -24,17 +24,19 @@ import java.util.List;
  * Bottom-left ad board of the film home: a paged carousel of 4:3 ad images.
  *
  * <p>The carousel auto-flips to the left every 10 seconds; during a flip both
- * the outgoing and incoming slides are visible, offset while they travel. The
- * "ad slot for rent" tile sits statically below and never participates in
- * paging — with no ads (or a single ad) nothing flips. Clicking an ad opens a
- * detail overlay with the full image and a selectable Markdown body plus
- * copy/open link actions. Content comes from {@code film_home/ads.json}
- * (config override, jar fallback).
+ * the outgoing and incoming slides travel offset from each other. Slides can
+ * also be dragged horizontally with the mouse (short tap opens, longer drags
+ * flip to the previous/next ad) and pagination dots underneath jump straight
+ * to a given ad. The "ad slot for rent" tile sits statically below and never
+ * participates in paging. Detail overlays show the full image plus a
+ * selectable Markdown body with copy/open link actions. Content comes from
+ * {@code film_home/ads.json} (config override, jar fallback).
  */
 public class UIAdBoard extends UIElement
 {
     private static final int GAP = 8;
     private static final int RENT_MIN_H = 48;
+    private static final int DOTS_H = 12;
     private static final long FLIP_INTERVAL_MS = 10_000L;
     private static final long FLIP_DURATION_MS = 400L;
 
@@ -42,6 +44,16 @@ public class UIAdBoard extends UIElement
     private int page;
     private long pageShownAt = System.currentTimeMillis();
     private long flipStart = -1L;
+
+    /* Swipe gesture */
+    private boolean swiping;
+    private int swipeStartX;
+    private int swipeDX;
+
+    /* Pagination dot geometry, refreshed during rendering */
+    private int dotsY;
+    private int dotsX;
+    private int dotStep = 12;
 
     public UIAdBoard()
     {
@@ -80,13 +92,27 @@ public class UIAdBoard extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.area.isInside(context) && context.mouseButton == 0 && this.flipStart < 0 && !this.ads.isEmpty())
+        if (context.mouseButton == 0 && this.area.isInside(context))
         {
+            /* Pagination dots */
+            if (this.ads.size() > 1 && this.dotsHit(context.mouseX, context.mouseY) >= 0)
+            {
+                this.page = this.dotsHit(context.mouseX, context.mouseY);
+                this.pageShownAt = System.currentTimeMillis();
+                this.flipStart = -1L;
+
+                return true;
+            }
+
+            /* Slide area starts a swipe/tap gesture */
             int viewY = this.area.y + GAP / 2;
 
-            if (context.mouseY >= viewY && context.mouseY < viewY + this.slideHeight())
+            if (!this.ads.isEmpty() && this.flipStart < 0
+                && context.mouseY >= viewY && context.mouseY < viewY + this.slideHeight())
             {
-                this.openDetails(this.ads.get(this.page % this.ads.size()));
+                this.swiping = true;
+                this.swipeStartX = context.mouseX;
+                this.swipeDX = 0;
 
                 return true;
             }
@@ -95,38 +121,61 @@ public class UIAdBoard extends UIElement
         return super.subMouseClicked(context);
     }
 
-    /** Advances the auto-flip state machine; returns the eased flip progress (1 = idle). */
-    private float advanceFlip(int count)
+    @Override
+    public boolean subMouseReleased(UIContext context)
     {
-        if (count <= 1)
+        if (this.swiping && context.mouseButton == 0)
         {
-            return 1F;
+            this.swiping = false;
+
+            int count = this.ads.size();
+            int dx = this.swipeDX;
+
+            this.swipeDX = 0;
+
+            if (count == 0 || this.flipStart >= 0)
+            {
+                return true;
+            }
+
+            if (Math.abs(dx) < 6)
+            {
+                /* Tap: open the details */
+                this.openDetails(this.ads.get(this.page));
+            }
+            else if (dx <= -w6())
+            {
+                /* Dragged left: next ad through the animated flip */
+                this.flipStart = System.currentTimeMillis();
+            }
+            else if (dx >= w6())
+            {
+                /* Dragged right: previous ad, snaps without animation */
+                this.page = (this.page + count - 1) % count;
+                this.pageShownAt = System.currentTimeMillis();
+            }
+
+            return true;
         }
 
-        long now = System.currentTimeMillis();
+        return super.subMouseReleased(context);
+    }
 
-        if (this.flipStart < 0 && now - this.pageShownAt >= FLIP_INTERVAL_MS)
+    private int w6()
+    {
+        return this.slideWidth() / 6;
+    }
+
+    private int dotsHit(int mouseX, int mouseY)
+    {
+        if (mouseY < this.dotsY || mouseY >= this.dotsY + DOTS_H)
         {
-            this.flipStart = now;
+            return -1;
         }
 
-        if (this.flipStart < 0)
-        {
-            return 1F;
-        }
+        int index = (mouseX - this.dotsX) / this.dotStep;
 
-        float progress = Math.min(1F, (now - this.flipStart) / (float) FLIP_DURATION_MS);
-
-        if (progress >= 1F)
-        {
-            this.page = (this.page + 1) % count;
-            this.pageShownAt = now;
-            this.flipStart = -1L;
-
-            return 1F;
-        }
-
-        return progress;
+        return index >= 0 && index < this.ads.size() ? index : -1;
     }
 
     private void renderBoard(UIContext context)
@@ -141,13 +190,21 @@ public class UIAdBoard extends UIElement
         clip.set(this.area.x, this.area.y, this.area.w, this.area.h);
         context.batcher.clip(clip, context);
 
+        if (this.swiping && Window.isMouseButtonPressed(0))
+        {
+            this.swipeDX = context.mouseX - this.swipeStartX;
+
+            /* Holding a drag pauses the automatic flipping */
+            this.pageShownAt = System.currentTimeMillis();
+        }
+
         if (!this.ads.isEmpty())
         {
             long now = System.currentTimeMillis();
             boolean flipping = false;
             float progress = 1F;
 
-            if (this.ads.size() > 1)
+            if (this.ads.size() > 1 && !this.swiping)
             {
                 if (this.flipStart < 0 && now - this.pageShownAt >= FLIP_INTERVAL_MS)
                 {
@@ -169,19 +226,39 @@ public class UIAdBoard extends UIElement
                 }
             }
 
-            boolean hovered = !flipping
+            boolean hovered = !flipping && !this.swiping
                 && context.mouseX >= x && context.mouseX < x + w
                 && context.mouseY >= viewY && context.mouseY < viewY + h;
 
-            if (!flipping)
+            if (this.swiping && Math.abs(this.swipeDX) > 0)
             {
-                /* Idle: the current slide rests in place. */
+                /* Manual drag: current slide follows the cursor, neighbors wait adjacent */
+                FilmHomeContent.AdItem current = this.ads.get(this.page);
+
+                if (this.swipeDX < 0)
+                {
+                    FilmHomeContent.AdItem next = this.ads.get((this.page + 1) % this.ads.size());
+
+                    this.drawSlide(context, next, x + w + this.swipeDX, viewY, w, h, false);
+                    this.drawSlide(context, current, x + this.swipeDX, viewY, w, h, false);
+                }
+                else
+                {
+                    FilmHomeContent.AdItem prev = this.ads.get((this.page + this.ads.size() - 1) % this.ads.size());
+
+                    this.drawSlide(context, current, x + this.swipeDX, viewY, w, h, false);
+                    this.drawSlide(context, prev, x - w + this.swipeDX, viewY, w, h, false);
+                }
+            }
+            else if (!flipping)
+            {
+                /* Idle: the current slide rests in place */
                 this.drawSlide(context, this.ads.get(this.page), x, viewY, w, h, hovered);
             }
             else
             {
                 /* Flip: outgoing travels left, incoming follows from the right,
-                 * staying adjacent so both are visible while they move. */
+                 * staying adjacent so both are visible while they move */
                 FilmHomeContent.AdItem outgoing = this.ads.get(this.page);
                 FilmHomeContent.AdItem incoming = this.ads.get((this.page + 1) % this.ads.size());
 
@@ -190,9 +267,49 @@ public class UIAdBoard extends UIElement
             }
         }
 
-        this.renderRentSlot(context, x, viewY + h + GAP, w);
+        this.renderDots(context, x, w, viewY + h + 4);
+
+        if (this.ads.size() > 1)
+        {
+            this.renderRentSlot(context, x, this.dotsY + DOTS_H + 2, w);
+        }
+        else
+        {
+            this.renderRentSlot(context, x, viewY + h + GAP, w);
+        }
 
         context.batcher.unclip(context);
+    }
+
+    private void renderDots(UIContext context, int x, int w, int y)
+    {
+        this.dotsY = y;
+        this.dotStep = 12;
+
+        if (this.ads.size() <= 1)
+        {
+            return;
+        }
+
+        int total = this.ads.size() * this.dotStep - (this.dotStep - 4);
+
+        this.dotsX = x + w / 2 - total / 2;
+
+        for (int i = 0; i < this.ads.size(); i++)
+        {
+            boolean active = i == this.page;
+            float cx = this.dotsX + i * this.dotStep + 2;
+            float cy = y + DOTS_H / 2F;
+
+            if (active)
+            {
+                context.batcher.filledCircle(cx, cy, 3.2F, BBSSettings.primaryColor(), 8);
+            }
+            else
+            {
+                context.batcher.filledCircle(cx, cy, 2.2F, Colors.setA(BBSSettings.mutedTextColor(), 0.6F), 8);
+            }
+        }
     }
 
     private void drawSlide(UIContext context, FilmHomeContent.AdItem ad, int x, int y, int w, int h, boolean hovered)
@@ -245,6 +362,7 @@ public class UIAdBoard extends UIElement
 
         final int imageW = 288;
         final int imageH = imageW * 3 / 4;
+        final int overlayH = imageH + 178;
 
         UIElement imageBox = new UIElement();
 
@@ -266,7 +384,7 @@ public class UIAdBoard extends UIElement
 
         MarkdownBody body = new MarkdownBody(ad.markdown);
 
-        body.relative(panel.content).xy(6, imageH + 14).w(1F, -12).h(110);
+        body.relative(panel.content).xy(6, imageH + 14).w(1F, -12).h(1F, -imageH - 46);
 
         panel.content.add(imageBox, body);
 
@@ -289,6 +407,6 @@ public class UIAdBoard extends UIElement
         copy.relative(panel.content).x(1F, -6).y(1F, -26).anchor(1F, 0F).wh(104, 20);
         panel.content.add(copy);
 
-        UIOverlay.addOverlay(this.getContext(), panel);
+        UIOverlay.addOverlay(this.getContext(), panel, imageW + 12, overlayH);
     }
 }
