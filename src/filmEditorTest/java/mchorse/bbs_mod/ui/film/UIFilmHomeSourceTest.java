@@ -49,8 +49,8 @@ public final class UIFilmHomeSourceTest
             "home must host the bottom-left ad board");
         check(home.contains("FilmThumbnails.getCached"),
             "film cards must render cached first-frame thumbnails");
-        check(home.contains("autoGenerateCovers"),
-            "missing covers must be generated automatically without any UI action");
+        check(!home.contains("startBatch"),
+            "cover generation must never hijack navigation by auto-opening films");
 
         String events = Files.readString(
             Path.of("src/client/java/mchorse/bbs_mod/client/BBSClientNeoEvents.java")

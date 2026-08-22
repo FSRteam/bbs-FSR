@@ -389,39 +389,7 @@ public class UIFilmHomePanel extends UIElement
             }
 
             this.syncCards();
-            this.autoGenerateCovers();
         });
-    }
-
-    /**
-     * Covers are fully automatic: whenever the home learns the film list and
-     * some films lack a thumbnail, generation starts on its own — no button,
-     * no context menu.
-     */
-    private void autoGenerateCovers()
-    {
-        if (FilmThumbnails.isBatchRunning())
-        {
-            return;
-        }
-
-        List<String> missing = new ArrayList<>();
-
-        for (String id : this.metaById.keySet())
-        {
-            if (!FilmThumbnails.hasThumbnail(id))
-            {
-                missing.add(id);
-            }
-        }
-
-        if (missing.isEmpty())
-        {
-            return;
-        }
-
-        /* Silent: the batch runs in the background, no toasts */
-        FilmThumbnails.startBatch(missing);
     }
 
     /** Project the currently visible data paths into sorted/filtered grid cards. */

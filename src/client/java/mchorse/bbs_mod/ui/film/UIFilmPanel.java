@@ -1668,8 +1668,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (this.data != null)
         {
-            /* First-frame cover capture once the preview has settled. */
-            FilmThumbnails.requestCapture(this.data.getId(), 30);
+            /* First-frame cover capture once the preview has fully settled
+             * into presenting the film's monitor picture. */
+            FilmThumbnails.requestCapture(this.data.getId(), 50);
         }
 
         this.getContext().menu.getRoot().add(this.secretPlay);
