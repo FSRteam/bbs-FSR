@@ -126,7 +126,9 @@ public class UiMarkdown
     {
         Layout layout = new Layout();
         int fontH = batcher.getFont().getHeight();
-        int lineH = fontH + 2;
+
+        /* Airier leading, matching list rows elsewhere in the UI (~16px for 9px text) */
+        int lineH = fontH + 6;
         int cy = 0;
         boolean inFence = false;
 

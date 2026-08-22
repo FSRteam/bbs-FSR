@@ -9,6 +9,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
@@ -392,9 +393,10 @@ public class UIAdBoard extends UIElement
 
         if (web)
         {
-            UIButton open = new UIButton(L10n.lang("bbs.ui.film.home.open_url"), (b) -> UIUtils.openWebLink(ad.link));
+            UIIcon open = new UIIcon(Icons.HELP, (b) -> UIUtils.openWebLink(ad.link));
 
-            open.relative(panel.content).x(1F, -116).y(1F, -26).wh(104, 20);
+            open.relative(panel.content).x(1F, -116).y(1F, -26).wh(20, 20);
+            open.tooltip(L10n.lang("bbs.ui.film.home.open_url"));
             panel.content.add(open);
         }
 
