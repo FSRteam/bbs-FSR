@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.ui.film.home;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -88,6 +90,23 @@ public class UiMarkdown
                 continue;
             }
 
+            if (line.startsWith("!["))
+            {
+                int close = line.indexOf("](");
+                int end = close > 0 ? line.indexOf(')', close) : -1;
+
+                if (close > 0 && end > close)
+                {
+                    String url = line.substring(close + 2, end);
+                    int imgW = Math.min(w, 320);
+                    int imgH = Math.min(180, Math.max(80, bottom - cy - lineH));
+
+                    cy = drawImageSlot(context, url, x, cy, imgW, imgH);
+
+                    continue;
+                }
+            }
+
             if (line.startsWith("### ") || line.startsWith("## ") || line.startsWith("# "))
             {
                 String text = line.substring(line.indexOf(' ') + 1);
@@ -125,6 +144,41 @@ public class UiMarkdown
         batcher.unclip(context);
 
         return cy - y;
+    }
+
+    /**
+     * One markdown image block: a fixed-ratio slot showing a spinner while the
+     * image downloads, the cover-cropped picture once it lands, or an error
+     * note after repeated failures.
+     */
+    private static int drawImageSlot(UIContext context, String url, int x, int y, int w, int h)
+    {
+        Batcher2D batcher = context.batcher;
+
+        batcher.box(x, y, x + w, y + h, BBSSettings.chromeSurface());
+
+        Texture texture = WebImages.get(url);
+
+        if (texture != null)
+        {
+            UINewsStrip.drawCover(batcher, texture, x, y, w, h);
+
+            return y + h + 6;
+        }
+
+        float cx = x + w / 2F;
+        float cy = y + h / 2F;
+        boolean failed = WebImages.isCoolingDown(url);
+        String label = failed ? L10n.lang("bbs.ui.film.home.load_failed").get() : L10n.lang("bbs.ui.film.home.loading").get();
+
+        if (!failed)
+        {
+            WebImages.drawSpinner(context, cx, cy - 7, BBSSettings.accentColorRGB());
+        }
+
+        batcher.textShadow(label, cx - batcher.getFont().getWidth(label) / 2F, cy + 8, BBSSettings.mutedTextColor());
+
+        return y + h + 6;
     }
 
     /** Word-wraps styled segments and draws them left to right. */

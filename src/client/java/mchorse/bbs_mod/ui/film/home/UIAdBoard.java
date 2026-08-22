@@ -48,7 +48,9 @@ public class UIAdBoard extends UIElement
 
         for (FilmHomeContent.AdItem ad : ads)
         {
-            if (ad.imageLink() != null)
+            /* Local covers pre-warm through the texture manager; remote ones
+             * load through WebImages on demand. */
+            if (ad.imageLink() != null && !WebImages.isRemote(ad.image))
             {
                 BBSModClient.getTextures().getTexture(ad.imageLink(), GL11.GL_NEAREST, true);
             }
@@ -139,11 +141,16 @@ public class UIAdBoard extends UIElement
         imageBox.wh(imageW, imageH);
         imageBox.add(new UIRenderable((ctx) ->
         {
-            Texture texture = ad.imageLink() == null ? null : BBSModClient.getTextures().getTexture(ad.imageLink(), GL11.GL_NEAREST, true);
+            Texture texture = WebImages.resolve(ad.image);
 
-            if (texture != null && texture != BBSModClient.getTextures().getError())
+            if (texture != null)
             {
                 UINewsStrip.drawCover(ctx.batcher, texture, imageBox.area.x, imageBox.area.y, imageBox.area.w, imageBox.area.h);
+            }
+            else if (WebImages.isLoading(ad.image))
+            {
+                ctx.batcher.box(imageBox.area.x, imageBox.area.y, imageBox.area.ex(), imageBox.area.ey(), BBSSettings.chromeSurface());
+                WebImages.drawSpinner(ctx, imageBox.area.mx(), imageBox.area.my(), BBSSettings.accentColorRGB());
             }
         }));
 
@@ -211,11 +218,16 @@ public class UIAdBoard extends UIElement
 
     private void renderAd(UIContext context, FilmHomeContent.AdItem ad, int x, int y, int w, int h, boolean hovered)
     {
-        Texture texture = ad.imageLink() == null ? null : BBSModClient.getTextures().getTexture(ad.imageLink(), GL11.GL_NEAREST, true);
+        Texture texture = WebImages.resolve(ad.image);
 
-        if (texture != null && texture != BBSModClient.getTextures().getError())
+        if (texture != null)
         {
             UINewsStrip.drawCover(context.batcher, texture, x, y, w, h);
+        }
+        else if (WebImages.isLoading(ad.image))
+        {
+            context.batcher.box(x, y, x + w, y + h, BBSSettings.chromeSurface());
+            WebImages.drawSpinner(context, x + w / 2F, y + h / 2F, BBSSettings.accentColorRGB());
         }
         else
         {

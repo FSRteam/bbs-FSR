@@ -63,8 +63,9 @@ public class UINewsStrip extends UIElement
         {
             this.cards.add(new CardView(item));
 
-            /* Pre-warm thumbnails once per refill so the render loop never hits disk. */
-            if (item.imageLink() != null)
+            /* Pre-warm local thumbnails once per refill so the render loop
+             * never hits disk; remote ones stream through WebImages. */
+            if (item.imageLink() != null && !WebImages.isRemote(item.image))
             {
                 BBSModClient.getTextures().getTexture(item.imageLink(), GL11.GL_NEAREST, true);
             }
@@ -237,21 +238,45 @@ public class UINewsStrip extends UIElement
         }
 
         int textX = x + GAP;
+        boolean loading = WebImages.isLoading(item.image);
 
-        if (item.imageLink() != null)
+        Texture texture;
+
+        if (WebImages.isRemote(item.image))
         {
-            Texture texture = BBSModClient.getTextures().getTexture(item.imageLink(), GL11.GL_NEAREST, true);
+            texture = WebImages.get(item.image);
+        }
+        else if (item.imageLink() != null)
+        {
+            texture = BBSModClient.getTextures().getTexture(item.imageLink(), GL11.GL_NEAREST, true);
 
-            if (texture != null && texture != BBSModClient.getTextures().getError())
+            if (texture == BBSModClient.getTextures().getError())
             {
-                drawCover(context.batcher, texture, textX, y + GAP, THUMB, THUMB);
-                textX += THUMB + GAP;
+                texture = null;
             }
+        }
+        else
+        {
+            texture = null;
+        }
+
+        if (texture != null)
+        {
+            drawCover(context.batcher, texture, textX, y + GAP, THUMB, THUMB);
+            textX += THUMB + GAP;
         }
 
         if (textX == x + GAP)
         {
-            context.batcher.iconArea(Icons.IMAGE, Colors.A50 | BBSSettings.accentColorRGB(), x + GAP + (THUMB - 12) / 2, y + GAP + (THUMB - 12) / 2, 12, 12);
+            if (loading)
+            {
+                WebImages.drawSpinner(context, textX + THUMB / 2F, y + GAP + THUMB / 2F, BBSSettings.accentColorRGB());
+            }
+            else
+            {
+                context.batcher.iconArea(Icons.IMAGE, Colors.A50 | BBSSettings.accentColorRGB(), x + GAP + (THUMB - 12) / 2, y + GAP + (THUMB - 12) / 2, 12, 12);
+            }
+
             textX += THUMB + GAP;
         }
 

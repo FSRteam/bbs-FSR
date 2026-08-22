@@ -720,6 +720,8 @@
     "bbs.ui.film.home.ad_rent": "广告栏招租",
     "bbs.ui.film.home.copy_link": "复制链接",
     "bbs.ui.film.home.link_copied": "链接已复制到剪贴板",
+    "bbs.ui.film.home.loading": "加载中…",
+    "bbs.ui.film.home.load_failed": "图片加载失败",
     "bbs.ui.film.groups.all": "所有组",
     "bbs.ui.film.groups.extra_1": "附加 1",
     "bbs.ui.film.groups.extra_2": "附加 2",
