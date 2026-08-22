@@ -247,17 +247,40 @@ public class UiMarkdown
 
         for (Run word : words)
         {
-            if (cx + word.width > indent + w && cx > indent)
+            int width = batcher.getFont().getWidth(word.text);
+
+            if (width > w)
+            {
+                /* Unbreakable oversized word (CJK text has no spaces):
+                 * place it character by character, wrapping mid-word. */
+                for (int i = 0; i < word.text.length(); i++)
+                {
+                    String c = String.valueOf(word.text.charAt(i));
+                    int cw = batcher.getFont().getWidth(c);
+
+                    if (cx + cw > indent + w && cx > indent)
+                    {
+                        line = new Line(cy, lineH);
+                        layout.lines.add(line);
+                        cx = indent;
+                    }
+
+                    line.add(new Run(word.style, c, cx, cw));
+                    cx += cw;
+                }
+
+                continue;
+            }
+
+            if (cx + width > indent + w && cx > indent)
             {
                 line = new Line(cy, lineH);
                 layout.lines.add(line);
                 cx = indent;
             }
 
-            Run placed = new Run(word.style, word.text, cx, word.width);
-
-            line.add(placed);
-            cx += word.width;
+            line.add(new Run(word.style, word.text, cx, width));
+            cx += width;
         }
 
         return cy + lineH;
