@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.film.home;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -144,20 +145,33 @@ public class UINewsStrip extends UIElement
         {
             ctx.batcher.textShadow(item.date, panel.content.area.x + 6, panel.content.area.y + 6, BBSSettings.mutedTextColor());
 
-            if (!item.summary.isEmpty())
-            {
-                ctx.batcher.wallText(item.summary, panel.content.area.x + 6, panel.content.area.y + 22, BBSSettings.textColor(), panel.content.area.w - 12);
-            }
+            String markdown = item.markdown.isEmpty() ? item.summary : item.markdown;
+
+            UiMarkdown.render(ctx, markdown, panel.content.area.x + 6, panel.content.area.y + 22, panel.content.area.w - 12, panel.content.area.h - 60);
         });
 
         panel.content.add(body);
 
         if (!item.url.isEmpty())
         {
-            UIButton open = new UIButton(L10n.lang("bbs.ui.film.home.open_url"), (b) -> UIUtils.openWebLink(item.url));
+            boolean web = item.url.startsWith("http://") || item.url.startsWith("https://");
 
-            open.relative(panel.content).x(1F, -6).y(1F, -26).anchor(1F, 0F).wh(140, 20);
-            panel.content.add(open);
+            if (web)
+            {
+                UIButton open = new UIButton(L10n.lang("bbs.ui.film.home.open_url"), (b) -> UIUtils.openWebLink(item.url));
+
+                open.relative(panel.content).x(1F, -116).y(1F, -26).wh(104, 20);
+                panel.content.add(open);
+            }
+
+            UIButton copy = new UIButton(L10n.lang("bbs.ui.film.home.copy_link"), (b) ->
+            {
+                Window.setClipboard(item.url);
+                this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.link_copied"));
+            });
+
+            copy.relative(panel.content).x(1F, -6).y(1F, -26).anchor(1F, 0F).wh(104, 20);
+            panel.content.add(copy);
         }
 
         UIOverlay.addOverlay(this.getContext(), panel);

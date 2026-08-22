@@ -2,15 +2,18 @@
   "items": [
     {
       "image": "images/ads/1.png",
-      "link": "2961764169"
+      "link": "2961764169",
+      "markdown": "## 加我约稿\nQQ 号见下方按钮，点击「复制链接」即可复制 QQ 号。\n\n- **Q版立绘** / 玩家模型 / 场景小件\n- 交稿快，含免费修改"
     },
     {
       "image": "images/ads/2.png",
-      "link": "https://www.bilibili.com/video/BV1NwuZ68ETA/?share_source=copy_web&vd_source=c37262a10f8d49861f32de94683b600d"
+      "link": "https://www.bilibili.com/video/BV1NwuZ68ETA/?share_source=copy_web&vd_source=c37262a10f8d49861f32de94683b600d",
+      "markdown": "## 作品展示\n点击「在浏览器打开」观看 B 站成片，或复制链接分享。"
     },
     {
       "image": "images/ads/3.png",
-      "link": "https://www.bilibili.com/video/BV1dEMQ68Evz/?share_source=copy_web&vd_source=c37262a10f8d49861f32de94683b600d"
+      "link": "https://www.bilibili.com/video/BV1dEMQ68Evz/?share_source=copy_web&vd_source=c37262a10f8d49861f32de94683b600d",
+      "markdown": "## 作品展示\n点击「在浏览器打开」观看 B 站成片，或复制链接分享。"
     }
   ]
 }

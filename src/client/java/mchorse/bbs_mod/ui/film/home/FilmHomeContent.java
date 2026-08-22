@@ -40,6 +40,8 @@ public class FilmHomeContent
         public String date = "";
         public String title = "";
         public String summary = "";
+        /** Optional Markdown body rendered in the detail overlay; wins over summary. */
+        public String markdown = "";
         /** Optional file name under film_home/images/, resolved through Link.assets. */
         public String image = "";
         public String url = "";
@@ -52,12 +54,14 @@ public class FilmHomeContent
 
     /**
      * One ad tile of the bottom-left ad board: a 4:3 image plus the link
-     * string offered for copying in the detail overlay.
+     * string offered for copying in the detail overlay, and an optional
+     * Markdown body shown next to the full image.
      */
     public static class AdItem
     {
         public String image = "";
         public String link = "";
+        public String markdown = "";
 
         public Link imageLink()
         {
@@ -92,6 +96,7 @@ public class FilmHomeContent
                 item.date = string(object, "date");
                 item.title = string(object, "title");
                 item.summary = string(object, "summary");
+                item.markdown = string(object, "markdown");
                 item.image = string(object, "image");
                 item.url = string(object, "url");
 
@@ -118,6 +123,7 @@ public class FilmHomeContent
 
                 item.image = string(object, "image");
                 item.link = string(object, "link");
+                item.markdown = string(object, "markdown");
 
                 if (!item.image.isEmpty())
                 {

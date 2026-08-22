@@ -31,8 +31,6 @@ public class UIAdBoard extends UIElement
 {
     private static final int GAP = 8;
     private static final int RENT_H = 90;
-    private static final int OVERLAY_IMAGE_W = 384;
-    private static final int OVERLAY_IMAGE_H = 288;
 
     private final Scroll scroll;
     private List<FilmHomeContent.AdItem> ads = List.of();
@@ -133,9 +131,12 @@ public class UIAdBoard extends UIElement
     {
         UIOverlayPanel panel = new UIOverlayPanel(IKey.EMPTY);
 
+        final int imageW = 288;
+        final int imageH = imageW * 3 / 4;
+
         UIElement imageBox = new UIElement();
 
-        imageBox.wh(OVERLAY_IMAGE_W, OVERLAY_IMAGE_H);
+        imageBox.wh(imageW, imageH);
         imageBox.add(new UIRenderable((ctx) ->
         {
             Texture texture = ad.imageLink() == null ? null : BBSModClient.getTextures().getTexture(ad.imageLink(), GL11.GL_NEAREST, true);
@@ -146,24 +147,31 @@ public class UIAdBoard extends UIElement
             }
         }));
 
+        UIRenderable body = new UIRenderable((ctx) ->
+        {
+            UiMarkdown.render(ctx, ad.markdown, panel.content.area.x + 6, panel.content.area.y + imageH + 12, panel.content.area.w - 12, 110);
+        });
+
+        panel.content.add(imageBox, body);
+
+        boolean web = ad.link.startsWith("http://") || ad.link.startsWith("https://");
+
+        if (web)
+        {
+            UIButton open = new UIButton(L10n.lang("bbs.ui.film.home.open_url"), (b) -> mchorse.bbs_mod.ui.utils.UIUtils.openWebLink(ad.link));
+
+            open.relative(panel.content).x(1F, -116).y(1F, -26).wh(104, 20);
+            panel.content.add(open);
+        }
+
         UIButton copy = new UIButton(L10n.lang("bbs.ui.film.home.copy_link"), (b) ->
         {
             Window.setClipboard(ad.link);
             this.getContext().notifyInfo(L10n.lang("bbs.ui.film.home.link_copied"));
         });
 
-        copy.relative(panel.content).xy(6, OVERLAY_IMAGE_H + 8).wh(110, 20);
-
-        UIRenderable linkLabel = new UIRenderable((ctx) ->
-        {
-            int x = panel.content.area.x + 124;
-            int w = Math.max(0, panel.content.area.ex() - 6 - x);
-            String link = ctx.batcher.getFont().limitToWidth(ad.link, "...", w);
-
-            ctx.batcher.textShadow(link, x, panel.content.area.y + OVERLAY_IMAGE_H + 13, BBSSettings.mutedTextColor());
-        });
-
-        panel.content.add(imageBox, copy, linkLabel);
+        copy.relative(panel.content).x(1F, -6).y(1F, -26).anchor(1F, 0F).wh(104, 20);
+        panel.content.add(copy);
 
         UIOverlay.addOverlay(this.getContext(), panel);
     }
