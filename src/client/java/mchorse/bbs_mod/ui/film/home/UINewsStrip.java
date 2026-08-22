@@ -142,15 +142,9 @@ public class UINewsStrip extends UIElement
     {
         UIOverlayPanel panel = new UIOverlayPanel(IKey.raw(item.title));
 
-        UIRenderable body = new UIRenderable((ctx) ->
-        {
-            ctx.batcher.textShadow(item.date, panel.content.area.x + 6, panel.content.area.y + 6, BBSSettings.mutedTextColor());
+        MarkdownBody body = new MarkdownBody(item.markdown.isEmpty() ? item.summary : item.markdown);
 
-            String markdown = item.markdown.isEmpty() ? item.summary : item.markdown;
-
-            UiMarkdown.render(ctx, markdown, panel.content.area.x + 6, panel.content.area.y + 22, panel.content.area.w - 12, panel.content.area.h - 60);
-        });
-
+        body.relative(panel.content).xy(6, 22).w(1F, -12).h(1F, -60);
         panel.content.add(body);
 
         if (!item.url.isEmpty())

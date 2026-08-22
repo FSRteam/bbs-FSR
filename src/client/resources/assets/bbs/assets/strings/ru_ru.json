@@ -599,6 +599,7 @@
 	"bbs.ui.film.home.link_copied": "Ссылка скопирована",
 	"bbs.ui.film.home.loading": "Загрузка...",
 	"bbs.ui.film.home.load_failed": "Не удалось загрузить изображение",
+	"bbs.ui.film.home.copied_selection": "Скопировано",
 	"bbs.ui.film.groups.all": "Все группы",
 	"bbs.ui.film.groups.extra_1": "Экстра 1",
 	"bbs.ui.film.groups.extra_2": "Экстра 2",
