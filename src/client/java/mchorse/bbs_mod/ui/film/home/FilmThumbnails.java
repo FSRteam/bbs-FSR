@@ -53,6 +53,10 @@ public class FilmThumbnails
     private static UIFilmPanel panel;
     private static String pendingFilmId;
     private static int pendingTicks = -1;
+    private static int pendingAttempts;
+
+    private static final int RETRY_TICKS = 8;
+    private static final int MAX_ATTEMPTS = 10;
 
     public static void setPanel(UIFilmPanel filmPanel)
     {
@@ -60,9 +64,9 @@ public class FilmThumbnails
     }
 
     /**
-     * Schedule a first-frame grab for the given film after {@code delayTicks}.
-     * The capture silently no-ops when the editor or its preview isn't visible
-     * by the time the delay elapses.
+     * Schedules a grab of the monitor's current frame. The first attempt
+     * fires almost immediately; if the preview hasn't presented a real frame
+     * yet (the grab would be black), it silently retries a few times.
      */
     public static void requestCapture(String filmId, int delayTicks)
     {
@@ -71,8 +75,14 @@ public class FilmThumbnails
             return;
         }
 
+        if (filmId.equals(pendingFilmId) && pendingTicks >= 0)
+        {
+            return;
+        }
+
         pendingFilmId = filmId;
         pendingTicks = Math.max(1, delayTicks);
+        pendingAttempts = MAX_ATTEMPTS;
     }
 
     /** Client tick hook (render thread). */
@@ -85,21 +95,38 @@ public class FilmThumbnails
 
         pendingTicks -= 1;
 
-        if (pendingTicks <= 0)
+        if (pendingTicks > 0)
         {
-            String filmId = pendingFilmId;
+            return;
+        }
 
-            pendingTicks = -1;
-            pendingFilmId = null;
+        String filmId = pendingFilmId;
 
-            if (filmId != null)
-            {
-                capture(filmId);
-            }
+        pendingTicks = -1;
+        pendingFilmId = null;
+
+        if (filmId == null)
+        {
+            return;
+        }
+
+        if (!capture(filmId) && pendingAttempts > 0)
+        {
+            /* Blank grab - the monitor hadn't presented a frame yet; retry shortly */
+            pendingAttempts -= 1;
+            pendingFilmId = filmId;
+            pendingTicks = RETRY_TICKS;
         }
     }
 
-    private static void capture(String filmId)
+    /**
+     * Grabs the monitor's current frame for this film.
+     *
+     * @return true when done (captured, or the editor/preview is gone so no
+     *         retry makes sense); false when the grab was blank and a retry
+     *         should happen shortly.
+     */
+    private static boolean capture(String filmId)
     {
         UIFilmPanel host = panel;
         Minecraft mc = Minecraft.getInstance();
@@ -109,21 +136,21 @@ public class FilmThumbnails
             || host.preview == null || !host.preview.isVisible()
             || host.preview.area.w < 16 || host.preview.area.h < 16)
         {
-            return;
+            return true;
         }
 
         RenderTarget target = mc.getMainRenderTarget();
 
         if (target == null || target.width < 16 || target.height < 16)
         {
-            return;
+            return true;
         }
 
         NativeImage image = Screenshot.takeScreenshot(target);
 
         if (image == null)
         {
-            return;
+            return true;
         }
 
         try
@@ -160,12 +187,12 @@ public class FilmThumbnails
             }
 
             /* A fully black grab means the preview hadn't presented a frame
-             * yet - keep whatever cover the film already has. */
+             * yet - keep whatever cover the film already has and retry. */
             if (isBlank(out))
             {
                 out.close();
 
-                return;
+                return false;
             }
 
             File file = fileFor(filmId);
@@ -193,6 +220,8 @@ public class FilmThumbnails
         {
             image.close();
         }
+
+        return true;
     }
 
     /**
