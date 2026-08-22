@@ -34,8 +34,7 @@ import java.util.List;
 public class UIAdBoard extends UIElement
 {
     private static final int GAP = 8;
-    private static final int VIEW_H = 100;
-    private static final int RENT_MIN_H = 56;
+    private static final int RENT_MIN_H = 48;
     private static final long FLIP_INTERVAL_MS = 10_000L;
     private static final long FLIP_DURATION_MS = 400L;
 
@@ -67,6 +66,17 @@ public class UIAdBoard extends UIElement
         }
     }
 
+    /** Slide width fills the column interior; height keeps the 4:3 ratio so images show in full. */
+    private int slideWidth()
+    {
+        return Math.max(1, this.area.w - GAP * 2 - 4);
+    }
+
+    private int slideHeight()
+    {
+        return this.slideWidth() * 3 / 4;
+    }
+
     @Override
     public boolean subMouseClicked(UIContext context)
     {
@@ -74,7 +84,7 @@ public class UIAdBoard extends UIElement
         {
             int viewY = this.area.y + GAP / 2;
 
-            if (context.mouseY >= viewY && context.mouseY < viewY + VIEW_H)
+            if (context.mouseY >= viewY && context.mouseY < viewY + this.slideHeight())
             {
                 this.openDetails(this.ads.get(this.page % this.ads.size()));
 
@@ -122,7 +132,8 @@ public class UIAdBoard extends UIElement
     private void renderBoard(UIContext context)
     {
         int x = this.area.x + GAP;
-        int w = Math.max(1, this.area.w - GAP * 2 - 4);
+        int w = this.slideWidth();
+        int h = this.slideHeight();
         int viewY = this.area.y + GAP / 2;
 
         Area clip = new Area();
@@ -132,30 +143,54 @@ public class UIAdBoard extends UIElement
 
         if (!this.ads.isEmpty())
         {
-            float progress = this.advanceFlip(this.ads.size());
-            int offset = (int) (w * progress);
-            boolean hovered = context.mouseX >= x && context.mouseX < x + w
-                && context.mouseY >= viewY && context.mouseY < viewY + VIEW_H
-                && this.flipStart < 0;
+            long now = System.currentTimeMillis();
+            boolean flipping = false;
+            float progress = 1F;
 
-            if (progress < 1F)
+            if (this.ads.size() > 1)
             {
-                FilmHomeContent.AdItem incoming = this.ads.get((this.page + 1) % this.ads.size());
+                if (this.flipStart < 0 && now - this.pageShownAt >= FLIP_INTERVAL_MS)
+                {
+                    this.flipStart = now;
+                }
 
-                this.drawSlide(context, incoming, x + w - offset, viewY, w, VIEW_H, false);
+                if (this.flipStart >= 0)
+                {
+                    flipping = true;
+                    progress = Math.min(1F, (now - this.flipStart) / (float) FLIP_DURATION_MS);
+
+                    if (progress >= 1F)
+                    {
+                        this.page = (this.page + 1) % this.ads.size();
+                        this.pageShownAt = now;
+                        this.flipStart = -1L;
+                        flipping = false;
+                    }
+                }
             }
 
-            this.drawSlide(context, this.ads.get(this.page), x - offset, viewY, w, VIEW_H, hovered);
+            boolean hovered = !flipping
+                && context.mouseX >= x && context.mouseX < x + w
+                && context.mouseY >= viewY && context.mouseY < viewY + h;
 
-            if (progress < 1F)
+            if (!flipping)
             {
-                /* The outgoing slide's right edge leaves through the left side;
-                 * cover the revealed gap with the incoming slide drawn above. */
-                this.drawSlide(context, this.ads.get((this.page + 1) % this.ads.size()), x + w - offset, viewY, w, VIEW_H, false);
+                /* Idle: the current slide rests in place. */
+                this.drawSlide(context, this.ads.get(this.page), x, viewY, w, h, hovered);
+            }
+            else
+            {
+                /* Flip: outgoing travels left, incoming follows from the right,
+                 * staying adjacent so both are visible while they move. */
+                FilmHomeContent.AdItem outgoing = this.ads.get(this.page);
+                FilmHomeContent.AdItem incoming = this.ads.get((this.page + 1) % this.ads.size());
+
+                this.drawSlide(context, incoming, x + (int) (w * (1F - progress)), viewY, w, h, false);
+                this.drawSlide(context, outgoing, x - (int) (w * progress), viewY, w, h, false);
             }
         }
 
-        this.renderRentSlot(context, x, viewY + VIEW_H + GAP, w);
+        this.renderRentSlot(context, x, viewY + h + GAP, w);
 
         context.batcher.unclip(context);
     }

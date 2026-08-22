@@ -280,7 +280,10 @@ public class UIFilmHomePanel extends UIElement
 
         int contentY = y + BAR_H + 6;
         boolean hasBoard = this.board.isVisible();
-        int boardW = Math.max(220, Math.min(300, this.area.w * 3 / 10));
+
+        /* The ad column stays narrow: slides keep their 4:3 ratio without
+         * cropping and the board doesn't crowd the film grid. */
+        int boardW = Math.max(170, Math.min(210, this.area.w * 22 / 100));
 
         if (hasBoard)
         {
