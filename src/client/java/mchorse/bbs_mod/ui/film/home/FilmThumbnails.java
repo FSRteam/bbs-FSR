@@ -35,6 +35,8 @@ import java.util.concurrent.Executors;
  */
 public class FilmThumbnails
 {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("bbs-film-home");
+
     private static final int MAX_CACHED = 64;
     private static final int CAPTURE_WIDTH = 320;
 
@@ -136,6 +138,11 @@ public class FilmThumbnails
             || host.preview == null || !host.preview.isVisible()
             || host.preview.area.w < 16 || host.preview.area.h < 16)
         {
+            LOGGER.warn("[BBS-SEM] topic=film_thumb phase=capture result=skip reason=precondition visible={} data={} preview={}",
+                host != null && host.isVisible(),
+                host != null && host.getData() != null ? host.getData().getId() : "null",
+                host != null && host.preview != null && host.preview.isVisible());
+
             return true;
         }
 
@@ -192,6 +199,8 @@ public class FilmThumbnails
             {
                 out.close();
 
+                LOGGER.warn("[BBS-SEM] topic=film_thumb phase=capture result=blank retry_in={}t", 8);
+
                 return false;
             }
 
@@ -200,6 +209,8 @@ public class FilmThumbnails
             file.getParentFile().mkdirs();
             out.writeToFile(file);
             out.close();
+
+            LOGGER.info("[BBS-SEM] topic=film_thumb phase=capture result=written file={} size={}x{}", file, outW, outH);
 
             synchronized (LOCK)
             {
@@ -215,6 +226,7 @@ public class FilmThumbnails
         {
             /* A failed capture is invisible degradation: the grid keeps its
              * procedural fallback card until the next successful one. */
+            LOGGER.warn("[BBS-SEM] topic=film_thumb phase=capture result=error", e);
         }
         finally
         {
