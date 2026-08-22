@@ -1824,6 +1824,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.forceSave();
         }
 
+        if (data != null)
+        {
+            /* Film data just arrived (async load): snapshot the monitor's
+             * frame as this film's cover. Blank grabs retry on their own. */
+            FilmThumbnails.requestCapture(data.getId(), 5);
+        }
+
         this.notifyServer(ActionState.RESTART);
     }
 
