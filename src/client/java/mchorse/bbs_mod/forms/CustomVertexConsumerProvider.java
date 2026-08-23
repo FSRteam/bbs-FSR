@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import net.minecraft.client.renderer.RenderType;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -43,12 +44,16 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
         buffer.bind();
         buffer.upload(meshData);
         VertexBuffer.unbind();
+        /* Still inside this layer's own flush, Iris' layout flag matches the mesh we just took;
+         * the deferred draw happens when it may not, so carry the snapshot along. */
+        boolean extendedLayout = BBSRendering.captureIrisVertexLayout();
         FormTranslucentQueue.add(new FormTranslucentQueue.RenderLayerCommand(
             layer,
             buffer,
             new Matrix4f(RenderSystem.getModelViewMatrix()),
             new Vector3f(origin),
-            captureLayerPreparation(layer)
+            captureLayerPreparation(layer),
+            extendedLayout
         ));
         return true;
     }

@@ -253,7 +253,10 @@ public class ArmorRenderer
             this.uploadGhost(mesh),
             new Matrix4f(RenderSystem.getModelViewMatrix()),
             new Vector3f(origin),
-            null
+            null,
+            /* The ghost mesh is built by this mod's own builder, never through Iris' extended
+             * begin, so its vertex layout is always plain. */
+            false
         ));
     }
 

@@ -807,6 +807,40 @@ public class BBSRendering
     }
 
     /**
+     * Snapshot of Iris' extended-vertex-layout flag, taken while a render layer's buffer is still
+     * inside its own flush (where Iris pins the flag to match the buffer). The translucent queue
+     * draws captured meshes later in the frame, when the flag may describe a different buffer —
+     * pinning the captured value during that draw keeps the vertex array layout matched to the
+     * data (a mismatch shreds the geometry into a fan of stretched triangles).
+     */
+    public static boolean captureIrisVertexLayout()
+    {
+        return iris && IrisUtils.captureBufferLayout();
+    }
+
+    /**
+     * Force the extended-vertex-layout flag for the duration of a deferred draw. Returns the
+     * previous value, to be handed to {@link #restoreIrisVertexLayout(boolean)}.
+     */
+    public static boolean applyIrisVertexLayout(boolean extended)
+    {
+        if (!iris)
+        {
+            return false;
+        }
+
+        return IrisUtils.applyBufferLayout(extended);
+    }
+
+    public static void restoreIrisVertexLayout(boolean previous)
+    {
+        if (iris)
+        {
+            IrisUtils.applyBufferLayout(previous);
+        }
+    }
+
+    /**
      * Tell Iris when a framebuffer form temporarily renders outside the main
      * world target, preventing Iris from masking its color and depth writes.
      */

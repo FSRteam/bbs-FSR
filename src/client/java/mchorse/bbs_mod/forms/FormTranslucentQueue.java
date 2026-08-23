@@ -434,13 +434,15 @@ public final class FormTranslucentQueue
         private final VertexBuffer buffer;
         private final Matrix4f modelView;
         private final Runnable prepare;
+        private final boolean extendedLayout;
 
         public RenderLayerCommand(
             RenderType layer,
             VertexBuffer buffer,
             Matrix4f modelView,
             Vector3f origin,
-            Runnable prepare
+            Runnable prepare,
+            boolean extendedLayout
         )
         {
             /* Depth writes stay on, matching what these vanilla entity layers do when they draw
@@ -453,6 +455,7 @@ public final class FormTranslucentQueue
             this.buffer = buffer;
             this.modelView = modelView;
             this.prepare = prepare;
+            this.extendedLayout = extendedLayout;
         }
 
         @Override
@@ -472,12 +475,19 @@ public final class FormTranslucentQueue
 
                 buffer.bind();
 
+                /* Pin Iris' vertex-array layout flag to what the mesh was captured with: at this
+                 * point in the frame the flag describes whatever Iris is flushing now, and a
+                 * vanilla-format mesh drawn under a raised flag gets its 36 byte vertices read
+                 * at the extended stride — the geometry shreds into a fan of triangles. */
+                boolean previousLayout = BBSRendering.applyIrisVertexLayout(this.extendedLayout);
+
                 try
                 {
                     buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
                 }
                 finally
                 {
+                    BBSRendering.restoreIrisVertexLayout(previousLayout);
                     VertexBuffer.unbind();
                 }
             }
