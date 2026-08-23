@@ -72,6 +72,21 @@ public class InteractBlockActionClip extends ActionClip
             this.applyIsolatedAction(actor, player, film, replay, tick));
     }
 
+    /**
+     * A container the interaction opened stays open for as long as the clip is
+     * long - the recorder grew it for exactly as long as the player kept the
+     * screen up. A clip of a single tick is a tap, a button or a door, and
+     * holds nothing open.
+     */
+    @Override
+    public void applyRange(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    {
+        if (this.duration.get() > 1 && ActionCommandContext.isAuthorizedFor(player))
+        {
+            player.wantLidOpen(this.hit.getBlockPos());
+        }
+    }
+
     private void applyIsolatedAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
         if (!this.applyInteractionPositionRotation(player, replay, tick))

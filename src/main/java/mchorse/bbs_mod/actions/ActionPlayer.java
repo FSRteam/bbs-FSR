@@ -901,6 +901,10 @@ public class ActionPlayer
                 }
             }
         })));
+
+        /* Chests the clips of this tick still hold open go up, the rest come
+         * down - including when the film was scrubbed rather than played */
+        fakePlayer.flushLids();
     }
 
     public void syncData(DataPath key, BaseType data)
@@ -1121,10 +1125,22 @@ public class ActionPlayer
         this.requestStop();
 
         ActionTeardown.runAll(
+            this::closeAllContainerLids,
             this::discardCurrentActors,
             this::restoreFirstPersonState,
             this::clearAllBreakProgressSessions
         );
+    }
+
+    /** Nothing asks for a lid any more, so every one the film opened closes. */
+    private void closeAllContainerLids()
+    {
+        SuperFakePlayer fakePlayer = SuperFakePlayer.getIfPresent(this.level);
+
+        if (fakePlayer != null)
+        {
+            fakePlayer.flushLids();
+        }
     }
 
     private void requestFullResync()
