@@ -851,6 +851,8 @@ public class UIKeys
     public static final IKey KEYFRAMES_TICK = L10n.lang("bbs.ui.keyframes.tick");
     public static final IKey KEYFRAMES_VALUE = L10n.lang("bbs.ui.keyframes.value");
     public static final IKey KEYFRAMES_RECORD_VALUE = L10n.lang("bbs.ui.keyframes.record_value");
+    public static final IKey KEYFRAMES_EMPTY_FILTERED = L10n.lang("bbs.ui.keyframes.empty_filtered");
+    public static final IKey KEYFRAMES_EMPTY_FILTERED_HINT = L10n.lang("bbs.ui.keyframes.empty_filtered-hint");
     public static final IKey KEYS_LIST = L10n.lang("bbs.ui.keys.list");
     public static final IKey KEYS_UI_SCALE_INC = L10n.lang("bbs.ui.keys.ui_scale_inc");
     public static final IKey KEYS_UI_SCALE_DEC = L10n.lang("bbs.ui.keys.ui_scale_dec");

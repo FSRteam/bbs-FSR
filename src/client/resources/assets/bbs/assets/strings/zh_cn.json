@@ -1049,6 +1049,8 @@
     "bbs.ui.keyframes.change_color": "更改关键帧颜色...",
     "bbs.ui.keyframes.change_shape": "更改关键帧形状",
     "bbs.ui.keyframes.forced_duration": "强制持续时间",
+    "bbs.ui.keyframes.empty_filtered": "所有轨道都被筛选隐藏了",
+    "bbs.ui.keyframes.empty_filtered-hint": "在这里右键 \u2192 筛选轨道...",
     "bbs.ui.keyframes.left_handle": "左手柄",
     "bbs.ui.keyframes.record_value": "录制参数",
     "bbs.ui.keyframes.reset_color": "重置颜色",

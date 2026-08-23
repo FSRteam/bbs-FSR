@@ -1044,6 +1044,8 @@
 	"bbs.ui.keyframes.context.simplify": "Simplify",
 	"bbs.ui.keyframes.context.spread": "Spread keyframes equally",
 	"bbs.ui.keyframes.forced_duration": "Forced duration",
+	"bbs.ui.keyframes.empty_filtered": "Every track is hidden by the filter",
+	"bbs.ui.keyframes.empty_filtered-hint": "Right click here \u2192 Filter tracks...",
 	"bbs.ui.keyframes.keys.category": "Keyframes editor",
 	"bbs.ui.keyframes.keys.scale_time": "Scale time",
 	"bbs.ui.keyframes.keys.select_left": "Select to the left",

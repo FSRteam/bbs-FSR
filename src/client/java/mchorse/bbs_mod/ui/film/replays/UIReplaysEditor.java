@@ -746,11 +746,12 @@ public class UIReplaysEditor extends UIElement {
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
 
-        sheets.removeIf(v -> {
-            if (!shouldShowTrack(v, this.category, this.showAllTracks())) {
-                return true;
-            }
+        sheets.removeIf(v -> !shouldShowTrack(v, this.category, this.showAllTracks()));
 
+        /* The tab isn't empty by itself - so if the filter empties it, the timeline has to stay (see below). */
+        boolean hadTracks = !sheets.isEmpty();
+
+        sheets.removeIf(v -> {
             String filterKey = getSheetFilterKey(v);
             for (String s : disabled) {
                 if (filterKey.equals(s) || v.id.equals(s) || v.id.endsWith("/" + s)) {
@@ -768,6 +769,13 @@ public class UIReplaysEditor extends UIElement {
 
             return false;
         });
+
+        /*
+         * Filtering every track off used to drop the timeline itself, and the track filter lives in its
+         * context menu - so "disable all" locked the user out of the only way back. Keep the (empty)
+         * timeline whenever the tab had tracks before the filter ran; the dope sheet says why it's blank.
+         */
+        boolean filteredOutEverything = hadTracks && sheets.isEmpty();
 
         Set<UIKeyframeSheet> kept = new LinkedHashSet<>(sheets);
 
@@ -791,7 +799,7 @@ public class UIReplaysEditor extends UIElement {
             lastForm = form;
         }
 
-        if (!sheets.isEmpty()) {
+        if (!sheets.isEmpty() || filteredOutEverything) {
             this.keyframeEditor = new UIKeyframeEditor(consumer
                     -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute()
             )
@@ -806,6 +814,7 @@ public class UIReplaysEditor extends UIElement {
             editor.setUndoId("replay_keyframe_editor");
             editor.setTimelineVisible(this.timelineVisible);
             editor.setPropertiesVisible(this.propertiesVisible);
+            view.getDopeSheet().setEmptyState(UIKeys.KEYFRAMES_EMPTY_FILTERED, UIKeys.KEYFRAMES_EMPTY_FILTERED_HINT);
 
             /* Reset */
             if (lastEditor != null) {
