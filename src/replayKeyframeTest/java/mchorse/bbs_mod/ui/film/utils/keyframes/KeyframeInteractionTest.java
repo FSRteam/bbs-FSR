@@ -156,7 +156,7 @@ public final class KeyframeInteractionTest
             "if(generation!=this.editorGeneration||this.editor!=replacement){return;}",
             "for(UIKeyframeFactorymounted:newArrayList<>(this.getChildren(UIKeyframeFactory.class)))",
             "if(mounted!=replacement&&mounted.getParent()==this){this.remove(mounted);}",
-            "if(replacement!=null&&replacement.getParent()!=this){this.add(replacement);}",
+            "if(replacement!=null&&replacement.getParent()!=this){this.add(replacement);this.moveToFront(this.splitter);}",
             "this.target.resize();",
             "this.resize();",
             "replacement.restoreScroll();",
