@@ -189,6 +189,7 @@ public class BBSSettings {
 	public static ValueBoolean recordingOverlays;
 	public static ValueInt recordingPoseTransformOverlays;
 	public static ValueBoolean recordingCameraPreview;
+	public static ValueBoolean recordingTeleport;
 
 	public static ValueBoolean renderAllModelBlocks;
 	public static ValueBoolean clickModelBlocks;
@@ -906,6 +907,7 @@ public class BBSSettings {
 		editorReplayTabs = builder.getBoolean("replay_tabs", true);
 		recordingPoseTransformOverlays = builder.getInt("pose_transform_overlays", 0, 0, 42);
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
+		recordingTeleport = builder.getBoolean("teleport", true);
 
 		builder.category("model_blocks", Icons.BLOCK);
 		renderAllModelBlocks = builder.getBoolean("render_all", true);

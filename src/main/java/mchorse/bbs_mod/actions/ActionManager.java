@@ -1145,6 +1145,29 @@ public class ActionManager
 
     /* Damage control */
 
+    /**
+     * Whether any world currently holds a live damage snapshot. The block-change mixin
+     * asks this before it samples the replaced block entity, so a world that isn't
+     * filming doesn't pay chunk lookups on every single block change.
+     */
+    public boolean isTrackingDamage()
+    {
+        if (this.dc.isEmpty())
+        {
+            return false;
+        }
+
+        for (DamageControl control : this.dc.values())
+        {
+            if (control.enable)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void trackDamage(ServerLevel world)
     {
         DamageControl damageControl = this.dc.get(world);
@@ -1171,8 +1194,12 @@ public class ActionManager
             }
             else
             {
-                damageControl.restore();
+                /* Drop the snapshot from the manager BEFORE restoring: restoring a block
+                 * is itself a block change, and a snapshot still reachable from the
+                 * manager gets written to while it is being walked - the restore used to
+                 * die halfway on exactly that. */
                 this.dc.remove(world);
+                damageControl.restore();
             }
         }
     }

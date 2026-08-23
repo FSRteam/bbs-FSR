@@ -1525,25 +1525,9 @@ public class UIReplaysEditor extends UIElement {
             return;
         }
 
-        Replay replay = this.getReplay();
-
-        if (replay != null) {
-            int tick = this.filmPanel.getCursor();
-            double x = replay.keyframes.x.interpolate(tick);
-            double y = replay.keyframes.y.interpolate(tick);
-            double z = replay.keyframes.z.interpolate(tick);
-            float yaw = replay.keyframes.yaw.interpolate(tick).floatValue();
-            float headYaw = replay.keyframes.headYaw.interpolate(tick).floatValue();
-            float bodyYaw = replay.keyframes.bodyYaw.interpolate(tick).floatValue();
-            float pitch = replay.keyframes.pitch.interpolate(tick).floatValue();
-            LocalPlayer player = Minecraft.getInstance().player;
-
-            PlayerUtils.teleport(x, y, z, headYaw, pitch);
-            player.setYRot(yaw);
-            player.setYHeadRot(headYaw);
-            player.setYBodyRot(bodyYaw);
-            player.setXRot(pitch);
-        }
+        /* Through the shared helper so the teleport key and a take started on the mark
+         * can never drift apart (and a replay without position keyframes is left alone) */
+        PlayerUtils.teleportToReplay(this.getReplay(), this.filmPanel.getCursor());
     }
 
     @Override

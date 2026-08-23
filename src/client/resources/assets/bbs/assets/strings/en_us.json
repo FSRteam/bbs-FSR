@@ -249,6 +249,8 @@
 	"bbs.config.recording.camera_preview-comment": "Allows to toggle rendering of camera boundaries in the film editor (when the camera mode isn't \"Camera\")",
 	"bbs.config.recording.countdown": "Recording countdown",
 	"bbs.config.recording.countdown-comment": "Recording countdown (in seconds)",
+	"bbs.config.recording.teleport": "Teleport to replay",
+	"bbs.config.recording.teleport-comment": "When a take started from the editor begins, teleport the player to where the replay stands at that tick (replays without any position keyframes are left alone)",
 	"bbs.config.recording.overlays": "Overlays",
 	"bbs.config.recording.overlays-comment": "Whether recording overlays will be displayed (counter, current tick and camera preview will be displayed)",
 	"bbs.config.recording.pose_transform_overlays": "Additional overlays",

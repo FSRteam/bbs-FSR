@@ -29,14 +29,19 @@ public class WorldChunkMixin
     {
         LevelChunk chunk = (LevelChunk) (Object) this;
 
-        if (chunk.getLevel() instanceof ServerLevel level)
+        /* Ask before sampling: the block entity lookup below costs a chunk map hit on
+         * every block change in the world, and when nothing is being filmed there is
+         * nothing to capture anyway. */
+        if (!BBSMod.getActions().isTrackingDamage() || !(chunk.getLevel() instanceof ServerLevel level))
         {
-            BlockEntity blockEntity = chunk.getBlockEntity(pos);
+            return;
+        }
 
-            if (blockEntity != null)
-            {
-                replaced.set(blockEntity.saveWithId(level.registryAccess()));
-            }
+        BlockEntity blockEntity = chunk.getBlockEntity(pos);
+
+        if (blockEntity != null)
+        {
+            replaced.set(blockEntity.saveWithId(level.registryAccess()));
         }
     }
 
@@ -46,7 +51,7 @@ public class WorldChunkMixin
         BlockState previous = info.getReturnValue();
         LevelChunk chunk = (LevelChunk) (Object) this;
 
-        if (previous != null && chunk.getLevel() instanceof ServerLevel)
+        if (previous != null && chunk.getLevel() instanceof ServerLevel && BBSMod.getActions().isTrackingDamage())
         {
             BBSMod.getActions().changedBlock(pos, previous, replaced.get());
         }

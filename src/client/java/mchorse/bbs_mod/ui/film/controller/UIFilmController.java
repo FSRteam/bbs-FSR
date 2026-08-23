@@ -613,7 +613,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
              * every recording input before that boundary; the world recorder must
              * never reach back into a panel which has already disappeared. */
             Minecraft.getInstance().setScreen(null);
-            BBSModClient.getFilms().startRecording(film, index, cursor);
+            /* On the mark: started from the editor, at a cursor the editor chose,
+             * so the take begins where the replay itself stands at that tick */
+            BBSModClient.getFilms().startRecording(film, index, cursor, true);
 
             return;
         }

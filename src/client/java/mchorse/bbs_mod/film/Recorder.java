@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
@@ -42,6 +43,8 @@ import java.util.List;
 
 public class Recorder extends WorldFilmController
 {
+    private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
+
     public ReplayKeyframes keyframes = new ReplayKeyframes("keyframes");
     public FormProperties properties = new FormProperties("properties");
     public final List<RecordedMob> mobs = new ArrayList<>();
@@ -64,6 +67,20 @@ public class Recorder extends WorldFilmController
 
     public int countdown;
     public final int initialTick;
+
+    /**
+     * Where the take is meant to begin, when starting the recording put the player on
+     * the replay's own mark &mdash; see {@link #awaitMark(Vector3d)}.
+     */
+    private Vector3d mark;
+    private int markWait;
+
+    /** How close to the mark counts as standing on it, in blocks. */
+    private static final double MARK_REACHED = 1D;
+
+    /** How many ticks the take may be held waiting for the teleport to land. */
+    private static final int MARK_TIMEOUT = 20;
+
     private final ClientLevel initialLevel;
     private final LocalPlayer initialPlayer;
     /* The network tuple is immutable even if the editor later renames the
@@ -191,7 +208,19 @@ public class Recorder extends WorldFilmController
 
     public boolean hasNotStarted()
     {
-        return this.countdown > 0;
+        return this.countdown > 0 || this.mark != null;
+    }
+
+    /**
+     * Hold the take until the player is actually standing on {@code mark}. The teleport
+     * that puts them there goes through the server and comes back a couple of ticks
+     * later, while the countdown ticks down on its own clock - with a short (or zero)
+     * countdown the first recorded ticks would catch the player still at the old spot,
+     * and the take would open with a visible jump.
+     */
+    public void awaitMark(Vector3d mark)
+    {
+        this.mark = mark;
     }
 
     public boolean hasRecordedFrame()
@@ -201,10 +230,15 @@ public class Recorder extends WorldFilmController
 
     public void update()
     {
-        if (this.hasNotStarted())
+        if (this.countdown > 0)
         {
             this.countdown -= 1;
 
+            return;
+        }
+
+        if (this.mark != null && !this.reachedMark())
+        {
             return;
         }
 
@@ -232,6 +266,35 @@ public class Recorder extends WorldFilmController
         }
 
         super.update();
+    }
+
+    /**
+     * Whether the teleport has landed. Given up on after {@link #MARK_TIMEOUT} rather
+     * than awaited forever: a mark inside a wall or up in the air is one the player can
+     * never quite stand on, and a take that never starts is worse than one that starts
+     * slightly off.
+     */
+    private boolean reachedMark()
+    {
+        LocalPlayer player = Minecraft.getInstance().player;
+        double distance = player == null ? Double.MAX_VALUE : this.mark.distance(player.getX(), player.getY(), player.getZ());
+        boolean reached = distance <= MARK_REACHED;
+
+        this.markWait += 1;
+
+        if (!reached && this.markWait < MARK_TIMEOUT)
+        {
+            return false;
+        }
+
+        if (!reached)
+        {
+            LOGGER.warn("[BBS film] Recording is starting {} blocks off the replay's mark - the teleport never landed.", String.format("%.2f", distance));
+        }
+
+        this.mark = null;
+
+        return true;
     }
 
     private void captureMobs(LocalPlayer player)
