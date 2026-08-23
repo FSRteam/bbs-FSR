@@ -237,44 +237,20 @@ public class UIFilmPreview extends UIElement
                 ScreenshotRecorder recorder = BBSModClient.getScreenshotRecorder();
                 File output = Window.isAltPressed() ? null : recorder.getScreenshotFile();
 
-                BBSRendering.cancelPendingExportResolutionActions();
-                boolean scheduled = false;
-
-                try
+                this.snapshotToFile(output, () ->
                 {
-                    UIFilmPanel.applyExportSizeToBBS();
-                    BBSRendering.scheduleAfterNextExportFrame(
-                        this::isPanelOwnerValid,
-                        () ->
-                        {
-                            Texture texture = BBSRendering.getTexture();
-                            int w = BBSRendering.getVideoWidth();
-                            int h = BBSRendering.getVideoHeight();
-                            recorder.takeScreenshot(output, texture.id, w, h);
-                            this.panel.restorePreviewSize();
+                    UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
 
-                            UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
-                            if (currentMenu != null)
-                            {
-                                UIMessageFolderOverlayPanel overlayPanel = new UIMessageFolderOverlayPanel(
-                                    UIKeys.FILM_SCREENSHOT_TITLE,
-                                    UIKeys.FILM_SCREENSHOT_DESCRIPTION,
-                                    recorder.getScreenshots()
-                                );
-                                UIOverlay.addOverlay(currentMenu.context, overlayPanel);
-                            }
-                        },
-                        this::restorePreviewIfOwned
-                    );
-                    scheduled = true;
-                }
-                finally
-                {
-                    if (!scheduled)
+                    if (currentMenu != null)
                     {
-                        this.restorePreviewIfOwned();
+                        UIMessageFolderOverlayPanel overlayPanel = new UIMessageFolderOverlayPanel(
+                            UIKeys.FILM_SCREENSHOT_TITLE,
+                            UIKeys.FILM_SCREENSHOT_DESCRIPTION,
+                            recorder.getScreenshots()
+                        );
+                        UIOverlay.addOverlay(currentMenu.context, overlayPanel);
                     }
-                }
+                });
             });
 
             menu.action(Icons.FILM, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEOS, () -> this.panel.recorder.openMovies());
@@ -326,6 +302,53 @@ public class UIFilmPreview extends UIElement
         if (this.isPanelOwnerValid())
         {
             this.panel.restorePreviewSize();
+        }
+    }
+
+    /**
+     * Renders the film at export resolution for exactly one isolated frame -
+     * pure camera picture, no dashboard UI - and saves it to {@code output}
+     * through the same pathway as the camera screenshot menu action. Used by
+     * the film home to capture covers.
+     *
+     * @param onDone optional callback invoked after the file was written
+     */
+    public void snapshotToFile(File output, Runnable onDone)
+    {
+        ScreenshotRecorder recorder = BBSModClient.getScreenshotRecorder();
+
+        BBSRendering.cancelPendingExportResolutionActions();
+        boolean scheduled = false;
+
+        try
+        {
+            UIFilmPanel.applyExportSizeToBBS();
+            BBSRendering.scheduleAfterNextExportFrame(
+                this::isPanelOwnerValid,
+                () ->
+                {
+                    Texture texture = BBSRendering.getTexture();
+                    int w = BBSRendering.getVideoWidth();
+                    int h = BBSRendering.getVideoHeight();
+
+                    recorder.takeScreenshot(output, texture.id, w, h);
+                    this.panel.restorePreviewSize();
+
+                    if (onDone != null)
+                    {
+                        onDone.run();
+                    }
+                },
+                this::restorePreviewIfOwned
+            );
+            scheduled = true;
+        }
+        finally
+        {
+            if (!scheduled)
+            {
+                this.restorePreviewIfOwned();
+            }
         }
     }
 

@@ -1666,13 +1666,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.setFlight(false);
         cameraController.add(this.runner);
 
-        if (this.data != null)
-        {
-            /* Snapshot the monitor's current frame right away; blank grabs
-             * retry on their own until a real picture presents. */
-            FilmThumbnails.requestCapture(this.data.getId(), 5);
-        }
-
         this.getContext().menu.getRoot().add(this.secretPlay);
     }
 
@@ -1827,8 +1820,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (data != null)
         {
             /* Film data just arrived (async load): snapshot the monitor's
-             * frame as this film's cover. Blank grabs retry on their own. */
-            FilmThumbnails.requestCapture(data.getId(), 5);
+             * frame as this film's cover through the editor's own
+             * screenshot pipeline. */
+            FilmThumbnails.requestCapture(data.getId());
         }
 
         this.notifyServer(ActionState.RESTART);
@@ -1866,7 +1860,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 /* Single last-modified chokepoint: every persisted save
                  * (manual, periodic, close, pre-pick) flows through here. */
                 this.data.stampUpdatedTimeNow();
-                FilmThumbnails.requestCapture(this.data.getId(), 5);
+                FilmThumbnails.requestCapture(this.data.getId());
             }
 
             /* The base panel owns the repository selected when this Film data

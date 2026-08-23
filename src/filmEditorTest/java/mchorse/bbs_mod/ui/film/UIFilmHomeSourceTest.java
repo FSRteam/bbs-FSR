@@ -52,14 +52,14 @@ public final class UIFilmHomeSourceTest
         check(!home.contains("startBatch"),
             "cover generation must never hijack navigation by auto-opening films");
 
-        String events = Files.readString(
-            Path.of("src/client/java/mchorse/bbs_mod/client/BBSClientNeoEvents.java")
+        String preview = Files.readString(
+            Path.of("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPreview.java")
         );
 
-        check(events.contains("FilmThumbnails.clientTick()"),
-            "thumbnail capture must advance on the client tick");
-        check(panel.contains("FilmThumbnails.requestCapture"),
-            "the film panel must schedule cover captures");
+        check(preview.contains("public void snapshotToFile(File output, Runnable onDone)"),
+            "the monitor's screenshot pipeline must be reusable for covers");
+        check(panel.contains("FilmThumbnails.requestCapture(data.getId())"),
+            "covers must be captured as soon as a film's data arrives");
 
         int paletteStart = home.indexOf("static final int[][] THUMB_COLORS");
         int paletteEnd = home.indexOf("};", paletteStart);

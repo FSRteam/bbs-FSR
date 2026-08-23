@@ -1,15 +1,16 @@
 package mchorse.bbs_mod.ui.film.home;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.Screenshot;
-import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.platform.NativeImage;
 import org.lwjgl.opengl.GL11;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.nio.file.Files;
@@ -20,18 +21,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * First-frame thumbnail pipeline for the film home grid.
+ * Cover thumbnails for the film home grid, captured through the film editor's
+ * own screenshot pipeline ({@code UIFilmPreview.snapshotToFile}): whenever a
+ * film's data lands in the editor - or it gets saved - the monitor is rendered
+ * at export resolution for one isolated frame and written to a temp PNG; a
+ * background job then waits for that file, downscales it into the 320px cover
+ * at {@code config/bbs/settings/film_thumbnails/<sha1(id)>.png} and invalidates
+ * the in-memory texture so the grid picks the fresh picture up.
  *
- * <p>Capture: while a film is open in the editor (and shortly after each save),
- * a frame is grabbed from the main render target over the preview area,
- * downscaled to 320px wide and written to
- * {@code config/bbs/settings/film_thumbnails/<sha1(id)>.png}. Grabbing happens
- * on the render thread inside the client tick.
- *
- * <p>Consumption: {@link #getCached(String)} never blocks and never touches
- * disk on the render hot path — a miss schedules a background file read whose
- * upload is posted back to the render thread. Textures are kept in a small
- * LRU; evicted entries delete their GL texture.
+ * <p>{@link #getCached(String)} never blocks: a miss schedules a background
+ * file read whose upload lands on the render thread; textures live in a small
+ * LRU whose evictions delete their GL texture.
  */
 public class FilmThumbnails
 {
@@ -53,12 +53,6 @@ public class FilmThumbnails
     private static final Object LOCK = new Object();
 
     private static UIFilmPanel panel;
-    private static String pendingFilmId;
-    private static int pendingTicks = -1;
-    private static int pendingAttempts;
-
-    private static final int RETRY_TICKS = 8;
-    private static final int MAX_ATTEMPTS = 10;
 
     public static void setPanel(UIFilmPanel filmPanel)
     {
@@ -66,174 +60,121 @@ public class FilmThumbnails
     }
 
     /**
-     * Schedules a grab of the monitor's current frame. The first attempt
-     * fires almost immediately; if the preview hasn't presented a real frame
-     * yet (the grab would be black), it silently retries a few times.
+     * Asks the currently open film's monitor for an isolated export-resolution
+     * snapshot, which is then downscaled into this film's cover. Silently
+     * does nothing when the film isn't open in the editor.
      */
-    public static void requestCapture(String filmId, int delayTicks)
+    public static void requestCapture(String filmId)
     {
-        if (filmId == null || filmId.isEmpty())
+        UIFilmPanel host = panel;
+
+        if (filmId == null || filmId.isEmpty() || host == null || host.preview == null
+            || host.getData() == null || !filmId.equals(host.getData().getId()))
         {
             return;
         }
 
-        if (filmId.equals(pendingFilmId) && pendingTicks >= 0)
+        File temp = tempFileFor(filmId);
+
+        try
         {
-            return;
+            host.preview.snapshotToFile(temp, () -> process(filmId, temp));
         }
-
-        pendingFilmId = filmId;
-        pendingTicks = Math.max(1, delayTicks);
-        pendingAttempts = MAX_ATTEMPTS;
-    }
-
-    /** Client tick hook (render thread). */
-    public static void clientTick()
-    {
-        if (pendingTicks < 0)
+        catch (Exception e)
         {
-            return;
-        }
-
-        pendingTicks -= 1;
-
-        if (pendingTicks > 0)
-        {
-            return;
-        }
-
-        String filmId = pendingFilmId;
-
-        pendingTicks = -1;
-        pendingFilmId = null;
-
-        if (filmId == null)
-        {
-            return;
-        }
-
-        if (!capture(filmId) && pendingAttempts > 0)
-        {
-            /* Blank grab - the monitor hadn't presented a frame yet; retry shortly */
-            pendingAttempts -= 1;
-            pendingFilmId = filmId;
-            pendingTicks = RETRY_TICKS;
+            LOGGER.warn("[BBS-SEM] topic=film_thumb phase=schedule result=error", e);
         }
     }
 
     /**
-     * Grabs the monitor's current frame for this film.
-     *
-     * @return true when done (captured, or the editor/preview is gone so no
-     *         retry makes sense); false when the grab was blank and a retry
-     *         should happen shortly.
+     * Waits for the screenshot writer thread to finish the full-res temp PNG
+     * (bounded), downscales it into the final cover file and invalidates the
+     * cached texture so the grid reloads it.
      */
-    private static boolean capture(String filmId)
+    private static void process(String filmId, File temp)
     {
-        UIFilmPanel host = panel;
-        Minecraft mc = Minecraft.getInstance();
-
-        if (host == null || mc.getWindow() == null || !host.isVisible()
-            || host.getData() == null || !filmId.equals(host.getData().getId())
-            || host.preview == null || !host.preview.isVisible()
-            || host.preview.area.w < 16 || host.preview.area.h < 16)
-        {
-            LOGGER.warn("[BBS-SEM] topic=film_thumb phase=capture result=skip reason=precondition visible={} data={} preview={}",
-                host != null && host.isVisible(),
-                host != null && host.getData() != null ? host.getData().getId() : "null",
-                host != null && host.preview != null && host.preview.isVisible());
-
-            return true;
-        }
-
-        RenderTarget target = mc.getMainRenderTarget();
-
-        if (target == null || target.width < 16 || target.height < 16)
-        {
-            return true;
-        }
-
-        NativeImage image = Screenshot.takeScreenshot(target);
-
-        if (image == null)
-        {
-            return true;
-        }
-
         try
         {
-            double ratioX = target.width / (double) mc.getWindow().getWidth();
-            double ratioY = target.height / (double) mc.getWindow().getHeight();
+            for (int i = 0; i < 50 && !isSettled(temp); i++)
+            {
+                Thread.sleep(200L);
+            }
 
-            int px = (int) Math.round(host.preview.area.x * ratioX);
-            int py = (int) Math.round(host.preview.area.y * ratioY);
-            int pw = (int) Math.round(host.preview.area.w * ratioX);
-            int ph = (int) Math.round(host.preview.area.h * ratioY);
+            if (!temp.isFile() || temp.length() == 0)
+            {
+                return;
+            }
 
-            px = Math.max(0, Math.min(px, target.width - 1));
-            py = Math.max(0, Math.min(py, target.height - 1));
-            pw = Math.max(1, Math.min(pw, target.width - px));
-            ph = Math.max(1, Math.min(ph, target.height - py));
+            Pixels source;
 
-            int outW = Math.min(CAPTURE_WIDTH, pw);
-            int outH = Math.max(1, (int) ((long) outW * ph / pw));
+            try (java.io.InputStream stream = Files.newInputStream(temp.toPath()))
+            {
+                source = Pixels.fromPNGStream(stream);
+            }
 
-            NativeImage out = new NativeImage(outW, outH, false);
+            int outW = Math.min(CAPTURE_WIDTH, source.width);
+            int outH = Math.max(1, (int) ((long) outW * source.height / source.width));
 
-            /* Framebuffer rows are bottom-up; map output rows accordingly. */
+            Pixels scaled = Pixels.fromSize(outW, outH);
+
             for (int y = 0; y < outH; y++)
             {
-                int sy = py + (ph - 1) - (int) ((long) y * ph / outH);
+                int sy = Math.min(source.height - 1, (int) ((long) y * source.height / outH));
 
                 for (int x = 0; x < outW; x++)
                 {
-                    int sx = px + (int) ((long) x * pw / outW);
+                    int sx = Math.min(source.width - 1, (int) ((long) x * source.width / outW));
 
-                    out.setPixelRGBA(x, y, image.getPixelRGBA(sx, sy));
+                    scaled.setColor(x, y, source.getColor(sx, sy));
                 }
             }
 
-            /* A fully black grab means the preview hadn't presented a frame
-             * yet - keep whatever cover the film already has and retry. */
-            if (isBlank(out))
+            scaled.rewindBuffer();
+
+            BufferedImage image = new BufferedImage(outW, outH, BufferedImage.TYPE_INT_ARGB);
+
+            for (int y = 0; y < outH; y++)
             {
-                out.close();
-
-                LOGGER.warn("[BBS-SEM] topic=film_thumb phase=capture result=blank retry_in={}t", 8);
-
-                return false;
-            }
-
-            File file = fileFor(filmId);
-
-            file.getParentFile().mkdirs();
-            out.writeToFile(file);
-            out.close();
-
-            LOGGER.info("[BBS-SEM] topic=film_thumb phase=capture result=written file={} size={}x{}", file, outW, outH);
-
-            synchronized (LOCK)
-            {
-                Texture cached = CACHE.remove(filmId);
-
-                if (cached != null)
+                for (int x = 0; x < outW; x++)
                 {
-                    cached.delete();
+                    mchorse.bbs_mod.utils.colors.Color color = scaled.getColor(x, y);
+
+                    image.setRGB(x, y, ((int) (color.a * 255F) << 24) | ((int) (color.r * 255F) << 16) | ((int) (color.g * 255F) << 8) | (int) (color.b * 255F));
                 }
             }
+
+            File target = fileFor(filmId);
+
+            target.getParentFile().mkdirs();
+            ImageIO.write(image, "png", target);
+
+            Files.deleteIfExists(temp.toPath());
+
+            Minecraft.getInstance().execute(() ->
+            {
+                synchronized (LOCK)
+                {
+                    Texture cached = CACHE.remove(filmId);
+
+                    if (cached != null)
+                    {
+                        cached.delete();
+                    }
+                }
+            });
+
+            LOGGER.info("[BBS-SEM] topic=film_thumb phase=process result=written file={} size={}x{}", target, outW, outH);
         }
         catch (Exception e)
         {
-            /* A failed capture is invisible degradation: the grid keeps its
-             * procedural fallback card until the next successful one. */
-            LOGGER.warn("[BBS-SEM] topic=film_thumb phase=capture result=error", e);
+            LOGGER.warn("[BBS-SEM] topic=film_thumb phase=process result=error", e);
         }
-        finally
-        {
-            image.close();
-        }
+    }
 
-        return true;
+    /** The screenshot writer thread creates and then fully writes the file. */
+    private static boolean isSettled(File file)
+    {
+        return file.isFile() && file.length() > 0;
     }
 
     /**
@@ -317,51 +258,14 @@ public class FilmThumbnails
         }
     }
 
-    /** Drops the cached texture and the persisted file so the next open/save re-captures. */
-    public static void invalidate(String filmId)
-    {
-        synchronized (LOCK)
-        {
-            Texture texture = CACHE.remove(filmId);
-
-            if (texture != null)
-            {
-                texture.delete();
-            }
-        }
-
-        try
-        {
-            Files.deleteIfExists(fileFor(filmId).toPath());
-        }
-        catch (Exception e)
-        {}
-    }
-
-    /** True when every sampled pixel is (near) black - an unpresented preview. */
-    private static boolean isBlank(NativeImage image)
-    {
-        int step = Math.max(1, Math.min(image.getWidth(), image.getHeight()) / 8);
-
-        for (int y = 0; y < image.getHeight(); y += step)
-        {
-            for (int x = 0; x < image.getWidth(); x += step)
-            {
-                int pixel = image.getPixelRGBA(x, y);
-
-                if ((pixel & 0xFF) > 10 || ((pixel >> 8) & 0xFF) > 10 || ((pixel >> 16) & 0xFF) > 10)
-                {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
     private static File fileFor(String filmId)
     {
         return new File(BBSMod.getSettingsPath("film_thumbnails"), sha1(filmId) + ".png");
+    }
+
+    private static File tempFileFor(String filmId)
+    {
+        return new File(BBSMod.getSettingsPath("film_thumbnails"), sha1(filmId) + "_temp.png");
     }
 
     private static String sha1(String value)
