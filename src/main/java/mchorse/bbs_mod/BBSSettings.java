@@ -173,6 +173,7 @@ public class BBSSettings {
 	public static ValueBoolean editorHorizontalClipEditor;
 	public static ValueBoolean editorMinutesBackup;
 	public static ValueBoolean editorResizablePanels;
+	public static ValueInt editorKeyframePanelWidth;
 	public static ValueInt editorTrackWidth;
 	public static ValueInt keyframeDefaultShape;
 	public static ValueInt editorPreviewSizeMode;
@@ -890,7 +891,8 @@ public class BBSSettings {
 		editorRewind = builder.getBoolean("rewind", true);
 		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", true);
 		editorMinutesBackup = builder.getBoolean("minutes_backup", true);
-		editorResizablePanels = builder.getBoolean("resizable_panels", true);
+			editorResizablePanels = builder.getBoolean("resizable_panels", true);
+			editorKeyframePanelWidth = builder.getInt("keyframe_panel_width", 140, 80, 480);
 		editorPreviewSizeMode = builder.getInt("preview_size_mode", 0, 0, 2);
 		editorPreviewCustomWidth = builder.getInt("preview_custom_width", 1280, 2, 16384);
 		editorPreviewCustomHeight = builder.getInt("preview_custom_height", 720, 2, 16384);
