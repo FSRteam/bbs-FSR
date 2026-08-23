@@ -173,11 +173,11 @@ public final class FormTranslucentQueue
             {
                 RenderSystem.enableDepthTest();
                 RenderSystem.depthFunc(GL11.GL_LEQUAL);
-                RenderSystem.enableBlend();
-                RenderSystem.defaultBlendFunc();
 
                 for (DrawCommand command : pending)
                 {
+                    resetBlend();
+
                     /* Solid geometry keeps depth writes for correct self-occlusion — the sort
                      * already ordered the commands between forms. Flat single-quad forms don't
                      * write, so they can't occlude each other or anything drawn after this pass. */
@@ -208,6 +208,19 @@ public final class FormTranslucentQueue
             RenderSystem.depthMask(true);
             RenderSystem.disableBlend();
         }
+    }
+
+    /**
+     * Blending is per-command state, not per-pass: a {@link RenderLayerCommand} ends with the
+     * layer's own clearRenderState, and every vanilla translucent layer disables blending there.
+     * The command replayed next — a label's background quad right after its text, a billboard
+     * after a block — would then draw with GL_BLEND off and lose its alpha entirely. Each
+     * command (and each child inside a group) starts from the same known state instead.
+     */
+    private static void resetBlend()
+    {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
     }
 
     private static void release()
@@ -568,7 +581,7 @@ public final class FormTranslucentQueue
     {
         private final List<DrawCommand> children = new ArrayList<>();
         GroupCommand(Vector3f origin, boolean cull) { super(origin, cull, false); }
-        @Override public void draw() { for (DrawCommand child : children) child.draw(); }
+        @Override public void draw() { for (DrawCommand child : children) { resetBlend(); child.draw(); } }
         @Override public void release() { for (DrawCommand child : children) child.release(); }
     }
 }
