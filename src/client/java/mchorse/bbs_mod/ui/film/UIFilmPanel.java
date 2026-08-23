@@ -121,6 +121,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIFilmRecorder recorder;
     public UIFilmPreview preview;
 
+    private boolean restartPending;
+    private int lastRestartCursor = -1;
+
     public UIIcon duplicateFilm;
 
     /* Main editors */
@@ -2065,6 +2068,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.playerToCamera = BBSSettings.editorPlayerFollowsCamera.get();
         this.controller.update();
+        this.updateRestartOnSeek();
 
         if (this.playerToCamera && this.data != null && !this.controller.isControlling())
         {
@@ -2391,6 +2395,67 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.runner.ticks = Math.max(0, value);
 
         this.notifyServer(ActionState.SEEK);
+
+        if (BBSSettings.editorRestartOnSeek.get())
+        {
+            this.restartPending = true;
+        }
+    }
+
+    /**
+     * Restart the actions and recreate the actors, the same way {@link Keys#FILM_CONTROLLER_RESTART_ACTIONS}
+     * does it manually.
+     */
+    public void restartActions()
+    {
+        this.restartPending = false;
+
+        this.notifyServer(ActionState.RESTART);
+        this.controller.createEntities();
+    }
+
+    /**
+     * Automatic restart of the actions upon scrubbing the cursor (see the "restart on seek" setting).
+     *
+     * <p>Both restarting the actions on the server and recreating the actors are way too
+     * expensive to run them on every frame of a scrubbing drag, so the restart waits until
+     * the cursor stops moving for a tick and only then fires once.</p>
+     */
+    private void updateRestartOnSeek()
+    {
+        int cursor = this.getCursor();
+        boolean settled = cursor == this.lastRestartCursor;
+
+        this.lastRestartCursor = cursor;
+
+        if (!this.restartPending || !settled)
+        {
+            return;
+        }
+
+        if (!BBSSettings.editorRestartOnSeek.get() || !this.canRestartOnSeek())
+        {
+            this.restartPending = false;
+
+            return;
+        }
+
+        this.restartActions();
+    }
+
+    /**
+     * Recreating the actors stops the recording and drops the character control, and both
+     * the playback and the video export move the cursor on their own, so an automatic
+     * restart must stay out of all of those.
+     */
+    private boolean canRestartOnSeek()
+    {
+        return this.data != null
+            && !this.isRunning()
+            && !this.controller.isRecording()
+            && !this.controller.isControlling()
+            && !this.recorder.isRecording()
+            && !this.recorder.isExporting();
     }
 
     public boolean isRunning()

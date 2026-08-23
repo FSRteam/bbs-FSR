@@ -32,6 +32,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         armorRenderer = new ArmorRenderer(
             new HumanoidModel<>(ctx.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
             new HumanoidModel<>(ctx.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
+            ctx.bakeLayer(ModelLayers.ELYTRA),
             ctx.getModelManager()
         );
 

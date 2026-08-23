@@ -40,8 +40,10 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ArmorMaterial;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.armortrim.ArmorTrim;
 import net.minecraft.world.item.component.DyedItemColor;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.function.Supplier;
 
@@ -54,6 +56,9 @@ public class ArmorRenderer
 
     private static final ResourceLocation CURSIUM_GHOST_TEXTURE =
         ResourceLocation.fromNamespaceAndPath("cataclysm", "textures/armor/cursium_armor_ghost.png");
+
+    private static final ResourceLocation ELYTRA_TEXTURE =
+        ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/elytra.png");
 
     /**
      * Semi-transparent energy-swirl layer matching Cataclysm's {@code CMRenderTypes.GHOST}
@@ -84,6 +89,9 @@ public class ArmorRenderer
 
     private final HumanoidModel<?> innerModel;
     private final HumanoidModel<?> outerModel;
+    private final ModelPart elytra;
+    private final ModelPart elytraLeftWing;
+    private final ModelPart elytraRightWing;
     private final TextureAtlas armorTrimsAtlas;
 
     /* Skinning state for the current slot. When bending is active, geometry gets rendered
@@ -97,10 +105,13 @@ public class ArmorRenderer
     private float bendStart;
     private float bendEnd;
 
-    public ArmorRenderer(HumanoidModel<?> innerModel, HumanoidModel<?> outerModel, ModelManager modelManager)
+    public ArmorRenderer(HumanoidModel<?> innerModel, HumanoidModel<?> outerModel, ModelPart elytra, ModelManager modelManager)
     {
         this.innerModel = innerModel;
         this.outerModel = outerModel;
+        this.elytra = elytra;
+        this.elytraLeftWing = elytra.getChild("left_wing");
+        this.elytraRightWing = elytra.getChild("right_wing");
         this.armorTrimsAtlas = modelManager.getAtlas(Sheets.ARMOR_TRIMS_SHEET);
     }
 
@@ -142,6 +153,13 @@ public class ArmorRenderer
     {
         ItemStack itemStack = entity.getEquipmentStack(armorSlot);
         Item item = itemStack.getItem();
+
+        if (type == ArmorType.CHEST && itemStack.is(Items.ELYTRA))
+        {
+            this.renderElytra(matrices, vertexConsumers, entity, itemStack, light);
+
+            return;
+        }
 
         if (item instanceof ArmorItem armorItem && armorItem.getEquipmentSlot() == armorSlot)
         {
@@ -198,13 +216,69 @@ public class ArmorRenderer
         }
     }
 
+    /* Vanilla elytra, verified against 1.20.4 bytecode: ElytraFeatureRenderer.render
+     * (translate 0,0,0.125; armor cutout layer; glint) + ElytraModel.setupAnim
+     * (non-player branch: standing / sneaking / fall flying wing angles) */
+    private void renderElytra(PoseStack matrices, MultiBufferSource vertexConsumers, IEntity entity, ItemStack itemStack, int light)
+    {
+        float pitch = 0.2617994F;
+        float roll = -0.2617994F;
+        float pivotY = 0F;
+        float yaw = 0F;
+
+        if (entity.isFallFlying())
+        {
+            float spread = 1F;
+            Vec3 velocity = entity.getVelocity();
+
+            if (velocity.y < 0D)
+            {
+                Vec3 normalized = velocity.normalize();
+
+                spread = 1F - (float) Math.pow(-normalized.y, 1.5D);
+            }
+
+            pitch = spread * 0.34906584F + (1F - spread) * pitch;
+            roll = spread * -1.5707964F + (1F - spread) * roll;
+        }
+        else if (entity.isSneaking())
+        {
+            pitch = 0.6981317F;
+            roll = -0.7853982F;
+            pivotY = 3F;
+            yaw = 0.08726646F;
+        }
+
+        this.elytraLeftWing.y = pivotY;
+        this.elytraLeftWing.xRot = pitch;
+        this.elytraLeftWing.yRot = yaw;
+        this.elytraLeftWing.zRot = roll;
+        this.elytraRightWing.y = pivotY;
+        this.elytraRightWing.xRot = pitch;
+        this.elytraRightWing.yRot = -yaw;
+        this.elytraRightWing.zRot = -roll;
+
+        matrices.pushPose();
+        matrices.translate(0F, 0F, 0.125F);
+
+        VertexConsumer vertexConsumer = vertexConsumers.getBuffer(RenderType.armorCutoutNoCull(ELYTRA_TEXTURE));
+
+        this.renderPart(this.elytra, matrices, vertexConsumer, light, WHITE);
+
+        if (itemStack.hasFoil())
+        {
+            this.renderGlint(this.elytra, matrices, vertexConsumers, light);
+        }
+
+        matrices.popPose();
+    }
+
     /**
      * Detects L_Ender's Cataclysm Cursium armor by item id without a compile-time
      * dependency on the mod. The ghost layer is a Cataclysm-specific effect, so gating
      * on the mod's own registry id keeps vanilla/other mods on the unchanged path.
      */
-    private boolean isCursium(ItemStack stack)
-    {
+    private boolean isCursium(ItemStack stack)    {
         if (stack == null || stack.isEmpty())
         {
             return false;

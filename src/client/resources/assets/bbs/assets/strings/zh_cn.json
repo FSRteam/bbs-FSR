@@ -215,6 +215,8 @@
     "bbs.config.recording.countdown-comment": "录制倒计时（以秒为单位）",
     "bbs.config.recording.teleport": "传送到回放位置",
     "bbs.config.recording.teleport-comment": "从编辑器开始的录制会先把玩家传送到回放在该 tick 所在的位置（没有任何位置关键帧的回放不受影响）",
+    "bbs.config.editor.restart_on_seek": "拖动时重启动作",
+    "bbs.config.editor.restart_on_seek-comment": "启用后，每次在时间线上拖动播放头都会自动重启动作（默认 Alt + R 的效果）。播放、录制、角色控制和视频导出期间会跳过",
     "bbs.config.recording.overlays": "录制提示",
     "bbs.config.recording.overlays-comment": "是否显示录制提示（显示倒计时、当前刻，以及摄像机预览）",
     "bbs.config.recording.pose_transform_overlays": "额外附加层（Overlay）",

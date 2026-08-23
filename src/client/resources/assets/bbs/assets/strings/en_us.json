@@ -251,6 +251,8 @@
 	"bbs.config.recording.countdown-comment": "Recording countdown (in seconds)",
 	"bbs.config.recording.teleport": "Teleport to replay",
 	"bbs.config.recording.teleport-comment": "When a take started from the editor begins, teleport the player to where the replay stands at that tick (replays without any position keyframes are left alone)",
+	"bbs.config.editor.restart_on_seek": "Restart on seek",
+	"bbs.config.editor.restart_on_seek-comment": "When enabled, restarting the actions (Alt + R by default) happens automatically every time you scrub the cursor on the timeline. It is skipped during playback, recording, character control and video export",
 	"bbs.config.recording.overlays": "Overlays",
 	"bbs.config.recording.overlays-comment": "Whether recording overlays will be displayed (counter, current tick and camera preview will be displayed)",
 	"bbs.config.recording.pose_transform_overlays": "Additional overlays",

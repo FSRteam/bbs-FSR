@@ -170,6 +170,7 @@ public class BBSSettings {
 	public static ValueBoolean editorSnapToMarkers;
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
+	public static ValueBoolean editorRestartOnSeek;
 	public static ValueBoolean editorHorizontalClipEditor;
 	public static ValueBoolean editorMinutesBackup;
 	public static ValueBoolean editorResizablePanels;
@@ -899,6 +900,7 @@ public class BBSSettings {
 		editorPreviewCustomHeight = builder.getInt("preview_custom_height", 720, 2, 16384);
 		editorPreviewResolutionScale = builder.getFloat("preview_resolution_scale", 2F, 1F, 3F).slider();
 		editorKeepFrameOnExit = builder.getBoolean("keep_frame_on_exit", false);
+		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
 
 		builder.category("recording", Icons.FILM);
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);

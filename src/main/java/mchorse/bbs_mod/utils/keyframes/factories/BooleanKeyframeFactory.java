@@ -7,6 +7,12 @@ import mchorse.bbs_mod.utils.interps.IInterp;
 public class BooleanKeyframeFactory implements IKeyframeFactory<Boolean>
 {
     @Override
+    public boolean isStepped()
+    {
+        return true;
+    }
+
+    @Override
     public Boolean fromData(BaseType data)
     {
         return data.isNumeric() && data.asNumeric().boolValue();
