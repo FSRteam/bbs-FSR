@@ -201,10 +201,18 @@ public final class RenderRuntimeMigrationSourceTest
                 && extruded.contains("queueWasActive = FormTranslucentQueue.suspend();")
                 && extruded.contains("FormTranslucentQueue.restore(queueWasActive);"),
             "extruded forms no longer use the Iris immediate/cutout fallback");
-        check(queue.contains("public RenderLayerCommand( RenderType layer, VertexBuffer buffer, Matrix4f modelView, Vector3f origin, Runnable prepare )")
+        check(queue.contains("public RenderLayerCommand( RenderType layer, VertexBuffer buffer, Matrix4f modelView, Vector3f origin, Runnable prepare, boolean extendedLayout )")
                 && queue.contains("super(origin, true, true);")
-                && consumers.contains("new Vector3f(origin), captureLayerPreparation(layer)")
-                && !consumers.contains("textLayer,"),
+                && consumers.contains("new Vector3f(origin),")
+                && consumers.contains("captureLayerPreparation(layer),")
+                && !consumers.contains("textLayer,")
+                /* The deferred draw must pin Iris' vertex-array layout to the one the mesh
+                 * was captured with, or a vanilla-format mesh drawn under a raised
+                 * renderWithExtendedVertexFormat flag tears into a triangle fan. */
+                && queue.contains("boolean previousLayout = BBSRendering.applyIrisVertexLayout(this.extendedLayout);")
+                && queue.contains("buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());")
+                && queue.contains("BBSRendering.restoreIrisVertexLayout(previousLayout);")
+                && consumers.contains("boolean extendedLayout = BBSRendering.captureIrisVertexLayout();"),
             "deferred vanilla render layers stopped writing depth unconditionally, so item and block forms pile their faces");
         check(queue.contains("this(vao, BBSShaders::getModel, PASS_TRANSLUCENT, true, texture, modelView, normalMat,")
                 && queue.contains("this(vao, BBSShaders::getModel, PASS_TRANSLUCENT, true, armatureSnapshot, uploadCount,")
