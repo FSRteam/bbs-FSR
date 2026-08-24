@@ -308,21 +308,9 @@ public class UIReplaysEditor extends UIElement {
         return Colors.BLUE;
     }
 
-    /** The key a sheet is identified by in track filters (global and per-form). */
+    /** Stable key shared by filters and global track styles. */
     public static String getSheetFilterKey(UIKeyframeSheet sheet) {
-        if (sheet.isBoneTrack)
-        {
-            PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(sheet.id);
-
-            if (path != null)
-            {
-                return path.formPath().isEmpty() ? path.bone() : path.formPath() + "/" + path.bone();
-            }
-
-            return sheet.title.get();
-        }
-
-        return StringUtils.fileName(sheet.id);
+        return sheet.getFilterKey();
     }
 
     /** The form a sheet belongs to, whether it backs a form property or carries its owner directly (bones, materials, IK). */

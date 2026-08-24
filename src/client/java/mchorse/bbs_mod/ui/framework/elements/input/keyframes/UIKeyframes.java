@@ -28,6 +28,8 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.KeyframeType
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIVector3KeyframeGraph;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.overlays.UITrackStyleOverlayPanel;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -142,6 +144,7 @@ public class UIKeyframes extends UIElement
             int mouseX = context.mouseX;
             int mouseY = context.mouseY;
             boolean hasSelected = this.currentGraph.getSelected() != null;
+            UIKeyframeSheet hovered = this.currentGraph.getSheet(mouseY);
 
             menu.custom(new UIPresetContextMenu(this.copyPasteController, mouseX, mouseY)
                 .labels(UIKeys.KEYFRAMES_CONTEXT_COPY, UIKeys.KEYFRAMES_CONTEXT_PASTE));
@@ -154,13 +157,17 @@ public class UIKeyframes extends UIElement
                 }
                 else
                 {
-                    UIKeyframeSheet sheet = this.dopeSheet.getSheet(this.getContext().mouseY);
-
-                    if (sheet != null && KeyframeFactories.isNumeric(sheet.channel.getFactory()))
+                    if (hovered != null && KeyframeFactories.isNumeric(hovered.channel.getFactory()))
                     {
-                        menu.action(Icons.EDIT, UIKeys.KEYFRAMES_CONTEXT_EDIT_TRACK.format(sheet.id), () -> this.editSheet(sheet));
+                        menu.action(Icons.EDIT, UIKeys.KEYFRAMES_CONTEXT_EDIT_TRACK.format(hovered.id), () -> this.editSheet(hovered));
                     }
                 }
+            }
+
+            if (hovered != null)
+            {
+                menu.action(Icons.BUCKET, UIKeys.KEYFRAMES_CONTEXT_TRACK_STYLE, () -> UIOverlay.addOverlay(
+                    this.getContext(), new UITrackStyleOverlayPanel(hovered, this::refreshTrackStyles), 220, 160));
             }
 
             menu.action(Icons.SEARCH, UIKeys.KEYFRAMES_CONTEXT_ADJUST_VALUES, () -> this.adjustValues());
@@ -1092,6 +1099,14 @@ public class UIKeyframes extends UIElement
     public void addSheet(UIKeyframeSheet sheet)
     {
         this.dopeSheet.addSheet(sheet);
+    }
+
+    public void refreshTrackStyles()
+    {
+        for (UIKeyframeSheet sheet : this.dopeSheet.getSheets())
+        {
+            sheet.applyStyle();
+        }
     }
 
     public void addElement(UIKeyframeElement element)
