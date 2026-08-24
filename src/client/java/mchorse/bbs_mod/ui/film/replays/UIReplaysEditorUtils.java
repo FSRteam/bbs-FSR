@@ -96,6 +96,7 @@ public class UIReplaysEditorUtils
         }
 
         Set<String> expanded = expandedPoseIds == null ? Collections.emptySet() : expandedPoseIds;
+        Form form = replay.form.get();
         BaseValue.edit(replay.properties, (props) ->
         {
             for (KeyframeChannel<?> channel : props.properties.values())
@@ -131,7 +132,18 @@ public class UIReplaysEditorUtils
                 {
                     KeyframeChannel<Pose> poseChannel = (KeyframeChannel<Pose>) channel;
                     KeyframeSegment<Pose> segment = poseChannel.find(tick);
-                    Pose value = segment != null ? segment.createInterpolated() : poseChannel.getFactory().createEmpty();
+                    Pose value;
+
+                    if (segment != null)
+                    {
+                        value = segment.createInterpolated();
+                    }
+                    else
+                    {
+                        BaseValue property = form == null ? null : FormUtils.getProperty(form, id);
+                        Object current = property instanceof BaseValueBasic basic ? basic.get() : null;
+                        value = current instanceof Pose pose ? poseChannel.getFactory().copy(pose) : poseChannel.getFactory().createEmpty();
+                    }
                     int index = poseChannel.insert(tick, value);
                     Keyframe<Pose> kf = poseChannel.get(index);
                     Keyframe<Pose> template = segment != null ? segment.a : null;
