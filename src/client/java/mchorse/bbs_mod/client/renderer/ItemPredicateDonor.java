@@ -18,7 +18,7 @@ import net.minecraft.world.InteractionHand;
  */
 public class ItemPredicateDonor
 {
-    private static ArmorStand donor;
+    private static Donor donor;
 
     /**
      * An entity that reports "using this stack, this much time left" so that
@@ -38,7 +38,7 @@ public class ItemPredicateDonor
 
         if (donor == null || donor.level() != mc.level)
         {
-            donor = new ArmorStand(mc.level, 0D, 0D, 0D);
+            donor = new Donor(mc.level);
 
             donor.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BOW));
             donor.startUsingItem(InteractionHand.MAIN_HAND);
@@ -52,10 +52,23 @@ public class ItemPredicateDonor
             donor.setLivingEntityFlag(1, true);
         }
 
-        donor.setItemInHand(InteractionHand.MAIN_HAND, stack);
-        donor.useItem = stack;
-        donor.useItemRemaining = Math.max(0, Math.round(ItemUsePose.maxUseTime(stack, use.user()) - use.elapsed()));
+        donor.setUse(stack, Math.max(0, Math.round(ItemUsePose.maxUseTime(stack, use.user()) - use.elapsed())));
 
         return donor;
+    }
+
+    private static final class Donor extends ArmorStand
+    {
+        private Donor(net.minecraft.world.level.Level level)
+        {
+            super(level, 0D, 0D, 0D);
+        }
+
+        private void setUse(ItemStack stack, int remaining)
+        {
+            this.setItemInHand(InteractionHand.MAIN_HAND, stack);
+            this.useItem = stack;
+            this.useItemRemaining = remaining;
+        }
     }
 }

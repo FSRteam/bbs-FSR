@@ -33,7 +33,7 @@ public class ClientPlayerEntityFilmUseMixin
         }
     }
 
-    @Inject(method = "getActiveHand", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "getUsedItemHand", at = @At("HEAD"), cancellable = true)
     private void bbsFilmGetActiveHand(CallbackInfoReturnable<InteractionHand> info)
     {
         if (LivePlayerItemUse.answersFor((LivingEntity) (Object) this))
