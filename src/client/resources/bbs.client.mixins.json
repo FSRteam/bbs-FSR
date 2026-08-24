@@ -16,6 +16,8 @@
         "WorldRendererMixin",
         "LanguageManagerMixin",
         "LivingEntityMixin",
+        "LivingEntityFilmUseMixin",
+        "ClientPlayerEntityFilmUseMixin",
         "LivingEntityUpdateMixin",
         "LivingEntityRendererAccessor",
         "ModelPartMixin",
@@ -35,7 +37,10 @@
         "KeyboardMixin",
         "KeyMappingAccessor",
         "EntityRenderersAccessor",
-        "BlockEntityRenderersAccessor"
+        "BlockEntityRenderersAccessor",
+        "CameraInvoker",
+        "ParticleEngineInvoker",
+        "ParticleMixin"
     ],
     "injectors": {
         "defaultRequire": 1

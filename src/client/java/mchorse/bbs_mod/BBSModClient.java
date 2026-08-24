@@ -17,6 +17,9 @@ import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationBridge;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
+import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
@@ -723,6 +726,7 @@ public class BBSModClient
 
     public static void onClientTickPre()
     {
+        LivePlayerItemUse.endFrame();
         ClientApiCompat.emitStartClientTick(Minecraft.getInstance());
         BBSRendering.startTick();
     }
@@ -963,6 +967,7 @@ public class BBSModClient
 
     public static void onClientStarted()
     {
+        ItemUsePose.setSource(ThirdPersonItemUse::get);
         BBSRendering.setupFramebuffer();
         BBSMod.getProvider().register(new MinecraftSourcePack());
 

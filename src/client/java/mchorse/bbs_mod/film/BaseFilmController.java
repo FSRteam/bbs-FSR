@@ -7,6 +7,11 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
+import mchorse.bbs_mod.client.renderer.ItemUseEffects;
+import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
+import mchorse.bbs_mod.film.replays.ReplayItemUse;
 import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.ik.IKControls;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
@@ -1190,6 +1195,17 @@ public abstract class BaseFilmController
     {
         replay.keyframes.apply(ticks, entity);
         replay.applyClientActions(ticks, entity, this.film);
+
+        LivingEntity user = ItemUsePose.livingOf(entity);
+        ItemUsePose.Use use = ReplayItemUse.compute(replay, ticks, true, user);
+        ItemUsePose.Use offUse = ReplayItemUse.compute(replay, ticks, false, user);
+        ThirdPersonItemUse.set(ThirdPersonItemUse.keyOf(entity), use, offUse);
+        ItemUseEffects.tick(replay, entity, ticks);
+
+        if (user != null)
+        {
+            LivePlayerItemUse.apply(user, use, offUse);
+        }
     }
 
     private void applyActorReplay(Replay replay, int ticks, ActorEntity actor, IEntity editorEntity)
@@ -1218,6 +1234,9 @@ public abstract class BaseFilmController
         }
 
         replay.applyClientActions(ticks, actorEntity, this.film);
+        ItemUsePose.Use use = ReplayItemUse.compute(replay, ticks, true, actorEntity.getMcEntity() instanceof LivingEntity living ? living : null);
+        ItemUsePose.Use offUse = ReplayItemUse.compute(replay, ticks, false, actorEntity.getMcEntity() instanceof LivingEntity living ? living : null);
+        ThirdPersonItemUse.set(ThirdPersonItemUse.keyOf(actorEntity), use, offUse);
     }
 
     public void startRenderFrame(float transition)
@@ -1851,6 +1870,9 @@ public abstract class BaseFilmController
         }
 
         FilmActorTimeline.clearOwner(this, this::releaseActorForm);
+        ThirdPersonItemUse.clear();
+        ItemUseEffects.clear();
+        LivePlayerItemUse.clear();
     }
 
     private void clearActorTimeline(Entity entity)
