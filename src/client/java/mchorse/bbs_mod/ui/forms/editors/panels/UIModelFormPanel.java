@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
-import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ModelForm;
