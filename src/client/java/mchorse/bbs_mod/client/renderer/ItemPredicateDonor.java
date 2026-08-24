@@ -31,7 +31,7 @@ public class ItemPredicateDonor
     {
         Minecraft mc = Minecraft.getInstance();
 
-        if (mc.world == null || stack.isEmpty())
+        if (mc.level == null || stack.isEmpty())
         {
             return null;
         }
@@ -49,7 +49,7 @@ public class ItemPredicateDonor
              * "throwing" predicates all demand that flag: without it the bow
              * never bends and never shows its arrow. Raise it by hand, once -
              * on the client nothing ever lowers it again. */
-            donor.setLivingEntityFlag(1, true);
+            donor.armUseFlag();
         }
 
         donor.setUse(stack, Math.max(0, Math.round(ItemUsePose.maxUseTime(stack, use.user()) - use.elapsed())));
@@ -69,6 +69,11 @@ public class ItemPredicateDonor
             this.setItemInHand(InteractionHand.MAIN_HAND, stack);
             this.useItem = stack;
             this.useItemRemaining = remaining;
+        }
+
+        private void armUseFlag()
+        {
+            this.setLivingEntityFlag(1, true);
         }
     }
 }

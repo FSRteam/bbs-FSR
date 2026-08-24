@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.mixin.client;
 
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
-import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.InteractionHand;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * other two questions ({@code getActiveItem}, {@code getItemUseTimeLeft}) are
  * inherited untouched and are answered in {@link LivingEntityFilmUseMixin}.</p>
  */
-@Mixin(ClientPlayerEntity.class)
+@Mixin(LocalPlayer.class)
 public class ClientPlayerEntityFilmUseMixin
 {
     @Inject(method = "isUsingItem", at = @At("HEAD"), cancellable = true)

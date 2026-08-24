@@ -4,7 +4,7 @@ import mchorse.bbs_mod.cubic.animation.ItemUsePose;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayItemUse;
 import mchorse.bbs_mod.forms.entities.IEntity;
-import net.minecraft.client.world.ClientWorld;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.food.FoodProperties;
@@ -155,9 +155,9 @@ public class ItemUseEffects
      */
     private static void playSound(Level world, double x, double y, double z, SoundEvent sound, float volume, float pitch)
     {
-        if (sound != null && world instanceof ClientWorld clientWorld)
+        if (sound != null && world instanceof ClientLevel clientLevel)
         {
-            clientWorld.playLocalSound(x, y, z, sound, SoundSource.PLAYERS, volume, pitch, false);
+            clientLevel.playLocalSound(x, y, z, sound, SoundSource.PLAYERS, volume, pitch, false);
         }
     }
 
@@ -171,6 +171,6 @@ public class ItemUseEffects
             return;
         }
 
-        playSound(world, entity.getX(), entity.getY(), entity.getZ(), SoundEvents.ENTITY_PLAYER_BURP, 0.5F, world.random.nextFloat() * 0.1F + 0.9F);
+        playSound(world, entity.getX(), entity.getY(), entity.getZ(), SoundEvents.PLAYER_BURP, 0.5F, world.random.nextFloat() * 0.1F + 0.9F);
     }
 }

@@ -172,6 +172,8 @@ public class BBSSettings {
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
 	public static ValueBoolean editorRestartOnSeek;
+	public static ValueBoolean editorStopPlaybackOnScrub;
+	public static ValueBoolean editorPreviewIconsAutoHide;
 	public static ValueBoolean editorHorizontalClipEditor;
 	public static ValueBoolean editorMinutesBackup;
 	public static ValueBoolean editorResizablePanels;
@@ -953,6 +955,8 @@ public class BBSSettings {
 		editorClipAutoName = builder.getBoolean("clip_auto_name", true);
 		editorKeepFrameOnExit = builder.getBoolean("keep_frame_on_exit", false);
 		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
+		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);
+		editorPreviewIconsAutoHide = builder.getBoolean("preview_icons_auto_hide", true);
 
 		builder.category("recording", Icons.FILM);
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
