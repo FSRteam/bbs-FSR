@@ -16,8 +16,7 @@ import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
-import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
-import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.forms.editors.panels.widgets.UIModelPicker;
 import mchorse.bbs_mod.ui.utils.shapes.UIShapeKeys;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -42,7 +41,7 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
 
         this.pickModel = new UIButton(UIKeys.FORMS_EDITOR_MODEL_PICK_MODEL, (b) ->
         {
-            UIListOverlayPanel list = new UIListOverlayPanel(UIKeys.FORMS_EDITOR_MODEL_MODELS, (l) ->
+            UIModelPicker.open(this.getContext(), this.form.model.get(), (l) ->
             {
                 this.form.model.set(l);
 
@@ -58,12 +57,6 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
 
                 this.editor.startEdit(this.form);
             });
-
-            list.addValues(BBSModClient.getModels().getAvailableKeys());
-            list.list.list.sort();
-            list.setValue(this.form.model.get());
-
-            UIOverlay.addOverlay(this.getContext(), list);
         });
         this.color = new UIColor((c) -> this.form.color.set(new Color().set(c))).withAlpha();
         this.color.direction(Direction.LEFT);
