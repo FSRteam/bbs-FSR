@@ -32,6 +32,8 @@ public class FormRenderingContext
     public boolean ui;
     public int color;
     public boolean modelRenderer;
+    /** Viewport clock used by previews that must tick independently of form ITickable. */
+    public long modelRendererTick;
     public FormProperties timelineProperties;
     public float timelineTick;
     public boolean timelinePlaying;
@@ -58,6 +60,7 @@ public class FormRenderingContext
         this.ui = false;
         this.color = 0xffffffff;
         this.modelRenderer = false;
+        this.modelRendererTick = 0L;
         this.timelineProperties = null;
         this.timelineTick = Float.NaN;
         this.timelinePlaying = false;
@@ -120,6 +123,17 @@ public class FormRenderingContext
     public FormRenderingContext modelRenderer()
     {
         this.modelRenderer = true;
+        this.renderSpace = FormRenderSpace.UI_LOCAL;
+        this.localSimulation();
+
+        return this;
+    }
+
+    /** Mark this as a model viewport and provide its monotonic UI clock. */
+    public FormRenderingContext modelRenderer(long tick)
+    {
+        this.modelRenderer = true;
+        this.modelRendererTick = tick;
         this.renderSpace = FormRenderSpace.UI_LOCAL;
         this.localSimulation();
 
