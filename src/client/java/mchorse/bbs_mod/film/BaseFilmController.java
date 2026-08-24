@@ -1196,6 +1196,13 @@ public abstract class BaseFilmController
         replay.keyframes.apply(ticks, entity);
         replay.applyClientActions(ticks, entity, this.film);
 
+        this.applyReplayItemUse(replay, ticks, entity);
+    }
+
+    /** Publish all replay-side item effects after a controller applies keyframes/actions. */
+    protected void applyReplayItemUse(Replay replay, int ticks, IEntity entity)
+    {
+
         LivingEntity user = ItemUsePose.livingOf(entity);
         ItemUsePose.Use use = ReplayItemUse.compute(replay, ticks, true, user);
         ItemUsePose.Use offUse = ReplayItemUse.compute(replay, ticks, false, user);
@@ -1216,6 +1223,21 @@ public abstract class BaseFilmController
         actorEntity.update();
         replay.keyframes.apply(ticks, actorEntity, List.of(ReplayKeyframes.GROUP_POSITION));
         actorEntity.setHurtTimer(Math.max(hurtTimer, actorEntity.getHurtTimer()));
+
+        /* ActorEntity is teleported to keyframes, so vanilla never sees a floor
+         * collision and never runs its step/sprint effects. Probe the floor with
+         * the recorded delta, then snap back to the exact keyframe position. */
+        double x = replay.keyframes.x.interpolate(ticks);
+        double y = replay.keyframes.y.interpolate(ticks);
+        double z = replay.keyframes.z.interpolate(ticks);
+        boolean grounded = replay.keyframes.grounded.interpolate(ticks) > 0;
+        Vec3 actorPos = actor.position();
+        double dY = y - actorPos.y - (grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D);
+
+        actor.move(MoverType.SELF, new Vec3(x - actorPos.x, dY, z - actorPos.z));
+        actor.setPos(x, y, z);
+        actor.setOnGround(grounded);
+        actor.setSprinting(replay.keyframes.sprinting.interpolate(ticks) > 0);
 
         /* The death channel drives the actor's topple rotation and red overlay. ActorEntity
          * is a real LivingEntity, so writing deathTime here lets ActorEntityRenderer apply

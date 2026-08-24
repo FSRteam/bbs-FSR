@@ -65,10 +65,10 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         matrices.last().normal().getScale(Vectors.EMPTY_3F);
         matrices.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
-        Color set = new Color();
+        Color set = Color.white();
         FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
 
-        consumers.setSubstitute(BBSRendering.getColorConsumer(set));
+        consumers.setSubstitute(null);
         consumers.setUI(true);
         this.renderBlock(matrices, consumers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, false);
         consumers.draw();
@@ -115,7 +115,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
                 CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
             }
 
-            Color set = new Color();
+            Color set = Color.white();
             FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
 
             color.set(context.color);
@@ -127,7 +127,10 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
                 FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
             }
 
-            consumers.setSubstitute(BBSRendering.getColorConsumer(color));
+        /* Keep the vanilla block vertex colors intact. Applying the generic form
+         * tint to chunk/model vertices turns Sodium/Iris block colors black when
+         * the layer does not provide an entity color attribute. */
+        consumers.setSubstitute(null);
             this.renderBlock(context.stack, consumers, light, context.overlay, context.isPicking());
             consumers.draw();
 

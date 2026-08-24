@@ -2,6 +2,7 @@ package mchorse.bbs_mod.cubic.animation;
 
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
+import mchorse.bbs_mod.forms.entities.StubEntity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -31,6 +32,11 @@ public class ItemUsePose
     /** The living body behind an entity, if there is one - the timings below ask it. */
     public static LivingEntity livingOf(IEntity entity)
     {
+        if (entity instanceof StubEntity stub)
+        {
+            return stub.getEntityOverride();
+        }
+
         return entity instanceof MCEntity mc && mc.getMcEntity() instanceof LivingEntity living ? living : null;
     }
 

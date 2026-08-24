@@ -740,6 +740,27 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         current.getForm().parts.addBodyPart(part);
         this.refreshFormList();
+
+        /* New attachments are appended to the owning form. Select and reveal the
+         * appended entry so adding several parts does not leave the user editing
+         * the previously selected attachment. */
+        UIForms.FormEntry added = null;
+
+        for (UIForms.FormEntry entry : this.formsList.getList())
+        {
+            if (entry.part == part)
+            {
+                added = entry;
+
+                break;
+            }
+        }
+
+        if (added != null)
+        {
+            this.formsList.setCurrentScroll(added);
+            this.pickForm(added);
+        }
     }
 
     private MapType copyBodyPart()

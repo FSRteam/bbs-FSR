@@ -2098,5 +2098,12 @@
     "bbs.ui.dock.undo_layout": "撤销布局变更",
     "bbs.ui.dock.keys.maximize": "最大化鼠标下的面板",
     "bbs.ui.film.layout_bind_to_editor": "绑定到编辑器布局",
-    "interpolations.step_tick": "按游戏刻阶跃"
+    "interpolations.step_tick": "按游戏刻阶跃",
+    "bbs.ui.film.panels.main": "时间轴",
+    "bbs.ui.film.panels.preview": "预览",
+    "bbs.ui.film.panels.edit_area": "属性",
+    "bbs.ui.film.panels.replays_list": "回放",
+    "bbs.ui.film.panels.replay_props": "回放属性"
 }
+
+

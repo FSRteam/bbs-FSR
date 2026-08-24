@@ -999,11 +999,10 @@ public class BBSRendering
 
     public static Function<VertexConsumer, VertexConsumer> getColorConsumer(Color color)
     {
-        if (sodium)
-        {
-            return (b) -> SodiumUtils.createVertexBuffer(b, color);
-        }
-
+        /* Sodium's 0.8 vertex writer bypasses the normal consumer color path and
+         * its optional mixin is not stable across Connector versions. Keep the
+         * vanilla consumer here; this is also the correct path for block/particle
+         * texture colors, which must not be replaced by a stale global tint. */
         return (b) -> new RecolorVertexConsumer(b, color);
     }
 
