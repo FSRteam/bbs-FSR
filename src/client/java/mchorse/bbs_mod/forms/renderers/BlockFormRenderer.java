@@ -10,6 +10,7 @@ import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.renderers.utils.FluidVertexConsumer;
+import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.SingleBlockRenderView;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
@@ -64,7 +65,8 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
         matrices.last().normal().getScale(Vectors.EMPTY_3F);
         matrices.last().normal().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
-        Color set = this.form.color.get();
+        Color set = new Color();
+        FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
         consumers.setUI(true);
@@ -113,7 +115,8 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
                 CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
             }
 
-            Color set = this.form.color.get();
+            Color set = new Color();
+            FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
 
             color.set(context.color);
             color.mul(set);
@@ -124,7 +127,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
                 FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
             }
 
-            consumers.setSubstitute(BBSRendering.getColorConsumer(set));
+            consumers.setSubstitute(BBSRendering.getColorConsumer(color));
             this.renderBlock(context.stack, consumers, light, context.overlay, context.isPicking());
             consumers.draw();
 
@@ -264,10 +267,10 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
             return false;
         }
 
-        /* 1.21.1 dispatcher computes the packed light itself from the entity's level position;
-         * a detached form entity has none, so it renders at full brightness. */
-        mc.getBlockEntityRenderDispatcher().render(this.blockEntity, 0F, matrices, consumers);
-
-        return true;
+        /* render() applies world-camera culling using BlockPos.ZERO, which is
+         * unrelated to the form's transformed position and also rejects UI
+         * previews without a level. renderItem() is the detached-form path and
+         * preserves the caller's light/overlay values. */
+        return mc.getBlockEntityRenderDispatcher().renderItem(this.blockEntity, matrices, consumers, light, overlay);
     }
 }

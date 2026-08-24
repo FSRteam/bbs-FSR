@@ -42,8 +42,6 @@ public class Films
      * may have, in ticks. The teleport is a round trip through the server, and the
      * recorder must not sample the player before it lands.
      */
-    private static final int TELEPORT_GRACE = 6;
-
     private List<BaseFilmController> controllers = new ArrayList<BaseFilmController>();
     private Recorder recorder;
     private final ArrayDeque<PendingRecordingTerminal> pendingRecordingTerminals = new ArrayDeque<>();
@@ -172,14 +170,10 @@ public class Films
 
         if (mark != null)
         {
-            /* Both clocks get the same countdown, so the server's action recorder
-             * keeps starting alongside this one - the grace window is only there to
-             * give the teleport its round trip even when the countdown is set to 0 */
-            this.recorder.countdown = Math.max(this.recorder.countdown, TELEPORT_GRACE);
             this.recorder.awaitMark(mark);
         }
 
-        if (ClientNetwork.isIsBBSModOnServer())
+        if (ClientNetwork.isIsBBSModOnServer() && mark == null)
         {
             ClientNetwork.sendActionRecording(
                 this.recorder.getRecordingFilmId(),
@@ -496,7 +490,20 @@ public class Films
 
         if (recorder != null)
         {
+            boolean wasAwaitingMark = recorder.isAwaitingMark();
             recorder.update();
+
+            if (wasAwaitingMark && recorder.takeDelayedServerStart()
+                && ClientNetwork.isIsBBSModOnServer())
+            {
+                ClientNetwork.sendActionRecording(
+                    recorder.getRecordingFilmId(),
+                    recorder.getRecordingReplayId(),
+                    recorder.getRecordingTick(),
+                    0,
+                    true
+                );
+            }
         }
     }
 

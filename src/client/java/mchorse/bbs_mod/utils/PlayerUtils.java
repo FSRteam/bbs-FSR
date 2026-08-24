@@ -34,7 +34,8 @@ public class PlayerUtils
         LocalPlayer player = Minecraft.getInstance().player;
         ReplayKeyframes keyframes = replay == null ? null : replay.keyframes;
 
-        if (player == null || keyframes == null || (keyframes.x.isEmpty() && keyframes.y.isEmpty() && keyframes.z.isEmpty()))
+        if (player == null || keyframes == null
+            || keyframes.x.isEmpty() || keyframes.y.isEmpty() || keyframes.z.isEmpty())
         {
             return null;
         }
@@ -50,7 +51,7 @@ public class PlayerUtils
         float bodyYaw = keyframes.bodyYaw.interpolate(replayTick).floatValue();
         float pitch = keyframes.pitch.interpolate(replayTick).floatValue();
 
-        teleport(x, y, z, headYaw, pitch);
+        teleport(x, y, z, yaw, bodyYaw, pitch);
 
         player.setYRot(yaw);
         player.setYHeadRot(headYaw);

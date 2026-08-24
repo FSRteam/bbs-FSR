@@ -74,6 +74,7 @@ public class Recorder extends WorldFilmController
      */
     private Vector3d mark;
     private int markWait;
+    private boolean delayedServerStart;
 
     /** How close to the mark counts as standing on it, in blocks. */
     private static final double MARK_REACHED = 1D;
@@ -221,6 +222,24 @@ public class Recorder extends WorldFilmController
     public void awaitMark(Vector3d mark)
     {
         this.mark = mark;
+        this.delayedServerStart = true;
+    }
+
+    public boolean isAwaitingMark()
+    {
+        return this.mark != null;
+    }
+
+    public boolean takeDelayedServerStart()
+    {
+        if (this.delayedServerStart && this.mark == null)
+        {
+            this.delayedServerStart = false;
+
+            return true;
+        }
+
+        return false;
     }
 
     public boolean hasRecordedFrame()

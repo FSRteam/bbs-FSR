@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.actions;
 
-import com.google.common.collect.MapMaker;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ClientInformation;
@@ -24,24 +23,33 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SuperFakePlayer extends ServerPlayer
 {
     private static final GameProfile PROFILE = new GameProfile(UUID.fromString("12345678-9ABC-DEF1-2345-6789ABCDEF69"), "[BBS Player]");
-    private static final Map<SuperFakePlayer.FakePlayerKey, SuperFakePlayer> FAKE_PLAYER_MAP = new MapMaker().weakValues().makeMap();
+    private static final Map<ServerLevel, SuperFakePlayer> FAKE_PLAYERS = new ConcurrentHashMap<>();
 
     public static SuperFakePlayer get(ServerLevel world)
     {
         Objects.requireNonNull(world, "World may not be null.");
 
-        return FAKE_PLAYER_MAP.computeIfAbsent(new SuperFakePlayer.FakePlayerKey(world, PROFILE), key -> new SuperFakePlayer(key.world, key.profile));
+        return FAKE_PLAYERS.computeIfAbsent(world, level -> new SuperFakePlayer(level, PROFILE));
+    }
+
+    /** Dedicated actor state for one ActionPlayer runtime. */
+    public static SuperFakePlayer create(ServerLevel world)
+    {
+        Objects.requireNonNull(world, "World may not be null.");
+
+        return new SuperFakePlayer(world, PROFILE);
     }
 
     /** The world's actor if it already has one - nothing is born just to be asked. */
     @Nullable
     public static SuperFakePlayer getIfPresent(ServerLevel world)
     {
-        return world == null ? null : FAKE_PLAYER_MAP.get(new SuperFakePlayer.FakePlayerKey(world, PROFILE));
+        return world == null ? null : FAKE_PLAYERS.get(world);
     }
 
     /**
@@ -61,7 +69,7 @@ public class SuperFakePlayer extends ServerPlayer
 
         if (level != null && ContainerLid.isLidded(level, pos))
         {
-            this.wantedLids.add(pos.immutable());
+            this.wantedLids.add(ContainerLid.canonicalPos(level, pos));
         }
     }
 
@@ -186,6 +194,4 @@ public class SuperFakePlayer extends ServerPlayer
     public void openHorseInventory(AbstractHorse horse, Container inventory)
     {}
 
-    private record FakePlayerKey(ServerLevel world, GameProfile profile)
-    {}
 }

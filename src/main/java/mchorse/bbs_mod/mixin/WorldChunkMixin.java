@@ -53,7 +53,7 @@ public class WorldChunkMixin
 
         if (previous != null && chunk.getLevel() instanceof ServerLevel && BBSMod.getActions().isTrackingDamage())
         {
-            BBSMod.getActions().changedBlock(pos, previous, replaced.get());
+            BBSMod.getActions().changedBlock((ServerLevel) chunk.getLevel(), pos, previous, replaced.get());
         }
     }
 }

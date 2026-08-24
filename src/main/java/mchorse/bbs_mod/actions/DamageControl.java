@@ -37,6 +37,16 @@ public class DamageControl
         this.enable = BBSSettings.damageControl.get();
     }
 
+    public boolean hasPendingChanges()
+    {
+        return !this.blocks.isEmpty() || !this.entities.isEmpty();
+    }
+
+    public ServerLevel getWorld()
+    {
+        return this.world;
+    }
+
     public void addBlock(BlockPos pos, BlockState state, CompoundTag blockEntity)
     {
         if (!this.enable || this.blocks.containsKey(pos))
@@ -74,36 +84,36 @@ public class DamageControl
      */
     public void restore()
     {
-        try
+        for (BlockCapture block : new ArrayList<>(this.blocks.values()))
         {
-            for (BlockCapture block : new ArrayList<>(this.blocks.values()))
+            if (this.restoreBlock(block))
             {
-                this.restoreBlock(block);
-            }
-
-            for (Entity entity : new ArrayList<>(this.entities))
-            {
-                try
-                {
-                    if (!entity.isRemoved())
-                    {
-                        entity.remove(Entity.RemovalReason.DISCARDED);
-                    }
-                }
-                catch (Exception e)
-                {
-                    LOGGER.warn("[BBS-SEM] topic=dc.restore phase=entity result=skip", e);
-                }
+                this.blocks.remove(block.pos);
             }
         }
-        finally
+
+        for (Entity entity : new ArrayList<>(this.entities))
         {
-            this.blocks.clear();
-            this.entities.clear();
+            try
+            {
+                if (entity.isRemoved())
+                {
+                    this.entities.remove(entity);
+                }
+                else
+                {
+                    entity.remove(Entity.RemovalReason.DISCARDED);
+                    if (entity.isRemoved()) this.entities.remove(entity);
+                }
+            }
+            catch (Exception e)
+            {
+                LOGGER.warn("[BBS-SEM] topic=dc.restore phase=entity result=retry", e);
+            }
         }
     }
 
-    private void restoreBlock(BlockCapture block)
+    private boolean restoreBlock(BlockCapture block)
     {
         try
         {
@@ -121,10 +131,14 @@ public class DamageControl
                     this.world.setBlockEntity(blockEntity);
                 }
             }
+
+            return true;
         }
         catch (Exception e)
         {
-            LOGGER.warn("[BBS-SEM] topic=dc.restore phase=block result=skip pos={}", block.pos, e);
+            LOGGER.warn("[BBS-SEM] topic=dc.restore phase=block result=retry pos={}", block.pos, e);
+
+            return false;
         }
     }
 

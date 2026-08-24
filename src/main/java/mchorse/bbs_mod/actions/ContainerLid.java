@@ -42,6 +42,40 @@ public class ContainerLid
         return entity instanceof ChestBlockEntity || entity instanceof EnderChestBlockEntity;
     }
 
+    /** Use one stable key for both halves of a double chest. */
+    public static BlockPos canonicalPos(Level level, BlockPos pos)
+    {
+        BlockEntity entity = level.getBlockEntity(pos);
+
+        if (!(entity instanceof ChestBlockEntity))
+        {
+            return pos.immutable();
+        }
+
+        BlockState state = level.getBlockState(pos);
+        ChestType type = chestType(state);
+
+        if (type == ChestType.SINGLE)
+        {
+            return pos.immutable();
+        }
+
+        BlockPos other = pos.relative(ChestBlock.getConnectedDirection(state));
+
+        return compare(pos, other) <= 0 ? pos.immutable() : other.immutable();
+    }
+
+    private static int compare(BlockPos a, BlockPos b)
+    {
+        int x = Integer.compare(a.getX(), b.getX());
+
+        if (x != 0) return x;
+
+        int y = Integer.compare(a.getY(), b.getY());
+
+        return y != 0 ? y : Integer.compare(a.getZ(), b.getZ());
+    }
+
     public static void setOpen(Level level, BlockPos pos, boolean open)
     {
         BlockEntity entity = level.getBlockEntity(pos);

@@ -73,6 +73,11 @@ public class ActionManager
             try
             {
                 damageControl.restore();
+
+                if (!damageControl.hasPendingChanges())
+                {
+                    this.dc.remove(damageControl.getWorld(), damageControl);
+                }
             }
             catch (RuntimeException | LinkageError e)
             {
@@ -82,7 +87,7 @@ public class ActionManager
 
         this.recordingPlayers.entrySet().removeIf((entry) -> this.indexOfPlayerIdentity(entry.getValue()) < 0);
         this.recorders.entrySet().removeIf((entry) -> !this.recordingPlayers.containsKey(entry.getKey()));
-        this.dc.clear();
+        this.dc.entrySet().removeIf((entry) -> !entry.getValue().hasPendingChanges());
 
         /* A failed restore still owns the exact player snapshot and lease. Keep
          * that runtime reachable so the next reset/tick can retry every field;
@@ -1198,33 +1203,46 @@ public class ActionManager
                  * is itself a block change, and a snapshot still reachable from the
                  * manager gets written to while it is being walked - the restore used to
                  * die halfway on exactly that. */
-                this.dc.remove(world);
                 damageControl.restore();
+
+                if (!damageControl.hasPendingChanges())
+                {
+                    this.dc.remove(world, damageControl);
+                }
             }
         }
     }
 
     public void resetDamage(ServerLevel world)
     {
-        DamageControl dc = this.dc.remove(world);
+        DamageControl dc = this.dc.get(world);
 
         if (dc != null)
         {
             dc.restore();
+
+            if (!dc.hasPendingChanges())
+            {
+                this.dc.remove(world, dc);
+            }
         }
     }
 
-    public void changedBlock(BlockPos pos, BlockState state, CompoundTag blockEntity)
+    public void changedBlock(ServerLevel world, BlockPos pos, BlockState state, CompoundTag blockEntity)
     {
-        for (DamageControl control : this.dc.values())
+        DamageControl control = this.dc.get(world);
+
+        if (control != null)
         {
             control.addBlock(pos, state, blockEntity);
         }
     }
 
-    public void spawnedEntity(Entity entity)
+    public void spawnedEntity(ServerLevel world, Entity entity)
     {
-        for (DamageControl control : this.dc.values())
+        DamageControl control = this.dc.get(world);
+
+        if (control != null)
         {
             control.addEntity(entity);
         }
