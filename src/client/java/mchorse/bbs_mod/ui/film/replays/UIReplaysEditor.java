@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -138,6 +139,7 @@ public class UIReplaysEditor extends UIElement {
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
     private final Map<String, Set<String>> expandedPoseTabsByReplay = new HashMap<>();
+    private String keyframeEditorReplayId;
 
     public enum ReplayCategory {
         PLAYER(
@@ -619,8 +621,9 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void setFilm(Film film) {
-        this.savePoseTabState(this.replay);
+        this.savePoseTabState();
         this.expandedPoseTabsByReplay.clear();
+        this.keyframeEditorReplayId = null;
         this.film = film;
 
         if (film != null) {
@@ -656,7 +659,7 @@ public class UIReplaysEditor extends UIElement {
         this.settingReplay = true;
 
         try {
-            this.savePoseTabState(this.replay);
+            this.savePoseTabState();
             this.replay = replay;
 
             if (orbit == OrbitReaction.RESET) {
@@ -691,6 +694,7 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void updateChannelsList() {
+        this.savePoseTabState();
         UIKeyframeEditor previousEditor = this.keyframeEditor;
         UIKeyframes lastEditor = previousEditor != null ? previousEditor.view : null;
         boolean resetView = lastEditor == null || this.keyframeEditorResetPending;
@@ -700,6 +704,7 @@ public class UIReplaysEditor extends UIElement {
 
         this.keyframeEditorGeneration = editorGeneration;
         this.keyframeEditor = null;
+        this.keyframeEditorReplayId = null;
         this.keyframeEditorResetPending = false;
 
         if (this.replay == null) {
@@ -938,6 +943,7 @@ public class UIReplaysEditor extends UIElement {
                 Collections.emptySet()
             );
             view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
+            this.keyframeEditorReplayId = this.replay == null ? null : this.replay.getId();
 
         }
 
@@ -1269,14 +1275,23 @@ public class UIReplaysEditor extends UIElement {
         sheets.addAll(orderedFormSheets);
     }
 
-    private void savePoseTabState(Replay replay)
+    public Set<String> getExpandedPoseTabIds()
     {
-        if (replay == null || this.keyframeEditor == null)
+        return this.keyframeEditor == null ? Collections.emptySet() : this.keyframeEditor.view.getDopeSheet().getExpandedPoseTabIds();
+    }
+
+    private void savePoseTabState()
+    {
+        if (this.keyframeEditorReplayId == null || this.keyframeEditor == null)
         {
             return;
         }
 
-        this.expandedPoseTabsByReplay.put(replay.getId(), this.keyframeEditor.view.getDopeSheet().getExpandedPoseTabIds());
+        UIKeyframeDopeSheet dopeSheet = this.keyframeEditor.view.getDopeSheet();
+        Set<String> saved = new HashSet<>(this.expandedPoseTabsByReplay.getOrDefault(this.keyframeEditorReplayId, Collections.emptySet()));
+        saved.removeAll(dopeSheet.getPoseTabIds());
+        saved.addAll(dopeSheet.getExpandedPoseTabIds());
+        this.expandedPoseTabsByReplay.put(this.keyframeEditorReplayId, saved);
     }
 
     /**

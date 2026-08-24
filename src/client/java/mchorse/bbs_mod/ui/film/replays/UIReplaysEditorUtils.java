@@ -88,33 +88,58 @@ public class UIReplaysEditorUtils
 {
     private static final int BONE_TRACK_HUE_COUNT = 12;
 
-    public static void insertPoseKeyframesAtTick(Replay replay, float tick)
+    public static void insertPoseKeyframesAtTick(Replay replay, float tick, Set<String> expandedPoseIds)
     {
         if (replay == null)
         {
             return;
         }
 
+        Set<String> expanded = expandedPoseIds == null ? Collections.emptySet() : expandedPoseIds;
         BaseValue.edit(replay.properties, (props) ->
         {
             for (KeyframeChannel<?> channel : props.properties.values())
             {
-                if (!PerLimbService.isPoseBoneChannel(channel.getId()))
+                String id = channel.getId();
+
+                if (PerLimbService.isPoseBoneChannel(id))
                 {
+                    PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(id);
+                    String parent = path == null || path.formPath().isEmpty() ? "pose" : path.formPath() + FormUtils.PATH_SEPARATOR + "pose";
+
+                    if (!expanded.contains(parent))
+                    {
+                        continue;
+                    }
+
+                    KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
+                    KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
+                    PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
+                    int index = poseChannel.insert(tick, value);
+                    Keyframe<PoseTransform> kf = poseChannel.get(index);
+                    Keyframe<PoseTransform> template = segment != null ? segment.a : null;
+
+                    if (template != null && template != kf)
+                    {
+                        kf.copyOverExtra(template);
+                    }
+
                     continue;
                 }
 
-                KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
-                KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
-                PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
-
-                int index = poseChannel.insert(tick, value);
-                Keyframe<PoseTransform> kf = poseChannel.get(index);
-
-                Keyframe<PoseTransform> template = segment != null ? segment.a : null;
-                if (template != null && template != kf)
+                if (channel.getFactory() == KeyframeFactories.POSE && !id.contains("pose_overlay") && (id.equals("pose") || id.endsWith(FormUtils.PATH_SEPARATOR + "pose")) && !expanded.contains(id))
                 {
-                    kf.copyOverExtra(template);
+                    KeyframeChannel<Pose> poseChannel = (KeyframeChannel<Pose>) channel;
+                    KeyframeSegment<Pose> segment = poseChannel.find(tick);
+                    Pose value = segment != null ? segment.createInterpolated() : poseChannel.getFactory().createEmpty();
+                    int index = poseChannel.insert(tick, value);
+                    Keyframe<Pose> kf = poseChannel.get(index);
+                    Keyframe<Pose> template = segment != null ? segment.a : null;
+
+                    if (template != null && template != kf)
+                    {
+                        kf.copyOverExtra(template);
+                    }
                 }
             }
         });
