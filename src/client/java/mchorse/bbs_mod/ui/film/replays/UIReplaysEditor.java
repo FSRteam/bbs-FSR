@@ -1019,9 +1019,7 @@ public class UIReplaysEditor extends UIElement {
             BaseValue value = this.replay.keyframes.get(key);
             KeyframeChannel channel = (KeyframeChannel) value;
 
-            sheets.add(
-                    new UIKeyframeSheet(getColor(key), false, channel, null).icon(ICONS.get(key))
-            );
+            sheets.add(new UIKeyframeSheet(getColor(key), false, channel, null).icon(getIcon(key)));
         }
     }
 
