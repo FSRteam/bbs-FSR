@@ -13,7 +13,6 @@ import java.util.HexFormat;
 /** Source-level guards for render-state migrations that require an in-game visual smoke. */
 public final class RenderRuntimeMigrationSourceTest
 {
-    private static final Path FILM_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/film/BaseFilmController.java");
     private static final Path FRAMEBUFFER_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/FramebufferFormRenderer.java");
     private static final Path FORM_FRAME_CACHE = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/utils/FormFrameCache.java");
     private static final Path ORBIT_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/ui/film/controller/OrbitFilmCameraController.java");
@@ -21,6 +20,12 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path MODEL_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/ModelFormRenderer.java");
     private static final Path EXTRUDED_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/ExtrudedFormRenderer.java");
     private static final Path BILLBOARD_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/BillboardFormRenderer.java");
+    private static final Path KEYFRAME_GRAPH = Path.of("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/graphs/UIKeyframeGraph.java");
+    private static final Path CLICKABLE = Path.of("src/client/java/mchorse/bbs_mod/ui/framework/elements/buttons/UIClickable.java");
+    private static final Path DASHBOARD_PANEL = Path.of("src/client/java/mchorse/bbs_mod/ui/dashboard/panels/UIDataDashboardPanel.java");
+    private static final Path BLOCK_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/BlockFormRenderer.java");
+    private static final Path SODIUM_UTILS = Path.of("src/client/java/mchorse/bbs_mod/utils/sodium/SodiumUtils.java");
+    private static final Path FILM_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/film/BaseFilmController.java");
     private static final Path TRANSLUCENT_QUEUE = Path.of("src/client/java/mchorse/bbs_mod/forms/FormTranslucentQueue.java");
     private static final Path VERTEX_CONSUMERS = Path.of("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
     private static final Path MODEL_INSTANCE = Path.of("src/client/java/mchorse/bbs_mod/cubic/ModelInstance.java");
@@ -144,8 +149,40 @@ public final class RenderRuntimeMigrationSourceTest
         checkFormFrameCacheWiring(root);
         checkTranslucentRenderWiring(root);
         checkSmallUiFixes(root);
+        checkCrashGuards(root);
         checkResources(root);
         checkSliderWiring(root);
+    }
+
+    private static void checkCrashGuards(Path root) throws IOException
+    {
+        String graph = compact(Files.readString(root.resolve(KEYFRAME_GRAPH)));
+        String film = compact(Files.readString(root.resolve(FILM_CONTROLLER)));
+        String clickable = compact(Files.readString(root.resolve(CLICKABLE)));
+        String dashboard = compact(Files.readString(root.resolve(DASHBOARD_PANEL)));
+        String block = compact(Files.readString(root.resolve(BLOCK_RENDERER)));
+        String sodium = compact(Files.readString(root.resolve(SODIUM_UTILS)));
+
+        check(graph.contains("MeshData mesh = builder.build();")
+                && graph.contains("if (mesh != null)")
+                && graph.contains("BufferUploader.drawWithShader(mesh);"),
+            "empty keyframe graph buffers still use buildOrThrow");
+        check(clickable.contains("if (context == null)")
+                && clickable.contains("this.click(mouseButton);"),
+            "programmatic keybind clicks still require a mouse context");
+        check(dashboard.contains("if (this.data == null || this.data.getId() == null || repository == null)"),
+            "Ctrl+S can still save a missing dashboard document");
+        check(block.contains("Color.white()")
+                && block.contains("consumers.setSubstitute(null);"),
+            "block and fluid forms can still start from black or replace vanilla vertex colors");
+        check(sodium.contains("Class.forName(\"net.caffeinemc.mods.sodium.client.SodiumClientMod\")")
+                && sodium.contains("catch (Throwable ignored)"),
+            "Sodium camera compatibility still links directly to one version's options accessor");
+        check(film.contains("this.applyReplayItemUse(replay, ticks, entity)")
+                && film.contains("ItemUseEffects.tick(replay, actorEntity, ticks)")
+                && film.contains("LivePlayerItemUse.apply(player, use, offUse);")
+                && film.contains("ItemUseEffects.tick(replay, new MCEntity(player), replayTick)"),
+            "replay item use/eating effects are not published for editor and actor playback");
     }
 
     private static void checkFormFrameCacheWiring(Path root) throws IOException

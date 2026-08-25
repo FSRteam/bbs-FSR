@@ -37,7 +37,7 @@ import java.util.WeakHashMap;
 public class ItemUseEffects
 {
     /** The last film tick each hand emitted on, per actor. */
-    private static final Map<IEntity, int[]> LAST = new WeakHashMap<>();
+    private static final Map<Object, int[]> LAST = new WeakHashMap<>();
 
     public static void tick(Replay replay, IEntity entity, int tick)
     {
@@ -52,7 +52,10 @@ public class ItemUseEffects
 
     private static void emit(Replay replay, IEntity entity, int tick, boolean mainHand)
     {
-        int[] last = LAST.computeIfAbsent(entity, (e) -> new int[] {Integer.MIN_VALUE, Integer.MIN_VALUE});
+        Object owner = entity instanceof mchorse.bbs_mod.forms.entities.MCEntity mc
+            ? mc.getMcEntity()
+            : entity;
+        int[] last = LAST.computeIfAbsent(owner, (e) -> new int[] {Integer.MIN_VALUE, Integer.MIN_VALUE});
         int index = mainHand ? 0 : 1;
         int previous = last[index];
 

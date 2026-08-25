@@ -1152,6 +1152,24 @@ public abstract class BaseFilmController
                         player.setOnGround(grounded);
                         player.setSprinting(replay.keyframes.sprinting.interpolate(replayTick) > 0);
 
+                        /* World first-person playback is driven through the real
+                         * client player in this end-of-world phase. Publish the
+                         * replay's held-item use here as well; the StubEntity
+                         * update path has no backing LivingEntity in world mode. */
+                        ItemUsePose.Use use = ReplayItemUse.compute(replay, replayTick, true, player);
+                        ItemUsePose.Use offUse = ReplayItemUse.compute(replay, replayTick, false, player);
+                        LivePlayerItemUse.apply(player, use, offUse);
+
+                        /* The use clips are answered back to vanilla only during the
+                         * render pass (LivingEntityFilmUseMixin is render-gated), so
+                         * the player's own tick never runs shouldSpawnConsumptionEffects
+                         * on a held item they are not actually using. Emit the eating/
+                         * drinking crumbs, sound and final burp from the clip here, the
+                         * same way applyActorReplay does for an ActorEntity actor. The
+                         * MCEntity wrapper gives ItemUseEffects the real ClientLevel and
+                         * coordinates the crumbs spawn from. */
+                        ItemUseEffects.tick(replay, new MCEntity(player), replayTick);
+
                         /* First person teleports the player from keyframes instead of walking it, so vanilla's
                          * bob amplitude (the view-bobbing stride) is computed from a zero velocity and stays
                          * flat. Re-derive it from the actual per-tick displacement (the same source as the limb
@@ -1202,6 +1220,10 @@ public abstract class BaseFilmController
     /** Publish all replay-side item effects after a controller applies keyframes/actions. */
     protected void applyReplayItemUse(Replay replay, int ticks, IEntity entity)
     {
+        if (replay.actor.get())
+        {
+            return;
+        }
 
         LivingEntity user = ItemUsePose.livingOf(entity);
         ItemUsePose.Use use = ReplayItemUse.compute(replay, ticks, true, user);
@@ -1259,6 +1281,7 @@ public abstract class BaseFilmController
         ItemUsePose.Use use = ReplayItemUse.compute(replay, ticks, true, actorEntity.getMcEntity() instanceof LivingEntity living ? living : null);
         ItemUsePose.Use offUse = ReplayItemUse.compute(replay, ticks, false, actorEntity.getMcEntity() instanceof LivingEntity living ? living : null);
         ThirdPersonItemUse.set(ThirdPersonItemUse.keyOf(actorEntity), use, offUse);
+        ItemUseEffects.tick(replay, actorEntity, ticks);
     }
 
     public void startRenderFrame(float transition)

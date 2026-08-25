@@ -596,7 +596,6 @@
 	"bbs.ui.dock.restore": "Свернуть панель",
 	"bbs.ui.dock.undo_layout": "Отменить изменение раскладки",
 	"bbs.ui.dock.keys.maximize": "Развернуть панель под курсором",
-	"bbs.ui.film.layout_bind_to_editor": "Привязать раскладку к редактору",
 	"bbs.ui.film.layout_lock": "Заблокировать раскладку",
 	"bbs.ui.film.layout_presets": "Пресеты раскладки",
 	"bbs.ui.film.layout_reset": "Сбросить раскладку",
