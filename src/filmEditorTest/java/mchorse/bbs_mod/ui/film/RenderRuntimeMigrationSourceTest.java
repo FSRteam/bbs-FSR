@@ -31,20 +31,22 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path MODEL_INSTANCE = Path.of("src/client/java/mchorse/bbs_mod/cubic/ModelInstance.java");
     private static final Path KEYFRAME_EDITOR = Path.of("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/UIKeyframeEditor.java");
     private static final Path NESTED_EDIT = Path.of("src/client/java/mchorse/bbs_mod/ui/forms/UINestedEdit.java");
+    private static final Path FORM_EDITOR = Path.of("src/client/java/mchorse/bbs_mod/ui/forms/editors/UIFormEditor.java");
+    private static final Path FILM_PREVIEW = Path.of("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPreview.java");
     private static final Path RENDER_LAYER_MIXIN = Path.of("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
     private static final Path CLIENT_MIXINS = Path.of("src/client/resources/bbs.client.mixins.json");
     private static final Path ICONS = Path.of("src/client/resources/assets/bbs/assets/textures/icons.png");
     private static final String ICONS_SHA256 = "c07f2b7db84e1e0afb7623126ef88744b6d0ec804cee78f6ff4ebbfb9b9bfe3b";
 
     private static final String[] MIGRATED_LANGUAGE_KEYS = {
-        "bbs.config.editor.keep_frame_on_exit",
-        "bbs.config.editor.keep_frame_on_exit-comment",
-        "bbs.config.editor.orbit_axis_ortho",
-        "bbs.config.editor.orbit_axis_ortho-comment",
-        "bbs.config.editor.orbit_gizmo",
-        "bbs.config.editor.orbit_gizmo_scale",
-        "bbs.config.editor.orbit_gizmo_scale-comment",
-        "bbs.config.editor.orbit_gizmo-comment",
+        "bbs.config.workspace.keep_frame_on_exit",
+        "bbs.config.workspace.keep_frame_on_exit-comment",
+        "bbs.config.camera.orbit_axis_ortho",
+        "bbs.config.camera.orbit_axis_ortho-comment",
+        "bbs.config.camera.orbit_gizmo",
+        "bbs.config.camera.orbit_gizmo_scale",
+        "bbs.config.camera.orbit_gizmo_scale-comment",
+        "bbs.config.camera.orbit_gizmo-comment",
         "bbs.ui.bone_picker.click_bone",
         "bbs.ui.film.controller.keys.toggle_ortho",
         "bbs.ui.forms.editors.model.ik.advanced",
@@ -287,6 +289,8 @@ public final class RenderRuntimeMigrationSourceTest
     {
         String keyframeEditor = compact(Files.readString(root.resolve(KEYFRAME_EDITOR)));
         String nestedEdit = compact(Files.readString(root.resolve(NESTED_EDIT)));
+        String formEditor = compact(Files.readString(root.resolve(FORM_EDITOR)));
+        String filmPreview = compact(Files.readString(root.resolve(FILM_PREVIEW)));
         String replacement = section(
             keyframeEditor,
             "private void replaceEditor(",
@@ -300,6 +304,15 @@ public final class RenderRuntimeMigrationSourceTest
             "keyframe replacement no longer resizes its target before the editor recursively resizes the mounted panel");
         check(nestedEdit.contains("this.h(UIConstants.CONTROL_HEIGHT).row(UIConstants.MARGIN);"),
             "nested form pick/edit buttons lost their standard spacing");
+        check(formEditor.contains("if (entry.part == part)")
+                && formEditor.contains("this.formsList.setCurrentScroll(added);")
+                && formEditor.contains("this.pickForm(added);"),
+            "new body attachments are not revealed and selected after the form list refresh");
+        check(filmPreview.contains("controller.populateCameraModeMenu(menu);")
+                && filmPreview.contains("controller::teleportOrbitPivotToReplay")
+                && filmPreview.contains("controller::toggleOrbitAttachment")
+                && filmPreview.contains("controller.orbit::toggleOrtho"),
+            "camera context menu no longer exposes all modes and orbit actions");
     }
 
     private static void checkSliderWiring(Path root) throws IOException
