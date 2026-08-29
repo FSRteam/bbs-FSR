@@ -171,7 +171,13 @@ public class UINewsStrip extends UIElement
             panel.content.add(copy);
         }
 
-        UIOverlay.addOverlay(this.getContext(), panel, 320, 280);
+        /* Adaptive to the window: 90% of the GUI area, capped at a readable
+         * size; UIOverlay's bounds() clamps further on tiny windows. */
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        int w = Math.min(640, (int) (minecraft.getWindow().getGuiScaledWidth() * 0.9F));
+        int h = Math.min(480, (int) (minecraft.getWindow().getGuiScaledHeight() * 0.9F));
+
+        UIOverlay.addOverlay(this.getContext(), panel, Math.max(280, w), Math.max(240, h));
     }
 
     private void renderStrip(UIContext context)
@@ -183,6 +189,16 @@ public class UINewsStrip extends UIElement
         clip.set(this.area.x, this.area.y + HEADER_H, this.area.w, this.area.h - HEADER_H);
 
         context.batcher.clip(clip, context);
+
+        /* Remote content still streaming in: show a spinner instead of an
+         * empty band (the host keeps the strip visible while fetching). */
+        if (this.cards.isEmpty() && FilmHomeContent.INSTANCE.fetchingNews)
+        {
+            WebImages.drawSpinner(context, this.area.mx(), this.area.y + HEADER_H + CARD_H / 2F, BBSSettings.accentColorRGB());
+            context.batcher.unclip(context);
+
+            return;
+        }
 
         int x = this.area.x + GAP - (int) this.scroll.getScroll();
         int y = this.area.y + HEADER_H + GAP / 2;

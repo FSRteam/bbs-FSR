@@ -105,6 +105,10 @@ public class UIFilmHomePanel extends UIElement
     private final UINewsStrip newsStrip = new UINewsStrip();
     private final UIAdBoard board = new UIAdBoard();
 
+    /* Lists painted last, so remote refreshes only refill when swapped */
+    private List<FilmHomeContent.NewsItem> paintedNews = List.of();
+    private List<FilmHomeContent.AdItem> paintedAds = List.of();
+
     /* Toolbar */
     private final UITextbox search;
     private final UIButton sortButton;
@@ -294,13 +298,35 @@ public class UIFilmHomePanel extends UIElement
         this.grid.relative(this).xy(left, contentY).w(1F, -left - 8).h(1F, -contentY - 8);
     }
 
-    /** Reloads editorial content from config/jar and shows or hides the sections. */
+    /** Reloads editorial content and kicks the async remote refresh. */
     private void applyContent()
     {
         FilmHomeContent.INSTANCE.load();
-        this.newsStrip.fill(FilmHomeContent.INSTANCE.news);
-        this.board.fill(FilmHomeContent.INSTANCE.ads);
-        this.newsStrip.setVisible(!FilmHomeContent.INSTANCE.news.isEmpty());
+        this.applyContentLists();
+        FilmHomeContent.INSTANCE.refreshAsync(this::applyContentRemote);
+    }
+
+    /** Runs on the UI thread after each remote refresh round. */
+    private void applyContentRemote()
+    {
+        this.applyContentLists();
+    }
+
+    private void applyContentLists()
+    {
+        if (this.paintedAds != FilmHomeContent.INSTANCE.ads)
+        {
+            this.paintedAds = FilmHomeContent.INSTANCE.ads;
+            this.board.fill(FilmHomeContent.INSTANCE.ads);
+        }
+
+        if (this.paintedNews != FilmHomeContent.INSTANCE.news)
+        {
+            this.paintedNews = FilmHomeContent.INSTANCE.news;
+            this.newsStrip.fill(FilmHomeContent.INSTANCE.news);
+        }
+
+        this.newsStrip.setVisible(!FilmHomeContent.INSTANCE.news.isEmpty() || FilmHomeContent.INSTANCE.fetchingNews);
         /* The rent slot keeps the ad board present even without paid ads. */
         this.board.setVisible(true);
         this.relayout();

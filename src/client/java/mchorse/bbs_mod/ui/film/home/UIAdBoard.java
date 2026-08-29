@@ -267,6 +267,12 @@ public class UIAdBoard extends UIElement
                 this.drawSlide(context, outgoing, x - (int) (w * progress), viewY, w, h, false);
             }
         }
+        else if (FilmHomeContent.INSTANCE.fetchingAds)
+        {
+            /* Remote ads still streaming in: spinner in the slide area */
+            context.batcher.box(x, viewY, x + w, viewY + h, BBSSettings.chromeSurface());
+            WebImages.drawSpinner(context, x + w / 2F, viewY + h / 2F, BBSSettings.accentColorRGB());
+        }
 
         this.renderDots(context, x, w, viewY + h + 4);
 
@@ -361,17 +367,21 @@ public class UIAdBoard extends UIElement
     {
         UIOverlayPanel panel = new UIOverlayPanel(IKey.EMPTY);
 
-        /* All geometry is fixed from the top-left of the content area. The
+        /* All geometry derives from the window size: the panel takes 90% of
+         * the GUI area capped at a readable width, the image keeps its 4:3
+         * ratio, and the Markdown body scrolls when it overflows. The
          * content is 20px narrower than the panel (right strip hosts the
          * close button), so every width stays clear of it. */
-        final int imageW = 248;
-        final int imageH = imageW * 3 / 4;
-        final int bodyH = 130;
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        int panelW = Math.min(400, Math.max(240, (int) (minecraft.getWindow().getGuiScaledWidth() * 0.9F)));
+        int contentW = panelW - 20;
+        int imageH = contentW * 3 / 4;
+        int bodyH = Math.min(200, Math.max(120, (int) (minecraft.getWindow().getGuiScaledHeight() * 0.35F)));
         final int buttonsY = 4 + imageH + 10 + bodyH + 8;
 
         UIElement imageBox = new UIElement();
 
-        imageBox.relative(panel.content).xy(6, 4).wh(imageW, imageH);
+        imageBox.relative(panel.content).xy(6, 4).wh(contentW, imageH);
         imageBox.add(new UIRenderable((ctx) ->
         {
             Texture texture = WebImages.resolve(ad.image);
@@ -389,7 +399,7 @@ public class UIAdBoard extends UIElement
 
         MarkdownBody body = new MarkdownBody(ad.markdown);
 
-        body.relative(panel.content).xy(6, 4 + imageH + 10).w(imageW).h(bodyH);
+        body.relative(panel.content).xy(6, 4 + imageH + 10).w(contentW).h(bodyH);
 
         panel.content.add(imageBox, body);
 
@@ -408,11 +418,11 @@ public class UIAdBoard extends UIElement
         {
             UIIcon open = new UIIcon(Icons.HELP, (b) -> UIUtils.openWebLink(ad.link));
 
-            open.relative(panel.content).xy(132, buttonsY).wh(20, 20);
+            open.relative(panel.content).xy(6 + 128, buttonsY).wh(20, 20);
             open.tooltip(L10n.lang("bbs.ui.film.home.open_url"));
             panel.content.add(open);
         }
 
-        UIOverlay.addOverlay(this.getContext(), panel, 280, buttonsY + 20 + 18);
+        UIOverlay.addOverlay(this.getContext(), panel, panelW, buttonsY + 20 + 18);
     }
 }
