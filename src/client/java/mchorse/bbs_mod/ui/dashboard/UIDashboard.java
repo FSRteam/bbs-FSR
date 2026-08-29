@@ -256,6 +256,10 @@ public class UIDashboard extends UIBaseMenu
             this.panels.open();
             this.setPanel(this.panels.panel);
             this.restoreCurrentPanelControls();
+
+            /* Kicks the throttled FSR update check; popups only land once
+             * the dashboard is actually on screen. */
+            mchorse.bbs_mod.update.FSRUpdates.onDashboardOpened(this);
         }
 
         BBSModClient.getCameraController().add(this.camera);

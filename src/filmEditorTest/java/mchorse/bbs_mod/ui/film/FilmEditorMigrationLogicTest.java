@@ -34,6 +34,7 @@ public final class FilmEditorMigrationLogicTest
             FilmDockInitialStateSourceTest.runAll();
             mchorse.bbs_mod.ui.framework.elements.input.grid.UICardGridSourceTest.runAll();
             UIFilmHomeSourceTest.runAll();
+            mchorse.bbs_mod.update.FSRUpdatesSourceTest.runAll();
             testLenientPresetComparison();
             PoseNavigationLogicTest.runAll();
             FilmReplayFirstPersonSyncSourceTest.runAll();
