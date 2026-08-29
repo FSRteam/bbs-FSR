@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "ads": ["https://fsrapi.twiap.studio/api/ads", "https://bbs-film-home.xbwhome.workers.dev/api/ads"],
-  "news": ["https://fsrapi.twiap.studio/api/news", "https://bbs-film-home.xbwhome.workers.dev/api/news"],
+  "ads": ["https://fsrapi.twiap.studio/api/ads"],
+  "news": ["https://fsrapi.twiap.studio/api/news"],
   "refresh_minutes": 30
 }
