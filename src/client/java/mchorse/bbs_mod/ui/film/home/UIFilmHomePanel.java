@@ -24,6 +24,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
@@ -60,14 +61,31 @@ import java.util.Map;
  */
 public class UIFilmHomePanel extends UIElement
 {
-    private static final int BANNER_H = 150;
+    /* Banner heights per layout tier; height gates override downwards. */
+    private static final int BANNER_H_FULL = 150;
+    private static final int BANNER_H_COMPACT = 120;
+    private static final int BANNER_H_SHORT = 96;
+    private static final int BANNER_H_TINY = 64;
     private static final int BAR_H = 28;
-    private static final int CONTENT_Y = BANNER_H + BAR_H + 6;
     private static final int CARD_H = 144;
     private static final int CARD_W = 220;
     private static final int THUMB_H = 88;
 
+    /* Width/height tier thresholds (GUI pixels) and the ±8px margin a resize
+     * must move past a boundary before the tier flips (anti flip-flop). */
+    private static final int T1_W = 1000;
+    private static final int T2_W = 700;
+    private static final int T3_W = 480;
+    private static final int SHORT_H = 700;
+    private static final int TINY_H = 480;
+    private static final int HYSTERESIS = 8;
+
     private static final Link BANNER = Link.assets("textures/banners/bg.png");
+
+    private enum LayoutTier
+    {
+        T0, T1, T2, T3
+    }
 
     /** Muted color pairs for procedural thumbnails, indexed by film id hash (content coding, not semantic). */
     static final int[][] THUMB_COLORS = {
@@ -98,12 +116,19 @@ public class UIFilmHomePanel extends UIElement
     private final UIFilmPanel panel;
 
     /* Banner */
+    private final UIElement banner;
+    private final UILabel title;
     private final UILabel stats;
     private final UIElement bar;
 
     /* Content sections */
     private final UINewsStrip newsStrip = new UINewsStrip();
     private final UIAdBoard board = new UIAdBoard();
+
+    /* Collapsed-section entries (shown in place of the board/news strip on
+     * narrow windows); each opens the section as an overlay panel. */
+    private final UIIcon boardEntry;
+    private final UIIcon newsEntry;
 
     /* Lists painted last, so remote refreshes only refill when swapped */
     private List<FilmHomeContent.NewsItem> paintedNews = List.of();
@@ -112,6 +137,7 @@ public class UIFilmHomePanel extends UIElement
     /* Toolbar */
     private final UITextbox search;
     private final UIButton sortButton;
+    private final UISliderTrackpad sizeSlider;
     private final UIIcon gridView;
     private final UIIcon listView;
     private final UILabel breadcrumb;
@@ -132,6 +158,12 @@ public class UIFilmHomePanel extends UIElement
     private int metaGeneration;
     private String filter = "";
 
+    /* Current responsive tiers; T3 forces the list view, remembered in
+     * {@code userGridMode} so leaving T3 restores the user's choice. */
+    private LayoutTier widthTier = LayoutTier.T0;
+    private int heightStep;
+    private boolean userGridMode = true;
+
     public UIFilmHomePanel(UIFilmPanel panel)
     {
         this.panel = panel;
@@ -139,24 +171,24 @@ public class UIFilmHomePanel extends UIElement
         FilmThumbnails.setPanel(panel);
 
         /* Banner */
-        UIElement banner = new UIElement();
+        this.banner = new UIElement();
 
-        banner.relative(this).xy(0, 0).w(1F).h(BANNER_H);
+        this.banner.relative(this).xy(0, 0).w(1F).h(BANNER_H_FULL);
 
-        UILabel title = UI.label(UIKeys.FILM_TITLE);
+        this.title = UI.label(UIKeys.FILM_TITLE);
 
-        title.relative(banner).xy(12, BANNER_H - 58).w(1F, -160).h(16);
+        this.title.relative(this.banner).xy(12, BANNER_H_FULL - 58).w(1F, -160).h(16);
 
         this.stats = UI.label(L10n.lang("bbs.ui.film.home.count").format(0)).color(BBSSettings.mutedTextColor());
 
-        this.stats.relative(banner).xy(12, BANNER_H - 38).w(1F, -160).h(12);
+        this.stats.relative(this.banner).xy(12, BANNER_H_FULL - 38).w(1F, -160).h(12);
 
-        banner.add(new UIRenderable((ctx) -> this.renderBanner(ctx, banner.area)), title, this.stats);
+        this.banner.add(new UIRenderable((ctx) -> this.renderBanner(ctx, this.banner.area)), this.title, this.stats);
 
         /* Toolbar */
         this.bar = new UIElement();
 
-        this.bar.relative(this).xy(0, BANNER_H).w(1F).h(BAR_H);
+        this.bar.relative(this).xy(0, BANNER_H_FULL).w(1F).h(BAR_H);
 
         this.search = new UITextbox((t) ->
         {
@@ -186,6 +218,16 @@ public class UIFilmHomePanel extends UIElement
         this.rename = new UIIcon(Icons.EDIT, (b) -> this.renameSelected());
         this.remove = new UIIcon(Icons.REMOVE, (b) -> this.removeSelected());
 
+        this.boardEntry = new UIIcon(Icons.IMAGE, (b) -> this.openBoardOverlay());
+        this.boardEntry.wh(20, 20);
+        this.boardEntry.relative(this.bar).x(1F, -176).y(4);
+        this.boardEntry.tooltip(L10n.lang("bbs.ui.film.home.ads"));
+
+        this.newsEntry = new UIIcon(Icons.FILE, (b) -> this.openNewsOverlay());
+        this.newsEntry.wh(20, 20);
+        this.newsEntry.relative(this.bar).x(1F, -200).y(4);
+        this.newsEntry.tooltip(L10n.lang("bbs.ui.film.home.news"));
+
         this.gridView.relative(bar).x(1F, -128).y(4);
         this.listView.relative(bar).x(1F, -152).y(4);
         this.breadcrumb.relative(bar).xy(196, 9).w(1F, -606).h(14);
@@ -194,12 +236,12 @@ public class UIFilmHomePanel extends UIElement
         this.rename.relative(bar).x(1F, -56).y(4);
         this.remove.relative(bar).x(1F, -32).y(4);
 
-        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.add, this.dupe, this.rename, this.remove);
+        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.add, this.dupe, this.rename, this.remove, this.boardEntry, this.newsEntry);
 
         /* Content: grid */
         this.grid = new UICardGrid<>(this::activateCard, new FilmCardRenderer());
         this.grid.multi();
-        this.grid.relative(this).xy(8, CONTENT_Y).w(1F, -16).h(1F, -CONTENT_Y - 8);
+        this.grid.relative(this).xy(8, BANNER_H_FULL + BAR_H + 6).w(1F, -16).h(1F, -BANNER_H_FULL - BAR_H - 14);
         this.grid.context((menu) ->
         {
             menu.action(Icons.ADD, UIKeys.GENERAL_ADD, this::addData);
@@ -219,17 +261,17 @@ public class UIFilmHomePanel extends UIElement
         this.grid.keys().register(new KeyCombo(UIKeys.KEYFRAMES_CONTEXT_SELECT_ALL, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_CONTROL), this.grid::selectAll).active(this::canUseGridKeys);
 
         /* Card size slider (right cluster, left of the sort button) */
-        UISliderTrackpad sizeSlider = new UISliderTrackpad((v) ->
+        this.sizeSlider = new UISliderTrackpad((v) ->
         {
             this.cardScale = (float) v.doubleValue();
             this.grid.resize();
         });
 
-        sizeSlider.limit(0.6D, 1.6D).increment(0.05D);
-        sizeSlider.setValue(1F);
-        sizeSlider.relative(this.bar).x(1F, -394).y(4).wh(90, 20);
-        sizeSlider.tooltip(L10n.lang("bbs.ui.film.home.card_size"));
-        this.bar.add(sizeSlider);
+        this.sizeSlider.limit(0.6D, 1.6D).increment(0.05D);
+        this.sizeSlider.setValue(1F);
+        this.sizeSlider.relative(this.bar).x(1F, -394).y(4).wh(90, 20);
+        this.sizeSlider.tooltip(L10n.lang("bbs.ui.film.home.card_size"));
+        this.bar.add(this.sizeSlider);
 
         /* Content: list (secondary view) */
         this.names = new UISearchList<>(new UIDataPathList((list) -> this.panel.pickData(list.get(0).toString())));
@@ -263,13 +305,29 @@ public class UIFilmHomePanel extends UIElement
     }
 
     /**
-     * Repositions every section below the banner. The news strip collapses
-     * when empty; the commission board takes a ~30% column next to the film
-     * area when it has content.
+     * Recomputes the responsive tiers (width for section collapsing, height
+     * for banner compaction), applies the tier-driven visibility switches and
+     * repositions every section below the banner. Flex changes only apply on
+     * resize cascades, so the touched children get an explicit {@code resize()}
+     * at the end — relayout() also runs outside window resizes (content
+     * arriving, sections appearing).
      */
     private void relayout()
     {
-        int y = BANNER_H;
+        LayoutTier prev = this.widthTier;
+
+        this.widthTier = this.computeWidthTier();
+        this.heightStep = this.computeHeightStep();
+
+        this.applyLayoutState(prev, this.widthTier);
+
+        int bannerH = this.bannerHeight();
+
+        this.banner.relative(this).xy(0, 0).w(1F).h(bannerH);
+        this.title.relative(this.banner).xy(12, Math.max(4, bannerH - 58)).w(1F, -160).h(16);
+        this.stats.relative(this.banner).xy(12, Math.max(4, bannerH - 38)).w(1F, -160).h(12);
+
+        int y = bannerH;
 
         if (this.newsStrip.isVisible())
         {
@@ -285,17 +343,141 @@ public class UIFilmHomePanel extends UIElement
         boolean hasBoard = this.board.isVisible();
 
         /* The ad column stays narrow: slides keep their 4:3 ratio without
-         * cropping and the board doesn't crowd the film grid. */
-        int boardW = Math.max(170, Math.min(210, this.area.w * 22 / 100));
+         * cropping and the board doesn't crowd the film grid. T1 tightens
+         * the cap so the grid keeps enough columns. */
+        int boardW = 0;
 
         if (hasBoard)
         {
+            int cap = this.widthTier == LayoutTier.T0 ? 210 : 180;
+
+            boardW = Math.max(170, Math.min(cap, this.area.w * 22 / 100));
+
             this.board.relative(this).xy(8, contentY).w(boardW).h(1F, -contentY - 8);
         }
 
         int left = 8 + (hasBoard ? boardW + 10 : 0);
 
         this.grid.relative(this).xy(left, contentY).w(1F, -left - 8).h(1F, -contentY - 8);
+
+        this.banner.resize();
+        this.newsStrip.resize();
+        this.bar.resize();
+        this.board.resize();
+        this.grid.resize();
+        this.names.resize();
+    }
+
+    /** Width-driven compactness with ±8px hysteresis at every boundary. */
+    private LayoutTier computeWidthTier()
+    {
+        if (below(this.area.w, T3_W, this.widthTier == LayoutTier.T3))
+        {
+            return LayoutTier.T3;
+        }
+
+        if (below(this.area.w, T2_W, this.widthTier.ordinal() >= LayoutTier.T2.ordinal()))
+        {
+            return LayoutTier.T2;
+        }
+
+        if (below(this.area.w, T1_W, this.widthTier.ordinal() >= LayoutTier.T1.ordinal()))
+        {
+            return LayoutTier.T1;
+        }
+
+        return LayoutTier.T0;
+    }
+
+    /** Height gates: short screens shrink the banner, tiny ones collapse news. */
+    private int computeHeightStep()
+    {
+        if (below(this.area.h, TINY_H, this.heightStep >= 2))
+        {
+            return 2;
+        }
+
+        if (below(this.area.h, SHORT_H, this.heightStep >= 1))
+        {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Hysteresis threshold test: a state that is already below
+     * {@code threshold} stays there until the value climbs 8px back above it,
+     * and one above only drops below 8px under — dragging the window edge
+     * around a boundary doesn't flip-flop the layout.
+     */
+    private static boolean below(int value, int threshold, boolean state)
+    {
+        return state ? value < threshold + HYSTERESIS : value < threshold - HYSTERESIS;
+    }
+
+    private int bannerHeight()
+    {
+        int h;
+
+        switch (this.widthTier)
+        {
+            case T0: h = BANNER_H_FULL; break;
+            case T1: h = BANNER_H_COMPACT; break;
+            case T2: h = BANNER_H_SHORT; break;
+            default: h = BANNER_H_TINY; break;
+        }
+
+        if (this.heightStep >= 2)
+        {
+            return BANNER_H_TINY;
+        }
+
+        return this.heightStep >= 1 ? Math.min(h, BANNER_H_SHORT) : h;
+    }
+
+    /**
+     * Tier-driven switches. Visibility/compact flags run on every relayout
+     * (cheap no-ops when unchanged, so content arriving re-evaluates them);
+     * the T3 view forcing only fires on tier transitions and never resets
+     * state — the carousel page, selections and filters are untouched.
+     */
+    private void applyLayoutState(LayoutTier prev, LayoutTier tier)
+    {
+        boolean collapsed = tier.ordinal() >= LayoutTier.T2.ordinal();
+        boolean tiny = this.heightStep >= 2;
+        boolean hasNews = !FilmHomeContent.INSTANCE.news.isEmpty() || FilmHomeContent.INSTANCE.fetchingNews;
+
+        this.board.setVisible(!collapsed);
+        this.boardEntry.setVisible(collapsed);
+        this.newsStrip.setCompact(collapsed);
+        this.newsStrip.setVisible(!tiny && hasNews);
+        this.newsEntry.setVisible(tiny && hasNews);
+
+        boolean fullBar = !collapsed;
+
+        this.sizeSlider.setVisible(fullBar);
+        this.breadcrumb.setVisible(fullBar);
+        this.sortButton.setVisible(fullBar);
+
+        /* The news entry sits next to the close of the right cluster when the
+         * sort button is hidden; otherwise left of the size slider, with the
+         * breadcrumb shortened to make room. */
+        this.newsEntry.relative(this.bar).x(1F, fullBar ? -418 : -200).y(4);
+        this.breadcrumb.relative(this.bar).xy(196, 9).w(1F, -(606 + (fullBar && this.newsEntry.isVisible() ? 24 : 0))).h(14);
+
+        if (tier == LayoutTier.T3)
+        {
+            if (prev != LayoutTier.T3)
+            {
+                this.userGridMode = this.gridMode;
+                this.setView(false);
+            }
+        }
+        else if (prev == LayoutTier.T3 && !this.gridMode && this.userGridMode)
+        {
+            this.setView(true);
+        }
     }
 
     /** Reloads editorial content and kicks the async remote refresh. */
@@ -326,9 +508,8 @@ public class UIFilmHomePanel extends UIElement
             this.newsStrip.fill(FilmHomeContent.INSTANCE.news);
         }
 
-        this.newsStrip.setVisible(!FilmHomeContent.INSTANCE.news.isEmpty() || FilmHomeContent.INSTANCE.fetchingNews);
-        /* The rent slot keeps the ad board present even without paid ads. */
-        this.board.setVisible(true);
+        /* Section visibility (content empty, fetching, tier collapsing) is
+         * re-evaluated inside relayout(). */
         this.relayout();
     }
 
@@ -979,7 +1160,14 @@ public class UIFilmHomePanel extends UIElement
         }
     }
 
-    /** Cover-cropped banner texture with a readability gradient and accent hairline. */
+    /**
+     * Banner background: height-priority contain so the centered artwork
+     * (and its logo) always fits the band whole, however wide the window is —
+     * the old width-cover crop sliced straight through the logo on wide
+     * screens. The leftover sides extend the texture's outer pixel columns
+     * and fade into the deep surface color; the readability gradient and
+     * accent hairline below stay as they were.
+     */
     private void renderBanner(UIContext context, Area area)
     {
         Texture texture = BBSModClient.getTextures().getTexture(BANNER);
@@ -988,33 +1176,33 @@ public class UIFilmHomePanel extends UIElement
         {
             float texW = texture.width;
             float texH = texture.height;
-            float texAspect = texW / texH;
-            float areaAspect = area.w / (float) area.h;
-            float u1;
-            float u2;
-            float v1;
-            float v2;
+            float scale = Math.min(area.w / texW, area.h / texH);
+            int drawnW = (int) (texW * scale);
+            int drawnH = (int) (texH * scale);
+            int imageX = area.x + (area.w - drawnW) / 2;
+            int imageY = area.y + (area.h - drawnH) / 2;
 
-            if (areaAspect > texAspect)
+            if (drawnW < area.w)
             {
-                float cropH = texW / areaAspect;
+                /* Stretch the texture's outermost pixel columns across the
+                 * empty sides so the fill reads as a continuation of the
+                 * artwork, then fade them into the surface color. */
+                context.batcher.texturedBox(texture, Colors.WHITE, area.x, area.y, imageX - area.x, area.h, 0, 0, 1, texH, texture.width, texture.height);
+                context.batcher.texturedBox(texture, Colors.WHITE, imageX + drawnW, area.y, area.ex() - imageX - drawnW, area.h, texW - 1, 0, texW, texH, texture.width, texture.height);
 
-                u1 = 0;
-                u2 = texW;
-                v1 = (texH - cropH) * 0.5F;
-                v2 = v1 + cropH;
+                int deep = BBSSettings.deepSurface();
+
+                context.batcher.gradientHBox(area.x, area.y, imageX, area.ey(), Colors.setA(deep, 0.85F), Colors.setA(deep, 0F));
+                context.batcher.gradientHBox(imageX + drawnW, area.y, area.ex(), area.ey(), Colors.setA(deep, 0F), Colors.setA(deep, 0.85F));
             }
-            else
+            else if (drawnH < area.h)
             {
-                float cropW = texH * areaAspect;
-
-                u1 = (texW - cropW) * 0.5F;
-                u2 = u1 + cropW;
-                v1 = 0;
-                v2 = texH;
+                /* Degenerate ultra-narrow panel: contain is width-bound and
+                 * leaves gaps above/below the artwork. */
+                context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.deepSurface());
             }
 
-            context.batcher.texturedBox(texture, Colors.WHITE, area.x, area.y, area.w, area.h, u1, v1, u2, v2, texture.width, texture.height);
+            context.batcher.texturedBox(texture, Colors.WHITE, imageX, imageY, drawnW, drawnH, 0, 0, texW, texH, texture.width, texture.height);
         }
 
         int deep = BBSSettings.deepSurface();
@@ -1026,6 +1214,43 @@ public class UIFilmHomePanel extends UIElement
 
         context.batcher.gradientHBox(area.x, area.ey() - 2, mid, area.ey(), Colors.setA(accent, 0F), Colors.A100 | accent);
         context.batcher.gradientHBox(mid, area.ey() - 2, area.ex(), area.ey(), Colors.A100 | accent, Colors.setA(accent, 0F));
+    }
+
+    /* Collapsed-section overlays (narrow windows) */
+
+    /** Shows the ad carousel as an overlay panel instead of the side column. */
+    private void openBoardOverlay()
+    {
+        UIOverlayPanel panel = new UIOverlayPanel(L10n.lang("bbs.ui.film.home.ads"));
+
+        UIAdBoard board = new UIAdBoard();
+
+        board.fill(FilmHomeContent.INSTANCE.ads);
+        board.relative(panel.content).xy(6, 6).w(1F, -12).h(1F, -12);
+        panel.content.add(board);
+
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        int w = Math.min(340, (int) (minecraft.getWindow().getGuiScaledWidth() * 0.9F));
+        int slideH = Math.max(60, (w - 32 - 20) * 3 / 4);
+
+        UIOverlay.addOverlay(this.getContext(), panel, w, 20 + slideH + 108);
+    }
+
+    /** Shows the news strip as an overlay panel when the height collapses it. */
+    private void openNewsOverlay()
+    {
+        UIOverlayPanel panel = new UIOverlayPanel(L10n.lang("bbs.ui.film.home.news"));
+
+        UINewsStrip strip = new UINewsStrip();
+
+        strip.fill(FilmHomeContent.INSTANCE.news);
+        strip.relative(panel.content).xy(6, 6).w(1F, -12).h(1F, -12);
+        panel.content.add(strip);
+
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        int w = Math.min(380, (int) (minecraft.getWindow().getGuiScaledWidth() * 0.9F));
+
+        UIOverlay.addOverlay(this.getContext(), panel, w, 20 + strip.getPreferredHeight() + 18);
     }
 
     private void renderEmptyState(UIContext context)
@@ -1061,7 +1286,14 @@ public class UIFilmHomePanel extends UIElement
         @Override
         public int preferredCardWidth()
         {
-            return (int) (CARD_W * cardScale);
+            /* The preferred width doubles as the column driver — raising it
+             * per tier keeps cards above a readable width when the user's
+             * size slider would shrink them below it. */
+            int min = UIFilmHomePanel.this.widthTier == LayoutTier.T1 ? 180
+                : UIFilmHomePanel.this.widthTier == LayoutTier.T2 ? 160
+                : 0;
+
+            return Math.max((int) (CARD_W * cardScale), min);
         }
 
         @Override

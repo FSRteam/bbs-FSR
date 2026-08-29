@@ -35,6 +35,7 @@ public class UINewsStrip extends UIElement
 {
     private static final int CARD_W = 260;
     private static final int CARD_H = 64;
+    private static final int CARD_H_COMPACT = 22;
     private static final int GAP = 8;
     private static final int HEADER_H = 14;
     private static final int THUMB = 48;
@@ -42,6 +43,7 @@ public class UINewsStrip extends UIElement
     private final Scroll scroll;
     private final List<CardView> cards = new ArrayList<>();
     private String header = "";
+    private boolean compact;
 
     public UINewsStrip()
     {
@@ -53,7 +55,22 @@ public class UINewsStrip extends UIElement
 
     public int getPreferredHeight()
     {
-        return HEADER_H + GAP / 2 + CARD_H + GAP / 2;
+        return HEADER_H + GAP / 2 + this.cardHeight() + GAP / 2;
+    }
+
+    /**
+     * Compact mode (narrow windows): single-line cards without thumbnails.
+     * Only the render/height branches change — cards, scroll position and
+     * selection state are kept so tier flips don't reset anything.
+     */
+    public void setCompact(boolean compact)
+    {
+        this.compact = compact;
+    }
+
+    private int cardHeight()
+    {
+        return this.compact ? CARD_H_COMPACT : CARD_H;
     }
 
     public void fill(List<FilmHomeContent.NewsItem> items)
@@ -118,8 +135,9 @@ public class UINewsStrip extends UIElement
     private CardView pick(int mouseX, int mouseY)
     {
         int y = this.area.y + HEADER_H + GAP / 2;
+        int h = this.cardHeight();
 
-        if (mouseY < y || mouseY >= y + CARD_H)
+        if (mouseY < y || mouseY >= y + h)
         {
             return null;
         }
@@ -194,12 +212,13 @@ public class UINewsStrip extends UIElement
          * empty band (the host keeps the strip visible while fetching). */
         if (this.cards.isEmpty() && FilmHomeContent.INSTANCE.fetchingNews)
         {
-            WebImages.drawSpinner(context, this.area.mx(), this.area.y + HEADER_H + CARD_H / 2F, BBSSettings.accentColorRGB());
+            WebImages.drawSpinner(context, this.area.mx(), this.area.y + HEADER_H + this.cardHeight() / 2F, BBSSettings.accentColorRGB());
             context.batcher.unclip(context);
 
             return;
         }
 
+        int cardH = this.cardHeight();
         int x = this.area.x + GAP - (int) this.scroll.getScroll();
         int y = this.area.y + HEADER_H + GAP / 2;
 
@@ -208,9 +227,9 @@ public class UINewsStrip extends UIElement
             if (x + CARD_W >= this.area.x && x <= this.area.ex())
             {
                 boolean hovered = context.mouseX >= x && context.mouseX < x + CARD_W
-                    && context.mouseY >= y && context.mouseY < y + CARD_H;
+                    && context.mouseY >= y && context.mouseY < y + cardH;
 
-                this.renderCard(context, card, x, y, hovered);
+                this.renderCard(context, card, x, y, hovered, cardH);
             }
 
             x += CARD_W + GAP;
@@ -220,8 +239,15 @@ public class UINewsStrip extends UIElement
         this.scroll.renderScrollbar(context.batcher, context.mouseX, context.mouseY);
     }
 
-    private void renderCard(UIContext context, CardView card, int x, int y, boolean hovered)
+    private void renderCard(UIContext context, CardView card, int x, int y, boolean hovered, int cardH)
     {
+        if (this.compact)
+        {
+            this.renderCompactCard(context, card, x, y, hovered, cardH);
+
+            return;
+        }
+
         FilmHomeContent.NewsItem item = card.item;
         int radius = BBSSettings.cornerWidget();
 
@@ -310,6 +336,62 @@ public class UINewsStrip extends UIElement
         if (!item.date.isEmpty())
         {
             context.batcher.textShadow(item.date, textX, y + CARD_H - GAP - 9, BBSSettings.mutedTextColor());
+        }
+    }
+
+    /** Single-line compact card: tag chip, limited title, right-aligned date. */
+    private void renderCompactCard(UIContext context, CardView card, int x, int y, boolean hovered, int cardH)
+    {
+        FilmHomeContent.NewsItem item = card.item;
+        int radius = BBSSettings.cornerWidget();
+
+        if (radius > 0)
+        {
+            context.batcher.roundedFrame(x, y, CARD_W, cardH, radius, 1, BBSSettings.dividerColor(), BBSSettings.raisedSurface());
+        }
+        else
+        {
+            context.batcher.box(x, y, x + CARD_W, y + cardH, BBSSettings.raisedSurface());
+            context.batcher.outline(x, y, x + CARD_W, y + cardH, BBSSettings.dividerColor());
+        }
+
+        if (hovered)
+        {
+            int tint = BBSSettings.primaryColor(Colors.A25);
+
+            if (radius > 0)
+            {
+                context.batcher.roundedBox(x, y, CARD_W, cardH, radius, tint);
+            }
+            else
+            {
+                context.batcher.box(x, y, x + CARD_W, y + cardH, tint);
+            }
+        }
+
+        int textY = y + (cardH - 8) / 2;
+        String tagLabel = card.tagLabel;
+        int tagW = context.batcher.getFont().getWidth(tagLabel) + 8;
+        int tagColor = tagColor(item.tag);
+
+        context.batcher.box(x + GAP, y + (cardH - 11) / 2, x + GAP + tagW, y + (cardH - 11) / 2 + 11, Colors.A25 | tagColor);
+        context.batcher.textShadow(tagLabel, x + GAP + 4, textY + 1, tagColor);
+
+        int titleX = x + GAP + tagW + 6;
+        int dateW = item.date.isEmpty() ? 0 : context.batcher.getFont().getWidth(item.date);
+        int maxW = CARD_W - (titleX - x) - GAP - (dateW > 0 ? dateW + 8 : 0);
+
+        if (card.titleWidth != maxW)
+        {
+            card.titleWidth = maxW;
+            card.title = context.batcher.getFont().limitToWidth(item.title, "...", maxW);
+        }
+
+        context.batcher.textShadow(card.title, titleX, textY, BBSSettings.textColor());
+
+        if (dateW > 0)
+        {
+            context.batcher.textShadow(item.date, x + CARD_W - 4 - dateW, textY, BBSSettings.mutedTextColor());
         }
     }
 
