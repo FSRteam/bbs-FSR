@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.dashboard.list.UIDataPathList;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.grid.UICardGrid;
@@ -454,17 +455,15 @@ public class UIFilmHomePanel extends UIElement
         this.newsStrip.setVisible(!tiny && hasNews);
         this.newsEntry.setVisible(tiny && hasNews);
 
-        boolean fullBar = !collapsed;
-
-        this.sizeSlider.setVisible(fullBar);
-        this.breadcrumb.setVisible(fullBar);
-        this.sortButton.setVisible(fullBar);
-
-        /* The news entry sits next to the close of the right cluster when the
-         * sort button is hidden; otherwise left of the size slider, with the
-         * breadcrumb shortened to make room. */
-        this.newsEntry.relative(this.bar).x(1F, fullBar ? -418 : -200).y(4);
-        this.breadcrumb.relative(this.bar).xy(196, 9).w(1F, -(606 + (fullBar && this.newsEntry.isVisible() ? 24 : 0))).h(14);
+        /* Card-size slider and sort stay visible at every width tier; the
+         * slider only follows the grid/list switch (setView). Collapsed
+         * tiers hide the breadcrumb, shrink the search box and place the
+         * section entries left of the size slider so everything fits. */
+        this.breadcrumb.setVisible(!collapsed);
+        this.search.relative(this.bar).xy(8, 4).wh(collapsed ? Math.max(24, Math.min(180, this.area.w - 474)) : 180, 20);
+        this.newsEntry.relative(this.bar).x(1F, -442).y(4);
+        this.boardEntry.relative(this.bar).x(1F, -418).y(4);
+        this.breadcrumb.relative(this.bar).xy(196, 9).w(1F, -(606 + (!collapsed && this.newsEntry.isVisible() ? 48 : 0))).h(14);
 
         if (tier == LayoutTier.T3)
         {
@@ -521,6 +520,32 @@ public class UIFilmHomePanel extends UIElement
         this.relayout();
     }
 
+    /**
+     * Selection changes happen inside the grid/list (their click handling
+     * consumes the event before the panel's own hooks run), so the toolbar
+     * action buttons (dupe/rename/remove) are refreshed after every child
+     * click and key press instead of only on refills.
+     */
+    @Override
+    protected IUIElement childrenMouseClicked(UIContext context)
+    {
+        IUIElement element = super.childrenMouseClicked(context);
+
+        this.updateActionButtons();
+
+        return element;
+    }
+
+    @Override
+    protected IUIElement childrenKeyPressed(UIContext context)
+    {
+        IUIElement element = super.childrenKeyPressed(context);
+
+        this.updateActionButtons();
+
+        return element;
+    }
+
     /* View switching & sorting */
 
     private void setView(boolean grid)
@@ -532,6 +557,9 @@ public class UIFilmHomePanel extends UIElement
         this.search.setVisible(grid);
         this.gridView.setEnabled(!grid);
         this.listView.setEnabled(grid);
+
+        /* The card-size slider only makes sense for the card grid. */
+        this.sizeSlider.setVisible(grid);
 
         if (!grid && !this.filter.isEmpty())
         {
