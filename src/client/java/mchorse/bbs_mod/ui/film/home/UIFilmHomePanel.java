@@ -25,7 +25,6 @@ import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
-import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
@@ -126,11 +125,6 @@ public class UIFilmHomePanel extends UIElement
     private final UINewsStrip newsStrip = new UINewsStrip();
     private final UIAdBoard board = new UIAdBoard();
 
-    /* Collapsed-section entries (shown in place of the board/news strip on
-     * narrow windows); each opens the section as an overlay panel. */
-    private final UIIcon boardEntry;
-    private final UIIcon newsEntry;
-
     /* Lists painted last, so remote refreshes only refill when swapped */
     private List<FilmHomeContent.NewsItem> paintedNews = List.of();
     private List<FilmHomeContent.AdItem> paintedAds = List.of();
@@ -219,16 +213,6 @@ public class UIFilmHomePanel extends UIElement
         this.rename = new UIIcon(Icons.EDIT, (b) -> this.renameSelected());
         this.remove = new UIIcon(Icons.REMOVE, (b) -> this.removeSelected());
 
-        this.boardEntry = new UIIcon(Icons.IMAGE, (b) -> this.openBoardOverlay());
-        this.boardEntry.wh(20, 20);
-        this.boardEntry.relative(this.bar).x(1F, -176).y(4);
-        this.boardEntry.tooltip(L10n.lang("bbs.ui.film.home.ads"));
-
-        this.newsEntry = new UIIcon(Icons.FILE, (b) -> this.openNewsOverlay());
-        this.newsEntry.wh(20, 20);
-        this.newsEntry.relative(this.bar).x(1F, -200).y(4);
-        this.newsEntry.tooltip(L10n.lang("bbs.ui.film.home.news"));
-
         this.gridView.relative(bar).x(1F, -128).y(4);
         this.listView.relative(bar).x(1F, -152).y(4);
         this.breadcrumb.relative(bar).xy(196, 9).w(1F, -606).h(14);
@@ -237,7 +221,7 @@ public class UIFilmHomePanel extends UIElement
         this.rename.relative(bar).x(1F, -56).y(4);
         this.remove.relative(bar).x(1F, -32).y(4);
 
-        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.add, this.dupe, this.rename, this.remove, this.boardEntry, this.newsEntry);
+        bar.add(this.search, this.sortButton, this.gridView, this.listView, this.breadcrumb, this.add, this.dupe, this.rename, this.remove);
 
         /* Content: grid */
         this.grid = new UICardGrid<>(this::activateCard, new FilmCardRenderer());
@@ -450,20 +434,17 @@ public class UIFilmHomePanel extends UIElement
         boolean hasNews = !FilmHomeContent.INSTANCE.news.isEmpty() || FilmHomeContent.INSTANCE.fetchingNews;
 
         this.board.setVisible(!collapsed);
-        this.boardEntry.setVisible(collapsed);
         this.newsStrip.setCompact(collapsed);
         this.newsStrip.setVisible(!tiny && hasNews);
-        this.newsEntry.setVisible(tiny && hasNews);
 
         /* Card-size slider and sort stay visible at every width tier; the
          * slider only follows the grid/list switch (setView). Collapsed
-         * tiers hide the breadcrumb, shrink the search box and place the
-         * section entries left of the size slider so everything fits. */
+         * tiers hide the board/news sections outright (no toolbar entries,
+         * per product decision) and only shrink the search box / hide the
+         * breadcrumb to make room. */
         this.breadcrumb.setVisible(!collapsed);
-        this.search.relative(this.bar).xy(8, 4).wh(collapsed ? Math.max(24, Math.min(180, this.area.w - 474)) : 180, 20);
-        this.newsEntry.relative(this.bar).x(1F, -442).y(4);
-        this.boardEntry.relative(this.bar).x(1F, -418).y(4);
-        this.breadcrumb.relative(this.bar).xy(196, 9).w(1F, -(606 + (!collapsed && this.newsEntry.isVisible() ? 48 : 0))).h(14);
+        this.search.relative(this.bar).xy(8, 4).wh(collapsed ? Math.max(24, Math.min(180, this.area.w - 410)) : 180, 20);
+        this.breadcrumb.relative(this.bar).xy(196, 9).w(1F, -606).h(14);
 
         if (tier == LayoutTier.T3)
         {
@@ -1242,43 +1223,6 @@ public class UIFilmHomePanel extends UIElement
 
         context.batcher.gradientHBox(area.x, area.ey() - 2, mid, area.ey(), Colors.setA(accent, 0F), Colors.A100 | accent);
         context.batcher.gradientHBox(mid, area.ey() - 2, area.ex(), area.ey(), Colors.A100 | accent, Colors.setA(accent, 0F));
-    }
-
-    /* Collapsed-section overlays (narrow windows) */
-
-    /** Shows the ad carousel as an overlay panel instead of the side column. */
-    private void openBoardOverlay()
-    {
-        UIOverlayPanel panel = new UIOverlayPanel(L10n.lang("bbs.ui.film.home.ads"));
-
-        UIAdBoard board = new UIAdBoard();
-
-        board.fill(FilmHomeContent.INSTANCE.ads);
-        board.relative(panel.content).xy(6, 6).w(1F, -12).h(1F, -12);
-        panel.content.add(board);
-
-        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
-        int w = Math.min(340, (int) (minecraft.getWindow().getGuiScaledWidth() * 0.9F));
-        int slideH = Math.max(60, (w - 32 - 20) * 3 / 4);
-
-        UIOverlay.addOverlay(this.getContext(), panel, w, 20 + slideH + 108);
-    }
-
-    /** Shows the news strip as an overlay panel when the height collapses it. */
-    private void openNewsOverlay()
-    {
-        UIOverlayPanel panel = new UIOverlayPanel(L10n.lang("bbs.ui.film.home.news"));
-
-        UINewsStrip strip = new UINewsStrip();
-
-        strip.fill(FilmHomeContent.INSTANCE.news);
-        strip.relative(panel.content).xy(6, 6).w(1F, -12).h(1F, -12);
-        panel.content.add(strip);
-
-        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
-        int w = Math.min(380, (int) (minecraft.getWindow().getGuiScaledWidth() * 0.9F));
-
-        UIOverlay.addOverlay(this.getContext(), panel, w, 20 + strip.getPreferredHeight() + 18);
     }
 
     private void renderEmptyState(UIContext context)
