@@ -249,6 +249,11 @@ public class Recorder extends WorldFilmController
 
     public void update()
     {
+        /* The teleport may arrive while the countdown is still running. Release the
+         * mark at that moment so client pose frames and server action clips keep the
+         * same timeline when the player walks away before recording starts. */
+        this.landMark();
+
         if (this.countdown > 0)
         {
             this.countdown -= 1;
@@ -256,7 +261,7 @@ public class Recorder extends WorldFilmController
             return;
         }
 
-        if (this.mark != null && !this.reachedMark())
+        if (this.mark != null && !this.giveUpOnMark())
         {
             return;
         }
@@ -287,33 +292,41 @@ public class Recorder extends WorldFilmController
         super.update();
     }
 
-    /**
-     * Whether the teleport has landed. Given up on after {@link #MARK_TIMEOUT} rather
-     * than awaited forever: a mark inside a wall or up in the air is one the player can
-     * never quite stand on, and a take that never starts is worse than one that starts
-     * slightly off.
-     */
-    private boolean reachedMark()
+    /** Release the mark as soon as the teleported player reaches it. */
+    private void landMark()
     {
-        LocalPlayer player = Minecraft.getInstance().player;
-        double distance = player == null ? Double.MAX_VALUE : this.mark.distance(player.getX(), player.getY(), player.getZ());
-        boolean reached = distance <= MARK_REACHED;
+        if (this.mark != null && this.distanceToMark() <= MARK_REACHED)
+        {
+            this.mark = null;
+        }
+    }
 
+    /**
+     * Whether to begin without the teleport ever having landed. Give up after
+     * {@link #MARK_TIMEOUT} ticks so an unreachable mark cannot hold a recording forever.
+     */
+    private boolean giveUpOnMark()
+    {
         this.markWait += 1;
 
-        if (!reached && this.markWait < MARK_TIMEOUT)
+        if (this.markWait < MARK_TIMEOUT)
         {
             return false;
         }
 
-        if (!reached)
-        {
-            LOGGER.warn("[BBS film] Recording is starting {} blocks off the replay's mark - the teleport never landed.", String.format("%.2f", distance));
-        }
+        LOGGER.warn("[BBS film] Recording is starting {} blocks off the replay's mark - the teleport never landed.",
+            String.format("%.2f", this.distanceToMark()));
 
         this.mark = null;
 
         return true;
+    }
+
+    private double distanceToMark()
+    {
+        LocalPlayer player = Minecraft.getInstance().player;
+
+        return player == null ? Double.MAX_VALUE : this.mark.distance(player.getX(), player.getY(), player.getZ());
     }
 
     private void captureMobs(LocalPlayer player)

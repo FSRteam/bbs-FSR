@@ -156,9 +156,9 @@ public class UIFilmPreview extends UIElement
         {
             UIFilmController controller = this.panel.getController();
 
-            menu.autoKeys();
-            controller.populateCameraModeMenu(menu);
-
+            /* The mode button's context menu is intentionally limited to the
+             * three orbit-camera actions. Camera modes themselves remain in the
+             * left-click mode picker owned by UIFilmController. */
             menu.action(Icons.MOVE_TO, UIKeys.FILM_REPLAY_ORBIT_TELEPORT_TO_RECORDING, controller::teleportOrbitPivotToReplay);
             menu.action(Icons.LINK, UIKeys.FILM_CONTROLLER_KEYS_ATTACH_ORBIT, controller.orbit.isAttached(), controller::toggleOrbitAttachment);
             menu.action(Icons.FRUSTUM, UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_ORTHO, controller.orbit.isOrtho(), controller.orbit::toggleOrtho);

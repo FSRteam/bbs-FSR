@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 import java.util.HexFormat;
 
 /** Source-level guards for render-state migrations that require an in-game visual smoke. */
@@ -29,6 +30,7 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path TRANSLUCENT_QUEUE = Path.of("src/client/java/mchorse/bbs_mod/forms/FormTranslucentQueue.java");
     private static final Path VERTEX_CONSUMERS = Path.of("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
     private static final Path MODEL_INSTANCE = Path.of("src/client/java/mchorse/bbs_mod/cubic/ModelInstance.java");
+    private static final Path MODEL_VAO_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/cubic/render/vao/ModelVAORenderer.java");
     private static final Path KEYFRAME_EDITOR = Path.of("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/UIKeyframeEditor.java");
     private static final Path NESTED_EDIT = Path.of("src/client/java/mchorse/bbs_mod/ui/forms/UINestedEdit.java");
     private static final Path FORM_EDITOR = Path.of("src/client/java/mchorse/bbs_mod/ui/forms/editors/UIFormEditor.java");
@@ -39,6 +41,12 @@ public final class RenderRuntimeMigrationSourceTest
     private static final String ICONS_SHA256 = "c07f2b7db84e1e0afb7623126ef88744b6d0ec804cee78f6ff4ebbfb9b9bfe3b";
 
     private static final String[] MIGRATED_LANGUAGE_KEYS = {
+        "bbs.config.workspace.keyframe_panel_width",
+        "bbs.config.workspace.keyframe_panel_width-comment",
+        "bbs.config.viewport.preview_icons_auto_hide",
+        "bbs.config.viewport.preview_icons_auto_hide-comment",
+        "bbs.config.timeline.stop_playback_on_scrub",
+        "bbs.config.timeline.stop_playback_on_scrub-comment",
         "bbs.config.workspace.keep_frame_on_exit",
         "bbs.config.workspace.keep_frame_on_exit-comment",
         "bbs.config.camera.orbit_axis_ortho",
@@ -84,6 +92,15 @@ public final class RenderRuntimeMigrationSourceTest
         "bbs.ui.transforms.space.wip",
         "bbs.ui.transforms.space.world",
         "interpolations.step_tick"
+    };
+
+    private static final String[] NEW_SETTINGS_LANGUAGE_KEYS = {
+        "bbs.config.workspace.keyframe_panel_width",
+        "bbs.config.workspace.keyframe_panel_width-comment",
+        "bbs.config.viewport.preview_icons_auto_hide",
+        "bbs.config.viewport.preview_icons_auto_hide-comment",
+        "bbs.config.timeline.stop_playback_on_scrub",
+        "bbs.config.timeline.stop_playback_on_scrub-comment"
     };
 
     private static final String[] SLIDER_SOURCES = {
@@ -217,7 +234,11 @@ public final class RenderRuntimeMigrationSourceTest
         String framebuffer = compact(Files.readString(root.resolve(FRAMEBUFFER_RENDERER)));
         String queue = compact(Files.readString(root.resolve(TRANSLUCENT_QUEUE)));
         String consumers = compact(Files.readString(root.resolve(VERTEX_CONSUMERS)));
+        String irisUtils = compact(Files.readString(root.resolve(Path.of("src/client/java/mchorse/bbs_mod/utils/iris/IrisUtils.java"))));
+        String rendering = compact(Files.readString(root.resolve(Path.of("src/client/java/mchorse/bbs_mod/client/BBSRendering.java"))));
         String modelInstance = compact(Files.readString(root.resolve(MODEL_INSTANCE)));
+        String modelVaoRenderer = compact(Files.readString(root.resolve(MODEL_VAO_RENDERER)));
+        String modelShader = compact(Files.readString(root.resolve(Path.of("src/main/resources/assets/bbs/shaders/core/model.fsh"))));
         String mixin = compact(Files.readString(root.resolve(RENDER_LAYER_MIXIN)));
         String mixins = compact(Files.readString(root.resolve(CLIENT_MIXINS)));
 
@@ -251,13 +272,42 @@ public final class RenderRuntimeMigrationSourceTest
                 && queue.contains("boolean previousLayout = BBSRendering.applyIrisVertexLayout(this.extendedLayout);")
                 && queue.contains("buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());")
                 && queue.contains("BBSRendering.restoreIrisVertexLayout(previousLayout);")
-                && consumers.contains("boolean extendedLayout = BBSRendering.captureIrisVertexLayout();"),
+                && queue.contains("private static void setupModelSamplers()")
+                && occurrences(queue, "setupModelSamplers();") >= 3
+                && queue.contains("private static void teardownModelSamplers()")
+                && occurrences(queue, "teardownModelSamplers();") >= 3
+                && queue.contains("game.gameRenderer.lightTexture().turnOnLightLayer();")
+                && queue.contains("game.gameRenderer.overlayTexture().setupOverlayColor();")
+                && queue.contains("game.gameRenderer.lightTexture().turnOffLightLayer();")
+                && queue.contains("game.gameRenderer.overlayTexture().teardownOverlayColor();")
+                && queue.contains("float[] previousShaderColor = RenderSystem.getShaderColor().clone();")
+                && queue.contains("RenderSystem.setShaderColor(1F, 1F, 1F, 1F);")
+                && consumers.contains("boolean extendedLayout = BBSRendering.captureIrisVertexLayout();")
+                && consumers.contains("BBSRendering.beginIrisBufferUpload(source)")
+                && consumers.contains("BBSRendering.endIrisBufferUpload(previousLayout)")
+                && irisUtils.contains("IrisExtendedBufferBuilder")
+                && irisUtils.contains("beginBufferUpload(BufferBuilder builder)")
+                && irisUtils.contains("!extended.iris$extending()")
+                && rendering.contains("beginIrisBufferUpload(com.mojang.blaze3d.vertex.BufferBuilder builder)"),
             "deferred vanilla render layers stopped writing depth unconditionally, so item and block forms pile their faces");
         check(queue.contains("this(vao, BBSShaders::getModel, PASS_TRANSLUCENT, true, texture, modelView, normalMat,")
                 && queue.contains("this(vao, BBSShaders::getModel, PASS_TRANSLUCENT, true, armatureSnapshot, uploadCount,")
-                && modelInstance.contains("VertexBufferCommand(buffer, () -> shader, true, texture, modelView, normalMat, origin, this.isCulling(), null, null)"),
+                && modelInstance.contains("PASS_TEX_OPAQUE")
+                && modelInstance.contains("PASS_TEX_TRANSLUCENT")
+                && modelShader.contains("float texAlpha = color.a")
+                && modelShader.contains("PassMode == 3")
+                && modelShader.contains("PassMode == 4")
+                && queue.contains("!BBSRendering.isIrisWorldForms()")
+                && rendering.contains("public static boolean isIrisWorldForms()")
+                && modelVaoRenderer.contains("Uniform colorModulator = shader.getUniform(\"ColorModulator\");")
+                && modelVaoRenderer.contains("colorModulator.set(1F, 1F, 1F, 1F);"),
             "split-pass solid geometry stopped writing depth in the deferred replay, so fully translucent textures self-blend");
-        check(queue.contains("this(buffer, shader, false, texture, modelView, normalMat, origin, cull, preDraw, postDraw);")
+        check(modelInstance.contains("drawWithStableModelColor(mesh, shader, bbsModelShader)")
+                && modelInstance.contains("drawWithStableModelColor(buffer, shader, modelView, bbsModelShader)")
+                && modelInstance.contains("RenderSystem.setShaderColor(1F, 1F, 1F, 1F);"),
+            "CPU model buffers can inherit a stale global ColorModulator");
+        check(queue.contains("PASS_TRANSLUCENT, false")
+                && queue.contains("boolean closeBuffer")
                 && billboard.contains("VertexBufferCommand(buffer, () -> capturedShader, texture,")
                 && framebuffer.contains("VertexBufferCommand(buffer, () -> capturedShader, texture,")
                 && label.contains("VertexBufferCommand(buffer, GameRenderer::getPositionColorShader, null,"),
@@ -266,12 +316,46 @@ public final class RenderRuntimeMigrationSourceTest
 
     private static void checkResources(Path root) throws IOException, NoSuchAlgorithmException
     {
-        for (String locale : new String[] {"en_us", "ru_ru", "zh_cn"})
+        String settings = Files.readString(root.resolve(Path.of("src/main/java/mchorse/bbs_mod/BBSSettings.java")));
+        String viewport = section(settings, "builder.category(\"viewport\"", "builder.category(\"timeline\"");
+        String timeline = section(settings, "builder.category(\"timeline\"", "builder.category(\"workspace\"");
+        String workspace = section(settings, "builder.category(\"workspace\"", "builder.category(\"recording\"");
+
+        check(viewport.contains("editorPreviewIconsAutoHide")
+                && timeline.contains("editorStopPlaybackOnScrub")
+                && timeline.contains("editorRestartOnSeek")
+                && workspace.contains("editorKeyframePanelWidth")
+                && !workspace.contains("editorStopPlaybackOnScrub")
+                && !workspace.contains("editorPreviewIconsAutoHide")
+                && !workspace.contains("editorRestartOnSeek"),
+            "post-sync settings are registered under the wrong category");
+
+        Path stringsDir = root.resolve("src/client/resources/assets/bbs/assets/strings");
+        List<Path> localeFiles;
+
+        try (var files = Files.list(stringsDir))
         {
-            Path path = root.resolve("src/client/resources/assets/bbs/assets/strings/" + locale + ".json");
-            MapType strings = DataToString.mapFromString(Files.readString(path));
+            localeFiles = files.filter(path -> path.getFileName().toString().endsWith(".json")).toList();
+        }
+
+        for (Path localePath : localeFiles)
+        {
+            String locale = localePath.getFileName().toString();
+            MapType strings = DataToString.mapFromString(Files.readString(localePath));
 
             check(strings != null, "failed to parse migrated locale: " + locale);
+
+            for (String key : NEW_SETTINGS_LANGUAGE_KEYS)
+            {
+                check(strings.has(key) && !strings.getString(key).isEmpty(),
+                    locale + " is missing new settings language key: " + key);
+            }
+        }
+
+        for (String locale : new String[] {"en_us", "ru_ru", "zh_cn"})
+        {
+            Path path = stringsDir.resolve(locale + ".json");
+            MapType strings = DataToString.mapFromString(Files.readString(path));
 
             for (String key : MIGRATED_LANGUAGE_KEYS)
             {
@@ -308,11 +392,21 @@ public final class RenderRuntimeMigrationSourceTest
                 && formEditor.contains("this.formsList.setCurrentScroll(added);")
                 && formEditor.contains("this.pickForm(added);"),
             "new body attachments are not revealed and selected after the form list refresh");
-        check(filmPreview.contains("controller.populateCameraModeMenu(menu);")
-                && filmPreview.contains("controller::teleportOrbitPivotToReplay")
+        String cameraContext = section(filmPreview, "this.perspective.context", "this.recordReplay =");
+
+        check(formEditor.contains("this.listSection = new UIElement();")
+                && formEditor.contains("this.bodyPartEditor.relative(this.forms).w(1F).y(1F).h(0).anchorY(1F);")
+                && formEditor.contains("private void resizeSidebar()")
+                && formEditor.contains("this.listSection.h(1F, -height);")
+                && formEditor.contains("if (entry.part == part)")
+                && formEditor.contains("this.formsList.setCurrentScroll(added);" )
+                && formEditor.contains("this.pickForm(added);"),
+            "body-part settings are not pinned to the sidebar bottom after adding an attachment");
+        check(!cameraContext.contains("controller.populateCameraModeMenu(menu);")
+                && cameraContext.contains("controller::teleportOrbitPivotToReplay")
                 && filmPreview.contains("controller::toggleOrbitAttachment")
                 && filmPreview.contains("controller.orbit::toggleOrtho"),
-            "camera context menu no longer exposes all modes and orbit actions");
+            "camera mode button context menu must contain only the three orbit-camera actions");
     }
 
     private static void checkSliderWiring(Path root) throws IOException

@@ -1,4 +1,10 @@
 {
+	"bbs.config.workspace.keyframe_panel_width": "Keyframe panel width",
+	"bbs.config.workspace.keyframe_panel_width-comment": "Width of the keyframe properties panel in the editor.",
+	"bbs.config.viewport.preview_icons_auto_hide": "Auto-hide preview icons",
+	"bbs.config.viewport.preview_icons_auto_hide-comment": "When enabled, the preview icon bar stays hidden until the mouse is over the preview.",
+	"bbs.config.timeline.stop_playback_on_scrub": "Stop playback on scrubbing",
+	"bbs.config.timeline.stop_playback_on_scrub-comment": "When enabled, dragging the timeline cursor stops film playback.",
     "bbs.config.title": "BBS",
     "bbs.config.appearance.axes_scale": "Escala dos eixos",
     "bbs.config.appearance.axes_scale-comment": "Dertemina o tamanho dos eixos, se os eixos forem demasiado grandes, coê pode ajustar de acordo com o seu gosto",

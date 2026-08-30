@@ -421,6 +421,18 @@ public abstract class UINumericInput <T extends UINumericInput<T>> extends UIBas
         }
     }
 
+    /** Apply this field's own gesture while keeping a focused textbox in sync. */
+    protected void setValueFromGesture(double value)
+    {
+        this.setValueAndNotify(value);
+
+        if (this.textbox.isFocused())
+        {
+            this.updateTextField();
+            this.textbox.moveCursorToEnd();
+        }
+    }
+
     protected void updateTextField()
     {
         if (Window.isAltPressed())
@@ -506,13 +518,13 @@ public abstract class UINumericInput <T extends UINumericInput<T>> extends UIBas
         {
             if (context.isHeld(GLFW.GLFW_KEY_UP))
             {
-                this.setValueAndNotify(this.value + this.getValueModifier());
+                this.setValueFromGesture(this.value + this.getValueModifier());
 
                 return true;
             }
             else if (context.isHeld(GLFW.GLFW_KEY_DOWN))
             {
-                this.setValueAndNotify(this.value - this.getValueModifier());
+                this.setValueFromGesture(this.value - this.getValueModifier());
 
                 return true;
             }

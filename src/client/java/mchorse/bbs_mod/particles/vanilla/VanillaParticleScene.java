@@ -125,7 +125,23 @@ public final class VanillaParticleScene
         Matrix4f previousModelView = new Matrix4f(RenderSystem.getModelViewMatrix());
         this.applyModelView(previewCamera.view);
 
+        boolean blendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+        boolean depthTestEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        boolean depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
         boolean culling = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        float[] shaderColor = RenderSystem.getShaderColor();
+        float previousR = shaderColor[0];
+        float previousG = shaderColor[1];
+        float previousB = shaderColor[2];
+        float previousA = shaderColor[3];
+
+        /* Particle providers multiply their atlas sample by the global shader
+         * colour. A Color Pose or a previous form may leave that multiplier
+         * dark/transparent, making otherwise valid block and item particles
+         * appear black or disappear. Preview particles own a neutral multiplier. */
+        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+        Minecraft mc = minecraft();
+        mc.gameRenderer.lightTexture().turnOnLightLayer();
         RenderSystem.disableCull();
         rendering = true;
 
@@ -168,14 +184,13 @@ public final class VanillaParticleScene
         {
             rendering = false;
 
-            if (culling)
-            {
-                RenderSystem.enableCull();
-            }
-            else
-            {
-                RenderSystem.disableCull();
-            }
+            RenderSystem.setShaderColor(previousR, previousG, previousB, previousA);
+            mc.gameRenderer.lightTexture().turnOffLightLayer();
+
+            if (blendEnabled) RenderSystem.enableBlend(); else RenderSystem.disableBlend();
+            if (depthTestEnabled) RenderSystem.enableDepthTest(); else RenderSystem.disableDepthTest();
+            RenderSystem.depthMask(depthMask);
+            if (culling) RenderSystem.enableCull(); else RenderSystem.disableCull();
 
             this.applyModelView(previousModelView);
         }

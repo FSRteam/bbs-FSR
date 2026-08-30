@@ -152,6 +152,7 @@ public class BBSSettings {
 	public static ValueBoolean editorSeconds;
 	public static ValueBoolean editorTimelineGrid;
 	public static ValueString keyframeDefaultInterpolation;
+	public static ValueBoolean keyframePreview;
 	public static ValueInt editorPeriodicSave;
 	public static ValueBoolean editorHorizontalFlight;
 	public static ValueBoolean editorOrbitMovementRequiresFlight;
@@ -209,6 +210,7 @@ public class BBSSettings {
 	public static ValueBoolean overlayGradientBorder;
 
 	public static ValueBoolean shaderCurvesEnabled;
+	public static ValueBoolean translucencyQueue;
 
 	public static ValueBoolean audioWaveformVisibleInPreview;
 	public static ValueBoolean audioWaveformVisibleInKeyframes;
@@ -680,9 +682,15 @@ public class BBSSettings {
 			"clip_preview", "onion_skin", "motion_path", "ik_debug", "physics_debug");
 		layoutMigrated |= migrateLegacyCategory(root, "editor", "timeline",
 			"duration", "jump", "loop", "seconds", "timeline_grid", "keyframe_default_interpolation",
-			"snap_to_markers", "rewind", "restart_on_seek", "horizontal_clip_editor");
+			"keyframe_preview", "snap_to_markers", "rewind", "restart_on_seek", "horizontal_clip_editor", "stop_playback_on_scrub");
 		layoutMigrated |= migrateLegacyCategory(root, "editor", "workspace",
 			"layout", "resizable_panels", "keyframe_panel_width", "periodic_save", "minutes_backup", "keep_frame_on_exit");
+		/* 2.5 briefly registered these two editor values in workspace before the
+		 * category split was completed. Read that shape too, without overriding a
+		 * value already migrated to its final category. */
+		layoutMigrated |= migrateLegacyValue(root, "workspace", "stop_playback_on_scrub", "timeline", "stop_playback_on_scrub");
+		layoutMigrated |= migrateLegacyValue(root, "workspace", "preview_icons_auto_hide", "viewport", "preview_icons_auto_hide");
+		layoutMigrated |= migrateLegacyValue(root, "workspace", "restart_on_seek", "timeline", "restart_on_seek");
 		layoutMigrated |= migrateLegacyCategory(root, "debug", "viewport", "ik_debug", "physics_debug");
 		layoutMigrated |= migrateLegacyCategory(root, "personalization", "timeline", "track_width", "keyframe_default_shape");
 		layoutMigrated |= migrateLegacyCategory(root, "appearance", "workspace", "clip_auto_name");
@@ -928,6 +936,7 @@ public class BBSSettings {
 		editorPreviewCustomWidth = builder.getInt("preview_custom_width", 1280, 2, 16384);
 		editorPreviewCustomHeight = builder.getInt("preview_custom_height", 720, 2, 16384);
 		editorPreviewResolutionScale = builder.getFloat("preview_resolution_scale", 2F, 1F, 3F).slider();
+		editorPreviewIconsAutoHide = builder.getBoolean("preview_icons_auto_hide", true);
 		builder.register(editorOnionSkin = new ValueOnionSkin("onion_skin"));
 		builder.register(editorMotionPath = new ValueMotionPath("motion_path"));
 		builder.register(ikDebug = new ValueIKDebug("ik_debug"));
@@ -940,11 +949,14 @@ public class BBSSettings {
 		editorSeconds = builder.getBoolean("seconds", false);
 		editorTimelineGrid = builder.getBoolean("timeline_grid", false);
 		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());
+		keyframePreview = builder.getBoolean("keyframe_preview", true);
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
 		editorRewind = builder.getBoolean("rewind", true);
 		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", true);
+		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);
+		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
 
 		builder.category("workspace", Icons.EDITOR);
 		builder.register(editorLayoutSettings = new ValueEditorLayout("layout"));
@@ -954,9 +966,6 @@ public class BBSSettings {
 		editorKeyframePanelWidth = builder.getInt("keyframe_panel_width", 140, 80, 480);
 		editorClipAutoName = builder.getBoolean("clip_auto_name", true);
 		editorKeepFrameOnExit = builder.getBoolean("keep_frame_on_exit", false);
-		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
-		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);
-		editorPreviewIconsAutoHide = builder.getBoolean("preview_icons_auto_hide", true);
 
 		builder.category("recording", Icons.FILM);
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
@@ -975,6 +984,7 @@ public class BBSSettings {
 		entitySelectorsPropertyWhitelist = builder.getString("entity_selectors_whitelist", "CustomName,Name");
 		damageControl = builder.getBoolean("damage_control", true);
 		shaderCurvesEnabled = builder.getBoolean("shader_curves", true);
+		translucencyQueue = builder.getBoolean("translucency_queue", false);
 		multiskinMultiThreaded = builder.getBoolean("multiskin_multithreaded", true);
 
 		builder.category("audio", Icons.SOUND);

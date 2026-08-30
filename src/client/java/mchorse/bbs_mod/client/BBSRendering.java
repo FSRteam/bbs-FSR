@@ -796,6 +796,12 @@ public class BBSRendering
         return IrisUtils.isShaderPackEnabled();
     }
 
+    /** True while forms are rendered inside Iris' shader-pack world pass. */
+    public static boolean isIrisWorldForms()
+    {
+        return isRenderingWorld() && isIrisShadersEnabled();
+    }
+
     public static boolean isIrisShadowPass()
     {
         if (!iris)
@@ -804,6 +810,26 @@ public class BBSRendering
         }
 
         return IrisUtils.isShadowPass();
+    }
+
+    /** Begin an Iris-aware vanilla buffer upload; returns the previous layout flag. */
+    public static boolean beginIrisBufferUpload(com.mojang.blaze3d.vertex.BufferBuilder builder)
+    {
+        if (!iris)
+        {
+            return false;
+        }
+
+        return IrisUtils.beginBufferUpload(builder);
+    }
+
+    /** Restore the layout flag returned by {@link #beginIrisBufferUpload}. */
+    public static void endIrisBufferUpload(boolean previous)
+    {
+        if (iris)
+        {
+            IrisUtils.endBufferUpload(previous);
+        }
     }
 
     /**

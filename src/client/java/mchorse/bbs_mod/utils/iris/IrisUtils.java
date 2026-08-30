@@ -25,9 +25,11 @@ import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.FloatCachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.IntCachedUniform;
 import net.irisshaders.iris.vertices.ImmediateState;
+import net.irisshaders.iris.vertices.IrisExtendedBufferBuilder;
 import net.irisshaders.iris.vertices.NormI8;
 import net.irisshaders.iris.vertices.NormalHelper;
 import net.irisshaders.iris.vertices.views.TriView;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -191,6 +193,30 @@ public class IrisUtils
     public static boolean isShadowPass()
     {
         return IrisApi.getInstance().isRenderingShadowPass();
+    }
+
+    /**
+     * Keep Iris' upload-time vertex format in sync with the actual builder. Iris 1.8.8
+     * temporarily enables its extended entity stride while the world is rendered, but
+     * vanilla builders still contain the 36-byte entity format. Uploading one of those
+     * builders with the extended flag set makes the later VAO read the wrong offsets,
+     * which presents as black/missing materials or torn geometry.
+     */
+    public static boolean beginBufferUpload(BufferBuilder builder)
+    {
+        boolean previous = ImmediateState.renderWithExtendedVertexFormat;
+
+        if (builder instanceof IrisExtendedBufferBuilder extended && !extended.iris$extending())
+        {
+            ImmediateState.renderWithExtendedVertexFormat = false;
+        }
+
+        return previous;
+    }
+
+    public static void endBufferUpload(boolean previous)
+    {
+        ImmediateState.renderWithExtendedVertexFormat = previous;
     }
 
     /**

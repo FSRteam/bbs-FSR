@@ -135,6 +135,9 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     private boolean playing;
     private Consumer<Pair<Form, String>> bonePicking;
 
+    /** Upper part of the sidebar; its height shrinks by the body-part editor's content height. */
+    private UIElement listSection;
+
     static
     {
         register(BillboardForm.class, UIBillboardForm::new);
@@ -230,8 +233,9 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                 return current != null && current.part != null;
             });
 
-        UIElement listSection = new UIElement();
-        listSection.relative(this.forms).w(1F).h(0.5F);
+        this.listSection = new UIElement();
+        this.listSection.relative(this.forms).w(1F).h(1F);
+        UIElement listSection = this.listSection;
         UIElement listToolbarBg = new UIElement()
         {
             @Override
@@ -283,8 +287,9 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         this.formsList.relative(listSection).y(20).h(1F, -20).w(1F);
         listSection.add(listToolbarBg, listToolbar, this.formsList);
 
+        /* Keep the settings panel at the sidebar bottom; the list above it gets the rest. */
         this.bodyPartEditor = new UIBodyPartEditor(this);
-        this.bodyPartEditor.relative(this.forms).w(1F).y(0.5F).h(0.5F);
+        this.bodyPartEditor.relative(this.forms).w(1F).y(1F).h(0).anchorY(1F);
 
         this.formEditor = new UIElement();
         this.formEditor.full(this);
@@ -815,6 +820,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         if (entry == null)
         {
             this.bodyPartEditor.setVisible(false);
+            this.resizeSidebar();
             return;
         }
 
@@ -825,7 +831,23 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             this.bodyPartEditor.setPart(entry.part, entry.form);
         }
 
+        this.resizeSidebar();
         this.switchEditor(entry.getForm());
+    }
+
+    /** Fit the body-part editor to its content at the bottom of the sidebar. */
+    private void resizeSidebar()
+    {
+        int height = 0;
+
+        if (this.bodyPartEditor.isVisible())
+        {
+            height = Math.min((int) this.bodyPartEditor.scroll.scrollSize, this.forms.area.h / 2);
+        }
+
+        this.bodyPartEditor.h(height);
+        this.listSection.h(1F, -height);
+        this.forms.resize();
     }
 
     public void openFormList(Form current, Consumer<Form> callback)
@@ -857,6 +879,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
         form = FormUtils.copy(form);
 
         this.bodyPartEditor.setVisible(false);
+        this.resizeSidebar();
 
         if (this.switchEditor(form))
         {
@@ -916,6 +939,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
         this.formsList.setForm(this.form);
         this.formsList.setCurrentScroll(current);
+        this.resizeSidebar();
         this.updateFormListButtons();
     }
 
@@ -983,6 +1007,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     public void resize()
     {
         super.resize();
+        this.resizeSidebar();
         this.updateFormListButtons();
     }
 

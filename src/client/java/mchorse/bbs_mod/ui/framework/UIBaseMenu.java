@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.Keys;
+import mchorse.bbs_mod.ui.framework.elements.IFocusedUIElement;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.IViewport;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -152,13 +153,36 @@ public abstract class UIBaseMenu
         {
             if (this.root.isEnabled())
             {
+                IFocusedUIElement focused = this.context.activeElement;
                 IUIElement element = this.dispatchPointer(this.root::mouseClicked);
 
+                this.unfocusClickedAway(focused, element, mouseButton);
                 result = element != null;
             }
         }
 
         return result;
+    }
+
+    private void unfocusClickedAway(IFocusedUIElement focused, IUIElement element, int mouseButton)
+    {
+        if (focused == null || mouseButton != 0)
+        {
+            return;
+        }
+
+        if (this.context.activeElement != focused || element == focused)
+        {
+            return;
+        }
+
+        if (focused instanceof UIElement && element instanceof UIElement
+            && ((UIElement) focused).isDescendant((UIElement) element))
+        {
+            return;
+        }
+
+        this.context.unfocus();
     }
 
     public boolean mouseScrolled(int x, int y, double h, double v)

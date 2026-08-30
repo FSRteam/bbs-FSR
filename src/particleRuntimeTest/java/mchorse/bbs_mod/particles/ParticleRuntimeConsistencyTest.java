@@ -375,7 +375,11 @@ public final class ParticleRuntimeConsistencyTest
             "vanilla particle forms are not routed into the isolated preview scene");
         check(scene.contains("ParticleEngineInvoker")
                 && scene.contains("MAX_PARTICLES = 4096")
-                && scene.contains("applyModelView(previousModelView)"),
+                && scene.contains("applyModelView(previousModelView)")
+                && scene.contains("RenderSystem.setShaderColor(1F, 1F, 1F, 1F)")
+                && scene.contains("mc.gameRenderer.lightTexture().turnOnLightLayer()")
+                && scene.contains("mc.gameRenderer.lightTexture().turnOffLightLayer()")
+                && scene.contains("GL11.GL_DEPTH_WRITEMASK"),
             "vanilla particle scene lost isolation, bounds, or model-view restoration");
         check(context.contains("public long modelRendererTick")
                 && context.contains("modelRenderer(long tick)"),

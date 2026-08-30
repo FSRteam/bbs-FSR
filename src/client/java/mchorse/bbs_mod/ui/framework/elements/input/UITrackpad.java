@@ -83,7 +83,7 @@ public class UITrackpad extends UINumericInput<UITrackpad>
     {
         if (context.mouseButton == 2 && !this.isDragging() && this.area.isInside(context))
         {
-            this.setValueAndNotify(-this.value);
+            this.setValueFromGesture(-this.value);
 
             return true;
         }
@@ -259,11 +259,11 @@ public class UITrackpad extends UINumericInput<UITrackpad>
         {
             if (context.mouseWheel > 0)
             {
-                this.setValueAndNotify(this.value + this.getValueModifier());
+                this.setValueFromGesture(this.value + this.getValueModifier());
             }
             else
             {
-                this.setValueAndNotify(this.value - this.getValueModifier());
+                this.setValueFromGesture(this.value - this.getValueModifier());
             }
 
             return true;
