@@ -17,6 +17,9 @@ import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationBridge;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
+import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
@@ -132,6 +135,9 @@ public class BBSModClient
     private static KeyMapping keyDemorph;
     private static KeyMapping keyTeleport;
     private static KeyMapping keyZoom;
+
+    /* Temporary multiview validation: Ctrl+M toggles the second off-screen render pass. */
+    private static KeyMapping keyDebugMultiview;
 
     private static UIDashboard dashboard;
 
@@ -562,6 +568,7 @@ public class BBSModClient
         register.accept(keyDemorph);
         register.accept(keyTeleport);
         register.accept(keyZoom);
+        register.accept(keyDebugMultiview);
     }
 
     public static void onRenderAfterEntities(IBbsWorldRenderContext context)
@@ -619,7 +626,7 @@ public class BBSModClient
     {
         FormTranslucentQueue.flush();
 
-        if (videoRecorder.isRecording() && BBSRendering.canRender)
+        if (videoRecorder.isRecording() && BBSRendering.canRender && !BBSRendering.isApplyingSecondaryCamera())
         {
             minecraftSoundCapture.captureFrame();
             videoRecorder.recordFrame();
@@ -723,6 +730,7 @@ public class BBSModClient
 
     public static void onClientTickPre()
     {
+        LivePlayerItemUse.endFrame();
         ClientApiCompat.emitStartClientTick(Minecraft.getInstance());
         BBSRendering.startTick();
     }
@@ -782,6 +790,37 @@ public class BBSModClient
         }
         while (keyDemorph.consumeClick()) ClientNetwork.sendPlayerForm(null);
         while (keyTeleport.consumeClick()) keyTeleport();
+
+        while (keyDebugMultiview.consumeClick())
+        {
+            if (!mchorse.bbs_mod.graphics.window.Window.isCtrlPressed())
+            {
+                continue;
+            }
+
+            boolean on = !BBSRendering.isSecondaryViewEnabled();
+
+            if (on && UIScreen.getCurrentMenu() instanceof UIDashboard dashboard
+                && dashboard.getPanels().panel instanceof UIFilmPanel panel)
+            {
+                panel.ensurePreview2Visible();
+            }
+
+            BBSRendering.setSecondaryViewEnabled(on);
+
+            if (mc.player != null)
+            {
+                net.minecraft.client.Camera cam = mc.gameRenderer.getMainCamera();
+                String yaw = cam != null ? String.valueOf(cam.getYRot()) : "null-cam";
+
+                mc.player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal(
+                        "multiview debug: " + (on ? "ON" : "OFF") + " (mainYaw=" + yaw + ")"
+                    ),
+                    true
+                );
+            }
+        }
 
         if (mc.player != null)
         {
@@ -963,6 +1002,7 @@ public class BBSModClient
 
     public static void onClientStarted()
     {
+        ItemUsePose.setSource(ThirdPersonItemUse::get);
         BBSRendering.setupFramebuffer();
         BBSMod.getProvider().register(new MinecraftSourcePack());
 
@@ -994,6 +1034,7 @@ public class BBSModClient
         keyDemorph = createKey("demorph", GLFW.GLFW_KEY_PERIOD);
         keyTeleport = createKey("teleport", GLFW.GLFW_KEY_Y);
         keyZoom = createKeyMouse("zoom", 2);
+        keyDebugMultiview = createKey("debug_multiview", GLFW.GLFW_KEY_M);
     }
 
     private static void keyRecordVideo(Minecraft mc)

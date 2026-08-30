@@ -244,45 +244,40 @@ public class InputRenderer
             return;
         }
 
-        boolean inputUnfocused = context.activeElement == null;
+        PressedKey last = null;
+        int offset = -1000;
 
-        if (inputUnfocused)
+        for (PressedKey pressed : this.pressedKeys)
         {
-            PressedKey last = null;
-            int offset = -1000;
-
-            for (PressedKey pressed : this.pressedKeys)
+            if (pressed.key == key)
             {
-                if (pressed.key == key)
-                {
-                    offset = pressed.increment(Batcher2D.getDefaultTextRenderer());
-                }
-                else if (offset != -1000)
-                {
-                    pressed.x += offset;
-                }
-
-                last = pressed;
+                offset = pressed.increment(Batcher2D.getDefaultTextRenderer());
+            }
+            else if (offset != -1000)
+            {
+                pressed.x += offset;
             }
 
-            if (offset != -1000)
-            {
-                return;
-            }
-
-            offset = BBSSettings.keystrokeOffset.get();
-            int x = last == null ? 0 : last.x + last.width + 18;
-            PressedKey newKey = new PressedKey(key, x);
-
-            newKey.setupName(Minecraft.getInstance().font);
-
-            if (newKey.x + newKey.width + offset > context.menu.width - offset * 2)
-            {
-                newKey.x = 0;
-            }
-
-            this.pressedKeys.add(newKey);
+            last = pressed;
         }
+
+        if (offset != -1000)
+        {
+            return;
+        }
+
+        offset = BBSSettings.keystrokeOffset.get();
+        int x = last == null ? 0 : last.x + last.width + 18;
+        PressedKey newKey = new PressedKey(key, x);
+
+        newKey.setupName(Minecraft.getInstance().font);
+
+        if (newKey.x + newKey.width + offset > context.menu.width - offset * 2)
+        {
+            newKey.x = 0;
+        }
+
+        this.pressedKeys.add(newKey);
     }
 
     /**

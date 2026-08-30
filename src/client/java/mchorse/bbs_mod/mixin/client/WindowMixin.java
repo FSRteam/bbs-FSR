@@ -58,7 +58,10 @@ public class WindowMixin
     @Inject(method = "getWidth", at = @At("HEAD"), cancellable = true)
     public void onGetWidth(CallbackInfoReturnable<Integer> info)
     {
-        if (BBSRendering.canReplaceFramebuffer())
+        /* A secondary world pass renders into its own target. Export-size
+         * overrides belong only to the primary pass; leaking them here makes
+         * camera/viewport helpers disagree with the active secondary target. */
+        if (BBSRendering.canReplaceFramebuffer() && !BBSRendering.isApplyingSecondaryCamera())
         {
             info.setReturnValue(BBSRendering.getVideoWidth());
         }
@@ -67,7 +70,7 @@ public class WindowMixin
     @Inject(method = "getHeight", at = @At("HEAD"), cancellable = true)
     public void onGetHeight(CallbackInfoReturnable<Integer> info)
     {
-        if (BBSRendering.canReplaceFramebuffer())
+        if (BBSRendering.canReplaceFramebuffer() && !BBSRendering.isApplyingSecondaryCamera())
         {
             info.setReturnValue(BBSRendering.getVideoHeight());
         }
@@ -76,7 +79,7 @@ public class WindowMixin
     @Inject(method = "getScreenWidth", at = @At("HEAD"), cancellable = true)
     public void onGetFramebufferWidth(CallbackInfoReturnable<Integer> info)
     {
-        if (BBSRendering.canReplaceFramebuffer())
+        if (BBSRendering.canReplaceFramebuffer() && !BBSRendering.isApplyingSecondaryCamera())
         {
             info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoWidth() / BBSModClient.getOriginalFramebufferScale())));
         }
@@ -85,7 +88,7 @@ public class WindowMixin
     @Inject(method = "getScreenHeight", at = @At("HEAD"), cancellable = true)
     public void onGetFramebufferHeight(CallbackInfoReturnable<Integer> info)
     {
-        if (BBSRendering.canReplaceFramebuffer())
+        if (BBSRendering.canReplaceFramebuffer() && !BBSRendering.isApplyingSecondaryCamera())
         {
             info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoHeight() / BBSModClient.getOriginalFramebufferScale())));
         }
@@ -94,7 +97,7 @@ public class WindowMixin
     @Inject(method = "getGuiScaledWidth", at = @At("HEAD"), cancellable = true)
     public void onGetScaledWidth(CallbackInfoReturnable<Integer> info)
     {
-        if (BBSRendering.canReplaceFramebuffer())
+        if (BBSRendering.canReplaceFramebuffer() && !BBSRendering.isApplyingSecondaryCamera())
         {
             info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoWidth() / this.guiScale)));
         }
@@ -103,7 +106,7 @@ public class WindowMixin
     @Inject(method = "getGuiScaledHeight", at = @At("HEAD"), cancellable = true)
     public void onGetScaledHeight(CallbackInfoReturnable<Integer> info)
     {
-        if (BBSRendering.canReplaceFramebuffer())
+        if (BBSRendering.canReplaceFramebuffer() && !BBSRendering.isApplyingSecondaryCamera())
         {
             info.setReturnValue(Math.max(1, (int) (BBSRendering.getVideoHeight() / this.guiScale)));
         }

@@ -120,6 +120,15 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private final UIDockLayout dock;
     public UIFilmRecorder recorder;
     public UIFilmPreview preview;
+    /* Secondary film monitor bound to the secondary off-screen view
+     * (BBSRendering.getSecondaryTexture). Display-only: it has no controller
+     * orbit/gizmo/cursor. Step 4 will wire it into the EditorLayoutNode tree;
+     * for now it is registered as a dock panel so the multiview debug toggle
+     * can be observed in the editor. */
+    public UIFilmPreview preview2;
+
+    private boolean restartPending;
+    private int lastRestartCursor = -1;
 
     public UIIcon duplicateFilm;
 
@@ -165,6 +174,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
     private static final String PANEL_MAIN_ID = "main";
     private static final String PANEL_PREVIEW_ID = "preview";
+    private static final String PANEL_PREVIEW_2_ID = "preview2";
     private static final String PANEL_EDIT_AREA_ID = "editArea";
     private static final String PANEL_REPLAYS_LIST_ID = "replaysList";
     private static final String PANEL_REPLAY_PROPS_ID = "replayProps";
@@ -198,8 +208,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.main = new UIElement();
         this.editArea = new UIElement();
         this.preview = new UIFilmPreview(this);
+        this.preview2 = new UIFilmPreview(this, true);
         this.panelById.put(PANEL_MAIN_ID, this.main);
         this.panelById.put(PANEL_PREVIEW_ID, this.preview);
+        this.panelById.put(PANEL_PREVIEW_2_ID, this.preview2);
         this.panelById.put(PANEL_EDIT_AREA_ID, this.editArea);
 
         /* The dock must be constructed before the editors below: the replay
@@ -340,7 +352,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 UIUtils.playClick();
             }
         }).active(active).category(editor);
-
         this.selectionPanel = new UIFilmSelectionPanel(this);
         this.selectionPanel.setVisible(false);
 
@@ -621,6 +632,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         switch (panelId)
         {
             case PANEL_PREVIEW_ID: return Icons.VIDEO_CAMERA;
+            case PANEL_PREVIEW_2_ID: return Icons.VIDEO_CAMERA;
             case PANEL_EDIT_AREA_ID: return Icons.EDITOR;
             case PANEL_REPLAYS_LIST_ID: return Icons.LIST;
             case PANEL_REPLAY_PROPS_ID: return Icons.PROPERTIES;
@@ -634,6 +646,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         switch (panelId)
         {
             case PANEL_PREVIEW_ID: return UIKeys.FILM_PANELS_PREVIEW;
+            case PANEL_PREVIEW_2_ID: return UIKeys.FILM_PANELS_PREVIEW;
             case PANEL_EDIT_AREA_ID: return UIKeys.FILM_PANELS_EDIT_AREA;
             case PANEL_REPLAYS_LIST_ID: return UIKeys.FILM_PANELS_REPLAYS_LIST;
             case PANEL_REPLAY_PROPS_ID: return UIKeys.FILM_PANELS_REPLAY_PROPS;
@@ -778,6 +791,33 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.dock.resetLayout();
     }
 
+    /**
+     * Restores the validation monitor without disturbing the user's other dock panels.
+     * Multiview can be enabled from the global Ctrl+M key even when an older layout
+     * persisted preview2 as hidden or did not contain the panel yet.
+     */
+    public void ensurePreview2Visible()
+    {
+        Set<String> hidden = this.getFilmLayoutSettings().getHiddenPanels(this.currentLayoutId());
+        boolean changed = hidden.remove(PANEL_PREVIEW_2_ID);
+        EditorLayoutNode root = this.getCurrentFilmLayoutRoot();
+        HashSet<String> ids = new HashSet<>();
+        this.collectPanelIds(root, ids);
+
+        if (!ids.contains(PANEL_PREVIEW_2_ID))
+        {
+            root = EditorLayoutNode.copyWithInsertSplitAt(root, PANEL_PREVIEW_ID, PANEL_PREVIEW_2_ID, EditorLayoutNode.EDGE_RIGHT);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            this.getFilmLayoutSettings().setHiddenPanels(this.currentLayoutId(), hidden);
+            this.setCurrentFilmLayoutRoot(root);
+            this.dock.refresh();
+        }
+    }
+
     private EditorLayoutNode ensureFilmLayoutPanels(EditorLayoutNode root)
     {
         HashSet<String> ids = new HashSet<>();
@@ -786,8 +826,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         Set<String> hidden = this.getFilmLayoutSettings().getHiddenPanels(this.currentLayoutId());
         boolean hasList = ids.contains(PANEL_REPLAYS_LIST_ID) || hidden.contains(PANEL_REPLAYS_LIST_ID);
         boolean hasProps = ids.contains(PANEL_REPLAY_PROPS_ID) || hidden.contains(PANEL_REPLAY_PROPS_ID);
+        boolean hasPreview2 = ids.contains(PANEL_PREVIEW_2_ID) || hidden.contains(PANEL_PREVIEW_2_ID);
 
-        if (hasList && hasProps)
+        if (hasList && hasProps && hasPreview2)
         {
             return root;
         }
@@ -802,6 +843,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (!hasProps)
         {
             out = EditorLayoutNode.copyWithInsertSplitAt(out, PANEL_REPLAYS_LIST_ID, PANEL_REPLAY_PROPS_ID, EditorLayoutNode.EDGE_RIGHT);
+        }
+
+        /* Dock the secondary monitor to the right of the main preview, so the
+         * editor shows two camera views side by side. The split ratio is left
+         * at the splitter default; users can drag to resize. */
+        if (!hasPreview2)
+        {
+            out = EditorLayoutNode.copyWithInsertSplitAt(out, PANEL_PREVIEW_ID, PANEL_PREVIEW_2_ID, EditorLayoutNode.EDGE_RIGHT);
         }
 
         return out;
@@ -2065,6 +2114,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.playerToCamera = BBSSettings.editorPlayerFollowsCamera.get();
         this.controller.update();
+        this.updateRestartOnSeek();
 
         if (this.playerToCamera && this.data != null && !this.controller.isControlling())
         {
@@ -2337,7 +2387,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.renderInWorld(context);
 
-        if (!BBSRendering.isIrisShadowPass())
+        if (!BBSRendering.isIrisShadowPass() && !BBSRendering.isApplyingSecondaryCamera())
         {
             this.lastProjection.set(context.projectionMatrix());
             this.lastView.set(context.modelViewMatrix());
@@ -2391,6 +2441,67 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.runner.ticks = Math.max(0, value);
 
         this.notifyServer(ActionState.SEEK);
+
+        if (BBSSettings.editorRestartOnSeek.get())
+        {
+            this.restartPending = true;
+        }
+    }
+
+    /**
+     * Restart the actions and recreate the actors, the same way {@link Keys#FILM_CONTROLLER_RESTART_ACTIONS}
+     * does it manually.
+     */
+    public void restartActions()
+    {
+        this.restartPending = false;
+
+        this.notifyServer(ActionState.RESTART);
+        this.controller.createEntities();
+    }
+
+    /**
+     * Automatic restart of the actions upon scrubbing the cursor (see the "restart on seek" setting).
+     *
+     * <p>Both restarting the actions on the server and recreating the actors are way too
+     * expensive to run them on every frame of a scrubbing drag, so the restart waits until
+     * the cursor stops moving for a tick and only then fires once.</p>
+     */
+    private void updateRestartOnSeek()
+    {
+        int cursor = this.getCursor();
+        boolean settled = cursor == this.lastRestartCursor;
+
+        this.lastRestartCursor = cursor;
+
+        if (!this.restartPending || !settled)
+        {
+            return;
+        }
+
+        if (!BBSSettings.editorRestartOnSeek.get() || !this.canRestartOnSeek())
+        {
+            this.restartPending = false;
+
+            return;
+        }
+
+        this.restartActions();
+    }
+
+    /**
+     * Recreating the actors stops the recording and drops the character control, and both
+     * the playback and the video export move the cursor on their own, so an automatic
+     * restart must stay out of all of those.
+     */
+    private boolean canRestartOnSeek()
+    {
+        return this.data != null
+            && !this.isRunning()
+            && !this.controller.isRecording()
+            && !this.controller.isControlling()
+            && !this.recorder.isRecording()
+            && !this.recorder.isExporting();
     }
 
     public boolean isRunning()

@@ -26,7 +26,6 @@ import io.netty.util.collection.IntObjectHashMap;
 import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
@@ -212,11 +211,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
                 this.panel.replayEditor.moveReplay(result.getLocation().x, result.getLocation().y, result.getLocation().z);
             }
         }).active(hasActor).category(category);
-        this.keys().register(Keys.FILM_CONTROLLER_RESTART_ACTIONS, () ->
-        {
-            this.panel.notifyServer(ActionState.RESTART);
-            this.createEntities();
-        }).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_RESTART_ACTIONS, this.panel::restartActions).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ONION_SKIN, () ->
         {
             this.getOnionSkin().enabled.toggle();
@@ -613,7 +608,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
              * every recording input before that boundary; the world recorder must
              * never reach back into a panel which has already disappeared. */
             Minecraft.getInstance().setScreen(null);
-            BBSModClient.getFilms().startRecording(film, index, cursor);
+            /* On the mark: started from the editor, at a cursor the editor chose,
+             * so the take begins where the replay itself stands at that tick */
+            BBSModClient.getFilms().startRecording(film, index, cursor, true);
 
             return;
         }
@@ -669,6 +666,25 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
 
         this.toggleMousePointer(!transformRecording && this.controlled != null);
+
+        /* No countdown means the take starts now. Without this nothing ever started it: the countdown
+         * branch in handleRecording is what calls togglePlayback, and it only runs while the counter
+         * is still above zero — with the setting at 0 the very first tick fell straight through to
+         * "the film is not running, so the take is over" and stopped the recording before a single
+         * frame was written. */
+        this.startPlayback();
+    }
+
+    /**
+     * Begin playback for a take, unless the film is already running (the editor can be playing when a
+     * recording starts). Never a blind {@code togglePlayback} — that would stop it instead.
+     */
+    private void startPlayback()
+    {
+        if (this.recordingCountdown <= 0 && !this.panel.getRunner().isRunning())
+        {
+            this.panel.togglePlayback();
+        }
     }
 
     public void stopRecording()
@@ -1294,7 +1310,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         if (category == UIReplaysEditor.ReplayCategory.POSE)
         {
-            UIReplaysEditorUtils.insertPoseKeyframesAtTick(replay, this.getTick());
+            UIReplaysEditorUtils.insertPoseKeyframesAtTick(replay, this.getTick(), this.panel.replayEditor.getExpandedPoseTabIds());
             return;
         }
 
@@ -1408,7 +1424,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 if (this.recordingCountdown <= 0)
                 {
-                    this.panel.togglePlayback();
+                    this.startPlayback();
                 }
             }
 
@@ -1722,7 +1738,15 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void renderFrame(IBbsWorldRenderContext context)
     {
-        this.worldRenderContext = context;
+        boolean secondaryPass = BBSRendering.isApplyingSecondaryCamera();
+
+        /* The secondary preview is a display-only pass. Keep the interactive
+         * picking context owned by the main preview; otherwise a later click
+         * can ray-trace against the secondary camera's stale matrix. */
+        if (!secondaryPass)
+        {
+            this.worldRenderContext = context;
+        }
 
         RenderSystem.enableDepthTest();
 
@@ -1730,12 +1754,25 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             this.editorController.render(context);
 
-            int povMode = this.panel.getController().getPovMode();
-
-            if (povMode != UIFilmController.CAMERA_MODE_CAMERA && BBSSettings.recordingCameraPreview.get())
+            if (!secondaryPass)
             {
-                Recorder.renderCameraPreview(this.panel.getRunner().getPosition(), context.camera(), context.matrixStack());
+                int povMode = this.panel.getController().getPovMode();
+
+                if (povMode != UIFilmController.CAMERA_MODE_CAMERA && BBSSettings.recordingCameraPreview.get())
+                {
+                    Recorder.renderCameraPreview(this.panel.getRunner().getPosition(), context.camera(), context.matrixStack());
+                }
             }
+        }
+
+        /* No editor guides, motion paths, orbit markers, picking, mouse control,
+         * or shared Gizmo state belong in the secondary texture. Those overlays
+         * use the main preview's viewport and projection by design. */
+        if (secondaryPass)
+        {
+            RenderSystem.disableDepthTest();
+
+            return;
         }
 
         this.renderOrbitCenterMarker(context);

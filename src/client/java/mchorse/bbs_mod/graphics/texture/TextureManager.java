@@ -17,12 +17,16 @@ import org.lwjgl.opengl.GL11;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class TextureManager implements IWatchDogListener
 {
     public final Map<Link, Texture> textures = new HashMap<>();
     public final Map<Link, AnimatedTexture> animatedTextures = new HashMap<>();
+    /** Missing links use the shared error texture without owning it in the texture map. */
+    private final Set<Link> failed = new HashSet<>();
     public AssetProvider provider;
 
     private Texture error;
@@ -42,6 +46,11 @@ public class TextureManager implements IWatchDogListener
 
     public Texture getError()
     {
+        if (this.error != null && !this.error.isValid())
+        {
+            this.error = null;
+        }
+
         if (this.error == null)
         {
             try
@@ -132,6 +141,8 @@ public class TextureManager implements IWatchDogListener
 
     public void delete(Link link)
     {
+        this.failed.remove(link);
+
         Texture texture = this.textures.remove(link);
 
         if (texture != null)
@@ -162,6 +173,7 @@ public class TextureManager implements IWatchDogListener
             texture.setFilter(filter);
 
             this.textures.put(link, texture);
+            this.failed.remove(link);
         }
 
         return texture;
@@ -211,6 +223,11 @@ public class TextureManager implements IWatchDogListener
 
         if (texture == null)
         {
+            if (this.failed.contains(link))
+            {
+                return this.getError();
+            }
+
             try
             {
                 Pixels pixels = this.getPixels(link);
@@ -243,7 +260,7 @@ public class TextureManager implements IWatchDogListener
                 }
                 else
                 {
-                    this.textures.put(link, this.getError());
+                    this.failed.add(link);
 
                     return this.getError();
                 }
@@ -255,9 +272,9 @@ public class TextureManager implements IWatchDogListener
                     e.printStackTrace();
                 }
 
-                texture = this.getError();
+                this.failed.add(link);
 
-                this.textures.put(link, texture);
+                return this.getError();
             }
         }
 
@@ -270,7 +287,7 @@ public class TextureManager implements IWatchDogListener
         {
             Texture texture = this.animatedTextures.get(link).getTexture(this.tick);
 
-            return texture == null ? this.error : texture;
+            return texture == null ? this.getError() : texture;
         }
 
         return this.textures.get(link);
@@ -290,6 +307,7 @@ public class TextureManager implements IWatchDogListener
 
         this.textures.clear();
         this.animatedTextures.clear();
+        this.failed.clear();
         this.extruder.deleteAll();
     }
 
@@ -316,6 +334,8 @@ public class TextureManager implements IWatchDogListener
         {
             link = new Link(link.source, StringUtils.removeExtension(link.path));
         }
+
+        this.failed.remove(link);
 
         Texture texture = this.textures.remove(link);
 

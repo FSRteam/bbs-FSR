@@ -24,6 +24,7 @@ public class ModelProperties implements IMapSerializable
     private boolean global;
     private boolean shadow;
     private boolean lookAt;
+    private boolean renderLast;
 
     public Form getForm()
     {
@@ -135,6 +136,16 @@ public class ModelProperties implements IMapSerializable
         this.lookAt = lookAt;
     }
 
+    public boolean isRenderLast()
+    {
+        return this.renderLast;
+    }
+
+    public void setRenderLast(boolean renderLast)
+    {
+        this.renderLast = renderLast;
+    }
+
     public Form getForm(ItemDisplayContext mode)
     {
         Form form = this.form;
@@ -199,6 +210,7 @@ public class ModelProperties implements IMapSerializable
         this.shadow = data.getBool("shadow");
         this.global = data.getBool("global");
         this.lookAt = data.getBool("look_at");
+        this.renderLast = data.getBool("render_last");
     }
 
     @Override
@@ -218,6 +230,7 @@ public class ModelProperties implements IMapSerializable
         data.putBool("shadow", this.shadow);
         data.putBool("global", this.global);
         data.putBool("look_at", this.lookAt);
+        data.putBool("render_last", this.renderLast);
     }
 
     public void update(IEntity entity)

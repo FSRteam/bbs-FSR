@@ -664,7 +664,11 @@ public class Gizmo
      */
     public void captureVisual(PoseStack stack)
     {
-        if (BBSRendering.isIrisShadowPass())
+        /* The secondary monitor is display-only. Its world pass uses a different
+         * camera and framebuffer, while this singleton's captured frame belongs
+         * to the interactive main preview. Do not let the secondary matrix
+         * replace the main preview's gizmo frame. */
+        if (BBSRendering.isIrisShadowPass() || BBSRendering.isApplyingSecondaryCamera())
         {
             return;
         }

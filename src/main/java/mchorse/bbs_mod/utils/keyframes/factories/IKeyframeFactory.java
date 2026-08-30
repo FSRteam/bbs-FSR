@@ -10,6 +10,18 @@ public interface IKeyframeFactory <T>
 {
     public T fromData(BaseType data);
 
+    /**
+     * Whether this kind of value has no in-between states, so a new keyframe of
+     * it holds until the next one instead of fading into it (constant
+     * interpolation by default). True for things that jump - a stack in a slot,
+     * a block state, a toggle - where a fade would show a value that never
+     * existed.
+     */
+    public default boolean isStepped()
+    {
+        return false;
+    }
+
     public BaseType toData(T value);
 
     public T createEmpty();

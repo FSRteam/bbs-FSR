@@ -295,7 +295,7 @@ public final class BBSUiLifecycleSourceTest
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
                 && outsideRecording.indexOf("int cursor = this.panel.getCursor();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
-                && outsideRecording.contains("startRecording(film, index, cursor)"),
+                && outsideRecording.contains("startRecording(film, index, cursor, true)"),
             "external replay recording still reads Film panel state after closing the dashboard");
         check(modelBlocks.contains("ModelBlockEntity editingBlock = this.modelBlock;")
                 && modelBlocks.contains("if (editingBlock.isRemoved())")

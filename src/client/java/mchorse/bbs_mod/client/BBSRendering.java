@@ -35,6 +35,13 @@ import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import mchorse.bbs_mod.mixin.client.MinecraftAccessor;
+import mchorse.bbs_mod.mixin.client.LevelRendererAccessor;
+import mchorse.bbs_mod.mixin.client.EntityRenderDispatcherAccessor;
+import mchorse.bbs_mod.mixin.client.GameRendererCameraAccessor;
+import mchorse.bbs_mod.mixin.client.WindowDimensionsAccessor;
+import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.LevelRenderer;
+import org.joml.Quaternionf;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.pipeline.MainTarget;
@@ -93,6 +100,34 @@ public class BBSRendering
     private static RenderTarget framebuffer;
     private static RenderTarget clientFramebuffer;
     private static Texture texture;
+
+    /* === STEP 1 (multiview validation): temporary secondary off-screen pass ===
+     * Renders the world a second time per frame into framebuffer2 so a second
+     * UIFilmPreview-like consumer can show an independent camera. Main-view path
+     * is untouched while secondaryViewEnabled is false (zero regression).
+     * Removed once the ViewDescriptor generalization (step 2) lands. */
+    private static boolean secondaryViewEnabled;
+    private static boolean renderingSecondaryView;
+    private static RenderTarget framebuffer2;
+    private static Texture texture2;
+
+    /* The secondary pass owns a separate vanilla Camera instance. Its pose is
+     * refreshed from the active film camera for the current frame, while all
+     * model/entity math observes that camera instead of the main one. */
+    private static boolean secondaryFrameRendered;
+    private static Camera secondaryCamera;
+    private static double secondaryCameraFov = Double.NaN;
+    private static int secondaryRenderWidth;
+    private static int secondaryRenderHeight;
+
+    /* Secondary-view camera pose, applied by CameraMixin to secondaryCamera
+     * while renderingSecondaryView is true. Step 2 will generalize this into
+     * per-ViewDescriptor poses. */
+    private static double secondaryCameraX;
+    private static double secondaryCameraY;
+    private static double secondaryCameraZ;
+    private static float secondaryCameraYaw;
+    private static float secondaryCameraPitch;
 
     private static volatile long exportFrameGeneration;
     private static final ExportResolutionActionGate EXPORT_RESOLUTION_ACTIONS =
@@ -244,6 +279,128 @@ public class BBSRendering
         return texture;
     }
 
+    public static boolean isSecondaryViewEnabled()
+    {
+        return secondaryViewEnabled;
+    }
+
+    public static void setSecondaryViewEnabled(boolean enabled)
+    {
+        if (secondaryViewEnabled == enabled)
+        {
+            return;
+        }
+
+        secondaryViewEnabled = enabled;
+        secondaryFrameRendered = false;
+
+        if (enabled)
+        {
+            secondaryCameraFov = Double.NaN;
+        }
+    }
+
+    /**
+     * Whether the CameraMixin should apply the secondary-view camera pose
+     * instead of the global controller's pose. True only during the secondary
+     * off-screen renderLevel call.
+     */
+    public static boolean isApplyingSecondaryCamera()
+    {
+        return renderingSecondaryView;
+    }
+
+    public static double getSecondaryCameraX()
+    {
+        return secondaryCameraX;
+    }
+
+    public static double getSecondaryCameraY()
+    {
+        return secondaryCameraY;
+    }
+
+    public static double getSecondaryCameraZ()
+    {
+        return secondaryCameraZ;
+    }
+
+    public static float getSecondaryCameraYaw()
+    {
+        return secondaryCameraYaw;
+    }
+
+    public static float getSecondaryCameraPitch()
+    {
+        return secondaryCameraPitch;
+    }
+
+    public static double getSecondaryCameraFov()
+    {
+        return secondaryCameraFov;
+    }
+
+    public static float getSecondaryRenderAspect()
+    {
+        return secondaryRenderWidth > 0 && secondaryRenderHeight > 0
+            ? secondaryRenderWidth / (float) secondaryRenderHeight
+            : 0F;
+    }
+
+    /** Keep the secondary projection's horizontal scale aligned with its target. */
+    public static Matrix4f fitSecondaryProjection(Matrix4f projection)
+    {
+        float aspect = getSecondaryRenderAspect();
+
+        if (projection == null || aspect <= 0F || !Float.isFinite(aspect) || projection.m11() == 0F)
+        {
+            return projection;
+        }
+
+        return new Matrix4f(projection).m00(projection.m11() / aspect);
+    }
+
+    private static int getPhysicalWindowWidth(Minecraft mc)
+    {
+        Object windowObject = mc.getWindow();
+
+        if (windowObject instanceof WindowDimensionsAccessor accessor)
+        {
+            return Math.max(1, accessor.bbs$getRawWidth());
+        }
+
+        return Math.max(1, mc.getWindow().getWidth());
+    }
+
+    private static int getPhysicalWindowHeight(Minecraft mc)
+    {
+        Object windowObject = mc.getWindow();
+
+        if (windowObject instanceof WindowDimensionsAccessor accessor)
+        {
+            return Math.max(1, accessor.bbs$getRawHeight());
+        }
+
+        return Math.max(1, mc.getWindow().getHeight());
+    }
+
+    public static Texture getSecondaryTexture()
+    {
+        if (texture2 == null)
+        {
+            texture2 = new Texture();
+            texture2.setFormat(TextureFormat.RGB_U8);
+            texture2.setFilter(GL11.GL_NEAREST);
+        }
+
+        return texture2;
+    }
+
+    public static RenderTarget getSecondaryFramebuffer()
+    {
+        return framebuffer2;
+    }
+
     public static void startTick()
     {
         capturedModelBlocks.clear();
@@ -280,9 +437,18 @@ public class BBSRendering
 
     public static void setupFramebuffer()
     {
-        Window window = Minecraft.getInstance().getWindow();
+        Minecraft mc = Minecraft.getInstance();
+        Window window = mc.getWindow();
 
         framebuffer = new MainTarget(window.getWidth(), window.getHeight());
+        /* preview2 belongs to the live game window, not the export target.
+         * Use the raw framebuffer size so a custom export resolution cannot
+         * make its first allocation disagree with the physical window. */
+        framebuffer2 = new MainTarget(getPhysicalWindowWidth(mc), getPhysicalWindowHeight(mc));
+        secondaryCamera = new Camera();
+        secondaryCameraFov = Double.NaN;
+        secondaryRenderWidth = 0;
+        secondaryRenderHeight = 0;
     }
 
     public static void resizeExtraFramebuffers()
@@ -301,6 +467,11 @@ public class BBSRendering
         {
             resizeFramebuffer(buffer);
         }
+
+        /* preview2 is deliberately resized from the raw physical framebuffer
+         * dimensions. resizeFramebuffer() uses Window.getWidth()/getHeight(),
+         * which are temporarily redirected to export dimensions by WindowMixin. */
+        resizeSecondaryFramebuffer();
     }
 
     public static void resizeFramebuffer(RenderTarget framebuffer)
@@ -320,6 +491,23 @@ public class BBSRendering
         }
 
         framebuffer.resize(w, h, Minecraft.ON_OSX);
+    }
+
+    private static void resizeSecondaryFramebuffer()
+    {
+        if (framebuffer2 == null)
+        {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        int w = getPhysicalWindowWidth(mc);
+        int h = getPhysicalWindowHeight(mc);
+
+        if (framebuffer2.width != w || framebuffer2.height != h)
+        {
+            framebuffer2.resize(w, h, Minecraft.ON_OSX);
+        }
     }
 
     public static void toggleFramebuffer(boolean toggleFramebuffer)
@@ -381,6 +569,18 @@ public class BBSRendering
 
     public static void onWorldRenderBegin()
     {
+        /* The secondary off-screen pass re-enters vanilla's renderLevel, which
+         * re-fires this hook. Skip it so the main-view framebuffer swap and the
+         * per-frame startRenderFrame bookkeeping are not disturbed. */
+        if (renderingSecondaryView)
+        {
+            return;
+        }
+
+        /* The secondary pass is gated to once per frame; reset the gate at the
+         * start of the main world render so a fresh frame can render again. */
+        secondaryFrameRendered = false;
+
         if (orthoDistance > 0F)
         {
             Minecraft.getInstance().smartCull = true;
@@ -404,6 +604,15 @@ public class BBSRendering
         }
 
         renderingWorld = true;
+
+        /* Sodium owns one shared set of visible terrain lists. Render preview2
+         * after the current Film state is updated but before the primary world
+         * pass, so the primary camera remains the final writer of that shared
+         * state. */
+        if (secondaryViewEnabled)
+        {
+            renderSecondaryView();
+        }
 
         if (!customSize)
         {
@@ -430,6 +639,13 @@ public class BBSRendering
 
     public static void onWorldRenderEnd()
     {
+        /* Secondary off-screen pass re-fires this hook; skip so it doesn't
+         * recapture the main surface or disturb the main-view bookkeeping. */
+        if (renderingSecondaryView)
+        {
+            return;
+        }
+
         Minecraft mc = Minecraft.getInstance();
         EnumSet<BBSRenderSurfaceKind> surfaces = EnumSet.noneOf(BBSRenderSurfaceKind.class);
         PlayCameraController playback = currentWorldReplayController();
@@ -501,8 +717,280 @@ public class BBSRendering
             : null;
     }
 
+    /**
+     * Render the world a second time this frame into framebuffer2, copying the
+     * result into texture2 so an independent preview can display it.
+     *
+     * <p>Runs before the primary world pass so Sodium's shared terrain state is
+     * finalized by the primary camera. The framebuffer copy remains deferred
+     * until {@link #onRenderBeforeScreen()}.</p>
+     *
+     * <p>The re-entrancy guard {@code renderingSecondaryView} keeps the
+     * {@code onWorldRenderBegin}/{@code onWorldRenderEnd} mixin hooks from
+     * re-toggling the primary framebuffer or re-capturing the main surface while
+     * the secondary {@code gameRenderer.renderLevel} call is in flight.</p>
+     */
+    private static void renderSecondaryView()
+    {
+        if (!secondaryViewEnabled || framebuffer2 == null)
+        {
+            return;
+        }
+
+        if (renderingSecondaryView)
+        {
+            return;
+        }
+
+        /* Multiple onRenderBeforeScreen call sites (GameRendererMixin and
+         * InGameHudMixin) can fire in a single frame. Render the secondary view
+         * only once so repeated hooks cannot overwrite its texture or mutate
+         * the shared renderer state twice. */
+        if (secondaryFrameRendered)
+        {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+
+        if (mc.level == null || mc.player == null)
+        {
+            return;
+        }
+
+        RenderTarget originalTarget = mc.getMainRenderTarget();
+        Camera mainCamera = mc.gameRenderer.getMainCamera();
+        Object gameRendererObject = mc.gameRenderer;
+
+        if (!(gameRendererObject instanceof GameRendererCameraAccessor))
+        {
+            secondaryViewEnabled = false;
+            LOGGER.error("Disabling secondary preview because GameRenderer camera accessor is unavailable");
+
+            return;
+        }
+
+        GameRendererCameraAccessor gameRenderer = (GameRendererCameraAccessor) gameRendererObject;
+        Camera originalGameRendererCamera = gameRenderer.bbs$getMainCamera();
+
+        if (mainCamera == null || originalGameRendererCamera == null)
+        {
+            secondaryViewEnabled = false;
+            LOGGER.error("Disabling secondary preview because the main camera is unavailable");
+
+            return;
+        }
+
+        if (secondaryCamera == null)
+        {
+            secondaryCamera = new Camera();
+        }
+
+        /* Keep the secondary view live with the active film camera mode. The
+         * pose is copied every frame into a separate Camera instance, so the
+         * secondary renderer gets the current orbit/free/first/third-person
+         * pose without sharing the main camera's matrices or mutable object. */
+        secondaryCameraX = mainCamera.getPosition().x;
+        secondaryCameraY = mainCamera.getPosition().y;
+        secondaryCameraZ = mainCamera.getPosition().z;
+        /* preview2 is a validation mirror until a camera-unit pose is bound to
+         * it. Reuse the primary yaw exactly; adding an artificial angle here
+         * makes every mouse-look update appear as a second movement layer in
+         * the model/replay transforms. */
+        secondaryCameraYaw = mainCamera.getYRot();
+        secondaryCameraPitch = mainCamera.getXRot();
+        secondaryCameraFov = BBSModClient.getCameraController().getFOV();
+
+        /* gameRenderer.renderLevel mutates global GL state that the 2D GUI pass
+         * (already set up by the time onRenderBeforeScreen runs) depends on:
+         * the projection matrix, vertex sorting and the model-view stack. Save
+         * them here so the secondary 3D pass cannot leak into the editor HUD. */
+        Matrix4f savedProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
+        VertexSorting savedVertexSorting = RenderSystem.getVertexSorting();
+        Matrix4fStack savedModelView = RenderSystem.getModelViewStack();
+
+        savedModelView.pushMatrix();
+        /* onRenderBeforeScreen runs after vanilla has installed the GUI
+         * translation (-11000) and an aspect-dependent orthographic matrix.
+         * A world pass must start from an identity model-view; otherwise the
+         * GUI scale becomes an extra transform on every entity. */
+        savedModelView.identity();
+        RenderSystem.applyModelViewMatrix();
+
+        /* LevelRenderer cull bookkeeping snapshots — declared before the try so
+         * the finally can restore them even if renderLevel throws. */
+        Object levelRendererObject = mc.levelRenderer;
+
+        if (!(levelRendererObject instanceof LevelRendererAccessor))
+        {
+            secondaryViewEnabled = false;
+            LOGGER.error("Disabling secondary preview because LevelRenderer state accessor is unavailable");
+
+            return;
+        }
+
+        LevelRendererAccessor lr = (LevelRendererAccessor) levelRendererObject;
+        double savePrevCamX = lr.bbs$getPrevCamX();
+        double savePrevCamY = lr.bbs$getPrevCamY();
+        double savePrevCamZ = lr.bbs$getPrevCamZ();
+        double savePrevCamRotX = lr.bbs$getPrevCamRotX();
+        double savePrevCamRotY = lr.bbs$getPrevCamRotY();
+        int saveLastSecX = lr.bbs$getLastCameraSectionX();
+        int saveLastSecY = lr.bbs$getLastCameraSectionY();
+        int saveLastSecZ = lr.bbs$getLastCameraSectionZ();
+
+        /* EntityRenderDispatcher holds the shared camera-relative state the
+         * secondary pass overwrites via prepare(). Entities render at the wrong
+         * position if a later read picks up the secondary camera. */
+        Object entityDispatcherObject = mc.getEntityRenderDispatcher();
+
+        if (!(entityDispatcherObject instanceof EntityRenderDispatcherAccessor))
+        {
+            secondaryViewEnabled = false;
+            LOGGER.error("Disabling secondary preview because entity camera state accessor is unavailable");
+
+            return;
+        }
+
+        EntityRenderDispatcherAccessor erd = (EntityRenderDispatcherAccessor) entityDispatcherObject;
+        Camera saveEntityCam = erd.bbs$getCamera();
+        Quaternionf saveEntityCamRot = erd.bbs$getCameraOrientation() != null
+            ? new Quaternionf(erd.bbs$getCameraOrientation())
+            : null;
+        boolean savedSmartCull = mc.smartCull;
+
+        try
+        {
+            resizeSecondaryFramebuffer();
+
+            secondaryRenderWidth = Math.max(1, framebuffer2.viewWidth);
+            secondaryRenderHeight = Math.max(1, framebuffer2.viewHeight);
+
+            /* Swap the field so renderLevel's internal bindWrite() calls land on
+             * our off-screen target, not the window. */
+            reassignFramebuffer(framebuffer2);
+            framebuffer2.bindWrite(true);
+            RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
+
+            secondaryFrameRendered = true;
+
+            /* GameRenderer.renderLevel(DeltaTracker) normally uses its private
+             * mainCamera field. Swap in the independent camera so every vanilla
+             * and BBS renderer receives the secondary camera as context.camera. */
+            gameRenderer.bbs$setMainCamera(secondaryCamera);
+            renderingSecondaryView = true;
+
+            /* Bind the secondary camera to the current world/entity before any
+             * fog, Sodium, or entity renderer hook can inspect it. The old
+             * addon path skipped setup on a fresh Camera and crashed in
+             * ClientHooks.onFogRender because camera.getEntity() was null. */
+            secondaryCamera.setup(
+                mc.level,
+                mc.player,
+                false,
+                false,
+                getTickDelta(mc)
+            );
+
+            mc.smartCull = false;
+
+            /* gameRenderer.renderLevel(DeltaTracker) is the Sodium-safe entry
+             * point (vs. the 7-arg LevelRenderer.renderLevel). It re-fires the
+             * BBS mixin hooks, but the guard above makes them no-ops. */
+            mc.gameRenderer.renderLevel(mc.getTimer());
+        }
+        catch (Throwable failure)
+        {
+            /* A secondary pass is an optional preview. Never let camera setup,
+             * fog, renderer, or shader incompatibility terminate the client. */
+            secondaryViewEnabled = false;
+            LOGGER.error("Disabling secondary preview after an off-screen render failure", failure);
+        }
+        finally
+        {
+            renderingSecondaryView = false;
+            mc.smartCull = savedSmartCull;
+
+            /* Restore the host's camera object before any following render hook
+             * can observe the temporary view. The main Camera itself was never
+             * mutated by the secondary pass. */
+            gameRenderer.bbs$setMainCamera(originalGameRendererCamera);
+
+            /* Restore the client's original target before any 2D overlay draws. */
+            reassignFramebuffer(originalTarget);
+            originalTarget.bindWrite(true);
+
+            /* Restore the GUI projection/model-view the 2D pass set up before us,
+             * otherwise the editor HUD renders with the secondary view's 3D
+             * projection and the screen goes black. */
+            savedModelView.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(savedProjection, savedVertexSorting);
+
+            /* Restore LevelRenderer's cull bookkeeping so the secondary pass's
+             * secondary-camera pose does not leak into the next main frame. */
+            lr.bbs$setPrevCamX(savePrevCamX);
+            lr.bbs$setPrevCamY(savePrevCamY);
+            lr.bbs$setPrevCamZ(savePrevCamZ);
+            lr.bbs$setPrevCamRotX(savePrevCamRotX);
+            lr.bbs$setPrevCamRotY(savePrevCamRotY);
+            lr.bbs$setLastCameraSectionX(saveLastSecX);
+            lr.bbs$setLastCameraSectionY(saveLastSecY);
+            lr.bbs$setLastCameraSectionZ(saveLastSecZ);
+
+            /* Restore EntityRenderDispatcher's camera-relative state so entities
+             * in the main view render relative to the main camera, not the
+             * secondary +45 yaw one. */
+            erd.bbs$setCamera(saveEntityCam);
+
+            if (saveEntityCamRot != null)
+            {
+                erd.bbs$setCameraOrientation(saveEntityCamRot);
+            }
+
+            secondaryRenderWidth = 0;
+            secondaryRenderHeight = 0;
+        }
+
+        /* Copy framebuffer2 into texture2 (mirrors the main-view glCopyTexSubImage2D path). */
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+
+        try
+        {
+            Texture secondary = getSecondaryTexture();
+
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer2.frameBufferId);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            secondary.bind();
+
+            if (secondary.width != framebuffer2.width || secondary.height != framebuffer2.height)
+            {
+                secondary.setSize(framebuffer2.width, framebuffer2.height);
+            }
+
+            GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer2.width, framebuffer2.height);
+        }
+        finally
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+        }
+    }
+
     public static void onRenderBeforeScreen()
     {
+        /* The secondary off-screen pass is independent of the export pipeline so
+         * the Shift+M debug toggle is visible in normal gameplay, not only while
+         * exporting with a hidden GUI. The export path below remains gated by
+         * toggleFramebuffer/customSize, so this adds no regression there. */
+        if (secondaryViewEnabled)
+        {
+            renderSecondaryView();
+        }
+
         if (!toggleFramebuffer)
         {
             return;
@@ -796,6 +1284,12 @@ public class BBSRendering
         return IrisUtils.isShaderPackEnabled();
     }
 
+    /** True while forms are rendered inside Iris' shader-pack world pass. */
+    public static boolean isIrisWorldForms()
+    {
+        return isRenderingWorld() && isIrisShadersEnabled();
+    }
+
     public static boolean isIrisShadowPass()
     {
         if (!iris)
@@ -804,6 +1298,44 @@ public class BBSRendering
         }
 
         return IrisUtils.isShadowPass();
+    }
+
+    /** Begin an Iris-aware vanilla buffer upload; returns the previous layout flag. */
+    public static boolean beginIrisBufferUpload(com.mojang.blaze3d.vertex.BufferBuilder builder)
+    {
+        if (!iris)
+        {
+            return false;
+        }
+
+        return IrisUtils.beginBufferUpload(builder);
+    }
+
+    /** Restore the layout flag returned by {@link #beginIrisBufferUpload}. */
+    public static void endIrisBufferUpload(boolean previous)
+    {
+        if (iris)
+        {
+            IrisUtils.endBufferUpload(previous);
+        }
+    }
+
+    public static boolean captureIrisVertexLayout()
+    {
+        return iris && IrisUtils.captureBufferLayout();
+    }
+
+    public static boolean applyIrisVertexLayout(boolean extended)
+    {
+        return iris && IrisUtils.applyBufferLayout(extended);
+    }
+
+    public static void restoreIrisVertexLayout(boolean previous)
+    {
+        if (iris)
+        {
+            IrisUtils.applyBufferLayout(previous);
+        }
     }
 
     /**
@@ -965,11 +1497,8 @@ public class BBSRendering
 
     public static Function<VertexConsumer, VertexConsumer> getColorConsumer(Color color)
     {
-        if (sodium)
-        {
-            return (b) -> SodiumUtils.createVertexBuffer(b, color);
-        }
-
+        /* Keep form tint and alpha on the normal VertexConsumer contract. Sodium's bulk writer
+         * bypasses setColor(), which can leave model layers with stale RGB/alpha values. */
         return (b) -> new RecolorVertexConsumer(b, color);
     }
 

@@ -124,10 +124,7 @@ public class UIDashboard extends UIBaseMenu
 
         this.settingsPanel = new UISettingsOverlayPanel();
 
-        this.settings = new UIIcon(Icons.SETTINGS, (b) ->
-        {
-            UIOverlay.addOverlay(this.context, this.settingsPanel, 430, 380);
-        });
+        this.settings = new UIIcon(Icons.SETTINGS, (b) -> this.openSettings());
         this.settings.tooltip(UIKeys.CONFIG_TITLE, Direction.TOP);
         this.selectors = new UIIcon(Icons.PROPERTIES, (b) ->
         {
@@ -169,6 +166,13 @@ public class UIDashboard extends UIBaseMenu
             BBSSettings.ikDebug.enabled.set(enabled);
             BBSSettings.physicsDebug.enabled.set(enabled);
         }).category(category);
+        this.overlay.keys().register(Keys.OPEN_SETTINGS, () ->
+        {
+            if (!UIOverlay.has(this.context))
+            {
+                this.openSettings();
+            }
+        }).category(category);
         this.overlay.keys().register(Keys.OPEN_UTILITY_PANEL, () ->
         {
             if (UIOverlay.has(this.context))
@@ -180,6 +184,11 @@ public class UIDashboard extends UIBaseMenu
         });
 
         this.showAnnoyingPopups();
+    }
+
+    public void openSettings()
+    {
+        UIOverlay.addOverlay(this.context, this.settingsPanel, 430, 380);
     }
 
     private void showAnnoyingPopups()
@@ -388,12 +397,125 @@ public class UIDashboard extends UIBaseMenu
 
         if (panel instanceof UIMorphingPanel morphing)
         {
-            this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE, id, () -> morphing.palette);
-            this.registerAnchor(BBSDashboardAnchors.MORPHING_DEMORPH, id, () -> morphing.demorph);
-            this.registerAnchor(BBSDashboardAnchors.MORPHING_FROM_MOB, id, () -> morphing.fromMob);
+            this.registerMorphingAnchors(morphing);
+        }
+        else if (panel instanceof UIFilmPanel film)
+        {
+            this.registerFilmAnchors(film);
+        }
+        else if (panel instanceof UIModelBlockPanel modelBlocks)
+        {
+            this.registerModelBlocksAnchors(modelBlocks);
+        }
+        else if (panel instanceof UIParticleSchemePanel particles)
+        {
+            this.registerParticlesAnchors(particles);
+        }
+        else if (panel instanceof UIModelEditorPanel modelEditor)
+        {
+            this.registerModelEditorAnchors(modelEditor);
+        }
+        else if (panel instanceof UITextureManagerPanel textures)
+        {
+            this.registerTexturesAnchors(textures);
+        }
+        else if (panel instanceof UIAudioEditorPanel audio)
+        {
+            this.registerAudioAnchors(audio);
+        }
+        else if (panel instanceof UIGraphPanel graph)
+        {
+            this.registerGraphAnchors(graph);
+        }
+        else if (panel instanceof UIPluginsPanel plugins)
+        {
+            this.registerPluginsAnchors(plugins);
         }
 
         return button;
+    }
+
+    private void registerMorphingAnchors(UIMorphingPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE, BBSDashboardPanelIds.MORPHING, () -> panel.palette);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE_LIST, BBSDashboardPanelIds.MORPHING, () -> panel.palette.list);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE_EDITOR, BBSDashboardPanelIds.MORPHING, () -> panel.palette.editor);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_DEMORPH, BBSDashboardPanelIds.MORPHING, () -> panel.demorph);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_FROM_MOB, BBSDashboardPanelIds.MORPHING, () -> panel.fromMob);
+    }
+
+    private void registerFilmAnchors(UIFilmPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.FILM_SELECTION, BBSDashboardPanelIds.FILM, () -> panel.selectionPanel);
+        this.registerAnchor(BBSDashboardAnchors.FILM_RECORDER, BBSDashboardPanelIds.FILM, () -> panel.recorder);
+        this.registerAnchor(BBSDashboardAnchors.FILM_PREVIEW, BBSDashboardPanelIds.FILM, () -> panel.preview);
+        this.registerAnchor(BBSDashboardAnchors.FILM_DUPLICATE, BBSDashboardPanelIds.FILM, () -> panel.duplicateFilm);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_MENU, BBSDashboardPanelIds.FILM, () -> panel.openFilmMenu);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_CAMERA_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.openCameraEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_REPLAY_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.openReplayEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_ACTION_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.openActionEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_CAMERA_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.cameraEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_REPLAY_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.replayEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_ACTION_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.actionEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_CAMERA_TIMELINE, BBSDashboardPanelIds.FILM, () -> panel.cameraEditor.clips);
+        this.registerAnchor(BBSDashboardAnchors.FILM_REPLAY_TIMELINE, BBSDashboardPanelIds.FILM, () -> panel.replayEditor.keyframeEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_ACTION_TIMELINE, BBSDashboardPanelIds.FILM, () -> panel.actionEditor.clips);
+    }
+
+    private void registerModelBlocksAnchors(UIModelBlockPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_LIST, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.modelBlocks);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_PICK_EDIT, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.pickEdit);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_ENABLED, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.enabled);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_SHADOW, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.shadow);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_GLOBAL, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.global);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_LOOK_AT, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.lookAt);
+    }
+
+    private void registerParticlesAnchors(UIParticleSchemePanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_RENDERER, BBSDashboardPanelIds.PARTICLES, () -> panel.renderer);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_SELECTION, BBSDashboardPanelIds.PARTICLES, () -> panel.selectionPanel);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_DOCK, BBSDashboardPanelIds.PARTICLES, () -> panel.dock);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_LOCK_LAYOUT, BBSDashboardPanelIds.PARTICLES, () -> panel.lockLayoutButton);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_LAYOUT_PRESETS, BBSDashboardPanelIds.PARTICLES, () -> panel.layoutPresetsButton);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_PLAY_PAUSE, BBSDashboardPanelIds.PARTICLES, () -> panel.playPauseBtn);
+    }
+
+    private void registerModelEditorAnchors(UIModelEditorPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.MODEL_EDITOR_GENERAL, BBSDashboardPanelIds.MODEL_EDITOR, () -> panel.general);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_EDITOR_RENDERER, BBSDashboardPanelIds.MODEL_EDITOR, () -> panel.renderer);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_EDITOR_SPLITTER, BBSDashboardPanelIds.MODEL_EDITOR, () -> panel.splitter);
+    }
+
+    private void registerTexturesAnchors(UITextureManagerPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.TEXTURES_PICKER, BBSDashboardPanelIds.TEXTURES, () -> panel.picker);
+    }
+
+    private void registerAudioAnchors(UIAudioEditorPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_PICK, BBSDashboardPanelIds.AUDIO, () -> panel.pickAudio);
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_PLAY_PAUSE, BBSDashboardPanelIds.AUDIO, () -> panel.plause);
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_SAVE_COLORS, BBSDashboardPanelIds.AUDIO, () -> panel.saveColors);
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_EDITOR, BBSDashboardPanelIds.AUDIO, () -> panel.audioEditor);
+    }
+
+    private void registerGraphAnchors(UIGraphPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.GRAPH_CANVAS, BBSDashboardPanelIds.GRAPH, () -> panel.canvas);
+        this.registerAnchor(BBSDashboardAnchors.GRAPH_EXPRESSION, BBSDashboardPanelIds.GRAPH, () -> panel.expression);
+        this.registerAnchor(BBSDashboardAnchors.GRAPH_HELP, BBSDashboardPanelIds.GRAPH, () -> panel.help);
+    }
+
+    private void registerPluginsAnchors(UIPluginsPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_LIST, BBSDashboardPanelIds.PLUGINS, () -> panel.list);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_RESCAN, BBSDashboardPanelIds.PLUGINS, () -> panel.rescan);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_OPEN_FOLDER, BBSDashboardPanelIds.PLUGINS, () -> panel.openFolder);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_INSTALL, BBSDashboardPanelIds.PLUGINS, () -> panel.install);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_AUTO_APPLY, BBSDashboardPanelIds.PLUGINS, () -> panel.autoApply);
     }
 
     public <T> T getPanel(Class<T> clazz)

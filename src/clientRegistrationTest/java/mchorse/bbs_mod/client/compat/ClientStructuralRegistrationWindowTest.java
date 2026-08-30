@@ -36,6 +36,7 @@ public final class ClientStructuralRegistrationWindowTest
             UIFilmPanelCompatibilityDescriptorTest.runAll();
             CameraControllerResetTest.runAll();
             ModelBlockItemRendererSourceTest.runAll();
+            ModelRenderPerformanceSourceTest.runAll();
             MissingClipTimelineFallbackTest.runAll();
             DashboardPanelRegistryTest.runAll();
             DashboardPanelLifecycleTest.runAll();

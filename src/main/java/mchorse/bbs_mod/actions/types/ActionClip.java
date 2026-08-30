@@ -45,6 +45,13 @@ public abstract class ActionClip extends Clip
 
     public final void apply(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
+        if (!this.isEnabledInRange(tick))
+        {
+            return;
+        }
+
+        this.applyRange(actor, player, film, replay, tick);
+
         if (!this.shouldApply(tick))
         {
             return;
@@ -57,6 +64,13 @@ public abstract class ActionClip extends Clip
         }
 
         this.applyAction(actor, player, film, replay, tick);
+    }
+
+    private boolean isEnabledInRange(int tick)
+    {
+        long relative = (long) tick - this.tick.get();
+
+        return this.enabled.get() && relative >= 0L && relative < this.duration.get();
     }
 
     private boolean shouldApply(int tick)
@@ -88,6 +102,16 @@ public abstract class ActionClip extends Clip
     }
 
     public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    {}
+
+    /**
+     * Called for every tick the clip covers, where {@link #applyAction} happens
+     * once at its start (or on its frequency). Actions that occupy their whole
+     * range instead of happening at an instant - a chest held open - keep
+     * saying so here, so the state ends when the clip does however the film
+     * arrived at that tick.
+     */
+    public void applyRange(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {}
 
     /**

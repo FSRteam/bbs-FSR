@@ -62,6 +62,14 @@ public class UIFilmPreview extends UIElement
     private List<AudioClip> clips = new ArrayList<>();
     private UIFilmPanel panel;
 
+    /* When false (the default, main preview) this widget behaves exactly as
+     * before: it draws BBSRendering.getTexture() (the main-view surface) and
+     * sizes its viewport from the export video resolution. When true the
+     * widget is a secondary monitor that draws the secondary off-screen view's
+     * texture (BBSRendering.getSecondaryTexture()) and sizes its viewport from
+     * that texture, so the film editor can show more than one camera at once. */
+    private boolean secondaryView;
+
     public UIElement icons;
 
     public UIIcon onionSkin;
@@ -74,9 +82,18 @@ public class UIFilmPreview extends UIElement
     public UIIcon recordReplay;
     public UIIcon recordVideo;
 
+    /** Whether the icon bar is currently shown - see {@link #updateIconsVisibility(UIContext)} */
+    private boolean iconsVisible = true;
+
     public UIFilmPreview(UIFilmPanel filmPanel)
     {
+        this(filmPanel, false);
+    }
+
+    public UIFilmPreview(UIFilmPanel filmPanel, boolean secondaryView)
+    {
         this.panel = filmPanel;
+        this.secondaryView = secondaryView;
 
         this.icons = UI.row(0, 0);
         this.icons.row().resize();
@@ -153,15 +170,12 @@ public class UIFilmPreview extends UIElement
         {
             UIFilmController controller = this.panel.getController();
 
-            menu.autoKeys();
-            controller.populateCameraModeMenu(menu);
-
-            if (controller.getPovMode() == UIFilmController.CAMERA_MODE_ORBIT)
-            {
-                menu.action(Icons.MOVE_TO, UIKeys.FILM_REPLAY_ORBIT_TELEPORT_TO_RECORDING, controller::teleportOrbitPivotToReplay);
-                menu.action(Icons.LINK, UIKeys.FILM_CONTROLLER_KEYS_ATTACH_ORBIT, controller.orbit.isAttached(), controller::toggleOrbitAttachment);
-                menu.action(Icons.FRUSTUM, UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_ORTHO, controller.orbit.isOrtho(), controller.orbit::toggleOrtho);
-            }
+            /* The mode button's context menu is intentionally limited to the
+             * three orbit-camera actions. Camera modes themselves remain in the
+             * left-click mode picker owned by UIFilmController. */
+            menu.action(Icons.MOVE_TO, UIKeys.FILM_REPLAY_ORBIT_TELEPORT_TO_RECORDING, controller::teleportOrbitPivotToReplay);
+            menu.action(Icons.LINK, UIKeys.FILM_CONTROLLER_KEYS_ATTACH_ORBIT, controller.orbit.isAttached(), controller::toggleOrbitAttachment);
+            menu.action(Icons.FRUSTUM, UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_ORTHO, controller.orbit.isOrtho(), controller.orbit::toggleOrtho);
         });
         this.recordReplay = new UIIcon(Icons.SPHERE, (b) -> this.panel.getController().pickRecording());
         this.recordReplay.tooltip(UIKeys.FILM_REPLAY_RECORD);
@@ -389,6 +403,18 @@ public class UIFilmPreview extends UIElement
         int w = this.area.w;
         int h = this.area.h;
 
+        if (this.secondaryView)
+        {
+            /* The secondary off-screen view is sized to the window, not the
+             * export video resolution, so derive the aspect (and the
+             * perspective projection fallback below) from the secondary
+             * texture instead. */
+            Texture secondary = BBSRendering.getSecondaryTexture();
+
+            width = secondary.width > 0 ? secondary.width : w;
+            height = secondary.height > 0 ? secondary.height : h;
+        }
+
         Camera camera = new Camera();
 
         camera.copy(this.panel.getWorldCamera());
@@ -406,6 +432,14 @@ public class UIFilmPreview extends UIElement
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        /* The secondary monitor is display-only: it does not drive the main
+         * orbit controller or the replay editor, so clicks on it are ignored
+         * instead of being forwarded to the shared panel controller. */
+        if (this.secondaryView)
+        {
+            return false;
+        }
+
         Area area = this.getViewport();
 
         if (area.isInside(context))
@@ -430,6 +464,11 @@ public class UIFilmPreview extends UIElement
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        if (this.secondaryView)
+        {
+            return super.subMouseReleased(context);
+        }
+
         boolean handled = this.panel.getController().releaseViewportGesture(context);
 
         return handled || super.subMouseReleased(context);
@@ -443,13 +482,21 @@ public class UIFilmPreview extends UIElement
          * that controller without synthesizing a committing release. The
          * controller's generation checks make the root-wide second traversal
          * idempotent. */
-        this.panel.getController().cancelViewportGesture(context);
+        if (!this.secondaryView)
+        {
+            this.panel.getController().cancelViewportGesture(context);
+        }
         super.subMouseCanceled(context);
     }
 
     @Override
     protected boolean subMouseScrolled(UIContext context)
     {
+        if (this.secondaryView)
+        {
+            return super.subMouseScrolled(context);
+        }
+
         Area area = this.getViewport();
 
         if (area.isInside(context) && !this.panel.isFlying() && this.panel.getController().getPovMode() == UIFilmController.CAMERA_MODE_ORBIT)
@@ -460,11 +507,69 @@ public class UIFilmPreview extends UIElement
         return super.subMouseScrolled(context);
     }
 
+    /**
+     * The icon bar can be set to stay out of the way until the mouse comes over the
+     * preview. A context menu opened from an icon takes the mouse out of the preview,
+     * so while any menu is up the bar keeps the visibility it had when it opened.
+     */
+    private void updateIconsVisibility(UIContext context)
+    {
+        if (!BBSSettings.editorPreviewIconsAutoHide.get())
+        {
+            this.iconsVisible = true;
+        }
+        else if (!context.hasContextMenu())
+        {
+            this.iconsVisible = this.area.isInside(context.mouseX, context.mouseY);
+        }
+
+        this.icons.setVisible(this.iconsVisible);
+    }
+
     @Override
     public void render(UIContext context)
     {
-        Texture texture = BBSRendering.getTexture();
+        Texture texture = this.secondaryView ? BBSRendering.getSecondaryTexture() : BBSRendering.getTexture();
         Area area = this.getViewport();
+
+        if (this.secondaryView)
+        {
+            /* The secondary monitor only paints the off-screen view's texture
+             * while the secondary pass is active. When the multiview toggle is
+             * off, no fresh frames are produced, so the panel draws nothing
+             * rather than a frozen last frame. It also skips the shared panel
+             * camera/controller touches (lastView/lastProjection, sound-guide
+             * drag, cursor, orbit gizmo, guides, HUD, waveform, icon bar) so
+             * it cannot disturb the main preview's multi-tenant state. */
+            if (!BBSRendering.isSecondaryViewEnabled())
+            {
+                return;
+            }
+
+            context.batcher.flush();
+
+            if (texture != null && texture.width > 0 && texture.height > 0)
+            {
+                context.batcher.surfaceBox(
+                    BBSRenderSurfaceKind.FILM_PREVIEW,
+                    texture.id,
+                    Colors.WHITE,
+                    area.x,
+                    area.y,
+                    area.w,
+                    area.h,
+                    0,
+                    texture.height,
+                    texture.width,
+                    0,
+                    texture.width,
+                    texture.height
+                );
+            }
+
+            return;
+        }
+
         Camera camera = this.panel.getCamera();
 
         camera.copy(this.panel.getWorldCamera());
@@ -574,25 +679,30 @@ public class UIFilmPreview extends UIElement
             }
         }
 
-        Area a = this.icons.area;
+        this.updateIconsVisibility(context);
 
-        /* Render icon bar */
-        int barShade = BBSSettings.isLightTheme() ? (Colors.A50 | 0xFFFFFF) : Colors.A50;
-        context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
-
-        if (this.panel.isFlying()) UIDashboardPanels.renderHighlight(context.batcher, this.flight.area, Direction.BOTTOM);
-        if (this.panel.getController().isControlling()) UIDashboardPanels.renderHighlight(context.batcher, this.control.area, Direction.BOTTOM);
-        if (this.panel.getController().isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordReplay.area, Direction.BOTTOM);
-        if (this.panel.recorder.isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordVideo.area, Direction.BOTTOM);
-        if (this.panel.getController().getOnionSkin().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.onionSkin.area, Direction.BOTTOM);
-        if (this.panel.getController().getMotionPath().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.motionPath.area, Direction.BOTTOM);
-        if (this.panel.getController().isControlling())
+        if (this.iconsVisible)
         {
-            String s = UIKeys.FILM_CONTROLLER_CONTROL_MODE_TOOLTIP.format(KeyCodes.getName(Keys.FILM_CONTROLLER_TOGGLE_CONTROL.getMainKey())).get();
-            int w = context.batcher.getFont().getWidth(s);
-            int height = context.batcher.getFont().getHeight();
+            Area a = this.icons.area;
 
-            context.batcher.textCard(s, a.mx(w), a.y - height - 5);
+            /* Render icon bar */
+            int barShade = BBSSettings.isLightTheme() ? (Colors.A50 | 0xFFFFFF) : Colors.A50;
+            context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
+
+            if (this.panel.isFlying()) UIDashboardPanels.renderHighlight(context.batcher, this.flight.area, Direction.BOTTOM);
+            if (this.panel.getController().isControlling()) UIDashboardPanels.renderHighlight(context.batcher, this.control.area, Direction.BOTTOM);
+            if (this.panel.getController().isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordReplay.area, Direction.BOTTOM);
+            if (this.panel.recorder.isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordVideo.area, Direction.BOTTOM);
+            if (this.panel.getController().getOnionSkin().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.onionSkin.area, Direction.BOTTOM);
+            if (this.panel.getController().getMotionPath().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.motionPath.area, Direction.BOTTOM);
+            if (this.panel.getController().isControlling())
+            {
+                String s = UIKeys.FILM_CONTROLLER_CONTROL_MODE_TOOLTIP.format(KeyCodes.getName(Keys.FILM_CONTROLLER_TOGGLE_CONTROL.getMainKey())).get();
+                int w = context.batcher.getFont().getWidth(s);
+                int height = context.batcher.getFont().getHeight();
+
+                context.batcher.textCard(s, a.mx(w), a.y - height - 5);
+            }
         }
 
         context.batcher.clip(this.area, context);

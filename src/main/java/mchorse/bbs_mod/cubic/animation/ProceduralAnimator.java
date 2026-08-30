@@ -166,6 +166,7 @@ public class ProceduralAnimator implements IAnimator
             ModelGroup leftArm = null;
             ModelGroup rightArm = null;
             ModelGroup torso = null;
+            ModelGroup headGroup = null;
 
             for (ModelGroup group : model.getAllGroups())
             {
@@ -219,6 +220,7 @@ public class ProceduralAnimator implements IAnimator
                 }
                 else if (group.id.equals("head"))
                 {
+                    headGroup = group;
                     group.current.rotate.y = -yaw;
 
                     if (isRolling)
@@ -240,11 +242,6 @@ public class ProceduralAnimator implements IAnimator
                     group.current.rotate.z += MathUtils.toDeg(1F * (Mth.cos(-age * 0.09F) * 0.05F + 0.05F));
                     group.current.rotate.x += MathUtils.toDeg(1F * Mth.sin(-age * 0.067F) * 0.05F);
 
-                    if (!main.isEmpty())
-                    {
-                        group.current.rotate.x = group.current.rotate.x * 0.5F + 18F;
-                    }
-
                     rightArm = group;
                 }
                 else if (group.id.equals("left_arm"))
@@ -252,11 +249,6 @@ public class ProceduralAnimator implements IAnimator
                     group.current.rotate.x += MathUtils.toDeg(Mth.cos(limbPhase * 0.6662F + 3.1415927F) * 2.0F * limbSpeed * 0.5F / coefficient);
                     group.current.rotate.z += MathUtils.toDeg(-1F * (Mth.cos(-age * 0.09F) * 0.05F + 0.05F));
                     group.current.rotate.x += MathUtils.toDeg(-1F * Mth.sin(-age * 0.067F) * 0.05F);
-
-                    if (!offhand.isEmpty())
-                    {
-                        group.current.rotate.x = group.current.rotate.x * 0.5F + 18F;
-                    }
 
                     leftArm = group;
                 }
@@ -272,6 +264,17 @@ public class ProceduralAnimator implements IAnimator
                 {
                     group.current.rotate.x = MathUtils.toDeg(Mth.cos(limbPhase * 0.6662F) * 1.4F * limbSpeed / coefficient);
                 }
+            }
+
+            if (leftArm != null && rightArm != null)
+            {
+                VanillaArmPoses.apply(
+                    cubicArm(rightArm), cubicArm(leftArm),
+                    headGroup == null ? MathUtils.toRad(pitch) : -MathUtils.toRad(headGroup.current.rotate.x),
+                    headGroup == null ? MathUtils.toRad(yaw) : -MathUtils.toRad(headGroup.current.rotate.y),
+                    main, offhand, ItemUsePose.get(target, true), ItemUsePose.get(target, false),
+                    target.isSneaking(), handSwingProgress > 0F
+                );
             }
 
             if (handSwingProgress > 0F && torso != null && leftArm != null && rightArm != null)
@@ -311,6 +314,7 @@ public class ProceduralAnimator implements IAnimator
         {
             BOBJBone bobjLeftArm = null;
             BOBJBone bobjRightArm = null;
+            BOBJBone bobjHead = null;
 
             for (BOBJBone bone : model.getAllBOBJBones())
             {
@@ -362,6 +366,7 @@ public class ProceduralAnimator implements IAnimator
                 }
                 else if (bone.name.equals("head"))
                 {
+                    bobjHead = bone;
                     bone.transform.rotate.y = MathUtils.toRad(-yaw);
 
                     if (isRolling)
@@ -383,11 +388,6 @@ public class ProceduralAnimator implements IAnimator
                     bone.transform.rotate.z -= 1F * (Mth.cos(-age * 0.09F) * 0.05F + 0.05F);
                     bone.transform.rotate.x += 1F * Mth.sin(-age * 0.067F) * 0.05F;
 
-                    if (!main.isEmpty())
-                    {
-                        bone.transform.rotate.x = bone.transform.rotate.x * 0.5F + MathUtils.toRad(18F);
-                    }
-
                     bobjRightArm = bone;
                 }
                 else if (bone.name.equals("left_arm"))
@@ -395,11 +395,6 @@ public class ProceduralAnimator implements IAnimator
                     bone.transform.rotate.x += Mth.cos(limbPhase * 0.6662F + 3.1415927F) * 2.0F * limbSpeed * 0.5F / coefficient;
                     bone.transform.rotate.z -= -1F * (Mth.cos(-age * 0.09F) * 0.05F + 0.05F);
                     bone.transform.rotate.x += -1F * Mth.sin(-age * 0.067F) * 0.05F;
-
-                    if (!offhand.isEmpty())
-                    {
-                        bone.transform.rotate.x = bone.transform.rotate.x * 0.5F + MathUtils.toRad(18F);
-                    }
 
                     bobjLeftArm = bone;
                 }
@@ -411,6 +406,17 @@ public class ProceduralAnimator implements IAnimator
                 {
                     bone.transform.rotate.x = Mth.cos(limbPhase * 0.6662F) * 1.4F * limbSpeed / coefficient;
                 }
+            }
+
+            if (bobjLeftArm != null && bobjRightArm != null)
+            {
+                VanillaArmPoses.apply(
+                    bobjArm(bobjRightArm), bobjArm(bobjLeftArm),
+                    bobjHead == null ? MathUtils.toRad(pitch) : bobjHead.transform.rotate.x,
+                    bobjHead == null ? MathUtils.toRad(yaw) : -bobjHead.transform.rotate.y,
+                    main, offhand, ItemUsePose.get(target, true), ItemUsePose.get(target, false),
+                    target.isSneaking(), handSwingProgress > 0F
+                );
             }
 
             if (handSwingProgress > 0F && bobjLeftArm != null && bobjRightArm != null)
@@ -463,5 +469,27 @@ public class ProceduralAnimator implements IAnimator
         if (factor >= 180) factor -= 360;
 
         return b + a * factor;
+    }
+
+    private static VanillaArmPoses.Arm cubicArm(ModelGroup group)
+    {
+        return new VanillaArmPoses.Arm()
+        {
+            public float pitch() { return -MathUtils.toRad(group.current.rotate.x); }
+            public void pitch(float value) { group.current.rotate.x = -MathUtils.toDeg(value); }
+            public float yaw() { return -MathUtils.toRad(group.current.rotate.y); }
+            public void yaw(float value) { group.current.rotate.y = -MathUtils.toDeg(value); }
+        };
+    }
+
+    private static VanillaArmPoses.Arm bobjArm(BOBJBone bone)
+    {
+        return new VanillaArmPoses.Arm()
+        {
+            public float pitch() { return -bone.transform.rotate.x; }
+            public void pitch(float value) { bone.transform.rotate.x = -value; }
+            public float yaw() { return bone.transform.rotate.y; }
+            public void yaw(float value) { bone.transform.rotate.y = value; }
+        };
     }
 }

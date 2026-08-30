@@ -213,7 +213,7 @@ public class UIClips extends UIElement
             UIContext context = this.getContext();
 
             if (this.copyPasteController.paste(context.mouseX, context.mouseY)) UIUtils.playClick();
-        }).category(KEYS_CATEGORY).active(canUseKeybinds);
+        }).inside().category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.PRESETS, () ->
         {
             UIContext context = this.getContext();
@@ -226,7 +226,7 @@ public class UIClips extends UIElement
         }).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_CUT, this::cut).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_SHIFT, this::shiftToCursor).category(KEYS_CATEGORY).active(canUseKeybinds);
-        this.keys().register(Keys.CLIP_DURATION, this::shiftDurationToCursor).category(KEYS_CATEGORY).active(canUseKeybindsSelected);
+        this.keys().register(Keys.CLIP_DURATION, this::shiftDurationToCursor).strict().category(KEYS_CATEGORY).active(canUseKeybindsSelected);
         this.keys().register(Keys.DELETE, this::removeSelected).label(UIKeys.CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_ENABLE, this::toggleEnabled).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_SELECT_ALL, this::selectAll).category(KEYS_CATEGORY).active(canUseKeybinds);
@@ -1389,6 +1389,7 @@ public class UIClips extends UIElement
         else
         {
             this.scrubbing = true;
+            this.delegate.stopPlaybackOnScrub();
             this.delegate.setCursor(this.fromGraphX(mouseX));
 
             return true;

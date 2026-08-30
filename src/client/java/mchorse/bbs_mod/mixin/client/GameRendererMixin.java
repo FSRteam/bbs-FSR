@@ -1,8 +1,6 @@
 package mchorse.bbs_mod.mixin.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.math.Axis;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.controller.CameraController;
@@ -33,7 +31,8 @@ public class GameRendererMixin
     @Inject(method = "bobView", at = @At("HEAD"), cancellable = true)
     public void onBob(PoseStack poseStack, float partialTick, CallbackInfo ci)
     {
-        if (BBSModClient.getCameraController().getCurrent() != null)
+        if (BBSModClient.getCameraController().getCurrent() != null
+            || BBSRendering.isApplyingSecondaryCamera())
         {
             ci.cancel();
         }
@@ -45,6 +44,18 @@ public class GameRendererMixin
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
     public void onGetFov(Camera camera, float partialTick, boolean useConfiguredFov, CallbackInfoReturnable<Double> info)
     {
+        if (BBSRendering.isApplyingSecondaryCamera())
+        {
+            double secondaryFov = BBSRendering.getSecondaryCameraFov();
+
+            if (Double.isFinite(secondaryFov) && secondaryFov > 0D)
+            {
+                info.setReturnValue(secondaryFov);
+            }
+
+            return;
+        }
+
         GunZoom gunZoom = BBSModClient.getGunZoom();
 
         if (gunZoom != null)
@@ -56,7 +67,12 @@ public class GameRendererMixin
 
         CameraController controller = BBSModClient.getCameraController();
 
-        if (controller.getCurrent() != null && !BBSRendering.isIrisShadowPass())
+        /* A secondary pass already owns its Camera and projection. Applying the
+         * main controller's FOV here would pair the secondary view matrix with
+         * the main monitor's lens and distort entity placement. */
+        if (controller.getCurrent() != null
+            && !BBSRendering.isIrisShadowPass()
+            && !BBSRendering.isApplyingSecondaryCamera())
         {
             info.setReturnValue(controller.getFOV());
         }
@@ -70,7 +86,9 @@ public class GameRendererMixin
     {
         CameraController controller = BBSModClient.getCameraController();
 
-        if (controller.getCurrent() != null && !BBSRendering.isIrisShadowPass())
+        if (controller.getCurrent() != null
+            && !BBSRendering.isIrisShadowPass()
+            && !BBSRendering.isApplyingSecondaryCamera())
         {
             poseStack.mulPose(Axis.ZP.rotationDegrees(controller.getRoll()));
 
@@ -81,11 +99,35 @@ public class GameRendererMixin
     @Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
     public void onRenderHand(Camera camera, float partialTick, Matrix4f projectionMatrix, CallbackInfo info)
     {
+        if (BBSRendering.isApplyingSecondaryCamera())
+        {
+            info.cancel();
+
+            return;
+        }
+
         ICameraController current = BBSModClient.getCameraController().getCurrent();
 
         if (current instanceof PlayCameraController)
         {
             info.cancel();
+        }
+    }
+
+    /**
+     * This injection replaces the projection matrix during the secondary
+     * off-screen pass. Fitting at the single source (getProjectionMatrix)
+     * means the matrix stored into RenderSystem by resetProjectionMatrix and
+     * the matrix passed as the renderLevel argument are the same object, so
+     * entities (BufferUploader reads RenderSystem) and terrain (argument)
+     * can never disagree after a window resize or export-size state flip.
+     */
+    @Inject(method = "getProjectionMatrix", at = @At("RETURN"), cancellable = true)
+    public void onGetProjectionMatrix(double fov, CallbackInfoReturnable<Matrix4f> info)
+    {
+        if (BBSRendering.isApplyingSecondaryCamera())
+        {
+            info.setReturnValue(BBSRendering.fitSecondaryProjection(info.getReturnValue()));
         }
     }
 
@@ -105,6 +147,15 @@ public class GameRendererMixin
     )
     private Matrix4f onSetupFrustumProjection(Matrix4f projection)
     {
+        /* The secondary pass gets its aspect-correct perspective matrix from
+         * getProjectionMatrix(). Applying the main view's orthographic helper
+         * here would make the frustum use a different projection than entity
+         * buffers after a window resize. */
+        if (BBSRendering.isApplyingSecondaryCamera())
+        {
+            return projection;
+        }
+
         return BBSRendering.getOrthoProjection((GameRenderer) (Object) this, projection, 20F);
     }
 
@@ -118,13 +169,15 @@ public class GameRendererMixin
     )
     private Matrix4f onRenderProjection(Matrix4f projection)
     {
-        Matrix4f ortho = BBSRendering.getOrthoProjection((GameRenderer) (Object) this, projection, 0F);
-
-        if (ortho != projection)
+        /* Keep the secondary pass on the single projection returned by
+         * getProjectionMatrix(). The main-view ortho conversion is a separate
+         * concern and must not run for preview2. */
+        if (BBSRendering.isApplyingSecondaryCamera())
         {
-            RenderSystem.setProjectionMatrix(ortho, VertexSorting.ORTHOGRAPHIC_Z);
+            return projection;
         }
 
+        Matrix4f ortho = BBSRendering.getOrthoProjection((GameRenderer) (Object) this, projection, 0F);
         return ortho;
     }
 
@@ -144,7 +197,11 @@ public class GameRendererMixin
     {
         ICameraController current = BBSModClient.getCameraController().getCurrent();
 
-        if (Minecraft.getInstance().options.hideGui && current == null)
+        /* The secondary off-screen pass runs whenever the Shift+M debug toggle
+         * is on, so it is visible in normal gameplay with a HUD. The export
+         * path additionally needs hideGui && current == null, which still holds
+         * below. */
+        if (BBSRendering.isSecondaryViewEnabled() || (Minecraft.getInstance().options.hideGui && current == null))
         {
             BBSRendering.onRenderBeforeScreen();
         }

@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.SwipeActionClip;
+import mchorse.bbs_mod.actions.types.blocks.InteractBlockActionClip;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.utils.clips.Clips;
 import net.minecraft.server.level.ServerPlayer;
@@ -19,6 +20,8 @@ public class ActionRecorder
     private int countdown;
     private int initialTick;
     private boolean targetedAttackRecordedThisTick;
+    /** The last block interaction, until it's known whether it opened a container. */
+    private InteractBlockActionClip interactClip;
     private Clips terminalClips;
     private boolean terminalPrepared;
     private boolean terminalForced;
@@ -114,6 +117,11 @@ public class ActionRecorder
         clip.duration.set(1);
 
         this.clips.addClip(clip);
+
+        if (clip instanceof InteractBlockActionClip interactClip)
+        {
+            this.interactClip = interactClip;
+        }
     }
 
     public void tick(ServerPlayer player)
@@ -129,6 +137,8 @@ public class ActionRecorder
 
             return;
         }
+
+        this.trackContainer(player);
 
         boolean swingStarted = player.swingTime == -1;
 
@@ -156,5 +166,30 @@ public class ActionRecorder
     static boolean shouldRecordFallbackAttack(boolean swingStarted, boolean targetedAttackRecorded)
     {
         return swingStarted && !targetedAttackRecorded;
+    }
+
+    /**
+     * Grows the last block interaction for as long as the container it opened
+     * stays open. The clip is born inside the interaction itself, before the
+     * screen it leads to is up, so the first tick after it is the one that
+     * knows whether there was a container at all - and from then on the clip
+     * is exactly as long as the player kept the chest open. Playback holds the
+     * lid up for precisely this stretch.
+     */
+    private void trackContainer(ServerPlayer player)
+    {
+        if (this.interactClip == null)
+        {
+            return;
+        }
+
+        if (player.containerMenu != player.inventoryMenu)
+        {
+            this.interactClip.duration.set(Math.max(1, this.tick - this.interactClip.tick.get() + 1));
+        }
+        else
+        {
+            this.interactClip = null;
+        }
     }
 }

@@ -13,6 +13,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.IKeyframeShapeRenderer;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.KeyframeShapeRenderers;
 import mchorse.bbs_mod.ui.framework.tooltips.InterpolationTooltip;
@@ -20,6 +21,7 @@ import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.interps.Interpolation;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
@@ -32,6 +34,7 @@ import java.util.Map;
 public abstract class UIKeyframeFactory <T> extends UIElement
 {
     private static final Map<IKeyframeFactory, IUIKeyframeFactoryFactory> FACTORIES = new HashMap<>();
+    private static final Map<String, IUIKeyframeFactoryFactory> PROPERTIES = new HashMap<>();
     private static final Map<IKeyframeFactory, Integer> SCROLLS = new HashMap<>();
 
     public UIScrollView scroll;
@@ -70,6 +73,7 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         register(KeyframeFactories.ACTIONS_CONFIG, UIActionsConfigKeyframeFactory::new);
         register(KeyframeFactories.SHAPE_KEYS, UIShapeKeysKeyframeFactory::new);
         register(KeyframeFactories.PARTICLE_SETTINGS, UIParticleSettingsKeyframeFactory::new);
+        registerProperty("model", UIModelKeyframeFactory::new);
         register(KeyframeFactories.SOUND, UISoundKeyframeFactory::new);
         register(KeyframeFactories.SOUND_SHAPE, UISoundKeyframeFactory::new);
         register(KeyframeFactories.SOUND_VISUALIZATION, UISoundKeyframeFactory::new);
@@ -80,6 +84,11 @@ public abstract class UIKeyframeFactory <T> extends UIElement
     public static <T> void register(IKeyframeFactory<T> clazz, IUIKeyframeFactoryFactory<T> factory)
     {
         FACTORIES.put(clazz, factory);
+    }
+
+    public static <T> void registerProperty(String property, IUIKeyframeFactoryFactory<T> factory)
+    {
+        PROPERTIES.put(property, factory);
     }
 
     public static void saveScroll(UIKeyframeFactory editor)
@@ -98,7 +107,19 @@ public abstract class UIKeyframeFactory <T> extends UIElement
 
     public static <T> UIKeyframeFactory createPanel(Keyframe<T> keyframe, UIKeyframes editor)
     {
-        IUIKeyframeFactoryFactory<T> factory = FACTORIES.get(keyframe.getFactory());
+        IUIKeyframeFactoryFactory<T> factory = null;
+        IUIKeyframeGraph graph = editor == null ? null : editor.getGraph();
+        UIKeyframeSheet sheet = graph == null ? null : graph.getSheet(keyframe);
+
+        if (sheet != null && sheet.property != null && !sheet.isBoneTrack)
+        {
+            factory = PROPERTIES.get(StringUtils.fileName(sheet.channel.getId()));
+        }
+
+        if (factory == null)
+        {
+            factory = FACTORIES.get(keyframe.getFactory());
+        }
 
         return factory == null ? null : factory.create(keyframe, editor);
     }
