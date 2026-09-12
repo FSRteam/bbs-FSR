@@ -56,6 +56,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 public class UIFilmPreview extends UIElement
 {
@@ -311,9 +312,30 @@ public class UIFilmPreview extends UIElement
      * through the same pathway as the camera screenshot menu action. Used by
      * the film home to capture covers.
      *
-     * @param onDone optional callback invoked after the file was written
+     * @param onDone optional callback invoked after the screenshot write is queued
      */
     public void snapshotToFile(File output, Runnable onDone)
+    {
+        this.snapshotToFile(output, onDone, null);
+    }
+
+    /**
+     * Renders one export-resolution frame and reports either completion or
+     * cancellation. The cancellation callback is used by background cover
+     * generation to release its in-flight slot when the editor closes before
+     * the frame fence runs.
+     */
+    public void snapshotToFile(File output, Runnable onDone, Runnable onCancelled)
+    {
+        this.snapshotToFile(output, onDone, onCancelled, null);
+    }
+
+    /**
+     * Renders one export-resolution frame while the supplied owner remains
+     * current. The extra owner check prevents delayed captures from writing a
+     * frame belonging to a different film after a tab switch.
+     */
+    public void snapshotToFile(File output, Runnable onDone, Runnable onCancelled, BooleanSupplier ownerValid)
     {
         ScreenshotRecorder recorder = BBSModClient.getScreenshotRecorder();
 
@@ -324,7 +346,7 @@ public class UIFilmPreview extends UIElement
         {
             UIFilmPanel.applyExportSizeToBBS();
             BBSRendering.scheduleAfterNextExportFrame(
-                this::isPanelOwnerValid,
+                () -> this.isPanelOwnerValid() && (ownerValid == null || ownerValid.getAsBoolean()),
                 () ->
                 {
                     Texture texture = BBSRendering.getTexture();
@@ -339,7 +361,15 @@ public class UIFilmPreview extends UIElement
                         onDone.run();
                     }
                 },
-                this::restorePreviewIfOwned
+                () ->
+                {
+                    this.restorePreviewIfOwned();
+
+                    if (onCancelled != null)
+                    {
+                        onCancelled.run();
+                    }
+                }
             );
             scheduled = true;
         }
@@ -348,6 +378,11 @@ public class UIFilmPreview extends UIElement
             if (!scheduled)
             {
                 this.restorePreviewIfOwned();
+
+                if (onCancelled != null)
+                {
+                    onCancelled.run();
+                }
             }
         }
     }

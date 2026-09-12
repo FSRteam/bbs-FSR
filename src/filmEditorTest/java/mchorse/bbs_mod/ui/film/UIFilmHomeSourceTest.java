@@ -14,12 +14,14 @@ public final class UIFilmHomeSourceTest
 {
     private static final Path FILM_PANEL = Path.of("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
     private static final Path HOME_PANEL = Path.of("src/client/java/mchorse/bbs_mod/ui/film/home/UIFilmHomePanel.java");
+    private static final Path THUMBNAILS = Path.of("src/client/java/mchorse/bbs_mod/ui/film/home/FilmThumbnails.java");
     private static final Path EN_US = Path.of("src/client/resources/assets/bbs/assets/strings/en_us.json");
 
     public static void runAll() throws IOException
     {
         String panel = Files.readString(FILM_PANEL);
         String home = Files.readString(HOME_PANEL);
+        String thumbnails = Files.readString(THUMBNAILS);
         String lang = Files.readString(EN_US);
 
         check(panel.contains("public UIFilmHomePanel selectionPanel"),
@@ -49,6 +51,14 @@ public final class UIFilmHomeSourceTest
             "home must host the bottom-left ad board");
         check(home.contains("FilmThumbnails.getCached"),
             "film cards must render cached first-frame thumbnails");
+        check(home.contains("this.renameFolder(first.toString(), to)"),
+            "folder rename must use the folder-specific operation");
+        check(home.contains("this.panel.getRepository().renameFolder(from, to"),
+            "folder rename must use the repository folder operation");
+        check(home.contains("PANELS_CONTEXT_PASTE"),
+            "film home context menus must retain paste");
+        check(home.contains("namesList.keys().register(Keys.DELETE"),
+            "list view must retain selection keybinds");
         check(!home.contains("startBatch"),
             "cover generation must never hijack navigation by auto-opening films");
 
@@ -58,6 +68,10 @@ public final class UIFilmHomeSourceTest
 
         check(preview.contains("public void snapshotToFile(File output, Runnable onDone)"),
             "the monitor's screenshot pipeline must be reusable for covers");
+        check(preview.contains("BooleanSupplier ownerValid"),
+            "cover captures must validate the active film before rendering");
+        check(thumbnails.contains("filmId.equals(host.getData().getId())"),
+            "cover captures must not cross film tabs");
         check(panel.contains("FilmThumbnails.requestCapture(data.getId())"),
             "covers must be captured as soon as a film's data arrives");
 

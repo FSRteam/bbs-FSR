@@ -85,13 +85,13 @@ public class FilmHomeContent
         public String summary = "";
         /** Optional Markdown body rendered in the detail overlay; wins over summary. */
         public String markdown = "";
-        /** Optional file name under film_home/images/, or an http(s) URL. */
+        /** Optional path relative to film_home/, or an http(s) URL. */
         public String image = "";
         public String url = "";
 
         public Link imageLink()
         {
-            return WebImages.isRemote(this.image) || this.image.isEmpty() ? null : Link.assets("film_home/images/" + this.image);
+            return WebImages.isRemote(this.image) || this.image.isEmpty() ? null : Link.assets("film_home/" + this.image);
         }
     }
 

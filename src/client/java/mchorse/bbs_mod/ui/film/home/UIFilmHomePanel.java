@@ -30,6 +30,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
@@ -229,6 +230,8 @@ public class UIFilmHomePanel extends UIElement
         this.grid.relative(this).xy(8, BANNER_H_FULL + BAR_H + 6).w(1F, -16).h(1F, -BANNER_H_FULL - BAR_H - 14);
         this.grid.context((menu) ->
         {
+            this.addPasteAction(menu);
+
             menu.action(Icons.ADD, UIKeys.GENERAL_ADD, this::addData);
             menu.action(Icons.FOLDER, UIKeys.PANELS_MODALS_ADD_FOLDER_TITLE, this::addNewFolder);
             menu.action(Icons.EDIT, UIKeys.GENERAL_RENAME, this::renameSelected);
@@ -267,6 +270,8 @@ public class UIFilmHomePanel extends UIElement
         this.namesList.setFileIcon(Icons.FILM);
         this.namesList.context((menu) ->
         {
+            this.addPasteAction(menu);
+
             menu.action(Icons.ADD, UIKeys.GENERAL_ADD, this::addData);
             menu.action(Icons.FOLDER, UIKeys.PANELS_MODALS_ADD_FOLDER_TITLE, this::addNewFolder);
             menu.action(Icons.EDIT, UIKeys.GENERAL_RENAME, this::renameSelected);
@@ -278,6 +283,10 @@ public class UIFilmHomePanel extends UIElement
                 menu.action(Icons.COPY, UIKeys.PANELS_CONTEXT_COPY, this::copySelected);
             }
         });
+        this.namesList.keys().register(Keys.DELETE, this::removeSelected).active(this::canUseListKeys);
+        this.namesList.keys().register(new KeyCombo(UIKeys.GENERAL_RENAME, GLFW.GLFW_KEY_F2), this::renameSelected).active(this::canUseListKeys);
+        this.namesList.keys().register(new KeyCombo(UIKeys.PANELS_CONTEXT_OPEN, GLFW.GLFW_KEY_ENTER), this.namesList::activateSelection).active(this::canUseListKeys);
+        this.namesList.keys().register(new KeyCombo(UIKeys.KEYFRAMES_CONTEXT_SELECT_ALL, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_CONTROL), this.namesList::selectAll).active(this::canUseListKeys);
 
         this.newsStrip.setVisible(false);
         this.board.setVisible(false);
@@ -783,6 +792,18 @@ public class UIFilmHomePanel extends UIElement
         return this.grid.area.isInside(context) || this.grid.isSelected();
     }
 
+    private boolean canUseListKeys()
+    {
+        UIContext context = this.getContext();
+
+        if (!this.isVisible() || context == null)
+        {
+            return false;
+        }
+
+        return this.namesList.area.isInside(context) || this.namesList.isSelected();
+    }
+
     private List<DataPath> getSelectedPaths()
     {
         List<DataPath> paths = new ArrayList<>();
@@ -975,6 +996,26 @@ public class UIFilmHomePanel extends UIElement
         });
     }
 
+    private void addPasteAction(ContextMenuManager menu)
+    {
+        try
+        {
+            MapType data = Window.getClipboardMap("_ContentType_" + this.panel.getType().getId());
+
+            if (data != null)
+            {
+                menu.action(Icons.PASTE, UIKeys.PANELS_CONTEXT_PASTE, () -> this.paste(data));
+            }
+        }
+        catch (Exception e)
+        {}
+    }
+
+    private void paste(MapType data)
+    {
+        this.addNewData(data);
+    }
+
     private void dupeSelected()
     {
         List<DataPath> files = this.getSelectedFiles();
@@ -1070,7 +1111,19 @@ public class UIFilmHomePanel extends UIElement
         UIPromptOverlayPanel panel = new UIPromptOverlayPanel(
             folder ? UIKeys.PANELS_MODALS_RENAME_FOLDER_TITLE : UIKeys.GENERAL_RENAME,
             folder ? UIKeys.PANELS_MODALS_RENAME_FOLDER : UIKeys.PANELS_MODALS_RENAME,
-            (str) -> this.rename(first.toString(), this.namesList.getPath(str).toString())
+            (str) ->
+            {
+                String to = this.namesList.getPath(str).toString();
+
+                if (folder)
+                {
+                    this.renameFolder(first.toString(), to);
+                }
+                else
+                {
+                    this.rename(first.toString(), to);
+                }
+            }
         );
 
         panel.text.setText(first.getLast());
@@ -1101,6 +1154,30 @@ public class UIFilmHomePanel extends UIElement
         }
 
         this.panel.requestNames();
+    }
+
+    private void renameFolder(String from, String to)
+    {
+        if (to.trim().isEmpty())
+        {
+            this.getContext().notifyError(UIKeys.PANELS_MODALS_EMPTY);
+
+            return;
+        }
+
+        if (this.namesList.hasInHierarchy(to))
+        {
+            return;
+        }
+
+        this.panel.getRepository().renameFolder(from, to, (success) ->
+        {
+            if (success)
+            {
+                this.panel.renameFilmFolder(from, to);
+                this.panel.requestNames();
+            }
+        });
     }
 
     private void removeSelected()

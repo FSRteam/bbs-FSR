@@ -3,7 +3,6 @@ package mchorse.bbs_mod.ui.film.home;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.graphics.texture.Texture;
-import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import net.minecraft.client.Minecraft;
@@ -17,6 +16,8 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -50,6 +51,8 @@ public class FilmThumbnails
     });
 
     private static final LinkedHashMap<String, Texture> CACHE = new LinkedHashMap<>(16, 0.75F, true);
+    private static final Set<String> CAPTURES = ConcurrentHashMap.newKeySet();
+    private static final Set<String> LOADS = ConcurrentHashMap.newKeySet();
     private static final Object LOCK = new Object();
 
     private static UIFilmPanel panel;
@@ -76,12 +79,34 @@ public class FilmThumbnails
 
         File temp = tempFileFor(filmId);
 
+        if (!CAPTURES.add(filmId))
+        {
+            return;
+        }
+
+        File parent = temp.getParentFile();
+
+        if (parent != null)
+        {
+            parent.mkdirs();
+        }
+
         try
         {
-            host.preview.snapshotToFile(temp, () -> process(filmId, temp));
+            Files.deleteIfExists(temp.toPath());
+
+            host.preview.snapshotToFile(
+                temp,
+                () -> IO.submit(() -> process(filmId, temp)),
+                () -> CAPTURES.remove(filmId),
+                () -> panel == host
+                    && host.getData() != null
+                    && filmId.equals(host.getData().getId())
+            );
         }
         catch (Exception e)
         {
+            CAPTURES.remove(filmId);
             LOGGER.warn("[BBS-SEM] topic=film_thumb phase=schedule result=error", e);
         }
     }
@@ -93,10 +118,34 @@ public class FilmThumbnails
      */
     private static void process(String filmId, File temp)
     {
+        Pixels source = null;
+        Pixels scaled = null;
+
         try
         {
-            for (int i = 0; i < 50 && !isSettled(temp); i++)
+            long previousLength = -1L;
+            int stableReads = 0;
+
+            for (int i = 0; i < 50 && stableReads < 2; i++)
             {
+                long length = temp.isFile() ? temp.length() : 0L;
+
+                if (length > 0L && length == previousLength)
+                {
+                    stableReads += 1;
+                }
+                else
+                {
+                    stableReads = 0;
+                }
+
+                previousLength = length;
+
+                if (stableReads >= 2)
+                {
+                    break;
+                }
+
                 Thread.sleep(200L);
             }
 
@@ -104,8 +153,6 @@ public class FilmThumbnails
             {
                 return;
             }
-
-            Pixels source;
 
             try (java.io.InputStream stream = Files.newInputStream(temp.toPath()))
             {
@@ -115,7 +162,7 @@ public class FilmThumbnails
             int outW = Math.min(CAPTURE_WIDTH, source.width);
             int outH = Math.max(1, (int) ((long) outW * source.height / source.width));
 
-            Pixels scaled = Pixels.fromSize(outW, outH);
+            scaled = Pixels.fromSize(outW, outH);
 
             for (int y = 0; y < outH; y++)
             {
@@ -144,9 +191,11 @@ public class FilmThumbnails
             }
 
             File target = fileFor(filmId);
+            File targetPart = new File(target.getParentFile(), target.getName() + ".part");
 
             target.getParentFile().mkdirs();
-            ImageIO.write(image, "png", target);
+            ImageIO.write(image, "png", targetPart);
+            Files.move(targetPart.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
             Files.deleteIfExists(temp.toPath());
 
@@ -169,12 +218,20 @@ public class FilmThumbnails
         {
             LOGGER.warn("[BBS-SEM] topic=film_thumb phase=process result=error", e);
         }
-    }
+        finally
+        {
+            if (source != null)
+            {
+                source.delete();
+            }
 
-    /** The screenshot writer thread creates and then fully writes the file. */
-    private static boolean isSettled(File file)
-    {
-        return file.isFile() && file.length() > 0;
+            if (scaled != null)
+            {
+                scaled.delete();
+            }
+
+            CAPTURES.remove(filmId);
+        }
     }
 
     /**
@@ -208,7 +265,7 @@ public class FilmThumbnails
     {
         final File file = fileFor(filmId);
 
-        if (!file.isFile())
+        if (!file.isFile() || !LOADS.add(filmId))
         {
             return;
         }
@@ -223,24 +280,43 @@ public class FilmThumbnails
             }
             catch (Exception e)
             {
+                LOADS.remove(filmId);
                 return;
             }
 
             Minecraft.getInstance().execute(() ->
             {
+                Pixels pixels = null;
+
                 try
                 {
-                    Pixels pixels = Pixels.fromPNGStream(new ByteArrayInputStream(bytes));
+                    pixels = Pixels.fromPNGStream(new ByteArrayInputStream(bytes));
                     Texture texture = Texture.textureFromPixels(pixels, GL11.GL_LINEAR);
+                    pixels = null;
 
                     synchronized (LOCK)
                     {
-                        CACHE.put(filmId, texture);
+                        Texture previous = CACHE.put(filmId, texture);
+
+                        if (previous != null && previous != texture)
+                        {
+                            previous.delete();
+                        }
+
                         evictOverflow();
                     }
                 }
                 catch (Exception e)
                 {}
+                finally
+                {
+                    if (pixels != null)
+                    {
+                        pixels.delete();
+                    }
+
+                    LOADS.remove(filmId);
+                }
             });
         });
     }
