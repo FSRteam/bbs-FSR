@@ -8,6 +8,7 @@ import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.numeric.ValueLong;
 import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueIKDebug;
@@ -194,6 +195,13 @@ public class BBSSettings {
 	public static ValueBoolean clickModelBlocks;
 
 	public static ValueString entitySelectorsPropertyWhitelist;
+
+	public static ValueBoolean updateEnabled;
+	public static ValueInt updateChannel;
+	public static ValueInt updateInterval;
+	public static ValueString updateSkippedVersion;
+	public static ValueLong updateLastCheck;
+	public static ValueBoolean updateCheckTrigger;
 
 	public static ValueBoolean damageControl;
 
@@ -933,5 +941,18 @@ public class BBSSettings {
 		builder.category("cdn", Icons.SERVER);
 		cdnUrl = builder.getString("url", "");
 		cdnToken = builder.getString("token", "");
+
+		builder.category("fsr_updates", Icons.DOWNLOAD);
+		updateEnabled = builder.getBoolean("update_enabled", true);
+		updateChannel = builder.getInt("update_channel", 0, 0, 1);
+		updateInterval = builder.getInt("update_interval", 2, 0, 4);
+		updateSkippedVersion = builder.getString("update_skipped_version", "");
+		updateSkippedVersion.invisible();
+		updateLastCheck = new ValueLong("update_last_check", 0L);
+		updateLastCheck.invisible();
+		builder.register(updateLastCheck);
+		/* Meaningless value on purpose: UIValueMap swaps it for the manual
+		 * "check for updates" button + live status line widgets. */
+		updateCheckTrigger = builder.getBoolean("update_check_trigger", false);
 	}
 }

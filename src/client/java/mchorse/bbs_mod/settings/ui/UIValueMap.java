@@ -58,6 +58,11 @@ public class UIValueMap
     {
         register(ValueBoolean.class, (value, ui) ->
         {
+            if (value == BBSSettings.updateCheckTrigger)
+            {
+                return mchorse.bbs_mod.update.FSRUpdates.createSettingsWidgets(ui);
+            }
+
             UIToggle toggle = UIValueFactory.booleanUI(value, value == BBSSettings.scrollingUseThemeCurve ? (button) ->
             {
                 if (ui instanceof UISettingsOverlayPanel panel)
@@ -91,6 +96,22 @@ public class UIValueMap
 
         register(ValueInt.class, (value, ui) ->
         {
+            if (value == BBSSettings.updateChannel || value == BBSSettings.updateInterval)
+            {
+                UICirculate button = new UICirculate(null);
+
+                for (IKey label : mchorse.bbs_mod.update.FSRUpdates.modeLabels(value))
+                {
+                    button.addLabel(label);
+                }
+
+                button.callback = (b) -> value.set(button.getValue());
+                button.setValue(value.get());
+                button.w(90);
+
+                return Arrays.asList(UIValueFactory.column(button, value));
+            }
+
             if (value == BBSSettings.editorPreviewSizeMode)
             {
                 UICirculate button = new UICirculate(null);

@@ -50,6 +50,8 @@ import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.dashboard.utils.IUIOrbitKeysHandler;
 import mchorse.bbs_mod.ui.film.audio.UIAudioRecorder;
 import mchorse.bbs_mod.ui.film.controller.UIFilmController;
+import mchorse.bbs_mod.ui.film.home.FilmThumbnails;
+import mchorse.bbs_mod.ui.film.home.UIFilmHomePanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.UIFilmUndoHandler;
 import mchorse.bbs_mod.ui.film.utils.undo.UIUndoHistoryOverlay;
@@ -113,7 +115,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private final Position position = new Position(0, 0, 0, 0, 0);
     private final Position lastPosition = new Position(0, 0, 0, 0, 0);
 
-    public UIFilmSelectionPanel selectionPanel;
+    public UIFilmHomePanel selectionPanel;
 
     public UIElement main;
     public UIElement editArea;
@@ -341,7 +343,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             }
         }).active(active).category(editor);
 
-        this.selectionPanel = new UIFilmSelectionPanel(this);
+        this.selectionPanel = new UIFilmHomePanel(this);
         this.selectionPanel.setVisible(false);
 
         this.fill(null);
@@ -1818,6 +1820,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.forceSave();
         }
 
+        if (data != null)
+        {
+            /* Film data just arrived (async load): snapshot the monitor's
+             * frame as this film's cover through the editor's own
+             * screenshot pipeline. */
+            FilmThumbnails.requestCapture(data.getId());
+        }
+
         this.notifyServer(ActionState.RESTART);
     }
 
@@ -1848,6 +1858,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         try
         {
+            if (this.data != null)
+            {
+                /* Single last-modified chokepoint: every persisted save
+                 * (manual, periodic, close, pre-pick) flows through here. */
+                this.data.stampUpdatedTimeNow();
+                FilmThumbnails.requestCapture(this.data.getId());
+            }
+
             /* The base panel owns the repository selected when this Film data
              * session started. Always attempt that persistence even when the
              * collaboration transport failed during teardown. */

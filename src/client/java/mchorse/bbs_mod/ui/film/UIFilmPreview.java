@@ -56,6 +56,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 public class UIFilmPreview extends UIElement
 {
@@ -237,44 +238,20 @@ public class UIFilmPreview extends UIElement
                 ScreenshotRecorder recorder = BBSModClient.getScreenshotRecorder();
                 File output = Window.isAltPressed() ? null : recorder.getScreenshotFile();
 
-                BBSRendering.cancelPendingExportResolutionActions();
-                boolean scheduled = false;
-
-                try
+                this.snapshotToFile(output, () ->
                 {
-                    UIFilmPanel.applyExportSizeToBBS();
-                    BBSRendering.scheduleAfterNextExportFrame(
-                        this::isPanelOwnerValid,
-                        () ->
-                        {
-                            Texture texture = BBSRendering.getTexture();
-                            int w = BBSRendering.getVideoWidth();
-                            int h = BBSRendering.getVideoHeight();
-                            recorder.takeScreenshot(output, texture.id, w, h);
-                            this.panel.restorePreviewSize();
+                    UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
 
-                            UIBaseMenu currentMenu = UIScreen.getCurrentMenu();
-                            if (currentMenu != null)
-                            {
-                                UIMessageFolderOverlayPanel overlayPanel = new UIMessageFolderOverlayPanel(
-                                    UIKeys.FILM_SCREENSHOT_TITLE,
-                                    UIKeys.FILM_SCREENSHOT_DESCRIPTION,
-                                    recorder.getScreenshots()
-                                );
-                                UIOverlay.addOverlay(currentMenu.context, overlayPanel);
-                            }
-                        },
-                        this::restorePreviewIfOwned
-                    );
-                    scheduled = true;
-                }
-                finally
-                {
-                    if (!scheduled)
+                    if (currentMenu != null)
                     {
-                        this.restorePreviewIfOwned();
+                        UIMessageFolderOverlayPanel overlayPanel = new UIMessageFolderOverlayPanel(
+                            UIKeys.FILM_SCREENSHOT_TITLE,
+                            UIKeys.FILM_SCREENSHOT_DESCRIPTION,
+                            recorder.getScreenshots()
+                        );
+                        UIOverlay.addOverlay(currentMenu.context, overlayPanel);
                     }
-                }
+                });
             });
 
             menu.action(Icons.FILM, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEOS, () -> this.panel.recorder.openMovies());
@@ -326,6 +303,87 @@ public class UIFilmPreview extends UIElement
         if (this.isPanelOwnerValid())
         {
             this.panel.restorePreviewSize();
+        }
+    }
+
+    /**
+     * Renders the film at export resolution for exactly one isolated frame -
+     * pure camera picture, no dashboard UI - and saves it to {@code output}
+     * through the same pathway as the camera screenshot menu action. Used by
+     * the film home to capture covers.
+     *
+     * @param onDone optional callback invoked after the screenshot write is queued
+     */
+    public void snapshotToFile(File output, Runnable onDone)
+    {
+        this.snapshotToFile(output, onDone, null);
+    }
+
+    /**
+     * Renders one export-resolution frame and reports either completion or
+     * cancellation. The cancellation callback is used by background cover
+     * generation to release its in-flight slot when the editor closes before
+     * the frame fence runs.
+     */
+    public void snapshotToFile(File output, Runnable onDone, Runnable onCancelled)
+    {
+        this.snapshotToFile(output, onDone, onCancelled, null);
+    }
+
+    /**
+     * Renders one export-resolution frame while the supplied owner remains
+     * current. The extra owner check prevents delayed captures from writing a
+     * frame belonging to a different film after a tab switch.
+     */
+    public void snapshotToFile(File output, Runnable onDone, Runnable onCancelled, BooleanSupplier ownerValid)
+    {
+        ScreenshotRecorder recorder = BBSModClient.getScreenshotRecorder();
+
+        BBSRendering.cancelPendingExportResolutionActions();
+        boolean scheduled = false;
+
+        try
+        {
+            UIFilmPanel.applyExportSizeToBBS();
+            BBSRendering.scheduleAfterNextExportFrame(
+                () -> this.isPanelOwnerValid() && (ownerValid == null || ownerValid.getAsBoolean()),
+                () ->
+                {
+                    Texture texture = BBSRendering.getTexture();
+                    int w = BBSRendering.getVideoWidth();
+                    int h = BBSRendering.getVideoHeight();
+
+                    recorder.takeScreenshot(output, texture.id, w, h);
+                    this.panel.restorePreviewSize();
+
+                    if (onDone != null)
+                    {
+                        onDone.run();
+                    }
+                },
+                () ->
+                {
+                    this.restorePreviewIfOwned();
+
+                    if (onCancelled != null)
+                    {
+                        onCancelled.run();
+                    }
+                }
+            );
+            scheduled = true;
+        }
+        finally
+        {
+            if (!scheduled)
+            {
+                this.restorePreviewIfOwned();
+
+                if (onCancelled != null)
+                {
+                    onCancelled.run();
+                }
+            }
         }
     }
 
