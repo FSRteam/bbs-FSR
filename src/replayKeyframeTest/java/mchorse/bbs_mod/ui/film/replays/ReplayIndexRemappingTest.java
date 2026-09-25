@@ -86,6 +86,7 @@ public final class ReplayIndexRemappingTest
             testBbsVolumeFieldsHaveNoFiniteUpperLimit();
             testReplayTrackCategories();
             testGlintLayerKeyframes();
+            testForeignChannelRoundTrip();
             testEnchantedEquipmentSerializationRoundTrip();
             testEnchantedItemPickerNbtRoundTrip();
             testDeathKeyframeChannel();
@@ -521,6 +522,40 @@ public final class ReplayIndexRemappingTest
             "player tab includes physics tracks");
         assertTrue(UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PHYSICS, false),
             "physics tab drops its own tracks");
+    }
+
+    private static void testForeignChannelRoundTrip()
+    {
+        KeyframeChannel<Float> live = new KeyframeChannel<>("known_channel", KeyframeFactories.FLOAT);
+
+        live.insert(0F, 1.5F);
+
+        MapType foreignData = live.toData().asMap();
+
+        foreignData.putString("type", "myaddon:custom_factory");
+
+        MapType data = new MapType();
+
+        data.put("known_channel", live.toData());
+        data.put("foreign_channel", foreignData);
+
+        FormProperties properties = new FormProperties("properties");
+
+        properties.fromData(data);
+
+        assertTrue(properties.get("known_channel") instanceof KeyframeChannel,
+            "known-factory channel is not registered after load");
+        assertTrue(properties.get("foreign_channel") == null,
+            "unknown-factory channel became a live value");
+
+        MapType saved = properties.toData().asMap();
+
+        assertTrue(saved.has("foreign_channel"), "unknown-factory channel is dropped on save");
+        assertEquals("myaddon:custom_factory", saved.getMap("foreign_channel").getString("type"),
+            "unknown-factory channel type is not preserved verbatim");
+        assertEquals(1, saved.getMap("foreign_channel").getList("keyframes").size(),
+            "unknown-factory channel keyframes are not preserved");
+        assertTrue(saved.has("known_channel"), "known channel disappeared next to a foreign one");
     }
 
     private static void testGlintLayerKeyframes()
