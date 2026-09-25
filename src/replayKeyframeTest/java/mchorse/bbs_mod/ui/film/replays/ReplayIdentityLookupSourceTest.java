@@ -139,6 +139,12 @@ public final class ReplayIdentityLookupSourceTest
         check(first.equals(second), "duplicate replay fixture is not structurally equal");
         check(values.indexOf(second) == 0, "fixture no longer demonstrates structural List.indexOf ambiguity");
         check(CollectionUtils.getIndex(values, second) == 1, "identity lookup selected the first equal replay");
+
+        List<StructurallyEqualReplay> remaining = List.of(second);
+
+        check(remaining.contains(first), "fixture no longer demonstrates structural List.contains ambiguity");
+        check(CollectionUtils.getIndex(remaining, first) == -1,
+            "a removed replay must stay absent when an equal duplicate remains");
     }
 
     private static void verifiesReplayUiCallSites()
@@ -152,6 +158,8 @@ public final class ReplayIdentityLookupSourceTest
 
             check(!compact.contains(".replays.getList().indexOf("),
                 sourcePath + " uses structural equality for a Replay index");
+            check(!compact.contains(".replays.getList().contains("),
+                sourcePath + " uses structural equality to keep a removed Replay alive");
             check(compact.contains("CollectionUtils.getIndex("),
                 sourcePath + " no longer uses the shared identity lookup");
         }

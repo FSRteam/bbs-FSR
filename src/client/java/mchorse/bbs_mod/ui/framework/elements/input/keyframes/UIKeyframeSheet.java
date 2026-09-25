@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
@@ -8,7 +9,10 @@ import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.settings.values.ui.ValueTrackStyles;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.utils.StringUtils;
+import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.utils.interps.Interpolation;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -22,6 +26,9 @@ public class UIKeyframeSheet extends UIKeyframeElement
     /* Meta data */
     public final String id;
     private Icon icon;
+    public final IKey defaultTitle;
+    public final int defaultColor;
+    private final String filterKey;
 
     public final KeyframeChannel channel;
     public final KeyframeSelection selection;
@@ -60,6 +67,33 @@ public class UIKeyframeSheet extends UIKeyframeElement
         this.selection = new KeyframeSelection(channel);
         this.property = property;
         this.isBoneTrack = isBoneTrack;
+        this.defaultTitle = title;
+        this.defaultColor = color;
+        if (isBoneTrack)
+        {
+            PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(id);
+            this.filterKey = path == null ? title.get() : (path.formPath().isEmpty() ? path.bone() : path.formPath() + "/" + path.bone());
+        }
+        else
+        {
+            this.filterKey = StringUtils.fileName(id);
+        }
+
+        this.applyStyle();
+    }
+
+    public String getFilterKey()
+    {
+        return this.filterKey;
+    }
+
+    public void applyStyle()
+    {
+        ValueTrackStyles styles = BBSSettings.trackStyles;
+        String name = styles == null ? "" : styles.name(this.filterKey, "");
+
+        this.title = name.isEmpty() ? this.defaultTitle : IKey.constant(name);
+        this.color = styles == null ? this.defaultColor : styles.color(this.filterKey, this.defaultColor);
     }
 
     private static IKey getTrackTitle(KeyframeChannel channel, BaseValueBasic property)

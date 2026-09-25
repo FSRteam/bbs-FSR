@@ -30,7 +30,7 @@ import java.util.Comparator;
  * the camera to look along that world axis (and switches the projection to
  * orthographic, see {@link OrbitFilmCameraController#snapToAxis}).
  *
- * The ball is drawn from {@link UIFilmPanel#lastView}, so it always matches
+ * The ball is drawn from the owning view's displayed camera, so it matches
  * the rendered frame, including the camera smoothing.
  *
  * The axes live in the orbit's anchor space: detached that is the world, but
@@ -77,7 +77,7 @@ public class OrbitViewGizmo
     {
         return BBSSettings.editorOrbitGizmo.get()
             && this.controller.getPovMode() == UIFilmController.CAMERA_MODE_ORBIT
-            && !this.controller.panel.isFlying()
+            && !this.controller.isViewFlying()
             && !this.controller.isControlling();
     }
 
@@ -108,7 +108,7 @@ public class OrbitViewGizmo
 
     public boolean mouseReleased(UIContext context)
     {
-        if (!this.pressed)
+        if (!this.pressed || context.mouseButton != 0)
         {
             return false;
         }
@@ -260,7 +260,7 @@ public class OrbitViewGizmo
 
     private Ball[] getBalls(Area area)
     {
-        Matrix3f view = new Matrix3f(this.controller.panel.lastView);
+        Matrix3f view = new Matrix3f(this.controller.getViewCamera().view);
         float anchorYaw = this.controller.orbit.getAnchorYaw();
         float cx = this.centerX(area);
         float cy = this.centerY(area);

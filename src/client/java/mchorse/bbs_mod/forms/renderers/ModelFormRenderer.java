@@ -7,6 +7,9 @@ import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
+import mchorse.bbs_mod.client.renderer.ItemPredicateDonor;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.animation.ActionsConfig;
 import mchorse.bbs_mod.cubic.animation.Animator;
@@ -842,7 +845,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                         }
                     }
 
-                    Minecraft.getInstance().getItemRenderer().renderStatic(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
+                    boolean mainHand = slot == EquipmentSlot.MAINHAND;
+                    ItemUsePose.Use use = ThirdPersonItemUse.get(target, mainHand);
+                    LivingEntity holder = use == null ? this.resolveLivingEntity(target) : ItemPredicateDonor.get(itemStack, use);
+
+                    Minecraft.getInstance().getItemRenderer().renderStatic(holder, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                     consumers.endBatch();
                 }
                 finally
@@ -943,7 +950,16 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 RenderSystem.enableBlend();
 
                 this.renderingArm = true;
-                this.renderModel(this.armSimulationClock, simulationOwner, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F, this.armSimulationWorld, false, false);
+                ItemUsePose.setSuppressed(true);
+
+                try
+                {
+                    this.renderModel(this.armSimulationClock, simulationOwner, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F, this.armSimulationWorld, false, false);
+                }
+                finally
+                {
+                    ItemUsePose.setSuppressed(false);
+                }
 
                 return true;
             }

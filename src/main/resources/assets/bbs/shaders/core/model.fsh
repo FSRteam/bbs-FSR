@@ -27,6 +27,8 @@ void main()
         discard;
     }
 
+    float texAlpha = color.a;
+
     color *= vertexColor * ColorModulator;
 
     if (PassMode == 1 && color.a < 0.999)
@@ -35,6 +37,19 @@ void main()
     }
 
     if (PassMode == 2 && color.a >= 0.999)
+    {
+        discard;
+    }
+
+    /* Uniform Color Pose fades use the texture's own alpha for the partition.
+     * That keeps skin overlays/shading blended over the model's opaque texels
+     * instead of blending against whatever happens to be behind the model. */
+    if (PassMode == 3 && texAlpha < 0.999)
+    {
+        discard;
+    }
+
+    if (PassMode == 4 && texAlpha >= 0.999)
     {
         discard;
     }

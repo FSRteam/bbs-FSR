@@ -21,7 +21,11 @@ public abstract class CameraWorkCameraController implements ICameraController
     {
         if (this.context.clips != clips)
         {
-            AudioClientClip.releaseSounds(this.context);
+            if (!this.context.isPoseOnly())
+            {
+                AudioClientClip.releaseSounds(this.context);
+            }
+
             this.context.resetPlaybackOwner();
             this.context.clipData.clear();
         }
@@ -51,12 +55,15 @@ public abstract class CameraWorkCameraController implements ICameraController
         this.context.clipData.clear();
         this.context.setup(ticks, transition);
 
-        for (Clip clip : this.context.clips.getClips(ticks))
+        if (this.context.clips != null)
         {
-            this.context.apply(clip, this.position);
+            for (Clip clip : this.context.clips.getClips(ticks))
+            {
+                this.context.apply(clip, this.position);
+            }
         }
 
-        if (this.managesAudio())
+        if (this.managesAudio() && !this.context.isPoseOnly())
         {
             AudioClientClip.manageSounds(this.context);
         }
@@ -90,7 +97,11 @@ public abstract class CameraWorkCameraController implements ICameraController
     @Override
     public void shutdown()
     {
-        AudioClientClip.releaseSounds(this.context);
+        if (!this.context.isPoseOnly())
+        {
+            AudioClientClip.releaseSounds(this.context);
+        }
+
         this.context.shutdown();
         this.context.resetPlaybackOwner();
         this.context.clipData.clear();

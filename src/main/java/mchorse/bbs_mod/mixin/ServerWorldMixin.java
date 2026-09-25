@@ -40,6 +40,6 @@ public class ServerWorldMixin
     @Inject(method = "addFreshEntity", at = @At("HEAD"))
     public void onAddFreshEntity(Entity entity, CallbackInfoReturnable<Boolean> cir)
     {
-        BBSMod.getActions().spawnedEntity(entity);
+        BBSMod.getActions().spawnedEntity((ServerLevel) (Object) this, entity);
     }
 }

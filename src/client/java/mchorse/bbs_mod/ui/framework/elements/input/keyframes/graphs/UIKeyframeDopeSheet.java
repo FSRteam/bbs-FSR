@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.graphics.window.Window;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeElement;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeGroup;
@@ -62,6 +63,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     private Map<UIKeyframeSheet, Integer> poseTabDepths = new HashMap<>();
     private Set<UIKeyframeSheet> poseTabParents = new HashSet<>();
     private Set<UIKeyframeSheet> expandedPoseTabs = new HashSet<>();
+
+    /** What to draw when there are no tracks at all - see {@link #setEmptyState(IKey, IKey)}. */
+    private IKey emptyLabel;
+    private IKey emptyHint;
 
     private Scroll dopeSheet;
     private double trackHeight;
@@ -300,6 +305,18 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         }
 
         return expandedIds;
+    }
+
+    public Set<String> getPoseTabIds()
+    {
+        Set<String> ids = new HashSet<>();
+
+        for (UIKeyframeSheet sheet : this.poseTabParents)
+        {
+            ids.add(sheet.id);
+        }
+
+        return ids;
     }
 
     public void removeAllSheets()
@@ -730,6 +747,38 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.renderGraph(context);
         this.renderTimelineGrid(context);
         this.renderPreviewHints(context);
+        this.renderEmptyState(context);
+    }
+
+    /**
+     * Say why the sheet is blank. Only the owner knows that - an empty curve clip is empty because it
+     * has no channels, while the film timeline is empty because the track filter hid every last row.
+     */
+    public void setEmptyState(IKey label, IKey hint)
+    {
+        this.emptyLabel = label;
+        this.emptyHint = hint;
+    }
+
+    private void renderEmptyState(UIContext context)
+    {
+        if (this.emptyLabel == null || !this.sheets.isEmpty())
+        {
+            return;
+        }
+
+        Area area = this.keyframes.graphArea;
+        FontRenderer font = context.batcher.getFont();
+        int w = (int) (area.w / 1.5F);
+        int x = area.mx() - w / 2;
+        int y = area.my() - font.getHeight();
+
+        context.batcher.wallText(this.emptyLabel.get(), x, y, Colors.setA(Colors.WHITE, 0.5F), w, 12, 0.5F, 0F, true);
+
+        if (this.emptyHint != null)
+        {
+            context.batcher.wallText(this.emptyHint.get(), x, y + font.getHeight() + 6, Colors.setA(Colors.WHITE, 0.25F), w, 12, 0.5F, 0F, true);
+        }
     }
 
     /**

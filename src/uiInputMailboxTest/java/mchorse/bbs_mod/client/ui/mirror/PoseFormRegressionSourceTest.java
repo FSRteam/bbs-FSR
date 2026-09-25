@@ -216,8 +216,29 @@ public final class PoseFormRegressionSourceTest
         check(section(gizmo, "public void captureVisual(PoseStack stack)", "public void renderInterface")
                 .contains("this.captureRenderMatrix(stack)"),
             "the gizmo visual pass no longer captures placement, leaving nothing to drag against");
-        check(filmController.contains("!viewport.isInside(context) || this.controlled != null"),
-            "the film pick pass is no longer cursor gated, so this contract no longer applies");
+        String filmStencil = section(filmController, "private boolean renderStencil(", "private void ensureStencilFramebuffer()");
+
+        assertOrdered(filmStencil,
+            "Area viewport = this.getViewArea();",
+            "if (!viewport.isInside(mouseX, mouseY) || this.isControlling())",
+            "this.stencil.clearPicking();",
+            "return false;",
+            "this.stencil.apply();");
+
+        String pickingPreview = section(filmController, "private void renderPickingPreview(", "public void startRenderFrame(");
+
+        assertOrdered(pickingPreview,
+            "!this.isViewActive()",
+            "!this.preview.isInsideFrame(context)",
+            "return;",
+            "this.updateViewStencil(context, altPressed);");
+
+        String visualFrame = section(filmController, "public void renderFrame(",
+            "Gizmo.INSTANCE.captureVisualState(this.pendingVisualState);");
+
+        check(visualFrame.contains("shared.render(context);") && !visualFrame.contains(".isInside")
+                && !visualFrame.contains("context.mouseX") && !visualFrame.contains("context.mouseY"),
+            "Film gizmo placement must be sampled in each view's visual pass independently of cursor position");
     }
 
     /**
@@ -294,10 +315,12 @@ public final class PoseFormRegressionSourceTest
      */
     private static void disabledReplayHidesGizmo(String filmController)
     {
-        String canShow = section(filmController, "private boolean canShowGizmo()", "private void renderStencil(");
+        String canShow = section(filmController, "private boolean canShowGizmo()", "private boolean renderStencil(");
 
-        check(canShow.contains("replay.enabled.get()"),
+        check(canShow.contains("(replay == null || replay.enabled.get())"),
             "a disabled replay no longer hides the gizmo, so it lingers on a stale matrix");
+        check(canShow.contains("return this.isViewActive() &&"),
+            "an inactive preview can display another view's stale gizmo placement");
     }
 
     /**

@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.film.home;
 
-import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -20,7 +19,6 @@ import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
-import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,13 +78,6 @@ public class UINewsStrip extends UIElement
         for (FilmHomeContent.NewsItem item : items)
         {
             this.cards.add(new CardView(item));
-
-            /* Pre-warm local thumbnails once per refill so the render loop
-             * never hits disk; remote ones stream through WebImages. */
-            if (item.imageLink() != null && !WebImages.isRemote(item.image))
-            {
-                BBSModClient.getTextures().getTexture(item.imageLink(), GL11.GL_NEAREST, true);
-            }
         }
 
         this.header = L10n.lang("bbs.ui.film.home.news").get();
@@ -280,23 +271,7 @@ public class UINewsStrip extends UIElement
 
         Texture texture;
 
-        if (WebImages.isRemote(item.image))
-        {
-            texture = WebImages.get(item.image);
-        }
-        else if (item.imageLink() != null)
-        {
-            texture = BBSModClient.getTextures().getTexture(item.imageLink(), GL11.GL_NEAREST, true);
-
-            if (texture == BBSModClient.getTextures().getError())
-            {
-                texture = null;
-            }
-        }
-        else
-        {
-            texture = null;
-        }
+        texture = WebImages.isRemote(item.image) ? WebImages.get(item.image) : null;
 
         if (texture != null)
         {

@@ -9,8 +9,12 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.camera.CameraPoseEditing;
+import mchorse.bbs_mod.camera.CameraPoseEvaluator;
+import mchorse.bbs_mod.camera.clips.CameraPosePolicy;
 import mchorse.bbs_mod.camera.clips.modifiers.TranslateClip;
 import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
+import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.camera.data.Position;
@@ -23,6 +27,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FrozenFilmController;
 import mchorse.bbs_mod.film.Recorder;
+import mchorse.bbs_mod.film.camera.CameraTrack;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -54,6 +59,9 @@ import mchorse.bbs_mod.ui.film.home.FilmThumbnails;
 import mchorse.bbs_mod.ui.film.home.UIFilmHomePanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.UIFilmUndoHandler;
+import mchorse.bbs_mod.ui.film.view.ViewDescriptor;
+import mchorse.bbs_mod.ui.film.view.ViewNavigationState;
+import mchorse.bbs_mod.ui.film.view.ViewPerformanceSettings;
 import mchorse.bbs_mod.ui.film.utils.undo.UIUndoHistoryOverlay;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -75,7 +83,6 @@ import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
-import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 import mchorse.bbs_mod.utils.clips.Clips;
@@ -97,6 +104,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -110,10 +118,22 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private static final int PREVIEW_MODE_AUTO = 2;
 
     private RunnerCameraController runner;
+    private final CameraPoseEvaluator cameraPoseEvaluator = new CameraPoseEvaluator();
+    private final ViewPerformanceSettings viewPerformanceSettings = new ViewPerformanceSettings();
+    private long sceneFrameId;
     private boolean lifecycleActive;
     private boolean lastRunning;
     private final Position position = new Position(0, 0, 0, 0, 0);
-    private final Position lastPosition = new Position(0, 0, 0, 0, 0);
+    private final Position flightStartPose = new Position();
+    private UIFilmPreview flightPreview;
+    private Film flightFilm;
+    private String flightCameraId;
+    private Clip flightClip;
+    private long flightSequence;
+    private int flightTick;
+    private boolean flightEditsCamera;
+    private MapType flightStartOrbit;
+    private long lastLogicFrame = Long.MIN_VALUE;
 
     public UIFilmHomePanel selectionPanel;
 
@@ -122,6 +142,22 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private final UIDockLayout dock;
     public UIFilmRecorder recorder;
     public UIFilmPreview preview;
+    private final ViewDescriptor primaryView;
+    /* Stable slots keep saved dock layouts and external preview references valid. */
+    public UIFilmPreview preview2;
+    public UIFilmPreview preview3;
+    public UIFilmPreview preview4;
+    private final ViewDescriptor secondaryView;
+    private final ViewDescriptor tertiaryView;
+    private final ViewDescriptor quaternaryView;
+    private UIFilmPreview activePreview;
+    private String editedCameraId = Film.LEGACY_CAMERA_ID;
+    private String viewSettingsFilmId;
+    private int singleViewPreviewWidth;
+    private int singleViewPreviewHeight;
+
+    private boolean restartPending;
+    private int lastRestartCursor = -1;
 
     public UIIcon duplicateFilm;
 
@@ -149,7 +185,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public final Matrix4f lastView = new Matrix4f();
     public final Matrix4f lastProjection = new Matrix4f();
 
-    private Timer flightEditTime = new Timer(100);
     private long lastTime;
     private double timeSpentActiveAccumulator;
     private final FilmEditorUserActivity filmUserActivity = new FilmEditorUserActivity();
@@ -167,6 +202,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private final Map<String, UIElement> panelById = new LinkedHashMap<>();
     private static final String PANEL_MAIN_ID = "main";
     private static final String PANEL_PREVIEW_ID = "preview";
+    private static final String PANEL_PREVIEW_2_ID = "preview2";
+    private static final String PANEL_PREVIEW_3_ID = "preview3";
+    private static final String PANEL_PREVIEW_4_ID = "preview4";
     private static final String PANEL_EDIT_AREA_ID = "editArea";
     private static final String PANEL_REPLAYS_LIST_ID = "replaysList";
     private static final String PANEL_REPLAY_PROPS_ID = "replayProps";
@@ -199,9 +237,23 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.main = new UIElement();
         this.editArea = new UIElement();
-        this.preview = new UIFilmPreview(this);
+        this.primaryView = new ViewDescriptor(this, ViewDescriptor.PRIMARY_ID, true);
+        this.secondaryView = new ViewDescriptor(this, ViewDescriptor.SECONDARY_ID, false);
+        this.secondaryView.setShadersEnabled(false);
+        this.tertiaryView = new ViewDescriptor(this, PANEL_PREVIEW_3_ID, false);
+        this.tertiaryView.setShadersEnabled(false);
+        this.quaternaryView = new ViewDescriptor(this, PANEL_PREVIEW_4_ID, false);
+        this.quaternaryView.setShadersEnabled(false);
+        this.preview = new UIFilmPreview(this, this.primaryView);
+        this.preview2 = new UIFilmPreview(this, this.secondaryView);
+        this.preview3 = new UIFilmPreview(this, this.tertiaryView);
+        this.preview4 = new UIFilmPreview(this, this.quaternaryView);
+        this.activePreview = this.preview;
         this.panelById.put(PANEL_MAIN_ID, this.main);
         this.panelById.put(PANEL_PREVIEW_ID, this.preview);
+        this.panelById.put(PANEL_PREVIEW_2_ID, this.preview2);
+        this.panelById.put(PANEL_PREVIEW_3_ID, this.preview3);
+        this.panelById.put(PANEL_PREVIEW_4_ID, this.preview4);
         this.panelById.put(PANEL_EDIT_AREA_ID, this.editArea);
 
         /* The dock must be constructed before the editors below: the replay
@@ -288,8 +340,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         Supplier<Boolean> active = () -> this.data != null && !this.isFlying();
 
         this.keys().register(Keys.PLAUSE, () -> this.preview.plause.clickItself()).active(active).category(editor);
-        this.keys().register(Keys.NEXT_CLIP, () -> this.setCursor(this.data.camera.findNextTick(this.getCursor()))).active(active).category(editor);
-        this.keys().register(Keys.PREV_CLIP, () -> this.setCursor(this.data.camera.findPreviousTick(this.getCursor()))).active(active).category(editor);
+        this.keys().register(Keys.NEXT_CLIP, () -> this.setCursor(this.data.getCameraClips(this.editedCameraId).findNextTick(this.getCursor()))).active(active).category(editor);
+        this.keys().register(Keys.PREV_CLIP, () -> this.setCursor(this.data.getCameraClips(this.editedCameraId).findPreviousTick(this.getCursor()))).active(active).category(editor);
         this.keys().register(Keys.NEXT, () -> this.setCursor(this.getCursor() + 1)).active(active).category(editor);
         this.keys().register(Keys.PREV, () -> this.setCursor(this.getCursor() - 1)).active(active).category(editor);
         this.keys().register(Keys.UNDO, this::undo).category(editor);
@@ -342,13 +394,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 UIUtils.playClick();
             }
         }).active(active).category(editor);
-
         this.selectionPanel = new UIFilmHomePanel(this);
         this.selectionPanel.setVisible(false);
 
         this.fill(null);
 
-        this.flightEditTime.mark();
 
         this.panels.add(this.cameraEditor);
         this.panels.add(this.replayEditor);
@@ -568,6 +618,29 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.selectionPanel.setVisible(!hasFilm);
         }
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            ViewDescriptor view = preview.getViewDescriptor();
+            boolean visible = hasFilm && this.dock.isPanelActive(view.getId());
+
+            if (!visible && view.isVisible())
+            {
+                preview.cancelViewInteraction();
+                preview.getViewController().releaseViewResources();
+            }
+
+            view.setVisible(visible);
+            view.setActive(visible || view.isPrimary());
+        }
+
+        if (this.activePreview != null && !this.activePreview.getViewDescriptor().isVisible())
+        {
+            this.activePreview = this.preview;
+        }
+        BBSRendering.setSecondaryViewEnabled(this.secondaryView.isVisible()
+            || this.tertiaryView.isVisible()
+            || this.quaternaryView.isVisible());
     }
 
     private boolean hasFilmInCurrentTab()
@@ -623,6 +696,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         switch (panelId)
         {
             case PANEL_PREVIEW_ID: return Icons.VIDEO_CAMERA;
+            case PANEL_PREVIEW_2_ID: return Icons.VIDEO_CAMERA;
+            case PANEL_PREVIEW_3_ID: return Icons.VIDEO_CAMERA;
+            case PANEL_PREVIEW_4_ID: return Icons.VIDEO_CAMERA;
             case PANEL_EDIT_AREA_ID: return Icons.EDITOR;
             case PANEL_REPLAYS_LIST_ID: return Icons.LIST;
             case PANEL_REPLAY_PROPS_ID: return Icons.PROPERTIES;
@@ -636,6 +712,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         switch (panelId)
         {
             case PANEL_PREVIEW_ID: return UIKeys.FILM_PANELS_PREVIEW;
+            case PANEL_PREVIEW_2_ID: return IKey.raw(UIKeys.FILM_PANELS_PREVIEW.get() + " 2");
+            case PANEL_PREVIEW_3_ID: return IKey.raw(UIKeys.FILM_PANELS_PREVIEW.get() + " 3");
+            case PANEL_PREVIEW_4_ID: return IKey.raw(UIKeys.FILM_PANELS_PREVIEW.get() + " 4");
             case PANEL_EDIT_AREA_ID: return UIKeys.FILM_PANELS_EDIT_AREA;
             case PANEL_REPLAYS_LIST_ID: return UIKeys.FILM_PANELS_REPLAYS_LIST;
             case PANEL_REPLAY_PROPS_ID: return UIKeys.FILM_PANELS_REPLAY_PROPS;
@@ -780,6 +859,115 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.dock.resetLayout();
     }
 
+    /** Restore the second preview while preserving the user's other dock panels. */
+    public void ensurePreview2Visible()
+    {
+        this.ensurePreviewVisible(2);
+    }
+
+    /** Add an auxiliary preview to the dock on demand. Slots are limited to four views. */
+    public void ensurePreviewVisible(int slot)
+    {
+        String panelId;
+
+        if (slot == 2)
+        {
+            panelId = PANEL_PREVIEW_2_ID;
+        }
+        else if (slot == 3)
+        {
+            panelId = PANEL_PREVIEW_3_ID;
+        }
+        else if (slot == 4)
+        {
+            panelId = PANEL_PREVIEW_4_ID;
+        }
+        else
+        {
+            return;
+        }
+
+        this.applyPreviewSizeToBBS("beforeAddPreview");
+        Set<String> hidden = this.getFilmLayoutSettings().getHiddenPanels(this.currentLayoutId());
+        boolean changed = hidden.remove(panelId);
+        EditorLayoutNode root = this.getCurrentFilmLayoutRoot();
+        HashSet<String> ids = new HashSet<>();
+        this.collectPanelIds(root, ids);
+
+        if (!ids.contains(panelId))
+        {
+            root = EditorLayoutNode.copyWithInsertSplitAt(root, PANEL_PREVIEW_ID, panelId, EditorLayoutNode.EDGE_RIGHT);
+            changed = true;
+        }
+        else
+        {
+            EditorLayoutNode selected = EditorLayoutNode.copyWithStackActivePanel(root, panelId, panelId);
+
+            changed = selected != root || changed;
+            root = selected;
+        }
+
+        if (changed)
+        {
+            this.getFilmLayoutSettings().setHiddenPanels(this.currentLayoutId(), hidden);
+            this.setCurrentFilmLayoutRoot(root);
+            this.dock.refresh();
+            this.onDockVisibilityChanged();
+        }
+
+        this.activatePreview(this.getPreview(panelId));
+        this.getPreview(panelId).requestRefresh();
+    }
+
+    public boolean canAddPreview()
+    {
+        return !this.isPreviewPresent(PANEL_PREVIEW_2_ID) || !this.isPreviewPresent(PANEL_PREVIEW_3_ID) || !this.isPreviewPresent(PANEL_PREVIEW_4_ID);
+    }
+
+    private boolean isPreviewPresent(String id)
+    {
+        HashSet<String> ids = new HashSet<>();
+
+        this.collectPanelIds(this.getCurrentFilmLayoutRoot(), ids);
+
+        return ids.contains(id) && !this.getFilmLayoutSettings().getHiddenPanels(this.currentLayoutId()).contains(id);
+    }
+
+    public void addPreview()
+    {
+        for (int slot = 2; slot <= 4; slot++)
+        {
+            UIFilmPreview preview = this.getPreviews().get(slot - 1);
+
+            if (!this.isPreviewPresent(preview.getViewDescriptor().getId()))
+            {
+                this.ensurePreviewVisible(slot);
+
+                return;
+            }
+        }
+    }
+
+    public void removePreview(UIFilmPreview preview)
+    {
+        if (preview == null || preview.isPrimaryView())
+        {
+            return;
+        }
+
+        preview.cancelViewInteraction();
+        preview.getViewController().releaseViewResources();
+        String id = preview.getViewDescriptor().getId();
+        Set<String> hidden = this.getFilmLayoutSettings().getHiddenPanels(this.currentLayoutId());
+
+        hidden.add(id);
+        this.getFilmLayoutSettings().setHiddenPanels(this.currentLayoutId(), hidden);
+        this.setCurrentFilmLayoutRoot(EditorLayoutNode.copyWithRemovedPanel(this.getCurrentFilmLayoutRoot(), id));
+        this.dock.refresh();
+        this.onDockVisibilityChanged();
+        this.saveViewSettings();
+    }
+
     private EditorLayoutNode ensureFilmLayoutPanels(EditorLayoutNode root)
     {
         HashSet<String> ids = new HashSet<>();
@@ -788,6 +976,20 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         Set<String> hidden = this.getFilmLayoutSettings().getHiddenPanels(this.currentLayoutId());
         boolean hasList = ids.contains(PANEL_REPLAYS_LIST_ID) || hidden.contains(PANEL_REPLAYS_LIST_ID);
         boolean hasProps = ids.contains(PANEL_REPLAY_PROPS_ID) || hidden.contains(PANEL_REPLAY_PROPS_ID);
+        boolean changed = false;
+
+        for (String id : List.of(PANEL_PREVIEW_2_ID, PANEL_PREVIEW_3_ID, PANEL_PREVIEW_4_ID))
+        {
+            if (!ids.contains(id))
+            {
+                changed = hidden.add(id) || changed;
+            }
+        }
+
+        if (changed)
+        {
+            this.getFilmLayoutSettings().setHiddenPanels(this.currentLayoutId(), hidden);
+        }
 
         if (hasList && hasProps)
         {
@@ -862,22 +1064,41 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         menu.action(Icons.ARROW_RIGHT, UIKeys.FILM_MOVE_TITLE, () ->
         {
+            Film film = this.data;
             UIFilmMoveOverlayPanel panel = new UIFilmMoveOverlayPanel((vector) ->
             {
-                int topLayer = this.data.camera.getTopLayer() + 1;
-                int duration = this.data.camera.calculateDuration();
+                if (film == null || film != this.data)
+                {
+                    return;
+                }
+
+                int duration = Math.max(1, film.calculateDuration());
                 double dx = vector.x;
                 double dy = vector.y;
                 double dz = vector.z;
 
-                BaseValue.edit(this.data, (__) ->
+                BaseValue.edit(film, (__) ->
                 {
-                    TranslateClip clip = new TranslateClip();
+                    this.addCameraTranslation(__.camera, duration, dx, dy, dz);
 
-                    clip.layer.set(topLayer);
-                    clip.duration.set(duration);
-                    clip.translate.get().set(dx, dy, dz);
-                    __.camera.addClip(clip);
+                    for (CameraTrack track : __.cameraTracks.getList())
+                    {
+                        boolean hasPose = track.clips.get().stream().anyMatch(clip -> clip.enabled.get() && CameraPosePolicy.allows(clip));
+
+                        if (hasPose)
+                        {
+                            this.addCameraTranslation(track.clips, duration, dx, dy, dz);
+                        }
+                        else
+                        {
+                            Position position = track.copyPosition();
+
+                            position.point.x += dx;
+                            position.point.y += dy;
+                            position.point.z += dz;
+                            track.position.set(position);
+                        }
+                    }
 
                     for (Replay replay : __.replays.getList())
                     {
@@ -932,6 +1153,17 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             UIOverlay.addOverlay(this.getContext(), new UIFilmDetailsOverlayPanel(this.getData()), 300, 260);
         });
+    }
+
+    private void addCameraTranslation(Clips clips, int duration, double dx, double dy, double dz)
+    {
+        TranslateClip clip = new TranslateClip();
+        int topLayer = clips.getTopLayer();
+
+        clip.layer.set(topLayer == Integer.MAX_VALUE ? topLayer : topLayer + 1);
+        clip.duration.set(duration);
+        clip.translate.get().set(dx, dy, dz);
+        clips.addClip(clip);
     }
 
     /**
@@ -1111,9 +1343,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         int h;
 
         int previewMode = BBSSettings.editorPreviewSizeMode.get();
-        boolean cameraVisible = this.cameraEditor.isVisible();
-        boolean replayVisible = this.replayEditor.isVisible();
-        boolean actionVisible = this.actionEditor.isVisible();
 
         if (previewMode == PREVIEW_MODE_EXPORT)
         {
@@ -1122,35 +1351,38 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
         else if (previewMode == PREVIEW_MODE_CUSTOM)
         {
-            w = Math.max(2, BBSSettings.editorPreviewCustomWidth.get());
-            h = Math.max(2, BBSSettings.editorPreviewCustomHeight.get());
+            Vector2i resized = Vectors.resize(
+                Math.max(2, BBSSettings.videoSettings.width.get()) / (float) Math.max(2, BBSSettings.videoSettings.height.get()),
+                Math.max(2, BBSSettings.editorPreviewCustomWidth.get()),
+                Math.max(2, BBSSettings.editorPreviewCustomHeight.get()));
+
+            w = Math.max(2, resized.x);
+            h = Math.max(2, resized.y);
         }
         else
         {
             float scale = BBSSettings.editorPreviewResolutionScale.get();
+            boolean multiple = this.isPreviewPresent(PANEL_PREVIEW_2_ID) || this.isPreviewPresent(PANEL_PREVIEW_3_ID)
+                || this.isPreviewPresent(PANEL_PREVIEW_4_ID);
 
-            if (cameraVisible)
+            if (!multiple || this.singleViewPreviewWidth <= 0 || this.singleViewPreviewHeight <= 0)
             {
-                int previewW = Math.max(2, this.preview.area.w);
-                int previewH = Math.max(2, this.preview.area.h);
-                int exportW = Math.max(2, BBSSettings.videoSettings.width.get());
-                int exportH = Math.max(2, BBSSettings.videoSettings.height.get());
-                Vector2i resized = Vectors.resize(exportW / (float) exportH, previewW, previewH);
+                this.singleViewPreviewWidth = Math.max(2, this.preview.area.w);
+                this.singleViewPreviewHeight = Math.max(2, this.preview.area.h);
+            }
 
-                w = Math.max(2, (int) (resized.x * scale));
-                h = Math.max(2, (int) (resized.y * scale));
-            }
-            else
-            {
-                int previewW = this.preview.area.w;
-                int previewH = this.preview.area.h;
-                w = Math.max(2, (int) (previewW * scale));
-                h = Math.max(2, (int) (previewH * scale));
-            }
+            int exportW = Math.max(2, BBSSettings.videoSettings.width.get());
+            int exportH = Math.max(2, BBSSettings.videoSettings.height.get());
+            Vector2i resized = Vectors.resize(exportW / (float) exportH, this.singleViewPreviewWidth, this.singleViewPreviewHeight);
+
+            w = Math.max(2, (int) (resized.x * scale));
+            h = Math.max(2, (int) (resized.y * scale));
         }
 
         if (w % 2 != 0) w++;
         if (h % 2 != 0) h++;
+
+        this.primaryView.setSize(w, h);
 
         boolean apply = !BBSRendering.isCustomSize() || w != BBSRendering.getVideoWidth() || h != BBSRendering.getVideoHeight();
 
@@ -1165,6 +1397,22 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (panel == this.cameraEditor)
         {
             this.setFlight(false);
+        }
+    }
+
+    /** Finish against the old clip before its property editor and selection are replaced. */
+    public void prepareClipSelection(UIClipsPanel panel)
+    {
+        if (panel == this.cameraEditor)
+        {
+            String editedCameraId = this.editedCameraId;
+
+            this.finishFlight(true, "clip-selection");
+
+            if (!editedCameraId.equals(this.editedCameraId))
+            {
+                this.selectCameraTrack(editedCameraId);
+            }
         }
     }
 
@@ -1318,6 +1566,283 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIFilmController getController()
     {
         return this.controller;
+    }
+
+    public List<UIFilmPreview> getPreviews()
+    {
+        return List.of(this.preview, this.preview2, this.preview3, this.preview4);
+    }
+
+    public UIFilmPreview getActivePreview()
+    {
+        return this.activePreview == null ? this.preview : this.activePreview;
+    }
+
+    public void activatePreview(UIFilmPreview preview)
+    {
+        if (preview != null && this.activePreview != preview)
+        {
+            this.finishFlight(false);
+
+            if (this.activePreview != null)
+            {
+                this.activePreview.cancelViewInteraction();
+            }
+
+            this.activePreview = preview;
+        }
+    }
+
+    public UIFilmPreview getPreview(String viewId)
+    {
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            if (preview.getViewDescriptor().getId().equals(viewId))
+            {
+                return preview;
+            }
+        }
+
+        return this.preview;
+    }
+
+    public CameraPoseEvaluator getCameraPoseEvaluator()
+    {
+        return this.cameraPoseEvaluator;
+    }
+
+    public String getEditedCameraId()
+    {
+        return this.editedCameraId;
+    }
+
+    public void selectCameraTrack(String cameraId)
+    {
+        String id = this.data != null && this.data.hasCamera(cameraId) ? cameraId : Film.LEGACY_CAMERA_ID;
+
+        if (!id.equals(this.editedCameraId) || this.cameraEditor.clips.getClips() != (this.data == null ? null : this.data.getCameraClips(id)))
+        {
+            this.cameraEditor.embedView(null);
+            this.cameraEditor.pickClip(null);
+            this.editedCameraId = id;
+            this.cameraEditor.setClips(this.data == null ? null : this.data.getCameraClips(id));
+            this.runner.setEditorCameraId(id);
+        }
+    }
+
+    public void editCameraTrack(String cameraId)
+    {
+        this.selectCameraTrack(cameraId);
+        this.showPanel(this.cameraEditor);
+        this.saveViewSettings();
+    }
+
+    public void performCameraEdit(Runnable edit)
+    {
+        if (this.data == null || this.recorder.isExporting())
+        {
+            return;
+        }
+
+        if (this.undoHandler != null)
+        {
+            this.undoHandler.submitUndo();
+            this.undoHandler.getUndoManager().markLastUndoNoMerging();
+        }
+
+        edit.run();
+        this.cameraPoseEvaluator.invalidate();
+
+        for (ViewDescriptor view : this.getViewDescriptors())
+        {
+            view.invalidateHistory();
+        }
+
+        if (this.undoHandler != null)
+        {
+            this.undoHandler.submitUndo();
+            this.undoHandler.getUndoManager().markLastUndoNoMerging();
+        }
+
+        this.fillData();
+        this.saveViewSettings();
+    }
+
+    public void deleteCamera(String cameraId)
+    {
+        this.performCameraEdit(() ->
+        {
+            if (this.data.removeCamera(cameraId))
+            {
+                for (UIFilmPreview preview : this.getPreviews())
+                {
+                    ViewDescriptor view = preview.getViewDescriptor();
+
+                    if (cameraId.equals(view.getCameraId()))
+                    {
+                        preview.cancelViewInteraction();
+                        view.setCameraId(Film.LEGACY_CAMERA_ID);
+                    }
+                }
+
+                this.selectCameraTrack(this.editedCameraId);
+            }
+        });
+    }
+
+    public void writeCameraPose(ViewDescriptor view, Position pose)
+    {
+        this.writeCameraPose(view.resolveCameraId(), pose);
+    }
+
+    public void writeCameraPose(String cameraId, Position pose)
+    {
+        if (this.data == null || !this.data.hasCamera(cameraId))
+        {
+            return;
+        }
+
+        this.finishFlight(false, "explicit-write");
+        this.writeCameraPose(cameraId, pose, cameraId.equals(this.editedCameraId) ? this.cameraEditor.getClip() : null);
+    }
+
+    private void writeCameraPose(String cameraId, Position pose, Clip selected)
+    {
+        if (this.data == null || !this.data.hasCamera(cameraId))
+        {
+            return;
+        }
+
+        this.performCameraEdit(() ->
+        {
+            CameraTrack track = this.data.getCameraTrack(cameraId);
+            Clips clips = this.data.getCameraClips(cameraId);
+
+            if (track != null && clips.get().isEmpty())
+            {
+                track.position.set(pose);
+                this.logCameraWrite(cameraId, null, pose);
+
+                return;
+            }
+
+            this.selectCameraTrack(cameraId);
+            Clip editable = CameraPoseEditing.findEditableClip(clips, selected, this.getCursor());
+
+            if (editable != null)
+            {
+                this.cameraEditor.pickClip(editable);
+                this.cameraEditor.editClip(pose);
+                this.logCameraWrite(cameraId, editable, pose);
+            }
+            else
+            {
+                KeyframeClip clip = new KeyframeClip();
+                Camera camera = new Camera();
+
+                pose.apply(camera);
+                clip.fromCamera(camera);
+                clip.tick.set(this.getCursor());
+                clip.duration.set(1);
+                clip.layer.set(clips.getTopLayer() == Integer.MAX_VALUE ? Integer.MAX_VALUE : clips.getTopLayer() + 1);
+                clips.addClip(clip);
+                this.cameraEditor.pickClip(clip);
+                this.logCameraWrite(cameraId, clip, pose);
+            }
+        });
+    }
+
+    private void logCameraWrite(String cameraId, Clip clip, Position requested)
+    {
+        try
+        {
+            CameraPoseEvaluator evaluator = new CameraPoseEvaluator();
+
+            evaluator.beginFrame(0L, this.data, this.getCursor(), 0F, false, this.controller.getEntities());
+            Position evaluated = evaluator.evaluateEditedEnd(cameraId, clip, this.data.getCameraBasePosition(cameraId));
+
+            LOGGER.info("[FilmFlight] write film={} camera={} tick={} target={} requested={} evaluated={}",
+                this.data.getId(), cameraId, this.getCursor(), cameraClipLog(clip), cameraPoseLog(requested), cameraPoseLog(evaluated));
+        }
+        catch (RuntimeException exception)
+        {
+            /* Diagnostics must not interrupt the edit's undo/history completion. */
+            LOGGER.warn("[FilmFlight] could not sample written camera={} tick={} target={}",
+                cameraId, this.getCursor(), cameraClipLog(clip), exception);
+        }
+    }
+
+    private static String cameraClipLog(Clip clip)
+    {
+        return clip == null ? "base" : clip.getClass().getSimpleName() + "@" + clip.tick.get()
+            + "+" + clip.duration.get() + "/layer=" + clip.layer.get();
+    }
+
+    private static String cameraPoseLog(Position pose)
+    {
+        return String.format(Locale.ROOT, "(%.3f,%.3f,%.3f) yaw=%.2f pitch=%.2f roll=%.2f fov=%.2f",
+            pose.point.x, pose.point.y, pose.point.z, pose.angle.yaw, pose.angle.pitch, pose.angle.roll, pose.angle.fov);
+    }
+
+    public double getAuxiliaryBudgetFraction()
+    {
+        return this.viewPerformanceSettings.getAuxiliaryBudgetFraction();
+    }
+
+    public void setAuxiliaryBudgetFraction(double fraction)
+    {
+        this.viewPerformanceSettings.setAuxiliaryBudgetFraction(fraction);
+        this.saveViewSettings();
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            preview.requestRefresh();
+        }
+    }
+
+    public void saveViewSettings()
+    {
+        if (this.viewSettingsFilmId == null)
+        {
+            return;
+        }
+
+        MapType settings = this.getFilmLayoutSettings().getFilmViewSettings();
+        MapType film = new MapType();
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            film.put(preview.getViewDescriptor().getId(), preview.getViewSettings());
+        }
+
+        film.putString("edited_camera", this.editedCameraId);
+        film.put("performance", this.viewPerformanceSettings.toData());
+        settings.put(this.viewSettingsFilmId, film);
+        this.getFilmLayoutSettings().setFilmViewSettings(settings);
+    }
+
+    private void loadViewSettings(Film film)
+    {
+        this.viewSettingsFilmId = film == null ? null : film.getId();
+        MapType settings = this.viewSettingsFilmId == null ? new MapType()
+            : this.getFilmLayoutSettings().getFilmViewSettings().getMap(this.viewSettingsFilmId);
+
+        this.viewPerformanceSettings.fromData(settings.getMap("performance"));
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            preview.loadViewSettings(settings.getMap(preview.getViewDescriptor().getId()));
+        }
+
+        this.editedCameraId = settings.getString("edited_camera", Film.LEGACY_CAMERA_ID);
+
+        if (film != null && !film.hasCamera(this.editedCameraId))
+        {
+            this.editedCameraId = Film.LEGACY_CAMERA_ID;
+        }
+
+        this.runner.setEditorCameraId(this.editedCameraId);
+        this.activePreview = this.preview;
     }
 
     public UIFilmUndoHandler getUndoHandler()
@@ -1675,6 +2200,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void close()
     {
+        this.cancelViewInteractions();
+        this.saveViewSettings();
+        this.releaseViewResources();
         this.recorder.cancel();
         UIAudioRecorder.cancelActive(this);
         this.controller.shutdown();
@@ -1727,6 +2255,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void disappear()
     {
+        this.cancelViewInteractions();
+        this.saveViewSettings();
+        this.releaseViewResources();
         this.recorder.cancel();
         UIAudioRecorder.cancelActive(this);
         this.controller.shutdown();
@@ -1748,6 +2279,24 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private void disableContext()
     {
         UIAudioRecorder.cancelActive(this);
+    }
+
+    private void cancelViewInteractions()
+    {
+        this.finishFlight(false);
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            preview.cancelViewInteraction();
+        }
+    }
+
+    private void releaseViewResources()
+    {
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            preview.getViewController().releaseViewResources();
+        }
     }
 
     @Override
@@ -1822,9 +2371,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (data != null)
         {
-            /* Film data just arrived (async load): snapshot the monitor's
-             * frame as this film's cover through the editor's own
-             * screenshot pipeline. */
+            /* Capture the first visible frame after an asynchronous film load. */
             FilmThumbnails.requestCapture(data.getId());
         }
 
@@ -1860,8 +2407,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             if (this.data != null)
             {
-                /* Single last-modified chokepoint: every persisted save
-                 * (manual, periodic, close, pre-pick) flows through here. */
+                /* Keep the persisted last-modified time at the save boundary. */
                 this.data.stampUpdatedTimeNow();
                 FilmThumbnails.requestCapture(this.data.getId());
             }
@@ -1896,6 +2442,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     protected void fillData(Film data)
     {
+        this.cancelViewInteractions();
+        this.saveViewSettings();
+
         if (this.data != null)
         {
             this.disableContext();
@@ -1920,8 +2469,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.actionEditor.setClips(null);
         this.runner.setWork(data == null ? null : data.camera);
-        this.cameraEditor.setClips(data == null ? null : data.camera);
         this.replayEditor.setFilm(data);
+        this.loadViewSettings(data);
+        this.cameraEditor.setClips(data == null ? null : data.getCameraClips(this.editedCameraId));
         this.cameraEditor.pickClip(null);
 
         this.fillData();
@@ -1972,11 +2522,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void undo()
     {
+        this.finishFlight(false, "undo");
         if (this.data != null && this.undoHandler.getUndoManager().undo(this.data)) UIUtils.playClick();
     }
 
     public void redo()
     {
+        this.finishFlight(false, "redo");
         if (this.data != null && this.undoHandler.getUndoManager().redo(this.data)) UIUtils.playClick();
     }
 
@@ -1993,56 +2545,156 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void toggleFlight()
     {
-        this.setFlight(!this.isFlying());
-    }
-
-    /**
-     * Set flight mode
-     */
-    public void setFlight(boolean flight)
-    {
-        if (flight)
+        if (this.isFlying())
         {
-            this.controller.stopGizmoInteraction();
+            this.finishFlight(true);
         }
         else
         {
-            /* handleKeyPressed only forwards to the orbit controller while flight is
-             * on, so a toggle with a movement key still held never delivers its
-             * release and the direction would resume on the next toggle. */
-            this.controller.orbit.resetVelocity();
+            this.setFlight(true);
+        }
+    }
+
+    public boolean isViewFlying(UIFilmPreview preview)
+    {
+        return this.isFlying() && this.flightPreview == preview;
+    }
+
+    public void cancelFlight(UIFilmPreview preview)
+    {
+        if (this.flightPreview == preview)
+        {
+            this.finishFlight(false);
+        }
+    }
+
+    /** Programmatic shutdown cancels an edit; the flight toggle commits it. */
+    public void setFlight(boolean flight)
+    {
+        if (!flight)
+        {
+            this.finishFlight(false);
+
+            return;
         }
 
-        if (!this.isRunning() || !flight)
+        if (this.isRunning() || this.recorder.isExporting() || this.data == null || this.flightPreview != null)
         {
-            if (!flight)
+            return;
+        }
+
+        UIFilmPreview preview = this.getActivePreview();
+        ViewNavigationState navigation = preview.getViewDescriptor().getNavigation();
+
+        preview.cancelViewInteraction();
+        Camera camera = new Camera();
+
+        camera.copy(preview.getViewDescriptor().resolveCamera(0F));
+
+        this.flightPreview = preview;
+        this.flightFilm = this.data;
+        this.flightCameraId = preview.getViewDescriptor().resolveCameraId();
+        this.flightTick = this.getCursor();
+        this.flightClip = CameraPoseEditing.findEditableClip(this.data.getCameraClips(this.flightCameraId),
+            this.flightCameraId.equals(this.editedCameraId) ? this.cameraEditor.getClip() : null, this.flightTick);
+        this.flightSequence++;
+        /* Flight explicitly edits the viewed camera; the lock only governs ordinary view dragging. */
+        this.flightEditsCamera = navigation.isInCameraView();
+        this.flightStartOrbit = preview.getViewController().orbit.toData();
+        this.flightStartPose.set(camera);
+        this.position.set(camera);
+        this.dashboard.orbit.setup(camera);
+
+        if (this.flightEditsCamera)
+        {
+            navigation.beginCameraEdit(camera);
+        }
+
+        this.runner.setManual(preview.isPrimaryView() ? this.position : null);
+        this.dashboard.orbitUI.setControl(true);
+
+        LOGGER.info("[FilmFlight] start #{} film={} view={} camera={} tick={} editingCamera={} locked={} target={} pose={}",
+            this.flightSequence, this.data.getId(), preview.getViewDescriptor().getId(), this.flightCameraId,
+            this.flightTick, this.flightEditsCamera, navigation.isLockCameraToView(), cameraClipLog(this.flightClip), cameraPoseLog(this.flightStartPose));
+    }
+
+    private void finishFlight(boolean commit)
+    {
+        this.finishFlight(commit, commit ? "toggle" : "cancel");
+    }
+
+    private void finishFlight(boolean commit, String reason)
+    {
+        UIFilmPreview preview = this.flightPreview;
+        Film film = this.flightFilm;
+        String cameraId = this.flightCameraId;
+        Clip clip = this.flightClip;
+        boolean editsCamera = this.flightEditsCamera;
+        MapType orbit = this.flightStartOrbit;
+
+        if (preview != null && this.isFlying())
+        {
+            /* A click or seek can arrive before the next render copies the latest input pose. */
+            this.dashboard.orbit.apply(this.position);
+        }
+
+        this.flightPreview = null;
+        this.flightFilm = null;
+        this.flightCameraId = null;
+        this.flightClip = null;
+        this.flightEditsCamera = false;
+        this.flightStartOrbit = null;
+        this.runner.setManual(null);
+        this.dashboard.orbitUI.setControl(false);
+
+        if (preview == null)
+        {
+            return;
+        }
+
+        ViewDescriptor view = preview.getViewDescriptor();
+        ViewNavigationState navigation = view.getNavigation();
+
+        preview.getViewController().orbit.resetVelocity();
+        navigation.endCameraEdit();
+
+        boolean targetValid = film == this.data && film.hasCamera(cameraId) && this.getCursor() == this.flightTick
+            && cameraId.equals(view.resolveCameraId()) && (clip == null || film.getCameraClips(cameraId).getIndex(clip) >= 0);
+        boolean changed = !this.flightStartPose.equals(this.position);
+        boolean write = editsCamera && commit && targetValid && changed;
+
+        LOGGER.info("[FilmFlight] finish #{} reason={} film={} view={} camera={} startTick={} currentTick={} editingCamera={} changed={} valid={} write={} pose={}",
+            this.flightSequence, reason, film.getId(), view.getId(), cameraId, this.flightTick, this.getCursor(),
+            editsCamera, changed, targetValid, write, cameraPoseLog(this.position));
+
+        if (write)
+        {
+            this.writeCameraPose(cameraId, this.position.copy(), clip);
+        }
+        else if (!editsCamera)
+        {
+            if (!commit)
             {
-                this.persistFlightFov();
-                if (this.undoHandler != null)
+                navigation.getFreePose().set(this.flightStartPose);
+
+                if (orbit != null)
                 {
-                    this.undoHandler.getUndoManager().markLastUndoNoMerging();
-                }
-                else
-                {
-                    this.lastPosition.set(Position.ZERO);
+                    preview.getViewController().orbit.fromData(orbit);
                 }
             }
             else
             {
-                this.lastPosition.set(Position.ZERO);
+                navigation.getFreePose().set(this.position);
+
+                if (preview.isPrimaryView() && BBSSettings.fov != null)
+                {
+                    BBSSettings.fov.set(this.position.angle.fov);
+                }
             }
-
-            this.runner.setManual(flight ? this.position : null);
-            this.dashboard.orbitUI.setControl(flight);
         }
-    }
 
-    private void persistFlightFov()
-    {
-        if (BBSSettings.fov != null)
-        {
-            BBSSettings.fov.set(this.position.angle.fov);
-        }
+        preview.requestRefresh();
+        this.saveViewSettings();
     }
 
     public Vector2i getLoopingRange()
@@ -2066,7 +2718,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             max = clips.loopMax;
         }
 
-        max = Math.min(max, this.data.camera.calculateDuration());
+        max = Math.min(max, this.data.calculateDuration());
 
         return new Vector2i(min, max);
     }
@@ -2083,6 +2735,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.playerToCamera = BBSSettings.editorPlayerFollowsCamera.get();
         this.controller.update();
+        this.updateRestartOnSeek();
 
         if (this.playerToCamera && this.data != null && !this.controller.isControlling())
         {
@@ -2221,7 +2874,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             context.mouseX = context.mouseY = -1;
         }
 
-        this.controller.orbit.update(context);
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            if (preview.getViewDescriptor().isVisible())
+            {
+                preview.getViewController().orbit.update(context);
+            }
+        }
 
         if (this.undoHandler != null)
         {
@@ -2287,7 +2946,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
      */
     private void updateLogic(UIContext context)
     {
-        Clip clip = this.cameraEditor.getClip();
+        if (this.lastLogicFrame == this.sceneFrameId)
+        {
+            return;
+        }
+
+        this.lastLogicFrame = this.sceneFrameId;
 
         /* Loop fixture */
         if (BBSSettings.editorLoop.get() && this.isRunning())
@@ -2304,29 +2968,25 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
 
         /* Animate flight mode */
-        if (this.dashboard.orbitUI.canControl())
+        if (this.flightPreview != null && this.dashboard.orbitUI.canControl())
         {
             this.dashboard.orbit.apply(this.position);
+            ViewNavigationState navigation = this.flightPreview.getViewDescriptor().getNavigation();
 
-            Position current = new Position(this.getCamera());
-            boolean check = this.flightEditTime.check();
-
-            if (this.cameraEditor.getClip() != null && this.cameraEditor.isVisible() && this.controller.getPovMode() != UIFilmController.CAMERA_MODE_FREE)
+            if (this.flightEditsCamera)
             {
-                if (!this.lastPosition.equals(current) && check)
-                {
-                    this.cameraEditor.editClip(current);
-                }
+                navigation.getEditingPose().set(this.position);
+            }
+            else
+            {
+                navigation.getFreePose().set(this.position);
             }
 
-            if (check)
-            {
-                this.lastPosition.set(current);
-            }
+            this.flightPreview.requestRefresh();
         }
         else
         {
-            this.dashboard.orbit.setup(this.getCamera());
+            this.dashboard.orbit.setup(this.getActivePreview().getDisplayedCamera());
         }
 
         /* Rewind playback back to 0 */
@@ -2348,6 +3008,20 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         super.startRenderFrame(tickDelta);
 
         this.controller.startRenderFrame(tickDelta);
+        this.sceneFrameId++;
+        this.cameraPoseEvaluator.beginFrame(
+            this.sceneFrameId,
+            this.data,
+            this.getCursor(),
+            tickDelta,
+            this.runner.isRunning(),
+            this.controller.getEntities()
+        );
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            preview.updateRenderDemand();
+        }
     }
 
     @Override
@@ -2355,13 +3029,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         super.renderInWorld(context);
 
-        if (!BBSRendering.isIrisShadowPass())
+        if (!BBSRendering.isIrisShadowPass() && !BBSRendering.isApplyingSecondaryCamera())
         {
             this.lastProjection.set(context.projectionMatrix());
             this.lastView.set(context.modelViewMatrix());
         }
 
-        this.controller.renderFrame(context);
+        this.getPreview(BBSRendering.getActiveViewId()).getViewController().renderFrame(context);
     }
 
     /* IUICameraWorkDelegate implementation */
@@ -2384,6 +3058,69 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return this.camera;
     }
 
+    /** Stable view descriptors consumed by the world renderer. */
+    public Collection<ViewDescriptor> getViewDescriptors()
+    {
+        return List.of(this.primaryView, this.secondaryView, this.tertiaryView, this.quaternaryView);
+    }
+
+    public ViewDescriptor getPrimaryView()
+    {
+        return this.primaryView;
+    }
+
+    public ViewDescriptor getSecondaryView()
+    {
+        return this.secondaryView;
+    }
+
+    /** Resolve one preview without advancing playback or modifying the output camera. */
+    public void resolveViewCamera(ViewDescriptor view, float transition)
+    {
+        if (view == null)
+        {
+            return;
+        }
+
+        Camera target = view.getCamera();
+        Film film = this.getData();
+        ViewNavigationState navigation = view.getNavigation();
+        UIFilmController controller = this.getPreview(view.getId()).getViewController();
+
+        view.setOrthoDistance(-1F);
+        navigation.initialize(this.getCamera());
+
+        if (film == null)
+        {
+            target.copy(this.getCamera());
+
+            return;
+        }
+
+        if (navigation.isInCameraView())
+        {
+            Position pose = navigation.isEditingCamera() ? navigation.getEditingPose()
+                : this.cameraPoseEvaluator.evaluate(view.resolveCameraId(), film.getCameraBasePosition(view.resolveCameraId()));
+
+            pose.apply(target);
+        }
+        else if (this.isViewFlying(this.getPreview(view.getId())))
+        {
+            this.position.apply(target);
+            controller.handleCamera(target, transition);
+            navigation.getFreePose().set(target);
+        }
+        else
+        {
+            navigation.getFreePose().apply(target);
+            controller.handleCamera(target, transition);
+            navigation.getFreePose().set(target);
+        }
+
+        target.updatePerspectiveProjection(Math.max(2, view.getWidth()), Math.max(2, view.getHeight()));
+        target.updateView();
+    }
+
     public Camera getWorldCamera()
     {
         return BBSModClient.getCameraController().camera;
@@ -2403,12 +3140,82 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public void setCursor(int value)
     {
-        this.flightEditTime.mark();
-        this.lastPosition.set(Position.ZERO);
+        int previousCursor = this.getCursor();
 
+        this.finishFlight(true, "seek");
+        this.cancelViewInteractions();
         this.runner.ticks = Math.max(0, value);
 
+        if (this.runner.ticks != previousCursor)
+        {
+            for (ViewDescriptor view : this.getViewDescriptors())
+            {
+                view.invalidateHistory();
+            }
+        }
+
         this.notifyServer(ActionState.SEEK);
+
+        if (BBSSettings.editorRestartOnSeek.get())
+        {
+            this.restartPending = true;
+        }
+    }
+
+    /**
+     * Restart the actions and recreate the actors, the same way {@link Keys#FILM_CONTROLLER_RESTART_ACTIONS}
+     * does it manually.
+     */
+    public void restartActions()
+    {
+        this.restartPending = false;
+
+        this.notifyServer(ActionState.RESTART);
+        this.controller.createEntities();
+    }
+
+    /**
+     * Automatic restart of the actions upon scrubbing the cursor (see the "restart on seek" setting).
+     *
+     * <p>Both restarting the actions on the server and recreating the actors are way too
+     * expensive to run them on every frame of a scrubbing drag, so the restart waits until
+     * the cursor stops moving for a tick and only then fires once.</p>
+     */
+    private void updateRestartOnSeek()
+    {
+        int cursor = this.getCursor();
+        boolean settled = cursor == this.lastRestartCursor;
+
+        this.lastRestartCursor = cursor;
+
+        if (!this.restartPending || !settled)
+        {
+            return;
+        }
+
+        if (!BBSSettings.editorRestartOnSeek.get() || !this.canRestartOnSeek())
+        {
+            this.restartPending = false;
+
+            return;
+        }
+
+        this.restartActions();
+    }
+
+    /**
+     * Recreating the actors stops the recording and drops the character control, and both
+     * the playback and the video export move the cursor on their own, so an automatic
+     * restart must stay out of all of those.
+     */
+    private boolean canRestartOnSeek()
+    {
+        return this.data != null
+            && !this.isRunning()
+            && !this.controller.isRecording()
+            && !this.controller.isControlling()
+            && !this.recorder.isRecording()
+            && !this.recorder.isExporting();
     }
 
     public boolean isRunning()
@@ -2418,7 +3225,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void togglePlayback()
     {
-        this.setFlight(false);
+        this.finishFlight(true, "playback");
 
         this.runner.toggle(this.getCursor());
         this.lastRunning = this.runner.isRunning();
@@ -2450,6 +3257,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void fillData()
     {
+        if (this.data != null)
+        {
+            this.selectCameraTrack(this.editedCameraId);
+        }
+
         this.cameraEditor.fillData();
         this.actionEditor.fillData();
 
@@ -2481,7 +3293,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
             this.actionEditor.setClips(null);
             this.runner.setWork(this.data.camera);
-            this.cameraEditor.setClips(this.data.camera);
+            this.cameraEditor.setClips(this.data.getCameraClips(this.editedCameraId));
             this.replayEditor.setFilm(this.data);
             this.cameraEditor.pickClip(null);
             this.fillData();
@@ -2518,7 +3330,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (cameraStructure)
         {
             this.runner.setWork(this.data.camera);
-            this.cameraEditor.setClips(this.data.camera);
+            this.cameraEditor.setClips(this.data.getCameraClips(this.editedCameraId));
             this.cameraEditor.pickClip(null);
         }
 
@@ -2567,7 +3379,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public boolean checkShowNoCamera()
     {
-        boolean noCamera = this.getData().camera.calculateDuration() <= 0;
+        boolean noCamera = this.getData() == null || this.getData().calculateDuration() <= 0;
 
         if (noCamera)
         {
@@ -2591,7 +3403,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     @Override
     public boolean handleKeyPressed(UIContext context)
     {
-        return this.controller.orbit.keyPressed(context, this.preview.area);
+        UIFilmPreview preview = this.getActivePreview();
+
+        return preview.getViewController().orbit.keyPressed(context, preview.getViewport());
     }
 
     @Override
@@ -2601,6 +3415,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.showPanel(data.getInt("panel"));
         this.setCursor(data.getInt("tick"));
+        this.restoreCameraViewState(data);
     }
 
     @Override
@@ -2610,6 +3425,47 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         data.putInt("panel", this.getPanelIndex());
         data.putInt("tick", this.getCursor());
+        this.captureCameraViewState(data);
+    }
+
+    public void captureCameraViewState(MapType data)
+    {
+        MapType views = new MapType();
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            ViewDescriptor view = preview.getViewDescriptor();
+            MapType binding = new MapType();
+
+            binding.putString("camera", view.getCameraId());
+            binding.putBool("follow_output", view.isFollowOutput());
+            views.put(view.getId(), binding);
+        }
+
+        data.put("camera_views", views);
+        data.putString("edited_camera", this.editedCameraId);
+    }
+
+    public void restoreCameraViewState(MapType data)
+    {
+        if (!data.has("camera_views"))
+        {
+            return;
+        }
+
+        MapType views = data.getMap("camera_views");
+
+        for (UIFilmPreview preview : this.getPreviews())
+        {
+            ViewDescriptor view = preview.getViewDescriptor();
+            MapType binding = views.getMap(view.getId());
+
+            view.setCameraId(binding.getString("camera", Film.LEGACY_CAMERA_ID));
+            view.setFollowOutput(binding.getBool("follow_output"));
+        }
+
+        this.selectCameraTrack(data.getString("edited_camera", Film.LEGACY_CAMERA_ID));
+        this.saveViewSettings();
     }
 
     @Override

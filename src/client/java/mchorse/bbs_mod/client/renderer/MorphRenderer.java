@@ -60,6 +60,11 @@ public class MorphRenderer
                 matrixStack.pushPose();
                 matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
 
+                /* This render replaces LivingEntityRenderer's own rotations,
+                 * so the fall of a dead body has to be repeated here - without
+                 * it a morphed player never went down when they died */
+                DeathPose.apply(matrixStack, player.deathTime, g);
+
                 FormRenderingContext context = new FormRenderingContext()
                     .set(FormRenderType.ENTITY, morph.entity, matrixStack, i, overlay, g)
                     .camera(Minecraft.getInstance().gameRenderer.getMainCamera());
@@ -130,6 +135,7 @@ public class MorphRenderer
 
             matrixStack.pushPose();
             matrixStack.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
+            DeathPose.apply(matrixStack, livingEntity.deathTime, g);
 
             renderForm(form, new FormRenderingContext()
                 .set(FormRenderType.ENTITY, owner.entity, matrixStack, i, o, g)

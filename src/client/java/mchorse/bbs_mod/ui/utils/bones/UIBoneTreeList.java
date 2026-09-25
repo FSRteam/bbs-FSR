@@ -9,8 +9,12 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.framework.tooltips.ITooltip;
+import mchorse.bbs_mod.ui.framework.tooltips.LabelTooltip;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 
@@ -23,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -45,11 +50,22 @@ public class UIBoneTreeList extends UIStringList
     public static final int INDENT = 8;
 
     private static final int GUIDE_COLOR = Colors.A25 | 0xFFFFFF;
+    private static final int MARKER = 4;
+    private static final int MARKER_GAP = 2;
+
+    /** One role dot; secondary roles use the smaller size. */
+    public record Marker(int color, boolean small)
+    {
+    }
 
     private final Map<String, Meta> metas = new HashMap<>();
     private final Map<String, String> labels = new HashMap<>();
 
     private Predicate<String> disabled;
+    private Function<String, Marker[]> markers;
+
+    /** Left edge of the marker lane, used to show its legend only on that lane. */
+    private int markerLaneX = Integer.MAX_VALUE;
 
     /** Hosts that filter by refilling the list (instead of {@link #filter}) set this
      *  while a query is active, so matches render flat like built-in filtering does. */
@@ -74,6 +90,25 @@ public class UIBoneTreeList extends UIStringList
     public boolean isDisabled(String id)
     {
         return this.disabled != null && id != null && !id.isEmpty() && this.disabled.test(id);
+    }
+
+    /**
+     * Adds fixed marker slots at the right edge of every row. Slot zero is the
+     * rightmost slot; null entries keep a slot empty without changing its role.
+     */
+    public UIBoneTreeList markers(Function<String, Marker[]> markers)
+    {
+        this.markers = markers;
+
+        return this;
+    }
+
+    /** Adds row markers and a legend that appears only over their column. */
+    public UIBoneTreeList markers(Function<String, Marker[]> markers, IKey legend)
+    {
+        this.tooltip(new MarkerLegend(legend));
+
+        return this.markers(markers);
     }
 
     public void flat(boolean flat)
@@ -501,13 +536,84 @@ public class UIBoneTreeList extends UIStringList
             ? this.elementToString(context, i, element)
             : meta.treeLabel;
         int color = this.isDisabled(element) ? Colors.GRAY : (hover ? Colors.HIGHLIGHT : Colors.WHITE);
+        int textX = x + 4 + depth * INDENT;
+        int right = this.renderMarkers(context, element, x, y, h);
 
-        context.batcher.textShadow(label, x + 4 + depth * INDENT, y + (h - context.batcher.getFont().getHeight()) / 2, color);
+        if (right < x + this.area.w)
+        {
+            label = context.batcher.getFont().limitToWidth(label, right - textX - 2);
+        }
+
+        context.batcher.textShadow(label, textX, y + (h - context.batcher.getFont().getHeight()) / 2, color);
+    }
+
+    /** Draws markers inside the list, excluding the scrollbar lane. */
+    private int renderMarkers(UIContext context, String element, int x, int y, int h)
+    {
+        int right = x + this.area.w - 3 - this.scroll.getScrollbarArea().w;
+
+        if (this.markers == null)
+        {
+            return x + this.area.w;
+        }
+
+        Marker[] markers = this.markers.apply(element);
+
+        if (markers == null || markers.length == 0)
+        {
+            return x + this.area.w;
+        }
+
+        this.markerLaneX = right - markers.length * (MARKER + MARKER_GAP);
+
+        for (int slot = 0; slot < markers.length; slot++)
+        {
+            Marker marker = markers[slot];
+
+            if (marker == null)
+            {
+                continue;
+            }
+
+            int cell = right - (slot + 1) * (MARKER + MARKER_GAP) + MARKER_GAP;
+            int size = marker.small ? MARKER / 2 : MARKER;
+            int inset = (MARKER - size) / 2;
+            int top = y + (h - size) / 2;
+
+            context.batcher.box(cell + inset, top, cell + inset + size, top + size, marker.color);
+        }
+
+        return this.markerLaneX;
     }
 
     private static int columnX(int x, int level)
     {
         return x + 4 + level * INDENT + 2;
+    }
+
+    private class MarkerLegend implements ITooltip
+    {
+        private final LabelTooltip label;
+
+        public MarkerLegend(IKey legend)
+        {
+            this.label = new LabelTooltip(legend, 200, Direction.LEFT);
+        }
+
+        @Override
+        public IKey getLabel()
+        {
+            return this.label.getLabel();
+        }
+
+        @Override
+        public void renderTooltip(UIContext context)
+        {
+            if (context.mouseX >= UIBoneTreeList.this.markerLaneX)
+            {
+                this.label.renderTooltip(context);
+            }
+        }
     }
 
     private static class Node

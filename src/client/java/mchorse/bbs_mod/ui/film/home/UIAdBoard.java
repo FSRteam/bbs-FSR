@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.film.home;
 
-import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
@@ -17,7 +16,6 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import org.lwjgl.opengl.GL11;
 
 import java.util.List;
 
@@ -31,7 +29,7 @@ import java.util.List;
  * to a given ad. The "ad slot for rent" tile sits statically below and never
  * participates in paging. Detail overlays show the full image plus a
  * selectable Markdown body with copy/open link actions. Content comes from
- * {@code film_home/ads.json} (config override, jar fallback).
+ * the remote film-home publisher and is cached on disk by the content loader.
  */
 public class UIAdBoard extends UIElement
 {
@@ -68,15 +66,6 @@ public class UIAdBoard extends UIElement
         this.pageShownAt = System.currentTimeMillis();
         this.flipStart = -1L;
 
-        for (FilmHomeContent.AdItem ad : ads)
-        {
-            /* Local covers pre-warm through the texture manager; remote ones
-             * stream through WebImages on demand. */
-            if (ad.imageLink() != null && !WebImages.isRemote(ad.image))
-            {
-                BBSModClient.getTextures().getTexture(ad.imageLink(), GL11.GL_NEAREST, true);
-            }
-        }
     }
 
     /** Slide width fills the column interior; height keeps the 4:3 ratio so images show in full. */

@@ -284,18 +284,46 @@ public final class BBSUiLifecycleSourceTest
                 && restorePanelControls.contains("this.copyCurrentEntityCamera();"),
             "dashboard same-panel reopen no longer restores focus, orbit input and the world camera");
         String filmFlightRestore = sourceSection(filmPanel, "public boolean shouldEnableFlightOnRestore()", "public void toggleFlight()");
+        String filmToggleFlight = sourceSection(filmPanel, "public void toggleFlight()", "public boolean isViewFlying(");
+        String filmSetFlight = sourceSection(filmPanel, "public void setFlight(boolean flight)", "private void finishFlight(boolean commit)");
+        String filmFinishFlight = sourceSection(filmPanel, "private void finishFlight(boolean commit)", "public Vector2i getLoopingRange()");
+        int flightPoseSeed = filmSetFlight.indexOf("this.dashboard.orbit.setup(camera);");
+        int flightEnabled = filmSetFlight.indexOf("this.dashboard.orbitUI.setControl(true);");
+
+        check(flightPoseSeed >= 0 && flightEnabled > flightPoseSeed && !filmSetFlight.contains("setInvertMouseRotation("),
+            "Film flight must seed its actual dashboard controller and retain FS mouse direction");
 
         check(flightSupported.contains("public default boolean shouldEnableFlightOnRestore()")
                 && filmFlightRestore.contains("return false;")
+                && filmActivate.contains("this.setFlight(false);")
                 && filmActivate.indexOf("this.setFlight(false);") < filmActivate.indexOf("cameraController.add(this.runner);")
-                && filmPanel.contains("this.setFlight(!this.isFlying());")
-                && filmPanel.contains("this.dashboard.orbitUI.setControl(flight);"),
+                && filmSetFlight.contains("if (!flight)")
+                && filmSetFlight.contains("this.finishFlight(false);")
+                && filmFinishFlight.contains("this.dashboard.orbitUI.setControl(false);")
+                && filmFinishFlight.indexOf("this.dashboard.orbitUI.setControl(false);") < filmFinishFlight.indexOf("if (preview == null)"),
             "Film dashboard re-entry can automatically restore flight mode");
+        check(filmToggleFlight.contains("if (this.isFlying())")
+                && filmToggleFlight.contains("this.finishFlight(true);")
+                && filmToggleFlight.contains("this.setFlight(true);")
+                && filmSetFlight.contains("this.dashboard.orbitUI.setControl(true);")
+                && filmFinishFlight.contains("this.flightPreview = null;")
+                && filmFinishFlight.contains("this.runner.setManual(null);"),
+            "explicit Film flight toggling no longer commits and releases the owning view");
+        String clipsPanel = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIClipsPanel.java");
+        String selectClip = sourceSection(clipsPanel, "public void pickClip(Clip clip)", "public void refreshEditPanelOffset()");
+        String seek = sourceSection(filmPanel, "public void setCursor(int value)", "public void restartActions()");
+
+        check(selectClip.indexOf("this.filmPanel.prepareClipSelection(this);") >= 0
+                && selectClip.indexOf("this.filmPanel.prepareClipSelection(this);") < selectClip.indexOf("UIClip.saveScroll(this.panel);")
+                && seek.indexOf("this.finishFlight(true, \"seek\");") >= 0
+                && seek.indexOf("this.finishFlight(true, \"seek\");") < seek.indexOf("this.cancelViewInteractions();")
+                && seek.indexOf("this.finishFlight(true, \"seek\");") < seek.indexOf("this.runner.ticks ="),
+            "timeline UI replaced the captured flight target before committing its pose");
         check(outsideRecording.indexOf("Film film = this.panel.getData();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
                 && outsideRecording.indexOf("int cursor = this.panel.getCursor();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
-                && outsideRecording.contains("startRecording(film, index, cursor)"),
+                && outsideRecording.contains("startRecording(film, index, cursor, true)"),
             "external replay recording still reads Film panel state after closing the dashboard");
         check(modelBlocks.contains("ModelBlockEntity editingBlock = this.modelBlock;")
                 && modelBlocks.contains("if (editingBlock.isRemoved())")

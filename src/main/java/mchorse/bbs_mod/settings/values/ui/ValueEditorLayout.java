@@ -77,10 +77,26 @@ public class ValueEditorLayout extends BaseValue
     private float stateEditorSizeH = 0.7F;
     private float stateEditorSizeV = 0.25F;
     private int keyframeLabelWidth = 120;
+    private MapType filmViewSettings = new MapType();
 
     public ValueEditorLayout(String id)
     {
         super(id);
+    }
+
+    public MapType getFilmViewSettings()
+    {
+        return (MapType) this.filmViewSettings.copy();
+    }
+
+    public void setFilmViewSettings(MapType settings)
+    {
+        MapType copy = settings == null ? new MapType() : (MapType) settings.copy();
+
+        if (!copy.equals(this.filmViewSettings))
+        {
+            BaseValue.edit(this, value -> this.filmViewSettings = copy);
+        }
     }
 
     public EditorLayoutNode getFilmLayoutRoot()
@@ -354,6 +370,7 @@ public class ValueEditorLayout extends BaseValue
 
         data.put("film_layout", this.filmLayout.getRoot().toData());
         data.put("particle_layout", this.particleLayout.getRoot().toData());
+        data.put("film_views", this.filmViewSettings.copy());
 
         for (FilmEditor editor : FilmEditor.values())
         {
@@ -424,10 +441,12 @@ public class ValueEditorLayout extends BaseValue
         this.particleLayout.setRoot(EditorLayoutNode.defaultParticleLayout());
         this.hiddenByLayout.clear();
         this.unlockedDocks.clear();
+        this.filmViewSettings = new MapType();
 
         if (data.isMap())
         {
             MapType map = data.asMap();
+            this.filmViewSettings = (MapType) map.getMap("film_views").copy();
 
             if (map.has("film_layout"))
             {

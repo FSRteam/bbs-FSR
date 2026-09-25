@@ -42,6 +42,15 @@ public final class IKPhysicsConsistencyTest
 
     public static void main(String[] args)
     {
+        try
+        {
+            IKMarkerSourceTest.runAll();
+        }
+        catch (java.io.IOException e)
+        {
+            throw new RuntimeException("IK marker source contract could not be read", e);
+        }
+
         testFormRenderingSimulationPolicy();
         testRendererCleanupOnEarlyReturnAndFailure();
         testControlSoftnessDefault();

@@ -14,6 +14,8 @@ public final class UIFilmHomeSourceTest
 {
     private static final Path FILM_PANEL = Path.of("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
     private static final Path HOME_PANEL = Path.of("src/client/java/mchorse/bbs_mod/ui/film/home/UIFilmHomePanel.java");
+    private static final Path HOME_CONTENT = Path.of("src/client/java/mchorse/bbs_mod/ui/film/home/FilmHomeContent.java");
+    private static final Path WEB_IMAGES = Path.of("src/client/java/mchorse/bbs_mod/ui/film/home/WebImages.java");
     private static final Path THUMBNAILS = Path.of("src/client/java/mchorse/bbs_mod/ui/film/home/FilmThumbnails.java");
     private static final Path EN_US = Path.of("src/client/resources/assets/bbs/assets/strings/en_us.json");
 
@@ -21,6 +23,8 @@ public final class UIFilmHomeSourceTest
     {
         String panel = Files.readString(FILM_PANEL);
         String home = Files.readString(HOME_PANEL);
+        String homeContent = Files.readString(HOME_CONTENT);
+        String webImages = Files.readString(WEB_IMAGES);
         String thumbnails = Files.readString(THUMBNAILS);
         String lang = Files.readString(EN_US);
 
@@ -49,6 +53,22 @@ public final class UIFilmHomeSourceTest
             "home must host the news strip section");
         check(home.contains("UIAdBoard"),
             "home must host the bottom-left ad board");
+        check(homeContent.contains("this.loadCached(\"ads\")")
+                && homeContent.contains("this.loadCached(\"news\")"),
+            "film home must start from the disk cache, not bundled editorial content");
+        check(!homeContent.contains("readJson(\"ads.json\")")
+                && !homeContent.contains("readJson(\"news.json\")"),
+            "film home must not read bundled ads or news JSON");
+        check(webImages.contains("return isRemote(image) ? get(image) : null;")
+                && !webImages.contains("Link.assets(\"film_home/"),
+            "film home image resolution must stay remote-only");
+        check(!Files.exists(Path.of("src/client/resources/assets/bbs/assets/film_home/ads.json"))
+                && !Files.exists(Path.of("src/client/resources/assets/bbs/assets/film_home/news.json")),
+            "film home editorial JSON must stay remote-only");
+        check(!Files.exists(Path.of("src/client/resources/assets/bbs/assets/film_home/images/ads/1.png"))
+                && !Files.exists(Path.of("src/client/resources/assets/bbs/assets/film_home/images/ads/2.png"))
+                && !Files.exists(Path.of("src/client/resources/assets/bbs/assets/film_home/images/ads/3.png")),
+            "film home ad images must not be bundled");
         check(home.contains("FilmThumbnails.getCached"),
             "film cards must render cached first-frame thumbnails");
         check(home.contains("this.renameFolder(first.toString(), to)"),

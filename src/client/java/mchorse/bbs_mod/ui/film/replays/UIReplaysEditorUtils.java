@@ -88,33 +88,70 @@ public class UIReplaysEditorUtils
 {
     private static final int BONE_TRACK_HUE_COUNT = 12;
 
-    public static void insertPoseKeyframesAtTick(Replay replay, float tick)
+    public static void insertPoseKeyframesAtTick(Replay replay, float tick, Set<String> expandedPoseIds)
     {
         if (replay == null)
         {
             return;
         }
 
+        Set<String> expanded = expandedPoseIds == null ? Collections.emptySet() : expandedPoseIds;
+        Form form = replay.form.get();
         BaseValue.edit(replay.properties, (props) ->
         {
             for (KeyframeChannel<?> channel : props.properties.values())
             {
-                if (!PerLimbService.isPoseBoneChannel(channel.getId()))
+                String id = channel.getId();
+
+                if (PerLimbService.isPoseBoneChannel(id))
                 {
+                    PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(id);
+                    String parent = path == null || path.formPath().isEmpty() ? "pose" : path.formPath() + FormUtils.PATH_SEPARATOR + "pose";
+
+                    if (!expanded.contains(parent))
+                    {
+                        continue;
+                    }
+
+                    KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
+                    KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
+                    PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
+                    int index = poseChannel.insert(tick, value);
+                    Keyframe<PoseTransform> kf = poseChannel.get(index);
+                    Keyframe<PoseTransform> template = segment != null ? segment.a : null;
+
+                    if (template != null && template != kf)
+                    {
+                        kf.copyOverExtra(template);
+                    }
+
                     continue;
                 }
 
-                KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
-                KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
-                PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
-
-                int index = poseChannel.insert(tick, value);
-                Keyframe<PoseTransform> kf = poseChannel.get(index);
-
-                Keyframe<PoseTransform> template = segment != null ? segment.a : null;
-                if (template != null && template != kf)
+                if (channel.getFactory() == KeyframeFactories.POSE && !id.contains("pose_overlay") && (id.equals("pose") || id.endsWith(FormUtils.PATH_SEPARATOR + "pose")) && !expanded.contains(id))
                 {
-                    kf.copyOverExtra(template);
+                    KeyframeChannel<Pose> poseChannel = (KeyframeChannel<Pose>) channel;
+                    KeyframeSegment<Pose> segment = poseChannel.find(tick);
+                    Pose value;
+
+                    if (segment != null)
+                    {
+                        value = segment.createInterpolated();
+                    }
+                    else
+                    {
+                        BaseValue property = form == null ? null : FormUtils.getProperty(form, id);
+                        Object current = property instanceof BaseValueBasic basic ? basic.get() : null;
+                        value = current instanceof Pose pose ? poseChannel.getFactory().copy(pose) : poseChannel.getFactory().createEmpty();
+                    }
+                    int index = poseChannel.insert(tick, value);
+                    Keyframe<Pose> kf = poseChannel.get(index);
+                    Keyframe<Pose> template = segment != null ? segment.a : null;
+
+                    if (template != null && template != kf)
+                    {
+                        kf.copyOverExtra(template);
+                    }
                 }
             }
         });
@@ -808,6 +845,11 @@ public class UIReplaysEditorUtils
 
     public static boolean startFilmGizmo(UIFilmPanel panel, UIContext context, int stencilIndex, float gizmoTransition)
     {
+        return panel != null && startFilmGizmo(panel, panel.getCamera(), panel.preview.getViewport(), context, stencilIndex, gizmoTransition);
+    }
+
+    public static boolean startFilmGizmo(UIFilmPanel panel, Camera camera, Area viewport, UIContext context, int stencilIndex, float gizmoTransition)
+    {
         if (panel == null || panel.isFlying() || context.mouseButton != 0)
         {
             return false;
@@ -816,8 +858,8 @@ public class UIReplaysEditorUtils
         UIPropTransform transform = getEditableTransform(panel.replayEditor.keyframeEditor);
         GizmoDrag drag = buildFilmGizmoDrag(
             panel,
-            panel.getCamera(),
-            panel.preview.getViewport(),
+            camera,
+            viewport,
             transform,
             gizmoTransition
         );
@@ -836,8 +878,8 @@ public class UIReplaysEditorUtils
 
         transform.hotkeyDrag(() -> buildFilmGizmoDrag(
             panel,
-            panel.getCamera(),
-            panel.preview.getViewport(),
+            panel.getActivePreview().getDisplayedCamera(),
+            panel.getActivePreview().getViewport(),
             transform,
             panel.replayEditor.getContext() == null ? 0F : panel.replayEditor.getContext().getTransition()
         ));
@@ -1585,19 +1627,26 @@ public class UIReplaysEditorUtils
 
     public static boolean pickFormWithOffers(UIContext context, Pair<Form, String> pair, FormPicker picker)
     {
-        boolean select = context.mouseButton == 0 || (context.mouseButton == 2 && Window.isCtrlPressed());
-        boolean insert = context.mouseButton == 1;
+        return pickFormWithOffers(context, pair, picker, context.mouseButton,
+            Window.isAltPressed(), Window.isCtrlPressed(), Window.isShiftPressed());
+    }
+
+    public static boolean pickFormWithOffers(UIContext context, Pair<Form, String> pair, FormPicker picker,
+        int button, boolean alt, boolean control, boolean shift)
+    {
+        boolean select = button == 0 || (button == 2 && control);
+        boolean insert = button == 1;
 
         if (pair == null || pair.a == null || (!select && !insert))
         {
             return false;
         }
 
-        if (Window.isAltPressed() && !Window.isCtrlPressed())
+        if (alt && !control)
         {
             offerAdjacent(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
         }
-        else if (Window.isShiftPressed())
+        else if (shift)
         {
             offerHierarchy(context, pair.a, pair.b, (bone) -> picker.pick(pair.a, bone, insert));
         }

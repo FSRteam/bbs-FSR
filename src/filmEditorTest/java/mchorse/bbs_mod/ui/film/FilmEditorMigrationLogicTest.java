@@ -32,15 +32,19 @@ public final class FilmEditorMigrationLogicTest
             testFilmControllerContextReset();
             testValueOrderDefaultInsertion();
             FilmDockInitialStateSourceTest.runAll();
-            mchorse.bbs_mod.ui.framework.elements.input.grid.UICardGridSourceTest.runAll();
-            UIFilmHomeSourceTest.runAll();
-            mchorse.bbs_mod.update.FSRUpdatesSourceTest.runAll();
             testLenientPresetComparison();
             PoseNavigationLogicTest.runAll();
             FilmReplayFirstPersonSyncSourceTest.runAll();
             HotbarFilmMigrationTest.runAll();
+            CameraTracksResolverTest.runAll();
             OrbitFilmCameraMissingRendererSourceTest.runAll();
             RenderRuntimeMigrationSourceTest.runAll();
+            IrisViewStateLogicTest.runAll();
+            IrisViewMixinContractTest.runAll();
+            SodiumCompatibilityTest.runAll();
+            MultiViewRenderBehaviorTest.runAll();
+            FilmViewNavigationTest.runAll();
+            FilmFlightEditingTest.runAll();
             RecentFormCategoryTest.runAll();
 
             if (args.length == 0 || !"--logic-only".equals(args[0]))

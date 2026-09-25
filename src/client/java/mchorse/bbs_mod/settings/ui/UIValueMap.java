@@ -17,6 +17,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.settings.values.ui.ValueExportChannelLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.update.FSRUpdates;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
@@ -60,7 +61,7 @@ public class UIValueMap
         {
             if (value == BBSSettings.updateCheckTrigger)
             {
-                return mchorse.bbs_mod.update.FSRUpdates.createSettingsWidgets(ui);
+                return FSRUpdates.createSettingsWidgets(ui);
             }
 
             UIToggle toggle = UIValueFactory.booleanUI(value, value == BBSSettings.scrollingUseThemeCurve ? (button) ->
@@ -100,7 +101,7 @@ public class UIValueMap
             {
                 UICirculate button = new UICirculate(null);
 
-                for (IKey label : mchorse.bbs_mod.update.FSRUpdates.modeLabels(value))
+                for (IKey label : FSRUpdates.modeLabels(value))
                 {
                     button.addLabel(label);
                 }

@@ -149,9 +149,21 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
                 {
                     ShaderInstance deferredShader = finalShader;
 
-                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, () -> deferredShader,
-                        FormTranslucentQueue.PASS_SINGLE, true, textureObject, modelView, normalMat,
-                        r, g, b, a, light, overlay, true));
+                    if (textureObject != null && textureObject.hasTranslucency())
+                    {
+                        FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, () -> deferredShader,
+                            FormTranslucentQueue.PASS_TEX_OPAQUE, true, textureObject, modelView, normalMat,
+                            r, g, b, a, light, overlay, true));
+                        FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, () -> deferredShader,
+                            FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, textureObject, modelView, normalMat,
+                            r, g, b, a, light, overlay, true));
+                    }
+                    else
+                    {
+                        FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(data, () -> deferredShader,
+                            FormTranslucentQueue.PASS_SINGLE, true, textureObject, modelView, normalMat,
+                            r, g, b, a, light, overlay, true));
+                    }
                 }
                 else
                 {

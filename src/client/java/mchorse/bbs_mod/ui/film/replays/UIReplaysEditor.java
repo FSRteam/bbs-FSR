@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,8 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.controller.UIFilmController;
+import mchorse.bbs_mod.ui.film.view.ViewportPickIntent;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPanel;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
@@ -125,8 +128,8 @@ public class UIReplaysEditor extends UIElement {
     private Film film;
     private Replay replay;
     private boolean settingReplay;
-    private Pair<Form, String> pendingPick;
     private long pendingPickGeneration;
+    private UIFilmController pendingPickOwner;
     /**
      * Monotonically identifies the latest keyframe-editor rebuild.  Hierarchy
      * mutations are deferred while a mouse dispatch is active, so the field
@@ -138,6 +141,7 @@ public class UIReplaysEditor extends UIElement {
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
     private final Map<String, Set<String>> expandedPoseTabsByReplay = new HashMap<>();
+    private String keyframeEditorReplayId;
 
     public enum ReplayCategory {
         PLAYER(
@@ -308,21 +312,9 @@ public class UIReplaysEditor extends UIElement {
         return Colors.BLUE;
     }
 
-    /** The key a sheet is identified by in track filters (global and per-form). */
+    /** Stable key shared by filters and global track styles. */
     public static String getSheetFilterKey(UIKeyframeSheet sheet) {
-        if (sheet.isBoneTrack)
-        {
-            PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(sheet.id);
-
-            if (path != null)
-            {
-                return path.formPath().isEmpty() ? path.bone() : path.formPath() + "/" + path.bone();
-            }
-
-            return sheet.title.get();
-        }
-
-        return StringUtils.fileName(sheet.id);
+        return sheet.getFilterKey();
     }
 
     /** The form a sheet belongs to, whether it backs a form property or carries its owner directly (bones, materials, IK). */
@@ -631,8 +623,9 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void setFilm(Film film) {
-        this.savePoseTabState(this.replay);
+        this.savePoseTabState();
         this.expandedPoseTabsByReplay.clear();
+        this.keyframeEditorReplayId = null;
         this.film = film;
 
         if (film != null) {
@@ -668,15 +661,15 @@ public class UIReplaysEditor extends UIElement {
         this.settingReplay = true;
 
         try {
-            this.savePoseTabState(this.replay);
+            this.savePoseTabState();
             this.replay = replay;
 
             if (orbit == OrbitReaction.RESET) {
-                this.filmPanel.getController().resetOrbit();
+                this.filmPanel.getActivePreview().getViewController().resetOrbit();
             }
             else if (orbit == OrbitReaction.SWITCH && replay != null && BBSSettings.editorOrbitTeleportOnSwitch.get())
             {
-                this.filmPanel.getController().orbit.teleportPivotToReplay();
+                this.filmPanel.getActivePreview().getViewController().orbit.teleportPivotToReplay();
             }
 
             this.replayProperties.setReplay(replay);
@@ -703,6 +696,7 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void updateChannelsList() {
+        this.savePoseTabState();
         UIKeyframeEditor previousEditor = this.keyframeEditor;
         UIKeyframes lastEditor = previousEditor != null ? previousEditor.view : null;
         boolean resetView = lastEditor == null || this.keyframeEditorResetPending;
@@ -712,6 +706,7 @@ public class UIReplaysEditor extends UIElement {
 
         this.keyframeEditorGeneration = editorGeneration;
         this.keyframeEditor = null;
+        this.keyframeEditorReplayId = null;
         this.keyframeEditorResetPending = false;
 
         if (this.replay == null) {
@@ -746,11 +741,12 @@ public class UIReplaysEditor extends UIElement {
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
 
-        sheets.removeIf(v -> {
-            if (!shouldShowTrack(v, this.category, this.showAllTracks())) {
-                return true;
-            }
+        sheets.removeIf(v -> !shouldShowTrack(v, this.category, this.showAllTracks()));
 
+        /* The tab isn't empty by itself - so if the filter empties it, the timeline has to stay (see below). */
+        boolean hadTracks = !sheets.isEmpty();
+
+        sheets.removeIf(v -> {
             String filterKey = getSheetFilterKey(v);
             for (String s : disabled) {
                 if (filterKey.equals(s) || v.id.equals(s) || v.id.endsWith("/" + s)) {
@@ -768,6 +764,13 @@ public class UIReplaysEditor extends UIElement {
 
             return false;
         });
+
+        /*
+         * Filtering every track off used to drop the timeline itself, and the track filter lives in its
+         * context menu - so "disable all" locked the user out of the only way back. Keep the (empty)
+         * timeline whenever the tab had tracks before the filter ran; the dope sheet says why it's blank.
+         */
+        boolean filteredOutEverything = hadTracks && sheets.isEmpty();
 
         Set<UIKeyframeSheet> kept = new LinkedHashSet<>(sheets);
 
@@ -791,7 +794,7 @@ public class UIReplaysEditor extends UIElement {
             lastForm = form;
         }
 
-        if (!sheets.isEmpty()) {
+        if (!sheets.isEmpty() || filteredOutEverything) {
             this.keyframeEditor = new UIKeyframeEditor(consumer
                     -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute()
             )
@@ -806,6 +809,7 @@ public class UIReplaysEditor extends UIElement {
             editor.setUndoId("replay_keyframe_editor");
             editor.setTimelineVisible(this.timelineVisible);
             editor.setPropertiesVisible(this.propertiesVisible);
+            view.getDopeSheet().setEmptyState(UIKeys.KEYFRAMES_EMPTY_FILTERED, UIKeys.KEYFRAMES_EMPTY_FILTERED_HINT);
 
             /* Reset */
             if (lastEditor != null) {
@@ -941,6 +945,7 @@ public class UIReplaysEditor extends UIElement {
                 Collections.emptySet()
             );
             view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
+            this.keyframeEditorReplayId = this.replay == null ? null : this.replay.getId();
 
         }
 
@@ -1016,9 +1021,7 @@ public class UIReplaysEditor extends UIElement {
             BaseValue value = this.replay.keyframes.get(key);
             KeyframeChannel channel = (KeyframeChannel) value;
 
-            sheets.add(
-                    new UIKeyframeSheet(getColor(key), false, channel, null).icon(ICONS.get(key))
-            );
+            sheets.add(new UIKeyframeSheet(getColor(key), false, channel, null).icon(getIcon(key)));
         }
     }
 
@@ -1272,14 +1275,23 @@ public class UIReplaysEditor extends UIElement {
         sheets.addAll(orderedFormSheets);
     }
 
-    private void savePoseTabState(Replay replay)
+    public Set<String> getExpandedPoseTabIds()
     {
-        if (replay == null || this.keyframeEditor == null)
+        return this.keyframeEditor == null ? Collections.emptySet() : this.keyframeEditor.view.getDopeSheet().getExpandedPoseTabIds();
+    }
+
+    private void savePoseTabState()
+    {
+        if (this.keyframeEditorReplayId == null || this.keyframeEditor == null)
         {
             return;
         }
 
-        this.expandedPoseTabsByReplay.put(replay.getId(), this.keyframeEditor.view.getDopeSheet().getExpandedPoseTabIds());
+        UIKeyframeDopeSheet dopeSheet = this.keyframeEditor.view.getDopeSheet();
+        Set<String> saved = new HashSet<>(this.expandedPoseTabsByReplay.getOrDefault(this.keyframeEditorReplayId, Collections.emptySet()));
+        saved.removeAll(dopeSheet.getPoseTabIds());
+        saved.addAll(dopeSheet.getExpandedPoseTabIds());
+        this.expandedPoseTabsByReplay.put(this.keyframeEditorReplayId, saved);
     }
 
     /**
@@ -1331,6 +1343,26 @@ public class UIReplaysEditor extends UIElement {
         UIReplaysEditorUtils.pickFormWithOffers(context, new Pair<>(form, bone), this::pickFormBone);
     }
 
+    public void pickViewportFormWithOffers(UIContext context, Pair<Form, String> pair, ViewportPickIntent.Input input)
+    {
+        Film ownerFilm = this.film;
+        Replay ownerReplay = this.replay;
+        int ownerTick = this.filmPanel.getCursor();
+
+        if (!this.isVisible())
+        {
+            this.filmPanel.showPanel(this);
+        }
+
+        UIReplaysEditorUtils.pickFormWithOffers(context, pair, (form, bone, insert) ->
+        {
+            if (this.film == ownerFilm && this.replay == ownerReplay && this.filmPanel.getCursor() == ownerTick)
+            {
+                this.pickFormBone(form, bone, insert);
+            }
+        }, input.button(), input.alt(), input.control(), input.shift());
+    }
+
     /**
      * Picking a model bone in the viewport is a pose edit, but the pose/bone tracks
      * only exist in the {@link ReplayCategory#POSE} category. So when another category
@@ -1355,51 +1387,55 @@ public class UIReplaysEditor extends UIElement {
 
     public void releaseViewport(UIContext context, boolean dragged, long generation)
     {
-        if (generation == 0L || this.pendingPickGeneration != generation)
+        this.releaseViewport(context, dragged, this.filmPanel.getController(), generation);
+    }
+
+    public void releaseViewport(UIContext context, boolean dragged, UIFilmController controller, long generation)
+    {
+        if (generation == 0L || this.pendingPickGeneration != generation || this.pendingPickOwner != controller)
         {
             return;
         }
 
-        Pair<Form, String> pending = this.pendingPick;
-
-        this.pendingPick = null;
         this.pendingPickGeneration = 0L;
-
-        if (pending == null || dragged || context.mouseButton != 0)
-        {
-            return;
-        }
-
-        if (!this.isVisible())
-        {
-            this.filmPanel.showPanel(this);
-        }
-
-        UIReplaysEditorUtils.pickFormWithOffers(context, pending, this::pickFormBone);
+        this.pendingPickOwner = null;
+        controller.releaseViewportPick(context, dragged, generation);
     }
 
     public void cancelViewportPick(long generation)
     {
-        if (generation != 0L && this.pendingPickGeneration == generation)
+        this.cancelViewportPick(this.filmPanel.getController(), generation);
+    }
+
+    public void cancelViewportPick(UIFilmController controller, long generation)
+    {
+        if (generation != 0L && this.pendingPickGeneration == generation && this.pendingPickOwner == controller)
         {
-            this.pendingPick = null;
             this.pendingPickGeneration = 0L;
+            this.pendingPickOwner = null;
+            controller.cancelViewportPick(generation);
         }
     }
 
-    public boolean clickViewport(UIContext context, Area area) {
-        boolean inside = area.isInside(context);
-        StencilFormFramebuffer stencil = this.filmPanel.getController().getStencil();
+    public boolean clickViewport(UIContext context, Area area)
+    {
+        return this.clickViewport(context, area, this.filmPanel.getController());
+    }
 
-        if (this.filmPanel.isFlying() && inside) {
-            if (context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
-                long generation = this.filmPanel.getController().orbit.startGesture(context);
+    public boolean clickViewport(UIContext context, Area area, UIFilmController controller)
+    {
+        boolean inside = area.isInside(context);
+        StencilFormFramebuffer stencil = controller.getStencil();
+
+        if (controller.isViewFlying() && inside) {
+            if (context.mouseButton == 0 && controller.orbit.enabled) {
+                long generation = controller.orbit.startGesture(context);
 
                 return generation != 0L;
             }
             if (context.mouseButton == 2) {
-                if (this.filmPanel.getController().orbit.enabled) {
-                    long generation = this.filmPanel.getController().orbit.startGesture(context);
+                if (controller.orbit.enabled) {
+                    long generation = controller.orbit.startGesture(context);
 
                     return generation != 0L;
                 } else {
@@ -1410,30 +1446,37 @@ public class UIReplaysEditor extends UIElement {
             }
         }
 
-        if (this.filmPanel.isFlying()) {
+        if (controller.isViewFlying()) {
             return false;
         }
 
-        if (inside && context.mouseButton == 2 && this.filmPanel.getController().orbit.enabled) {
-            long generation = this.filmPanel.getController().orbit.startGesture(context);
+        if (inside && context.mouseButton == 2 && controller.orbit.enabled) {
+            long generation = controller.orbit.startGesture(context);
 
             return generation != 0L;
         }
 
+        if (inside && context.mouseButton == 1 && !controller.isViewportPickReady())
+        {
+            return controller.deferViewportPick(context, 0L);
+        }
+
         if (stencil != null && stencil.hasPicked()) {
             if (inside && context.mouseButton == 0
-                    && this.filmPanel.getController().startViewportSoundGuide(context)) {
+                    && controller.startViewportSoundGuide(context)) {
                 return true;
             }
 
             if (inside && context.mouseButton == 0
-                    && this.filmPanel.getController().startViewportGizmo(context)) {
+                    && controller.startViewportGizmo(context)) {
                 return true;
             }
 
             Pair<Form, String> pair = stencil.getPicked();
+            boolean deferred = context.mouseButton == 0 && controller.orbit.enabled
+                && !Window.isShiftPressed() && !Window.isAltPressed();
 
-            if (pair != null && (context.mouseButton < 2 || (context.mouseButton == 2 && Window.isCtrlPressed()))) {
+            if (!deferred && pair != null && (context.mouseButton < 2 || (context.mouseButton == 2 && Window.isCtrlPressed()))) {
                 if (!this.isVisible()) {
                     this.filmPanel.showPanel(this);
                 }
@@ -1442,64 +1485,86 @@ public class UIReplaysEditor extends UIElement {
                     return true;
                 }
             }
-        } else if (context.mouseButton == 1 && this.isVisible()) {
-            Level world = Minecraft.getInstance().level;
-            Camera camera = this.filmPanel.getCamera();
-            Vector3f rayOffset = new Vector3f();
-            Vector3f rayDirection = CameraUtils.getMouseRay(camera.projection, camera.view, context.mouseX, context.mouseY, area.x, area.y, area.w, area.h, rayOffset);
-
-            BlockHitResult blockHitResult = RayTracing.rayTrace(
-                    world,
-                    RayTracing.fromVector3d(new Vector3d(camera.position).add(rayOffset.x, rayOffset.y, rayOffset.z)),
-                    RayTracing.fromVector3f(rayDirection),
-                    256F
-            );
-
-            if (blockHitResult.getType() != HitResult.Type.MISS) {
-                Vector3d vec = new Vector3d(
-                        blockHitResult.getLocation().x,
-                        blockHitResult.getLocation().y,
-                        blockHitResult.getLocation().z
-                );
-
-                if (Window.isShiftPressed()) {
-                    vec = new Vector3d(
-                            Math.floor(vec.x) + 0.5D,
-                            Math.round(vec.y),
-                            Math.floor(vec.z) + 0.5D
-                    );
-                }
-
-                final Vector3d finalVec = vec;
-
-                context.replaceContextMenu(menu -> {
-                    float pitch = 0F;
-                    float yaw = MathUtils.toDeg(camera.rotation.y);
-
-                    menu.action(Icons.ADD, UIKeys.FILM_REPLAY_CONTEXT_ADD, ()
-                            -> this.replaysList.replays.addReplay(finalVec, pitch, yaw)
-                    );
-                    menu.action(Icons.POINTER, UIKeys.FILM_REPLAY_CONTEXT_MOVE_HERE, ()
-                            -> this.moveReplay(finalVec.x, finalVec.y, finalVec.z)
-                    );
-                });
-
-                return true;
-            }
+        } else if (inside && context.mouseButton == 1) {
+            return this.openViewportContextMenu(context, area, controller, Window.isShiftPressed());
         }
 
-        if (inside && context.mouseButton == 0 && this.filmPanel.getController().orbit.enabled) {
-            long generation = this.filmPanel.getController().orbit.startGesture(context);
+        if (inside && context.mouseButton == 0 && controller.orbit.enabled) {
+            long generation = controller.orbit.startGesture(context);
 
             if (generation != 0L) {
-                this.pendingPick = stencil != null && stencil.hasPicked() ? stencil.getPicked() : null;
                 this.pendingPickGeneration = generation;
+                this.pendingPickOwner = controller;
+                controller.deferViewportPick(context, generation);
             }
 
             return generation != 0L;
         }
 
+        if (inside && context.mouseButton == 0 && !controller.isViewportPickReady())
+        {
+            return controller.deferViewportPick(context, 0L);
+        }
+
         return false;
+    }
+
+    public boolean openViewportContextMenu(UIContext context, Area area, UIFilmController controller, boolean snapToBlock)
+    {
+        if (!this.isVisible() || controller.isViewFlying())
+        {
+            return false;
+        }
+
+        Level world = Minecraft.getInstance().level;
+        Camera camera = controller.getViewCamera();
+        Vector3f rayOffset = new Vector3f();
+        Vector3f rayDirection = CameraUtils.getMouseRay(camera.projection, camera.view, context.mouseX, context.mouseY, area.x, area.y, area.w, area.h, rayOffset);
+        BlockHitResult blockHitResult = RayTracing.rayTrace(
+            world,
+            RayTracing.fromVector3d(new Vector3d(camera.position).add(rayOffset.x, rayOffset.y, rayOffset.z)),
+            RayTracing.fromVector3f(rayDirection),
+            256F
+        );
+
+        if (blockHitResult.getType() == HitResult.Type.MISS)
+        {
+            return false;
+        }
+
+        Vector3d vec = new Vector3d(blockHitResult.getLocation().x, blockHitResult.getLocation().y, blockHitResult.getLocation().z);
+
+        if (snapToBlock)
+        {
+            vec.set(Math.floor(vec.x) + 0.5D, Math.round(vec.y), Math.floor(vec.z) + 0.5D);
+        }
+
+        Film ownerFilm = this.film;
+        Replay ownerReplay = this.replay;
+        int ownerTick = this.filmPanel.getCursor();
+        float yaw = MathUtils.toDeg(camera.rotation.y);
+
+        context.replaceContextMenu(menu ->
+        {
+            menu.action(Icons.ADD, UIKeys.FILM_REPLAY_CONTEXT_ADD, () ->
+            {
+                if (this.film == ownerFilm)
+                {
+                    this.replaysList.replays.addReplay(vec, 0F, yaw);
+                }
+            });
+            menu.action(Icons.POINTER, UIKeys.FILM_REPLAY_CONTEXT_MOVE_HERE, () ->
+            {
+                if (this.film == ownerFilm && ownerReplay != null && CollectionUtils.getIndex(ownerFilm.replays.getList(), ownerReplay) >= 0)
+                {
+                    ownerReplay.keyframes.x.insert(ownerTick, vec.x);
+                    ownerReplay.keyframes.y.insert(ownerTick, vec.y);
+                    ownerReplay.keyframes.z.insert(ownerTick, vec.z);
+                }
+            });
+        });
+
+        return true;
     }
 
     public void close() {
@@ -1516,25 +1581,9 @@ public class UIReplaysEditor extends UIElement {
             return;
         }
 
-        Replay replay = this.getReplay();
-
-        if (replay != null) {
-            int tick = this.filmPanel.getCursor();
-            double x = replay.keyframes.x.interpolate(tick);
-            double y = replay.keyframes.y.interpolate(tick);
-            double z = replay.keyframes.z.interpolate(tick);
-            float yaw = replay.keyframes.yaw.interpolate(tick).floatValue();
-            float headYaw = replay.keyframes.headYaw.interpolate(tick).floatValue();
-            float bodyYaw = replay.keyframes.bodyYaw.interpolate(tick).floatValue();
-            float pitch = replay.keyframes.pitch.interpolate(tick).floatValue();
-            LocalPlayer player = Minecraft.getInstance().player;
-
-            PlayerUtils.teleport(x, y, z, headYaw, pitch);
-            player.setYRot(yaw);
-            player.setYHeadRot(headYaw);
-            player.setYBodyRot(bodyYaw);
-            player.setXRot(pitch);
-        }
+        /* Through the shared helper so the teleport key and a take started on the mark
+         * can never drift apart (and a replay without position keyframes is left alone) */
+        PlayerUtils.teleportToReplay(this.getReplay(), this.filmPanel.getCursor());
     }
 
     @Override

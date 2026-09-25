@@ -18,6 +18,24 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
     private Position lastPosition = new Position();
     private Map<Clip, Position> snapshots = new HashMap<>();
     private boolean captureSnapshots;
+    private boolean poseOnly;
+
+    /**
+     * Restrict evaluation to visual camera pose. This is used by secondary
+     * views, which must not publish audio, subtitle, curve, or other playback
+     * side effects.
+     */
+    public CameraClipContext poseOnly(boolean poseOnly)
+    {
+        this.poseOnly = poseOnly;
+
+        return this;
+    }
+
+    public boolean isPoseOnly()
+    {
+        return this.poseOnly;
+    }
 
     public void captureSnapshots()
     {
@@ -57,6 +75,22 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
     @Override
     public boolean apply(Clip clip, Position position)
     {
+        return this.apply(clip, position, false);
+    }
+
+    /** Apply an editor endpoint through the same safety policy as ordinary sampling. */
+    public boolean applyLast(Clip clip, Position position)
+    {
+        return this.apply(clip, position, true);
+    }
+
+    private boolean apply(Clip clip, Position position, boolean last)
+    {
+        if (clip == null || !clip.enabled.get() || (this.poseOnly && !CameraPosePolicy.allows(clip)))
+        {
+            return false;
+        }
+
         if (clip instanceof CameraClip && position != null)
         {
             CameraState state = this.captureState();
@@ -77,7 +111,14 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
 
             try
             {
-                ((CameraClip) clip).apply(this, position);
+                if (last)
+                {
+                    ((CameraClip) clip).applyLast(this, position);
+                }
+                else
+                {
+                    ((CameraClip) clip).apply(this, position);
+                }
             }
             catch (RuntimeException e)
             {
@@ -123,6 +164,16 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
         }
 
         return false;
+    }
+
+    /** Reset only camera-local sampling state; this never publishes playback effects. */
+    public void resetPose(Position base)
+    {
+        this.lastPosition.copy(base);
+        this.distance = 0D;
+        this.velocity = 0D;
+        this.clipData.clear();
+        this.snapshots.clear();
     }
 
     private CameraState captureState()
@@ -177,6 +228,14 @@ public class CameraClipContext extends ClipContext<CameraClip, Position>
 
     public void shutdown()
     {
+        if (this.poseOnly)
+        {
+            this.clipData.clear();
+            this.snapshots.clear();
+
+            return;
+        }
+
         if (this.clips == null)
         {
             return;

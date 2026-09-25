@@ -56,6 +56,7 @@ public final class ParticleRuntimeConsistencyTest
         testBundledDefaultTexture();
         testExplicitRenderSpaces();
         testOuterWorldDepthSnapshot();
+        testVanillaParticlePreviewWiring();
         testTextboxContentInsetBounds();
 
         System.out.println("ParticleRuntimeConsistencyTest: all tests passed");
@@ -356,6 +357,51 @@ public final class ParticleRuntimeConsistencyTest
         catch (IOException e)
         {
             throw new AssertionError("could not inspect world render-state guard", e);
+        }
+    }
+
+    private static void testVanillaParticlePreviewWiring()
+    {
+        String renderer = source("src/client/java/mchorse/bbs_mod/forms/renderers/VanillaParticleFormRenderer.java");
+        String scene = source("src/client/java/mchorse/bbs_mod/particles/vanilla/VanillaParticleScene.java");
+        String context = source("src/client/java/mchorse/bbs_mod/forms/renderers/FormRenderingContext.java");
+        String formViewport = source("src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIFormRenderer.java");
+        String pickViewport = source("src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIPickableFormRenderer.java");
+        String mixins = source("src/client/resources/bbs.client.mixins.json");
+
+        check(renderer.contains("this.getScene().render(context.camera")
+                && renderer.contains("!context.isPicking()")
+                && renderer.contains("scene::spawn"),
+            "vanilla particle forms are not routed into the isolated preview scene");
+        check(scene.contains("ParticleEngineInvoker")
+                && scene.contains("MAX_PARTICLES = 4096")
+                && scene.contains("applyModelView(previousModelView)")
+                && scene.contains("RenderSystem.setShaderColor(1F, 1F, 1F, 1F)")
+                && scene.contains("mc.gameRenderer.lightTexture().turnOnLightLayer()")
+                && scene.contains("mc.gameRenderer.lightTexture().turnOffLightLayer()")
+                && scene.contains("GL11.GL_DEPTH_WRITEMASK"),
+            "vanilla particle scene lost isolation, bounds, or model-view restoration");
+        check(context.contains("public long modelRendererTick")
+                && context.contains("modelRenderer(long tick)"),
+            "form rendering context does not carry the preview viewport clock");
+        check(formViewport.contains(".modelRenderer(context.getTick())")
+                && pickViewport.contains(".modelRenderer(context.getTick())"),
+            "form preview renderers do not publish their viewport clock");
+        check(mixins.contains("CameraInvoker")
+                && mixins.contains("ParticleEngineInvoker")
+                && mixins.contains("ParticleMixin"),
+            "vanilla particle preview mixins are not registered");
+    }
+
+    private static String source(String path)
+    {
+        try
+        {
+            return Files.readString(Path.of(path));
+        }
+        catch (IOException e)
+        {
+            throw new AssertionError("could not inspect " + path, e);
         }
     }
 

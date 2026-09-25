@@ -43,6 +43,9 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 {
     private static ActorEntity entity;
 
+    /** The registered renderer instance, so the render-last queue can replay through it. */
+    private static ModelBlockEntityRenderer instance;
+
     private final Transform lookTransform = new Transform();
     private final Vector3f headTranslation = new Vector3f();
 
@@ -103,7 +106,9 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
     }
 
     public ModelBlockEntityRenderer(BlockEntityRendererProvider.Context ctx)
-    {}
+    {
+        instance = this;
+    }
 
     @Override
     public boolean shouldRenderOffScreen(ModelBlockEntity blockEntity)
@@ -118,6 +123,23 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         ModelProperties properties = entity.getProperties();
         Transform transform = properties.getTransform();
         BlockPos pos = entity.getBlockPos();
+
+        if (ModelBlockRenderLastQueue.shouldDefer(entity))
+        {
+            /* Render-last blocks skip the block-entity pass; the queue replays them at the
+             * AFTER_BLOCK_ENTITIES stage (see ModelBlockRenderLastQueue). The dispatcher's
+             * current stack — already translated to this block — is captured so the replay
+             * draws through the exact transform. Shadows still draw here — they go through
+             * the vanilla buffer and are order-independent. */
+            ModelBlockRenderLastQueue.add(entity, tickDelta, matrices, light, overlay);
+
+            if (properties.isShadow())
+            {
+                this.renderShadowFor(entity, matrices, vertexConsumers, tickDelta);
+            }
+
+            return;
+        }
 
         matrices.pushPose();
         matrices.translate(0.5F, 0F, 0.5F);
@@ -182,15 +204,92 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
         if (properties.isShadow())
         {
-            float tx = 0.5F + transform.translate.x;
-            float ty = transform.translate.y;
-            float tz = 0.5F + transform.translate.z;
-            double x = pos.getX() + tx;
-            double y = pos.getY() + ty;
-            double z = pos.getZ() + tz;
-
-            renderShadow(vertexConsumers, matrices, tickDelta, x, y, z, tx, ty, tz);
+            this.renderShadowFor(entity, matrices, vertexConsumers, tickDelta);
         }
+    }
+
+    /**
+     * Deferred replay for render-last model blocks: the same draw the immediate path performs,
+     * minus the editor axes/debug box helpers (immediate-pass only) and the shadow — shadows
+     * already drew during the block-entity pass through the vanilla buffer, where their draw
+     * order does not matter. The camera-relative {@code matrices} comes from the
+     * AFTER_BLOCK_ENTITIES stage, so the model lands in the same world position it would have
+     * had during the block-entity pass.
+     */
+    public static void renderDeferred(ModelBlockEntity entity, float tickDelta, PoseStack matrices, MultiBufferSource vertexConsumers, int light, int overlay)
+    {
+        ModelBlockEntityRenderer renderer = instance;
+
+        if (renderer == null)
+        {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        ModelProperties properties = entity.getProperties();
+        Transform transform = properties.getTransform();
+        BlockPos pos = entity.getBlockPos();
+
+        matrices.pushPose();
+        matrices.translate(0.5F, 0F, 0.5F);
+
+        if (properties.getForm() != null && renderer.canRender(entity))
+        {
+            matrices.pushPose();
+
+            Transform applied = transform;
+
+            if (properties.isLookAt())
+            {
+                applied = renderer.applyLookingAnimation(mc, entity, properties, tickDelta);
+            }
+            else
+            {
+                IEntity iEntity = entity.getEntity();
+
+                entity.resetLookYaw();
+                iEntity.setHeadYaw(0F);
+                iEntity.setPrevHeadYaw(0F);
+                iEntity.setPitch(0F);
+                iEntity.setPrevPitch(0F);
+            }
+
+            MatrixStackUtils.applyTransform(matrices, applied);
+
+            PoseStack semanticWorld = new PoseStack();
+
+            semanticWorld.translate(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D);
+            MatrixStackUtils.applyTransform(semanticWorld, applied);
+
+            int lightAbove = LevelRenderer.getLightColor(entity.getLevel(), pos.offset((int) transform.translate.x, (int) transform.translate.y, (int) transform.translate.z));
+            Camera camera = mc.gameRenderer.getMainCamera();
+
+            RenderSystem.enableDepthTest();
+            MorphRenderer.renderForm(properties.getForm(), new FormRenderingContext()
+                .set(FormRenderType.MODEL_BLOCK, entity.getEntity(), matrices, lightAbove, overlay, tickDelta)
+                .entityLocal(semanticWorld)
+                .camera(camera));
+            RenderSystem.disableDepthTest();
+
+            matrices.popPose();
+        }
+
+        matrices.popPose();
+    }
+
+    private void renderShadowFor(ModelBlockEntity entity, PoseStack matrices, MultiBufferSource vertexConsumers, float tickDelta)
+    {
+        Transform transform = entity.getProperties().getTransform();
+        BlockPos pos = entity.getBlockPos();
+
+        float tx = 0.5F + transform.translate.x;
+        float ty = transform.translate.y;
+        float tz = 0.5F + transform.translate.z;
+        double x = pos.getX() + tx;
+        double y = pos.getY() + ty;
+        double z = pos.getZ() + tz;
+
+        renderShadow(vertexConsumers, matrices, tickDelta, x, y, z, tx, ty, tz);
     }
 
     private Transform applyLookingAnimation(Minecraft mc, ModelBlockEntity entity, ModelProperties properties, float tickDelta)

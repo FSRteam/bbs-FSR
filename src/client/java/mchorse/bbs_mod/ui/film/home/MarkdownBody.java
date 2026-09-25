@@ -6,6 +6,7 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -152,7 +153,7 @@ public class MarkdownBody extends UIElement
 
         if (texture != null)
         {
-            UINewsStrip.drawCover(context.batcher, texture, x, y, slot.width, slot.height);
+            drawCover(context.batcher, texture, x, y, slot.width, slot.height);
         }
         else if (WebImages.isCoolingDown(slot.url))
         {
@@ -287,5 +288,43 @@ public class MarkdownBody extends UIElement
         }
 
         return super.subMouseReleased(context);
+    }
+
+    /**
+     * Cover-fit texture draw, inlined from UINewsStrip (which is not part of
+     * this baseline yet) — reconcile with UINewsStrip.drawCover when the film
+     * home panel itself gets merged.
+     */
+    private static void drawCover(Batcher2D batcher, Texture texture, int x, int y, int w, int h)
+    {
+        float texW = texture.width;
+        float texH = texture.height;
+        float texAspect = texW / texH;
+        float areaAspect = w / (float) h;
+        float u1;
+        float u2;
+        float v1;
+        float v2;
+
+        if (areaAspect > texAspect)
+        {
+            float cropH = texW / areaAspect;
+
+            u1 = 0;
+            u2 = texW;
+            v1 = (texH - cropH) * 0.5F;
+            v2 = v1 + cropH;
+        }
+        else
+        {
+            float cropW = texH * areaAspect;
+
+            u1 = (texW - cropW) * 0.5F;
+            u2 = u1 + cropW;
+            v1 = 0;
+            v2 = texH;
+        }
+
+        batcher.texturedBox(texture, Colors.WHITE, x, y, w, h, u1, v1, u2, v2, texture.width, texture.height);
     }
 }

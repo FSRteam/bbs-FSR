@@ -2,7 +2,10 @@ package mchorse.bbs_mod.camera.controller;
 
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.WorldFilmController;
 import mchorse.bbs_mod.utils.clips.Clips;
 
 import java.util.Objects;
@@ -12,6 +15,8 @@ public class PlayCameraController extends CameraWorkCameraController
     private int ticks;
     private int duration;
     private final String filmId;
+    private final Clips sourceClips;
+    private BaseFilmController pairedController;
 
     public PlayCameraController(Clips clips)
     {
@@ -23,29 +28,76 @@ public class PlayCameraController extends CameraWorkCameraController
         super();
 
         this.filmId = filmId;
+        this.sourceClips = clips;
+        this.context.poseOnly(filmId != null);
         this.setWork(clips);
 
         this.duration = clips.calculateDuration();
     }
 
+    public PlayCameraController(BaseFilmController controller)
+    {
+        this(controller.film.getId(), controller.film.camera);
+
+        this.pairedController = controller;
+        this.duration = controller.film.calculateDuration();
+    }
+
     public boolean isForFilm(String filmId, Clips clips)
     {
-        return this.filmId != null ? Objects.equals(this.filmId, filmId) : this.context.clips == clips;
+        return this.filmId != null ? Objects.equals(this.filmId, filmId) : this.sourceClips == clips;
     }
 
     @Override
     protected boolean managesAudio()
     {
-        return false;
+        return this.filmId == null;
+    }
+
+    @Override
+    public CameraClipContext getContext()
+    {
+        BaseFilmController controller = this.getPairedController();
+
+        return controller instanceof WorldFilmController world ? world.getCameraContext() : super.getContext();
     }
 
     @Override
     public void setup(Camera camera, float transition)
     {
-        boolean paused = this.isPairedFilmPaused();
+        BaseFilmController controller = this.getPairedController();
+        boolean paused = controller != null && controller.paused;
+        Film film = controller == null ? null : controller.film;
 
         this.context.playing = !paused;
-        this.apply(camera, this.ticks, paused ? 0F : transition);
+
+        if (film == null)
+        {
+            this.apply(camera, this.ticks, paused ? 0F : transition);
+
+            return;
+        }
+
+        this.ticks = Math.max(0, controller.getTick());
+        this.duration = film.calculateDuration();
+
+        if (controller instanceof WorldFilmController world)
+        {
+            this.position.copy(world.getOutputCameraPosition(transition));
+        }
+        else
+        {
+            String cameraId = film.resolveCameraId(this.ticks);
+
+            this.setWork(film.getCameraClips(cameraId));
+            this.position.set(film.getCameraBasePosition(cameraId));
+            this.apply(null, this.ticks, paused ? 0F : transition);
+        }
+
+        if (camera != null)
+        {
+            this.position.apply(camera);
+        }
     }
 
     @Override
@@ -53,26 +105,36 @@ public class PlayCameraController extends CameraWorkCameraController
     {
         super.update();
 
-        if (!this.isPairedFilmPaused())
+        BaseFilmController controller = this.getPairedController();
+
+        if (controller != null)
+        {
+            this.ticks = Math.max(0, controller.getTick());
+            this.duration = controller.film.calculateDuration();
+        }
+        else if (this.filmId == null)
         {
             this.ticks += 1;
         }
 
-        if (this.ticks >= this.duration)
+        if (this.ticks >= this.duration || (this.filmId != null && controller == null))
         {
             BBSModClient.getCameraController().remove(this);
         }
     }
 
-    private boolean isPairedFilmPaused()
+    protected BaseFilmController getPairedController()
     {
-        if (this.filmId == null || BBSModClient.getFilms() == null)
+        if (this.pairedController != null)
         {
-            return false;
+            return this.pairedController;
         }
 
-        BaseFilmController controller = BBSModClient.getFilms().getController(this.filmId);
+        if (this.filmId == null || BBSModClient.getFilms() == null)
+        {
+            return null;
+        }
 
-        return controller != null && controller.paused;
+        return BBSModClient.getFilms().getController(this.filmId);
     }
 }

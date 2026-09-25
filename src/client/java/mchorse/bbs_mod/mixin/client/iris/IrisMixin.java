@@ -2,6 +2,7 @@ package mchorse.bbs_mod.mixin.client.iris;
 
 import mchorse.bbs_mod.utils.iris.QueueMap;
 import mchorse.bbs_mod.utils.iris.ShaderCurves;
+import mchorse.bbs_mod.client.render.view.IrisViewBackend;
 import net.irisshaders.iris.Iris;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,12 +27,14 @@ public class IrisMixin
     private static void onLoadExternalShaderpack(String name, CallbackInfoReturnable<Boolean> info)
     {
         ShaderCurves.reset();
+        IrisViewBackend.releaseAll();
     }
 
     @Inject(method = "setShadersDisabled", at = @At("HEAD"), remap = false)
     private static void onLoadExternalShaderpack(CallbackInfo info)
     {
         ShaderCurves.reset();
+        IrisViewBackend.releaseAll();
     }
 
     @Inject(method = "loadExternalShaderpack", at = @At(value = "RETURN", ordinal = 9), remap = false)

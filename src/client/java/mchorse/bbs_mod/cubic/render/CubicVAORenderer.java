@@ -27,6 +27,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +40,8 @@ public class CubicVAORenderer extends CubicCubeRenderer
     private ModelInstance model;
     private Function<String, Link> textureResolver;
     private final List<FormTranslucentQueue.DrawCommand> glintCommands = new ArrayList<>();
+    private final List<ImmediateDraw> immediateDraws = new ArrayList<>();
+    private final Map<String, Texture> textureCache = new HashMap<>();
 
     /** Whether any base geometry of this model went into the deferred queue (see renderGlint). */
     private boolean deferredBase;
@@ -103,21 +107,11 @@ public class CubicVAORenderer extends CubicCubeRenderer
             light = u | v << 16;
         }
 
-        /* One draw per material; bind that material's resolved texture before each. */
+        /* Resolve each material once per model draw. The render pass may visit the same material
+         * from many groups, especially in high-face-count multi-texture models. */
         for (Map.Entry<String, ModelVAO> entry : groupVaos.entrySet())
         {
-            Texture texture = null;
-
-            if (this.textureResolver != null)
-            {
-                Link link = this.textureResolver.apply(entry.getKey());
-
-                if (link != null)
-                {
-                    texture = BBSModClient.getTextures().getTexture(link);
-                    BBSModClient.getTextures().bindTexture(texture);
-                }
-            }
+            Texture texture = this.resolveTexture(entry.getKey());
 
             if (texture == null)
             {
@@ -131,6 +125,11 @@ public class CubicVAORenderer extends CubicCubeRenderer
             {
                 this.deferredBase = true;
 
+                if (texture != null)
+                {
+                    BBSModClient.getTextures().bindTexture(texture);
+                }
+
                 FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_OPAQUE);
                 ModelVAORenderer.render(this.program, entry.getValue(), modelView, normalMat, r, g, b, a, light, this.overlay);
                 FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_SINGLE);
@@ -143,13 +142,27 @@ public class CubicVAORenderer extends CubicCubeRenderer
 
                 this.deferredBase = true;
 
-                FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
-                    () -> program, FormTranslucentQueue.PASS_SINGLE, true, texture, modelView,
-                    normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                if (texture != null && texture.hasTranslucency())
+                {
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
+                        () -> program, FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView,
+                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
+                        () -> program, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView,
+                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                }
+                else
+                {
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
+                        () -> program, FormTranslucentQueue.PASS_SINGLE, true, texture, modelView,
+                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                }
             }
             else
             {
-                ModelVAORenderer.render(this.program, entry.getValue(), stack, r, g, b, a, light, this.overlay);
+                this.immediateDraws.add(new ImmediateDraw(texture,
+                    new ModelVAORenderer.BatchDraw(entry.getValue(), modelView, normalMat, r, g, b, a, light, this.overlay),
+                    a >= 1F && (texture == null || !texture.hasTranslucency())));
             }
         }
 
@@ -171,6 +184,8 @@ public class CubicVAORenderer extends CubicCubeRenderer
      */
     public void renderGlint()
     {
+        this.renderImmediateBatches();
+
         for (FormTranslucentQueue.DrawCommand command : this.glintCommands)
         {
             if (this.deferredBase)
@@ -187,6 +202,104 @@ public class CubicVAORenderer extends CubicCubeRenderer
         this.glintCommands.clear();
         this.deferredBase = false;
     }
+
+    private Texture resolveTexture(String material)
+    {
+        if (this.textureResolver == null)
+        {
+            return null;
+        }
+
+        if (this.textureCache.containsKey(material))
+        {
+            return this.textureCache.get(material);
+        }
+
+        Link link = this.textureResolver.apply(material);
+        Texture texture = link == null ? null : BBSModClient.getTextures().getTexture(link);
+
+        this.textureCache.put(material, texture);
+
+        return texture;
+    }
+
+    /**
+     * Opaque model geometry can be reordered by texture without changing the visible result. If
+     * a UI/immediate path contains translucent entries, retain traversal order and only merge
+     * adjacent entries so alpha compositing keeps its historical order.
+     */
+    private void renderImmediateBatches()
+    {
+        if (this.immediateDraws.isEmpty())
+        {
+            return;
+        }
+
+        boolean opaque = true;
+
+        for (ImmediateDraw draw : this.immediateDraws)
+        {
+            if (!draw.opaque())
+            {
+                opaque = false;
+                break;
+            }
+        }
+
+        if (opaque)
+        {
+            Map<Texture, List<ModelVAORenderer.BatchDraw>> batches = new LinkedHashMap<>();
+
+            for (ImmediateDraw draw : this.immediateDraws)
+            {
+                batches.computeIfAbsent(draw.texture(), (key) -> new ArrayList<>()).add(draw.draw());
+            }
+
+            for (Map.Entry<Texture, List<ModelVAORenderer.BatchDraw>> entry : batches.entrySet())
+            {
+                if (entry.getKey() != null)
+                {
+                    BBSModClient.getTextures().bindTexture(entry.getKey());
+                }
+
+                ModelVAORenderer.renderBatch(this.program, entry.getValue());
+            }
+        }
+        else
+        {
+            Texture currentTexture = null;
+            List<ModelVAORenderer.BatchDraw> batch = new ArrayList<>();
+
+            for (ImmediateDraw draw : this.immediateDraws)
+            {
+                if (!batch.isEmpty() && draw.texture() != currentTexture)
+                {
+                    this.renderImmediateBatch(currentTexture, batch);
+                    batch = new ArrayList<>();
+                }
+
+                currentTexture = draw.texture();
+                batch.add(draw.draw());
+            }
+
+            this.renderImmediateBatch(currentTexture, batch);
+        }
+
+        this.immediateDraws.clear();
+    }
+
+    private void renderImmediateBatch(Texture texture, List<ModelVAORenderer.BatchDraw> batch)
+    {
+        if (texture != null)
+        {
+            BBSModClient.getTextures().bindTexture(texture);
+        }
+
+        ModelVAORenderer.renderBatch(this.program, batch);
+    }
+
+    private static record ImmediateDraw(Texture texture, ModelVAORenderer.BatchDraw draw, boolean opaque)
+    {}
 
     /**
      * Captures the bone's second pass without changing render state during base rendering.

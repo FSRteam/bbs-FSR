@@ -34,7 +34,9 @@ public class Keys
     public static final KeyCombo ADD_AT_TICK = new KeyCombo("add_at_tick", UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_AT_TICK, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("camera");
     public static final KeyCombo ADD_ON_TOP = new KeyCombo("add_on_top", UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_ON_TOP, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("camera");
     public static final KeyCombo CLIP_CUT = new KeyCombo("clip_cut", UIKeys.CAMERA_TIMELINE_CONTEXT_CUT, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("camera");
-    public static final KeyCombo CLIP_DURATION = new KeyCombo("clip_duration", UIKeys.CAMERA_TIMELINE_CONTEXT_SHIFT_DURATION, GLFW.GLFW_KEY_M).categoryKey("camera");
+    /* Plain M is reserved for the marker hotkey (bbs_snow addon), so shifting a
+     * clip's duration to the cursor moved onto Shift+M. */
+    public static final KeyCombo CLIP_DURATION = new KeyCombo("clip_duration", UIKeys.CAMERA_TIMELINE_CONTEXT_SHIFT_DURATION, GLFW.GLFW_KEY_M, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("camera");
     public static final KeyCombo CLIP_ENABLE = new KeyCombo("clip_enable", UIKeys.CAMERA_TIMELINE_KEYS_ENABLED, GLFW.GLFW_KEY_J).categoryKey("camera");
     public static final KeyCombo CLIP_SELECT_ALL = new KeyCombo("clip_select_all", UIKeys.CAMERA_EDITOR_KEYS_CLIPS_SELECT_ALL, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("camera");
     public static final KeyCombo CLIP_SELECT_TRACK = new KeyCombo("clip_select_track", UIKeys.CAMERA_EDITOR_KEYS_CLIPS_SELECT_TRACK, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("camera");
@@ -70,6 +72,7 @@ public class Keys
 
     /* Dashboard */
     public static final KeyCombo OPEN_UTILITY_PANEL = new KeyCombo("utility_panel", UIKeys.UTILITY_TITLE, GLFW.GLFW_KEY_F6).categoryKey("dashboard");
+    public static final KeyCombo OPEN_SETTINGS = new KeyCombo("settings", UIKeys.CONFIG_TITLE, GLFW.GLFW_KEY_S, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("dashboard");
     public static final KeyCombo OPEN_DATA_MANAGER = new KeyCombo("data_manager", UIKeys.PANELS_KEYS_OPEN_DATA_MANAGER, GLFW.GLFW_KEY_N).categoryKey("dashboard");
     public static final KeyCombo OPEN_NEW_TAB = new KeyCombo("new_tab", UIKeys.PANELS_KEYS_OPEN_NEW_TAB, GLFW.GLFW_KEY_N, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("dashboard");
     public static final KeyCombo TOGGLE_VISIBILITY = new KeyCombo("toggle", UIKeys.DASHBOARD_CONTEXT_TOGGLE_VISIBILITY, GLFW.GLFW_KEY_F1).categoryKey("dashboard");
@@ -159,6 +162,7 @@ public class Keys
     public static final KeyCombo FILM_CONTROLLER_NEXT_DOCK_TAB = new KeyCombo("next_dock_tab", UIKeys.FILM_CONTROLLER_KEYS_CYCLE_EDITORS, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_PREV_DOCK_TAB = new KeyCombo("prev_dock_tab", UIKeys.FILM_CONTROLLER_KEYS_CYCLE_EDITORS, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("film_controller");
     public static final KeyCombo DOCK_MAXIMIZE = new KeyCombo("dock_maximize", UIKeys.DOCK_KEYS_MAXIMIZE, GLFW.GLFW_KEY_SPACE, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("film_controller");
+    public static final KeyCombo MULTIVIEW_TOGGLE = new KeyCombo("multiview_toggle", UIKeys.FILM_PANELS_KEYS_TOGGLE_MULTIVIEW, GLFW.GLFW_KEY_M, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("film_controller");
     public static final KeyCombo DOCK_UNDO_LAYOUT = new KeyCombo("dock_undo_layout", UIKeys.DOCK_UNDO_LAYOUT, GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_ALT).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_PREV_REPLAY = new KeyCombo("prev_replay", UIKeys.FILM_CONTROLLER_KEYS_PREV_REPLAY, GLFW.GLFW_KEY_PAGE_UP).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_NEXT_REPLAY = new KeyCombo("next_replay", UIKeys.FILM_CONTROLLER_KEYS_NEXT_REPLAY, GLFW.GLFW_KEY_PAGE_DOWN).categoryKey("film_controller");
