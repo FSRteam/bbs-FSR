@@ -1,17 +1,55 @@
 package mchorse.bbs_mod.audio;
 
+import com.mojang.logging.LogUtils;
+import mchorse.bbs_mod.utils.MathUtils;
+import org.lwjgl.openal.AL;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.AL11;
+import org.lwjgl.openal.ALCapabilities;
+import org.lwjgl.openal.SOFTGainClampEx;
 import org.lwjgl.system.MemoryUtil;
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 
 final class OpenALSoundBackend implements SoundBackend
 {
+    private static final Logger LOGGER = LogUtils.getLogger();
+
+    /**
+     * Cached {@code AL_GAIN_LIMIT_SOFT}, queried once a genuinely loud sound
+     * shows up. Negative means "not queried yet".
+     */
+    private static float gainLimit = -1F;
+
     static final OpenALSoundBackend INSTANCE = new OpenALSoundBackend();
 
     private OpenALSoundBackend()
     {}
+
+    /**
+     * Ceiling for a source's gain: OpenAL clamps AL_GAIN to AL_MAX_GAIN which
+     * defaults to 1, so clip volume above 100% would silently preview quieter
+     * than export unless the extension raises the ceiling.
+     */
+    static float getGainLimit()
+    {
+        if (gainLimit < 0F)
+        {
+            ALCapabilities capabilities = AL.getCapabilities();
+
+            gainLimit = capabilities != null && capabilities.AL_SOFT_gain_clamp_ex
+                ? Math.max(AL10.alGetFloat(SOFTGainClampEx.AL_GAIN_LIMIT_SOFT), 1F)
+                : 1F;
+
+            if (gainLimit <= 1F)
+            {
+                LOGGER.warn("AL_SOFT_gain_clamp_ex is missing, sounds can't be played louder than 100%");
+            }
+        }
+
+        return gainLimit;
+    }
 
     @Override
     public int createBuffer(Wave wave)
@@ -118,7 +156,16 @@ final class OpenALSoundBackend implements SoundBackend
     public void setSourceVolume(int source, float volume)
     {
         clearError();
-        AL10.alSourcef(source, AL10.AL_GAIN, volume);
+
+        float gain = MathUtils.clamp(volume, 0F, getGainLimit());
+
+        /* AL_MAX_GAIN has to be lifted first, or the gain below gets clamped back to it */
+        if (gain > 1F)
+        {
+            AL10.alSourcef(source, AL10.AL_MAX_GAIN, gain);
+        }
+
+        AL10.alSourcef(source, AL10.AL_GAIN, gain);
         checkError("set sound source volume");
     }
 
