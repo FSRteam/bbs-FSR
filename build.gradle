@@ -290,6 +290,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    cemTest {
+        java.srcDirs = ['src/cemTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
 }
 
 runs {
@@ -346,6 +352,8 @@ configurations {
     pluginHotReloadTestRuntimeOnly.extendsFrom clientRuntimeOnly
     pluginSmokeFixtureImplementation.extendsFrom clientImplementation
     pluginSmokeFixtureRuntimeOnly.extendsFrom clientRuntimeOnly
+    cemTestImplementation.extendsFrom implementation
+    cemTestRuntimeOnly.extendsFrom runtimeOnly
 }
 
 java {
@@ -539,6 +547,14 @@ tasks.register('testUiMirrorDemand', JavaExec) {
     mainClass = 'mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorDemandTest'
 }
 
+tasks.register('testCemParser', JavaExec) {
+    group = 'verification'
+    description = 'Runs the OptiFine CEM parser, geometry, and expression engine sanity checks (no Minecraft needed).'
+    dependsOn tasks.named('compileJava'), tasks.named('cemTestClasses')
+    classpath = sourceSets.cemTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.cubic.jem.CemTest'
+}
+
 tasks.register('testReplayKeyframeConsistency', JavaExec) {
     dependsOn tasks.named('clientClasses'), tasks.named('replayKeyframeTestClasses')
     classpath = sourceSets.replayKeyframeTest.runtimeClasspath
@@ -684,7 +700,8 @@ def bbsVerificationTaskNames = [
     'testReplayKeyframeConsistency',
     'testFilmEditorMigration',
     'testParticleRuntimeConsistency',
-    'testIkPhysicsConsistency'
+    'testIkPhysicsConsistency',
+    'testCemParser'
 ]
 
 bbsVerificationTaskNames.each { taskName ->

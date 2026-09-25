@@ -25,6 +25,7 @@ import mchorse.bbs_mod.client.render.multiview.ViewPassContext;
 import mchorse.bbs_mod.client.render.multiview.ViewTargetSize;
 import mchorse.bbs_mod.client.render.multiview.ViewFramebuffer;
 import mchorse.bbs_mod.camera.controller.CameraController;
+import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.ui.film.view.ViewDescriptor;
@@ -710,6 +711,9 @@ public class BBSRendering
 
     private static void prepareSceneFrame()
     {
+        /* The budgeted tail of model loading: VAO bakes for whatever the background loader
+         * finished, a few milliseconds' worth per frame instead of all of them at once. */
+        ModelSetupQueue.drain();
         restoreSceneCulling();
         Minecraft mc = Minecraft.getInstance();
         sceneSmartCull = mc.smartCull;

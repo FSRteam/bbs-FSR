@@ -9,9 +9,11 @@ import mchorse.bbs_mod.cubic.data.animation.Animations;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.data.model.ModelMesh;
+import mchorse.bbs_mod.cubic.jem.CemAnimation;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.View;
+import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
 import mchorse.bbs_mod.cubic.render.CubicCubeRenderer;
@@ -39,7 +41,6 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.Transform;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -75,6 +76,12 @@ public class ModelInstance implements IModelInstance
     public final String id;
     public IModel model;
     public Animations animations;
+
+    /** The live OptiFine CEM program of a .jem model, or null for every other kind. */
+    public CemAnimation cemAnimation;
+
+    /** The quirks the loader worked around while reading this model, printed against its name. */
+    public final List<String> warnings = new ArrayList<>();
 
     /** The model's intrinsic texture from its loader; {@link ModelConfig#texture} overrides it when set. */
     public Link baseTexture;
@@ -288,7 +295,7 @@ public class ModelInstance implements IModelInstance
     {
         if (this.model instanceof BOBJModel model)
         {
-            Minecraft.getInstance().execute(model::setup);
+            ModelSetupQueue.add(model::setup);
         }
 
         /* A welded or shape-keyed model still builds VAOs: only its welded bones and shape-keyed groups render
@@ -301,7 +308,7 @@ public class ModelInstance implements IModelInstance
 
             if (bake)
             {
-                Minecraft.getInstance().execute(() ->
+                ModelSetupQueue.add(() ->
                 {
                     CubicRenderer.processRenderModel(new CubicVAOBuilderRenderer(this.vaos), null, new PoseStack(), model);
                 });
