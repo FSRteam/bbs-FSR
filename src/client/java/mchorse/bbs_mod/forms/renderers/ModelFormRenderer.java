@@ -19,6 +19,7 @@ import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.jem.CemAnimator;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
@@ -249,12 +250,50 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return;
         }
 
-        this.animator = model.isProcedural() ? new ProceduralAnimator() : new Animator();
+        this.animator = createAnimator(model);
         this.animator.setup(model, actionsConfig, false);
 
         this.lastConfigs = new ActionsConfig();
         this.lastConfigs.copy(actionsConfig);
         this.lastModel = model;
+    }
+
+    /**
+     * The animator stage for a model: a .jem's live CEM program drives it, otherwise the config's
+     * choice between vanilla-like procedural and keyframe actions.
+     */
+    private static IAnimator createAnimator(ModelInstance model)
+    {
+        if (model.cemAnimation != null)
+        {
+            if (model.config.cemAnimation.get())
+            {
+                /* The vanilla stage under the program (upstream CemVanillaStage, the game's posed
+                 * model of the entity) lands with the mob-rig bridge batch; until then the program
+                 * evaluates over the rest pose. */
+                return new CemAnimator(model.cemAnimation);
+            }
+
+            /* CEM drove the bones' visibility and nothing else resets it: switched off, every bone shows again. */
+            for (ModelGroup group : model.model.getAllGroups())
+            {
+                group.visible = true;
+            }
+        }
+
+        return model.isProcedural() ? new ProceduralAnimator() : new Animator();
+    }
+
+    /**
+     * The states a CEM pack asks about that only the form can answer — sitting, tamed, angry. Read
+     * here rather than kept in sync, so a keyframe on one of them lands the frame it changes.
+     */
+    private void readCemStatus()
+    {
+        if (this.animator instanceof CemAnimator cem)
+        {
+            cem.status.read(this.form);
+        }
     }
 
     @Override
@@ -350,6 +389,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                     model.model.resetPose();
 
+                    this.readCemStatus();
                     this.animator.applyActions(null, model, poseTransition);
                     model.model.applyPose(this.getPose(this.renderPose));
                 }
@@ -1009,6 +1049,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             {
                 model.model.resetPose();
 
+                this.readCemStatus();
                 this.animator.applyActions(context.entity, model, context.getTransition());
                 model.model.applyPose(this.getPose(this.renderPose));
             }
@@ -1520,6 +1561,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 {
                     model.model.resetPose();
 
+                    this.readCemStatus();
                     this.animator.applyActions(entity, model, transition);
                     model.model.applyPose(this.getPose(this.renderPose));
 
