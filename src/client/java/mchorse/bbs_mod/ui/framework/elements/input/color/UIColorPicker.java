@@ -66,6 +66,9 @@ public class UIColorPicker extends UIElement
 
     public boolean editAlpha;
 
+    /** The color model the current layout was built for; {@link #render} re-lays-out when it drifts. */
+    private boolean layoutHsv;
+
     public Area picker = new Area();
     public Area hue = new Area();
     public Area red = new Area();
@@ -284,6 +287,12 @@ public class UIColorPicker extends UIElement
     {
         PickerLayout layout = this.createLayout();
 
+        /* The color model the current layout was built for. Everything that paints or hits
+         * the surfaces reads this rather than the setting: the setting can change from another
+         * picker or the settings screen, and a popup laid out for one model must never be
+         * painted as the other. {@link #render} notices the drift and lays out again. */
+        this.layoutHsv = layout.hsv;
+
         this.w(layout.width);
         this.h(layout.height);
 
@@ -317,6 +326,12 @@ public class UIColorPicker extends UIElement
         layout.contentY = HEADER_HEIGHT;
         layout.paletteY = layout.contentY + (layout.hsv ? HSV_PICKER_SIZE + HSV_SECTION_GAP : RGB_SLIDER_HEIGHT + RGB_SECTION_GAP);
         layout.height = layout.paletteY;
+
+        /* Both palettes are placed from the layout alone. Reading one's area to place the
+         * other would read it a layout late — the element's area only catches up with its
+         * flex in resize(), which runs after everything here. */
+        layout.favoriteY = layout.paletteY;
+        layout.recentY = layout.favoriteHeight > 0 ? layout.paletteY + layout.favoriteHeight + PALETTE_GAP : layout.paletteY;
 
         if (layout.favoriteHeight > 0)
         {
@@ -358,16 +373,8 @@ public class UIColorPicker extends UIElement
             this.layoutRgb(contentX, contentY, layout.paletteWidth);
         }
 
-        this.favorite.set(contentX, this.area.y + layout.paletteY, layout.paletteWidth, layout.favoriteHeight);
-
-        if (layout.favoriteHeight > 0 && layout.recentHeight > 0)
-        {
-            this.recent.set(contentX, this.favorite.area.ey() + PALETTE_GAP, layout.paletteWidth, layout.recentHeight);
-        }
-        else
-        {
-            this.recent.set(contentX, this.area.y + layout.paletteY, layout.paletteWidth, layout.recentHeight);
-        }
+        this.favorite.set(contentX, this.area.y + layout.favoriteY, layout.paletteWidth, layout.favoriteHeight);
+        this.recent.set(contentX, this.area.y + layout.recentY, layout.paletteWidth, layout.recentHeight);
     }
 
     private void layoutHsv(int x, int y)
@@ -486,13 +493,19 @@ public class UIColorPicker extends UIElement
     @Override
     public void render(UIContext context)
     {
+        /* The setting may have been changed elsewhere while this popup was open */
+        if (this.layoutHsv != this.isHsvPicker())
+        {
+            this.resize();
+        }
+
         this.handleDragging(context);
 
         this.area.render(context.batcher, Colors.LIGHTEST_GRAY);
         this.renderRect(context.batcher, this.preview.x, this.preview.y, this.preview.ex(), this.preview.ey());
         context.batcher.outline(this.preview.x, this.preview.y, this.preview.ex(), this.preview.ey(), Colors.A25);
 
-        if (this.isHsvPicker())
+        if (this.layoutHsv)
         {
             this.renderHsv(context);
         }
@@ -525,7 +538,7 @@ public class UIColorPicker extends UIElement
 
         try
         {
-            if (this.isHsvPicker())
+            if (this.layoutHsv)
             {
                 if (this.picker.isInside(context))
                 {
@@ -605,7 +618,7 @@ public class UIColorPicker extends UIElement
             return;
         }
 
-        if (this.isHsvPicker())
+        if (this.layoutHsv)
         {
             this.handleHsvDragging(context);
         }
@@ -793,6 +806,8 @@ public class UIColorPicker extends UIElement
         public int paletteWidth;
         public int contentY;
         public int paletteY;
+        public int favoriteY;
+        public int recentY;
         public int recentHeight;
         public int favoriteHeight;
     }
