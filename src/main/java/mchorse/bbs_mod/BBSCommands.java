@@ -30,7 +30,6 @@ import net.minecraft.commands.arguments.coordinates.Coordinates;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.commands.arguments.selector.EntitySelector;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -38,17 +37,20 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.storage.PrimaryLevelData;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.function.Predicate;
 
@@ -519,21 +521,22 @@ public class BBSCommands
         return 1;
     }
 
+    /**
+     * Writes the region into BBS's own {@code <assets>/structures} folder (addressed by the
+     * structure form as {@code assets:<name>}), where it is there in every world. Deliberate
+     * behavior change vs. older FSR: nothing is written into the world's {@code generated}
+     * folder any more — structures written there by vanilla structure blocks are still read,
+     * but they are the world's, not ours.
+     */
     private static int saveStructure(CommandContext<CommandSourceStack> source)
     {
         String name = StringArgumentType.getString(source, "name");
         BlockPos from = BlockPosArgument.getBlockPos(source, "from");
         BlockPos to = BlockPosArgument.getBlockPos(source, "to");
-        ResourceLocation id = ResourceLocation.tryParse(name);
-
-        if (id == null)
-        {
-            return 0;
-        }
 
         ServerLevel world = source.getSource().getLevel();
-        StructureTemplateManager structureTemplateManager = world.getStructureManager();
-        StructureTemplate structureTemplate = structureTemplateManager.getOrCreate(id);
+        StructureTemplate structureTemplate = new StructureTemplate();
+        CompoundTag nbt = new CompoundTag();
 
         BlockPos min = new BlockPos(
             Math.min(from.getX(), to.getX()),
@@ -552,12 +555,33 @@ public class BBSCommands
         );
 
         structureTemplate.fillFromWorld(world, min, size, true, Blocks.STRUCTURE_VOID);
+        structureTemplate.save(nbt);
 
-        if (structureTemplateManager.save(id))
+        /* Stamped the way the vanilla manager stamps its own, so a file written here is the
+         * same file a structure block would have written and reads back everywhere. */
+        NbtUtils.addCurrentDataVersion(nbt);
+
+        File folder = BBSMod.getAssetsPath("structures");
+        File file = new File(folder, name + ".nbt");
+
+        /* No writing outside the folder through a path full of ".." */
+        if (!file.toPath().normalize().startsWith(folder.toPath().normalize()))
         {
-            return 1;
+            return 0;
         }
 
-        return 0;
+        try
+        {
+            file.getParentFile().mkdirs();
+            NbtIo.writeCompressed(nbt, file.toPath());
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+
+            return 0;
+        }
+
+        return 1;
     }
 }

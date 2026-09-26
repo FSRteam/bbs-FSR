@@ -14,6 +14,7 @@ import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.ParticleForm;
+import mchorse.bbs_mod.forms.forms.StructureForm;
 import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
 import mchorse.bbs_mod.forms.renderers.AnchorFormRenderer;
@@ -31,6 +32,7 @@ import mchorse.bbs_mod.forms.renderers.LabelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.MobFormRenderer;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
+import mchorse.bbs_mod.forms.renderers.StructureFormRenderer;
 import mchorse.bbs_mod.forms.renderers.TrailFormRenderer;
 import mchorse.bbs_mod.forms.renderers.VanillaParticleFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -60,6 +62,14 @@ public class FormUtilsClient
         SequencedMap<RenderType, ByteBufferBuilder> sortedMap = Util.make(new LinkedHashMap<>(), map -> {
             assignBufferBuilder(map, Sheets.solidBlockSheet());
             assignBufferBuilder(map, Sheets.cutoutBlockSheet());
+            /* Keyed terrain block layers so forms that render real blocks (the structure form) get
+             * them keyed — drawn together at draw() with correct depth — instead of falling through
+             * to the shared fallback buffer, which flushes on every layer switch and loses depth
+             * between opaque layers (e.g. cutout leaves drawing over solid blocks). Kept before the
+             * translucent layer so opaque draws first. */
+            assignBufferBuilder(map, RenderType.solid());
+            assignBufferBuilder(map, RenderType.cutout());
+            assignBufferBuilder(map, RenderType.cutoutMipped());
             assignBufferBuilder(map, Sheets.bannerSheet());
             assignBufferBuilder(map, Sheets.translucentCullBlockSheet());
             assignBufferBuilder(map, Sheets.shieldSheet());
@@ -93,6 +103,7 @@ public class FormUtilsClient
         register(VanillaParticleForm.class, VanillaParticleFormRenderer::new);
         register(TrailForm.class, TrailFormRenderer::new);
         register(FramebufferForm.class, FramebufferFormRenderer::new);
+        register(StructureForm.class, StructureFormRenderer::new);
         register(SoundSphereForm.class, SoundSphereFormRenderer::new);
         register(SoundConeForm.class, SoundConeFormRenderer::new);
     }

@@ -41,6 +41,7 @@ import mchorse.bbs_mod.film.WorldVideoExportSession;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.forms.structure.BakedStructure;
 import mchorse.bbs_mod.forms.categories.UserFormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
@@ -185,6 +186,9 @@ public class BBSModClient
         minecraftSourcePack.setupPaths();
         cemSourcePack.reindex();
         VanillaRigs.clear();
+
+        /* Baked structures hold sprite UVs — stale after resource reload (pack switch, F3+T) */
+        BakedStructure.invalidateAll();
 
         getModels().forgetFolder(CemSourcePack.NAME + "/");
         getFormCategories().setup();
