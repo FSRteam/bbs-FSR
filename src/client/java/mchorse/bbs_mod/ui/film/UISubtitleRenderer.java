@@ -9,6 +9,7 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.math.Axis;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.clips.misc.Subtitle;
+import mchorse.bbs_mod.camera.data.Placement;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.graphics.Framebuffer;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -65,13 +66,14 @@ public class UISubtitleRenderer
         Supplier<ShaderInstance> supplier = () -> program;
 
         RenderTarget fb = Minecraft.getInstance().getMainRenderTarget();
-        int width = fb.width;
-        int height = fb.height;
+
+        /* Overlay clips position themselves in resolution independent frame units:
+         * the virtual frame is always Placement.HEIGHT units tall, as wide as the
+         * framebuffer's aspect ratio makes it. */
+        float width = fb.width * Placement.HEIGHT / fb.height;
+        float height = Placement.HEIGHT;
 
         Matrix4f cache = projectionCache.set(RenderSystem.getProjectionMatrix());
-
-        width /= 2;
-        height /= 2;
 
         Framebuffer framebuffer = getTextFramebuffer();
         Texture texture = framebuffer.getMainTexture();
@@ -91,11 +93,12 @@ public class UISubtitleRenderer
             }
 
             String label = StringUtils.processColoredText(subtitle.label);
+            Placement placement = subtitle.placement;
             int w = 0;
             int h = 0;
-            int x = (int) (width * subtitle.windowX + subtitle.x);
-            int y = (int) (height * subtitle.windowY + subtitle.y);
-            float scale = subtitle.size;
+            float x = width * placement.windowX + placement.offsetX;
+            float y = height * placement.windowY + placement.offsetY;
+            float scale = placement.scale;
             int subColor = subtitle.color;
 
             List<String> strings = subtitle.maxWidth <= 10 ? Collections.singletonList(label) : font.wrap(label, subtitle.maxWidth);
@@ -212,7 +215,7 @@ public class UISubtitleRenderer
             RenderSystem.enableBlend();
             RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 
-            batcher.texturedBox(supplier, texture.id, Colors.setA(Colors.WHITE, alpha), -fw * subtitle.anchorX, -fh * subtitle.anchorY, texture.width, texture.height, 0, 0, texture.width, texture.height, texture.width, texture.height);
+            batcher.texturedBox(supplier, texture.id, Colors.setA(Colors.WHITE, alpha), -fw * placement.anchorX, -fh * placement.anchorY, texture.width, texture.height, 0, 0, texture.width, texture.height, texture.width, texture.height);
 
             stack.popPose();
         }
