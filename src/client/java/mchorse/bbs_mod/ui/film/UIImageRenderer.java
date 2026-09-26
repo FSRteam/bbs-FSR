@@ -6,12 +6,14 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.clips.misc.ImageOverlay;
+import mchorse.bbs_mod.camera.clips.misc.VideoOverlay;
 import mchorse.bbs_mod.camera.data.Placement;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
+import mchorse.bbs_mod.video.VideoPlayer;
 import net.minecraft.client.Minecraft;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -59,16 +61,35 @@ public class UIImageRenderer
                 continue;
             }
 
-            if (image.texture == null || !BBSModClient.getTextures().has(image.texture))
+            Texture texture;
+
+            if (image instanceof VideoOverlay video)
             {
-                continue;
+                /* The overlay is the clip's own object, so it IS the decoder's owner:
+                 * two clips playing the same file sit on different timestamps and
+                 * cannot share one. */
+                VideoPlayer player = video.video == null ? null : BBSModClient.getVideos().getPlayer(video, video.video);
+
+                texture = player == null ? null : player.getFrame(video.seconds);
+
+                if (texture == null)
+                {
+                    continue;
+                }
             }
-
-            Texture texture = BBSModClient.getTextures().getTexture(image.texture);
-
-            if (texture == BBSModClient.getTextures().getError())
+            else
             {
-                continue;
+                if (image.texture == null || !BBSModClient.getTextures().has(image.texture))
+                {
+                    continue;
+                }
+
+                texture = BBSModClient.getTextures().getTexture(image.texture);
+
+                if (texture == BBSModClient.getTextures().getError())
+                {
+                    continue;
+                }
             }
 
             texture.bind();

@@ -562,6 +562,8 @@
 	"bbs.ui.camera.panels.placement.offset": "Offset",
 	"bbs.ui.camera.panels.placement.anchor": "Anchor",
 	"bbs.ui.camera.panels.placement.scale": "Scale",
+	"bbs.ui.camera.panels.video.pick": "Pick video",
+	"bbs.ui.camera.panels.video.loop": "Loop",
 	"bbs.ui.camera.panels.image.image": "Image",
 	"bbs.ui.camera.panels.image.pick": "Pick image",
 	"bbs.ui.camera.panels.image.fullscreen": "Fullscreen",

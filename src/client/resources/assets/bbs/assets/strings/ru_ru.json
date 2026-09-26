@@ -454,6 +454,8 @@
 	"bbs.ui.camera.panels.placement.offset": "Сдвиг",
 	"bbs.ui.camera.panels.placement.anchor": "Якорь",
 	"bbs.ui.camera.panels.placement.scale": "Масштаб",
+	"bbs.ui.camera.panels.video.pick": "Выбрать видео",
+	"bbs.ui.camera.panels.video.loop": "Цикл",
 	"bbs.ui.camera.panels.image.image": "Изображение",
 	"bbs.ui.camera.panels.image.pick": "Выбрать изображение",
 	"bbs.ui.camera.panels.image.fullscreen": "На весь экран",

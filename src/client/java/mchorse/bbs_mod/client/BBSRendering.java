@@ -732,6 +732,11 @@ public class BBSRendering
         pendingPrimaryFrame = null;
         pendingPrimaryIris = null;
         float transition = getTickDelta(mc);
+
+        /* Marks which owned video decoders nobody asked for during this frame - the
+         * idle ones can be adopted by a fresh owner of the same file (no black flash). */
+        BBSModClient.getVideos().startFrame();
+
         BBSModClient.getFilms().startRenderFrame(transition);
         UIBaseMenu menu = UIScreen.getCurrentMenu();
 

@@ -170,6 +170,8 @@ public class UIKeys
     public static final IKey CAMERA_PANELS_IMAGE_FULLSCREEN = L10n.lang("bbs.ui.camera.panels.image.fullscreen");
     public static final IKey CAMERA_PANELS_IMAGE_SMOOTH = L10n.lang("bbs.ui.camera.panels.image.smooth");
     public static final IKey CAMERA_PANELS_IMAGE_TRANSFORM = L10n.lang("bbs.ui.camera.panels.image.transform");
+    public static final IKey CAMERA_PANELS_VIDEO_PICK = L10n.lang("bbs.ui.camera.panels.video.pick");
+    public static final IKey CAMERA_PANELS_VIDEO_LOOP = L10n.lang("bbs.ui.camera.panels.video.loop");
     public static final IKey CAMERA_PANELS_PLACEMENT = L10n.lang("bbs.ui.camera.panels.placement.title");
     public static final IKey CAMERA_PANELS_PLACEMENT_POSITION = L10n.lang("bbs.ui.camera.panels.placement.position");
     public static final IKey CAMERA_PANELS_PLACEMENT_OFFSET = L10n.lang("bbs.ui.camera.panels.placement.offset");

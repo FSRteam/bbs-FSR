@@ -9,6 +9,8 @@ import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
+import mchorse.bbs_mod.camera.clips.misc.VideoClientClip;
+import mchorse.bbs_mod.video.VideoManager;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -114,6 +116,7 @@ public class BBSModClient
     private static TextureManager textures;
     private static FramebufferManager framebuffers;
     private static SoundManager sounds;
+    private static VideoManager videos;
     private static L10n l10n;
 
     private static ModelManager models;
@@ -198,6 +201,11 @@ public class BBSModClient
     public static SoundManager getSounds()
     {
         return sounds;
+    }
+
+    public static VideoManager getVideos()
+    {
+        return videos;
     }
 
     public static L10n getL10n()
@@ -443,6 +451,7 @@ public class BBSModClient
         textures = new TextureManager(provider);
         framebuffers = new FramebufferManager();
         sounds = new SoundManager(provider);
+        videos = new VideoManager();
         l10n = new L10n();
         l10n.register((lang) -> Collections.singletonList(Link.assets("strings/" + lang + ".json")));
         l10n.reload();
@@ -539,6 +548,7 @@ public class BBSModClient
         /* Replace audio clip with client version that plays audio */
         BBSMod.getFactoryCameraClips()
             .register(Link.bbs("audio"), AudioClientClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
+            .register(Link.bbs("video"), VideoClientClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
             .register(Link.bbs("tracker"), TrackerClientClip.class, new ClipFactoryData(Icons.USER, 0x4cedfc))
             .register(Link.bbs("curve"), CurveClientClip.class, new ClipFactoryData(Icons.ARC, 0xff1493));
 
@@ -679,6 +689,7 @@ public class BBSModClient
             runClientLifecycleStep("notify addon disconnect", () -> ClientApiCompat.emitDisconnect(Minecraft.getInstance()));
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
             runClientLifecycleStep("stop Minecraft sound capture", minecraftSoundCapture::end);
+            runClientLifecycleStep("release video decoders", () -> videos.delete());
             runClientLifecycleStep("release Film view resources", BBSRendering::releaseViewResources);
             runClientLifecycleStep("reset UI mirror", () -> BBSUiMirrorRuntime.reset());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
@@ -768,6 +779,10 @@ public class BBSModClient
     {
         LivePlayerItemUse.endFrame();
         ClientApiCompat.emitStartClientTick(Minecraft.getInstance());
+
+        /* Wind down decoders of video clips and forms that left the screen */
+        videos.update();
+
         BBSRendering.startTick();
     }
 
@@ -914,6 +929,7 @@ public class BBSModClient
             runClientLifecycleStep("stop hot plugin runtime", () ->
                 BBSPluginClientStructuralBridge.runBlockingShutdown(BBSMod::stopHotPluginRuntime));
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
+            runClientLifecycleStep("release video decoders", () -> videos.delete());
             runClientLifecycleStep("release Film view resources", BBSRendering::releaseViewResources);
             runClientLifecycleStep("shutdown UI mirror", () -> BBSUiMirrorRuntime.shutdown());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
