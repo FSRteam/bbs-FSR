@@ -966,7 +966,7 @@ public class BBSSettings {
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
 		editorRewind = builder.getBoolean("rewind", true);
-		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", true);
+		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", false);
 		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);
 		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
 
