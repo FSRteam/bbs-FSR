@@ -6,12 +6,16 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.pose.Pose;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 
-public interface IModel
+/**
+ * A drivable cubic model. The bone-tree shape queries live on {@link IBoneHierarchy}, which this
+ * interface extends (upstream e341fa733 split them out so a vanilla entity rig can sit in the
+ * same widgets) — the pose, shape key and animation methods are what make a model more than a
+ * skeleton, and a vanilla rig supplies none of them.
+ */
+public interface IModel extends IBoneHierarchy
 {
     public Pose createPose();
 
@@ -40,27 +44,6 @@ public interface IModel
     public Collection<String> getDirectChildrenKeys(String key);
 
     public String getParentGroupKey(String key);
-
-    public default List<String> getGroupKeysInHierarchyOrder()
-    {
-        List<String> out = new ArrayList<>();
-
-        for (String root : this.getRootGroupKeys())
-        {
-            this.collectGroupAndDescendants(root, out);
-        }
-
-        return out;
-    }
-
-    default void collectGroupAndDescendants(String name, List<String> out)
-    {
-        out.add(name);
-        for (String child : this.getDirectChildrenKeys(name))
-        {
-            this.collectGroupAndDescendants(child, out);
-        }
-    }
 
     public void apply(IEntity target, Animation action, float tick, float blend, float transition, boolean skipInitial);
 

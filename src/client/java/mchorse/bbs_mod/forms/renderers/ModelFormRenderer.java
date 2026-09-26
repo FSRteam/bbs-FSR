@@ -20,6 +20,7 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.jem.CemAnimator;
+import mchorse.bbs_mod.cubic.jem.CemVanillaStage;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
@@ -268,10 +269,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         {
             if (model.config.cemAnimation.get())
             {
-                /* The vanilla stage under the program (upstream CemVanillaStage, the game's posed
-                 * model of the entity) lands with the mob-rig bridge batch; until then the program
-                 * evaluates over the rest pose. */
-                return new CemAnimator(model.cemAnimation);
+                /* The vanilla stage under the program (upstream 6d7aa0fd1): the game's own model of
+                 * the entity, posed by the game's own code, read back as the program's starting
+                 * values. Without it a pack that reads the parts it leaves empty — the fox's flat
+                 * body, the hoglin's bowed head — would evaluate against the rest pose. */
+                return new CemAnimator(model.cemAnimation, new CemVanillaStage(model.cemAnimation.jem));
             }
 
             /* CEM drove the bones' visibility and nothing else resets it: switched off, every bone shows again. */

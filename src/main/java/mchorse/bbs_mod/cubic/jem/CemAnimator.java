@@ -68,14 +68,9 @@ public class CemAnimator implements IAnimator
     private int previewTicked = -1;
 
     /**
-     * A program run with no vanilla stage under it — the game's side of the stage is not ported yet,
-     * so the program evaluates over the rest pose until it lands.
+     * @param stage the vanilla stage under the program ({@code CemVanillaStage}, the game's posed
+     *              model of the entity), or null for a program run with no game under it.
      */
-    public CemAnimator(CemAnimation program)
-    {
-        this(program, null);
-    }
-
     public CemAnimator(CemAnimation program, ICemVanillaStage stage)
     {
         this.program = program;
