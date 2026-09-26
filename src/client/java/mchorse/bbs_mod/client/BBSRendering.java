@@ -6,6 +6,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
+import mchorse.bbs_mod.camera.clips.misc.ImageClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
@@ -41,6 +42,7 @@ import mchorse.bbs_mod.graphics.texture.TextureFormat;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.UIImageRenderer;
 import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -788,6 +790,7 @@ public class BBSRendering
             if (currentMenu instanceof UIDashboard dashboard && dashboard.getPanels().panel instanceof UIFilmPanel panel)
             {
                 filmPanel = panel;
+                UIImageRenderer.renderImages(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, ImageClip.getImages(panel.getRunner().getContext()));
                 UISubtitleRenderer.renderSubtitles(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
                 surfaces.add(BBSRenderSurfaceKind.FILM_PREVIEW);
             }
@@ -803,6 +806,7 @@ public class BBSRendering
                 GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
                 Batcher2D batcher = new Batcher2D(drawContext);
 
+                UIImageRenderer.renderImages(batcher.getContext().pose(), batcher, ImageClip.getImages(playback.getContext()));
                 UISubtitleRenderer.renderSubtitles(batcher.getContext().pose(), batcher, SubtitleClip.getSubtitles(playback.getContext()));
             }
 

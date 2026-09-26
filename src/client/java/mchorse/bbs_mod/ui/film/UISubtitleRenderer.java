@@ -66,11 +66,7 @@ public class UISubtitleRenderer
         Supplier<ShaderInstance> supplier = () -> program;
 
         RenderTarget fb = Minecraft.getInstance().getMainRenderTarget();
-
-        /* Overlay clips position themselves in resolution independent frame units:
-         * the virtual frame is always Placement.HEIGHT units tall, as wide as the
-         * framebuffer's aspect ratio makes it. */
-        float width = fb.width * Placement.HEIGHT / fb.height;
+        float width = UIImageRenderer.getUnitWidth();
         float height = Placement.HEIGHT;
 
         Matrix4f cache = projectionCache.set(RenderSystem.getProjectionMatrix());
