@@ -8,9 +8,6 @@ import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
-import com.mojang.logging.LogUtils;
-import org.slf4j.Logger;
-
 import java.util.Collections;
 import java.util.List;
 
@@ -22,8 +19,6 @@ import java.util.List;
  */
 public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
 {
-    private static final Logger LOGGER = LogUtils.getLogger();
-
     private IKeyframeFactory<T> factory;
 
     public KeyframeChannel(String id, IKeyframeFactory<T> factory)
@@ -369,8 +364,9 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
              * a null factory: reading the first keyframe then threw, and wherever that throw was
              * swallowed the whole channel disappeared without a trace. Keep the factory the channel
              * was constructed with, say so out loud, and leave the keyframes unread — they are
-             * written in a shape this build has no way to interpret. */
-            LOGGER.warn("Keyframe channel \"" + this.getId() + "\" has unknown value type \""
+             * written in a shape this build has no way to interpret. Stderr rather than a logger:
+             * this class initializes on bare test-harness classpaths with no logging backend. */
+            System.err.println("[bbs] Keyframe channel \"" + this.getId() + "\" has unknown value type \""
                 + map.getString("type") + "\"; its keyframes are left out.");
 
             return;
