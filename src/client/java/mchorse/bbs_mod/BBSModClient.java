@@ -10,6 +10,7 @@ import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.clips.misc.VideoClientClip;
+import mchorse.bbs_mod.fonts.FontManager;
 import mchorse.bbs_mod.video.VideoManager;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
@@ -117,6 +118,7 @@ public class BBSModClient
     private static FramebufferManager framebuffers;
     private static SoundManager sounds;
     private static VideoManager videos;
+    private static FontManager fonts;
     private static L10n l10n;
 
     private static ModelManager models;
@@ -206,6 +208,11 @@ public class BBSModClient
     public static VideoManager getVideos()
     {
         return videos;
+    }
+
+    public static FontManager getFonts()
+    {
+        return fonts;
     }
 
     public static L10n getL10n()
@@ -452,6 +459,7 @@ public class BBSModClient
         framebuffers = new FramebufferManager();
         sounds = new SoundManager(provider);
         videos = new VideoManager();
+        fonts = new FontManager();
         l10n = new L10n();
         l10n.register((lang) -> Collections.singletonList(Link.assets("strings/" + lang + ".json")));
         l10n.reload();
@@ -782,6 +790,9 @@ public class BBSModClient
 
         /* Wind down decoders of video clips and forms that left the screen */
         videos.update();
+
+        /* Give back the glyph atlases of fonts nobody has drawn lately */
+        fonts.update();
 
         BBSRendering.startTick();
     }

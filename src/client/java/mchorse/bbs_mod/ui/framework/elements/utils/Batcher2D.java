@@ -135,6 +135,19 @@ public class Batcher2D
         return this.font;
     }
 
+    /**
+     * Swap the font every text call of this batcher goes through, handing back the
+     * previous one so the caller can put it back. A null restores the default one.
+     */
+    public FontRenderer setFont(FontRenderer font)
+    {
+        FontRenderer previous = this.font;
+
+        this.font = font == null ? getDefaultTextRenderer() : font;
+
+        return previous;
+    }
+
     public void pushAlpha(float mul)
     {
         if (this.alphaStackSize >= this.alphaStack.length)

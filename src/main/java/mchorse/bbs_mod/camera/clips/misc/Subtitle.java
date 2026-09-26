@@ -21,6 +21,9 @@ public class Subtitle
     public int lineHeight;
     public int maxWidth;
 
+    public Link font;
+    public int fontSize;
+
     public Link image;
     public boolean imageRight;
     public float imageScale;
@@ -51,6 +54,12 @@ public class Subtitle
     {
         this.lineHeight = lineHeight;
         this.maxWidth = maxWidth;
+    }
+
+    public void updateFont(Link font, int fontSize)
+    {
+        this.font = font;
+        this.fontSize = fontSize;
     }
 
     public void updateImage(Link image, boolean imageRight, float imageScale)

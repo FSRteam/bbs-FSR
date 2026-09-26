@@ -154,6 +154,9 @@ public class UIKeys
     public static final IKey CAMERA_PANELS_SHAKE_AMOUNT = L10n.lang("bbs.ui.camera.panels.shake_amount");
     public static final IKey CAMERA_PANELS_SUBTITLE_BACKGROUND = L10n.lang("bbs.ui.camera.panels.subtitle.background");
     public static final IKey CAMERA_PANELS_SUBTITLE_CONSTRAINT = L10n.lang("bbs.ui.camera.panels.subtitle.constraints");
+    public static final IKey CAMERA_PANELS_SUBTITLE_FONT = L10n.lang("bbs.ui.camera.panels.subtitle.font");
+    public static final IKey CAMERA_PANELS_SUBTITLE_FONT_PICK = L10n.lang("bbs.ui.camera.panels.subtitle.font_pick");
+    public static final IKey CAMERA_PANELS_SUBTITLE_FONT_SIZE = L10n.lang("bbs.ui.camera.panels.subtitle.font_size");
     public static final IKey CAMERA_PANELS_SUBTITLE_LINE_HEIGHT = L10n.lang("bbs.ui.camera.panels.subtitle.line_height");
     public static final IKey CAMERA_PANELS_SUBTITLE_MAX_WIDTH = L10n.lang("bbs.ui.camera.panels.subtitle.max_width");
     public static final IKey CAMERA_PANELS_SUBTITLE_OPAQUE = L10n.lang("bbs.ui.camera.panels.subtitle.opaque");
@@ -591,7 +594,11 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_LABEL_ANCHOR = L10n.lang("bbs.ui.forms.editors.label.anchor");
     public static final IKey FORMS_EDITORS_LABEL_ANCHOR_LINES = L10n.lang("bbs.ui.forms.editors.label.anchor_lines");
     public static final IKey FORMS_EDITORS_LABEL_BACKGROUND = L10n.lang("bbs.ui.forms.editors.label.background");
+    public static final IKey FORMS_EDITORS_LABEL_FONT = L10n.lang("bbs.ui.forms.editors.label.font");
+    public static final IKey FORMS_EDITORS_LABEL_FONT_PICK = L10n.lang("bbs.ui.forms.editors.label.font_pick");
+    public static final IKey FORMS_EDITORS_LABEL_FONT_SIZE = L10n.lang("bbs.ui.forms.editors.label.font_size");
     public static final IKey FORMS_EDITORS_LABEL_LABEL = L10n.lang("bbs.ui.forms.editors.label.label");
+    public static final IKey FORMS_EDITORS_LABEL_LINE_HEIGHT = L10n.lang("bbs.ui.forms.editors.label.line_height");
     public static final IKey FORMS_EDITORS_LABEL_SHADOW_COLOR = L10n.lang("bbs.ui.forms.editors.label.shadow_color");
     public static final IKey FORMS_EDITORS_LABEL_SHADOW_OFFSET = L10n.lang("bbs.ui.forms.editors.label.shadow_offset");
     public static final IKey FORMS_EDITORS_LABEL_TITLE = L10n.lang("bbs.ui.forms.editors.label.title");
@@ -1659,6 +1666,7 @@ public class UIKeys
     public static final IKey UTILITY_OPEN_AUDIO_EDITOR = L10n.lang("studio.ui.utility.open_audio_editor");
     public static final IKey UTILITY_OPEN_AUDIO_FOLDER = L10n.lang("studio.ui.utility.open_audio_folder");
     public static final IKey UTILITY_OPEN_FOLDER = L10n.lang("studio.ui.utility.open_folder");
+    public static final IKey UTILITY_OPEN_FONTS_FOLDER = L10n.lang("studio.ui.utility.open_fonts_folder");
     public static final IKey UTILITY_OPEN_GAME_FOLDER = L10n.lang("studio.ui.utility.open_game_folder");
     public static final IKey UTILITY_OPEN_MODELS_FOLDER = L10n.lang("studio.ui.utility.open_models_folder");
     public static final IKey UTILITY_OPEN_VIDEO_FOLDER = L10n.lang("studio.ui.utility.open_video_folder");
