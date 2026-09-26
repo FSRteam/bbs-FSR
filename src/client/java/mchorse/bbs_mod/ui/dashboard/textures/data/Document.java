@@ -19,6 +19,9 @@ import java.util.List;
 
 public class Document implements IMapSerializable
 {
+    /** What a document is persisted as, next to its texture: {@code name.png.dat}. */
+    public static final String EXTENSION = ".dat";
+
     public Link link;
     public final List<TextureLayer> layers = new ArrayList<>();
     public int activeLayerIndex = -1;
@@ -27,7 +30,7 @@ public class Document implements IMapSerializable
 
     public static File datFile(File textureFile)
     {
-        return new File(textureFile.getParentFile(), textureFile.getName() + ".dat");
+        return new File(textureFile.getParentFile(), textureFile.getName() + EXTENSION);
     }
 
     public static Document read(Link link, File file)

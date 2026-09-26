@@ -1,6 +1,8 @@
 package mchorse.bbs_mod;
 
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
@@ -41,6 +43,9 @@ public class BBSSettings {
 	public static ValueStringKeys disabledSheets;
 	public static mchorse.bbs_mod.settings.values.ui.ValueTrackStyles trackStyles;
 	public static ValueStringKeys disabledMorphFormCategories;
+	public static ValueInt textureCellSize;
+	public static ValueString textureSort;
+	public static mchorse.bbs_mod.settings.values.core.ValueLinkList texturePins;
 	public static ValueLanguage language;
 	public static ValueInt primaryColor;
 	public static ValueInt stencilHighlightColor;
@@ -749,25 +754,20 @@ public class BBSSettings {
 	}
 
 	public static void register(SettingsBuilder builder) {
-		HashSet<String> defaultFilters = new HashSet<>();
-
-		defaultFilters.add("item_off_hand");
-		defaultFilters.add("item_head");
-		defaultFilters.add("item_chest");
-		defaultFilters.add("item_legs");
-		defaultFilters.add("item_feet");
-		defaultFilters.add("vX");
-		defaultFilters.add("vY");
-		defaultFilters.add("vZ");
-		defaultFilters.add("grounded");
-		defaultFilters.add("stick_rx");
-		defaultFilters.add("stick_ry");
-		defaultFilters.add("trigger_l");
-		defaultFilters.add("trigger_r");
-		defaultFilters.add("extra1_x");
-		defaultFilters.add("extra1_y");
-		defaultFilters.add("extra2_x");
-		defaultFilters.add("extra2_y");
+		/* Channels the timeline keeps folded away until they are asked for: the inventory
+		 * past the held slot, the armour, the states the entity is put into, the velocity
+		 * readout, and the gamepad axes nothing binds by default. */
+		HashSet<String> defaultFilters = new HashSet<>(Arrays.asList(
+			"item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4",
+			"item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8",
+			"selected_slot",
+			"item_head", "item_chest", "item_legs", "item_feet",
+			"swimming", "riding", "flying", "gliding",
+			"grounded", "leaning", "yaw", "roll",
+			"vX", "vY", "vZ",
+			"stick_rx", "stick_ry", "trigger_l", "trigger_r",
+			"extra1_x", "extra1_y", "extra2_x", "extra2_y"
+		));
 
 		builder.category("appearance", Icons.LAYOUT);
 		builder.register(language = new ValueLanguage("language"));
@@ -783,13 +783,17 @@ public class BBSSettings {
 		morphingFocusSearch = builder.getBoolean("morphing_focus_search", false);
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
+		textureCellSize = builder.getInt("texture_cell_size", 80, 40, 200).slider();
+		textureSort = builder.getString("texture_sort", "name");
+		texturePins = new mchorse.bbs_mod.settings.values.core.ValueLinkList("texture_pins", List.of(mchorse.bbs_mod.resources.Link.assets("textures/")));
+		texturePins.invisible();
 		favoriteColors = new ValueColors("favorite_colors");
 		recentColors = new ValueColors("recent_colors").limit(33);
-		disabledSheets = new ValueStringKeys("disabled_sheets");
-		disabledSheets.set(defaultFilters);
+		disabledSheets = new ValueStringKeys("disabled_sheets", defaultFilters);
 		builder.register(favoriteColors);
 		builder.register(recentColors);
 		builder.register(disabledSheets);
+		builder.register(texturePins);
 		trackStyles = new mchorse.bbs_mod.settings.values.ui.ValueTrackStyles("track_styles");
 		builder.register(trackStyles);
 		disabledMorphFormCategories = new ValueStringKeys("disabled_morph_form_categories");

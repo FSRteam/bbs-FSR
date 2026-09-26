@@ -44,7 +44,7 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path RENDER_LAYER_MIXIN = Path.of("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
     private static final Path CLIENT_MIXINS = Path.of("src/client/resources/bbs.client.mixins.json");
     private static final Path ICONS = Path.of("src/client/resources/assets/bbs/assets/textures/icons.png");
-    private static final String ICONS_SHA256 = "c07f2b7db84e1e0afb7623126ef88744b6d0ec804cee78f6ff4ebbfb9b9bfe3b";
+    private static final String ICONS_SHA256 = "e8e8297585374629b14de90cef480c589e643b7de1570d1cb0df5899e38c1a41";
 
     private static final String[] MIGRATED_LANGUAGE_KEYS = {
         "bbs.config.workspace.keyframe_panel_width",
