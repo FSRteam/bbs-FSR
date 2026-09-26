@@ -1,221 +1,62 @@
 package mchorse.bbs_mod.audio;
 
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
-import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.resources.Pixels;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL13;
+import net.minecraft.client.Minecraft;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class Waveform
 {
-    public float[] average;
-    public float[] maximum;
-
-    private List<Texture> sprites = new ArrayList<>();
-    private int w;
-    private int h;
+    private WaveformEnvelope envelope;
+    private List<ColorCode> colorCodes;
+    private float[] cues;
     private int pixelsPerSecond;
+    private int height;
     private float duration;
 
     public void generate(Wave data, List<ColorCode> colorCodes, int pixelsPerSecond, int height)
     {
-        Wave waveformData = data.getFormat().encoding() == PcmEncoding.PCM_S16_LE
+        /* The envelope reads raw 16-bit PCM; FSR's audio pipeline may hand out
+         * 8-bit or float WAVs, so convert up front (same as the texture-baked
+         * version this replaces). */
+        Wave envelopeData = data.getFormat().encoding() == PcmEncoding.PCM_S16_LE
             ? data
             : data.convertTo16();
 
-        this.populate(waveformData, pixelsPerSecond, height);
-        this.render(colorCodes, waveformData.getCues());
+        this.populate(envelopeData, pixelsPerSecond, height);
+        this.render(colorCodes, envelopeData.getCues());
     }
 
+    /** Update annotations without rebuilding the audio envelope. */
     public void render(List<ColorCode> colorCodes, float[] cues)
     {
-        this.delete();
-
-        int maxTextureSize = GL11.glGetInteger(GL11.GL_MAX_TEXTURE_SIZE) / 2;
-        int count = (int) Math.ceil(this.w / (double) maxTextureSize);
-        int offset = 0;
-        float time = 0;
-        ColorCode code = this.getColorCode(colorCodes, time);
-        Color tmp = new Color();
-
-        for (int t = 0; t < count; t++)
-        {
-            Texture texture = new Texture();
-            int width = Math.min(this.w - offset, maxTextureSize);
-
-            Pixels pixels = Pixels.fromSize(width, this.h);
-
-            for (int i = offset, j = 0, c = Math.min(offset + width, this.average.length); i < c; i++, j++)
-            {
-                float average = this.average[i];
-                float maximum = this.maximum[i];
-
-                int maxHeight = (int) (maximum * this.h);
-                int avgHeight = (int) (average * (this.h - 1)) + 1;
-
-                int color = Colors.WHITE;
-                boolean background = false;
-
-                if (code != null && !code.isInside(time)) code = null;
-                if (code == null) code = this.getColorCode(colorCodes, time);
-                if (code != null)
-                {
-                    color = Colors.setA(code.color, 1F);
-                    background = true;
-                }
-
-                if (this.hasCue(cues, time))
-                {
-                    pixels.drawRect(j, 0, 1, this.h, (BBSSettings.activeColor() & Colors.RGB) | Colors.A75);
-                }
-
-                if (avgHeight > 0)
-                {
-                    if (background)
-                    {
-                        tmp.set(color);
-
-                        for (int k = 0; k < this.h; k++)
-                        {
-                            tmp.a = 0.125F + 0.25F * (k / (float) this.h);
-
-                            pixels.setColor(j, k, tmp);
-                        }
-                    }
-
-                    pixels.drawRect(j, this.h / 2 - maxHeight / 2, 1, maxHeight, color);
-                    pixels.drawRect(j, this.h / 2 - avgHeight / 2, 1, avgHeight, Colors.mulRGB(color, 0.8F));
-                }
-
-                time += 1 / (float) this.pixelsPerSecond;
-            }
-
-            pixels.rewindBuffer();
-
-            texture.bind();
-            texture.uploadTexture(pixels);
-            texture.setFilter(GL11.GL_NEAREST);
-            texture.setParameter(GL11.GL_TEXTURE_WRAP_S, GL13.GL_CLAMP_TO_BORDER);
-            texture.unbind();
-
-            this.sprites.add(texture);
-
-            offset += maxTextureSize;
-        }
-    }
-
-    private boolean hasCue(float[] cues, float time)
-    {
-        if (cues == null)
-        {
-            return false;
-        }
-
-        for (float cue : cues)
-        {
-            if (time >= cue && time - cue < 1.5F / this.pixelsPerSecond)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private ColorCode getColorCode(List<ColorCode> colorCodes, float time)
-    {
-        if (colorCodes == null)
-        {
-            return null;
-        }
-
-        for (ColorCode colorCode : colorCodes)
-        {
-            if (colorCode.isInside(time))
-            {
-                return colorCode;
-            }
-        }
-
-        return null;
+        this.colorCodes = colorCodes;
+        this.cues = cues;
     }
 
     public void populate(Wave data, int pixelsPerSecond, int height)
     {
-        this.pixelsPerSecond = pixelsPerSecond;
-        this.w = (int) (data.getDuration() * pixelsPerSecond);
-        this.h = height;
-        this.average = new float[this.w];
-        this.maximum = new float[this.w];
-
-        int region = data.getScanRegion(pixelsPerSecond);
-        int frameBytes = data.getFormat().bytesPerFrame();
-        int channels = data.getFormat().channels();
-
-        for (int i = 0; i < this.w; i ++)
-        {
-            int offset = i * region;
-            int count = 0;
-            float average = 0;
-            float maximum = 0;
-
-            for (int j = 0; j + frameBytes <= region; j += frameBytes)
-            {
-                if (offset + j + frameBytes > data.data.length)
-                {
-                    break;
-                }
-
-                float framePeak = 0F;
-                float frameAverage = 0F;
-
-                for (int channel = 0; channel < channels; channel++)
-                {
-                    double sample = PcmSamples.readNormalized(data,
-                        (offset + j) / frameBytes, channel);
-                    float magnitude = (float) Math.abs(sample);
-                    framePeak = Math.max(framePeak, magnitude);
-                    frameAverage += magnitude;
-                }
-
-                maximum = Math.max(maximum, framePeak);
-                average += frameAverage / channels;
-                count++;
-            }
-
-            if (count > 0)
-            {
-                average /= count;
-            }
-
-            this.average[i] = Math.min(1F, average);
-            this.maximum[i] = Math.min(1F, maximum);
-        }
-
+        this.envelope = new WaveformEnvelope(data);
+        this.pixelsPerSecond = Math.max(1, pixelsPerSecond);
+        this.height = height;
         this.duration = data.getDuration();
     }
 
     public void delete()
     {
-        for (Texture sprite : this.sprites)
-        {
-            sprite.delete();
-        }
-
-        this.sprites.clear();
+        this.envelope = null;
+        this.colorCodes = null;
+        this.cues = null;
     }
 
     public boolean isCreated()
     {
-        return !this.sprites.isEmpty();
+        return this.envelope != null;
     }
 
+    /** Preview scale only; waveform detail is determined by the visible pixels. */
     public int getPixelsPerSecond()
     {
         return this.pixelsPerSecond;
@@ -223,12 +64,12 @@ public class Waveform
 
     public int getWidth()
     {
-        return this.w;
+        return (int) Math.ceil(this.duration * this.pixelsPerSecond);
     }
 
     public int getHeight()
     {
-        return this.h;
+        return this.height;
     }
 
     public float getDuration()
@@ -236,42 +77,96 @@ public class Waveform
         return this.duration;
     }
 
-    public List<Texture> getSprites()
-    {
-        return this.sprites;
-    }
-
-    /**
-     * Draw the waveform out of multiple sprites of desired cropped region
-     */
     public void render(Batcher2D batcher, int color, int x, int y, int w, int h, float startTime, float endTime)
     {
-        float pixelsPerSecond = w / (endTime - startTime);
-        float xOffset = x - (startTime * pixelsPerSecond);
-        float timeOffset = 0F;
-
-        batcher.clip(x, y, w, h, 0, 0);
-
-        for (Texture sprite : this.sprites)
+        if (this.envelope == null || w <= 0 || h <= 0 || !(endTime > startTime))
         {
-            float duration = sprite.width / (float) this.pixelsPerSecond;
-            float timeEnd = timeOffset + duration;
-
-            float spriteW = duration * pixelsPerSecond;
-            float u1 = 0F;
-            float u2 = sprite.width;
-
-            if (timeOffset >= endTime)
-            {
-                break;
-            }
-
-            batcher.texturedBox(sprite, color, xOffset, y, spriteW, h, u1, 0, u2, sprite.height, sprite.width, sprite.height);
-
-            timeOffset = timeEnd;
-            xOffset += spriteW;
+            return;
         }
 
-        batcher.unclip(0, 0);
+        double secondsPerPixel = (endTime - (double) startTime) / w;
+        /* Physical width also covers BBS's custom GUI scale. Limit CPU work
+         * when a zoomed timeline extends far beyond the screen. */
+        int first = (int) Math.max(0L, -(long) x);
+        int last = (int) Math.min(w, (long) Minecraft.getInstance().getWindow().getWidth() - x);
+        float center = y + h / 2F;
+        WaveformEnvelope.Range range = new WaveformEnvelope.Range();
+        boolean wasBatching = batcher.isBatching();
+
+        batcher.clip(x, y, w, h, 0, 0);
+        batcher.beginBatch();
+
+        try
+        {
+            for (int i = first; i < last; i++)
+            {
+                double from = startTime + i * secondsPerPixel;
+                double to = from + secondsPerPixel;
+
+                if (to <= 0 || from >= this.duration)
+                {
+                    continue;
+                }
+
+                this.envelope.sample(from, to, range);
+                int columnColor = color;
+
+                if (this.colorCodes != null)
+                {
+                    for (ColorCode code : this.colorCodes)
+                    {
+                        if (code.isInside((float) Math.max(0, from)))
+                        {
+                            columnColor = tint(code.color | 0xff000000, color);
+                            batcher.gradientVBox(x + i, y, x + i + 1, y + h, Colors.mulA(columnColor, 0.125F), Colors.mulA(columnColor, 0.375F));
+
+                            break;
+                        }
+                    }
+                }
+
+                if (this.cues != null)
+                {
+                    for (float cue : this.cues)
+                    {
+                        if (cue >= from && cue < to)
+                        {
+                            batcher.box(x + i, y, x + i + 1, y + h, tint((BBSSettings.activeColor() & Colors.RGB) | Colors.A75, color));
+
+                            break;
+                        }
+                    }
+                }
+
+                float peak = range.maximum * h / 2F;
+                float average = range.average * h / 2F;
+
+                batcher.box(x + i, center - peak, x + i + 1, center + peak, columnColor);
+                batcher.box(x + i, center - average, x + i + 1, center + average, Colors.mulRGB(columnColor, 0.8F));
+            }
+        }
+        finally
+        {
+            /* A scope this code opened must never leak into the shared batcher,
+             * even if sampling throws midway through. */
+            batcher.unclip(0, 0);
+
+            if (!wasBatching)
+            {
+                batcher.endBatch();
+            }
+        }
+    }
+
+    private static int tint(int a, int b)
+    {
+        int result = 0;
+
+        for (int shift = 0; shift <= 24; shift += 8)
+        {
+            result |= (((a >>> shift) & 255) * ((b >>> shift) & 255) / 255) << shift;
+        }
+
+        return result;
     }
 }
