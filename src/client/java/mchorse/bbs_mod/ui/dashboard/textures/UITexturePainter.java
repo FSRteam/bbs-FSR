@@ -11,16 +11,20 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
+import mchorse.bbs_mod.ui.dashboard.textures.data.TextureAnimation;
+import mchorse.bbs_mod.ui.dashboard.textures.frames.UIFramesPanel;
 import mchorse.bbs_mod.ui.dashboard.textures.layers.UILayersPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
@@ -29,6 +33,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
@@ -78,6 +83,15 @@ public class UITexturePainter extends UIElement
     private static final float DEFAULT_OPTIONS_WIDTH = 0.2F;
     private static final int MIN_OPTIONS_WIDTH = 140;
     private static final int MAX_BRUSH_SIZE = 1024;
+    private static final int DEFAULT_FRAMES_HEIGHT = 90;
+    private static final int MIN_FRAMES_HEIGHT = 44;
+    private static final int MAX_FRAMES_HEIGHT = 300;
+
+    /** Fold state of the option sections, kept across painters for the session. */
+    private static final Map<String, Boolean> SECTION_FOLDS = new HashMap<>();
+
+    /** Persisted pixel height of the frame strip, keyed by painter class (FSR idiom instead of upstream's UISplitter). */
+    private static final Map<Class, Integer> framesHeights = new HashMap<>();
 
     public UISliderTrackpad brightness;
     public UITrackpad brushSize;
@@ -90,6 +104,8 @@ public class UITexturePainter extends UIElement
     public UIIcon saveIcon;
     public UIIcon resizeIcon;
     public UIIcon extractIcon;
+    public UIIcon macrosIcon;
+    public UIIcon animationIcon;
     public UIElement savebar;
 
     private TexturePaintTool activeTool = TexturePaintTool.BRUSH;
@@ -128,6 +144,12 @@ public class UITexturePainter extends UIElement
     private UIDraggable modelPreviewDraggable;
     private UIModelPreviewPanel modelPreviewPanel;
 
+    /* The canvas column: the editor above, the strip of frames below it for an animated texture */
+    private UIElement canvasHost;
+    private UIElement framesHost;
+    private UIFramesPanel framesPanel;
+    private UIDraggable framesDraggable;
+
     private UIElement brushSizeRow;
     private UIElement brushSoftnessRow;
     private UIToggle roundBrushToggle;
@@ -135,6 +157,12 @@ public class UITexturePainter extends UIElement
     private UIToggle alphaLockToggle;
     private UIElement eraserOpacityRow;
     private UISliderTrackpad eraserOpacity;
+
+    /* The animation's own settings, there only for an animated texture */
+    private UISection animationSection;
+    private UITrackpad frametime;
+    private UITrackpad frameWidth;
+    private UITrackpad frameHeight;
 
     private UIElement content;
     private final Consumer<Link> saveCallback;
@@ -187,9 +215,19 @@ public class UITexturePainter extends UIElement
             UITextureEditor ed = this.getCurrentEditor();
 
             return ed != null && ed.isDirty() ? Icons.SAVE : Icons.SAVED;
-        }, (b) -> this.withEditor(UITextureEditor::saveCurrentTexture));
-        this.saveIcon.tooltip(UIKeys.GENERAL_SAVE, Direction.LEFT);
-        this.saveIcon.context((menu) -> menu.action(Icons.SAVED, UIKeys.TEXTURES_SAVE_AS, () -> this.withEditor(UITextureEditor::openSaveOverlay)));
+        }, (b) ->
+        {
+            /* The button asks where to save; Shift skips the asking and writes in place, like Ctrl+S */
+            if (Window.isShiftPressed())
+            {
+                this.withEditor(UITextureEditor::saveCurrentTexture);
+            }
+            else
+            {
+                this.withEditor(UITextureEditor::openSaveOverlay);
+            }
+        });
+        this.saveIcon.tooltip(UIKeys.TEXTURES_SAVE_TOOLTIP, Direction.LEFT);
 
         this.resizeIcon = new UIIcon(Icons.FULLSCREEN, (b) -> this.withEditor(UITextureEditor::openResizeOverlay));
         this.resizeIcon.tooltip(UIKeys.TEXTURES_RESIZE, Direction.LEFT);
@@ -204,13 +242,34 @@ public class UITexturePainter extends UIElement
         this.toolIconSelection = this.createToolIcon(Icons.OUTLINE, UIKeys.TEXTURES_TOOLS_SELECTION, TexturePaintTool.SELECTION);
         this.modelPreviewIcon = new UIIcon(Icons.POSE, (b) -> this.openModelPreview());
         this.modelPreviewIcon.tooltip(UIKeys.TEXTURES_PREVIEW_MODEL, Direction.LEFT);
+        this.animationIcon = new UIIcon(Icons.FILM, (b) -> this.withEditor(this::toggleAnimation));
+        this.animationIcon.tooltip(UIKeys.TEXTURES_FRAMES_TOGGLE, Direction.LEFT);
+        this.macrosIcon = new UIIcon(Icons.WRENCH, (b) -> this.openMacrosMenu());
+        this.macrosIcon.tooltip(UIKeys.TEXTURES_MACROS_TOOLTIP, Direction.LEFT);
 
         this.iconBar.add(this.saveIcon, this.resizeIcon, this.extractIcon,
             this.toolIconBrush.marginTop(TOOL_SEPARATOR_GAP),
             this.toolIconEraser, this.toolIconMove, this.toolIconFill, this.toolIconPipette,
             this.toolIconSelection,
-            this.modelPreviewIcon.marginTop(TOOL_SEPARATOR_GAP));
+            this.modelPreviewIcon.marginTop(TOOL_SEPARATOR_GAP),
+            this.macrosIcon, this.animationIcon);
         this.savebar = this.iconBar;
+    }
+
+    /** The one-shot operations as a list under the bar button: the selection, or the whole frame without one, on the active layer. */
+    private void openMacrosMenu()
+    {
+        if (this.editor == null)
+        {
+            return;
+        }
+
+        this.getContext().replaceContextMenu((menu) ->
+        {
+            menu.action(Icons.ERASER, UIKeys.TEXTURES_MACROS_CLEAR, () -> this.withEditor((editor) -> editor.applyMacroToWindow(PixelMacro.CLEAR)));
+            menu.action(Icons.FLIP_HORIZONTAL, UIKeys.TEXTURES_MACROS_FLIP_H, () -> this.withEditor((editor) -> editor.applyMacroToWindow(PixelMacro.FLIP_HORIZONTAL)));
+            menu.action(Icons.FLIP_VERTICAL, UIKeys.TEXTURES_MACROS_FLIP_V, () -> this.withEditor((editor) -> editor.applyMacroToWindow(PixelMacro.FLIP_VERTICAL)));
+        });
     }
 
     private UIIcon createToolIcon(Icon icon, IKey tooltip, TexturePaintTool tool)
@@ -288,6 +347,31 @@ public class UITexturePainter extends UIElement
         this.eraserOpacity.limit(0, 100).setValue(100);
         this.eraserOpacityRow = UI.labelRow(UIKeys.TEXTURES_ERASER_OPACITY, this.eraserOpacity);
 
+        this.frametime = new UITrackpad((v) -> this.withEditor((editor) -> editor.setFrametime(v.intValue())));
+        this.frametime.limit(1, UIFramesPanel.MAX_TIME).integer();
+        this.frameWidth = new UITrackpad((v) -> this.withEditor((editor) ->
+        {
+            editor.setFrameSize(v.intValue(), (int) this.frameHeight.getValue());
+            this.framesPanel.sync();
+        }));
+        this.frameWidth.limit(1, 4096).integer();
+        this.frameHeight = new UITrackpad((v) -> this.withEditor((editor) ->
+        {
+            editor.setFrameSize((int) this.frameWidth.getValue(), v.intValue());
+            this.framesPanel.sync();
+        }));
+        this.frameHeight.limit(1, 4096).integer();
+
+        this.animationSection = new UISection(UIKeys.TEXTURES_FRAMES_SECTION);
+        this.animationSection.onToggle((s) -> SECTION_FOLDS.put("animation", s.isExpanded()));
+        this.animationSection.setExpanded(SECTION_FOLDS.getOrDefault("animation", true));
+        this.animationSection.fields.add(
+            UI.labelRow(UIKeys.TEXTURES_FRAMES_FRAMETIME, this.frametime),
+            UI.labelRow(UIKeys.TEXTURES_FRAMES_FRAME_WIDTH, this.frameWidth),
+            UI.labelRow(UIKeys.TEXTURES_FRAMES_FRAME_HEIGHT, this.frameHeight)
+        );
+        this.animationSection.setVisible(false);
+
         this.options.add(
             this.colorPickersRow,
             this.alphaLockToggle,
@@ -296,7 +380,8 @@ public class UITexturePainter extends UIElement
             this.brushSoftnessRow,
             this.roundBrushToggle,
             this.brushBuildUpToggle,
-            this.eraserOpacityRow
+            this.eraserOpacityRow,
+            this.animationSection
         );
     }
 
@@ -328,6 +413,37 @@ public class UITexturePainter extends UIElement
         this.editorHost = new UIElement();
         this.editorHost.relative(this.optionsHost).x(1F, UIConstants.MARGIN).h(1F)
             .wTo(this.iconBar.area, 0F, -UIConstants.MARGIN);
+
+        /* The strip sits along the bottom, collapsed to nothing while the texture isn't animated */
+        this.framesHost = new UIElement();
+        this.framesHost.relative(this.editorHost).y(1F).w(1F).h(0).anchorY(1F);
+        this.framesHost.setVisible(false);
+
+        this.framesPanel = new UIFramesPanel(this);
+        this.framesPanel.relative(this.framesHost).w(1F).h(1F);
+        this.framesHost.add(this.framesPanel);
+
+        this.framesHost.h(this.getFramesHeight());
+
+        this.framesDraggable = new UIDraggable((context) ->
+        {
+            int h = MathUtils.clamp(this.editorHost.area.ey() - context.mouseY, MIN_FRAMES_HEIGHT, MAX_FRAMES_HEIGHT);
+
+            framesHeights.put(this.getClass(), h);
+            this.framesHost.h(h);
+            this.editorHost.resize();
+            this.framesDraggable.resize();
+        });
+        this.framesDraggable.cursors(GLFW.GLFW_VRESIZE_CURSOR, GLFW.GLFW_VRESIZE_CURSOR);
+        this.framesDraggable.relative(this.framesHost).x(0.5F).y(0F).w(40).h(6).anchor(0.5F, 0.5F);
+        this.framesDraggable.setVisible(false);
+
+        /* The canvas takes what the strip leaves: its height is measured to the strip's top, so
+         * the strip has to be laid out first */
+        this.canvasHost = new UIElement();
+        this.canvasHost.relative(this.editorHost).w(1F).hTo(this.framesHost.area, 0F);
+
+        this.editorHost.add(this.framesHost, this.canvasHost, this.framesDraggable);
     }
 
     private void registerShortcuts()
@@ -342,6 +458,33 @@ public class UITexturePainter extends UIElement
         this.keys().register(Keys.PIXEL_TOOL_SELECTION, () -> this.userSelectTool(TexturePaintTool.SELECTION)).inside().category(category);
         this.keys().register(Keys.PIXEL_BRUSH_DEC, () -> this.adjustBrushSize(-1)).inside().category(category);
         this.keys().register(Keys.PIXEL_BRUSH_INC, () -> this.adjustBrushSize(1)).inside().category(category);
+
+        /* The plain steps are strict, so they step aside for their Shift and Alt+Shift variants */
+        this.keys().register(Keys.PIXEL_FRAME_PREV, () -> this.framesPanel.step(-1)).inside().strict().active(this::isAnimated).category(category);
+        this.keys().register(Keys.PIXEL_FRAME_NEXT, () -> this.framesPanel.step(1)).inside().strict().active(this::isAnimated).category(category);
+        this.keys().register(Keys.PIXEL_FRAME_FIRST, this.framesPanel::first).inside().active(this::isAnimated).category(category);
+        this.keys().register(Keys.PIXEL_FRAME_LAST, this.framesPanel::last).inside().active(this::isAnimated).category(category);
+        this.keys().register(Keys.PIXEL_FRAME_ADD, () -> this.framesPanel.addFrame(true)).inside().strict().active(this::isAnimated).category(category);
+        this.keys().register(Keys.PIXEL_FRAME_ADD_EMPTY, () -> this.framesPanel.addFrame(false)).inside().active(this::isAnimated).category(category);
+        this.keys().register(Keys.PIXEL_FRAME_PLAY, this.framesPanel::togglePlaying).inside().active(this::isAnimated).category(category);
+
+        /* Undo has to answer wherever the cursor is in the editor — over the strip, the layers,
+         * the options — not only over the canvas, which keeps its own binds for when it's there
+         * (a key stops at the first element that takes it, so the two never both fire) */
+        this.keys().register(Keys.UNDO, () -> this.withEditor(UITextureEditor::undo)).inside().active(() -> this.editor != null).category(category);
+        this.keys().register(Keys.REDO, () -> this.withEditor(UITextureEditor::redo)).inside().active(() -> this.editor != null).category(category);
+
+        /* Ctrl+S lives on its own element so it outranks the other keybinds, the way the data
+         * panels do it — the painter isn't one of those, so nothing registered it before */
+        UIElement savePlease = new UIElement().noCulling();
+
+        savePlease.keys().register(Keys.SAVE, () ->
+        {
+            UIUtils.playClick();
+            this.withEditor(UITextureEditor::saveCurrentTexture);
+        }).active(() -> this.editor != null && this.isVisible()).category(category);
+
+        this.add(savePlease);
     }
 
     private void renderPanelBackground(UIContext context)
@@ -438,6 +581,105 @@ public class UITexturePainter extends UIElement
 
         this.brushSize.setValue(n);
         this.setBrushSize(n);
+    }
+
+    /* The animation strip */
+
+    private boolean isAnimated()
+    {
+        return this.editor != null && this.editor.isAnimated();
+    }
+
+    /**
+     * The bar button flips the animation: on for a plain texture; off for an animated one —
+     * after asking, when there is a .mcmeta on disk that saving would then remove.
+     */
+    private void toggleAnimation(UITextureEditor editor)
+    {
+        if (!editor.isAnimated())
+        {
+            this.setAnimated(editor, true);
+
+            return;
+        }
+
+        Link link = editor.getTexture();
+        File mcmeta = link != null && Link.isAssets(link) ? TextureAnimation.file(BBSMod.getAssetsPath(link.path)) : null;
+
+        if (mcmeta != null && mcmeta.isFile())
+        {
+            UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.TEXTURES_FRAMES_DISABLE_TITLE, UIKeys.TEXTURES_FRAMES_DISABLE_MESSAGE, (confirmed) ->
+            {
+                if (confirmed)
+                {
+                    this.setAnimated(editor, false);
+                }
+            });
+
+            UIOverlay.addOverlay(this.getContext(), panel);
+        }
+        else
+        {
+            this.setAnimated(editor, false);
+        }
+    }
+
+    private void setAnimated(UITextureEditor editor, boolean animated)
+    {
+        editor.setAnimated(animated);
+        this.framesPanel.sync();
+        this.updateFramesVisibility();
+    }
+
+    /** Turn the animation of the texture on show on, if it isn't already — the browser's way in. */
+    public void enableAnimation()
+    {
+        this.withEditor((editor) ->
+        {
+            if (!editor.isAnimated())
+            {
+                this.setAnimated(editor, true);
+            }
+        });
+    }
+
+    /**
+     * The strip and the animation section are there for an animated texture and gone otherwise;
+     * the canvas takes what's left.
+     */
+    private void updateFramesVisibility()
+    {
+        boolean animated = this.isAnimated();
+
+        this.framesHost.h(animated ? this.getFramesHeight() : 0);
+        this.framesHost.setVisible(animated);
+        this.framesDraggable.setVisible(animated);
+        this.editorHost.resize();
+
+        this.animationSection.setVisible(animated);
+        this.syncAnimationSettings();
+        this.optionsHost.resize();
+    }
+
+    /** The persisted pixel height of the strip — upstream's UISplitter keeps this per layout id. */
+    private int getFramesHeight()
+    {
+        return MathUtils.clamp(framesHeights.getOrDefault(this.getClass(), DEFAULT_FRAMES_HEIGHT), MIN_FRAMES_HEIGHT, MAX_FRAMES_HEIGHT);
+    }
+
+    /** The section reads the animation on show; setValue doesn't fire the trackpads, so this can't loop. */
+    private void syncAnimationSettings()
+    {
+        Document document = this.editor == null ? null : this.editor.getDocument();
+
+        if (document == null || document.animation == null)
+        {
+            return;
+        }
+
+        this.frametime.setValue(document.animation.frametime);
+        this.frameWidth.setValue(document.frameWidth());
+        this.frameHeight.setValue(document.frameHeight());
     }
 
     /**
@@ -584,11 +826,16 @@ public class UITexturePainter extends UIElement
         editor.brushSoftnessSupplier(() -> (float) this.brushSoftness.getValue() / 100.0F);
         editor.eraserOpacitySupplier(() -> (float) this.eraserOpacity.getValue() / 100.0F);
         editor.secondaryEraserToggle(this::setSecondaryEraser);
+        editor.frameStepper(this.framesPanel::step);
         editor.layersChangedCallback(() ->
         {
             if (this.layersPanel != null && this.getCurrentEditor() == editor)
             {
                 this.layersPanel.updateLayers();
+
+                /* An undo may have brought frames back or taken the animation away altogether */
+                this.framesPanel.sync();
+                this.updateFramesVisibility();
             }
         });
         editor.setBrushSize((int) this.brushSize.getValue());
@@ -601,11 +848,11 @@ public class UITexturePainter extends UIElement
      */
     public void setEditor(UITextureEditor editor)
     {
-        List<IUIElement> hostChildren = this.editorHost.getChildren();
+        List<IUIElement> hostChildren = this.canvasHost.getChildren();
 
         if (!hostChildren.isEmpty() && hostChildren.get(0) instanceof UITextureEditor currentInHost)
         {
-            this.editorHost.remove(currentInHost);
+            this.canvasHost.remove(currentInHost);
         }
 
         this.editor = editor;
@@ -614,8 +861,8 @@ public class UITexturePainter extends UIElement
         {
             this.bind(editor);
             editor.removeFromParent();
-            this.editorHost.prepend(editor);
-            editor.full(this.editorHost);
+            this.canvasHost.prepend(editor);
+            editor.full(this.canvasHost);
         }
 
         if (this.layersPanel != null)
@@ -623,6 +870,8 @@ public class UITexturePainter extends UIElement
             this.layersPanel.setEditor(editor);
         }
 
+        this.framesPanel.setEditor(editor);
+        this.updateFramesVisibility();
         this.resize();
     }
 
@@ -632,11 +881,27 @@ public class UITexturePainter extends UIElement
     }
 
     /**
-     * Loads the editable document for {@code link}: deserializes the {@code NAME_INCLUDING_EXTENSION.dat}
-     * sidecar next to the texture when present, otherwise builds a fresh single-layer document from
-     * the texture's pixels.
+     * Loads the editable document for {@code link}: the project from the {@code .dat} sidecar (or a
+     * fresh single-layer one from the texture's pixels), and the animation from the {@code .mcmeta}
+     * — which lives there alone, whether or not there was a project.
      */
     private Document loadDocument(Link link)
+    {
+        Document document = this.loadProject(link);
+
+        if (document != null)
+        {
+            document.animation = TextureAnimation.read(link, document.width, document.height);
+        }
+
+        return document;
+    }
+
+    /**
+     * Deserializes the {@code NAME_INCLUDING_EXTENSION.dat} sidecar next to the texture when present,
+     * otherwise builds a fresh single-layer document from the texture's pixels.
+     */
+    private Document loadProject(Link link)
     {
         File datFile = Document.datFile(BBSMod.getAssetsPath(link.path));
 
@@ -650,10 +915,66 @@ public class UITexturePainter extends UIElement
             }
         }
 
-        Texture texture = BBSModClient.getTextures().getTexture(link);
-        Pixels pixels = Texture.pixelsFromTexture(texture);
+        Pixels pixels = loadPixels(link);
 
         return pixels == null ? null : Document.fromPixels(link, pixels);
+    }
+
+    /**
+     * The pixels of the texture file itself, four channels per pixel.
+     *
+     * <p>Not the GL texture: an animated texture is cut into frames when it is loaded, and
+     * {@link mchorse.bbs_mod.graphics.texture.TextureManager#getTexture} hands out the frame on
+     * show, so reading it back would give the editor one image of the strip in place of the whole
+     * strip — every frame past the first would then point outside the document and come out
+     * empty. The GL texture stays as the fallback for what the provider can't read (a downloaded
+     * texture, say).</p>
+     */
+    private static Pixels loadPixels(Link link)
+    {
+        try
+        {
+            Pixels pixels = BBSModClient.getTextures().getPixels(link);
+
+            if (pixels != null)
+            {
+                return toRGBA(pixels);
+            }
+        }
+        catch (Exception e)
+        {}
+
+        return Texture.pixelsFromTexture(BBSModClient.getTextures().getTexture(link));
+    }
+
+    /** A PNG without an alpha channel reads back three bytes per pixel; the editor paints with four. */
+    private static Pixels toRGBA(Pixels pixels)
+    {
+        if (pixels.bits == 4)
+        {
+            return pixels;
+        }
+
+        Pixels rgba = Pixels.fromSize(pixels.width, pixels.height);
+
+        for (int y = 0; y < pixels.height; y++)
+        {
+            for (int x = 0; x < pixels.width; x++)
+            {
+                rgba.setColor(x, y, pixels.getColor(x, y));
+            }
+        }
+
+        pixels.delete();
+        rgba.rewindBuffer();
+
+        return rgba;
+    }
+
+    /** The checkerboard brightness the user set for the canvas, 0..1 — the strip's cells go by it too. */
+    public float getBackgroundBrightness()
+    {
+        return (float) this.brightness.getValue();
     }
 
     private void swapColors()
@@ -678,6 +999,9 @@ public class UITexturePainter extends UIElement
     {
         this.updateAltPipetteHold();
 
+        /* FSR's icon shows its toggled state through the active backdrop (upstream: a highlight bar) */
+        this.animationIcon.active(this.isAnimated());
+
         BBSSettings.lightInputs = true;
 
         try
@@ -699,12 +1023,13 @@ public class UITexturePainter extends UIElement
 
     private void renderHoverInfo(UIContext context, UITextureEditor editor)
     {
-        Pixels pixels = editor.getPixels();
+        Document document = editor.getDocument();
         Vector2i hover = editor.getHoverPixel(context.mouseX, context.mouseY);
-        int tw = pixels.width;
-        int th = pixels.height;
-        int px = tw <= 0 ? 0 : MathUtils.clamp(hover.x, 0, tw - 1);
-        int py = th <= 0 ? 0 : MathUtils.clamp(hover.y, 0, th - 1);
+        /* Size and position within the frame on show — what the user is looking at */
+        int tw = editor.area.w;
+        int th = editor.area.h;
+        int px = tw <= 0 ? 0 : MathUtils.clamp(hover.x - editor.getFrameX(), 0, tw - 1);
+        int py = th <= 0 ? 0 : MathUtils.clamp(hover.y - editor.getFrameY(), 0, th - 1);
         /* Read the merged colour across all layers at the cursor (document space). */
         Color color = editor.getMergedColor(hover.x, hover.y);
 
@@ -721,18 +1046,19 @@ public class UITexturePainter extends UIElement
             a = (int) Math.floor(color.a * 255);
         }
 
-        String[] lines = {
-            tw + "x" + th + " (" + px + ", " + py + ")",
-            "\u00A7cR\u00A7aG\u00A79B\u00A7rA (" + r + ", " + g + ", " + b + ", " + a + ")",
-        };
+        String size = tw + "x" + th + " (" + px + ", " + py + ")";
+        String rgba = "\u00A7cR\u00A7aG\u00A79B\u00A7rA (" + r + ", " + g + ", " + b + ", " + a + ")";
+        String[] lines = document != null && document.animation != null
+            ? new String[] {size, rgba, UIKeys.TEXTURES_FRAME_COUNTER.format(String.valueOf(editor.getFrame() + 1), String.valueOf(document.animation.frames.size())).get()}
+            : new String[] {size, rgba};
 
         FontRenderer font = context.batcher.getFont();
         int margin = 10;
-        int ty = this.editorHost.area.y + margin;
+        int ty = this.canvasHost.area.y + margin;
 
         for (String line : lines)
         {
-            context.batcher.textShadow(line, this.editorHost.area.ex() - margin - font.getWidth(line), ty);
+            context.batcher.textShadow(line, this.canvasHost.area.ex() - margin - font.getWidth(line), ty);
 
             ty += font.getHeight() + 2;
         }
