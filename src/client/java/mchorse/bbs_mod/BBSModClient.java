@@ -20,6 +20,7 @@ import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
 import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
 import mchorse.bbs_mod.cubic.animation.ItemUsePose;
+import mchorse.bbs_mod.cubic.jem.VanillaRigs;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
@@ -76,6 +77,7 @@ import mchorse.bbs_mod.utils.ScreenshotRecorder;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.resources.CemSourcePack;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -150,6 +152,38 @@ public class BBSModClient
 
     private static float originalFramebufferScale;
     private static boolean customGUIScale;
+
+    /** The OptiFine CEM models of the installed resource packs; null until the client has started. */
+    private static CemSourcePack cemSourcePack;
+
+    /** Minecraft's own textures; null until the client has started. */
+    private static MinecraftSourcePack minecraftSourcePack;
+
+    public static CemSourcePack getCemSourcePack()
+    {
+        return cemSourcePack;
+    }
+
+    /**
+     * Read the resource packs again and drop everything built on what they said before. A pack going
+     * on or off changes which models and textures exist, and nothing else would notice: the watchdog
+     * watches BBS's own folder, and a link a pack serves has no file behind it to watch.
+     */
+    public static void onResourcePacksReloaded()
+    {
+        /* The first reload runs before the client has started; both packs index themselves when made. */
+        if (cemSourcePack == null)
+        {
+            return;
+        }
+
+        minecraftSourcePack.setupPaths();
+        cemSourcePack.reindex();
+        VanillaRigs.clear();
+
+        getModels().forgetFolder(CemSourcePack.NAME + "/");
+        getFormCategories().setup();
+    }
 
     public static TextureManager getTextures()
     {
@@ -1007,7 +1041,16 @@ public class BBSModClient
     {
         ItemUsePose.setSource(ThirdPersonItemUse::get);
         BBSRendering.setupFramebuffer();
-        BBSMod.getProvider().register(new MinecraftSourcePack());
+
+        minecraftSourcePack = new MinecraftSourcePack();
+
+        BBSMod.getProvider().register(minecraftSourcePack);
+
+        /* Last under "assets", so the user's own folder and the jar win over a resource pack's
+         * models - which is what lets a pack model be given a config.json or replaced outright. */
+        cemSourcePack = new CemSourcePack();
+
+        BBSMod.getProvider().register(cemSourcePack);
 
         BBSUiOpenDispatcher.start(Minecraft.getInstance());
 

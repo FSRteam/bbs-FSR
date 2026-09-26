@@ -52,6 +52,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -126,6 +127,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     private int armorRegion;
 
     /* The sections, built once and refilled — see the class docs. */
+    private UISection warningsSection;
     private UISection generalSection;
     private UISection itemsSection;
     private UISection armorSection;
@@ -137,6 +139,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     private UISection bonesSection;
 
     /* The refillable bodies inside those sections. */
+    private UIElement warningsBody;
     private UIElement generalBody;
     private UIElement itemsMainBody;
     private UIElement itemsOffBody;
@@ -584,6 +587,13 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
     private void createSections()
     {
+        /* What the loader had to work around, first in the page and only visible while there is any —
+         * see fillWarnings(). A .jem the pack drew differently should say so before anything else. */
+        this.warningsSection = this.section(UIKeys.MODEL_EDITOR_WARNINGS, true);
+        this.warningsSection.title.tooltip(UIKeys.MODEL_EDITOR_WARNINGS_TOOLTIP);
+        this.warningsBody = this.body();
+        this.warningsSection.fields.add(this.warningsBody);
+
         this.generalSection = this.section(UIKeys.FORMS_EDITORS_GENERAL, true);
         this.generalBody = this.body();
         this.generalSection.fields.add(this.generalBody);
@@ -660,6 +670,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
         this.sections = new UISection[]
         {
+            this.warningsSection,
             this.generalSection,
             this.itemsSection,
             this.armorSection,
@@ -770,6 +781,9 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.weldsBody.removeAll();
         this.bonesBody.removeAll();
 
+        /* No model open — nothing to warn about. */
+        this.warningsSection.setVisible(false);
+
         this.general.resize();
     }
 
@@ -802,7 +816,18 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.generalBody.add(
             this.toggleRefresh(UIKeys.MODEL_EDITOR_PROCEDURAL, config.procedural),
             this.toggle(UIKeys.MODEL_EDITOR_CULLING, config.culling),
-            this.toggleRefresh(UIKeys.MODEL_EDITOR_ON_CPU, config.onCpu),
+            this.toggleRefresh(UIKeys.MODEL_EDITOR_ON_CPU, config.onCpu)
+        );
+
+        /* Only a .jem carries a CEM program to switch; for any other model the toggle would switch nothing. */
+        if (this.bound != null && this.bound.cemAnimation != null)
+        {
+            this.generalBody.add(this.toggleRefresh(UIKeys.MODEL_EDITOR_CEM_ANIMATION, config.cemAnimation));
+        }
+
+        this.fillWarnings(this.bound == null ? Collections.emptyList() : this.bound.warnings);
+
+        this.generalBody.add(
             this.labeledRow(UIKeys.MODEL_EDITOR_UI_SCALE, this.floatField(config.uiScale)),
             UI.label(UIKeys.MODEL_EDITOR_SCALE), UI.row(this.component(config.scale, 0), this.component(config.scale, 1), this.component(config.scale, 2)),
             this.labeledRow(UIKeys.MODEL_EDITOR_POSE_GROUP, this.stringField(config.poseGroup)),
@@ -811,6 +836,22 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         );
 
         this.resizeGeneral();
+    }
+
+    /**
+     * The loader's notes on this model (see {@link ModelInstance#warnings}), a line each, in a section
+     * that is there only while there is something to say — the layout skips what is not visible.
+     */
+    private void fillWarnings(List<String> warnings)
+    {
+        this.warningsSection.title(UIKeys.MODEL_EDITOR_WARNINGS.format(warnings.size()));
+        this.warningsSection.setVisible(!warnings.isEmpty());
+        this.warningsBody.removeAll();
+
+        for (String warning : warnings)
+        {
+            this.warningsBody.add(new UIText(warning));
+        }
     }
 
     private void fillLookAt()

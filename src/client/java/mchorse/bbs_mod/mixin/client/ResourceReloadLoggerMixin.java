@@ -16,5 +16,11 @@ public class ResourceReloadLoggerMixin
     {
         BBSRendering.releaseViewResources();
         BBSModClient.getSounds().deleteSounds();
+
+        /* Fires on every completed resource reload (initial load, F3+T, pack changes), which is the
+         * NeoForge stand-in for Fabric's synchronous reload listener: pick up the resource packs'
+         * CEM models and vanilla textures without re-entering the world. Sits out the first reload,
+         * before the packs exist, on its own. */
+        BBSModClient.onResourcePacksReloaded();
     }
 }
