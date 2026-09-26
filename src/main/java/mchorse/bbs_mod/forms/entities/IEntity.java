@@ -383,9 +383,11 @@ public interface IEntity
     {
         this.setForm(entity.getForm());
 
-        this.setSneaking(entity.isSneaking());
-        this.setSprinting(entity.isSprinting());
-        this.setOnGround(entity.isOnGround());
+        for (EntityState state : EntityState.values())
+        {
+            state.set(this, state.get(entity));
+        }
+
         this.setFallDistance(entity.getFallDistance());
         this.setHurtTimer(entity.getHurtTimer());
 

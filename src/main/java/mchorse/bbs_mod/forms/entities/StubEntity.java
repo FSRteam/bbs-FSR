@@ -25,9 +25,22 @@ public class StubEntity implements IEntity
     private boolean sneaking;
     private boolean sprinting;
     private boolean onGround = true;
+    private boolean swimming;
+    private boolean riding;
+    private boolean flying;
+    private boolean fallFlying;
     private float fallDistance;
     private int hurtTimer;
     private float death;
+
+    /** Hands every stub its own {@link #getId()}: a number that stays put for the life of the instance. */
+    private static int nextId;
+
+    private final int id = nextId++;
+
+    private float prevLeaningPitch;
+    private float leaningPitch;
+    private int roll;
 
     private double prevX;
     private double prevY;

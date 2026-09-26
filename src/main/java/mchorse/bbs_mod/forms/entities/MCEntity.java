@@ -1,18 +1,26 @@
 package mchorse.bbs_mod.forms.entities;
 
+import mchorse.bbs_mod.cubic.jem.CemVariables;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.mixin.EntityInvoker;
+import mchorse.bbs_mod.mixin.LivingEntityRollAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.utils.AABB;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.WalkAnimationState;
+import net.minecraft.world.entity.animal.Fox;
+import net.minecraft.world.entity.ambient.Bat;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.HumanoidArm;
 
 public class MCEntity implements IEntity
 {
@@ -174,6 +182,46 @@ public class MCEntity implements IEntity
     }
 
     @Override
+    public boolean isSwimming()
+    {
+        return this.mcEntity.isSwimming();
+    }
+
+    @Override
+    public void setSwimming(boolean swimming)
+    {
+        this.mcEntity.setSwimming(swimming);
+    }
+
+    @Override
+    public boolean isRiding()
+    {
+        return this.mcEntity.isPassenger();
+    }
+
+    /**
+     * Riding isn't a flag one can set - it's whether something is being ridden - and a replay
+     * doesn't mount anyone, so there is nothing to write onto a live entity here.
+     */
+    @Override
+    public void setRiding(boolean riding)
+    {}
+
+    @Override
+    public boolean isFlying()
+    {
+        return this.mcEntity instanceof Player player && player.getAbilities().flying;
+    }
+
+    /**
+     * Deliberately nothing: creative flight is a permission on a real player, and a film has no
+     * business granting or taking it. The recorded state only picks an animation.
+     */
+    @Override
+    public void setFlying(boolean flying)
+    {}
+
+    @Override
     public void swingArm()
     {
         this.swingArm(InteractionHand.MAIN_HAND);
@@ -252,6 +300,161 @@ public class MCEntity implements IEntity
         {
             living.hurtTime = hurtTimer;
         }
+    }
+
+    @Override
+    public int getId()
+    {
+        return this.mcEntity.getId();
+    }
+
+    @Override
+    public int getDeathTime()
+    {
+        return this.mcEntity instanceof LivingEntity living ? living.deathTime : 0;
+    }
+
+    @Override
+    public boolean isRidden()
+    {
+        return this.mcEntity.isVehicle();
+    }
+
+    @Override
+    public boolean isChild()
+    {
+        return this.mcEntity instanceof LivingEntity living && living.isBaby();
+    }
+
+    @Override
+    public float getHealth()
+    {
+        return this.mcEntity instanceof LivingEntity living ? living.getHealth() : IEntity.FULL_HEALTH;
+    }
+
+    @Override
+    public float getMaxHealth()
+    {
+        /* An attribute can read zero on an entity whose attributes have not arrived from the server yet,
+         * and a pack divides by this one. */
+        float max = this.mcEntity instanceof LivingEntity living ? living.getMaxHealth() : 0F;
+
+        return max > 0F ? max : IEntity.FULL_HEALTH;
+    }
+
+    @Override
+    public boolean isBurning()
+    {
+        return this.mcEntity.isOnFire();
+    }
+
+    @Override
+    public boolean isInLava()
+    {
+        return this.mcEntity.isInLava();
+    }
+
+    @Override
+    public boolean isClimbing()
+    {
+        return this.mcEntity instanceof LivingEntity living && living.onClimbable();
+    }
+
+    @Override
+    public boolean isCrawling()
+    {
+        return this.mcEntity.isVisuallyCrawling();
+    }
+
+    /**
+     * Vanilla has no one word for it: a pet holds the pose through {@link TamableAnimal}, while a fox
+     * and a bat each keep their own flag, and those three are the whole of it in 1.21.1.
+     */
+    @Override
+    public boolean isSitting()
+    {
+        if (this.mcEntity instanceof TamableAnimal tameable)
+        {
+            return tameable.isInSittingPose();
+        }
+        else if (this.mcEntity instanceof Fox fox)
+        {
+            return fox.isSitting();
+        }
+
+        return this.mcEntity instanceof Bat bat && bat.isResting();
+    }
+
+    @Override
+    public boolean isTamed()
+    {
+        return this.mcEntity instanceof TamableAnimal tameable && tameable.isTame();
+    }
+
+    @Override
+    public boolean isAggressive()
+    {
+        return this.mcEntity instanceof Mob mob && mob.isAggressive();
+    }
+
+    @Override
+    public boolean isRightHanded()
+    {
+        return !(this.mcEntity instanceof LivingEntity living) || living.getMainArm() == HumanoidArm.RIGHT;
+    }
+
+    @Override
+    public boolean isUsingItem()
+    {
+        return this.mcEntity instanceof LivingEntity living && living.isUsingItem();
+    }
+
+    @Override
+    public boolean isBlocking()
+    {
+        return this.mcEntity instanceof LivingEntity living && living.isBlocking();
+    }
+
+    @Override
+    public boolean isSwinging()
+    {
+        return this.mcEntity instanceof LivingEntity living && living.swinging;
+    }
+
+    @Override
+    public boolean isSwingingOffHand()
+    {
+        return this.mcEntity instanceof LivingEntity living && living.swingingArm == InteractionHand.OFF_HAND;
+    }
+
+    @Override
+    public float getForwardSpeed()
+    {
+        return this.mcEntity instanceof LivingEntity living ? living.zza : 0F;
+    }
+
+    @Override
+    public float getSidewaysSpeed()
+    {
+        return this.mcEntity instanceof LivingEntity living ? living.xxa : 0F;
+    }
+
+    /** Lazily made: an entity that never renders a CEM model never allocates one. */
+    private CemVariables cemVariables;
+
+    /**
+     * The CEM variables of this entity, made on first use — every CEM model rendered on it shares them,
+     * which is how a pack's cape follows its body. See {@link CemVariables}.
+     */
+    @Override
+    public CemVariables getCemVariables()
+    {
+        if (this.cemVariables == null)
+        {
+            this.cemVariables = new CemVariables();
+        }
+
+        return this.cemVariables;
     }
 
     @Override
@@ -572,6 +775,14 @@ public class MCEntity implements IEntity
         return 0F;
     }
 
+    /**
+     * The lean is vanilla's own on a live entity - it grows it every tick - so there is nothing
+     * to hand it. Only the preview stub, which has no ticks of its own, needs to be told.
+     */
+    @Override
+    public void setLeaningPitch(float leaningPitch)
+    {}
+
     @Override
     public boolean isTouchingWater()
     {
@@ -596,6 +807,15 @@ public class MCEntity implements IEntity
     }
 
     @Override
+    public void setRoll(int roll)
+    {
+        if (this.mcEntity instanceof LivingEntity living)
+        {
+            ((LivingEntityRollAccessor) living).bbs$setRoll(roll);
+        }
+    }
+
+    @Override
     public boolean isFallFlying()
     {
         if (this.mcEntity instanceof LivingEntity living)
@@ -604,6 +824,17 @@ public class MCEntity implements IEntity
         }
 
         return false;
+    }
+
+    /**
+     * Gliding is a tracked flag, and writing it on the server is what tells every client to
+     * spread the wings - the same reason a played back actor's sprinting flag is written rather
+     * than merely moved fast.
+     */
+    @Override
+    public void setFallFlying(boolean fallFlying)
+    {
+        ((EntityInvoker) this.mcEntity).bbs$setFlag(EntityState.FALL_FLYING_FLAG, fallFlying);
     }
 
     @Override
