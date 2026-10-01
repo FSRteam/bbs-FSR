@@ -147,8 +147,8 @@ final class ClientTransportIdentitySourceTest
     {
         String setup = section(source, "public static void setup()", "private static void handleClientTick");
 
-        check(countOccurrences(setup, "registerClientReceiver(ServerNetwork.CLIENT_") == 19,
-            "not every frozen c1..c19 payload is registered through the exact-scope helper");
+        check(countOccurrences(setup, "registerClientReceiver(ServerNetwork.CLIENT_") == 21,
+            "not every frozen c1..c21 payload is registered through the exact-scope helper");
         check(!source.contains("NetworkCompatClient.registerClientReceiver("),
             "ClientNetwork still registers an unscoped legacy client receiver");
 
@@ -171,7 +171,9 @@ final class ClientTransportIdentitySourceTest
             "handleAnimationStateModelBlockPacket",
             "handleRefreshModelBlocksPacket",
             "handleAddonBrokerPacket",
-            "handleRequestFilmResync"
+            "handleRequestFilmResync",
+            "handleStructureSaved",
+            "handleStructureCut"
         };
 
         for (String handler : handlers)

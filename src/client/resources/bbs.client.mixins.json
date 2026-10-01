@@ -32,6 +32,7 @@
         "EntityRendererMixin",
         "ClientPlayerEntityAccessor",
         "MinecraftAccessor",
+        "MinecraftMixin",
         "LevelRendererAccessor",
         "EntityRenderDispatcherAccessor",
         "SimpleOptionMixin",

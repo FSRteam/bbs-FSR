@@ -42,6 +42,8 @@ import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.structure.BakedStructure;
+import mchorse.bbs_mod.forms.structure.StructureSelection;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.forms.categories.UserFormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
@@ -588,6 +590,8 @@ public class BBSModClient
 
         BBSRendering.setup();
 
+        StructureWand.register();
+
         /* Network */
         ClientNetwork.setup();
 
@@ -629,6 +633,8 @@ public class BBSModClient
 
     public static void onRenderAfterEntities(IBbsWorldRenderContext context)
     {
+        StructureWand.renderWorld(context);
+
         if (!BBSRendering.isIrisShadersEnabled())
         {
             BBSRendering.renderCoolStuff(context);
@@ -711,6 +717,10 @@ public class BBSModClient
             /* Identity clearing is unconditional and independent of callbacks. */
             dashboard = null;
         }
+
+        /* Corners are raw coordinates: kept across a world change they would point the wand
+         * at whatever now stands in their place */
+        runClientLifecycleStep("clear structure selection", StructureSelection::clear);
 
         runClientLifecycleStep("reset Film controller state", () -> films.reset());
         runClientLifecycleStep("replace Film controller", () -> films = new Films());

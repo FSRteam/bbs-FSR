@@ -29,6 +29,7 @@ import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.PermissionUtils;
+import mchorse.bbs_mod.utils.StructureSaver;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
@@ -99,6 +100,8 @@ public class ServerNetwork
     public static final ResourceLocation CLIENT_ADDON_BROKER = NetworkCompat.ADDON_BROKER_S2C;
     /* Upstream fs 2.3 allocates "c18" for this channel, but "c18" is already taken by the addon broker in this fork */
     public static final ResourceLocation CLIENT_REQUEST_FILM_RESYNC = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c19");
+    public static final ResourceLocation CLIENT_STRUCTURE_SAVED = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c20");
+    public static final ResourceLocation CLIENT_STRUCTURE_CUT = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "c21");
 
     public static final ResourceLocation SERVER_MODEL_BLOCK_FORM_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s1");
     public static final ResourceLocation SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s2");
@@ -114,6 +117,8 @@ public class ServerNetwork
     public static final ResourceLocation SERVER_ZOOM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s12");
     public static final ResourceLocation SERVER_PAUSE_FILM = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s13");
     public static final ResourceLocation SERVER_APPLY_FILM_PLAYER_SETTINGS = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s14");
+    public static final ResourceLocation SERVER_SAVE_STRUCTURE = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s16");
+    public static final ResourceLocation SERVER_CUT_STRUCTURE = ResourceLocation.fromNamespaceAndPath(BBSMod.MOD_ID, "s17");
     public static final ResourceLocation SERVER_ADDON_BROKER = NetworkCompat.ADDON_BROKER_C2S;
 
     /** Optional c7 terminal marker. A missing trailing byte is legacy/manual. */
@@ -235,6 +240,8 @@ public class ServerNetwork
         NetworkCompat.registerCoreServerReceiver(SERVER_ZOOM, (server, player, buf) -> handleZoomPacket(server, player, buf));
         NetworkCompat.registerCoreServerReceiver(SERVER_PAUSE_FILM, (server, player, buf) -> handlePauseFilmPacket(server, player, buf));
         NetworkCompat.registerCoreServerReceiver(SERVER_APPLY_FILM_PLAYER_SETTINGS, (server, player, buf) -> handleApplyFilmPlayerSettings(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_SAVE_STRUCTURE, (server, player, buf) -> handleSaveStructure(server, player, buf));
+        NetworkCompat.registerCoreServerReceiver(SERVER_CUT_STRUCTURE, (server, player, buf) -> handleCutStructure(server, player, buf));
         NetworkCompat.registerCoreServerReceiver(SERVER_ADDON_BROKER, AddonPayloadBroker::handleServerPayload);
 
         if (!lifecycleListenerRegistered)
@@ -2052,6 +2059,102 @@ public class ServerNetwork
         }
 
         return List.copyOf(snapshot);
+    }
+
+    /**
+     * The structure wand's save: write the two corners as a structure file into BBS's structures
+     * folder. Same rights as the panels, for it is their sibling — a full-screen editing tool.
+     */
+    private static void handleSaveStructure(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
+    {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
+        String name;
+        BlockPos from;
+        BlockPos to;
+
+        try
+        {
+            name = buf.readUtf(256);
+            from = buf.readBlockPos();
+            to = buf.readBlockPos();
+        }
+        catch (RuntimeException e)
+        {
+            return;
+        }
+
+        server.execute(() ->
+        {
+            if (!isCurrentConnection(server, player) || !PermissionUtils.arePanelsAllowed(server, player))
+            {
+                return;
+            }
+
+            ServerLevel world = player.serverLevel();
+            boolean saved = StructureSaver.save(world, name, from, to);
+
+            FriendlyByteBuf reply = NetworkCompat.createBuffer();
+
+            reply.writeBoolean(saved);
+            reply.writeUtf(name, 256);
+
+            NetworkCompat.sendToPlayer(player, CLIENT_STRUCTURE_SAVED, reply);
+        });
+    }
+
+    /**
+     * The film's cut: save the region as a structure, then — and only then — empty it out of the
+     * world. A failed save touches nothing, so the build is never lost without a file to show for
+     * it. Same rights as the save, for it is the same tool turned destructive.
+     */
+    private static void handleCutStructure(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf)
+    {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
+        String name;
+        BlockPos from;
+        BlockPos to;
+
+        try
+        {
+            name = buf.readUtf(256);
+            from = buf.readBlockPos();
+            to = buf.readBlockPos();
+        }
+        catch (RuntimeException e)
+        {
+            return;
+        }
+
+        server.execute(() ->
+        {
+            if (!isCurrentConnection(server, player) || !PermissionUtils.arePanelsAllowed(server, player))
+            {
+                return;
+            }
+
+            ServerLevel world = player.serverLevel();
+            boolean saved = StructureSaver.save(world, name, from, to);
+
+            if (saved)
+            {
+                StructureSaver.clear(world, from, to);
+            }
+
+            FriendlyByteBuf reply = NetworkCompat.createBuffer();
+
+            reply.writeBoolean(saved);
+            reply.writeUtf(name, 256);
+
+            NetworkCompat.sendToPlayer(player, CLIENT_STRUCTURE_CUT, reply);
+        });
     }
 
     private static void applyStagedEquipment(ServerPlayer player, List<ItemStack> staged, int selectedSlot)

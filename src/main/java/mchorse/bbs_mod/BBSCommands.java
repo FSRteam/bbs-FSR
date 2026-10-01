@@ -21,6 +21,7 @@ import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.Settings;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.utils.StructureSaver;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -37,20 +38,14 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtUtils;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelSettings;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.storage.PrimaryLevelData;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.function.Predicate;
 
@@ -533,55 +528,8 @@ public class BBSCommands
         String name = StringArgumentType.getString(source, "name");
         BlockPos from = BlockPosArgument.getBlockPos(source, "from");
         BlockPos to = BlockPosArgument.getBlockPos(source, "to");
-
         ServerLevel world = source.getSource().getLevel();
-        StructureTemplate structureTemplate = new StructureTemplate();
-        CompoundTag nbt = new CompoundTag();
 
-        BlockPos min = new BlockPos(
-            Math.min(from.getX(), to.getX()),
-            Math.min(from.getY(), to.getY()),
-            Math.min(from.getZ(), to.getZ())
-        );
-        BlockPos max = new BlockPos(
-            Math.max(from.getX(), to.getX()),
-            Math.max(from.getY(), to.getY()),
-            Math.max(from.getZ(), to.getZ())
-        );
-        BlockPos size = new BlockPos(
-            max.getX() - min.getX() + 1,
-            max.getY() - min.getY() + 1,
-            max.getZ() - min.getZ() + 1
-        );
-
-        structureTemplate.fillFromWorld(world, min, size, true, Blocks.STRUCTURE_VOID);
-        structureTemplate.save(nbt);
-
-        /* Stamped the way the vanilla manager stamps its own, so a file written here is the
-         * same file a structure block would have written and reads back everywhere. */
-        NbtUtils.addCurrentDataVersion(nbt);
-
-        File folder = BBSMod.getAssetsPath("structures");
-        File file = new File(folder, name + ".nbt");
-
-        /* No writing outside the folder through a path full of ".." */
-        if (!file.toPath().normalize().startsWith(folder.toPath().normalize()))
-        {
-            return 0;
-        }
-
-        try
-        {
-            file.getParentFile().mkdirs();
-            NbtIo.writeCompressed(nbt, file.toPath());
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-
-            return 0;
-        }
-
-        return 1;
+        return StructureSaver.save(world, name, from, to) ? 1 : 0;
     }
 }

@@ -251,6 +251,10 @@ public class BBSMod
 
     public static final DeferredHolder<Item, ModelBlockItem> MODEL_BLOCK_ITEM = ITEMS.register("model", () -> new ModelBlockItem(MODEL_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<Item, GunItem> GUN_ITEM = ITEMS.register("gun", () -> new GunItem(new Item.Properties().stacksTo(1)));
+
+    /* The structure wand stays a plain Item on purpose: every bit of its behaviour lives on the
+     * client, in StructureWand, and an Item subclass would exist for nothing. */
+    public static final DeferredHolder<Item, Item> STRUCTURE_WAND_ITEM = ITEMS.register("structure_wand", () -> new Item(new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item, BlockItem> CHROMA_RED_BLOCK_ITEM = ITEMS.register("chroma_red", () -> new BlockItem(CHROMA_RED_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> CHROMA_GREEN_BLOCK_ITEM = ITEMS.register("chroma_green", () -> new BlockItem(CHROMA_GREEN_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> CHROMA_BLUE_BLOCK_ITEM = ITEMS.register("chroma_blue", () -> new BlockItem(CHROMA_BLUE_BLOCK.get(), new Item.Properties()));
@@ -282,6 +286,7 @@ public class BBSMod
             entries.accept(new ItemStack(CHROMA_BLACK_BLOCK_ITEM.get()));
             entries.accept(new ItemStack(CHROMA_WHITE_BLOCK_ITEM.get()));
             entries.accept(new ItemStack(GUN_ITEM.get()));
+            entries.accept(new ItemStack(STRUCTURE_WAND_ITEM.get()));
         })
         .build());
 

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.structure;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.utils.StructureSaver;
 import mchorse.bbs_mod.resources.Link;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
@@ -41,13 +42,6 @@ import java.util.stream.Stream;
  */
 public class StructureManager
 {
-    /**
-     * The folder BBS's own structures live in, under the assets folder. Declared here (the
-     * reader) until the structure wand lands: upstream owns this constant on {@code StructureSaver}
-     * (the writer), which is a later batch — the writer keeps writing into the very same folder.
-     */
-    public static final String ASSETS_FOLDER = "structures";
-
     /**
      * Parsed structures, kept softly: a renderer holds its own hard reference to the data it is
      * drawing, so anything only this map still points at is a structure nobody is using. Letting
@@ -134,7 +128,7 @@ public class StructureManager
     /** The folder BBS's own structures are read from and dropped into. */
     public static File getAssetsFolder()
     {
-        return BBSMod.getAssetsPath(ASSETS_FOLDER);
+        return BBSMod.getAssetsPath(StructureSaver.ASSETS_FOLDER);
     }
 
     /** The id a structure of BBS's own is addressed by, from its path under the folder. */
@@ -146,7 +140,7 @@ public class StructureManager
     /** {@code assets:path/name} for the file this link points at. */
     private static String toAssetId(Link link)
     {
-        String path = link.path.substring(ASSETS_FOLDER.length() + 1);
+        String path = link.path.substring(StructureSaver.ASSETS_FOLDER.length() + 1);
 
         return assetId(path.substring(0, path.length() - EXTENSION.length()));
     }
@@ -154,7 +148,7 @@ public class StructureManager
     /** The file {@code assets:path/name} names, for the provider to look up. */
     private static Link toAssetLink(String id)
     {
-        return Link.assets(ASSETS_FOLDER + "/" + id.substring(ASSETS_PREFIX.length()) + EXTENSION);
+        return Link.assets(StructureSaver.ASSETS_FOLDER + "/" + id.substring(ASSETS_PREFIX.length()) + EXTENSION);
     }
 
     /**
@@ -176,7 +170,7 @@ public class StructureManager
     /** BBS's own structures, from every source pack that answers to {@code assets}. */
     private static void collectAssetIds(List<String> ids)
     {
-        for (Link link : BBSMod.getProvider().getLinksFromPath(Link.assets(ASSETS_FOLDER)))
+        for (Link link : BBSMod.getProvider().getLinksFromPath(Link.assets(StructureSaver.ASSETS_FOLDER)))
         {
             if (link.path.endsWith(EXTENSION))
             {

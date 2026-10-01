@@ -9,6 +9,7 @@ import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.window.Window;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -271,6 +272,12 @@ public final class BBSClientNeoEvents
         if (scrollY != 0)
         {
             Window.setVerticalScroll(scrollY);
+        }
+
+        /* The structure wand spends the notch on reshaping its box: the hotbar must not get it */
+        if (StructureWand.onScroll(event.getScrollDeltaY()))
+        {
+            event.setCanceled(true);
         }
     }
 
