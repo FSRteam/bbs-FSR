@@ -38,6 +38,7 @@ import org.joml.Matrix4f;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
@@ -66,6 +67,18 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     private Map<UIKeyframeSheet, Integer> poseTabDepths = new HashMap<>();
     private Set<UIKeyframeSheet> poseTabParents = new HashSet<>();
     private Set<UIKeyframeSheet> expandedPoseTabs = new HashSet<>();
+
+    /** Section header rows in first-appearance order, rebuilt by every {@link #updateScrollSize()}. */
+    private final Map<UIKeyframeSheet.Section, Integer> sectionYCache = new LinkedHashMap<>();
+
+    /** Owner-provided fold state per section id, so folds survive the timeline being rebuilt. */
+    private Map<String, Boolean> sectionFolds = new HashMap<>();
+
+    /** Section of the last row walked, so every element walk emits a header once per run. */
+    private UIKeyframeSheet.Section lastSection;
+
+    /** Y of the header emitted by the last {@link #applySectionHeader(UIKeyframeSheet, int)} call, or -1. */
+    private int lastHeaderY = -1;
 
     /** What to draw when there are no tracks at all - see {@link #setEmptyState(IKey, IKey)}. */
     private IKey emptyLabel;
@@ -110,6 +123,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     private void updateScrollSize()
     {
         this.sheetYCache.clear();
+        this.sectionYCache.clear();
+        this.resetSectionRun();
         this.dopeSheet.scrollSize = this.calculateLayout(this.elements, 0) + TOP_MARGIN;
     }
 
@@ -119,6 +134,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             if (element instanceof UIKeyframeSheet sheet)
             {
+                y = this.applySectionHeader(sheet, y);
+
                 if (!this.isVisible(sheet))
                 {
                     continue;
@@ -136,6 +153,49 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         }
 
         return y;
+    }
+
+    private void resetSectionRun()
+    {
+        this.lastSection = null;
+        this.lastHeaderY = -1;
+    }
+
+    /**
+     * Emit a section header row before the first sheet of each run of same-section rows. Every element
+     * walk (layout, render and hit test) calls this, so they all reserve the same extra row; the header's
+     * y is left in {@link #lastHeaderY} (or -1 when the row did not open one) for the renderer.
+     */
+    private int applySectionHeader(UIKeyframeSheet sheet, int y)
+    {
+        this.lastHeaderY = -1;
+
+        if (sheet.section == null)
+        {
+            this.lastSection = null;
+
+            return y;
+        }
+
+        if (sheet.section.equals(this.lastSection))
+        {
+            return y;
+        }
+
+        this.lastSection = sheet.section;
+        this.lastHeaderY = y;
+
+        if (!this.sectionYCache.containsKey(sheet.section))
+        {
+            this.sectionYCache.put(sheet.section, y);
+        }
+
+        return y + (int) this.trackHeight;
+    }
+
+    private boolean isSectionExpanded(UIKeyframeSheet.Section section)
+    {
+        return this.sectionFolds.getOrDefault(section.id(), Boolean.TRUE);
     }
 
     private int getElementHeight(UIKeyframeElement element)
@@ -165,6 +225,18 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private boolean isVisible(UIKeyframeSheet sheet)
     {
+        /* Rows of a folded section go away together with their section header row. */
+        if (sheet.section != null && !this.isSectionExpanded(sheet.section))
+        {
+            return false;
+        }
+
+        /* A row whose ancestors are all unfolded is drawn (see UIKeyframeSheet#isFolded). */
+        if (sheet.isFolded())
+        {
+            return false;
+        }
+
         UIKeyframeSheet root = this.poseTabRoots.get(sheet);
 
         return root == null || this.expandedPoseTabs.contains(root);
@@ -172,12 +244,19 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private int getSheetIndent(UIKeyframeSheet sheet)
     {
-        if (!this.poseTabRoots.containsKey(sheet))
+        boolean poseTab = this.poseTabRoots.containsKey(sheet);
+        int depth = sheet.getDepth() + (sheet.section == null ? 0 : 1);
+
+        if (poseTab)
+        {
+            depth += Math.max(0, this.poseTabDepths.getOrDefault(sheet, 0));
+        }
+
+        if (depth == 0)
         {
             return 0;
         }
 
-        int depth = Math.max(0, this.poseTabDepths.getOrDefault(sheet, 0));
         int labelWidth = Math.max(1, this.keyframes.getLabelWidth());
         float scale = MathUtils.clamp(labelWidth / 120F, 0.75F, 1.5F);
         int baseIndent = Math.max(1, Math.round(POSE_TAB_BASE_INDENT * scale));
@@ -331,6 +410,81 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         this.poseTabParents.clear();
         this.expandedPoseTabs.clear();
         this.updateScrollSize();
+    }
+
+    /**
+     * Take over the owner's fold map, so a section left folded stays folded when the timeline is rebuilt
+     * (the same "map lives with the owner" contract as {@code UISection#remember}).
+     */
+    public void configureSectionFolds(Map<String, Boolean> folds)
+    {
+        if (folds != null)
+        {
+            this.sectionFolds = folds;
+        }
+
+        this.updateScrollSize();
+    }
+
+    public boolean hasSections()
+    {
+        return !this.sectionYCache.isEmpty();
+    }
+
+    public boolean hasExpandedSections()
+    {
+        for (UIKeyframeSheet.Section section : this.sectionYCache.keySet())
+        {
+            if (this.isSectionExpanded(section))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void setAllSectionsExpanded(boolean expanded)
+    {
+        for (UIKeyframeSheet.Section section : this.sectionYCache.keySet())
+        {
+            this.sectionFolds.put(section.id(), expanded);
+        }
+
+        if (!expanded)
+        {
+            for (UIKeyframeSheet sheet : this.sheets)
+            {
+                if (sheet.section != null)
+                {
+                    sheet.selection.clear();
+                }
+            }
+        }
+
+        this.updateScrollSize();
+        this.pickSelected();
+    }
+
+    private void toggleSection(UIKeyframeSheet.Section section)
+    {
+        boolean expanded = !this.isSectionExpanded(section);
+
+        this.sectionFolds.put(section.id(), expanded);
+
+        if (!expanded)
+        {
+            for (UIKeyframeSheet sheet : this.sheets)
+            {
+                if (section.equals(sheet.section))
+                {
+                    sheet.selection.clear();
+                }
+            }
+        }
+
+        this.updateScrollSize();
+        this.pickSelected();
     }
 
     public void addSheet(UIKeyframeSheet sheet)
@@ -614,6 +768,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
             int y = this.getDopeSheetY();
 
+            this.resetSectionRun();
+
             return this.clickElements(context, this.elements, 0, y);
         }
 
@@ -646,6 +802,17 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             }
             else if (element instanceof UIKeyframeSheet sheet)
             {
+                int headerY = y;
+
+                y = this.applySectionHeader(sheet, y);
+
+                if (this.lastHeaderY >= 0 && context.mouseY >= headerY && context.mouseY < headerY + this.trackHeight)
+                {
+                    this.toggleSection(sheet.section);
+
+                    return true;
+                }
+
                 if (!this.isVisible(sheet))
                 {
                     continue;
@@ -653,9 +820,17 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
                 if (context.mouseY >= y && context.mouseY < y + this.trackHeight)
                 {
-                    if (this.isPoseTabParent(sheet) && this.isPoseTabArrowHit(context, y, labelWidth))
+                    if ((this.isPoseTabParent(sheet) || this.isFoldable(sheet)) && this.isPoseTabArrowHit(context, y, labelWidth))
                     {
-                        this.togglePoseTab(sheet);
+                        if (this.isPoseTabParent(sheet))
+                        {
+                            this.togglePoseTab(sheet);
+                        }
+                        else
+                        {
+                            sheet.folded = !sheet.folded;
+                        }
+
                         this.updateScrollSize();
 
                         return true;
@@ -986,6 +1161,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int contentTop = Math.min(rulerBottom, area.ey());
 
         context.batcher.clip(area.x, contentTop, area.w, area.ey() - contentTop, context);
+        this.resetSectionRun();
         this.renderElements(context, builder, matrix, area, this.elements, 0, this.getDopeSheetY());
         this.renderOutOfRangeShading(context, builder, matrix, area);
         context.batcher.unclip(context);
@@ -1034,6 +1210,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             if (element instanceof UIKeyframeSheet sheet)
             {
+                y = this.applySectionHeader(sheet, y);
+
+                if (this.lastHeaderY >= 0)
+                {
+                    this.renderSectionLabel(context, area, sheet.section, this.lastHeaderY, w);
+                }
+
                 if (this.isVisible(sheet))
                 {
                     this.renderSheetLabel(context, builder, matrix, area, sheet, offset, y, w);
@@ -1092,6 +1275,44 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         context.batcher.icon(group.collapsed ? Icons.ARROW_RIGHT : Icons.ARROW_DOWN, arrowX, my - 8);
     }
 
+    /** A section header row: the section's accent bar, title and fold arrow, in the label column. */
+    private void renderSectionLabel(UIContext context, Area area, UIKeyframeSheet.Section section, int y, int w)
+    {
+        if (y + this.trackHeight < area.y || y > area.ey())
+        {
+            return;
+        }
+
+        boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight;
+        int my = y + (int) this.trackHeight / 2;
+        int lx = area.x;
+
+        if (hover)
+        {
+            context.batcher.gradientHBox(lx, y, lx + w, y + (int) this.trackHeight, Colors.setA(section.color(), 0.25F), Colors.setA(section.color(), 0.05F));
+        }
+
+        context.batcher.box(lx, y, lx + 3, y + (int) this.trackHeight, section.color() | Colors.A100);
+
+        boolean expanded = this.isSectionExpanded(section);
+        int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
+
+        /* Hide every title together when the column is reduced to its icon controls. */
+        if (w > LABEL_COMPACT_WIDTH)
+        {
+            FontRenderer font = context.batcher.getFont();
+            int textColor = hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.9F);
+            String title = font.limitToWidth(section.title().get(), Math.max(0, iconX - LABEL_TEXT_ICON_GAP - lx - LABEL_TEXT_LEFT));
+
+            context.batcher.textShadow(title, lx + LABEL_TEXT_LEFT, my - font.getHeight() / 2, textColor);
+        }
+
+        if (this.trackHeight >= 12D)
+        {
+            context.batcher.icon(expanded ? Icons.ARROW_DOWN : Icons.ARROW_RIGHT, iconX, my - 8);
+        }
+    }
+
     private void renderSheetLabel(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area, UIKeyframeSheet sheet, int offset, int y, int w)
     {
         if (y + this.trackHeight < area.y || y > area.ey())
@@ -1114,7 +1335,9 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         FontRenderer font = context.batcher.getFont();
         int textColor = hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F);
         boolean poseTab = this.isPoseTabParent(sheet);
-        Icon icon = poseTab ? (this.expandedPoseTabs.contains(sheet) ? Icons.ARROW_DOWN : Icons.ARROW_RIGHT) : sheet.getIcon();
+        boolean foldable = poseTab || this.isFoldable(sheet);
+        boolean expanded = poseTab ? this.expandedPoseTabs.contains(sheet) : !sheet.folded;
+        Icon icon = foldable ? (expanded ? Icons.ARROW_DOWN : Icons.ARROW_RIGHT) : sheet.getIcon();
         boolean hasIcon = icon != null && this.trackHeight >= 12D;
         int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
 
@@ -1140,6 +1363,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             if (element instanceof UIKeyframeSheet sheet)
             {
+                y = this.applySectionHeader(sheet, y);
+
                 if (this.isVisible(sheet))
                 {
                     this.renderSheet(context, builder, matrix, area, sheet, offset, y);
@@ -1354,6 +1579,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             if (element instanceof UIKeyframeSheet sheet)
             {
+                y = this.applySectionHeader(sheet, y);
+
                 this.renderSheetKeyframeShapes(context, builder, matrix, area, sheet, y);
             }
 
@@ -1368,6 +1595,41 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         return y;
     }
 
+    /**
+     * Aggregate overview of a section's keyframes, drawn on its header row so a folded section still
+     * shows where its keys are - the reason the header is worth keeping visible when collapsed.
+     */
+    private void renderSectionKeyframes(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area)
+    {
+        for (UIKeyframeSheet sheet : this.sheets)
+        {
+            Integer offset = sheet.section == null ? null : this.sectionYCache.get(sheet.section);
+
+            if (offset == null)
+            {
+                continue;
+            }
+
+            int y = this.getDopeSheetY() + offset + (int) this.trackHeight / 2;
+
+            if (y + 3 < area.y || y - 3 > area.ey())
+            {
+                continue;
+            }
+
+            List keyframes = sheet.channel.getKeyframes();
+
+            for (int i = 0; i < keyframes.size(); i++)
+            {
+                Keyframe frame = (Keyframe) keyframes.get(i);
+                int x = this.keyframes.toGraphX(frame.getTick());
+                int color = sheet.section.color() | Colors.A100;
+
+                context.batcher.fillRect(builder, matrix, x - 3, y - 3, 6, 6, color, color, color, color);
+            }
+        }
+    }
+
     @Override
     public void renderTopmostKeyframes(UIContext context)
     {
@@ -1376,9 +1638,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             return;
         }
 
+        /* Every sheet counts, not only the visible ones: a folded section still shows its overview. */
         boolean hasKeyframes = false;
 
-        for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+        for (UIKeyframeSheet sheet : this.sheets)
         {
             if (!sheet.channel.getKeyframes().isEmpty())
             {
@@ -1401,6 +1664,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         context.batcher.clip(area.x, contentTop, area.w, area.ey() - contentTop, context);
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        this.resetSectionRun();
+        this.renderSectionKeyframes(context, builder, matrix, area);
         this.renderElementsTopmostKeyframes(context, builder, matrix, area, this.elements, this.getDopeSheetY());
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
@@ -1421,6 +1686,12 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         int minY = y + (int) this.trackHeight / 2 - 8;
 
         return context.mouseX >= x && context.mouseX < x + LABEL_ICON_SIZE && context.mouseY >= minY && context.mouseY < minY + LABEL_ICON_SIZE;
+    }
+
+    /** Whether this row nests other rows (hotbar slots under their first slot). */
+    private boolean isFoldable(UIKeyframeSheet sheet)
+    {
+        return !sheet.children.isEmpty();
     }
 
     private void togglePoseTab(UIKeyframeSheet parent)
@@ -1451,6 +1722,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             BufferBuilder builder = null;
             Matrix4f matrix = context.batcher.getContext().pose().last().pose();
 
+            this.resetSectionRun();
             this.renderLabels(context, builder, matrix, this.elements, 0, this.getDopeSheetY());
         }
 
