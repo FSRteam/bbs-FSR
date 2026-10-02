@@ -75,6 +75,9 @@ public final class FilmFlightEditingTest
             setting(settings, "editorOnionSkin", new ValueOnionSkin("onion_skin"));
             setting(settings, "editorMotionPath", new ValueMotionPath("motion_path"));
             setting(settings, "editorCameraSmoothness", new ValueFloat("smoothness", 0F));
+            /* Authoring reads these while writing a keyframe; leave them at their shipped defaults. */
+            setting(settings, "editorSnapToTicks", new ValueBoolean("editorSnapToTicks", true));
+            setting(settings, "editorSnapToFilmMarkers", new ValueBoolean("editorSnapToFilmMarkers", true));
 
             for (String name : List.of("editorRuleOfThirds", "editorCenterLines", "editorCrosshair", "editorRestartOnSeek", "editorLoop",
                 "editorSnapToMarkers", "scrollingDisableSmoothnessInEditors"))

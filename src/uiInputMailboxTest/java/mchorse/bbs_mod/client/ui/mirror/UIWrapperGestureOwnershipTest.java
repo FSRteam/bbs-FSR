@@ -9,6 +9,8 @@ import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIModelRenderer;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.GizmoInteraction;
+import mchorse.bbs_mod.ui.utils.Scale;
+import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import org.lwjgl.glfw.GLFW;
 import sun.misc.Unsafe;
 
@@ -134,6 +136,9 @@ public final class UIWrapperGestureOwnershipTest
         setField(clickFailure, "editingGeneration", 0L);
         setField(clickFailure, "currentGraph", throwingKeyframeGraph("findKeyframe"));
         setField(clickFailure, "graphArea", graphArea);
+        /* A click over the timeline stops the axis zoom before it picks a keyframe. */
+        setField(clickFailure, "area", graphArea);
+        setField(clickFailure, "xAxis", new Scale(graphArea, ScrollDirection.HORIZONTAL));
         setField(clickFailure, "dragging", -1);
         context.setMouse(20, 20, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 

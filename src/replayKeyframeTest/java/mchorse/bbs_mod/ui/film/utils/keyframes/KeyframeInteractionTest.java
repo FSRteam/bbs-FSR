@@ -155,7 +155,7 @@ public final class KeyframeInteractionTest
             "film keyframe view does not seek when a keyframe is picked");
         check(clips.contains("this.scrubbing=true;")
                 && clips.contains("this.delegate.stopPlaybackOnScrub();")
-                && clips.contains("this.delegate.setCursor(this.fromGraphX(mouseX));"),
+                && clips.contains("this.delegate.setCursor(Math.max(0F,this.fromGraphCursor(mouseX)));"),
             "camera clips timeline no longer seeks on its initial click");
 
         String replacement = section(

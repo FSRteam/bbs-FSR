@@ -317,7 +317,7 @@ public final class BBSUiLifecycleSourceTest
                 && selectClip.indexOf("this.filmPanel.prepareClipSelection(this);") < selectClip.indexOf("UIClip.saveScroll(this.panel);")
                 && seek.indexOf("this.finishFlight(true, \"seek\");") >= 0
                 && seek.indexOf("this.finishFlight(true, \"seek\");") < seek.indexOf("this.cancelViewInteractions();")
-                && seek.indexOf("this.finishFlight(true, \"seek\");") < seek.indexOf("this.runner.ticks ="),
+                && seek.indexOf("this.finishFlight(true, \"seek\");") < seek.indexOf("this.runner.setCursor(Math.max(0F, value));"),
             "timeline UI replaced the captured flight target before committing its pose");
         check(outsideRecording.indexOf("Film film = this.panel.getData();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
