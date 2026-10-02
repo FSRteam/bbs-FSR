@@ -34,7 +34,7 @@ public final class NetworkCompatClient
     }
 
     /**
-     * Legacy API descriptor retained for binary compatibility. Frozen c1..c19
+     * Legacy API descriptor retained for binary compatibility. Frozen c1..c21
      * channels are core-owned, so unscoped receivers are rejected fail-closed.
      */
     public static synchronized void registerClientReceiver(ResourceLocation id, ClientReceiver receiver)
