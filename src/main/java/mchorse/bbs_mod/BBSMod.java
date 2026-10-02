@@ -239,7 +239,11 @@ public class BBSMod
         .noLootTable()
         .noCollission()
         .noOcclusion()
-        .strength(0F)));
+        .strength(0F)
+        /* The hitbox comes from the block entity, so the state's shape cache
+         * must stay off — with it on, the per-block shape would never be asked. */
+        .dynamicShape()
+        .lightLevel((state) -> state.getValue(ModelBlock.LIGHT_LEVEL))));
     public static final DeferredHolder<Block, Block> CHROMA_RED_BLOCK = BLOCKS.register("chroma_red", BBSMod::createChromaBlock);
     public static final DeferredHolder<Block, Block> CHROMA_GREEN_BLOCK = BLOCKS.register("chroma_green", BBSMod::createChromaBlock);
     public static final DeferredHolder<Block, Block> CHROMA_BLUE_BLOCK = BLOCKS.register("chroma_blue", BBSMod::createChromaBlock);
