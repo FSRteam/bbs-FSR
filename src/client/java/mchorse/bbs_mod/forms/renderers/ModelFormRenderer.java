@@ -39,6 +39,7 @@ import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -991,6 +992,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 RenderSystem.enableDepthTest();
                 RenderSystem.enableBlend();
 
+                if (FramebufferDebug.inside())
+                {
+                    FramebufferDebug.log("model", "shader=" + FramebufferDebug.shader(mainShader.get())
+                        + " light=" + light + " overlay=" + OverlayTexture.NO_OVERLAY
+                        + " | " + FramebufferDebug.bindings());
+                }
+
                 this.renderingArm = true;
                 ItemUsePose.setSuppressed(true);
 
@@ -1001,6 +1009,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 finally
                 {
                     ItemUsePose.setSuppressed(false);
+                }
+
+                if (FramebufferDebug.inside())
+                {
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.bindings());
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.glState());
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.samplers());
                 }
 
                 return true;
@@ -1064,7 +1079,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             }
 
             Texture textureObject = BBSModClient.getTextures().getTexture(texture);
-            boolean irisWorld = BBSRendering.isIrisWorldShadersEnabled();
+            /* Deliberately the wider question - "is a pack loaded at all" - and not
+             * isIrisWorldShadersEnabled() (fae8b715b). What hangs off this below is the alpha
+             * handling, and that has to stay put where a pack can see the result. Inside a
+             * framebuffer form the pack stops shading, but the pixels still end up in its world:
+             * dropping the cutout degrade there turns blending back on, the parts land in the
+             * buffer premultiplied with alpha squared, and the quad multiplies by alpha once more. */
+            boolean irisWorld = BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld();
             boolean cutout = irisWorld && textureObject != null && textureObject.hasTranslucency()
                 && color.a >= 1F && !this.form.additiveColor.get();
 
@@ -1086,9 +1107,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             BBSModClient.getTextures().bindTexture(textureObject);
 
+            /* The program, unlike the alpha handling above, does follow whether the pack is
+             * shading this very draw: off-screen it has stopped, and our own is the better one. */
             Supplier<ShaderInstance> mainShader = cutout
                 ? GameRenderer::getRendertypeEntityCutoutShader
-                : (irisWorld || !model.isVAORendered())
+                : (BBSRendering.isIrisWorldShadersEnabled() || !model.isVAORendered())
                     ? GameRenderer::getRendertypeEntityTranslucentCullShader
                     : BBSShaders::getModel;
             Supplier<ShaderInstance> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);

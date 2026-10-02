@@ -35,6 +35,7 @@ import mchorse.bbs_mod.client.render.view.IrisViewBackend;
 import mchorse.bbs_mod.utils.iris.IrisViewState;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiFrameRecorder;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.InverseView;
@@ -876,6 +877,10 @@ public class BBSRendering
             primaryPass.run();
             return;
         }
+
+        /* Once per real frame, and only the frame the window shows: the framebuffer form's
+         * diagnostic (see FramebufferDebug) logs one frame per second, counted from here. */
+        FramebufferDebug.newFrame();
 
         PreparedFrame frame = new PreparedFrame();
 

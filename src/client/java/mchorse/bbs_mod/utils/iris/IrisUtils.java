@@ -4,6 +4,7 @@ import joptsimple.internal.Strings;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.DataPath;
@@ -226,6 +227,12 @@ public class IrisUtils
             && shaders.shouldOverrideShaders();
         boolean shadow = ShadowRenderer.ACTIVE;
 
+        if (FramebufferDebug.logging)
+        {
+            FramebufferDebug.log("offscreen", "enter override=" + override + " offscreenDepth=" + offscreenDepth
+                + " " + FramebufferDebug.iris());
+        }
+
         try
         {
             if (override)
@@ -239,6 +246,12 @@ public class IrisUtils
             offscreenDepth += 1;
             ShadowRenderer.ACTIVE = false;
 
+            if (FramebufferDebug.logging)
+            {
+                FramebufferDebug.log("offscreen", "inside shouldOverride=" + shouldOverrideShaders()
+                    + " offscreenDepth=" + offscreenDepth + " " + FramebufferDebug.iris());
+            }
+
             render.run();
         }
         finally
@@ -250,7 +263,23 @@ public class IrisUtils
             {
                 pipeline.setIsMainBound(true);
             }
+
+            if (FramebufferDebug.logging)
+            {
+                FramebufferDebug.log("offscreen", "leave offscreenDepth=" + offscreenDepth + " shouldOverride=" + shouldOverrideShaders()
+                    + " " + FramebufferDebug.iris());
+            }
         }
+    }
+
+    /**
+     * Whether a render into a framebuffer of ours is going on right now (4c6a1c4cd). The pack is
+     * told the main target is gone for the duration, and the flags it checks ahead of that - the
+     * shadow pass and the hand - are answered to match (see HandRendererMixin).
+     */
+    public static boolean isRenderingOffscreen()
+    {
+        return offscreenDepth > 0;
     }
 
     public static boolean isShadowPass()

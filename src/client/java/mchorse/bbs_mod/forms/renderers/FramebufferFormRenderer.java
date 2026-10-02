@@ -5,7 +5,9 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.graphics.Framebuffer;
 import mchorse.bbs_mod.graphics.Renderbuffer;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -15,6 +17,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Quad;
 import mchorse.bbs_mod.utils.colors.Color;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -29,6 +32,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryStack;
 
@@ -39,8 +43,14 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 {
     private static final Quad quad = new Quad();
     private static final Quad uvQuad = new Quad();
+    /* Both lights along Z, one each way (7d12a584a). The picture in here is meant to be flat, and
+     * the two vanilla lights are what a flat one is made of - but pointing both at the camera
+     * lights only the faces that happen to look back at it. The framebuffer renders under a
+     * Y-flipped ortho with front faces culled, so a two-sided quad (a billboard draws both of its
+     * sides) keeps the side whose normal points away, and that side came out at
+     * MINECRAFT_AMBIENT_LIGHT alone - 40% - while a one-sided model next to it stayed lit. */
     private static final Vector3f framebufferLight0 = new Vector3f(0F, 0F, 1F);
-    private static final Vector3f framebufferLight1 = new Vector3f(0F, 0F, 1F);
+    private static final Vector3f framebufferLight1 = new Vector3f(0F, 0F, -1F);
 
     /* Nested framebuffer forms need separate targets: the depth picks which cached framebuffer
      * this level renders into (the off-screen Iris state is nested inside renderOffscreen). */
@@ -81,6 +91,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             f.unbind();
         });
 
+        FramebufferDebug.beginRender(this.form, context, framebuffer);
+
         int width;
         int height;
         int viewportX;
@@ -102,14 +114,18 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         int prevRead = GL30.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         boolean scissorEnabled = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
         int[] scissorBox = new int[4];
+        float[] clearColor = new float[4];
 
         GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, scissorBox);
+        GL11.glGetFloatv(GL11.GL_COLOR_CLEAR_VALUE, clearColor);
 
         int prevCullFace = GL30.glGetInteger(GL11.GL_CULL_FACE_MODE);
         Vector3f light0 = new Vector3f(RenderSystem.shaderLightDirections[0]);
         Vector3f light1 = new Vector3f(RenderSystem.shaderLightDirections[1]);
         Matrix4f projectionMatrix = this.projectionMatrix.set(RenderSystem.getProjectionMatrix());
         VertexSorting vertexSorting = RenderSystem.getVertexSorting();
+
+        FramebufferDebug.state("entry", context);
 
         GL30.glCullFace(GL30.GL_FRONT);
         RenderSystem.setShaderLights(framebufferLight0, framebufferLight1);
@@ -125,6 +141,12 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             /* Whoever was drawing before us may have left a scissor box — the UI clips its
              * viewport that way — and it would clip this framebuffer's own pixels too. */
             RenderSystem.disableScissor();
+
+            /* Transparent clear (beeeb3f2a): whatever was drawn before us may have left an opaque
+             * clear colour, and clearing this buffer with it would give the finished picture a
+             * solid background. */
+            RenderSystem.clearColor(0F, 0F, 0F, 0F);
+            FramebufferDebug.clearState("clear");
             framebuffer.clear();
 
             context.stack.pushPose();
@@ -142,9 +164,42 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
                     try
                     {
-                        /* Off-screen rendering: only the outermost framebuffer form flips Iris
-                         * off the main target, and the shadow pass stays off for the duration. */
-                        BBSRendering.renderOffscreen(() -> super.renderBodyParts(context));
+                        /* Full bright on the way in (d7a71e001): the quad that draws the finished
+                         * picture applies the caller's lightmap once, so letting it shade the parts
+                         * inside the buffer too would land the very same shading on them twice. */
+                        int light = context.light;
+
+                        context.light = LightTexture.FULL_BRIGHT;
+
+                        try
+                        {
+                            /* Blending as GL really holds it, not as GlStateManager's cache
+                             * believes (8d47b6af3). A shader pack's per-draw-buffer blend modes are
+                             * set by Iris with indexed GL calls the cache never sees, and put back
+                             * through the cache - which skips the real call when it already thinks
+                             * the default is in place. So after a pack's entity program the world
+                             * runs with the alpha factors ZERO/ONE on draw buffer 0 while the cache
+                             * says ONE/ZERO. This buffer is cleared to alpha 0, and every part's
+                             * defaultBlendFunc() was a no-op against that cache: the parts painted
+                             * their colours, alpha stayed 0, and the quad drew a fully transparent
+                             * picture - only in the world pass, only under a pack. A raw reset puts
+                             * GL at the default, the tracked calls put the cache there too. Nothing
+                             * is put back afterwards: the pack re-applies its overrides on its next
+                             * program bind, and a cache that agrees with GL is the state everything
+                             * else assumes. */
+                            GL14.glBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+                            GL11.glEnable(GL11.GL_BLEND);
+                            RenderSystem.defaultBlendFunc();
+                            RenderSystem.enableBlend();
+
+                            /* Off-screen rendering: only the outermost framebuffer form flips Iris
+                             * off the main target, and the shadow pass stays off for the duration. */
+                            BBSRendering.renderOffscreen(() -> super.renderBodyParts(context));
+                        }
+                        finally
+                        {
+                            context.light = light;
+                        }
                     }
                     finally
                     {
@@ -160,9 +215,13 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             {
                 context.stack.popPose();
             }
+
+            FramebufferDebug.readBuffer("after parts", framebuffer);
+            FramebufferDebug.state("after parts", context);
         }
         finally
         {
+            RenderSystem.clearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
             GL30.glViewport(viewportX, viewportY, width, height);
@@ -181,6 +240,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             RenderSystem.applyModelViewMatrix();
             RenderSystem.setProjectionMatrix(projectionMatrix, vertexSorting);
             GL30.glCullFace(prevCullFace);
+            FramebufferDebug.endRender();
         }
 
         boolean shading = !context.isPicking();
@@ -189,6 +249,31 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         this.renderModel(framebuffer.getMainTexture(), format, shader, context.stack, context.overlay,
             context.light, context.color, context.getTransition(), !context.isPicking());
+    }
+
+    /**
+     * Diagnostic (see {@link FramebufferDebug}): every nested part reports its bindings and what it
+     * left in the buffer. Off by default; the unlogged path is exactly the inherited one.
+     */
+    @Override
+    protected void renderBodyPart(BodyPart part, FormRenderingContext context)
+    {
+        if (!FramebufferDebug.inside())
+        {
+            super.renderBodyPart(part, context);
+
+            return;
+        }
+
+        String name = part.getForm() == null ? "null" : part.getForm().getClass().getSimpleName();
+
+        FramebufferDebug.log("part", "begin " + name + " id=" + part.getId() + " | " + FramebufferDebug.bindings());
+
+        super.renderBodyPart(part, context);
+
+        FramebufferDebug.log("part", "end " + name + " | " + FramebufferDebug.bindings());
+        FramebufferDebug.log("part", "end " + name + " | " + FramebufferDebug.glState());
+        FramebufferDebug.readViewport("part end " + name);
     }
 
     private void renderModel(Texture texture, VertexFormat format, Supplier<ShaderInstance> shader,
@@ -245,7 +330,9 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         BBSModClient.getTextures().bindTexture(texture);
         RenderSystem.setShader(shader);
 
-        texture.bind();
+        /* No raw bind here (0a3d78437): the draw binds its own samplers, and a bind on whatever
+         * texture unit happens to be active would land behind GlStateManager's back - see
+         * BillboardFormRenderer. */
         texture.setFilterMipmap(false, false);
         builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
 
@@ -270,6 +357,14 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableBlend();
 
+        if (FramebufferDebug.logging)
+        {
+            FramebufferDebug.log("quad", "shader=" + FramebufferDebug.shader(shader.get()) + " deferred=" + defer
+                + " | " + FramebufferDebug.bindings());
+        }
+
+        FramebufferDebug.state("before quad", matrices);
+
         if (defer && FormTranslucentQueue.isActive())
         {
             /* The deferred command binds the framebuffer's live texture at flush, and the cache
@@ -285,6 +380,25 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
             Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
             Vector3f planeNormal = FormTranslucentQueue.quadPlaneNormal(modelView, matrix);
+
+            /* The quad's opaque texels also draw right here, writing depth (67f23fe9c), because
+             * the sort alone cannot order this quad against a model it sits inside: a
+             * semi-transparent layer of the parent model (a skin's hat layer) sorts by its group's
+             * pivot, which is always further than the quad's own plane, so it replays first. With
+             * depth in the buffer that layer lands over the quad by the depth test, pixel by
+             * pixel, instead of the two fighting over who overwrites whom. */
+            ShaderInstance cutout = GameRenderer.getRendertypeEntityCutoutShader();
+
+            if (cutout != null)
+            {
+                /* The world pass draws with depth writes on; this only re-asserts it. */
+                RenderSystem.depthMask(true);
+
+                buffer.bind();
+                buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), cutout);
+                VertexBuffer.unbind();
+            }
+
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
                 () -> capturedShader, texture, modelView, null, origin, planeNormal, true, null, null));
         }
@@ -295,6 +409,9 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         gameRenderer.lightTexture().turnOffLightLayer();
         gameRenderer.overlayTexture().teardownOverlayColor();
+
+        FramebufferDebug.quad("quad corners", matrices, quad);
+        FramebufferDebug.state("after quad", matrices);
     }
 
     private void fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, PoseStack.Pose normal, float nz)
