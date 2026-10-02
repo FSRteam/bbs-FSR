@@ -36,6 +36,8 @@ public final class PoseFormRegressionSourceTest
     private static final String TRANSFORM_SPACE = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/TransformSpace.java";
     private static final String FILM_CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
     private static final String FILM_BASE = "src/client/java/mchorse/bbs_mod/film/BaseFilmController.java";
+    private static final String FILM_ENTITY_RENDERER = "src/client/java/mchorse/bbs_mod/film/FilmEntityRenderer.java";
+    private static final String FILM_MATRICES = "src/client/java/mchorse/bbs_mod/film/FilmMatrices.java";
     private static final String FILM_CONTEXT = "src/client/java/mchorse/bbs_mod/film/FilmControllerContext.java";
     private static final String UI_SCREEN = "src/client/java/mchorse/bbs_mod/ui/framework/UIScreen.java";
     private static final String FORM_RENDERER = "src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIPickableFormRenderer.java";
@@ -69,16 +71,18 @@ public final class PoseFormRegressionSourceTest
         String transformSpace = read(root.resolve(TRANSFORM_SPACE));
         String filmController = read(root.resolve(FILM_CONTROLLER));
         String filmBase = read(root.resolve(FILM_BASE));
+        String filmEntityRenderer = read(root.resolve(FILM_ENTITY_RENDERER));
+        String filmMatrices = read(root.resolve(FILM_MATRICES));
         String filmContext = read(root.resolve(FILM_CONTEXT));
         String uiScreen = read(root.resolve(UI_SCREEN));
         String formRenderer = read(root.resolve(FORM_RENDERER));
 
-        gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmBase);
+        gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmEntityRenderer);
         viewSpaceGizmoFacesCamera(gizmo, gizmoDrag, transformSpace);
         hiddenAxesStillRefreshGizmoPlacement(formRenderer);
-        filmBoneConsumersShareOnePlacementSample(filmBase, filmEditor);
+        filmBoneConsumersShareOnePlacementSample(filmMatrices, filmEditor);
         proceduralPanelGizmoKeepsPoseSelection(editor, poseFormEditor, modelFormEditor);
-        actorReplaysKeepCapturingGizmoPlacement(filmBase, filmContext);
+        actorReplaysKeepCapturingGizmoPlacement(filmBase, filmEntityRenderer, filmContext);
         disabledReplayHidesGizmo(filmController);
         additiveBlendDoesNotLeak(renderer);
         pausedPreviewsKeepInterpolating(uiScreen);
@@ -197,12 +201,12 @@ public final class PoseFormRegressionSourceTest
      * pass alone, otherwise a MobForm whose equipment layers make the two passes disagree drags
      * against a bone frame at the wrong depth.
      */
-    private static void gizmoPlacementIsIndependentOfCursorPosition(String gizmo, String filmController, String filmBase)
+    private static void gizmoPlacementIsIndependentOfCursorPosition(String gizmo, String filmController, String filmEntityRenderer)
     {
-        check(filmBase.contains("renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame)"),
+        check(filmEntityRenderer.contains("renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame)"),
             "the replay axes preview draws through renderAxes, so it snapshots gizmo placement over "
                 + "the bone the user actually drags");
-        check(!section(filmBase, "private static void renderPreviewAxes", "private static void renderAnchorGizmo")
+        check(!section(filmEntityRenderer, "private static void renderPreviewAxes", "private static void renderAnchorGizmo")
                 .contains("Gizmo.INSTANCE"),
             "the replay axes preview still touches the shared gizmo placement");
 
@@ -265,15 +269,15 @@ public final class PoseFormRegressionSourceTest
      * placements lets the rotation basis disagree with the mesh - for a form with IK or physics bones
      * a second collectMatrices call also builds a second simulation history.
      */
-    private static void filmBoneConsumersShareOnePlacementSample(String filmBase, String filmEditor)
+    private static void filmBoneConsumersShareOnePlacementSample(String filmMatrices, String filmEditor)
     {
         assertOrdered(
-            section(filmBase, "public static Vector3f getGizmoBoneRotationOffset", "private static Matrix4f absoluteSemanticMatrix"),
+            section(filmMatrices, "public static Vector3f getGizmoBoneRotationOffset", "private static Matrix4f absoluteSemanticMatrix"),
             "sampleBonePlacement(entities, entity, replay, cameraX, cameraY, cameraZ, transition, bonePath)",
             "private static BonePlacement sampleBonePlacement",
             "Object simulationOwner = relative ? relativeSimulationOwner(entity) : entity",
             "renderer.collectMatrices(");
-        check(!section(filmBase, "public static Vector3f getGizmoBoneRotationOffset", "private static Matrix4f absoluteSemanticMatrix")
+        check(!section(filmMatrices, "public static Vector3f getGizmoBoneRotationOffset", "private static Matrix4f absoluteSemanticMatrix")
                 .contains("collectMatrices(entity, transition)"),
             "the film bone rotation offset samples through the ownerless collectMatrices overload again");
         check(filmEditor.contains("sampleFilmBoneRotationOffset(panel, camera, entity, replay, transition, bone.a)"),
@@ -288,7 +292,7 @@ public final class PoseFormRegressionSourceTest
      * stays the gizmo's placement source. If the visual pass skips actor replays entirely the gizmo's
      * captured matrix goes stale and the handles stop following the replayed form's anchor.
      */
-    private static void actorReplaysKeepCapturingGizmoPlacement(String filmBase, String filmContext)
+    private static void actorReplaysKeepCapturingGizmoPlacement(String filmBase, String filmEntityRenderer, String filmContext)
     {
         String wrapper = section(
             filmBase,
@@ -296,7 +300,7 @@ public final class PoseFormRegressionSourceTest
             "protected FilmControllerContext getFilmControllerContext"
         );
         String pass = section(
-            filmBase,
+            filmEntityRenderer,
             "public static void renderEntity(FilmControllerContext context)",
             "private static void renderAxes"
         );

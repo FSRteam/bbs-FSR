@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays;
 
-import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -20,7 +20,7 @@ import org.joml.Matrix4f;
  * world-space paste). Before sampling, the (possibly just-perturbed) keyframe pose is force-applied
  * to the model via the replay's properties — exactly like the gizmo sampler in
  * {@code UIReplaysEditorUtils.buildFilmGizmoDrag} — so a nudge to the pose shows up in the next
- * sample. It reuses {@link BaseFilmController#getBoneCompositeMatrix}, the same composite the
+ * sample. It reuses {@link FilmMatrices#getBoneCompositeMatrix}, the same composite the
  * viewport draws the bone gizmo with, just keeping scale.
  */
 public class FilmBoneWorldProvider implements IWorldTransformProvider
@@ -64,7 +64,7 @@ public class FilmBoneWorldProvider implements IWorldTransformProvider
             replay.properties.applyProperties(form, tick);
         }
 
-        Matrix4f matrix = BaseFilmController.getBoneCompositeMatrix(
+        Matrix4f matrix = FilmMatrices.getBoneCompositeMatrix(
             this.panel.getController().getEntities(), entity, replay, 0D, 0D, 0D, transition, bone.a, true
         );
 

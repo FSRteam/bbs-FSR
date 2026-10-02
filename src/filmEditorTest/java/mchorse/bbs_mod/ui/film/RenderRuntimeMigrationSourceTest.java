@@ -33,6 +33,8 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path BLOCK_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/BlockFormRenderer.java");
     private static final Path SODIUM_UTILS = Path.of("src/client/java/mchorse/bbs_mod/utils/sodium/SodiumUtils.java");
     private static final Path FILM_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/film/BaseFilmController.java");
+    private static final Path FILM_ENTITY_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/film/FilmEntityRenderer.java");
+    private static final Path FILM_MATRICES = Path.of("src/client/java/mchorse/bbs_mod/film/FilmMatrices.java");
     private static final Path TRANSLUCENT_QUEUE = Path.of("src/client/java/mchorse/bbs_mod/forms/FormTranslucentQueue.java");
     private static final Path VERTEX_CONSUMERS = Path.of("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
     private static final Path MODEL_INSTANCE = Path.of("src/client/java/mchorse/bbs_mod/cubic/ModelInstance.java");
@@ -147,9 +149,9 @@ public final class RenderRuntimeMigrationSourceTest
     public static void runAll() throws Exception
     {
         Path root = findProjectRoot();
-        String film = compact(Files.readString(root.resolve(FILM_CONTROLLER)));
+        String filmEntityRenderer = compact(Files.readString(root.resolve(FILM_ENTITY_RENDERER)));
         String framebuffer = compact(Files.readString(root.resolve(FRAMEBUFFER_RENDERER)));
-        String relativeRender = section(film, "stack.pushPose(); try", "if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)");
+        String relativeRender = section(filmEntityRenderer, "stack.pushPose(); try", "if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)");
 
         check(relativeRender.contains("stack.last().pose().rotate(context.camera.rotation());")
                 && relativeRender.contains("stack.last().normal().rotate(context.camera.rotation());")
@@ -237,7 +239,8 @@ public final class RenderRuntimeMigrationSourceTest
     private static void checkFormFrameCacheWiring(Path root) throws IOException
     {
         String cache = compact(Files.readString(root.resolve(FORM_FRAME_CACHE)));
-        String film = compact(Files.readString(root.resolve(FILM_CONTROLLER)));
+        String film = compact(Files.readString(root.resolve(FILM_ENTITY_RENDERER)))
+            + " " + compact(Files.readString(root.resolve(FILM_MATRICES)));
         String orbit = compact(Files.readString(root.resolve(ORBIT_CONTROLLER)));
 
         check(cache.contains("entry.entity == entity")

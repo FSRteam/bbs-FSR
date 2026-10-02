@@ -5,8 +5,8 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -671,7 +671,7 @@ public class OrbitFilmCameraController implements ICameraController
         Replay replay = this.controller.panel.replayEditor.getReplay();
         boolean relative = replay != null && replay.relative.get();
 
-        if (form != null && !relative && !BaseFilmController.isRelativeReplayEntity(entity))
+        if (form != null && !relative && !FilmMatrices.isRelativeReplayEntity(entity))
         {
             FormRenderer<?> renderer = FormUtilsClient.getRenderer(form);
 
@@ -692,9 +692,9 @@ public class OrbitFilmCameraController implements ICameraController
                 }
 
                 Anchor v = form.anchor.get();
-                Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
+                Matrix4f defaultMatrix = FilmMatrices.getMatrixForRenderWithRotation(entity, x, y, z, transition);
                 FormFrameCache frame = new FormFrameCache();
-                Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(
+                Pair<Matrix4f, Float> totalMatrix = FilmMatrices.getTotalMatrix(
                     this.controller.getEntities(),
                     v,
                     defaultMatrix,

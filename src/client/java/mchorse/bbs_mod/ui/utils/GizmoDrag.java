@@ -79,7 +79,7 @@ public class GizmoDrag
      * is what the editors without a scene of their own (form editor, model
      * blocks, animation states) leave it at. The film viewport instead fills it
      * with the edited replay's own facing
-     * ({@code BaseFilmController.getReplayWorldAxes}), so "global" there means
+     * ({@code FilmMatrices.getReplayWorldAxes}), so "global" there means
      * the actor's world rather than the map's: it stays flat and axis-aligned,
      * it just turns with the replay. Read through {@link #frameBasis}, and drawn
      * by the twin {@link #stackBasisForSpace}.

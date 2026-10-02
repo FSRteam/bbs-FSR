@@ -196,7 +196,7 @@ public final class FilmEditorMigrationLogicTest
             "anchor transform editor is missing");
         check(hasField(loader, "mchorse.bbs_mod.film.FilmControllerContext", "anchorGizmo"),
             "anchor gizmo render context is missing");
-        check(hasMethod(loader, "mchorse.bbs_mod.film.BaseFilmController", "getGizmoAnchorCompositeMatrix"),
+        check(hasMethod(loader, "mchorse.bbs_mod.film.FilmMatrices", "getGizmoAnchorCompositeMatrix"),
             "anchor gizmo composite sampler is missing");
     }
 

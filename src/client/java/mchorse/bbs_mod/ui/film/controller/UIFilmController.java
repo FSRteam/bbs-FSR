@@ -32,9 +32,9 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.multiview.ViewRenderState;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.data.types.BaseType;
-import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmControllerContext;
+import mchorse.bbs_mod.film.FilmEntityRenderer;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -2677,7 +2677,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
                         this.stencilMap.setIncrement(false);
                     }
 
-                    BaseFilmController.renderEntity(filmContext);
+                    FilmEntityRenderer.renderEntity(filmContext);
                 }
             }
             else
@@ -2686,7 +2686,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 this.stencilMap.setIncrement(true);
 
-                BaseFilmController.renderEntity(FilmControllerContext.instance
+                FilmEntityRenderer.renderEntity(FilmControllerContext.instance
                     .setup(this.getEntities(), entity, selectedReplay, renderContext)
                     .transition(isPlaying ? renderContext.tickDelta() : 0)
                     .stencil(this.stencilMap)

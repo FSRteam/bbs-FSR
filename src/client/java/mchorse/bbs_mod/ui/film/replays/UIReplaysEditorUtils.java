@@ -17,7 +17,7 @@ import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControls;
 import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
@@ -945,7 +945,7 @@ public class UIReplaysEditorUtils
 
         IEntity entity = panel.getController().getCurrentEntity();
 
-        drag.setGlobalAxes(BaseFilmController.getReplayWorldAxes(entity, transition));
+        drag.setGlobalAxes(FilmMatrices.getReplayWorldAxes(entity, transition));
 
         if (transform == null || transform.getTransform() == null)
         {
@@ -1108,7 +1108,7 @@ public class UIReplaysEditorUtils
     {
         applyReplayProperties(panel, entity, replay, transition);
 
-        return BaseFilmController.getBoneCompositeMatrix(
+        return FilmMatrices.getBoneCompositeMatrix(
             panel.getController().getEntities(),
             entity,
             replay,
@@ -1132,7 +1132,7 @@ public class UIReplaysEditorUtils
     {
         applyReplayProperties(panel, entity, replay, transition);
 
-        return BaseFilmController.getGizmoBoneRotationOffset(
+        return FilmMatrices.getGizmoBoneRotationOffset(
             panel.getController().getEntities(),
             entity,
             replay,
@@ -1155,7 +1155,7 @@ public class UIReplaysEditorUtils
     {
         applyReplayProperties(panel, entity, replay, transition);
 
-        return BaseFilmController.getGizmoBoneEvaluatedRotation(
+        return FilmMatrices.getGizmoBoneEvaluatedRotation(
             panel.getController().getEntities(),
             entity,
             replay,
@@ -1181,7 +1181,7 @@ public class UIReplaysEditorUtils
         {
             applyReplayProperties(panel, entity, replay, transition);
 
-            Matrix4f matrix = BaseFilmController.getGizmoAnchorCompositeMatrix(
+            Matrix4f matrix = FilmMatrices.getGizmoAnchorCompositeMatrix(
                 panel.getController().getEntities(),
                 entity,
                 replay,
