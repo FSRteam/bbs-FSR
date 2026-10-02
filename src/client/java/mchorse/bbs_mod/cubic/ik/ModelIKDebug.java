@@ -109,7 +109,14 @@ public final class ModelIKDebug
         }
 
         Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-        ModelPivotFrames.collect(model, wanted, frames);
+
+        /* applyStretch = true: the overlay must read the pose the renderer actually
+         * draws. Without it the frames are the UN-stretched pose, so the dashed line
+         * to the goal aimed at where the tip would be with the stretch/squash
+         * checkbox off — a foot pinned to the floor drew its line down through the
+         * controller. The overlay runs after the IK pass, so the same frame's
+         * shifted positions are available. */
+        ModelPivotFrames.collect(model, wanted, frames, null, true);
 
         return frames;
     }

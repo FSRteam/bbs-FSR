@@ -30,10 +30,11 @@ import java.util.Map;
  * negotiate a shared bone with another chain — a classic chain that overlaps
  * one solves on the core instead (the panel marks this statically).
  *
- * <p>Position solve and orientation pass are lifted from the legacy
- * {@code IKSolver}/{@code ModelIKApplier} (pre-M6), trimmed to the two-segment
- * case; both bone flavours write the result to {@code orient}, the same
- * constraint-stack contract the core path honours.
+ * <p>Position solve and orientation pass are lifted from the legacy direct
+ * solver this port carried before M6 (since removed: it was reachable only from
+ * the IK physics test source set), trimmed to the two-segment case; both bone
+ * flavours write the result to {@code orient}, the same constraint-stack
+ * contract the core path honours.
  */
 final class ClassicLimbSolver
 {
@@ -153,7 +154,7 @@ final class ClassicLimbSolver
     }
 
     /* ------------------------------------------------------------------ */
-    /* Position solve (legacy IKSolver, two-segment subset)                */
+    /* Position solve (legacy direct solver, two-segment subset)           */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -775,7 +776,7 @@ final class ClassicLimbSolver
     }
 
     /* ------------------------------------------------------------------ */
-    /* Small vector helpers (legacy IKSolver)                              */
+    /* Small vector helpers (legacy direct solver)                         */
     /* ------------------------------------------------------------------ */
 
     /** A deterministic unit perpendicular to {@code dir}, cross with world Z (falling back to world Y). */

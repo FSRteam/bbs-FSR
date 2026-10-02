@@ -145,18 +145,18 @@ final class ModelIKDlsApplier
         apply(model, chains, jointDoF, controllerTargets, poleTargets, targetWeights, poleWeights, controlOverrides, null, null);
     }
 
-    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, ModelIKConfig.JointDoF> jointDoF, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, List<ModelIKApplier.ChainWorkspace> workspaces, Map<String, BoneConstraint> boneLimits)
+    public static void apply(IModel model, List<ModelIKCache.CompiledChain> chains, Map<String, ModelIKConfig.JointDoF> jointDoF, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, List<ModelIKChainWorkspace> workspaces, Map<String, BoneConstraint> boneLimits)
     {
         if (model == null || chains == null || chains.isEmpty())
         {
             return;
         }
 
-        Map<ModelIKCache.CompiledChain, ModelIKApplier.ChainWorkspace> workspaceByChain = new IdentityHashMap<>();
+        Map<ModelIKCache.CompiledChain, ModelIKChainWorkspace> workspaceByChain = new IdentityHashMap<>();
 
         for (int i = 0; i < chains.size(); i++)
         {
-            ModelIKApplier.ChainWorkspace workspace = workspaces != null && i < workspaces.size()
+            ModelIKChainWorkspace workspace = workspaces != null && i < workspaces.size()
                 ? workspaces.get(i) : null;
 
             workspaceByChain.put(chains.get(i), workspace);
@@ -348,7 +348,7 @@ final class ModelIKDlsApplier
      * {@code null} when the chain is off this frame (disabled, weightless, or
      * its target frame is missing).
      */
-    private static ResolvedChain resolveChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, ModelIKApplier.ChainWorkspace workspace)
+    private static ResolvedChain resolveChain(IModel model, ModelIKCache.CompiledChain chain, Map<String, PivotFrame> frames, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, ModelIKChainWorkspace workspace)
     {
         /* The film's `ik` track may override the chain's static config scalars.
          * IK weight is independent of pose `fix` — freezing a bone pins it to rest
@@ -531,7 +531,7 @@ final class ModelIKDlsApplier
      * contract), and the solved angles START from them, so the twist the
      * animator posed survives into the solve by construction.
      */
-    private static void applyGroup(IModel model, List<ModelIKCache.CompiledChain> group, Map<String, PivotFrame> frames, Map<String, ModelIKConfig.JointDoF> jointDoF, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<ModelIKCache.CompiledChain, ModelIKApplier.ChainWorkspace> workspaceByChain, Map<String, BoneConstraint> boneLimits)
+    private static void applyGroup(IModel model, List<ModelIKCache.CompiledChain> group, Map<String, PivotFrame> frames, Map<String, ModelIKConfig.JointDoF> jointDoF, Map<String, Vector3f> controllerTargets, Map<String, Vector3f> poleTargets, Map<String, Float> targetWeights, Map<String, Float> poleWeights, Map<String, IKControl> controlOverrides, Map<ModelIKCache.CompiledChain, ModelIKChainWorkspace> workspaceByChain, Map<String, BoneConstraint> boneLimits)
     {
         List<ResolvedChain> resolved = new ArrayList<>(group.size());
 
@@ -896,6 +896,9 @@ final class ModelIKDlsApplier
      * A chain's authored rest geometry: the root, first interior and effector
      * rest positions (absolute model rest space) plus the {@code lift}
      * rotation folding rest-space directions into the current pose.
+     *
+     * <p>{@code elbow} is null on a chain with no interior joint — a single
+     * directed bone.
      */
     private record RestChain(Vector3f root, Vector3f elbow, Vector3f effector, Quaternionf lift)
     {
@@ -908,22 +911,29 @@ final class ModelIKDlsApplier
      * BOBJ rest geometry lives in the bind matrices, and the lift subtracts
      * the bind frame the same way (BOBJ ancestors carry authored rest
      * rotations, so the raw parent frame alone would double-count them).
-     * {@code null} when the chain is too short or a bone is missing.
+     * {@code null} when the chain is too short or a bone is missing. A chain of
+     * one directed bone has no interior joint, so it loads with a null elbow
+     * rather than not at all: the elbow is what a virtual pole needs (which side
+     * the knee bulges), while an authored pole target needs only the axis and its
+     * own rest spot — and on such a chain the pole is the only handle on the
+     * bone's twist, since the solve owns its rotation.
      */
     private static RestChain restChain(IModel model, List<String> workIds, Quaternionf rootParentRotation)
     {
-        if (workIds.size() < 3)
+        if (workIds.size() < 2)
         {
             return null;
         }
 
+        boolean bent = workIds.size() >= 3;
+
         if (model instanceof Model cubic)
         {
             ModelGroup root = cubic.getGroup(workIds.get(0));
-            ModelGroup elbow = cubic.getGroup(workIds.get(1));
+            ModelGroup elbow = bent ? cubic.getGroup(workIds.get(1)) : null;
             ModelGroup effector = cubic.getGroup(workIds.get(workIds.size() - 1));
 
-            if (root == null || elbow == null || effector == null)
+            if (root == null || effector == null || (bent && elbow == null))
             {
                 return null;
             }
@@ -935,16 +945,16 @@ final class ModelIKDlsApplier
              * chain's ancestors carry, tilting the result even in rest pose. */
             Quaternionf restParent = cubicRestParentRotation(cubic, workIds.get(0));
 
-            return new RestChain(root.initial.translate, elbow.initial.translate, effector.initial.translate, new Quaternionf(rootParentRotation).mul(restParent.conjugate()));
+            return new RestChain(root.initial.translate, elbow == null ? null : elbow.initial.translate, effector.initial.translate, new Quaternionf(rootParentRotation).mul(restParent.conjugate()));
         }
         else if (model instanceof BOBJModel bobj)
         {
             Map<String, BOBJBone> bones = bobj.getArmature().bones;
             BOBJBone root = bones.get(workIds.get(0));
-            BOBJBone elbow = bones.get(workIds.get(1));
+            BOBJBone elbow = bent ? bones.get(workIds.get(1)) : null;
             BOBJBone effector = bones.get(workIds.get(workIds.size() - 1));
 
-            if (root == null || elbow == null || effector == null)
+            if (root == null || effector == null || (bent && elbow == null))
             {
                 return null;
             }
@@ -953,7 +963,7 @@ final class ModelIKDlsApplier
              * rotation, so the current-vs-bind delta is the exact world lift. */
             Quaternionf bindParent = root.boneMat.getUnnormalizedRotation(new Quaternionf());
 
-            return new RestChain(root.boneMat.getTranslation(new Vector3f()), elbow.boneMat.getTranslation(new Vector3f()), effector.boneMat.getTranslation(new Vector3f()), new Quaternionf(rootParentRotation).mul(bindParent.conjugate()));
+            return new RestChain(root.boneMat.getTranslation(new Vector3f()), elbow == null ? null : elbow.boneMat.getTranslation(new Vector3f()), effector.boneMat.getTranslation(new Vector3f()), new Quaternionf(rootParentRotation).mul(bindParent.conjugate()));
         }
 
         return null;
@@ -983,6 +993,13 @@ final class ModelIKDlsApplier
         }
 
         axis.normalize();
+
+        /* No interior joint, no bulge to read a side off: a single-bone chain can
+         * only be poled by an authored target. */
+        if (rest.elbow() == null)
+        {
+            return null;
+        }
 
         Vector3f side = perpendicularTo(new Vector3f(rest.elbow()).sub(rest.root()), axis);
         // (axis and side are in absolute model rest space; `lift` folds them into the current pose.)
@@ -1037,7 +1054,7 @@ final class ModelIKDlsApplier
         Vector3f poleRest = restPosition(model, poleTarget);
         Vector3f side = poleRest == null ? null : perpendicularTo(new Vector3f(poleRest).sub(rest.root()), axis);
 
-        if (side == null)
+        if (side == null && rest.elbow() != null)
         {
             side = perpendicularTo(new Vector3f(rest.elbow()).sub(rest.root()), axis);
         }
