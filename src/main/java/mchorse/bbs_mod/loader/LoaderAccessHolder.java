@@ -25,4 +25,15 @@ public final class LoaderAccessHolder
 
         return instance;
     }
+
+    /**
+     * @return Whether a loader access has been installed.
+     *
+     * <p>For code that has a meaningful answer when there is no loader — the addon API reports
+     * "unknown" for the mod version rather than refusing to answer in a headless harness.</p>
+     */
+    public static boolean has()
+    {
+        return instance != null;
+    }
 }
