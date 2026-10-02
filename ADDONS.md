@@ -61,13 +61,52 @@ An addon extending a BBS form subclasses it and registers the subclass through
 along its superclass chain, so a subclass inherits the parent's renderer and editor and only
 overrides what it actually changes.
 
+## Subscribing to events
+
+Alongside the callbacks above, BBS has an event channel for addons, taken from FS 2.6 verbatim.
+An addon hands over an object whose `@Subscribe` methods take exactly one event parameter, and
+BBS keeps it:
+
+```java
+public final class MyAddon implements BBSAddonMod
+{
+    @Subscribe
+    public void onSections(RegisterFormSectionsEvent event)
+    {
+        event.register((categories) -> new MyFormSection(categories));
+    }
+}
+```
+
+Two things are worth knowing about it:
+
+- It is **not** `mchorse.bbs_mod.events.EventBus`. That bus carries BBS's own events and is not
+  a contract; this one carries `mchorse.bbs_mod.api.events.*` and
+  `mchorse.bbs_mod.api.client.events.*` to addons and is. Neither forwards into the other.
+- Ordering comes from BBS's initialization, not from the channel. There is no priority, no
+  lifetime and no cancellation — a subscriber is called when the phase it registered in reaches
+  the point that posts the event.
+
+Methods are collected along the class hierarchy, so shared subscriptions can live in a base
+class. The most specific declaration wins: an override replaces the method it overrides, and an
+override that drops `@Subscribe` unsubscribes it. A subscriber that throws is logged and the
+other subscribers still run.
+
 ## Not ported yet
 
-The FS 2.6 branch has a second, much larger set of addon extension points — the
-`Register*Event` family, `FilmEvents`, `FormPoseEvents`, `FilmEditEvents`, `TimelineEvents`,
-`RegisterFilmTools`, structure render parts and the like — which FSR does not have yet. They are
-being ported batch by batch; see the migration task's `research/fs26-api-addon.md` for the
-inventory and order.
+The registration events are in (`mchorse.bbs_mod.api.events` and
+`mchorse.bbs_mod.api.client.events`): the `Register*` family, plus `BBSReadyEvent` and
+`BBSClientReadyEvent`. Everything under `api` and its sub-packages is a contract, so those do not
+move without a version bump.
 
-Until those land, code that imports them will not resolve against this build. Do not write
-against them from an addon and expect them to appear: the classes are absent, not stubbed.
+Still absent from FSR, and **absent rather than stubbed** — code importing them will not resolve:
+
+- `FilmEvents`, `StructureRenderEvents` — no counterpart yet.
+- The runtime events: `FilmEditEvents`, `FormPoseEvents`, `TimelineEvents`, `FormPreviewEvents`,
+  `FilmGizmoEvents`.
+- The remaining registration events: `RegisterL10nEvent`, `RegisterClientSettingsEvent`,
+  `RegisterDashboardPanelsEvent`, `RegisterFilmToolsEvent`, `RegisterFormPanelsEvent`,
+  `RegisterPreviewOverlaysEvent`, `RegisterReplayActionsEvent`.
+
+They are being ported batch by batch; see the migration task's `research/fs26-api-addon.md` for
+the inventory and order. Do not write against them from an addon and expect them to appear.
