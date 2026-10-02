@@ -50,6 +50,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UILabelList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.model_blocks.UIModelBlockEntityList;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIFolderOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
@@ -87,7 +88,6 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -2101,32 +2101,25 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     private void fromModelBlock()
     {
-        ArrayList<ModelBlockEntity> modelBlocks = new ArrayList<>(BBSRendering.capturedModelBlocks);
-        UISearchList<String> search = new UISearchList<>(new UIStringList(null));
-        UIList<String> list = search.list;
+        /* The same list the model block panel shows, so a block is picked here by the
+         * face it wears there instead of by a line of coordinates. */
+        UIModelBlockEntityList list = new UIModelBlockEntityList(null);
+        UISearchList<ModelBlockEntity> search = new UISearchList<>(list);
         UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_DESCRIPTION, (b) ->
         {
-            if (b)
-            {
-                int index = list.getIndex();
-                ModelBlockEntity modelBlock = CollectionUtils.getSafe(modelBlocks, index);
+            ModelBlockEntity modelBlock = b ? list.getCurrentFirst() : null;
 
-                if (modelBlock != null)
-                {
-                    this.fromModelBlock(modelBlock);
-                }
+            if (modelBlock != null)
+            {
+                this.fromModelBlock(modelBlock);
             }
         });
 
-        modelBlocks.sort(Comparator.comparing(ModelBlockEntity::getName));
-
-        for (ModelBlockEntity modelBlock : modelBlocks)
-        {
-            list.add(modelBlock.getName());
-        }
-
+        list.setBlocks(BBSRendering.capturedModelBlocks);
         list.background();
-        search.relative(panel.confirm).y(-5).w(1F).h(16 * 9 + 20).anchor(0F, 1F);
+
+        search.label(UIKeys.GENERAL_SEARCH);
+        search.relative(panel.confirm).y(-5).w(1F).h(UIModelBlockEntityList.ROW * 7 + 20).anchor(0F, 1F);
 
         panel.confirm.w(1F, -10);
         panel.content.add(search);

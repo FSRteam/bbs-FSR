@@ -39,6 +39,14 @@ public class UIDraggable extends UIElement
         this.callback = callback;
     }
 
+    /** Sets the drag callback after construction, for subclasses that configure themselves in a builder chain. */
+    public UIDraggable callback(Consumer<UIContext> callback)
+    {
+        this.callback = callback;
+
+        return this;
+    }
+
     public UIDraggable hoverOnly()
     {
         this.hover = true;
