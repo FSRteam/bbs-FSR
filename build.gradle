@@ -176,6 +176,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath
     }
+    anchorInterpolationTest {
+        java.srcDirs = ['src/anchorInterpolationTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
     folderManagerTest {
         java.srcDirs = ['src/folderManagerTest/java']
         resources.srcDirs = []
@@ -354,6 +360,8 @@ configurations {
     pluginSmokeFixtureRuntimeOnly.extendsFrom clientRuntimeOnly
     cemTestImplementation.extendsFrom implementation
     cemTestRuntimeOnly.extendsFrom runtimeOnly
+    anchorInterpolationTestImplementation.extendsFrom clientImplementation
+    anchorInterpolationTestRuntimeOnly.extendsFrom clientRuntimeOnly
 }
 
 java {
@@ -497,6 +505,12 @@ tasks.register('testUiMotions', JavaExec) {
     dependsOn tasks.named('clientClasses'), tasks.named('themeCoreTestClasses')
     classpath = sourceSets.themeCoreTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.ui.themes.UIMotionsTest'
+}
+
+tasks.register('testAnchorInterpolation', JavaExec) {
+    dependsOn tasks.named('clientClasses'), tasks.named('anchorInterpolationTestClasses')
+    classpath = sourceSets.anchorInterpolationTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.utils.keyframes.AnchorInterpolationTest'
 }
 
 tasks.register('testFolderManagerContainment', JavaExec) {
@@ -698,6 +712,7 @@ def bbsVerificationTaskNames = [
     'testUiInputMailbox',
     'testUiMirrorDemand',
     'testReplayKeyframeConsistency',
+    'testAnchorInterpolation',
     'testFilmEditorMigration',
     'testParticleRuntimeConsistency',
     'testIkPhysicsConsistency',
