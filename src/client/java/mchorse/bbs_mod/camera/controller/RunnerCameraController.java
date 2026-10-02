@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.camera.controller;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.CameraPoseEvaluator;
 import mchorse.bbs_mod.camera.clips.CameraClip;
@@ -15,6 +16,9 @@ import java.util.function.Consumer;
 public class RunnerCameraController extends CameraWorkCameraController
 {
     public int ticks;
+
+    private float cursorFraction;
+    private float lastTransition;
 
     private Position manual;
     private UIFilmPanel panel;
@@ -42,6 +46,11 @@ public class RunnerCameraController extends CameraWorkCameraController
 
     public void setPlaying(boolean playing)
     {
+        if (this.context.playing && !playing)
+        {
+            this.cursorFraction = BBSSettings.editorSnapToTicks.get() ? 0F : this.getTransition(this.lastTransition);
+        }
+
         this.context.playing = playing;
         AudioClientClip.manageSounds(this.context);
 
@@ -53,9 +62,32 @@ public class RunnerCameraController extends CameraWorkCameraController
 
     public void toggle(int ticks)
     {
-        this.setPlaying(!this.context.playing);
+        if (ticks != this.ticks)
+        {
+            this.setCursor(ticks);
+        }
 
-        this.ticks = ticks;
+        this.setPlaying(!this.context.playing);
+    }
+
+    public void setCursor(float tick)
+    {
+        tick = Math.max(0F, tick);
+
+        this.ticks = (int) tick;
+        this.cursorFraction = tick - this.ticks;
+        this.lastTransition = this.cursorFraction;
+    }
+
+    public float getTransition(float transition)
+    {
+        /* Resuming from a sub-tick must not move backwards before the next game tick. */
+        return this.context.playing ? Math.max(this.cursorFraction, transition) : this.cursorFraction;
+    }
+
+    public float getCursor(float transition)
+    {
+        return this.ticks + this.getTransition(transition);
     }
 
     /** Editor selection never replaces the shared soundtrack or output-camera selection. */
@@ -99,6 +131,8 @@ public class RunnerCameraController extends CameraWorkCameraController
             }
 
             this.ticks += 1;
+            this.cursorFraction = 0F;
+            this.lastTransition = 0F;
 
             Film film = this.panel.getData();
             int duration = film == null ? this.context.clips.calculateDuration() : film.calculateDuration();
@@ -113,7 +147,7 @@ public class RunnerCameraController extends CameraWorkCameraController
     @Override
     protected void applyEditedClipEnd(int ticks)
     {
-        if (this.context.playing || this.panel.recorder.isExporting() || !Film.LEGACY_CAMERA_ID.equals(this.editorCameraId))
+        if (this.context.playing || this.cursorFraction != 0F || this.panel.recorder.isExporting() || !Film.LEGACY_CAMERA_ID.equals(this.editorCameraId))
         {
             return;
         }
@@ -136,7 +170,9 @@ public class RunnerCameraController extends CameraWorkCameraController
         Film film = this.panel.getData();
         CameraPoseEvaluator evaluator = this.panel.getCameraPoseEvaluator();
         boolean exporting = this.panel.recorder.isExporting();
-        float delta = this.context.playing ? transition : 0F;
+        float delta = this.getTransition(transition);
+
+        this.lastTransition = transition;
 
         if (film != null)
         {

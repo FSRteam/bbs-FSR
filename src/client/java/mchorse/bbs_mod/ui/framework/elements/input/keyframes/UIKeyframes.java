@@ -60,6 +60,7 @@ public class UIKeyframes extends UIElement
     private boolean selecting;
     private boolean navigating;
     private int dragging = -1;
+    private boolean controlFirst;
     private Pair<Keyframe, KeyframeType> draggingData;
     private final MouseGestureOwnership editingOwnership = new MouseGestureOwnership();
     private long editingGeneration;
@@ -131,7 +132,7 @@ public class UIKeyframes extends UIElement
             .supplier(this::serializeKeyframes)
             .consumer((data, mouseX, mouseY) ->
             {
-                double offset = Math.round(this.fromGraphX(mouseX));
+                double offset = this.isSnappingToTicks() ? Math.round(this.fromGraphX(mouseX)) : this.fromGraphX(mouseX);
 
                 this.pasteKeyframes(parseKeyframes(data), (float) offset, mouseY);
             })
@@ -951,11 +952,16 @@ public class UIKeyframes extends UIElement
      */
     protected void pasteKeyframes(Map<String, PastedKeyframes> keyframes, float offset, int mouseY)
     {
+        this.pasteKeyframes(keyframes, offset, mouseY, false);
+    }
+
+    protected void pasteKeyframes(Map<String, PastedKeyframes> keyframes, float offset, int mouseY, boolean keepTracks)
+    {
         List<UIKeyframeSheet> sheets = this.currentGraph.getSheets();
 
         this.currentGraph.clearSelection();
 
-        if (keyframes.size() == 1)
+        if (keyframes.size() == 1 && !keepTracks)
         {
             UIKeyframeSheet current = this.currentGraph.getSheet(mouseY);
 
@@ -1071,6 +1077,42 @@ public class UIKeyframes extends UIElement
     public float getTick()
     {
         return (float) this.fromGraphX(this.getContext().mouseX);
+    }
+
+    /** Exact visible playhead time, including fractions entered with Shift while snapping. */
+    public float getPlayheadTick(UIContext context)
+    {
+        return this.getTick();
+    }
+
+    /** Whether this timeline shows a shared playhead that keyframes can be authored against. */
+    protected boolean hasCursor()
+    {
+        return false;
+    }
+
+    public boolean isSnappingToTicks()
+    {
+        return BBSSettings.editorSnapToTicks.get() && !Window.isShiftPressed();
+    }
+
+    /** Mouse authoring uses the shared tick grid, with Shift temporarily bypassing it. */
+    public float fromGraphCursor(int mouseX)
+    {
+        double tick = this.fromGraphX(mouseX);
+
+        return (float) (this.isSnappingToTicks() ? Math.round(tick) : tick);
+    }
+
+    /** Zoom the time axis one step in the wheel's direction, anchored under the cursor. */
+    public void zoomTimeAt(UIContext context, double wheel)
+    {
+        this.xAxis.animateZoom(Scale.getAnchorX(context, this.xAxis.area), wheel, this.getZoomSpeed());
+    }
+
+    public double getZoomSpeed()
+    {
+        return Window.isShiftPressed() && Window.isCtrlPressed() ? 3D : 1D;
     }
 
     public boolean isSelecting()
@@ -1262,6 +1304,29 @@ public class UIKeyframes extends UIElement
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        this.updateModifierOrder();
+
+        if (this.area.isInside(context))
+        {
+            this.xAxis.stopZoom();
+            this.currentGraph.stopZoom();
+        }
+
+        if (!this.scaling && !this.stacking && context.mouseButton == 0
+            && this.graphArea.isInside(context) && (this.isDuplicatingAtPlayhead() || this.isCreatingAtPlayhead()))
+        {
+            if (this.isCreatingAtPlayhead())
+            {
+                this.removeOrCreateKeyframe(context);
+            }
+            else
+            {
+                this.duplicateOrSelectColumn(context);
+            }
+
+            return true;
+        }
+
         if (this.currentGraph.mouseClicked(context))
         {
             return true;
@@ -1369,6 +1434,13 @@ public class UIKeyframes extends UIElement
 
     private void removeOrCreateKeyframe(UIContext context)
     {
+        if (this.isCreatingAtPlayhead())
+        {
+            this.currentGraph.addKeyframeAt(this.getCreationTick(context), context.mouseY);
+
+            return;
+        }
+
         Pair<Keyframe, KeyframeType> keyframe = this.currentGraph.findKeyframe(context.mouseX, context.mouseY);
 
         if (keyframe != null)
@@ -1386,15 +1458,52 @@ public class UIKeyframes extends UIElement
         if (this.currentGraph.getSelected() != null && !Window.isShiftPressed())
         {
             /* Duplicate */
-            int tick = (int) Math.round(this.fromGraphX(context.mouseX));
-
-            this.pasteKeyframes(this.parseKeyframes(this.serializeKeyframes()), tick, context.mouseY);
+            this.pasteKeyframes(this.parseKeyframes(this.serializeKeyframes()), this.getDuplicationTick(context),
+                context.mouseY, this.isDuplicatingAtPlayhead());
 
             return;
         }
 
         /* Select a column */
         this.currentGraph.selectByX(context.mouseX);
+    }
+
+    public boolean isDuplicatingAtPlayhead()
+    {
+        this.updateModifierOrder();
+
+        return !this.controlFirst && Window.isAltPressed() && Window.isCtrlPressed() && !Window.isShiftPressed()
+            && this.currentGraph.getSelected() != null;
+    }
+
+    private void updateModifierOrder()
+    {
+        /* Keep the first modifier's mode while both are held, even after creating a
+         * key selects it. Releasing one modifier lets the remaining one choose again. */
+        if (!Window.isAltPressed() || !Window.isCtrlPressed())
+        {
+            this.controlFirst = Window.isCtrlPressed();
+        }
+    }
+
+    public boolean isCreatingAtPlayhead()
+    {
+        return this.hasCursor() && Window.isCtrlPressed() && Window.isAltPressed() && !this.isDuplicatingAtPlayhead();
+    }
+
+    public boolean isRemovingKeyframe()
+    {
+        return Window.isCtrlPressed() && !this.isDuplicatingAtPlayhead() && !this.isCreatingAtPlayhead();
+    }
+
+    public float getCreationTick(UIContext context)
+    {
+        return this.isCreatingAtPlayhead() ? this.getPlayheadTick(context) : this.fromGraphCursor(context.mouseX);
+    }
+
+    public float getDuplicationTick(UIContext context)
+    {
+        return this.isDuplicatingAtPlayhead() ? this.getPlayheadTick(context) : this.fromGraphCursor(context.mouseX);
     }
 
     private void pickOrStartSelectingKeyframes(UIContext context)
@@ -1660,6 +1769,20 @@ public class UIKeyframes extends UIElement
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        this.updateModifierOrder();
+
+        if (Window.isCtrlPressed() && (context.isPressed(GLFW.GLFW_KEY_LEFT_ALT) || context.isPressed(GLFW.GLFW_KEY_RIGHT_ALT)))
+        {
+            this.controlFirst = true;
+        }
+        else if (Window.isAltPressed() && (context.isPressed(GLFW.GLFW_KEY_LEFT_CONTROL) || context.isPressed(GLFW.GLFW_KEY_RIGHT_CONTROL)))
+        {
+            this.controlFirst = false;
+        }
+
+        this.xAxis.stopZoom();
+        this.currentGraph.stopZoom();
+
         if (this.currentGraph != this.dopeSheet && context.isPressed(GLFW.GLFW_KEY_ESCAPE) && !this.single)
         {
             this.editSheet(null);
@@ -1693,6 +1816,19 @@ public class UIKeyframes extends UIElement
     @Override
     public void render(UIContext context)
     {
+        this.updateModifierOrder();
+
+        if (this.isInteracting())
+        {
+            this.xAxis.stopZoom();
+            this.currentGraph.stopZoom();
+        }
+        else
+        {
+            this.xAxis.updateZoom();
+            this.currentGraph.updateZoom();
+        }
+
         super.render(context);
 
         this.handleMouse(context);

@@ -5,6 +5,16 @@ import mchorse.bbs_mod.utils.StringUtils;
 
 public class TimeUtils
 {
+    public static String formatCursorTime(float ticks)
+    {
+        if (BBSSettings.editorSeconds.get() || ticks == (int) ticks)
+        {
+            return formatTime(ticks);
+        }
+
+        return String.format(java.util.Locale.ROOT, "%.2f", ticks);
+    }
+
     public static int toTick(float seconds)
     {
         return (int) (seconds * 20);

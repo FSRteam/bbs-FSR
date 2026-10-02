@@ -115,6 +115,7 @@ public class BBSSettings {
 	public static ValueFloat scrollingSensitivity;
 	public static ValueFloat scrollingSensitivityHorizontal;
 	public static ValueBoolean scrollingSmoothness;
+	public static ValueFloat scrollingSmoothnessIntensity;
 	public static ValueBoolean scrollingDisableSmoothnessInEditors;
 	public static ValueBoolean scrollingUseThemeCurve;
 	public static ValueString scrollingMotionEasing;
@@ -176,6 +177,7 @@ public class BBSSettings {
 	public static ValueIKDebug ikDebug;
 	public static ValuePhysicsDebug physicsDebug;
 	public static ValueBoolean editorSnapToMarkers;
+	public static ValueBoolean editorSnapToTicks;
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
 	public static ValueBoolean editorRestartOnSeek;
@@ -533,6 +535,11 @@ public class BBSSettings {
 		return duration == null ? 30 : duration.get();
 	}
 
+	/** Shared strength for smooth scrolling and timeline zoom; zero selects immediate movement. */
+	public static float getScrollSmoothingIntensity() {
+		return scrollingSmoothness.get() ? scrollingSmoothnessIntensity.get() : 0F;
+	}
+
 	public static float getFov() {
 		return MathUtils.toRad(BBSSettings.fov.get());
 	}
@@ -883,6 +890,7 @@ public class BBSSettings {
 		scrollingSensitivity = builder.getFloat("sensitivity", 3F, 0F, 10F).slider();
 		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 3F, 0F, 10F).slider();
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
+		scrollingSmoothnessIntensity = builder.getFloat("smoothness_intensity", 0.75F, 0F, 2F).slider();
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", false);
 		scrollingUseThemeCurve = builder.getBoolean("use_theme_curve", true);
 		scrollingMotionEasing = builder.getString("motion_easing", DEFAULT_MOTION_EASING);
@@ -971,6 +979,7 @@ public class BBSSettings {
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
+		editorSnapToTicks = builder.getBoolean("snap_to_ticks", true);
 		editorRewind = builder.getBoolean("rewind", true);
 		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", false);
 		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);

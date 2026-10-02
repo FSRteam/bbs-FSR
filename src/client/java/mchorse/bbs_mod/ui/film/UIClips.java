@@ -1161,7 +1161,25 @@ public class UIClips extends UIElement
         return (int) Math.round(this.scale.from(mouseX));
     }
 
-    public int toGraphX(int value)
+    public boolean isSnappingToTicks()
+    {
+        return BBSSettings.editorSnapToTicks.get() && !Window.isShiftPressed();
+    }
+
+    /** Cursor scrubbing uses the shared tick grid, with Shift temporarily bypassing it. */
+    public float fromGraphCursor(int mouseX)
+    {
+        double tick = this.scale.from(mouseX);
+
+        return (float) (this.isSnappingToTicks() ? Math.round(tick) : tick);
+    }
+
+    public double getZoomSpeed()
+    {
+        return Window.isShiftPressed() && Window.isCtrlPressed() ? 3D : 1D;
+    }
+
+    public int toGraphX(double value)
     {
         return (int) (this.scale.to(value));
     }
@@ -1242,6 +1260,11 @@ public class UIClips extends UIElement
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (this.area.isInside(context))
+        {
+            this.scale.stopZoom();
+        }
+
         if (this.area.isInside(context) && this.gestureOwnership.isActive())
         {
             return true;
@@ -1387,7 +1410,7 @@ public class UIClips extends UIElement
             }
         }
 
-        if (shift && !this.hasEmbeddedView())
+        if (shift && !this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
             this.selecting = true;
 
@@ -1407,7 +1430,7 @@ public class UIClips extends UIElement
         {
             this.scrubbing = true;
             this.delegate.stopPlaybackOnScrub();
-            this.delegate.setCursor(this.fromGraphX(mouseX));
+            this.delegate.setCursor(Math.max(0F, this.fromGraphCursor(mouseX)));
 
             return true;
         }
@@ -1499,13 +1522,13 @@ public class UIClips extends UIElement
                     this.layerHeight = MathUtils.clamp(this.layerHeight - step, LAYER_HEIGHT_MIN, LAYER_HEIGHT_MAX);
                 }
             }
-            else if (Window.isShiftPressed())
+            else if (Window.isShiftPressed() && !Window.isCtrlPressed())
             {
                 this.vertical.mouseScroll(context);
             }
             else if (context.mouseWheel != 0D)
             {
-                this.scale.zoomAnchor(Scale.getAnchorX(context, this.area), Math.copySign(this.scale.getZoomFactor(), context.mouseWheel));
+                this.scale.animateZoom(Scale.getAnchorX(context, this.area), context.mouseWheel, this.getZoomSpeed());
             }
 
             return true;
@@ -1721,6 +1744,8 @@ public class UIClips extends UIElement
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        this.scale.stopZoom();
+
         if (this.embedded != null && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
             this.embedView(null);
@@ -1735,6 +1760,16 @@ public class UIClips extends UIElement
     @Override
     public void render(UIContext context)
     {
+        if (this.grabbing || this.scrubbing || this.selecting || this.scrolling || this.selectingLoop >= 0
+            || this.hasEmbeddedView())
+        {
+            this.scale.stopZoom();
+        }
+        else
+        {
+            this.scale.updateZoom();
+        }
+
         this.updateScrollSize();
 
         if (this.centerScrollOnRender)
@@ -1758,7 +1793,7 @@ public class UIClips extends UIElement
     {
         if (this.scrubbing)
         {
-            this.delegate.setCursor(this.fromGraphX(mouseX));
+            this.delegate.setCursor(Math.max(0F, this.fromGraphCursor(mouseX)));
         }
         else if (this.selectingLoop == 0)
         {
@@ -2181,9 +2216,10 @@ public class UIClips extends UIElement
         batcher.unclip(context);
         batcher.clip(this.area, context);
 
-        String label = TimeUtils.formatTime(this.delegate.getCursor()) + "/" + TimeUtils.formatTime(this.clips.calculateDuration());
+        float cursor = this.delegate.getTimelineCursor(context.getTransition());
+        String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.clips.calculateDuration());
 
-        renderCursor(context, label, area, this.toGraphX(this.delegate.getCursor()));
+        renderCursor(context, label, area, this.toGraphX(cursor));
         this.renderSelection(context);
 
         batcher.unclip(context);

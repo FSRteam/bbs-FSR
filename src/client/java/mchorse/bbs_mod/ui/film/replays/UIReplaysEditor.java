@@ -687,7 +687,8 @@ public class UIReplaysEditor extends UIElement {
 
     public void moveReplay(double x, double y, double z) {
         if (this.replay != null) {
-            int cursor = this.filmPanel.getCursor();
+            UIContext context = this.getContext();
+            float cursor = this.filmPanel.getKeyframeCursor(context == null ? 0F : context.getTransition());
 
             this.replay.keyframes.x.insert(cursor, x);
             this.replay.keyframes.y.insert(cursor, y);
@@ -846,7 +847,8 @@ public class UIReplaysEditor extends UIElement {
                                                         return;
                                                     }
 
-                                                    int current = this.filmPanel.getCursor();
+                                                    UIContext context = this.getContext();
+                                                    float current = this.filmPanel.getKeyframeCursor(context == null ? 0F : context.getTransition());
                                                     IEntity entity = this.filmPanel.getController().getCurrentEntity();
 
                                                     UIReplaysEditorUtils.animationToPoseKeyframes(

@@ -43,20 +43,34 @@ public class UIFilmKeyframes extends UIKeyframes
         return this.editor.getClip().tick.get();
     }
 
-    public int getOffset()
+    public float getOffset()
     {
         if (this.editor == null)
         {
             return 0;
         }
 
-        return (int) (this.editor.getCursor() - this.getClipOffset());
+        UIContext context = this.getContext();
+
+        return this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition()) - this.getClipOffset();
     }
 
     @Override
     public float getTick()
     {
         return this.getOffset();
+    }
+
+    @Override
+    public float getPlayheadTick(UIContext context)
+    {
+        return this.editor == null ? 0F : this.editor.getTimelineCursor(context.getTransition()) - this.getClipOffset();
+    }
+
+    @Override
+    protected boolean hasCursor()
+    {
+        return this.editor != null;
     }
 
     @Override
@@ -101,7 +115,7 @@ public class UIFilmKeyframes extends UIKeyframes
             long offset = this.getClipOffset();
 
             this.editor.stopPlaybackOnScrub();
-            this.editor.setCursor(Math.max(0, (int) (Math.round(this.fromGraphX(context.mouseX)) + offset)));
+            this.editor.setCursor(Math.max(0F, this.fromGraphCursor(context.mouseX) + offset));
         }
     }
 
@@ -110,8 +124,9 @@ public class UIFilmKeyframes extends UIKeyframes
     {
         if (this.editor != null)
         {
-            int cx = this.toGraphX(this.getOffset());
-            String label = TimeUtils.formatTime(this.getOffset()) + "/" + TimeUtils.formatTime(this.getDuration());
+            float cursor = this.getPlayheadTick(context);
+            int cx = this.toGraphX(cursor);
+            String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.getDuration());
 
             context.batcher.clip(this.graphArea, context);
             UIClips.renderCursor(context, label, this.area, cx - 1);

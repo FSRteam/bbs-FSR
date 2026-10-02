@@ -134,6 +134,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
     private int lastTick;
     private int cursor;
+    private float cursorFraction;
     private boolean playing;
     private Consumer<Pair<Form, String>> bonePicking;
 
@@ -661,7 +662,20 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
 
     private void plause()
     {
+        if (this.playing)
+        {
+            this.cursorFraction = BBSSettings.editorSnapToTicks.get() ? 0F : this.getSamplingTick() - this.cursor;
+        }
+
         this.playing = !this.playing;
+    }
+
+    public void stopPlaybackOnScrub()
+    {
+        if (this.playing && BBSSettings.editorStopPlaybackOnScrub.get())
+        {
+            this.plause();
+        }
     }
 
     private void toggleStateEditor()
@@ -1079,16 +1093,17 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
                     if (tick != this.lastTick)
                     {
                         this.cursor += 1;
+                        this.cursorFraction = 0F;
                     }
 
                     if (this.cursor >= state.duration.get())
                     {
                         this.playing = false;
-                        this.cursor = 0;
+                        this.setCursor(0);
                     }
                 }
 
-                state.properties.applyProperties(form, this.cursor + (this.playing ? context.getTransition() : 0));
+                state.properties.applyProperties(form, this.getCursor(context.getTransition()));
             }
         }
 
@@ -1182,6 +1197,27 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
     @Override
     public void setCursor(int tick)
     {
-        this.cursor = tick;
+        this.setCursor((float) tick);
+    }
+
+    @Override
+    public float getCursor(float transition)
+    {
+        return this.cursor + (this.playing ? Math.max(this.cursorFraction, transition) : this.cursorFraction);
+    }
+
+    @Override
+    public void setCursor(float tick)
+    {
+        tick = Math.max(0F, tick);
+
+        this.cursor = (int) tick;
+        this.cursorFraction = tick - this.cursor;
+    }
+
+    @Override
+    public boolean isRunning()
+    {
+        return this.playing;
     }
 }

@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
@@ -77,7 +78,8 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
     public void editClip(Position position)
     {
         Position newPos = position.copy();
-        long tick = this.editor.getCursor() - this.clip.tick.get();
+        UIContext context = this.getContext();
+        float tick = this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition()) - this.clip.tick.get();
 
         if (!this.clip.distance.isEmpty())
         {
@@ -105,7 +107,7 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
         this.insertKeyframe(tick, this.clip.fov, newPos.angle.fov);
     }
 
-    private void insertKeyframe(long tick, KeyframeChannel<Double> channel, double x)
+    private void insertKeyframe(float tick, KeyframeChannel<Double> channel, double x)
     {
         KeyframeSegment<Double> segment = channel.findSegment(tick);
         int insert = channel.insert(tick, x);

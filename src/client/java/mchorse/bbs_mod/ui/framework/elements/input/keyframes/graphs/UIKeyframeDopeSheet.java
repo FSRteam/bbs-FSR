@@ -509,13 +509,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public boolean addKeyframe(int mouseX, int mouseY)
     {
-        float tick = (float) this.keyframes.fromGraphX(mouseX);
-        UIKeyframeSheet sheet = this.getSheet(mouseY);
+        return this.addKeyframeAt(this.keyframes.fromGraphCursor(mouseX), mouseY);
+    }
 
-        if (!Window.isShiftPressed())
-        {
-            tick = Math.round(tick);
-        }
+    @Override
+    public boolean addKeyframeAt(float tick, int mouseY)
+    {
+        UIKeyframeSheet sheet = this.getSheet(mouseY);
 
         if (sheet != null)
         {
@@ -688,7 +688,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
             this.keyframes.getXAxis().setShift(this.keyframes.getXAxis().getShift() - offsetX);
         }
-        else if (Window.isShiftPressed())
+        else if (Window.isShiftPressed() && !Window.isCtrlPressed())
         {
             this.dopeSheet.mouseScroll(context);
         }
@@ -732,7 +732,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         float offset = (float) (this.keyframes.fromGraphX(originalX) - originalT);
         float tick = (float) this.keyframes.fromGraphX(context.mouseX) - offset;
 
-        if (!Window.isShiftPressed())
+        if (this.keyframes.isSnappingToTicks())
         {
             tick = Math.round(this.keyframes.fromGraphX(context.mouseX) - offset);
         }
@@ -876,18 +876,13 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 }
             }
         }
-        else if (Window.isCtrlPressed())
+        else if (Window.isCtrlPressed() && !this.keyframes.isDuplicatingAtPlayhead())
         {
             UIKeyframeSheet sheet = this.getSheet(context.mouseY);
 
             if (sheet != null)
             {
-                float tick = (float) this.keyframes.fromGraphX(context.mouseX);
-
-                if (!Window.isShiftPressed())
-                {
-                    tick = Math.round(tick);
-                }
+                float tick = this.keyframes.getCreationTick(context);
 
                 this.renderPreviewKeyframe(context, sheet, tick, Colors.WHITE);
             }
@@ -895,8 +890,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         else if (Window.isAltPressed() && !Window.isShiftPressed())
         {
             List<UIKeyframeSheet> sheets = new ArrayList<>();
+            boolean atPlayhead = this.keyframes.isDuplicatingAtPlayhead();
+            float tick = this.keyframes.getDuplicationTick(context);
 
-            for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+            for (UIKeyframeSheet sheet : atPlayhead ? this.getSheets() : this.getInteractiveSheets())
             {
                 if (sheet.selection.hasAny())
                 {
@@ -904,7 +901,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 }
             }
 
-            if (sheets.size() == 1)
+            if (sheets.size() == 1 && !atPlayhead)
             {
                 UIKeyframeSheet current = sheets.get(0);
                 UIKeyframeSheet hovered = this.getSheet(context.mouseY);
@@ -921,7 +918,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                     Keyframe first = selected.get(0);
                     Keyframe keyframe = selected.get(i);
 
-                    this.renderPreviewKeyframe(context, hovered, Math.round(this.keyframes.fromGraphX(context.mouseX)) + (keyframe.getTick() - first.getTick()), Colors.YELLOW);
+                    this.renderPreviewKeyframe(context, hovered, tick + (keyframe.getTick() - first.getTick()), Colors.YELLOW);
                 }
             }
             else
@@ -940,13 +937,18 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
                 for (UIKeyframeSheet sheet : sheets)
                 {
+                    if (!this.isVisible(sheet))
+                    {
+                        continue;
+                    }
+
                     List<Keyframe> selected = sheet.selection.getSelected();
 
                     for (int i = 0; i < selected.size(); i++)
                     {
                         Keyframe keyframe = selected.get(i);
 
-                        this.renderPreviewKeyframe(context, sheet, Math.round(this.keyframes.fromGraphX(context.mouseX)) + (keyframe.getTick() - min), Colors.YELLOW);
+                        this.renderPreviewKeyframe(context, sheet, tick + (keyframe.getTick() - min), Colors.YELLOW);
                     }
                 }
             }
@@ -1313,7 +1315,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             }
 
             boolean isPointHover = this.isNear(this.keyframes.toGraphX(frame.getTick()), my, context.mouseX, context.mouseY, Window.isAltPressed() && Window.isShiftPressed());
-            boolean toRemove = Window.isCtrlPressed() && isPointHover;
+            boolean toRemove = this.keyframes.isRemovingKeyframe() && isPointHover;
 
             if (this.keyframes.isSelecting())
             {

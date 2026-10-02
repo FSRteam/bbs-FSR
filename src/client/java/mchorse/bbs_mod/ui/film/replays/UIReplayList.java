@@ -1040,7 +1040,8 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         UINumberOverlayPanel offsetPanel = new UINumberOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_PASTE_KEYFRAMES_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_PASTE_KEYFRAMES_DESCRIPTION, (n) ->
         {
-            int tick = this.panel.getCursor();
+            UIContext context = this.getContext();
+            float tick = this.panel.getKeyframeCursor(context == null ? 0F : context.getTransition());
 
             for (Replay replay : selectedReplays)
             {

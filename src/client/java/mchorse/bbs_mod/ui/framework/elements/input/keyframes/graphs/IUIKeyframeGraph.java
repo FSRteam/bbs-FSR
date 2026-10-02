@@ -116,6 +116,15 @@ public interface IUIKeyframeGraph
 
     public boolean addKeyframe(int mouseX, int mouseY);
 
+    /** Create at exact time without converting the playhead through a screen pixel. */
+    public boolean addKeyframeAt(float tick, int mouseY);
+
+    public default void updateZoom()
+    {}
+
+    public default void stopZoom()
+    {}
+
     public default Keyframe addKeyframe(UIKeyframeSheet sheet, float tick, Object value)
     {
         KeyframeSegment segment = sheet.channel.find(tick);
