@@ -70,7 +70,7 @@ public final class FilmFrustumCulling
      * each pass really did get a frustum built from its own camera, which is what makes culling by
      * it safe.</p>
      */
-    public static boolean PROBE = true;
+    public static boolean PROBE = false;
 
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-film-frustum");
 
