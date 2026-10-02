@@ -30,6 +30,73 @@ public class UIKeyframeSheet extends UIKeyframeElement
     public final int defaultColor;
     private final String filterKey;
 
+    /** Display-only grouping for dope-sheet sections: never a channel, selection, or filter entry. */
+    public record Section(String id, IKey title, Icon icon, int color) {}
+
+    /** Display-only grouping slot, set by the replay editor (see B7a-3 dope-sheet sections). */
+    public Section section;
+
+    /** Tree hierarchy for collapsible timeline rows (see B7a-3 A). Additive; existing flat rendering is untouched. */
+    public UIKeyframeSheet parent;
+    public final List<UIKeyframeSheet> children = new ArrayList<>();
+
+    public void setParent(UIKeyframeSheet parent)
+    {
+        if (this.parent == parent)
+        {
+            return;
+        }
+
+        if (this.parent != null)
+        {
+            this.parent.children.remove(this);
+        }
+
+        this.parent = parent;
+
+        if (parent != null && !parent.children.contains(this))
+        {
+            parent.children.add(this);
+        }
+    }
+
+    public int getDepth()
+    {
+        int depth = 0;
+        UIKeyframeSheet current = this.parent;
+
+        while (current != null)
+        {
+            depth++;
+            current = current.parent;
+        }
+
+        return depth;
+    }
+
+    /** Whether any ancestor is folded away (the fold state lives in the rendering layer, populated via setParent). */
+    public boolean isFolded()
+    {
+        UIKeyframeSheet current = this.parent;
+
+        while (current != null)
+        {
+            if (current.folded)
+            {
+                return true;
+            }
+
+            current = current.parent;
+        }
+
+        return false;
+    }
+
+    /** Fold flag, owned by the dope-sheet rendering layer (B7a-3 B); additive so existing code ignores it. */
+    public boolean folded;
+
+
+
     public final KeyframeChannel channel;
     public final KeyframeSelection selection;
     public final BaseValueBasic property;
