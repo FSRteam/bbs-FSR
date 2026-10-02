@@ -12,6 +12,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -58,10 +59,19 @@ public class UIColorPicker extends UIElement
     private static final int PREVIEW_WIDTH = PREVIEW_SIZE * 2 + 4;
 
     private static final int HEADER_HEIGHT = 30;
-    private static final int DEFAULT_WIDTH = 200;
+
+    /**
+     * The popup is the same width in both color models, so switching between them moves
+     * nothing but the surface in the middle.
+     */
+    private static final int POPUP_WIDTH = 200;
+
+    private static final int TABS_HEIGHT = 16;
+    private static final int TABS_GAP = 6;
+    private static final int FIELDS_HEIGHT = UIConstants.CONTROL_HEIGHT;
+    private static final int FIELDS_GAP = 6;
     private static final int RGB_SLIDER_HEIGHT = 50;
     private static final int RGB_SECTION_GAP = 15;
-    private static final int HSV_PICKER_SIZE = 132;
     private static final int HSV_SLIDER_WIDTH = 12;
     private static final int HSV_SLIDER_GAP = 6;
     private static final int HSV_SECTION_GAP = 15;
@@ -83,6 +93,8 @@ public class UIColorPicker extends UIElement
 
     public UITextbox input;
     public UIIcon eyedropper;
+    public UIColorPickerTabs tabs;
+    public UIColorFields fields;
     public UIColorPalette recent;
     public UIColorPalette favorite;
 
@@ -163,6 +175,13 @@ public class UIColorPicker extends UIElement
         this.eyedropper = new UIIcon(Icons.EYEDROPPER, (b) -> this.picking = !this.picking);
         this.eyedropper.tooltip(UIKeys.COLOR_EYEDROPPER);
 
+        this.tabs = new UIColorPickerTabs(this::setHsvPicker);
+        this.fields = new UIColorFields(this::applyChannel);
+
+        /* While the popup is still unattached the row is built at once; adding children is
+         * deferred for a mounted element, which would cost the first frame they show. */
+        this.fields.mode(this.isHsvPicker(), this.editAlpha);
+
         this.recent = new UIColorPalette((color) ->
         {
             this.setColor(color.getARGBColor());
@@ -195,7 +214,7 @@ public class UIColorPicker extends UIElement
             }
         });
 
-        this.eventPropagataion(EventPropagation.BLOCK_INSIDE).add(this.input, this.eyedropper, this.favorite, this.recent);
+        this.eventPropagataion(EventPropagation.BLOCK_INSIDE).add(this.input, this.eyedropper, this.tabs, this.fields, this.favorite, this.recent);
     }
 
     public UIColorPicker editAlpha()
@@ -203,17 +222,61 @@ public class UIColorPicker extends UIElement
         this.editAlpha = true;
         this.input.textbox.setLength(9);
 
+        /* The numeric row only gains its alpha field now, and doing it while the popup is
+         * still unattached is what keeps that field out of a deferred add. */
+        this.syncFields();
+
         return this;
     }
 
     public void updateField()
     {
+        this.syncFields();
+
         if (this.input.isFocused())
         {
             return;
         }
 
         this.syncHexInputAfterEdit();
+    }
+
+    /** Show the current color in the numeric row, in the units of the model on show. */
+    private void syncFields()
+    {
+        boolean hsv = this.isHsvPicker();
+
+        this.fields.mode(hsv, this.editAlpha);
+
+        if (hsv)
+        {
+            this.fields.update(this.hsv.r, this.hsv.g, this.hsv.b, this.hsv.a);
+        }
+        else
+        {
+            this.fields.update(this.color.r, this.color.g, this.color.b, this.color.a);
+        }
+    }
+
+    /**
+     * One channel was typed or dragged in the numeric row. Channels are numbered the way
+     * {@link Color#set(float, int)} numbers them once shifted by one, so the fourth is alpha
+     * in both models.
+     */
+    private void applyChannel(int channel, float value)
+    {
+        if (this.isHsvPicker())
+        {
+            this.hsv.set(value, channel + 1);
+            this.syncColorFromHsv();
+        }
+        else
+        {
+            this.color.set(value, channel + 1);
+            this.syncHsvFromColor();
+        }
+
+        this.notifyColorChanged();
     }
 
     private void syncHexInputAfterEdit()
@@ -465,6 +528,7 @@ public class UIColorPicker extends UIElement
          * picker or the settings screen, and a popup laid out for one model must never be
          * painted as the other. {@link #render} notices the drift and lays out again. */
         this.layoutHsv = layout.hsv;
+        this.tabs.setHsv(layout.hsv);
 
         this.w(layout.width);
         this.h(layout.height);
@@ -479,6 +543,9 @@ public class UIColorPicker extends UIElement
 
         this.input.resize();
         this.eyedropper.resize();
+        this.tabs.resize();
+        this.syncFields();
+        this.fields.resize();
         this.favorite.resize();
         this.recent.resize();
 
@@ -493,12 +560,14 @@ public class UIColorPicker extends UIElement
         PickerLayout layout = new PickerLayout();
 
         layout.hsv = this.isHsvPicker();
-        layout.width = layout.hsv ? this.getHsvWidth() : DEFAULT_WIDTH;
+        layout.width = POPUP_WIDTH;
         layout.paletteWidth = layout.width - POPUP_PADDING * 2;
         layout.favoriteHeight = this.favorite.colors.isEmpty() ? 0 : this.favorite.getHeight(layout.paletteWidth);
         layout.recentHeight = this.recent.colors.isEmpty() ? 0 : this.recent.getHeight(layout.paletteWidth);
-        layout.contentY = HEADER_HEIGHT;
-        layout.paletteY = layout.contentY + (layout.hsv ? HSV_PICKER_SIZE + HSV_SECTION_GAP : RGB_SLIDER_HEIGHT + RGB_SECTION_GAP);
+        layout.surfaceY = HEADER_HEIGHT + TABS_HEIGHT + TABS_GAP;
+        layout.surfaceHeight = layout.hsv ? this.hsvSquareSize(layout.paletteWidth) : RGB_SLIDER_HEIGHT;
+        layout.fieldsY = layout.surfaceY + layout.surfaceHeight + FIELDS_GAP;
+        layout.paletteY = layout.fieldsY + FIELDS_HEIGHT + (layout.hsv ? HSV_SECTION_GAP : RGB_SECTION_GAP);
         layout.height = layout.paletteY;
 
         /* Both palettes are placed from the layout alone. Reading one's area to place the
@@ -532,7 +601,7 @@ public class UIColorPicker extends UIElement
     private void applyLayout(PickerLayout layout)
     {
         int contentX = this.area.x + POPUP_PADDING;
-        int contentY = this.area.y + layout.contentY;
+        int surfaceY = this.area.y + layout.surfaceY;
         int headerY = this.area.y + POPUP_PADDING;
         int previewX = this.area.ex() - POPUP_PADDING - PREVIEW_WIDTH;
         int eyedropperX = previewX - POPUP_PADDING - EYEDROPPER_SIZE;
@@ -540,28 +609,44 @@ public class UIColorPicker extends UIElement
         this.preview.set(previewX, headerY, PREVIEW_WIDTH, PREVIEW_SIZE);
         this.eyedropper.set(eyedropperX, headerY, EYEDROPPER_SIZE, INPUT_HEIGHT);
         this.input.set(contentX, headerY, eyedropperX - POPUP_PADDING - contentX, INPUT_HEIGHT);
+        this.tabs.set(contentX, this.area.y + HEADER_HEIGHT, layout.paletteWidth, TABS_HEIGHT);
 
         if (layout.hsv)
         {
-            this.layoutHsv(contentX, contentY);
+            this.layoutHsv(contentX, surfaceY, layout.paletteWidth);
         }
         else
         {
-            this.layoutRgb(contentX, contentY, layout.paletteWidth);
+            this.layoutRgb(contentX, surfaceY, layout.paletteWidth);
         }
 
+        this.fields.set(contentX, this.area.y + layout.fieldsY, layout.paletteWidth, FIELDS_HEIGHT);
         this.favorite.set(contentX, this.area.y + layout.favoriteY, layout.paletteWidth, layout.favoriteHeight);
         this.recent.set(contentX, this.area.y + layout.recentY, layout.paletteWidth, layout.recentHeight);
     }
 
-    private void layoutHsv(int x, int y)
+    /**
+     * The saturation/value field is a square — saturation across, value down, at the same
+     * rate — so its side is whatever the sliders down its right leave, and the popup grows
+     * to that. The sliders stand as tall as it does.
+     */
+    private int hsvSquareSize(int width)
     {
-        this.picker.set(x, y, HSV_PICKER_SIZE, HSV_PICKER_SIZE);
-        this.hue.set(this.picker.ex() + HSV_SLIDER_GAP, y, HSV_SLIDER_WIDTH, HSV_PICKER_SIZE);
+        int sliders = HSV_SLIDER_GAP + HSV_SLIDER_WIDTH + (this.editAlpha ? HSV_SLIDER_GAP + HSV_SLIDER_WIDTH : 0);
+
+        return width - sliders;
+    }
+
+    private void layoutHsv(int x, int y, int width)
+    {
+        int size = this.hsvSquareSize(width);
+
+        this.picker.set(x, y, size, size);
+        this.hue.set(this.picker.ex() + HSV_SLIDER_GAP, y, HSV_SLIDER_WIDTH, size);
 
         if (this.editAlpha)
         {
-            this.alpha.set(this.hue.ex() + HSV_SLIDER_GAP, y, HSV_SLIDER_WIDTH, HSV_PICKER_SIZE);
+            this.alpha.set(this.hue.ex() + HSV_SLIDER_GAP, y, HSV_SLIDER_WIDTH, size);
         }
         else
         {
@@ -596,18 +681,6 @@ public class UIColorPicker extends UIElement
 
         this.picker.set(0, 0, 0, 0);
         this.hue.set(0, 0, 0, 0);
-    }
-
-    private int getHsvWidth()
-    {
-        int width = POPUP_PADDING * 2 + HSV_PICKER_SIZE + HSV_SLIDER_GAP + HSV_SLIDER_WIDTH;
-
-        if (this.editAlpha)
-        {
-            width += HSV_SLIDER_GAP + HSV_SLIDER_WIDTH;
-        }
-
-        return width;
     }
 
     @Override
@@ -967,6 +1040,26 @@ public class UIColorPicker extends UIElement
         return BBSSettings.hsvColorPicker.get();
     }
 
+    /**
+     * Switch color models. The choice is remembered in the settings, so it's still one
+     * setting for every picker — it just isn't only reachable from the settings screen.
+     */
+    private void setHsvPicker(boolean hsv)
+    {
+        if (this.isHsvPicker() == hsv)
+        {
+            return;
+        }
+
+        BBSSettings.hsvColorPicker.set(hsv);
+
+        this.dragging = -1;
+        this.layoutHsv = hsv;
+        this.tabs.setHsv(hsv);
+        this.syncFields();
+        this.resize();
+    }
+
     private void renderHsv(UIContext context)
     {
         this.renderSliderBackdrop(context.batcher, this.picker, this.editAlpha ? this.alpha.ex() : this.hue.ex());
@@ -1034,7 +1127,9 @@ public class UIColorPicker extends UIElement
         {
             context.batcher.text(UIKeys.COLOR_RECENT.get(), this.recent.area.x, this.recent.area.y - 10, Colors.GRAY);
         }
-    }    private void renderHsvSquare(Batcher2D batcher)
+    }
+
+    private void renderHsvSquare(Batcher2D batcher)
     {
         int hueColor = Colors.HSVtoRGB(this.tempColor, this.hsv.r, 1F, 1F).getARGBColor();
 
@@ -1100,7 +1195,9 @@ public class UIColorPicker extends UIElement
         public int width;
         public int height;
         public int paletteWidth;
-        public int contentY;
+        public int surfaceY;
+        public int surfaceHeight;
+        public int fieldsY;
         public int paletteY;
         public int favoriteY;
         public int recentY;
