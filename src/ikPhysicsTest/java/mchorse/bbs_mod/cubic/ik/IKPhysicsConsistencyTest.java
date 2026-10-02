@@ -69,6 +69,7 @@ public final class IKPhysicsConsistencyTest
         testBobjShortChainTipLimit();
         testCubicMultiBoneTipLimit();
         testBobjMultiBoneTipLimit();
+        testEffectorTracksControllerAndIsNotClamped();
         testPhysicsUsesConstrainedParentAndClampsTwist();
         testBobjPhysicsUsesConstrainedParentAndClampsTwist();
 
@@ -670,10 +671,13 @@ public final class IKPhysicsConsistencyTest
      * runs and nothing re-clamps the effector after it.
      *
      * <p>That was not true of the removed direct solver, which clamped the effector
-     * too ({@code ModelIKApplier.clampFinalOrientation}). Pinning the production
-     * contract here keeps the difference visible instead of silently lost with the
-     * deleted assertions; enforcing the effector limit is a real behaviour change
-     * and deliberately out of R5-0's scope.
+     * too ({@code ModelIKApplier.clampFinalOrientation}) — but R5-0 established that
+     * whole solver was reachable only from this source set, so its clamp never ran in
+     * the game and these four tests used to be green by exercising it. The behaviour
+     * pinned here is what upstream {@code da84e5f8f} does as well ("tip orientation
+     * wins", see {@link #testEffectorTracksControllerAndIsNotClamped}), so this is the
+     * migration target, not a gap: re-adding a clamp would be a divergence from
+     * upstream, and would break the exact parent cancellation the tip follow relies on.
      */
     private static void testCubicShortChainTipLimit()
     {
@@ -694,7 +698,7 @@ public final class IKPhysicsConsistencyTest
         require(fixture.root.orient != null, "single-bone cubic chain skipped quaternion reconstruction");
         require(fixture.tip.orient != null, "cubic tipRotation did not write a tip quaternion");
         assertWithin(fixture.root.orient, 25F, "cubic root final limit");
-        assertEffectorFollowsController(fixture.tip.orient, "cubic single-bone effector");
+        assertEffectorFollowsController(fixture.tip.orient, 5F, "cubic single-bone effector");
     }
 
     /** BOBJ twin of {@link #testCubicShortChainTipLimit}: same contract, bind-matrix flavour. */
@@ -717,10 +721,10 @@ public final class IKPhysicsConsistencyTest
         require(fixture.root.orient != null, "single-bone BOBJ chain skipped quaternion reconstruction");
         require(fixture.tip.orient != null, "BOBJ tipRotation did not write a tip quaternion");
         assertWithin(fixture.root.orient, 25F, "BOBJ root final limit");
-        assertEffectorFollowsController(fixture.tip.orient, "BOBJ single-bone effector");
+        assertEffectorFollowsController(fixture.tip.orient, 5F, "BOBJ single-bone effector");
     }
 
-    /** Multi-bone cubic twin of {@link #testCubicShortChainTipLimit}: the interior bones are clamped, the effector is not. */
+    /** Multi-bone cubic twin of {@link #testCubicShortChainTipLimit}: the interior bones clamp in the solver, the effector deliberately does not. */
     private static void testCubicMultiBoneTipLimit()
     {
         CubicMultiFixture fixture = cubicMultiFixture(false);
@@ -743,7 +747,172 @@ public final class IKPhysicsConsistencyTest
         require(fixture.tip.orient != null, "multi-bone cubic tipRotation skipped the effector quaternion");
         assertWithin(fixture.root.orient, 20F, "multi-bone cubic root final limit");
         assertWithin(fixture.mid.orient, 15F, "multi-bone cubic child final limit");
-        assertEffectorFollowsController(fixture.tip.orient, "multi-bone cubic effector");
+        assertEffectorFollowsController(fixture.tip.orient, 5F, "multi-bone cubic effector");
+    }
+
+    /**
+     * R5-0b (task-22): the effector follows the controller one-for-one, and is
+     * deliberately NOT clamped to its own constraint.
+     *
+     * <p>This is the contract the deleted {@code ModelIKApplier} did not have: that
+     * file clamped the FINAL local quaternion of every bone it wrote, the tip
+     * included ({@code clampFinalOrientation}, called on the tip at the pre-deletion
+     * {@code :476/:507/:700/:957}). R5-0 proved that whole solver unreachable outside
+     * this source set, so the clamp was never on the production path — and the four
+     * {@code *TipLimit} tests above used to be green by testing it. The production
+     * applier instead hands a {@code BoneConstraint} to the solver as joint-space
+     * limits ({@code ModelIKDlsApplier.applyGroup:605-608}), which can only reach the
+     * tree's NODES — the node set is every work id but the LAST, because a bone's own
+     * angles move only its descendants — so the effector is point, never variable,
+     * and its authored range is ignored. That is not a migration gap: upstream
+     * {@code da84e5f8f} has no effector clamp either, and its tip writer documents the
+     * intent as "tip orientation wins" ({@code ModelIKApplier.java:995-1004}). R5-0
+     * showed the two files are the same code, so this test pins the UPSTREAM
+     * behaviour, and its whole purpose is to stop someone from helpfully "fixing" it.
+     *
+     * <p>WHY upstream can get away with it — and why a clamp makes things WORSE: the
+     * tip writer sets {@code tipLocal = tipParent⁻¹ · tipTarget}, so the drawn tip is
+     * {@code parent · parent⁻¹ · tipTarget = tipTarget} and the parent frame cancels
+     * EXACTLY, by construction. The effector therefore tracks the controller's
+     * rotation one-for-one no matter what the chain underneath does, including across
+     * whatever discontinuities the solve has. Clamping {@code tipLocal} destroys that
+     * cancellation and hands the drawn tip the parent's own motion instead. Measured
+     * while a clamp was briefly in place (same sweep, ±5° tip limit): the unclamped
+     * tip advanced at most 1.001°/controller-degree, while the clamped tip jumped
+     * 37.85° in a single controller degree — a parent bone's basin flip that the
+     * cancellation had been covering.
+     *
+     * <p>The sweep drives the render path's own call shape (no workspace), because that
+     * is the branch where the contract is stated most literally:
+     * {@code ModelIKDlsApplier.resolveChain:470-473} takes
+     * {@code tipTarget = targetFrame.worldRotation()} — the controller's world rotation,
+     * read from the very frame map the applier builds. So the check is not "does the tip
+     * track a formula the test inferred", it is "does the drawn tip equal the same
+     * quaternion the applier was handed as the controller".
+     */
+    private static void testEffectorTracksControllerAndIsNotClamped()
+    {
+        CubicMultiFixture fixture = cubicMultiFixture(false);
+        ModelIKCache.CompiledChain chain = compiledChain(List.of("root", "mid", "tip"), false, true);
+        Map<String, BoneConstraint> limits = Map.of(
+            "root", limit(-20F, 20F),
+            "mid", limit(-15F, 15F),
+            "tip", limit(-5F, 5F)
+        );
+
+        float tipLimit = 5F;
+        float maxTrackingError = 0F;
+        float maxStep = 0F;
+        float maxDirectedViolation = 0F;
+        float maxEffectorViolation = 0F;
+        int samples = 0;
+        Quaternionf previous = null;
+
+        for (int deg = -180; deg <= 180; deg++)
+        {
+            fixture.model.resetPose();
+            fixture.target.current.translate.add(16F, 0F, 0F);
+            fixture.target.current.rotate.z = deg;
+            applyWithoutWorkspace(fixture.model, chain, limits);
+
+            require(fixture.root.orient != null && fixture.mid.orient != null && fixture.tip.orient != null,
+                "the effector-tracking sweep did not solve at controller " + deg);
+
+            /* The DIRECTED bones ARE limited: the in-solver limit path is the one place a
+             * constraint is honoured, and it is exact to float precision. That also makes the
+             * sweep non-vacuous — a solve that ignored the stack entirely would leave the tip
+             * tracking for the wrong reason. */
+            maxDirectedViolation = Math.max(maxDirectedViolation, Math.max(
+                violationDegrees(fixture.root.orient, 20F),
+                violationDegrees(fixture.mid.orient, 15F)));
+
+            /* The effector is NOT limited: its authored range is ignored, by design. Read on
+             * the LOCAL quaternion, which is where a clamp would have bitten. */
+            maxEffectorViolation = Math.max(maxEffectorViolation, violationDegrees(fixture.tip.orient, tipLimit));
+
+            /* Drawn tip vs the controller, both through the applier's own frame collection. */
+            Quaternionf tip = worldRotationOf(fixture.model, "tip");
+            Quaternionf controller = worldRotationOf(fixture.model, "target");
+
+            maxTrackingError = Math.max(maxTrackingError, angleBetweenDegrees(tip, controller));
+
+            if (previous != null)
+            {
+                maxStep = Math.max(maxStep, angleBetweenDegrees(previous, tip));
+            }
+
+            previous = tip;
+            samples++;
+        }
+
+        System.out.println("  effector-tracking sweep (" + samples + " controller angles, tip limit +/-" + tipLimit + " degrees):");
+        System.out.println("    directed-bone residual violation (root/mid): " + maxDirectedViolation + " degrees");
+        System.out.println("    effector violation of its own constraint:    " + maxEffectorViolation + " degrees");
+        System.out.println("    drawn tip vs controller, worst difference:   " + maxTrackingError + " degrees");
+        System.out.println("    drawn-tip step per controller degree:        " + maxStep + " degrees");
+
+        /* The directed bones honour the constraint stack ... */
+        require(maxDirectedViolation <= EPS,
+            "the directed bones' in-solver limits were not exact: " + maxDirectedViolation + " degrees over");
+
+        /* ... while the effector does not, which is upstream's documented intent. A clamp
+         * would drive this to ~0, so this is the assertion that fails the moment someone
+         * re-adds one. The bound is far below the ~174 degrees this sweep measures and far
+         * above the float noise of a clamped pose, so it is not a threshold tuned to the
+         * current numbers. */
+        require(maxEffectorViolation > 45F,
+            "the effector obeyed its own +/-" + tipLimit + "-degree constraint (worst violation "
+                + maxEffectorViolation + " degrees): something is clamping the effector, which upstream's "
+                + "'tip orientation wins' does not do, and which breaks the exact parent cancellation "
+                + "the tip follow relies on");
+
+        /* The consequence of that missing clamp, pinned two ways. First the contract itself:
+         * the drawn tip IS the controller. A clamp on tipLocal would leave the drawn tip at
+         * parent·clamp(...), i.e. off the controller by however far the parent had swung —
+         * tens of degrees here, not the float tolerance this allows. */
+        require(maxTrackingError <= 1F,
+            "the drawn tip is not the controller: worst difference " + maxTrackingError + " degrees");
+
+        /* Second, the kinematic consequence: one degree of controller becomes one degree of
+         * tip, so the effector never tears. Both bounds are generous relative to the ~0.002
+         * degree that acos noise alone produces at this scale, and both are exceeded by an
+         * order of magnitude the moment a clamp comes back. */
+        require(maxStep <= 1.5F,
+            "the drawn tip tore between adjacent controller degrees: " + maxStep + " degrees");
+    }
+
+    /** How far past a symmetric ZYX degree limit an orientation sits, on its worst axis. */
+    private static float violationDegrees(Quaternionf orientation, float limit)
+    {
+        Vector3f euler = Matrices.toEulerZYXDegrees(orientation);
+
+        return Math.max(0F, Math.max(Math.abs(euler.x), Math.max(Math.abs(euler.y), Math.abs(euler.z))) - limit);
+    }
+
+    /**
+     * A bone's drawn world rotation, from an INDEPENDENT collection — deliberately the same
+     * call the applier makes ({@code ModelIKDlsApplier:191}, the four-argument overload), so
+     * that what is compared here is the same quantity the applier read. {@code applyStretch}
+     * stays false for that reason: the applier's frames are the unstretched ones.
+     */
+    private static Quaternionf worldRotationOf(IModel model, String bone)
+    {
+        Map<String, CubicRenderer.PivotFrame> frames = new HashMap<>();
+
+        ModelPivotFrames.collect(model, Set.of(bone), frames, null);
+
+        CubicRenderer.PivotFrame frame = frames.get(bone);
+
+        require(frame != null, "no pivot frame was collected for " + bone);
+
+        return new Quaternionf(frame.worldRotation());
+    }
+
+    private static float angleBetweenDegrees(Quaternionf a, Quaternionf b)
+    {
+        float dot = Math.abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);
+
+        return (float) Math.toDegrees(2D * Math.acos(Math.min(1D, dot)));
     }
 
     /** Multi-bone BOBJ twin of {@link #testCubicMultiBoneTipLimit}. */
@@ -769,7 +938,7 @@ public final class IKPhysicsConsistencyTest
         require(fixture.tip.orient != null, "multi-bone BOBJ tipRotation skipped the effector quaternion");
         assertWithin(fixture.root.orient, 20F, "multi-bone BOBJ root final limit");
         assertWithin(fixture.mid.orient, 15F, "multi-bone BOBJ child final limit");
-        assertEffectorFollowsController(fixture.tip.orient, "multi-bone BOBJ effector");
+        assertEffectorFollowsController(fixture.tip.orient, 5F, "multi-bone BOBJ effector");
     }
 
     private static void testPhysicsUsesConstrainedParentAndClampsTwist()
@@ -884,6 +1053,17 @@ public final class IKPhysicsConsistencyTest
     /** The render path's own call shape: {@code ModelIKRuntime} passes no workspace. */
     private static void applyWithoutWorkspace(IModel model, ModelIKCache.CompiledChain chain)
     {
+        applyWithoutWorkspace(model, chain, Collections.emptyMap());
+    }
+
+    /**
+     * The render path's call shape with a constraint stack attached. Because no workspace is
+     * passed, {@code ModelIKDlsApplier.resolveChain:470-473} takes the controller's world
+     * rotation directly instead of the bind-delta branch, which makes the "tip wins" contract
+     * directly observable.
+     */
+    private static void applyWithoutWorkspace(IModel model, ModelIKCache.CompiledChain chain, Map<String, BoneConstraint> limits)
+    {
         ModelIKDlsApplier.apply(
             model,
             List.of(chain),
@@ -894,7 +1074,7 @@ public final class IKPhysicsConsistencyTest
             null,
             null,
             null,
-            Collections.emptyMap()
+            limits
         );
     }
 
@@ -1047,18 +1227,35 @@ public final class IKPhysicsConsistencyTest
     }
 
     /**
-     * The applier's effector contract: with {@code tipRotation} on, the effector bone
-     * is written from the controller's world orientation by the tip-follow snap, and
-     * NOT clamped by the applier. Every fixture here turns its controller by 90
-     * degrees, so a solved effector that came out at rest means the snap never ran,
-     * and one that stayed inside a 5-degree limit would mean the applier had started
-     * clamping the effector — which it does not, and which would change behaviour.
+     * The applier's effector contract: with {@code tipRotation} on, the effector bone is
+     * written from the controller's world orientation by the tip-follow snap, and that
+     * written orientation is deliberately NOT clamped to the effector's own
+     * {@link BoneConstraint}. The effector is not a solver joint, the joint-space limits
+     * handed to the solver therefore never reach it, and upstream
+     * ({@code da84e5f8f}, "tip orientation wins") does not clamp it either — so the limit
+     * is inert on this bone by design. See
+     * {@link #testEffectorTracksControllerAndIsNotClamped} for the sweep that pins the
+     * resulting one-for-one tracking and explains why clamping here would be a regression.
+     *
+     * <p>Both halves of THIS helper matter: the fixtures here turn their controller by 90
+     * degrees, so an effector that stayed at rest would mean the snap never ran at all, and
+     * one sitting inside the authored range would mean a clamp had come back. The "did it
+     * run" check is an explicit angle rather than {@link #sameRotation}: a 5-degree rotation
+     * is only 0.99905 away from identity, inside that helper's {@code EPS} band, so with a
+     * tight limit the two are indistinguishable by dot product.
      */
-    private static void assertEffectorFollowsController(Quaternionf effector, String label)
+    private static void assertEffectorFollowsController(Quaternionf effector, float limit, String label)
     {
         require(effector != null, label + " was never written");
-        require(!sameRotation(effector, new Quaternionf()),
+
+        float swung = angleBetweenDegrees(effector, new Quaternionf());
+
+        require(swung > 0.5F,
             label + " stayed at rest despite a 90-degree controller turn: the tip snap did not run");
+        require(violationDegrees(effector, limit) > 1F,
+            label + " stayed inside its own +/-" + limit + "-degree constraint: the effector is being "
+                + "clamped, which upstream ('tip orientation wins') does not do and which breaks the exact "
+                + "parent cancellation the tip follow relies on");
     }
 
     private static void assertWithin(Quaternionf quaternion, float limit, String label)
