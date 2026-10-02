@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueString;
@@ -178,6 +179,8 @@ public class BBSSettings {
 	public static ValuePhysicsDebug physicsDebug;
 	public static ValueBoolean editorSnapToMarkers;
 	public static ValueBoolean editorSnapToTicks;
+	/** Snapping to the film's own markers — unlike {@link #editorSnapToMarkers}, which is the ruler's notches. */
+	public static ValueBoolean editorSnapToFilmMarkers;
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
 	public static ValueBoolean editorRestartOnSeek;
@@ -721,7 +724,25 @@ public class BBSSettings {
 		layoutMigrated |= migrateLegacyValue(root, "multiskin", "multithreaded", "misc", "multiskin_multithreaded");
 		layoutMigrated |= migrateLegacyValue(root, "entity_selectors", "whitelist", "misc", "entity_selectors_whitelist");
 
-		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated || layoutMigrated;
+		/* Extra hotbar slots now fold under slot 0 instead of being filtered away by
+		 * default. Clear that old filter once; manual filtering afterwards must survive
+		 * reloads, so the flag is what keeps this from running again. */
+		boolean hotbarFilterMigrated = false;
+
+		if (!appearance.getBool("hotbar_filter_migrated")) {
+			HashSet<String> slots = new HashSet<>();
+
+			for (int i = 1; i < ReplayKeyframes.HOTBAR_SIZE; i++) {
+				slots.add(ReplayKeyframes.hotbarChannelId(i));
+			}
+
+			appearance.getList("disabled_sheets").elements.removeIf(value -> value.isString() && slots.contains(value.asString()));
+			appearance.putBool("hotbar_filter_migrated", true);
+			root.put("appearance", appearance);
+			hotbarFilterMigrated = true;
+		}
+
+		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated || layoutMigrated || hotbarFilterMigrated;
 	}
 
 	private static boolean migrateLegacyCategory(MapType root, String oldCategory, String newCategory, String... keys) {
@@ -763,12 +784,11 @@ public class BBSSettings {
 	}
 
 	public static void register(SettingsBuilder builder) {
-		/* Channels the timeline keeps folded away until they are asked for: the inventory
-		 * past the held slot, the armour, the states the entity is put into, the velocity
-		 * readout, and the gamepad axes nothing binds by default. */
+		/* Channels the timeline keeps folded away until they are asked for: the
+		 * armour, the states the entity is put into, the velocity readout, and the
+		 * gamepad axes nothing binds by default. Hotbar slots past the first are no
+		 * longer hidden: they fold under slot 0 in the timeline instead (B7a-3 D). */
 		HashSet<String> defaultFilters = new HashSet<>(Arrays.asList(
-			"item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4",
-			"item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8",
 			"selected_slot",
 			"item_head", "item_chest", "item_legs", "item_feet",
 			"swimming", "riding", "flying", "gliding",
@@ -802,6 +822,7 @@ public class BBSSettings {
 		builder.register(favoriteColors);
 		builder.register(recentColors);
 		builder.register(disabledSheets);
+		builder.getBoolean("hotbar_filter_migrated", true).invisible();
 		builder.register(texturePins);
 		trackStyles = new mchorse.bbs_mod.settings.values.ui.ValueTrackStyles("track_styles");
 		builder.register(trackStyles);
@@ -980,6 +1001,7 @@ public class BBSSettings {
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
 		editorSnapToTicks = builder.getBoolean("snap_to_ticks", true);
+		editorSnapToFilmMarkers = builder.getBoolean("snap_to_film_markers", true);
 		editorRewind = builder.getBoolean("rewind", true);
 		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", false);
 		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);
