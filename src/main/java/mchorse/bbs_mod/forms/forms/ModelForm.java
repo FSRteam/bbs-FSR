@@ -25,9 +25,33 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ModelForm extends Form implements PoseForm
 {
+    /**
+     * Children of this form that a build newer than this one writes and this one does not model.
+     *
+     * <p>Upstream moved the IK setup and the joint limits into a per-bone {@code bones} group and
+     * the form's global wind into {@code wind}, and it holds the per-material appearance overrides
+     * in {@code materials}. This build has none of the three — the same data travels in the
+     * {@code ik} / {@code constraints} / {@code physics} blobs it still shares with upstream's
+     * legacy reader, and it has no per-material layer at all — so nothing here claims those keys
+     * and, without this list, reading such a file and saving it would delete them.</p>
+     *
+     * <p>Kept as raw data and written back untouched — see
+     * {@link mchorse.bbs_mod.settings.values.core.ValueGroup#preservedUnknownKeys()}. That is a
+     * stopgap, not support: this build still shows no chain from such a file, and unpacking a
+     * {@code bones} entry into a chain is a real migration (its per-bone shape is not the
+     * {@code chains} shape the IK reader takes), deliberately not attempted here. What it prevents
+     * is the part that cannot be undone: the IK setup, every constraint and all physics used to
+     * disappear from disk with no warning and nothing in the editor to suggest anything had been
+     * there. Preserved, an upstream client still finds them — and one that reads this build's
+     * {@code ik} / {@code constraints} / {@code physics} on top of them prefers the newer values,
+     * because upstream applies its legacy blobs after the group.</p>
+     */
+    private static final Set<String> PRESERVED_UNKNOWN_KEYS = Set.of("bones", "materials", "wind");
+
     public final ValueLink texture = new ValueLink("texture", null);
     public final ValueLinks materialTextures = new ValueLinks("material_textures");
     public final ValueString model = new ValueString("model", "");
@@ -148,5 +172,11 @@ public class ModelForm extends Form implements PoseForm
     public String getDefaultDisplayName()
     {
         return this.model.get();
+    }
+
+    @Override
+    protected Set<String> preservedUnknownKeys()
+    {
+        return PRESERVED_UNKNOWN_KEYS;
     }
 }
