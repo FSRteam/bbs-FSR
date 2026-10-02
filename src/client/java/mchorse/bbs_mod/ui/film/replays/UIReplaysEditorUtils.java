@@ -703,7 +703,7 @@ public class UIReplaysEditorUtils
 
             BaseValueBasic formProperty = FormUtils.getProperty(form, key);
 
-            sheets.add(new UIKeyframeSheet(UIReplaysEditor.getColor(key), false, channel, formProperty).icon(UIReplaysEditor.getIcon(key)));
+            sheets.add(UIReplaysEditor.createTrackSheet(key, channel, formProperty));
         }
 
         if (form instanceof ModelForm modelForm)

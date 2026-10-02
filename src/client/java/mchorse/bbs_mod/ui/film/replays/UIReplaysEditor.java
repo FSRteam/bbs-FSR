@@ -94,6 +94,7 @@ public class UIReplaysEditor extends UIElement {
 
     private static final Map<String, Integer> COLORS = new HashMap<>();
     private static final Map<String, Icon> ICONS = new HashMap<>();
+    private static final Map<String, IKey> LABELS = new HashMap<>();
 
     /* Item channel families: the nine hotbar tracks form a warm gradient, while
      * armor tracks use a cool top-to-bottom scale. */
@@ -328,6 +329,76 @@ public class UIReplaysEditor extends UIElement {
         String topLevel = StringUtils.fileName(key);
 
         return ICONS.getOrDefault(topLevel, Icons.NONE);
+    }
+
+    /**
+     * Gives a property of an addon's its own look on the timeline.
+     *
+     * <p>Keyed by the property's own name, the last segment of a track's address — the same way
+     * BBS keys its own, so the same thing wears the same colour wherever it appears. The user's
+     * own overrides in {@code BBSSettings.trackStyles} still win over this.</p>
+     */
+    public static void registerTrackStyle(String property, Icon icon, int color)
+    {
+        if (property == null || property.isEmpty())
+        {
+            return;
+        }
+
+        if (icon != null)
+        {
+            ICONS.put(property, icon);
+        }
+
+        COLORS.put(property, color & Colors.RGB);
+    }
+
+    /** The icon registered for a property, or null when none was. */
+    public static Icon getRegisteredIcon(String property)
+    {
+        return property == null ? null : ICONS.get(StringUtils.fileName(property));
+    }
+
+    /**
+     * Gives a property of an addon's its own name on the timeline.
+     *
+     * <p>A label is not required for a track to work, which is why BBS's own rows carry one only
+     * where the property's key alone would read poorly — {@code x}, {@code y}, {@code z} being
+     * the obvious ones. The last segment of the property's address is the key, the same one
+     * {@link #registerTrackStyle(String, Icon, int)} uses.</p>
+     */
+    public static void registerTrackLabel(String property, IKey label)
+    {
+        if (property == null || property.isEmpty() || label == null)
+        {
+            return;
+        }
+
+        LABELS.put(property, label);
+    }
+
+    /** The label registered for a property, or null when none was. */
+    public static IKey getRegisteredLabel(String property)
+    {
+        return property == null ? null : LABELS.get(StringUtils.fileName(property));
+    }
+
+    /**
+     * Builds the timeline row of a replay property, wearing whatever look was registered for it.
+     *
+     * <p>The row id stays the channel's own, so filtering and selection are unaffected — only the
+     * default title comes from the label, and a name the user gave the track still overrides it in
+     * {@code UIKeyframeSheet.applyStyle()}.</p>
+     */
+    public static UIKeyframeSheet createTrackSheet(String property, KeyframeChannel channel, BaseValueBasic value)
+    {
+        IKey label = getRegisteredLabel(property);
+        int color = getColor(property);
+        UIKeyframeSheet sheet = label == null
+            ? new UIKeyframeSheet(color, false, channel, value)
+            : new UIKeyframeSheet(channel.getId(), label, color, false, channel, value);
+
+        return sheet.icon(getIcon(property));
     }
 
     public static int getColor(String key) {

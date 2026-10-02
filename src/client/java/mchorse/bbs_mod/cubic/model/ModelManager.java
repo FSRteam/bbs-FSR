@@ -32,10 +32,20 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class ModelManager implements IWatchDogListener
 {
     public static final String MODELS_PREFIX = "models/";
+
+    /**
+     * Model loaders an addon added.
+     *
+     * <p>Suppliers rather than loaders: the list is rebuilt from scratch on every asset reload,
+     * so anything appended to it directly would survive exactly until the user saved a file in the
+     * assets folder.</p>
+     */
+    private static final List<Supplier<IModelLoader>> EXTRA_LOADERS = new ArrayList<>();
 
     public final Map<String, ModelInstance> models = new HashMap<>();
 
@@ -58,6 +68,27 @@ public class ModelManager implements IWatchDogListener
         this.setupLoaders();
     }
 
+    /** Teaches BBS to read a model format of an addon's. */
+    public static void registerLoader(Supplier<IModelLoader> loader)
+    {
+        if (loader != null)
+        {
+            EXTRA_LOADERS.add(loader);
+        }
+    }
+
+    /** Removes a previously added loader supplier; returns whether it was there. */
+    public static boolean unregisterLoader(Supplier<IModelLoader> loader)
+    {
+        return loader != null && EXTRA_LOADERS.remove(loader);
+    }
+
+    /** The loader suppliers added so far, in registration order. */
+    public static List<Supplier<IModelLoader>> getRegisteredLoaders()
+    {
+        return java.util.Collections.unmodifiableList(EXTRA_LOADERS);
+    }
+
     private void setupLoaders()
     {
         this.loaders.clear();
@@ -66,6 +97,16 @@ public class ModelManager implements IWatchDogListener
         this.loaders.add(new GeoCubicModelLoader());
         this.loaders.add(new JemModelLoader());
         this.loaders.add(new VoxModelLoader());
+
+        for (Supplier<IModelLoader> extra : EXTRA_LOADERS)
+        {
+            IModelLoader loader = extra.get();
+
+            if (loader != null)
+            {
+                this.loaders.add(loader);
+            }
+        }
     }
 
     /**

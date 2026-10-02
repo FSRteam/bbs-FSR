@@ -543,6 +543,14 @@ public class BBSMod
         BBSAddonProtocolSelfCheck.run(loader, this.addonCollector);
         List<BBSAddonMod> addonEntrypoints = loader.getEntrypoints("bbs-addon", BBSAddonMod.class);
         LOGGER.info("[bbs-addon] loader resolved {} registered addon(s)", addonEntrypoints.size());
+
+        /* The api marker reaches the addon channel rather than the v1 collector above: an addon
+         * written against the upstream contract declares this one, and its event handlers are
+         * found by their @Subscribe methods when it is registered. */
+        for (mchorse.bbs_mod.api.BBSAddonMod addon : loader.getEntrypoints("bbs-addon", mchorse.bbs_mod.api.BBSAddonMod.class))
+        {
+            mchorse.bbs_mod.api.EventBus.INSTANCE.register(addon);
+        }
         LOGGER.info("[bbs-addon] common setup sees collected addon ids: {}", this.addonCollector.getAddonIds());
         this.addonManager.closeRegistrationWindow();
         assetsFolder = new File(gameFolder, "config/bbs/assets");
@@ -567,6 +575,10 @@ public class BBSMod
         LOGGER.info("[bbs-addon] posting RegisterSourcePacksEvent");
         events.post(new RegisterSourcePacksEvent(provider));
 
+        /* Before the forms, because a form of an addon's may well animate a value type of the
+         * same addon's. */
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterKeyframeFactoriesEvent());
+
         forms = new FormArchitect();
         forms
             .register(Link.bbs("billboard"), BillboardForm.class, null)
@@ -587,6 +599,7 @@ public class BBSMod
 
         LOGGER.info("[bbs-addon] posting RegisterFormsEvent");
         events.post(new RegisterFormsEvent(forms));
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterFormsEvent(forms));
 
         films = new FilmManager(() -> new File(worldFolder, "bbs/films"));
 
@@ -636,10 +649,17 @@ public class BBSMod
             .register(Link.bbs("damage"), DamageActionClip.class, new ClipFactoryData(Icons.SKULL, Colors.CURSOR))
             .register(Link.bbs("swipe"), SwipeActionClip.class, new ClipFactoryData(Icons.LIMB, Colors.ORANGE));
 
+        /* Both clip factories are complete, and the addon channel is told so before the addons
+         * get their turn at the registries below — adding a clip is done from the event. */
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterCameraClipsEvent(factoryCameraClips));
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterActionClipsEvent(factoryActionClips));
+
         this.addonManager.runCommonRegistration(settingsFolder, provider, forms, factoryCameraClips, factoryActionClips, events);
         this.runLegacyInitialization();
         events.post(new RegisterSettingsEvent());
         this.addonManager.runCommonSetup();
+
+        postAddonEvent(new mchorse.bbs_mod.api.events.BBSReadyEvent());
 
         ServerNetwork.setup();
 
@@ -656,6 +676,12 @@ public class BBSMod
         {
             this.pluginManager.start();
         }
+    }
+
+    /** Sends an addon-facing event down the addon channel; a no-op while no addon subscribed. */
+    private static void postAddonEvent(Object event)
+    {
+        mchorse.bbs_mod.api.EventBus.INSTANCE.post(event);
     }
 
     private void runLegacyInitialization()

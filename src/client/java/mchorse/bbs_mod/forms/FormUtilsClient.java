@@ -153,7 +153,7 @@ public class FormUtilsClient
             return renderer;
         }
 
-        IFormRendererFactory factory = map.get(form.getClass());
+        IFormRendererFactory factory = findFactory(form.getClass());
 
         if (factory != null)
         {
@@ -162,6 +162,33 @@ public class FormUtilsClient
             form.setRenderer(formRenderer);
 
             return formRenderer;
+        }
+
+        return null;
+    }
+
+    /**
+     * The renderer registered for a form's own class, or for the nearest class it extends.
+     *
+     * <p>Without the walk up, extending one of BBS's forms bought nothing: the subclass inherited
+     * the shape and the data and then drew as nothing at all, until it registered a renderer that
+     * was usually a copy of its parent's.</p>
+     *
+     * <p>An exact registration always wins, so BBS's own forms resolve exactly as they did before
+     * this walk existed; the walk only decides what an unregistered subclass falls back to.</p>
+     */
+    private static IFormRendererFactory findFactory(Class clazz)
+    {
+        while (clazz != null && clazz != Object.class)
+        {
+            IFormRendererFactory factory = map.get(clazz);
+
+            if (factory != null)
+            {
+                return factory;
+            }
+
+            clazz = clazz.getSuperclass();
         }
 
         return null;

@@ -185,9 +185,34 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor
             return null;
         }
 
-        Supplier<UIForm> supplier = panels.get(form.getClass());
+        Supplier<UIForm> supplier = findPanel(form.getClass());
 
         return supplier == null ? null : supplier.get();
+    }
+
+    /**
+     * The panel registered for a form's own class, or for the nearest class it extends, so a form
+     * built on top of one of BBS's own is editable through its parent's panel until it brings one
+     * of its own.
+     *
+     * <p>An exact registration always wins, so BBS's own forms resolve exactly as they did before
+     * this walk existed.</p>
+     */
+    private static Supplier<UIForm> findPanel(Class clazz)
+    {
+        while (clazz != null && clazz != Object.class)
+        {
+            Supplier<UIForm> supplier = panels.get(clazz);
+
+            if (supplier != null)
+            {
+                return supplier;
+            }
+
+            clazz = clazz.getSuperclass();
+        }
+
+        return null;
     }
 
     public UIFormEditor(UIFormPalette palette)

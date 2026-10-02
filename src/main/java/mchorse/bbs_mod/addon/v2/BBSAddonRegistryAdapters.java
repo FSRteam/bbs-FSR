@@ -300,6 +300,14 @@ final class BBSAddonRegistryAdapters
 
                 eventBus.register(subscriber);
 
+                /* The same object also feeds the addon channel — the one table every entry point
+                 * converges on. The two carry different traffic: the internal bus keeps BBS's own
+                 * events to itself, and the addon channel only ever sees mchorse.bbs_mod.api
+                 * events. Registering into both is therefore additive: a subscriber that only
+                 * declares @Subscribe methods from the api packages simply had nothing listening
+                 * for it before. */
+                mchorse.bbs_mod.api.EventBus.INSTANCE.register(subscriber);
+
                 return diagnostics.record(BBSRegistrationResult.accepted(key));
             });
         };

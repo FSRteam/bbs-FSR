@@ -28,6 +28,18 @@ import mchorse.bbs_mod.cubic.jem.VanillaRigs;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
+import mchorse.bbs_mod.api.client.events.BBSClientReadyEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterImportersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent;
+import mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent;
 import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterL10nEvent;
@@ -473,6 +485,18 @@ public class BBSModClient
 
         BBSMod.events.post(new RegisterL10nEvent(l10n));
 
+        /* The client half of the addons, picked up before anything client side is posted. Their
+         * common half is registered by BBSMod, from the "bbs-addon" entrypoint. */
+        for (mchorse.bbs_mod.api.BBSAddonMod addon : mchorse.bbs_mod.loader.LoaderAccessHolder.get().getEntrypoints("bbs-client-addon", mchorse.bbs_mod.api.BBSAddonMod.class))
+        {
+            mchorse.bbs_mod.api.EventBus.INSTANCE.register(addon);
+        }
+
+        /* Both of these are read by the objects made right below, and both lists are rebuilt on
+         * every asset reload — so the moment to add to them is before the first build. */
+        postAddonEvent(new RegisterModelLoadersEvent());
+        postAddonEvent(new RegisterFormSectionsEvent());
+
         File parentFile = BBSMod.getSettingsFolder().getParentFile();
 
         particles = new ParticleManager(() -> new File(BBSMod.getAssetsFolder(), "particles"));
@@ -508,9 +532,26 @@ public class BBSModClient
 
         KeybindSettings.registerClasses();
 
+        /* Before the settings file below is built: it reads the classes, and the addon combos
+         * have to be among them. */
+        postAddonEvent(new RegisterKeybindsEvent());
+
         BBSMod.setupConfig(Icons.KEY_CAP, "keybinds", new File(BBSMod.getSettingsFolder(), "keybinds.json"), KeybindSettings::register);
 
         BBSMod.events.post(new RegisterClientSettingsEvent());
+
+        /* The registries behind these fill themselves lazily, on first use, and every one of them
+         * puts BBS's own entries in before an addon gets a chance to — a subscriber's register()
+         * call is what initializes the class. So the only thing that matters here is that the
+         * posts happen before anything reads the finished picture. */
+        postAddonEvent(new RegisterFormRenderersEvent());
+        postAddonEvent(new RegisterFormEditorsEvent());
+        postAddonEvent(new RegisterClipPanelsEvent());
+        postAddonEvent(new RegisterKeyframeEditorsEvent());
+        postAddonEvent(new RegisterValueWidgetsEvent());
+        postAddonEvent(new RegisterClipRenderersEvent());
+        postAddonEvent(new RegisterTrackStylesEvent());
+        postAddonEvent(new RegisterImportersEvent());
 
         BBSSettings.language.postCallback((v, f) -> reloadLanguage(getLanguageKey()));
         BBSSettings.userIntefaceScale.postCallback((v, f) ->
@@ -624,6 +665,13 @@ public class BBSModClient
             BBSMod.getAssetsPath("models/player/" + path + "/").mkdirs();
         }
 
+        postAddonEvent(new BBSClientReadyEvent());
+    }
+
+    /** Sends an addon-facing event down the addon channel; a no-op while no addon subscribed. */
+    private static void postAddonEvent(Object event)
+    {
+        mchorse.bbs_mod.api.EventBus.INSTANCE.post(event);
     }
 
     public static void registerKeyMappings(Consumer<KeyMapping> register)

@@ -39,6 +39,37 @@ public class KeyframeFactories
     public static final SoundKeyframeFactory SOUND_FALLOFF = new SoundKeyframeFactory(SoundKeyframeValue.Group.FALLOFF);
     public static final SoundKeyframeFactory SOUND_REFLECTIONS = new SoundKeyframeFactory(SoundKeyframeValue.Group.REFLECTIONS);
 
+    /**
+     * Registers a value type under a factory key — the key written next to saved keyframes, so an
+     * addon should namespace it. Registering over a key BBS already uses replaces that type for
+     * every film read afterwards.
+     *
+     * <p>Called from {@code RegisterKeyframeFactoriesEvent}, and usable directly; a null key or
+     * factory is ignored rather than stored, so a lookup can never return nothing under a key that
+     * looks registered.</p>
+     */
+    public static void register(String key, IKeyframeFactory factory)
+    {
+        if (key == null || key.isEmpty() || factory == null)
+        {
+            return;
+        }
+
+        FACTORIES.put(key, factory);
+    }
+
+    /** Removes a factory key; returns whether it was there. */
+    public static boolean unregister(String key)
+    {
+        return key != null && FACTORIES.remove(key) != null;
+    }
+
+    /** The factory stored under a key, or null when nothing registered it. */
+    public static IKeyframeFactory get(String key)
+    {
+        return key == null ? null : FACTORIES.get(key);
+    }
+
     public static boolean isNumeric(IKeyframeFactory factory)
     {
         return factory instanceof DoubleKeyframeFactory
