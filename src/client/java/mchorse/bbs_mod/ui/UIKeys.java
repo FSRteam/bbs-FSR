@@ -254,6 +254,12 @@ public class UIKeys
     public static final IKey ENGINE_TOOLTIP_STYLE_LIGHT = L10n.lang("bbs.tooltip_style.light");
     public static final IKey ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL = L10n.lang("bbs.rotate_3d_sphere_mode.trackball");
     public static final IKey ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL = L10n.lang("bbs.rotate_3d_sphere_mode.arcball");
+    public static final IKey FILM_BACKUPS_TITLE = L10n.lang("bbs.ui.film.backups.title");
+    public static final IKey FILM_BACKUPS_EMPTY = L10n.lang("bbs.ui.film.backups.empty");
+    public static final IKey FILM_BACKUPS_ERROR = L10n.lang("bbs.ui.film.backups.error");
+    public static final IKey FILM_BACKUPS_RESTORE = L10n.lang("bbs.ui.film.backups.restore");
+    public static final IKey FILM_BACKUPS_DESCRIPTION = L10n.lang("bbs.ui.film.backups.description");
+    public static final IKey FILM_BACKUPS_EXISTS = L10n.lang("bbs.ui.film.backups.exists");
     public static final IKey FILM_CONTROLLER_CONTROL_MODE_TOOLTIP = L10n.lang("bbs.ui.film.controller.control_mode-tooltip");
     public static final IKey FILM_CONTROLLER_INSERT_FRAME_DESCRIPTION = L10n.lang("bbs.ui.film.controller.insert_frame-description");
     public static final IKey FILM_CONTROLLER_INSERT_FRAME_TITLE = L10n.lang("bbs.ui.film.controller.insert_frame-title");

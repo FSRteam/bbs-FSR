@@ -788,6 +788,13 @@ public class ServerNetwork
                     {
                         sendFilmMetaData(player, callbackId, op, films);
                     }
+                    else if (op == RepositoryOperation.BACKUPS)
+                    {
+                        /* Read-only file names of the saved versions of one canonicalized film */
+                        String id = canonicalFilmId(films, data.getString("id"));
+
+                        sendManagerData(player, callbackId, op, DataStorageUtils.stringListToData(films.getBackupKeys(id)));
+                    }
                     else if (op == RepositoryOperation.ADD_FOLDER)
                     {
                         String folder = data.getString("folder");

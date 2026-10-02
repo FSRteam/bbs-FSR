@@ -2,10 +2,12 @@ package mchorse.bbs_mod.utils.repos;
 
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.utils.manager.BaseManager;
 import mchorse.bbs_mod.utils.manager.FolderManager;
 
 import java.io.File;
 import java.util.Collection;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class FolderManagerRepository <T extends ValueGroup> implements IRepository<T>
@@ -58,6 +60,16 @@ public class FolderManagerRepository <T extends ValueGroup> implements IReposito
         if (callback != null)
         {
             callback.accept(this.manager.getKeys());
+        }
+    }
+
+    @Override
+    public void requestBackups(String id, Consumer<Collection<String>> callback)
+    {
+        if (callback != null)
+        {
+            callback.accept(this.manager instanceof BaseManager<?> manager
+                ? manager.getBackupKeys(id) : List.of());
         }
     }
 
