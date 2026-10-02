@@ -37,6 +37,7 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
@@ -924,6 +925,12 @@ public abstract class BaseFilmController
     {
         RenderSystem.enableDepthTest();
 
+        /* Read per pass, never cached in a field: each viewport's world render rebuilds the
+         * culling frustum from its own camera and projection, so this one belongs to this pass.
+         * A cached frustum would follow the primary view into the side viewports and cull what
+         * they can see. */
+        Frustum frustum = context.frustum();
+
         for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
         {
             int i = entry.getKey();
@@ -936,6 +943,18 @@ public abstract class BaseFilmController
             }
 
             if (!this.canUpdate(i, replay, entity, UpdateMode.RENDER))
+            {
+                continue;
+            }
+
+            /* Skips only this pass's draw. Nothing in the replay, the entity or our maps is
+             * touched, so a replay anchored onto this one is unaffected — anchors read matrices
+             * through the pose pipeline, not through the draw. */
+            boolean culled = FilmFrustumCulling.isCulled(frustum, entity);
+
+            FilmFrustumCulling.probeReplay(frustum, entity, culled);
+
+            if (culled)
             {
                 continue;
             }

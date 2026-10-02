@@ -9,6 +9,7 @@ import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
+import mchorse.bbs_mod.film.FilmFrustumCulling;
 import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.window.Window;
 import net.minecraft.client.DeltaTracker;
@@ -300,13 +301,21 @@ public final class BBSClientNeoEvents
         worldStack.last().pose().set(stack.last().pose());
         worldStack.last().normal().set(stack.last().normal());
 
+        /* Diagnostic only (off by default). Placed on the factory rather than on any one user of
+         * the context, so it measures the frustum and camera every pass hands out, with or without
+         * a film in the scene. */
+        FilmFrustumCulling.probePass(event.getFrustum(), event.getCamera());
+
         return new BbsWorldRenderContext(
             event.getCamera(),
             worldStack,
             mc.renderBuffers().bufferSource(),
             resolveTickDelta(event.getPartialTick()),
             event.getModelViewMatrix(),
-            event.getProjectionMatrix()
+            event.getProjectionMatrix(),
+            /* The frustum of this very pass: each viewport runs its own world render, and that
+             * render rebuilds it from its own camera and projection. */
+            event.getFrustum()
         );
     }
 

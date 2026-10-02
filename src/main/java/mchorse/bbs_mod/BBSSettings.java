@@ -71,6 +71,8 @@ public class BBSSettings {
 	public static ValueBoolean freezeModels;
 	public static ValueBoolean freezeFormAnimations;
 	public static ValueBoolean listModelPreview;
+	/** Replay frustum culling (upstream {@code e08d8ac92}); read as the {@code frustum_culling} config key. */
+	public static ValueBoolean frustumCulling;
 	public static ValueBoolean morphingFocusSearch;
 	public static ValueFloat axesScale;
 	public static ValueFloat axesThickness;
@@ -1035,6 +1037,10 @@ public class BBSSettings {
 		shaderCurvesEnabled = builder.getBoolean("shader_curves", true);
 		translucencyQueue = builder.getBoolean("translucency_queue", false);
 		multiskinMultiThreaded = builder.getBoolean("multiskin_multithreaded", true);
+		/* Upstream keeps this in its "performance" category; FSR never grew that category and
+		 * parks the other two performance toggles above, so it lives here too. The config key
+		 * itself is upstream's, verbatim. */
+		frustumCulling = builder.getBoolean("frustum_culling", true);
 
 		builder.category("audio", Icons.SOUND);
 		audioWaveformVisibleInPreview = builder.getBoolean("waveform_visible_preview", true);
