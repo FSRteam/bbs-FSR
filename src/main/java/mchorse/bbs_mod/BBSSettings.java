@@ -221,6 +221,8 @@ public class BBSSettings {
 	public static ValueBoolean interfaceHighlights;
 	public static ValueFloat overlayBackgroundOpacity;
 	public static ValueBoolean overlayGradientBorder;
+	public static ValueBoolean interfaceBlur;
+	public static ValueInt interfaceBlurRadius;
 
 	public static ValueBoolean shaderCurvesEnabled;
 	public static ValueBoolean translucencyQueue;
@@ -805,6 +807,10 @@ public class BBSSettings {
 		interfaceHighlights = builder.getBoolean("interface_highlights", false);
 		overlayBackgroundOpacity = builder.getFloat("overlay_background_opacity", DEFAULT_OVERLAY_BACKGROUND_OPACITY, 0F, 1F).slider();
 		overlayGradientBorder = builder.getBoolean("overlay_gradient_border", true);
+		/* Dual kawase background blur: off by default — the framebuffer ping-pong needs an
+		 * in-game Iris/Sodium smoke before it can be FSR's default (upstream ships it on). */
+		interfaceBlur = builder.getBoolean("interface_blur", false);
+		interfaceBlurRadius = builder.getInt("interface_blur_radius", 12, 1, 30).slider();
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
 		stencilHighlightColor = builder.getInt("stencil_highlight_color", 0x2EFFFFFF).colorAlpha();
 

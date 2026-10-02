@@ -53,6 +53,9 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     private static final int LABEL_ICON_SIZE = 16;
     private static final int LABEL_TEXT_ICON_GAP = 3;
 
+    /** Below this width the label column is reduced to its icon controls; titles hide altogether. */
+    private static final int LABEL_COMPACT_WIDTH = 60;
+
     private UIKeyframes keyframes;
 
     private List<UIKeyframeElement> elements = new ArrayList<>();
@@ -1073,10 +1076,16 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
         FontRenderer font = context.batcher.getFont();
         int arrowX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
-        int textX = lx + LABEL_TEXT_LEFT + offset;
-        String label = font.limitToWidth(group.title.get(), Math.max(0, arrowX - LABEL_TEXT_ICON_GAP - textX));
-        int textColor = hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F);
-        context.batcher.textShadow(label, textX, my - font.getHeight() / 2, textColor);
+
+        /* Hide every title together when the column is reduced to its icon controls. */
+        if (w > LABEL_COMPACT_WIDTH)
+        {
+            int textX = lx + LABEL_TEXT_LEFT + offset;
+            String label = font.limitToWidth(group.title.get(), Math.max(0, arrowX - LABEL_TEXT_ICON_GAP - textX));
+            int textColor = hover ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.75F);
+
+            context.batcher.textShadow(label, textX, my - font.getHeight() / 2, textColor);
+        }
 
         context.batcher.icon(group.collapsed ? Icons.ARROW_RIGHT : Icons.ARROW_DOWN, arrowX, my - 8);
     }
@@ -1106,11 +1115,16 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         Icon icon = poseTab ? (this.expandedPoseTabs.contains(sheet) ? Icons.ARROW_DOWN : Icons.ARROW_RIGHT) : sheet.getIcon();
         boolean hasIcon = icon != null && this.trackHeight >= 12D;
         int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
-        int textX = lx + LABEL_TEXT_LEFT + offset + this.getSheetIndent(sheet);
-        int textRight = hasIcon ? iconX - LABEL_TEXT_ICON_GAP : lx + w - LABEL_RIGHT_PAD;
-        String title = font.limitToWidth(sheet.title.get(), Math.max(0, textRight - textX));
 
-        context.batcher.textShadow(title, textX, my - font.getHeight() / 2, textColor);
+        /* Hide every title together when the column is reduced to its icon controls. */
+        if (w > LABEL_COMPACT_WIDTH)
+        {
+            int textX = lx + LABEL_TEXT_LEFT + offset + this.getSheetIndent(sheet);
+            int textRight = hasIcon ? iconX - LABEL_TEXT_ICON_GAP : lx + w - LABEL_RIGHT_PAD;
+            String title = font.limitToWidth(sheet.title.get(), Math.max(0, textRight - textX));
+
+            context.batcher.textShadow(title, textX, my - font.getHeight() / 2, textColor);
+        }
 
         if (hasIcon)
         {

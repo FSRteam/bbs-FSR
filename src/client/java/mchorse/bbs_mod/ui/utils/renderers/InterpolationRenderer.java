@@ -13,6 +13,10 @@ import mchorse.bbs_mod.utils.interps.IInterp;
 
 public class InterpolationRenderer
 {
+    /** The size of the preview card drawn by {@link #renderInterpolationPreview}. */
+    public static final int PREVIEW_WIDTH = 140;
+    public static final int PREVIEW_HEIGHT = 130;
+
     private static Color color = new Color();
 
     public static void renderInterpolationPreview(IInterp interp, UIContext context, int x, int y, float anchorX, float anchorY, int duration)
@@ -22,8 +26,8 @@ public class InterpolationRenderer
             return;
         }
 
-        int w = 140;
-        int h = 130;
+        int w = PREVIEW_WIDTH;
+        int h = PREVIEW_HEIGHT;
 
         TooltipStyle style = TooltipStyle.get();
 

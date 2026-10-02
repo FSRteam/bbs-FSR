@@ -229,8 +229,10 @@ public class UIKeys
     public static final IKey CDN_UPLOADING_TITLE = L10n.lang("bbs.ui.cdn.uploading-title");
     public static final IKey COLOR_CONTEXT_FAVORITES_ADD = L10n.lang("bbs.ui.color.context.favorites.add");
     public static final IKey COLOR_CONTEXT_FAVORITES_REMOVE = L10n.lang("bbs.ui.color.context.favorites.remove");
+    public static final IKey COLOR_EYEDROPPER = L10n.lang("bbs.ui.color.eyedropper");
     public static final IKey COLOR_FAVORITE = L10n.lang("bbs.ui.color.favorite");
     public static final IKey COLOR_RECENT = L10n.lang("bbs.ui.color.recent");
+    public static final IKey COLOR_REVERT = L10n.lang("bbs.ui.color.revert");
     public static final IKey CONFIG_TITLE = L10n.lang("bbs.ui.config.title");
     public static final IKey CONTEXT_MENU_KEY = L10n.lang("bbs.ui.context.key");
     public static final IKey CONTEXT_MENU_KEY_CATEGORY = L10n.lang("bbs.ui.context.key_category");

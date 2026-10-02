@@ -6,6 +6,7 @@ import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
@@ -17,13 +18,17 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.system.MemoryStack;
 
+import java.nio.FloatBuffer;
 import java.util.function.Consumer;
 
 /**
@@ -44,6 +49,14 @@ public class UIColorPicker extends UIElement
     private static final int POPUP_PADDING = 5;
     private static final int INPUT_HEIGHT = 20;
     private static final int PREVIEW_SIZE = 20;
+
+    /**
+     * The preview shows both colors side by side: what the picker opened with on the left,
+     * what it holds now on the right — so a nudge can be judged against where it started,
+     * and pressing the left half goes back there.
+     */
+    private static final int PREVIEW_WIDTH = PREVIEW_SIZE * 2 + 4;
+
     private static final int HEADER_HEIGHT = 30;
     private static final int DEFAULT_WIDTH = 200;
     private static final int RGB_SLIDER_HEIGHT = 50;
@@ -55,12 +68,21 @@ public class UIColorPicker extends UIElement
     private static final int PALETTE_GAP = 15;
     private static final int WINDOW_BOTTOM_GAP = 4;
 
+    /** How far the ends of an RGB slider are kept clear so the marker never hangs off it. */
+    private static final int SLIDER_INSET = 7;
+
+    private static final int EYEDROPPER_SIZE = 20;
+
+    /** The patch of the sampled color shown beside the cursor while the eyedropper is armed. */
+    private static final int SAMPLE_SIZE = 16;
+
     private static final ValueColors RECENT_COLORS_FALLBACK = new ValueColors("recent");
 
     public Color color = new Color();
     public Consumer<Integer> callback;
 
     public UITextbox input;
+    public UIIcon eyedropper;
     public UIColorPalette recent;
     public UIColorPalette favorite;
 
@@ -83,6 +105,23 @@ public class UIColorPicker extends UIElement
     private final Color hsv = new Color();
     private final Color tempColor = new Color();
     private final Color tempColor2 = new Color();
+
+    /**
+     * The color the popup opened with. Escape puts it back, and a color that never moved
+     * away from it isn't worth remembering among the recent ones.
+     */
+    private final Color initial = new Color();
+
+    /** Whether what's typed into the hex field can't be read as a color. */
+    private boolean hexError;
+
+    /** Whether the next click takes its color off the screen rather than doing what it usually does. */
+    private boolean picking;
+
+    /** What the eyedropper sees under the cursor, read once a frame while it's armed. */
+    private int sampled;
+
+    private final Color sampledColor = new Color();
 
     public static void renderAlphaPreviewQuad(Batcher2D batcher, int x1, int y1, int x2, int y2, Color color)
     {
@@ -121,6 +160,9 @@ public class UIColorPicker extends UIElement
         };
         this.input.context((menu) -> menu.action(Icons.FAVORITE, UIKeys.COLOR_CONTEXT_FAVORITES_ADD, () -> this.addToFavorites(this.color)));
 
+        this.eyedropper = new UIIcon(Icons.EYEDROPPER, (b) -> this.picking = !this.picking);
+        this.eyedropper.tooltip(UIKeys.COLOR_EYEDROPPER);
+
         this.recent = new UIColorPalette((color) ->
         {
             this.setColor(color.getARGBColor());
@@ -153,7 +195,7 @@ public class UIColorPicker extends UIElement
             }
         });
 
-        this.eventPropagataion(EventPropagation.BLOCK_INSIDE).add(this.input, this.favorite, this.recent);
+        this.eventPropagataion(EventPropagation.BLOCK_INSIDE).add(this.input, this.eyedropper, this.favorite, this.recent);
     }
 
     public UIColorPicker editAlpha()
@@ -177,34 +219,63 @@ public class UIColorPicker extends UIElement
     private void syncHexInputAfterEdit()
     {
         this.input.setText(this.color.stringify(this.editAlpha));
+        this.setHexError(false);
     }
 
+    /**
+     * A color typed by hand. Half-typed input is left alone — it's on its way somewhere —
+     * but input of the right length that still isn't a color is marked instead of silently
+     * turning the color into black, which is what a failed parse used to hand back.
+     */
     private void applyColorFromHexInput(String string)
     {
-        if (!this.isCompleteHexColorInput(string))
+        int digits = this.hexDigits(string);
+
+        if (digits != 6 && digits != 8)
         {
+            this.setHexError(false);
+
             return;
         }
 
-        this.setValue(Colors.parse(string));
+        int parsed;
+
+        try
+        {
+            parsed = Colors.parseWithException(string.trim());
+        }
+        catch (Exception e)
+        {
+            this.setHexError(true);
+
+            return;
+        }
+
+        this.setHexError(false);
+        this.setValue(parsed, digits == 8);
         this.notifyColorChanged();
     }
 
-    private boolean isCompleteHexColorInput(String raw)
+    /** How many hex digits were typed, without the leading hash. */
+    private int hexDigits(String raw)
     {
         if (raw == null)
         {
-            return false;
+            return -1;
         }
 
         String t = raw.trim();
 
-        if (t.startsWith("#"))
-        {
-            t = t.substring(1);
-        }
+        return t.startsWith("#") ? t.length() - 1 : t.length();
+    }
 
-        return t.length() == 6 || t.length() == 8;
+    private void setHexError(boolean error)
+    {
+        if (this.hexError != error)
+        {
+            this.hexError = error;
+            this.input.setColor(error ? Colors.A100 | Colors.RED : Colors.WHITE, true);
+        }
     }
 
     protected void callback()
@@ -223,13 +294,34 @@ public class UIColorPicker extends UIElement
 
     public void setValue(int color)
     {
-        this.color.set(color, this.editAlpha);
+        this.setValue(color, this.editAlpha);
+    }
+
+    /**
+     * @param withAlpha whether the value carries an alpha channel of its own. A six digit
+     *                  color handed to an alpha picker keeps the alpha the picker already
+     *                  has, rather than reading the missing channel as fully transparent.
+     */
+    public void setValue(int color, boolean withAlpha)
+    {
+        float alpha = this.color.a;
+
+        this.color.set(color, withAlpha && this.editAlpha);
+
+        if (this.editAlpha && !withAlpha)
+        {
+            this.color.a = alpha;
+        }
+
         this.syncHsvFromColor();
     }
 
+    /** Place the popup and remember what it opened with, so Escape has somewhere to go back to. */
     public void setup(int x, int y)
     {
         this.xy(x, y);
+        this.initial.copy(this.color);
+        this.setHexError(false);
     }
 
     private void notifyColorChanged()
@@ -248,6 +340,82 @@ public class UIColorPicker extends UIElement
     {
         Colors.HSVtoRGB(this.color, this.hsv.r, this.hsv.g, this.hsv.b);
         this.color.a = this.hsv.a;
+    }
+
+    /* Eyedropper */
+
+    /**
+     * What the pixel under the cursor is, out of what's already been painted this frame.
+     *
+     * <p>The read happens at the top of this element's own painting, which is the moment
+     * everything under the popup is on screen and the popup itself is not — so the dropper
+     * sees the viewport, the panels and other people's colors, right through its own window.
+     * It reads the default framebuffer during UI rendering, which on NeoForge 1.21.1 is the
+     * same valid spot FSR's other framebuffer reads (screenshots, surface readback) use.</p>
+     */
+    private int readPixelUnderCursor(UIContext context)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        int width = mc.getWindow().getWidth();
+        int height = mc.getWindow().getHeight();
+
+        if (width <= 0 || height <= 0 || context.menu.width <= 0)
+        {
+            return this.color.getARGBColor();
+        }
+
+        /* Nothing may still be sitting in a buffer: the read is of the framebuffer, not of the queue */
+        context.batcher.flush();
+
+        /* The interface is drawn at its own scale; the framebuffer is in real pixels and upside down */
+        float scale = width / (float) context.menu.width;
+        int x = MathUtils.clamp(Math.round(context.globalX(context.mouseX) * scale), 0, width - 1);
+        int y = MathUtils.clamp(height - 1 - Math.round(context.globalY(context.mouseY) * scale), 0, height - 1);
+
+        try (MemoryStack stack = MemoryStack.stackPush())
+        {
+            FloatBuffer floats = stack.mallocFloat(4);
+
+            GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_FLOAT, floats);
+
+            /* Whatever is on screen is opaque; the alpha being edited is the picker's own */
+            return this.sampledColor.set(floats.get(0), floats.get(1), floats.get(2), this.color.a).getARGBColor();
+        }
+    }
+
+    /** Take the sampled color and put the dropper away. */
+    private void applySample()
+    {
+        this.picking = false;
+
+        this.setValue(this.sampled, true);
+        this.notifyColorChanged();
+    }
+
+    /** Escape puts the color back the way it was when the popup opened, and closes it. */
+    private void cancelPicker()
+    {
+        this.removeFromParent();
+        this.revertToInitial();
+    }
+
+    /** Back to the color the picker opened with, leaving it open. */
+    private void revertToInitial()
+    {
+        if (this.color.equals(this.initial))
+        {
+            return;
+        }
+
+        this.color.copy(this.initial);
+        this.syncHsvFromColor();
+        this.notifyColorChanged();
+    }
+
+    /** Whether the cursor is over the half of the preview that puts the original color back. */
+    private boolean isOverInitial(UIContext context)
+    {
+        return this.preview.isInside(context) && context.mouseX < this.preview.x + this.preview.w / 2;
     }
 
     private ValueColors getRecentColors()
@@ -274,10 +442,15 @@ public class UIColorPicker extends UIElement
         this.resize();
     }
 
+    /** Settle on the current color: only one the user actually moved to is worth remembering. */
     private void closePicker()
     {
         this.removeFromParent();
-        this.addToRecent();
+
+        if (!this.color.equals(this.initial))
+        {
+            this.addToRecent();
+        }
     }
 
     /* GuiElement overrides */
@@ -305,6 +478,7 @@ public class UIColorPicker extends UIElement
         this.applyLayout(layout);
 
         this.input.resize();
+        this.eyedropper.resize();
         this.favorite.resize();
         this.recent.resize();
 
@@ -359,10 +533,13 @@ public class UIColorPicker extends UIElement
     {
         int contentX = this.area.x + POPUP_PADDING;
         int contentY = this.area.y + layout.contentY;
-        int previewX = this.area.ex() - POPUP_PADDING - PREVIEW_SIZE;
+        int headerY = this.area.y + POPUP_PADDING;
+        int previewX = this.area.ex() - POPUP_PADDING - PREVIEW_WIDTH;
+        int eyedropperX = previewX - POPUP_PADDING - EYEDROPPER_SIZE;
 
-        this.preview.set(previewX, this.area.y + POPUP_PADDING, PREVIEW_SIZE, PREVIEW_SIZE);
-        this.input.set(contentX, this.area.y + POPUP_PADDING, layout.paletteWidth - PREVIEW_SIZE - POPUP_PADDING, INPUT_HEIGHT);
+        this.preview.set(previewX, headerY, PREVIEW_WIDTH, PREVIEW_SIZE);
+        this.eyedropper.set(eyedropperX, headerY, EYEDROPPER_SIZE, INPUT_HEIGHT);
+        this.input.set(contentX, headerY, eyedropperX - POPUP_PADDING - contentX, INPUT_HEIGHT);
 
         if (layout.hsv)
         {
@@ -436,6 +613,31 @@ public class UIColorPicker extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        if (this.picking)
+        {
+            /* Pressing the dropper again is how it's put away, so that press stays its own */
+            if (context.mouseButton == 0 && !this.eyedropper.area.isInside(context))
+            {
+                this.applySample();
+
+                return true;
+            }
+
+            if (context.mouseButton == 1)
+            {
+                this.picking = false;
+
+                return true;
+            }
+        }
+
+        if (context.mouseButton == 0 && this.isOverInitial(context))
+        {
+            this.revertToInitial();
+
+            return true;
+        }
+
         if (this.beginDragging(context))
         {
             return true;
@@ -482,7 +684,15 @@ public class UIColorPicker extends UIElement
     {
         if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
-            this.closePicker();
+            /* Escape puts the dropper away first; the picker itself stays open */
+            if (this.picking)
+            {
+                this.picking = false;
+
+                return true;
+            }
+
+            this.cancelPicker();
 
             return true;
         }
@@ -501,9 +711,14 @@ public class UIColorPicker extends UIElement
 
         this.handleDragging(context);
 
-        this.area.render(context.batcher, Colors.LIGHTEST_GRAY);
-        this.renderRect(context.batcher, this.preview.x, this.preview.y, this.preview.ex(), this.preview.ey());
-        context.batcher.outline(this.preview.x, this.preview.y, this.preview.ex(), this.preview.ey(), Colors.A25);
+        /* Before anything of this popup is painted: what the dropper sees is what's under it */
+        if (this.picking)
+        {
+            this.sampled = this.readPixelUnderCursor(context);
+        }
+
+        this.renderBackground(context);
+        this.renderPreview(context);
 
         if (this.layoutHsv)
         {
@@ -517,6 +732,70 @@ public class UIColorPicker extends UIElement
         this.renderPaletteLabels(context);
 
         super.render(context);
+
+        if (this.picking)
+        {
+            this.renderSample(context);
+        }
+    }
+
+    /**
+     * The picker floats over whatever it was opened from, so it takes the raised surface of
+     * the tonal map and the shadow every other popup casts — the same background as a context
+     * menu or an overlay panel, rather than a fixed grey of its own.
+     */
+    private void renderBackground(UIContext context)
+    {
+        context.batcher.dropShadow(this.area.x, this.area.y, this.area.ex(), this.area.ey(), 10, BBSSettings.panelShadowOpaqueColor(), BBSSettings.panelShadowTransparentColor());
+
+        this.area.render(context.batcher, BBSSettings.raisedSurface());
+    }
+
+    /** The color the picker opened with beside the one it holds now. */
+    private void renderPreview(UIContext context)
+    {
+        Batcher2D batcher = context.batcher;
+        int half = this.preview.x + this.preview.w / 2;
+
+        this.renderSwatch(batcher, this.preview.x, this.preview.y, half, this.preview.ey(), this.initial);
+        this.renderSwatch(batcher, half, this.preview.y, this.preview.ex(), this.preview.ey(), this.color);
+
+        /* A seam down the middle, so two nearly equal colors still read as two patches */
+        batcher.box(half, this.preview.y, half + 1, this.preview.ey(), Colors.A25);
+        batcher.outline(this.preview.x, this.preview.y, this.preview.ex(), this.preview.ey(), Colors.A25);
+
+        if (this.isOverInitial(context) && !this.color.equals(this.initial))
+        {
+            context.requestCursor(GLFW.GLFW_HAND_CURSOR);
+            batcher.textCard(UIKeys.COLOR_REVERT.get(), context.mouseX + 6, context.mouseY + 10);
+        }
+    }
+
+    /** One color as a patch: over a checkboard, split along the diagonal, when alpha is edited. */
+    private void renderSwatch(Batcher2D batcher, int x1, int y1, int x2, int y2, Color color)
+    {
+        if (this.editAlpha)
+        {
+            batcher.iconArea(Icons.CHECKBOARD, x1, y1, x2 - x1, y2 - y1);
+            renderAlphaPreviewQuad(batcher, x1, y1, x2, y2, color);
+        }
+        else
+        {
+            batcher.box(x1, y1, x2, y2, color.getARGBColor());
+        }
+    }
+
+    /** What the dropper sees right now, beside the cursor, over everything else. */
+    private void renderSample(UIContext context)
+    {
+        int x = context.mouseX + 10;
+        int y = context.mouseY + 10;
+
+        context.requestCursor(GLFW.GLFW_CROSSHAIR_CURSOR);
+
+        context.batcher.box(x - 1, y - 1, x + SAMPLE_SIZE + 1, y + SAMPLE_SIZE + 1, Colors.A100);
+        context.batcher.box(x, y, x + SAMPLE_SIZE, y + SAMPLE_SIZE, Colors.opaque(this.sampled));
+        context.batcher.textCard(this.sampledColor.stringify(), x + SAMPLE_SIZE + 4, y + (SAMPLE_SIZE - context.batcher.getFont().getHeight()) / 2);
     }
 
     private boolean beginDragging(UIContext context)
@@ -650,11 +929,37 @@ public class UIColorPicker extends UIElement
 
     private void handleRgbDragging(UIContext context)
     {
-        float factor = (context.mouseX - (this.red.x + 7)) / (float) (this.red.w - 14);
+        Area slider = this.rgbSlider(this.dragging);
+        float factor = (context.mouseX - (slider.x + SLIDER_INSET)) / (float) (slider.w - SLIDER_INSET * 2);
 
         this.color.set(MathUtils.clamp(factor, 0, 1), this.dragging);
         this.syncHsvFromColor();
         this.notifyColorChanged();
+    }
+
+    /** The strip a channel is dragged along; channels are numbered as {@link Color#set(float, int)} numbers them. */
+    private Area rgbSlider(int channel)
+    {
+        switch (channel)
+        {
+            case DRAG_RGB_RED:
+                return this.red;
+
+            case DRAG_RGB_GREEN:
+                return this.green;
+
+            case DRAG_RGB_BLUE:
+                return this.blue;
+
+            default:
+                return this.alpha;
+        }
+    }
+
+    /** Where a channel's marker sits along its strip. */
+    private int markerX(Area slider, float value)
+    {
+        return slider.x + SLIDER_INSET + (int) ((slider.w - SLIDER_INSET * 2) * value);
     }
 
     private boolean isHsvPicker()
@@ -708,13 +1013,13 @@ public class UIColorPicker extends UIElement
 
         context.batcher.outline(this.red.x, this.red.y, this.red.ex(), this.editAlpha ? this.alpha.ey() : this.blue.ey(), Colors.A25);
 
-        this.renderMarker(context.batcher, this.red.x + 7 + (int) ((this.red.w - 14) * this.color.r), this.red.my());
-        this.renderMarker(context.batcher, this.green.x + 7 + (int) ((this.green.w - 14) * this.color.g), this.green.my());
-        this.renderMarker(context.batcher, this.blue.x + 7 + (int) ((this.blue.w - 14) * this.color.b), this.blue.my());
+        this.renderMarker(context.batcher, this.markerX(this.red, this.color.r), this.red.my());
+        this.renderMarker(context.batcher, this.markerX(this.green, this.color.g), this.green.my());
+        this.renderMarker(context.batcher, this.markerX(this.blue, this.color.b), this.blue.my());
 
         if (this.editAlpha)
         {
-            this.renderMarker(context.batcher, this.alpha.x + 7 + (int) ((this.alpha.w - 14) * this.color.a), this.alpha.my());
+            this.renderMarker(context.batcher, this.markerX(this.alpha, this.color.a), this.alpha.my());
         }
     }
 
@@ -729,9 +1034,7 @@ public class UIColorPicker extends UIElement
         {
             context.batcher.text(UIKeys.COLOR_RECENT.get(), this.recent.area.x, this.recent.area.y - 10, Colors.GRAY);
         }
-    }
-
-    private void renderHsvSquare(Batcher2D batcher)
+    }    private void renderHsvSquare(Batcher2D batcher)
     {
         int hueColor = Colors.HSVtoRGB(this.tempColor, this.hsv.r, 1F, 1F).getARGBColor();
 
@@ -767,22 +1070,15 @@ public class UIColorPicker extends UIElement
         batcher.gradientHBox(area.x, area.y, area.ex(), area.ey(), left, right);
     }
 
+    /** The well the square and its sliders sit in: a step below the popup, like every other field. */
     private void renderSliderBackdrop(Batcher2D batcher, Area picker, int right)
     {
-        batcher.box(picker.x - 1, picker.y - 1, right + 1, picker.ey() + 1, Colors.A6);
+        batcher.box(picker.x - 1, picker.y - 1, right + 1, picker.ey() + 1, BBSSettings.deepSurface());
     }
 
     public void renderRect(Batcher2D batcher, int x1, int y1, int x2, int y2)
     {
-        if (this.editAlpha)
-        {
-            batcher.iconArea(Icons.CHECKBOARD, x1, y1, x2 - x1, y2 - y1);
-            renderAlphaPreviewQuad(batcher, x1, y1, x2, y2, this.color);
-        }
-        else
-        {
-            batcher.box(x1, y1, x2, y2, this.color.getARGBColor());
-        }
+        this.renderSwatch(batcher, x1, y1, x2, y2, this.color);
     }
 
     private void renderMarker(Batcher2D batcher, int x, int y)
