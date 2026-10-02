@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms;
 
+import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
@@ -27,6 +28,8 @@ import java.util.List;
 
 public class FormUtils
 {
+    private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
+
     public static final String PATH_SEPARATOR = "/";
 
     private static final List<String> path = new ArrayList<>();
@@ -121,6 +124,17 @@ public class FormUtils
             if (data == null)
             {
                 return null;
+            }
+
+            /* A form id this build has no class for comes back as a stand-in now (see
+             * MissingForm), so what reaches here is data that is genuinely broken. That still
+             * ends in a lost form — but it no longer ends in silence, which is how a
+             * switched-off addon used to eat a scene. A missing form factory altogether (a
+             * runtime without the registries bootstrapped) is the one expected case and stays
+             * quiet. */
+            if (BBSMod.getForms() != null)
+            {
+                LOGGER.error("Failed to read a form out of {}!", data, e);
             }
 
             /* The placeholder is the safety net; if even it can't be built

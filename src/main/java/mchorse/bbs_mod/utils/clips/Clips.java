@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.utils.clips;
 
+import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.data.Point;
@@ -22,6 +23,8 @@ import java.util.function.BiConsumer;
 
 public class Clips extends ValueGroup
 {
+    private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
+
     private List<Clip> clips = new ArrayList<>();
     private IFactory<Clip, ClipFactoryData> factory;
 
@@ -297,7 +300,9 @@ public class Clips extends ValueGroup
             {
                 Clip recovered = this.factory.fromData(missing.sourceData());
 
-                if (recovered != null)
+                /* An unknown type now answers with a stand-in rather than throwing, so a
+                 * freshly built placeholder is not a recovery — only a real clip is. */
+                if (recovered != null && !(recovered instanceof MissingClip))
                 {
                     this.clips.set(i, recovered);
                     changed = true;
@@ -406,9 +411,21 @@ public class Clips extends ValueGroup
                 continue;
             }
 
+            MapType map = type.asMap();
+
+            /* The circular clip was replaced by the keyframe one, so its data is converted rather
+             * than read. It is resolved here, before the factory is asked for a type that was never
+             * registered and would answer with a data-preserving stand-in instead of an exception. */
+            if ("bbs:circular".equalsIgnoreCase(map.getString("type")))
+            {
+                this.clips.add(readCircular(map));
+
+                continue;
+            }
+
             try
             {
-                Clip clip = this.factory.fromData(type.asMap());
+                Clip clip = this.factory.fromData(map);
 
                 if (clip != null)
                 {
@@ -417,35 +434,41 @@ public class Clips extends ValueGroup
             }
             catch (Exception e)
             {
-                MapType map = type.asMap();
-
-                if (map.getString("type").equalsIgnoreCase("bbs:circular"))
+                /* An unknown clip type is no longer an exception — it comes back as a stand-in
+                 * holding its data. What is left here is data that is actually broken, and the
+                 * one clip is dropped rather than the whole film, but not quietly. A null factory
+                 * (a runtime without the clip registries bootstrapped) is the one expected case:
+                 * the placeholder is still built, but it is not a data error. */
+                if (this.factory != null)
                 {
-                    KeyframeClip clip = new KeyframeClip();
-                    Point point = new Point(0D, 0D, 0D);
-
-                    point.fromData(map.getMap("start"));
-                    clip.fromData(map);
-                    clip.x.insert(0F, point.x);
-                    clip.y.insert(0F, point.y);
-                    clip.z.insert(0F, point.z);
-                    clip.yaw.insert(0F, (double) map.getFloat("start"));
-                    clip.yaw.insert(clip.duration.get(), (double) map.getFloat("start") + (double) map.getFloat("circles"));
-                    clip.pitch.insert(0F, (double) map.getFloat("pitch"));
-                    clip.roll.insert(0F, 0D);
-                    clip.fov.insert(0F, (double) map.getFloat("fov"));
-                    clip.distance.insert(0F, (double) map.getFloat("distance"));
-
-                    this.clips.add(clip);
+                    LOGGER.error("Failed to read a clip out of {}!", map, e);
                 }
-                else
-                {
-                    this.clips.add(new MissingClip(map));
-                }
+
+                this.clips.add(new MissingClip(map));
             }
         }
 
         this.sync();
+    }
+
+    private static Clip readCircular(MapType map)
+    {
+        KeyframeClip clip = new KeyframeClip();
+        Point point = new Point(0D, 0D, 0D);
+
+        point.fromData(map.getMap("start"));
+        clip.fromData(map);
+        clip.x.insert(0F, point.x);
+        clip.y.insert(0F, point.y);
+        clip.z.insert(0F, point.z);
+        clip.yaw.insert(0F, (double) map.getFloat("start"));
+        clip.yaw.insert(clip.duration.get(), (double) map.getFloat("start") + (double) map.getFloat("circles"));
+        clip.pitch.insert(0F, (double) map.getFloat("pitch"));
+        clip.roll.insert(0F, 0D);
+        clip.fov.insert(0F, (double) map.getFloat("fov"));
+        clip.distance.insert(0F, (double) map.getFloat("distance"));
+
+        return clip;
     }
 
     public static final class Snapshot
