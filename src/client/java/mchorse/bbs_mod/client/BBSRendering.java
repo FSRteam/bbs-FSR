@@ -1670,6 +1670,29 @@ public class BBSRendering
         return isRenderingWorld() && isIrisShadersEnabled();
     }
 
+    /**
+     * Whether a shader pack is shading this very draw. Unlike {@link #isIrisShadersEnabled()} it
+     * also reports no inside {@link #renderOffscreen(Runnable)}, where our own framebuffer forms
+     * draw off-screen and Iris' programs must not take over the vanilla render types we use there.
+     */
+    public static boolean isIrisWorldShadersEnabled()
+    {
+        return iris && renderingWorld && isIrisShadersEnabled() && IrisUtils.shouldOverrideShaders();
+    }
+
+    /** Render into a framebuffer of ours: see {@link IrisUtils#renderOffscreen(Runnable)}. */
+    public static void renderOffscreen(Runnable render)
+    {
+        if (iris)
+        {
+            IrisUtils.renderOffscreen(render);
+        }
+        else
+        {
+            render.run();
+        }
+    }
+
     public static boolean isIrisShadowPass()
     {
         if (!iris)

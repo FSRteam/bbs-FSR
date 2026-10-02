@@ -10,7 +10,9 @@ import mchorse.bbs_mod.utils.DataPath;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
+import net.irisshaders.iris.pipeline.ShaderRenderingPipeline;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
+import net.irisshaders.iris.shadows.ShadowRenderer;
 import net.irisshaders.iris.shaderpack.LanguageMap;
 import net.irisshaders.iris.shaderpack.ShaderPack;
 import net.irisshaders.iris.shaderpack.option.menu.OptionMenuContainer;
@@ -43,6 +45,9 @@ public class IrisUtils
 {
     private static Set<Texture> textureSet = new HashSet<>();
     private static ShaderProperties properties;
+
+    /** Nesting depth of {@link #renderOffscreen(Runnable)}: only the outermost call flips Iris. */
+    private static int offscreenDepth;
 
     public static void setShaderProperties(ShaderProperties shaderProperties)
     {
@@ -187,6 +192,64 @@ public class IrisUtils
         {
             /* Iris 1.8.8 NeoForge exposes this directly on the pipeline. */
             pipeline.setIsMainBound(bound);
+        }
+    }
+
+    /**
+     * Whether the pack currently replaces the game's own programs. Iris 1.8.8 spells this as
+     * {@code isRenderingWorld && isMainBound} on {@link ShaderRenderingPipeline}, so this says no
+     * while the main framebuffer isn't bound — that is, while something renders off-screen — and
+     * a caller can tell "a pack is loaded" apart from "the pack is shading this very draw".
+     */
+    public static boolean shouldOverrideShaders()
+    {
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+
+        return pipeline instanceof ShaderRenderingPipeline shaders && shaders.shouldOverrideShaders();
+    }
+
+    /**
+     * Run a render that goes into a framebuffer of ours instead of the world's: the pack is told
+     * the main target is gone (so it stops overriding programs) and the shadow pass is turned off
+     * for the duration. Only the outermost call flips the pack's state — nested off-screen renders
+     * would otherwise hand the main target back while the outer one is still drawing.
+     *
+     * <p>Restoring {@code true} on the way out is exact rather than a guess: the flip only happens
+     * when the pack was overriding shaders, which Iris reports as main-bound plus rendering-world,
+     * so the state we interrupted was always "bound".</p>
+     */
+    public static void renderOffscreen(Runnable render)
+    {
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        boolean override = offscreenDepth == 0
+            && pipeline instanceof ShaderRenderingPipeline shaders
+            && shaders.shouldOverrideShaders();
+        boolean shadow = ShadowRenderer.ACTIVE;
+
+        try
+        {
+            if (override)
+            {
+                /* Upstream flips this through Iris' render-target-state listener; Iris 1.8.8
+                 * NeoForge has no such listener, and the pipeline setter writes the very flag
+                 * shouldOverrideShaders() reads. */
+                pipeline.setIsMainBound(false);
+            }
+
+            offscreenDepth += 1;
+            ShadowRenderer.ACTIVE = false;
+
+            render.run();
+        }
+        finally
+        {
+            offscreenDepth -= 1;
+            ShadowRenderer.ACTIVE = shadow;
+
+            if (override)
+            {
+                pipeline.setIsMainBound(true);
+            }
         }
     }
 

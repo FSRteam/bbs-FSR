@@ -42,7 +42,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
     private static final Vector3f framebufferLight0 = new Vector3f(0F, 0F, 1F);
     private static final Vector3f framebufferLight1 = new Vector3f(0F, 0F, 1F);
 
-    /* Nested framebuffer forms need separate targets and one outer Iris state change. */
+    /* Nested framebuffer forms need separate targets: the depth picks which cached framebuffer
+     * this level renders into (the off-screen Iris state is nested inside renderOffscreen). */
     private static int depth;
 
     private final Matrix4f projectionMatrix = new Matrix4f();
@@ -61,17 +62,19 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
     @Override
     public void renderBodyParts(FormRenderingContext context)
     {
-        Framebuffer framebuffer = BBSModClient.getFramebuffers().getFramebuffer(Link.bbs("framebuffer_form_" + depth), (f) ->
+        int w = MathUtils.clamp(this.form.width.get(), 2, 4096);
+        int h = MathUtils.clamp(this.form.height.get(), 2, 4096);
+        Framebuffer framebuffer = BBSModClient.getFramebuffers().getFramebuffer(Link.bbs("framebuffer_form_" + depth), w, h, (f) ->
         {
             Texture texture = new Texture();
 
-            texture.setSize(2, 2);
+            texture.setSize(w, h);
             texture.setFilter(GL11.GL_NEAREST);
             texture.setWrap(GL13.GL_CLAMP_TO_EDGE);
 
             Renderbuffer renderbuffer = new Renderbuffer();
 
-            renderbuffer.resize(2, 2);
+            renderbuffer.resize(w, h);
 
             f.deleteTextures().attach(texture, GL30.GL_COLOR_ATTACHMENT0);
             f.attach(renderbuffer);
@@ -95,11 +98,13 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             height = viewport.get(3);
         }
 
-        Texture mainTexture = framebuffer.getMainTexture();
-        int w = MathUtils.clamp(this.form.width.get(), 2, 4096);
-        int h = MathUtils.clamp(this.form.height.get(), 2, 4096);
         int prevDraw = GL30.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int prevRead = GL30.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        boolean scissorEnabled = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        int[] scissorBox = new int[4];
+
+        GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, scissorBox);
+
         int prevCullFace = GL30.glGetInteger(GL11.GL_CULL_FACE_MODE);
         Vector3f light0 = new Vector3f(RenderSystem.shaderLightDirections[0]);
         Vector3f light1 = new Vector3f(RenderSystem.shaderLightDirections[1]);
@@ -117,11 +122,9 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             RenderSystem.applyModelViewMatrix();
             framebuffer.apply();
 
-            if (w != mainTexture.width || h != mainTexture.height)
-            {
-                framebuffer.resize(w, h);
-            }
-
+            /* Whoever was drawing before us may have left a scissor box — the UI clips its
+             * viewport that way — and it would clip this framebuffer's own pixels too. */
+            RenderSystem.disableScissor();
             framebuffer.clear();
 
             context.stack.pushPose();
@@ -132,20 +135,16 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
                 context.stack.last().normal().identity();
 
                 depth += 1;
-                boolean outermost = depth == 1;
 
                 try
                 {
-                    if (outermost)
-                    {
-                        BBSRendering.setIrisMainBound(false);
-                    }
-
                     boolean queueWasActive = FormTranslucentQueue.suspend();
 
                     try
                     {
-                        super.renderBodyParts(context);
+                        /* Off-screen rendering: only the outermost framebuffer form flips Iris
+                         * off the main target, and the shadow pass stays off for the duration. */
+                        BBSRendering.renderOffscreen(() -> super.renderBodyParts(context));
                     }
                     finally
                     {
@@ -155,11 +154,6 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
                 finally
                 {
                     depth -= 1;
-
-                    if (outermost)
-                    {
-                        BBSRendering.setIrisMainBound(true);
-                    }
                 }
             }
             finally
@@ -172,6 +166,15 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
             GL30.glViewport(viewportX, viewportY, width, height);
+
+            if (scissorEnabled)
+            {
+                RenderSystem.enableScissor(scissorBox[0], scissorBox[1], scissorBox[2], scissorBox[3]);
+            }
+            else
+            {
+                RenderSystem.disableScissor();
+            }
 
             RenderSystem.setShaderLights(light0, light1);
             RenderSystem.getModelViewStack().popMatrix();
@@ -205,9 +208,12 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         uvQuad.p3.set(uvTLx, uvBRy, 0);
         uvQuad.p4.set(uvBRx, uvBRy, 0);
 
-        /* Calculate quad's size (vertices, not UV) */
-        float ratioX = w > h ? h / w : 1F;
-        float ratioY = h > w ? w / h : 1F;
+        /* Calculate quad's size (vertices, not UV). The scale sizes the quad the framebuffer is
+         * shown on, not what is drawn into it — the body parts always fill the whole texture, so
+         * raising it can't push them past the framebuffer's own edges. */
+        float scale = this.form.scale.get() * 2F;
+        float ratioX = (w > h ? h / w : 1F) * scale;
+        float ratioY = (h > w ? w / h : 1F) * scale;
         float TLx = (uvTLx - 0.5F) * ratioY;
         float TLy = -(uvTLy - 0.5F) * ratioX;
         float BRx = (uvBRx - 0.5F) * ratioY;
@@ -266,6 +272,10 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
         if (defer && FormTranslucentQueue.isActive())
         {
+            /* The deferred command binds the framebuffer's live texture at flush, and the cache
+             * hands one buffer to every form of a given nesting depth, so two sibling framebuffer
+             * forms deferring into the same queue would both show the last-rendered content. A
+             * known trade-off of the shared-per-depth framebuffer scheme, same as upstream's pool. */
             VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
             buffer.bind();
             buffer.upload(builder.buildOrThrow());

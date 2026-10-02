@@ -402,7 +402,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 BBSModClient.getTextures().bindTexture(texture);
                 RenderSystem.depthFunc(GL11.GL_LEQUAL);
 
-                Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
+                Supplier<ShaderInstance> mainShader = BBSRendering.isIrisWorldShadersEnabled() || !model.isVAORendered()
                     ? GameRenderer::getRendertypeEntityTranslucentCullShader
                     : BBSShaders::getModel;
 
@@ -984,7 +984,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 BBSModClient.getTextures().bindTexture(texture);
 
-                Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
+                Supplier<ShaderInstance> mainShader = BBSRendering.isIrisWorldShadersEnabled() || !model.isVAORendered()
                     ? GameRenderer::getRendertypeEntityTranslucentCullShader
                     : BBSShaders::getModel;
 
@@ -1064,7 +1064,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             }
 
             Texture textureObject = BBSModClient.getTextures().getTexture(texture);
-            boolean irisWorld = BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld();
+            boolean irisWorld = BBSRendering.isIrisWorldShadersEnabled();
             boolean cutout = irisWorld && textureObject != null && textureObject.hasTranslucency()
                 && color.a >= 1F && !this.form.additiveColor.get();
 
