@@ -95,16 +95,35 @@ public class ModelGroup implements IMapSerializable, RigBone
 
     /**
      * Composes one rotation layer into {@link #orient}, the quaternion the renderer applies in place of the
-     * euler triples. The FIRST layer on a bone seeds orient from the euler accumulated so far (this layer's
+     * euler triples. The FIRST layer on a bone seeds orient from what the channels say so far (this layer's
      * own {@code +=} included), so a single layer renders byte-identically to the euler path; every later
      * layer multiplies its delta as a quaternion, so stacked layers compose without the euler-pole flip.
      * Call this AFTER the layer has applied its additive euler readback to {@code current.rotate}.
+     *
+     * <p>The seed is mode-aware, the same read {@link #evaluatedRotation()} and
+     * {@code ModelRotationBlender.cubicLocal} make: in {@link Transform.RotationMode#QUATERNION} mode
+     * {@code current.rotate} is the euler readback of the channels and no longer describes the rotation —
+     * {@code current.quat} does. Some writers leave the channels behind and author the quaternion directly
+     * (the riptide spin, {@code ProceduralAnimator}); seeding from the stale euler there would drop the
+     * orientation they just wrote. In EULER mode this is the previous expression, character for character.
+     *
+     * <p>Upstream seeds from {@code toLocalRotationZYXDegrees(current.rotate)} unconditionally, and its
+     * {@code BOBJBone.composeOrient} seeds through the mode-aware {@code Transform.createRotation()} —
+     * so the two skeletons disagree upstream. This keeps the unit cubic needs (degrees) while following
+     * BOBJ's mode-aware behaviour, which is what {@link RigBone#composeOrient} documents.
+     *
+     * <p>{@code Model.applyPose} has a second, older copy of this seed (its QUATERNION branch) for the
+     * pose layer, where {@code orient} can still be null — the action phase composed nothing for that
+     * bone, or {@code fix} just dropped it. It must make the same read; the two are kept in step and
+     * each points at the other. {@code BOBJModel.applyPose} carries the same pair of sites.
      */
     public void composeOrient(Quaternionf delta)
     {
         if (this.orient == null)
         {
-            this.orient = Matrices.toLocalRotationZYXDegrees(this.current.rotate);
+            this.orient = this.current.rotationMode == Transform.RotationMode.QUATERNION
+                ? new Quaternionf(this.current.quat)
+                : Matrices.toLocalRotationZYXDegrees(this.current.rotate);
         }
         else
         {

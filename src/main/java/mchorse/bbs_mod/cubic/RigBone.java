@@ -61,8 +61,17 @@ public interface RigBone
 
     /**
      * Composes one rotation layer into the orient quaternion. The first layer seeds it from the
-     * euler accumulated so far, so a single layer stays byte-identical to the euler path; later
-     * layers multiply their delta, so stacked layers compose without the euler-pole flip.
+     * rotation the transform holds as of this point in the pipeline (the layer's own additive change
+     * included), so a single layer stays byte-identical to the euler path; later layers multiply
+     * their delta, so stacked layers compose without the euler-pole flip. Call it AFTER the layer
+     * has written its own additive change to the transform.
+     *
+     * <p>The seed is <b>mode-aware</b>: in
+     * {@link mchorse.bbs_mod.utils.pose.Transform.RotationMode#QUATERNION} mode the {@code rotate}
+     * triple is only a readback and {@code quat} is the rotation, so a layer that adds to
+     * {@code rotate} alone would otherwise drop what the quaternion holds — which is exactly what a
+     * writer that authors the quaternion directly leaves behind (the riptide spin). Each skeleton
+     * reads its own store in its own unit: the cubic group in degrees, the BOBJ bone in radians.
      */
     void composeOrient(Quaternionf delta);
 
@@ -127,6 +136,13 @@ public interface RigBone
      * Whether a stretch offset is stored in WORLD space (BOBJ, which accumulates it along the
      * chain) rather than in the bone's own local space with the pivot scale divided out (cubic).
      * The two skeletons genuinely disagree here, so the writer asks instead of assuming.
+     *
+     * <p><b>The default is a proxy, not the truth.</b> {@code !isRotationInDegrees()} happens to
+     * answer correctly for the two skeletons that exist today, but "which unit the euler channels
+     * use" and "which space a stretch offset lives in" are independent facts that just happen to
+     * line up here. A third skeleton — or a change to how either one stores its offsets — would get
+     * a silently wrong answer, and because this is a {@code default} nothing would fail to compile.
+     * An implementer whose offset space does not follow its rotation unit must override this.
      */
     default boolean usesWorldStretchOffset()
     {

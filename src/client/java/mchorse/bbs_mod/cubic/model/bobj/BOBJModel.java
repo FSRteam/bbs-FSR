@@ -154,7 +154,7 @@ public class BOBJModel implements IModel
                 bone.transform.lerp(Transform.DEFAULT, transform.fix);
 
                 /* fix blends toward rest, so a composed orientation from earlier layers no longer applies —
-                 * drop it and let composeOrient below re-seed from the fix-lerped euler. */
+                 * drop it and let the seed below take the fix-lerped rotation. */
                 bone.orient = null;
             }
 
@@ -165,12 +165,22 @@ public class BOBJModel implements IModel
 
             if (transform.rotationMode == Transform.RotationMode.QUATERNION)
             {
-                /* Quaternion pose: seed orient from the euler so far, compose the
-                 * pose quaternion straight in (gimbal-free), keep the euler readback
-                 * for gizmo/IK. Mirrors Model.applyPose. */
+                /* Quaternion pose: seed orient from the rotation the transform holds so far, compose
+                 * the pose quaternion straight in (gimbal-free), keep the euler readback for
+                 * gizmo/IK. Mirrors Model.applyPose.
+                 *
+                 * The seed is mode-aware, like BOBJBone.evaluatedRotation() and BOBJBone.composeOrient —
+                 * this skeleton's own two reads, which already agree: in QUATERNION mode
+                 * `transform.rotate` is a stale readback and `transform.quat` is the rotation, so
+                 * seeding from the euler there drops whatever authored the quaternion — the riptide
+                 * spin (ProceduralAnimator, the BOBJ branch) writes `transform.quat` and never touches
+                 * `rotate`, and this branch runs when the action phase composed no orientation for
+                 * this bone, or the fix above just dropped it. */
                 if (bone.orient == null)
                 {
-                    bone.orient = Matrices.toLocalRotationZYXRadians(bone.transform.rotate);
+                    bone.orient = bone.transform.rotationMode == Transform.RotationMode.QUATERNION
+                        ? new Quaternionf(bone.transform.quat)
+                        : Matrices.toLocalRotationZYXRadians(bone.transform.rotate);
                 }
 
                 bone.orient.mul(transform.createRotation());

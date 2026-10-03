@@ -208,8 +208,11 @@ public final class ModelIKRuntime
 
     /**
      * The chains the form's config compiles to on this model — the bones each one spans, root
-     * to tip, keyed by the tip bone that names it, in the config's order. For tools that act on
-     * a chain as a whole (the bake) without re-deriving the topology the solver uses.
+     * to tip, keyed by the tip bone that names it, in the order the solver itself walks them:
+     * shallowest chain root first ({@code ModelIKCache.compile} sorts by chain-root depth; the sort
+     * is stable, so chains at equal depth keep the config's order). For tools that act on a chain as
+     * a whole (the bake) without re-deriving the topology the solver uses. Note that this is NOT
+     * simply the config's order — a tool that depends on ordering must mean this one.
      */
     public static Map<String, List<String>> getChains(IModel model, ModelForm form)
     {
@@ -232,9 +235,14 @@ public final class ModelIKRuntime
 
     /**
      * The per-chain IK scalars the form's config seeds — one entry per enabled chain, keyed by
-     * the tip that names it. This is the shared source of truth for "what does a fresh
-     * IK-controls keyframe start from"; the editor's keyframe sheets and the bake's
-     * disable-these-chains pass both read it, so they cannot drift apart.
+     * the tip that names it. This is meant to be the single source of truth for "what does a fresh
+     * IK-controls keyframe start from", so that the editor's keyframe sheets and the bake's
+     * disable-these-chains pass cannot drift apart.
+     *
+     * <p>Today only this method exists: the editor still seeds from its own private
+     * {@code UIReplaysEditorUtils.buildIKControls}, which was verified field-for-field equivalent
+     * ({@code research/w1-interface-review.md} §5), and the bake is not written yet. The claim above
+     * becomes true when those two call this instead — until then, keep them in step by hand.
      */
     public static IKControls ikControls(ModelForm form)
     {
