@@ -5,7 +5,6 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -24,7 +23,6 @@ import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
-import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -533,16 +531,14 @@ public class OrbitFilmCameraController implements ICameraController
 
     private IEntity resolveEntity(Replay replay)
     {
-        Film film = this.controller.panel.getData();
-
-        if (film == null)
+        /* Addressed by the replay's stable id, not by its position: the entity map is keyed by id
+         * since identity moved off the list index, and a positional lookup would silently miss. */
+        if (replay == null || this.controller.panel.getData() == null)
         {
             return null;
         }
 
-        int index = CollectionUtils.getIndex(film.replays.getList(), replay);
-
-        return index < 0 ? null : this.controller.getEntities().get(index);
+        return this.controller.getEntities().get(replay.getId());
     }
 
     private Vector3d toWorld(Vector3d pivot)

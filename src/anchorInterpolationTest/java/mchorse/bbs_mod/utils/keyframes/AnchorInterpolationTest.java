@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.utils.keyframes;
 
 import java.lang.reflect.Proxy;
-import io.netty.util.collection.IntObjectHashMap;
-import io.netty.util.collection.IntObjectMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.film.FilmMatrices;
@@ -25,14 +25,23 @@ import org.joml.Matrix4f;
  */
 public class AnchorInterpolationTest
 {
+    /* An anchor now addresses its replay by stable id, and the actor map is keyed by that same id.
+     * Only presence in the map matters on this path, so the three ids below are arbitrary but
+     * valid: eight lowercase hex characters with at least one letter, which is what
+     * StableIds.isStableId accepts and what a legacy index can never look like. */
+    private static final String TARGET = "aaaaaaaa";
+    private static final String OTHER_TARGET = "bbbbbbbb";
+    private static final String ABSENT_TARGET = "cccccccc";
+
     private static int failures;
     private static int checks;
 
     public static void main(String[] args)
     {
         AnchorKeyframeFactory factory = new AnchorKeyframeFactory();
-        Anchor p = anchor(0, -4F), a = anchor(0, 0F);
-        Anchor b = anchor(0, 10F), q = anchor(0, 12F);
+        Anchor p = anchor("", -4F), a = anchor("", 0F);
+        Anchor b = anchor("", 10F), q = anchor("", 12F);
+
 
         for (IInterp interp : new IInterp[] {Interpolations.AUTO, Interpolations.AUTO_CLAMPED})
         {
@@ -44,8 +53,8 @@ public class AnchorInterpolationTest
 
         /* Offsets that belong to a different target live in a different coordinate system, so they
          * must not shape this segment's tangents. */
-        Anchor isolatedOther = anchor(1, 1000F);
-        Anchor boundaryOther = anchor(1, -1000F);
+        Anchor isolatedOther = anchor(OTHER_TARGET, 1000F);
+        Anchor boundaryOther = anchor(OTHER_TARGET, -1000F);
         near(
             factory.interpolate(isolatedOther, a, b, boundaryOther, Interpolations.HERMITE, 0.25F).transform.translate.x,
             factory.interpolate(a, a, b, b, Interpolations.HERMITE, 0.25F).transform.translate.x,
@@ -70,14 +79,15 @@ public class AnchorInterpolationTest
         }
 
         /* The resolved-transition path runs against the real compiled FilmMatrices, with a standalone
-         * IEntity whose only meaningful channel is its X. */
+         * IEntity whose only meaningful channel is its X. Both anchors have no target, so the
+         * caller's fallback matrix is the base and the anchor's own offset is folded into it. */
         a = anchor(Anchor.NO_ATTACHMENT, 2);
         b = anchor(Anchor.NO_ATTACHMENT, 6);
         for (float t : new float[] {-0.2F, 0, 0.25F, 0.5F, 1, 1.2F})
         {
             Anchor value = factory.interpolate(a, a, b, b, Interpolations.LINEAR, t);
             Matrix4f fallback = new Matrix4f().translation(10, 0, 0);
-            Pair<Matrix4f, Float> result = FilmMatrices.getTotalMatrix(new IntObjectHashMap<>(), value, fallback, 0D, 0D, 0D, 0F, 0);
+            Pair<Matrix4f, Float> result = FilmMatrices.getTotalMatrix(new LinkedHashMap<>(), value, fallback, 0D, 0D, 0D, 0F, 0);
             Matrix4f actual = result.a == null ? fallback : result.a;
             near(actual.m30(), 12 + 4 * t, "Independent fallback transforms, including overshoot: " + t);
             near(fallback.m30(), 10, "Fallback matrix is unchanged: " + t);
@@ -86,12 +96,15 @@ public class AnchorInterpolationTest
 
         IEntity target = entity(20D);
         IEntity other = entity(20D);
-        IntObjectMap<IEntity> entities = new IntObjectHashMap<>();
+        Map<String, IEntity> entities = new LinkedHashMap<>();
 
-        entities.put(0, target);
-        entities.put(1, other);
+        entities.put(TARGET, target);
+        entities.put(OTHER_TARGET, other);
 
-        for (int[] targets : new int[][] {{Anchor.NO_ATTACHMENT, 0}, {0, Anchor.NO_ATTACHMENT}, {0, 1}, {7, 0}})
+        /* Every combination of "resolves to an actor present in the map" and "resolves to nothing
+         * at all": an absent id must behave exactly like no target, not like a miss that loses the
+         * fallback matrix. */
+        for (String[] targets : new String[][] {{Anchor.NO_ATTACHMENT, TARGET}, {TARGET, Anchor.NO_ATTACHMENT}, {TARGET, OTHER_TARGET}, {ABSENT_TARGET, TARGET}})
         {
             a = anchor(targets[0], 2);
             b = anchor(targets[1], 6);
@@ -101,8 +114,8 @@ public class AnchorInterpolationTest
                 for (float t : new float[] {0, 0.25F, 0.5F, 0.75F, 1})
                 {
                     Anchor value = factory.interpolate(a, a, b, b, interp, t);
-                    boolean fromTarget = targets[0] == 0 || targets[0] == 1;
-                    boolean toTarget = targets[1] == 0 || targets[1] == 1;
+                    boolean fromTarget = entities.containsKey(targets[0]);
+                    boolean toTarget = entities.containsKey(targets[1]);
                     float weight = interp.interpolate(0F, 1F, t);
                     float fromX = (fromTarget ? 20 : 10) + 2;
                     float toX = (toTarget ? 20 : 10) + 6;
@@ -145,7 +158,7 @@ public class AnchorInterpolationTest
         });
     }
 
-    private static Anchor anchor(int replay, float x)
+    private static Anchor anchor(String replay, float x)
     {
         Anchor result = new Anchor(replay, "", false, false);
 

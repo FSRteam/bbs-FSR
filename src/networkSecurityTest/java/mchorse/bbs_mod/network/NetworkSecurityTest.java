@@ -7,6 +7,7 @@ import mchorse.bbs_mod.items.GunRuntimeWiringTest;
 import mchorse.bbs_mod.actions.FilmPlaybackPolicyTest;
 import mchorse.bbs_mod.actions.FilmActionAuthorityPolicyTest;
 import mchorse.bbs_mod.actions.FilmRawPreflightTest;
+import mchorse.bbs_mod.actions.FilmActionPathResolutionTest;
 import mchorse.bbs_mod.actions.ActionRuntimeAuthorityWiringTest;
 import mchorse.bbs_mod.actions.ActionManagerCompatibilityTest;
 import mchorse.bbs_mod.actions.ActionRetirementQueueTest;
@@ -45,6 +46,7 @@ public final class NetworkSecurityTest
         FilmPlayerSettingsPolicyTest.runAll();
         FilmActionAuthorityPolicyTest.runAll();
         FilmRawPreflightTest.runAll();
+        FilmActionPathResolutionTest.runAll();
         ActionRuntimeAuthorityWiringTest.runAll();
         ActionManagerCompatibilityTest.runAll();
         ActionRetirementQueueTest.runAll();

@@ -6,7 +6,6 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.EntityInteractionActionClip;
-import mchorse.bbs_mod.actions.values.ActionTarget;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
 import mchorse.bbs_mod.cubic.glint.GlintControls;
@@ -17,8 +16,6 @@ import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
-import mchorse.bbs_mod.film.replays.ReplayIndexRemapper;
-import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -28,14 +25,11 @@ import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
 import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
-import mchorse.bbs_mod.forms.values.ValueAnchor;
 import mchorse.bbs_mod.l10n.L10n;
-import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.KeyframeNavigationTest;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.film.utils.keyframes.KeyframeInteractionTest;
-import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.factory.MapFactory;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -65,9 +59,27 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Replay identity under list mutation.
+ *
+ * <p>These tests used to be about the index remapper: a film's replays were addressed by their
+ * position, so every insertion, removal and reorder had to be followed by a transaction that
+ * rewrote every reference. The stable-id migration removed that whole mechanism — a reference now
+ * names an actor's permanent id, and nothing has to be rewritten. What is left to check is the
+ * property the remapping was supposed to establish, and the failure mode it could not:
+ * <em>deleting</em> an actor used to make a reference quietly resolve onto whichever actor slid
+ * into the freed slot. It no longer can, because the id does not move.</p>
+ *
+ * <p>So the tests below pin down four invariants: a replay's id never changes under removal or
+ * reorder (and the id of a removed replay is never recycled); an id resolves to the one actor that
+ * carries it, even when two actors hold identical content; ids survive a save/load unchanged, no
+ * matter how many times the document is loaded; and the deleted-actor reference stays dangling
+ * instead of being retargeted or cleared.</p>
+ */
 public final class ReplayIndexRemappingTest
 {
-    private static final int[] REFERENCES = {-1, 0, 1, 2, 3, 99};
+    /** How many replays the identity scenarios build. Single deletion is enumerated over every slot. */
+    private static final int REPLAY_COUNT = 4;
 
     public static void main(String[] args)
     {
@@ -79,7 +91,9 @@ public final class ReplayIndexRemappingTest
             testBatchDeletion();
             testArbitraryReorder();
             testIdentityNotEquality();
-            testActionTargetReorderAndDeletion();
+            testIdRoundTripIsIdempotent();
+            testPositionalRenumberingIsRefused();
+            testActionTargetSurvivesReplayDeletion();
             testFilmReferenceTransaction();
             testGroupedSoundChannelsPreserveLegacyFallback();
             testGroupedSoundLoopIntervalLifecycle();
@@ -279,80 +293,179 @@ public final class ReplayIndexRemappingTest
         ).build(id);
     }
 
+    /**
+     * Exhaustive over every slot. However the one replay is chosen, removing it must leave every
+     * survivor's id alone, must make the removed id unresolvable, and must not hand the removed
+     * actor's identity to whichever replay slid into the freed slot.
+     */
     private static void testEverySingleDeletion()
     {
-        List<Object> previousOrder = replayOrder();
-
-        for (int removed = 0; removed < previousOrder.size(); removed++)
+        for (int removed = 0; removed < REPLAY_COUNT; removed++)
         {
-            List<Object> currentOrder = new ArrayList<>(previousOrder);
+            assertDeletionKeepsIdentities(removed, "single deletion " + removed);
+        }
+    }
 
-            currentOrder.remove(removed);
-            assertMapping(previousOrder, currentOrder, "single deletion " + removed);
+    private static void assertDeletionKeepsIdentities(int removed, String scenario)
+    {
+        Film film = filmWithReplays();
+        List<String> before = replayIds(film);
+        Replay deleted = film.replays.getList().get(removed);
+        String deletedId = deleted.getId();
+
+        film.replays.remove(deleted);
+
+        assertEquals(REPLAY_COUNT - 1, film.replays.getList().size(), scenario + ": list size");
+        assertTrue(film.replays.getById(deletedId) == null,
+            scenario + ": the deleted replay is still resolvable by its stable id");
+
+        List<String> expected = new ArrayList<>(before);
+
+        expected.remove(removed);
+        assertEquals(String.join(",", expected), String.join(",", replayIds(film)),
+            scenario + ": deleting a replay renumbered the survivors");
+
+        if (removed < film.replays.getList().size())
+        {
+            String occupant = film.replays.getList().get(removed).getId();
+
+            assertTrue(!deletedId.equals(occupant),
+                scenario + ": the replay that took the freed slot inherited the deleted id, so a "
+                    + "dangling reference would silently resolve onto a different actor");
         }
     }
 
     private static void testBatchDeletion()
     {
-        List<Object> previousOrder = replayOrder();
-        List<Object> currentOrder = List.of(previousOrder.get(0), previousOrder.get(2));
+        Film film = filmWithReplays();
+        List<String> before = replayIds(film);
 
-        assertMapping(previousOrder, currentOrder, "batch deletion");
+        film.replays.remove(film.replays.getList().get(0));
+        film.replays.remove(film.replays.getById(before.get(2)));
+
+        assertEquals(REPLAY_COUNT - 2, film.replays.getList().size(), "batch deletion: list size");
+        assertTrue(film.replays.getById(before.get(0)) == null && film.replays.getById(before.get(2)) == null,
+            "batch deletion left a deleted replay resolvable by its stable id");
+        assertEquals(String.join(",", List.of(before.get(1), before.get(3))), String.join(",", replayIds(film)),
+            "batch deletion renumbered the survivors");
     }
 
     private static void testArbitraryReorder()
     {
-        List<Object> previousOrder = replayOrder();
-        List<Object> currentOrder = List.of(
-            previousOrder.get(2),
-            previousOrder.get(0),
-            previousOrder.get(3),
-            previousOrder.get(1)
-        );
+        Film film = filmWithReplays();
+        List<String> before = replayIds(film);
+        Replay moved = film.replays.getList().get(REPLAY_COUNT - 1);
 
-        assertMapping(previousOrder, currentOrder, "arbitrary reorder");
+        /* Move the last replay to the front through the list's own door. */
+        film.replays.remove(moved);
+        film.replays.add(0, moved);
+
+        List<String> expected = new ArrayList<>(before);
+        String lastId = expected.remove(REPLAY_COUNT - 1);
+
+        expected.add(0, lastId);
+        assertEquals(String.join(",", expected), String.join(",", replayIds(film)),
+            "reordering rewrote the replays' stable ids");
+        assertTrue(film.replays.getById(lastId) == moved,
+            "the reordered replay is not resolvable by the id it kept");
+        assertTrue(film.replays.getById(before.get(0)) == film.replays.getList().get(1),
+            "the replay left in place was retargeted by another replay's move");
     }
 
+    /**
+     * Two replays with identical persisted content are still two different actors. Everything that
+     * used to be a positional lookup now resolves through the id, so an equality-based lookup would
+     * be free to return either of the two.
+     */
     private static void testIdentityNotEquality()
     {
-        String first = new String("same");
-        String second = new String("same");
-        List<String> previousOrder = List.of(first, second);
-        List<String> currentOrder = List.of(second, first);
-        int[] oldToNew = ReplayIndexRemapper.create(previousOrder, currentOrder);
+        Film film = filmWithReplays();
+        Replay first = film.replays.getList().get(0);
+        Replay second = film.replays.getList().get(1);
 
-        assertEquals(1, ReplayIndexRemapper.remap(0, oldToNew), "identity first");
-        assertEquals(0, ReplayIndexRemapper.remap(1, oldToNew), "identity second");
+        /* Make the two actors hold the same content, so only identity can tell them apart. */
+        second.fromData(first.toData());
+
+        assertTrue(first != second, "two replays collapsed into one object");
+        assertTrue(!first.getId().equals(second.getId()), "two replays were issued the same stable id");
+        assertTrue(film.replays.getById(first.getId()) == first, "id lookup selected the first equal replay");
+        assertTrue(film.replays.getById(second.getId()) == second, "id lookup selected the wrong equal replay");
     }
 
-    private static void testActionTargetReorderAndDeletion()
+    /**
+     * The other half of "the id lives in the data": ids survive a save and a load, and loading a
+     * document twice does not mint a second set of them. This is what makes running a conversion
+     * again a no-op instead of a renumbering.
+     */
+    private static void testIdRoundTripIsIdempotent()
     {
+        Film film = filmWithReplays();
+        String ids = String.join(",", replayIds(film));
+        BaseType data = film.toData();
+        Film once = new Film();
+        Film twice = new Film();
+
+        once.fromData(data);
+        twice.fromData(once.toData());
+
+        assertEquals(ids, String.join(",", replayIds(once)), "replay ids changed on the first load");
+        assertEquals(ids, String.join(",", replayIds(twice)), "replay ids changed on the second load");
+    }
+
+    /**
+     * Positional renumbering is the exact bookkeeping stable ids replaced. It has to fail loudly
+     * rather than quietly rewrite every identity, and a refused call must leave the ids as they were.
+     */
+    private static void testPositionalRenumberingIsRefused()
+    {
+        Film film = filmWithReplays();
+        String before = String.join(",", replayIds(film));
+
+        try
+        {
+            film.replays.sync();
+
+            throw new AssertionError("a stable-id replay list was renumbered by position");
+        }
+        catch (UnsupportedOperationException expected)
+        {
+            /* The contract: there is no longer any way to renumber a replay list by position. */
+        }
+
+        assertEquals(before, String.join(",", replayIds(film)), "a refused renumbering still rewrote ids");
+    }
+
+    /**
+     * An action target addresses its actor by the replay's stable id. Deleting that replay must
+     * leave the reference dangling — neither rewritten onto whichever replay took the slot nor
+     * cleared — while the tombstone (uuid, type, position) that lets the action fall back to a
+     * raycast survives untouched.
+     */
+    private static void testActionTargetSurvivesReplayDeletion()
+    {
+        Film film = filmWithReplays();
+        Replay deleted = film.replays.getList().get(1);
+        String deletedId = deleted.getId();
         AttackActionClip attack = new AttackActionClip();
         EntityInteractionActionClip interaction = new EntityInteractionActionClip();
-        NestedTargetClip addon = new NestedTargetClip();
 
         attack.target.uuid.set("00000000-0000-0000-0000-000000000001");
         attack.target.entityType.set("bbs:actor");
-        attack.target.replayId.set("1");
+        attack.target.replayId.set(deletedId);
         attack.target.position.get().set(1D, 2D, 3D);
         interaction.target.uuid.set("00000000-0000-0000-0000-000000000002");
         interaction.target.entityType.set("bbs:actor");
-        interaction.target.replayId.set("2");
+        interaction.target.replayId.set(deletedId);
         interaction.target.position.get().set(4D, 5D, 6D);
-        addon.target.uuid.set("00000000-0000-0000-0000-000000000003");
-        addon.target.replayId.set("0");
 
-        ReplayReferenceRemapper.remap(List.of(attack, interaction, addon), new int[] {1, 2, 0});
+        film.replays.remove(deleted);
 
-        assertEquals("2", attack.target.replayId.get(), "attack target reorder");
-        assertEquals("0", interaction.target.replayId.get(), "entity-interaction target reorder");
-        assertEquals("1", addon.target.replayId.get(), "nested addon action target reorder");
-
-        interaction.target.replayId.set("invalid");
-        ReplayReferenceRemapper.remap(List.of(attack, interaction), new int[] {0, 1, ReplayIndexRemapper.NO_TARGET});
-
-        assertEquals("", attack.target.replayId.get(), "deleted attack target replay fallback");
-        assertEquals("", interaction.target.replayId.get(), "invalid entity-interaction replay fallback");
+        assertEquals(deletedId, attack.target.replayId.get(), "deleting the replay rewrote the attack target");
+        assertEquals(deletedId, interaction.target.replayId.get(), "deleting the replay rewrote the entity-interaction target");
+        assertTrue(film.replays.getById(attack.target.replayId.get()) == null,
+            "the dangling attack target resolves again, so the deletion retargeted it");
+        assertTrue(film.replays.getById(interaction.target.replayId.get()) == null,
+            "the dangling entity-interaction target resolves again, so the deletion retargeted it");
         assertTrue(attack.target.isPresent(), "deleted attack target became a legacy raycast action");
         assertTrue(interaction.target.isPresent(), "deleted entity-interaction target lost its targeted tombstone");
         assertEquals("00000000-0000-0000-0000-000000000001", attack.target.uuid.get(), "deleted attack target UUID tombstone");
@@ -365,17 +478,6 @@ public final class ReplayIndexRemappingTest
         assertEquals(4D, interaction.target.position.get().x, "entity-interaction target x");
         assertEquals(5D, interaction.target.position.get().y, "entity-interaction target y");
         assertEquals(6D, interaction.target.position.get().z, "entity-interaction target z");
-
-        ValueGroup anchorHolder = new ValueGroup("holder");
-        ValueAnchor aliasedAnchor = new ValueAnchor("anchor", new Anchor());
-
-        aliasedAnchor.getOriginalValue().replay = 0;
-        aliasedAnchor.setRuntimeValue(aliasedAnchor.getOriginalValue());
-        anchorHolder.add(aliasedAnchor);
-        ReplayReferenceRemapper.remap(List.of(anchorHolder), new int[] {1, 0});
-
-        assertEquals(1, aliasedAnchor.getOriginalValue().replay,
-            "aliased runtime/original anchor was remapped twice");
     }
 
     private static void testFilmReferenceTransaction()
@@ -396,48 +498,59 @@ public final class ReplayIndexRemappingTest
         AnchorForm nestedForm = new AnchorForm();
         BodyPart part = new BodyPart("0");
 
+        String sourceId = source.getId();
+        String firstId = firstTarget.getId();
+        String secondId = secondTarget.getId();
+
         attack.target.uuid.set("00000000-0000-0000-0000-000000000011");
-        attack.target.replayId.set("1");
+        attack.target.replayId.set(secondId);
         interaction.target.uuid.set("00000000-0000-0000-0000-000000000012");
-        interaction.target.replayId.set("2");
+        interaction.target.replayId.set(sourceId);
         source.actions.addClip(attack);
         source.actions.addClip(interaction);
-        camera.selector.set(2);
+        camera.selector.set(secondId);
         film.camera.addClip(camera);
-        form.anchor.get().replay = 1;
+        form.anchor.get().replay = firstId;
+
         Anchor runtimeAnchor = new Anchor();
 
-        runtimeAnchor.replay = 0;
+        runtimeAnchor.replay = secondId;
         form.anchor.setRuntimeValue(runtimeAnchor);
-        nestedForm.anchor.get().replay = 2;
+        nestedForm.anchor.get().replay = sourceId;
         part.setForm(nestedForm);
         form.parts.addBodyPart(part);
         source.form.set(form);
 
-        List<Replay> previousOrder = new ArrayList<>(film.replays.getList());
-
+        /* Reorder: the last replay becomes the first. Every reference above addresses an actor by
+         * its stable id, so the move must not retarget a single one of them. */
         film.replays.remove(secondTarget);
         film.replays.add(0, secondTarget);
-        film.replays.sync();
-        UIReplayList.remapReplayReferences(film, previousOrder);
 
-        assertEquals("2", attack.target.replayId.get(), "film attack target reorder");
-        assertEquals("0", interaction.target.replayId.get(), "film entity target reorder");
-        assertEquals(2, form.anchor.getOriginalValue().replay, "top-level form anchor reorder");
-        assertEquals(1, form.anchor.getRuntimeValue().replay, "transient form anchor did not follow the same reorder");
-        assertEquals(0, nestedForm.anchor.get().replay, "nested body-part anchor reorder");
-        assertEquals(0, camera.selector.get(), "camera entity selector reorder");
+        assertEquals(String.join(",", List.of(secondId, sourceId, firstId)), String.join(",", replayIds(film)),
+            "reordering rewrote the replays' stable ids");
+        assertEquals(secondId, attack.target.replayId.get(), "reorder retargeted the film attack target");
+        assertEquals(sourceId, interaction.target.replayId.get(), "reorder retargeted the film entity target");
+        assertEquals(firstId, form.anchor.getOriginalValue().replay, "reorder retargeted the top-level form anchor");
+        assertEquals(secondId, form.anchor.getRuntimeValue().replay,
+            "the transient form anchor followed the reorder instead of its own id");
+        assertEquals(sourceId, nestedForm.anchor.get().replay, "reorder retargeted the nested body-part anchor");
+        assertEquals(secondId, camera.selector.get(), "reorder retargeted the camera entity selector");
+        assertTrue(film.replays.getById(secondId) == secondTarget, "the reordered replay is not resolvable by its id");
+        assertTrue(film.replays.getById(firstId) == firstTarget, "the replay left in place is not resolvable by its id");
 
-        previousOrder = new ArrayList<>(film.replays.getList());
+        /* Delete an actor a reference points at. The reference has to stay dangling: nothing
+         * rewrites it, and it must not resolve onto whichever replay took the freed slot. */
         film.replays.remove(firstTarget);
-        UIReplayList.remapReplayReferences(film, previousOrder);
 
-        assertEquals("", attack.target.replayId.get(), "deleted film action target fallback");
-        assertTrue(attack.target.isPresent(), "deleted film action target became legacy raycast");
-        assertEquals(ReplayIndexRemapper.NO_TARGET, form.anchor.getOriginalValue().replay, "deleted top-level form anchor");
-        assertEquals(0, nestedForm.anchor.get().replay, "surviving nested body-part anchor");
-        assertEquals("0", interaction.target.replayId.get(), "surviving film entity target");
-        assertEquals(0, camera.selector.get(), "surviving camera selector");
+        assertEquals(String.join(",", List.of(secondId, sourceId)), String.join(",", replayIds(film)),
+            "deleting a replay renumbered the survivors");
+        assertTrue(film.replays.getById(firstId) == null, "the deleted replay is still resolvable by its id");
+        assertEquals(firstId, form.anchor.getOriginalValue().replay, "deletion retargeted the top-level form anchor");
+        assertEquals(secondId, form.anchor.getRuntimeValue().replay, "deletion retargeted the transient form anchor");
+        assertEquals(secondId, attack.target.replayId.get(), "deletion retargeted the film attack target");
+        assertEquals(sourceId, interaction.target.replayId.get(), "deletion retargeted the film entity target");
+        assertEquals(sourceId, nestedForm.anchor.get().replay, "deletion retargeted the surviving nested body-part anchor");
+        assertEquals(secondId, camera.selector.get(), "deletion retargeted the surviving camera selector");
     }
 
     @SuppressWarnings("unchecked")
@@ -701,44 +814,30 @@ public final class ReplayIndexRemappingTest
             "sound property reset does not restore the persisted loop interval");
     }
 
-    private static List<Object> replayOrder()
+    /** A film with {@link #REPLAY_COUNT} replays, each already carrying the id its list assigned. */
+    private static Film filmWithReplays()
     {
-        return List.of(new Object(), new Object(), new Object(), new Object());
+        Film film = new Film();
+
+        for (int i = 0; i < REPLAY_COUNT; i++)
+        {
+            film.replays.addReplay();
+        }
+
+        return film;
     }
 
-    private static void assertMapping(List<?> previousOrder, List<?> currentOrder, String scenario)
+    /** The replays' ids in list order — the sequence every identity assertion compares. */
+    private static List<String> replayIds(Film film)
     {
-        int[] oldToNew = ReplayIndexRemapper.create(previousOrder, currentOrder);
+        List<String> ids = new ArrayList<>();
 
-        assertEquals(previousOrder.size(), oldToNew.length, scenario + " mapping size");
-
-        for (int oldReference : REFERENCES)
+        for (Replay replay : film.replays.getList())
         {
-            int expected = expectedIndex(oldReference, previousOrder, currentOrder);
-            int actual = ReplayIndexRemapper.remap(oldReference, oldToNew);
-
-            assertEquals(expected, actual, scenario + " reference " + oldReference);
-        }
-    }
-
-    private static int expectedIndex(int oldIndex, List<?> previousOrder, List<?> currentOrder)
-    {
-        if (oldIndex < 0 || oldIndex >= previousOrder.size())
-        {
-            return ReplayIndexRemapper.NO_TARGET;
+            ids.add(replay.getId());
         }
 
-        Object target = previousOrder.get(oldIndex);
-
-        for (int i = 0; i < currentOrder.size(); i++)
-        {
-            if (currentOrder.get(i) == target)
-            {
-                return i;
-            }
-        }
-
-        return ReplayIndexRemapper.NO_TARGET;
+        return ids;
     }
 
     private static void assertEquals(int expected, int actual, String message)
@@ -804,23 +903,5 @@ public final class ReplayIndexRemappingTest
         assertEquals(20D, entity.getDeath(), "death 1 after a ramp did not map to 20");
 
         assertTrue(entity.getHurtTimer() >= 1, "applied death did not keep the red flash active");
-    }
-
-    private static final class NestedTargetClip extends Clip
-    {
-        private final ValueGroup nested = new ValueGroup("nested");
-        private final ActionTarget target = new ActionTarget("target");
-
-        private NestedTargetClip()
-        {
-            this.nested.add(this.target);
-            this.add(this.nested);
-        }
-
-        @Override
-        protected Clip create()
-        {
-            return new NestedTargetClip();
-        }
     }
 }

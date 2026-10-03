@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.camera;
 
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.clips.CameraPosePolicy;
 import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
@@ -10,6 +9,8 @@ import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
+
+import java.util.Map;
 
 /** Resolves a camera edit against its own track and playhead, without playback effects. */
 public final class CameraPoseEditing
@@ -46,7 +47,7 @@ public final class CameraPoseEditing
 
     /** Remove the layers above this clip using this camera's snapshots, not the legacy runner's. */
     public static Position toClipPosition(Film film, String cameraId, Clip clip, int tick, Position pose,
-        IntObjectMap<IEntity> entities)
+        Map<String, IEntity> entities)
     {
         Position edited = pose.copy();
 

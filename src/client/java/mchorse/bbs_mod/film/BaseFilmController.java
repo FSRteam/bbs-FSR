@@ -1,8 +1,6 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import io.netty.util.collection.IntObjectHashMap;
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.client.renderer.ItemUseEffects;
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
 import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
@@ -30,7 +28,6 @@ import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.mixin.client.ClientPlayerEntityAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.ui.utils.Gizmo;
-import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
@@ -46,6 +43,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -53,7 +51,8 @@ public abstract class BaseFilmController
 {
     public final Film film;
 
-    protected IntObjectMap<IEntity> entities = new IntObjectHashMap<>();
+    /** Keyed by each replay's stable id (never by index), in replay-list order. */
+    protected Map<String, IEntity> entities = new LinkedHashMap<>();
 
     public boolean paused;
     public int exception = -1;
@@ -68,7 +67,7 @@ public abstract class BaseFilmController
         this.film = film;
     }
 
-    public IntObjectMap<IEntity> getEntities()
+    public Map<String, IEntity> getEntities()
     {
         return this.entities;
     }
@@ -87,8 +86,6 @@ public abstract class BaseFilmController
         {
             return;
         }
-
-        int i = 0;
 
         for (Replay replay : this.film.replays.getList())
         {
@@ -114,10 +111,10 @@ public abstract class BaseFilmController
                 entity.setPrevPitch(entity.getPitch());
                 entity.setPrevBodyYaw(entity.getBodyYaw());
 
-                this.entities.put(i, entity);
+                /* Keyed by the replay's stable id. Disabled replays simply have no entry, so every
+                 * walk over this map must go through the replay list and tolerate a miss. */
+                this.entities.put(replay.getId(), entity);
             }
-
-            i += 1;
         }
 
     }
@@ -156,14 +153,17 @@ public abstract class BaseFilmController
             return;
         }
 
-        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
-        {
-            int i = entry.getKey();
-            IEntity entity = entry.getValue();
-            List<Replay> replays = this.film.replays.getList();
-            Replay replay = CollectionUtils.getSafe(replays, i);
+        List<Replay> replays = this.film.replays.getList();
 
-            if (replay == null || !replay.enabled.get())
+        for (int i = 0; i < replays.size(); i++)
+        {
+            Replay replay = replays.get(i);
+            IEntity entity = this.entities.get(replay.getId());
+
+            /* This used to walk the entity map, so a disabled replay was skipped for free. The walk
+             * now goes over the list (the map's ids are not positions), and a disabled replay has no
+             * entity — the miss is the skip. */
+            if (entity == null || !replay.enabled.get())
             {
                 continue;
             }
@@ -220,14 +220,14 @@ public abstract class BaseFilmController
             return;
         }
 
-        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
-        {
-            int i = entry.getKey();
-            IEntity entity = entry.getValue();
-            List<Replay> replays = this.film.replays.getList();
-            Replay replay = CollectionUtils.getSafe(replays, i);
+        List<Replay> replays = this.film.replays.getList();
 
-            if (replay == null || !replay.enabled.get())
+        for (int i = 0; i < replays.size(); i++)
+        {
+            Replay replay = replays.get(i);
+            IEntity entity = this.entities.get(replay.getId());
+
+            if (entity == null || !replay.enabled.get())
             {
                 continue;
             }
@@ -405,19 +405,23 @@ public abstract class BaseFilmController
         /* Phase 1: every replay receives this frame's ordinary properties and
          * scalar procedural controls before any target channel samples another
          * replay's bones. This removes replay iteration order from simulation. */
-        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
-        {
-            int i = entry.getKey();
-            IEntity entity = entry.getValue();
-            Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
-            Entity anEntity = replay == null ? null : this.getReplayActor(replay);
+        List<Replay> replays = this.film.replays.getList();
 
-            if (replay != null)
+        for (int i = 0; i < replays.size(); i++)
+        {
+            Replay replay = replays.get(i);
+            IEntity entity = this.entities.get(replay.getId());
+
+            if (entity == null)
             {
-                FilmMatrices.markRelativeReplayEntity(entity, replay.relative.get());
+                continue;
             }
 
-            if (replay == null || !replay.enabled.get())
+            Entity anEntity = this.getReplayActor(replay);
+
+            FilmMatrices.markRelativeReplayEntity(entity, replay.relative.get());
+
+            if (!replay.enabled.get())
             {
                 FormUtilsClient.release(entity.getForm());
                 this.clearActorTimeline(anEntity);
@@ -486,13 +490,14 @@ public abstract class BaseFilmController
 
         /* Phase 2: target maps are now assembled without advancing current-age
          * physics. Placement-aware sampling happens only after this phase. */
-        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
-        {
-            int i = entry.getKey();
-            IEntity entity = entry.getValue();
-            Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
+        List<Replay> phaseTwoReplays = this.film.replays.getList();
 
-            if (replay == null || !replay.enabled.get() || !this.canUpdate(i, replay, entity, UpdateMode.PROPERTIES))
+        for (int i = 0; i < phaseTwoReplays.size(); i++)
+        {
+            Replay replay = phaseTwoReplays.get(i);
+            IEntity entity = this.entities.get(replay.getId());
+
+            if (entity == null || !replay.enabled.get() || !this.canUpdate(i, replay, entity, UpdateMode.PROPERTIES))
             {
                 continue;
             }
@@ -786,7 +791,7 @@ public abstract class BaseFilmController
 
         IEntity targetEntity = this.entities.get(resolve.replay);
 
-        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(this.entities, resolve))
+        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(this.entities, resolve))
         {
             return;
         }
@@ -845,7 +850,7 @@ public abstract class BaseFilmController
 
         IEntity targetEntity = this.entities.get(resolve.replay);
 
-        if (weight <= 0F || resolve.replay == Anchor.NO_ATTACHMENT || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(this.entities, resolve))
+        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(this.entities, resolve))
         {
             return;
         }
@@ -931,13 +936,14 @@ public abstract class BaseFilmController
          * they can see. */
         Frustum frustum = context.frustum();
 
-        for (Map.Entry<Integer, IEntity> entry : this.entities.entrySet())
-        {
-            int i = entry.getKey();
-            IEntity entity = entry.getValue();
-            Replay replay = CollectionUtils.getSafe(this.film.replays.getList(), i);
+        List<Replay> renderReplays = this.film.replays.getList();
 
-            if (replay == null || !replay.enabled.get())
+        for (int i = 0; i < renderReplays.size(); i++)
+        {
+            Replay replay = renderReplays.get(i);
+            IEntity entity = this.entities.get(replay.getId());
+
+            if (entity == null || !replay.enabled.get())
             {
                 continue;
             }

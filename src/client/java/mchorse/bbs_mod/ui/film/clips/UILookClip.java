@@ -48,7 +48,7 @@ public class UILookClip extends UIClip<LookClip>
 
             if (panel != null)
             {
-                UIAnchorKeyframeFactory.displayActors(this.getContext(), panel.getController().getEntities(), this.clip.selector.get(), (i) -> this.clip.selector.set(i));
+                UIAnchorKeyframeFactory.displayActors(this.getContext(), panel.getController().getEntities(), this.clip.selector.get(), (id) -> this.clip.selector.set(id));
             }
         });
         this.selector.tooltip(UIKeys.CAMERA_PANELS_TARGET_TOOLTIP);

@@ -118,12 +118,12 @@ public final class FilmFrustumCulling
         ));
     }
 
-    /** Whether the form is anchored onto another replay (FSR's counterpart of {@code hasTarget()}). */
+    /** Whether the form is anchored onto another replay. */
     public static boolean hasAnchorTarget(Form form)
     {
         Anchor anchor = form.anchor.get();
 
-        return anchor != null && anchor.replay != Anchor.NO_ATTACHMENT;
+        return anchor != null && anchor.hasTarget();
     }
 
     /**

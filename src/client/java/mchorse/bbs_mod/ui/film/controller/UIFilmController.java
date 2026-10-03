@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.film.controller;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -21,8 +22,6 @@ import com.mojang.logging.LogUtils;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 
-import io.netty.util.collection.IntObjectHashMap;
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
@@ -486,9 +485,10 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return null;
         }
 
-        int idx = this.getCurrentReplayIndex();
+        /* The entity map is keyed by the replay's stable id, never by its position in the list. */
+        Replay replay = this.getReplay();
 
-        return idx < 0 ? null : this.getEntities().get(idx);
+        return replay == null ? null : this.getEntities().get(replay.getId());
     }
 
     public int getPovMode()
@@ -582,7 +582,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.editorController = new FilmEditorController(this.panel.getData(), this);
         this.editorController.createEntities();
 
-        IntObjectMap<IEntity> entities = this.panel.getRunner().getContext().entities;
+        Map<String, IEntity> entities = this.panel.getRunner().getContext().entities;
 
         entities.clear();
         entities.putAll(this.editorController.getEntities());
@@ -598,14 +598,14 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
     }
 
-    public IntObjectMap<IEntity> getEntities()
+    public Map<String, IEntity> getEntities()
     {
         if (!this.sceneOwner)
         {
             return this.panel.getController().getEntities();
         }
 
-        return this.editorController == null ? new IntObjectHashMap<>() : this.editorController.getEntities();
+        return this.editorController == null ? new LinkedHashMap<>() : this.editorController.getEntities();
     }
 
     public Map<String, Integer> getActors()
@@ -654,7 +654,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
 
         boolean replacePlayer = ClientNetwork.isIsBBSModOnServer();
-        IntObjectMap<IEntity> entities = this.getEntities();
+        Map<String, IEntity> entities = this.getEntities();
 
         if (this.controlled != null)
         {
@@ -662,11 +662,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
             {
                 this.controlled.setForm(this.playerForm);
 
-                Integer controlledIndex = CollectionUtils.getKey(entities, this.controlled);
+                String controlledId = CollectionUtils.getKey(entities, this.controlled);
 
-                if (controlledIndex != null)
+                if (controlledId != null)
                 {
-                    entities.put(controlledIndex, this.previousEntity);
+                    entities.put(controlledId, this.previousEntity);
                 }
 
                 this.previousEntity = null;
@@ -687,11 +687,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 player.copy(this.controlled);
                 PlayerUtils.teleport(this.controlled.getX(), this.controlled.getY(), this.controlled.getZ(), this.controlled.getHeadYaw(), this.controlled.getBodyYaw(), this.controlled.getPitch());
-                Integer controlledIndex = CollectionUtils.getKey(entities, this.controlled);
+                String controlledId = CollectionUtils.getKey(entities, this.controlled);
 
-                if (controlledIndex != null)
+                if (controlledId != null)
                 {
-                    entities.put(controlledIndex, player);
+                    entities.put(controlledId, player);
                 }
 
                 this.controlled = player;
@@ -2646,22 +2646,23 @@ public class UIFilmController extends UIElement implements GizmoViewport
                 int selectedReplayIndex = this.getCurrentReplayIndex();
                 Pair<String, Boolean> bone = this.getBone();
 
-                for (Map.Entry<Integer, IEntity> entry : this.getEntities().entrySet())
+                for (int i = 0; i < replays.size(); i++)
                 {
-                    Replay replay = CollectionUtils.getSafe(replays, entry.getKey());
+                    Replay replay = replays.get(i);
+                    IEntity replayEntity = this.getEntities().get(replay.getId());
 
-                    if (replay == null)
+                    if (replayEntity == null)
                     {
                         continue;
                     }
 
                     FilmControllerContext filmContext = FilmControllerContext.instance
-                        .setup(this.getEntities(), entry.getValue(), replay, renderContext)
+                        .setup(this.getEntities(), replayEntity, replay, renderContext)
                         .transition(isPlaying ? renderContext.tickDelta() : 0)
                         .stencil(this.stencilMap)
                         .relative(replay.relative.get());
 
-                    if (entry.getKey() == selectedReplayIndex)
+                    if (i == selectedReplayIndex)
                     {
                         this.stencilMap.objectIndex = replays.size() + REPLAY_STENCIL_OFFSET;
                         this.stencilMap.setIncrement(true);
@@ -2673,7 +2674,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
                     }
                     else
                     {
-                        this.stencilMap.objectIndex = entry.getKey() + REPLAY_STENCIL_OFFSET;
+                        /* The stencil object index IS the replay's position in the list — never its
+                         * stable id. The pick pass hands that number back to the replay list. */
+                        this.stencilMap.objectIndex = i + REPLAY_STENCIL_OFFSET;
                         this.stencilMap.setIncrement(false);
                     }
 

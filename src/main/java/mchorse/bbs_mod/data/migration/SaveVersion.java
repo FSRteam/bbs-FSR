@@ -28,8 +28,12 @@ public class SaveVersion
      * document kind it belongs to.
      *
      * <p>1 — versioning itself; the shape of the data is unchanged from the versionless files.
+     *
+     * <p>2 — stable ids: every replay and body part is addressed by a {@code StableIds id} instead
+     * of its position in a list, and every reference that used to be an index (anchor actors,
+     * camera clip selectors, recorded action targets) holds that id.
      */
-    public static final int CURRENT = 1;
+    public static final int CURRENT = 2;
 
     /** Documents written before versioning existed: they carry no {@link #KEY} at all. */
     public static final int LEGACY = 0;

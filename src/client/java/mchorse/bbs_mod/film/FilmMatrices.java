@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.film;
 
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -47,27 +46,27 @@ public class FilmMatrices
     private static final Map<IEntity, Object> RELATIVE_SIMULATION_OWNERS = new WeakHashMap<>();
     private static final Map<IEntity, Object> TARGET_RESOLUTION_OWNERS = new WeakHashMap<>();
 
-    public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i)
+    public static Pair<Matrix4f, Float> getTotalMatrix(Map<String, IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i)
     {
         return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, false);
     }
 
-    public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix)
+    public static Pair<Matrix4f, Float> getTotalMatrix(Map<String, IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix)
     {
         return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, true, null);
     }
 
-    public static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, FormFrameCache frame)
+    public static Pair<Matrix4f, Float> getTotalMatrix(Map<String, IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, FormFrameCache frame)
     {
         return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, true, frame);
     }
 
-    static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware)
+    static Pair<Matrix4f, Float> getTotalMatrix(Map<String, IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware)
     {
         return getTotalMatrix(entities, value, defaultMatrix, cx, cy, cz, transition, i, fullMatrix, placementAware, null);
     }
 
-    private static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware, FormFrameCache frame)
+    private static Pair<Matrix4f, Float> getTotalMatrix(Map<String, IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware, FormFrameCache frame)
     {
         /* Substituting the anchor here rather than at each caller covers the whole chain, because
          * this method resolves the anchor level by level - including the levels reached from a
@@ -128,12 +127,12 @@ public class FilmMatrices
         return result;
     }
 
-    private static boolean isRelativeAnchorTarget(IntObjectMap<IEntity> entities, Anchor anchor)
+    private static boolean isRelativeAnchorTarget(Map<String, IEntity> entities, Anchor anchor)
     {
         return anchor != null && isRelativeReplayEntity(entities.get(anchor.replay));
     }
 
-    static boolean hasRelativeAnchorTarget(IntObjectMap<IEntity> entities, Anchor anchor)
+    static boolean hasRelativeAnchorTarget(Map<String, IEntity> entities, Anchor anchor)
     {
         Anchor current = anchor;
 
@@ -162,27 +161,27 @@ public class FilmMatrices
         return new Matrix4f(matrix).mul(anchor.transform.createMatrix());
     }
 
-    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i)
+    public static Matrix4f getEntityMatrix(Map<String, IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i)
     {
         return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, false);
     }
 
-    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix)
+    public static Matrix4f getEntityMatrix(Map<String, IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix)
     {
         return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, true, null);
     }
 
-    public static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, FormFrameCache frame)
+    public static Matrix4f getEntityMatrix(Map<String, IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, FormFrameCache frame)
     {
         return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, true, frame);
     }
 
-    private static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, boolean placementAware)
+    private static Matrix4f getEntityMatrix(Map<String, IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, boolean placementAware)
     {
         return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, placementAware, null);
     }
 
-    private static Matrix4f getEntityMatrix(IntObjectMap<IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, boolean placementAware, FormFrameCache frame)
+    private static Matrix4f getEntityMatrix(Map<String, IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix, boolean placementAware, FormFrameCache frame)
     {
         IEntity entity = entities.get(anchor.replay);
 
@@ -295,7 +294,7 @@ public class FilmMatrices
     }
 
     public static Matrix4f getGizmoBoneCompositeMatrix(
-        IntObjectMap<IEntity> entities,
+        Map<String, IEntity> entities,
         IEntity entity,
         Replay replay,
         double cameraX,
@@ -318,7 +317,7 @@ public class FilmMatrices
      * rotation basis disagree with the mesh the user sees.
      */
     public static Vector3f getGizmoBoneRotationOffset(
-        IntObjectMap<IEntity> entities,
+        Map<String, IEntity> entities,
         IEntity entity,
         Replay replay,
         double cameraX,
@@ -335,7 +334,7 @@ public class FilmMatrices
     }
 
     public static Vector3f getGizmoBoneEvaluatedRotation(
-        IntObjectMap<IEntity> entities,
+        Map<String, IEntity> entities,
         IEntity entity,
         Replay replay,
         double cameraX,
@@ -357,7 +356,7 @@ public class FilmMatrices
      * needs the full matrix, so it goes through this variant instead.
      */
     public static Matrix4f getBoneCompositeMatrix(
-        IntObjectMap<IEntity> entities,
+        Map<String, IEntity> entities,
         IEntity entity,
         Replay replay,
         double cameraX,
@@ -390,7 +389,7 @@ public class FilmMatrices
      * shares this so they agree on the placement, the simulation owner and the world-input policy.
      */
     private static BonePlacement sampleBonePlacement(
-        IntObjectMap<IEntity> entities,
+        Map<String, IEntity> entities,
         IEntity entity,
         Replay replay,
         double cameraX,
@@ -477,7 +476,7 @@ public class FilmMatrices
 
     /** The camera-relative matrix of the whole form after its anchor chain and offset are applied. */
     public static Matrix4f getGizmoAnchorCompositeMatrix(
-        IntObjectMap<IEntity> entities,
+        Map<String, IEntity> entities,
         IEntity entity,
         Replay replay,
         double cameraX,

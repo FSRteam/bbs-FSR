@@ -5,6 +5,9 @@ import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.camera.values.ValuePoint;
+import mchorse.bbs_mod.data.migration.FilmStableIds;
+import mchorse.bbs_mod.data.migration.FormStableIds;
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -105,6 +108,28 @@ public class Replay extends ValueGroup
         }
 
         return s.isEmpty() ? "" : s;
+    }
+
+    /**
+     * A replay also travels outside a film document — a clipboard replay, a replay preset — where
+     * no film version gate applies, so the conversion has to happen here as well. It is the same
+     * walk {@code FilmStableIds.migrate} does, and running it twice is a no-op.
+     *
+     * <p>The action targets are normalized against an <em>empty</em> replay list: a bare replay
+     * carries no source film order, so a cross-film index cannot be resolved and fails closed to
+     * "no target". An id that is already stable survives untouched, which is what keeps a
+     * within-film copy/paste, and every load of an already-migrated film, pointing where it did.</p>
+     */
+    @Override
+    public void fromData(BaseType data)
+    {
+        if (data.isMap())
+        {
+            FormStableIds.ensureReplay(data.asMap());
+            FilmStableIds.migrateReplayReferences(data.asMap(), List.of());
+        }
+
+        super.fromData(data);
     }
 
     public String getName()

@@ -8,12 +8,12 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.data.migration.FilmStableIds;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
-import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.film.replays.Replays;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -974,7 +974,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
         Film data = this.panel.getData();
         Replays replays = data.replays;
         List<Replay> all = replays.getList();
-        List<Replay> previousOrder = new ArrayList<>(all);
 
         ReplayListEntry ef = this.list.get(from);
         ReplayListEntry et = this.list.get(to);
@@ -1000,10 +999,9 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         replays.remove(value);
         replays.add(globalTo, value);
-        replays.sync();
 
-        remapReplayReferences(data, previousOrder);
-
+        /* Reordering is just reordering now: anchors and camera selectors hold the replay's stable
+         * id, so the hand-written index remapping that used to chase them is gone. */
         data.postNotify(IValueListener.FLAG_UNMERGEABLE);
 
         this.refreshReplayList();
@@ -1967,28 +1965,50 @@ public class UIReplayList extends UIList<ReplayListEntry>
     }
 
     /**
-     * Remap every persisted Film reference from a previous Replay order to the
-     * Film's current order. Identity is intentional: two Replay values may be
-     * structurally equal while still representing different logical actors.
-     * Removed or already-invalid targets are normalized to the no-target
-     * sentinel instead of silently pointing at the Replay that shifted into
-     * their old slot.
+     * Insert a {@code {"replays": [...]}} clipboard payload or preset into the film.
+     *
+     * <p>Clipboard replays and presets are read outside any film document, so no save version gates
+     * them and {@code Film.fromData} never sees them — but the pasted map still carries whatever
+     * references the source film wrote. Those references are answered in two different places, one
+     * per kind of reference: a legacy positional index is converted by {@link Replay#fromData},
+     * which runs for every element below with an empty replay list (a bare replay carries no source
+     * film order, so a cross-film index cannot be resolved and fails closed to "no target"); a
+     * reference that is <em>already</em> a stable id is a membership question about <em>this</em>
+     * film and is answered by the prune call above the loop, against the ids the film holds right
+     * now.
+     *
+     * <p>Neither question belongs to a second copy of the conversion written out at this call site
+     * — that is how the two would drift apart. The prune call is a call into the same walk
+     * {@code Film.fromData} runs, not a reimplementation of it.
      */
-    static void remapReplayReferences(Film film, List<Replay> previousOrder)
-    {
-        ReplayReferenceRemapper.remap(film, previousOrder);
-    }
-
     public void pasteReplay(MapType data)
     {
         Film film = this.panel.getData();
         ListType replays = data.getList("replays");
+
+        /* The film's own ids, taken before the first insert: a within-film copy carries ids that
+         * are in here, which is what keeps it pointing at the replay it was copied from. */
+        List<String> filmReplayIds = new ArrayList<>();
+
+        for (Replay existing : film.replays.getAllTyped())
+        {
+            filmReplayIds.add(existing.getId());
+        }
+
         Replay last = null;
 
         for (BaseType replayType : replays)
         {
             Replay replay = film.replays.addReplay();
 
+            /* A stable id that addresses a replay this film does not have would send
+             * ActionTarget.resolve down its scoped branch and lose the uuid fallback. */
+            if (replayType.isMap())
+            {
+                FilmStableIds.pruneDanglingReplayReferences(replayType.asMap(), filmReplayIds);
+            }
+
+            /* The legacy index conversion happens inside Replay.fromData; do not duplicate it. */
             BaseValue.edit(replay, (r) -> r.fromData(replayType));
             replay.category.set("");
 
@@ -2342,7 +2362,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
         }
 
         Film film = this.panel.getData();
-        List<Replay> previousOrder = new ArrayList<>(film.replays.getList());
         List<Replay> removing = new ArrayList<>(this.getSelectedReplays());
         Replay focus = removing.get(0);
         int globalFocus = CollectionUtils.getIndex(film.replays.getList(), focus);
@@ -2354,7 +2373,9 @@ public class UIReplayList extends UIList<ReplayListEntry>
             film.replays.remove(replay);
         }
 
-        remapReplayReferences(film, previousOrder);
+        /* Deleting a replay no longer renumbers anybody: the survivors keep their ids, and a
+         * reference to the deleted one stays dangling on purpose rather than sliding onto whichever
+         * replay moved into its slot. */
         film.postNotify(IValueListener.FLAG_UNMERGEABLE);
 
         List<Replay> remaining = film.replays.getList();

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms;
 
+import mchorse.bbs_mod.data.migration.FormStableIds;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MissingForm;
@@ -12,6 +13,28 @@ public class FormArchitect extends MapFactory<Form, Void>
     public String getTypeKey()
     {
         return "id";
+    }
+
+    /**
+     * Every form read anywhere passes through here, so this is where form fragments living outside
+     * the versioned documents — model blocks, morphs, items, old clipboards — get their body part
+     * ids on first contact. Film documents arrive already converted (see {@code FilmStableIds});
+     * for them this is a no-op walk.
+     *
+     * <p>The walk has to stay <em>before</em> {@code super.fromData}: a form this build has no
+     * class for comes back as a {@link MissingForm} that copies the map it was handed, so it is the
+     * already-converted map that ends up written back out. Running the walk after would preserve
+     * the legacy shape instead.</p>
+     */
+    @Override
+    public Form fromData(MapType data)
+    {
+        if (data != null)
+        {
+            FormStableIds.ensure(data);
+        }
+
+        return super.fromData(data);
     }
 
     @Override

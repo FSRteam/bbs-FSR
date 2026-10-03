@@ -4,6 +4,7 @@ import mchorse.bbs_mod.forms.categories.RecentFormCategoryTest;
 import mchorse.bbs_mod.forms.FormDataPreservationTest;
 import mchorse.bbs_mod.forms.PhysicsWeightRoundTripTest;
 import mchorse.bbs_mod.film.FilmControllerContext;
+import mchorse.bbs_mod.film.FilmControllerActorMapTest;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
@@ -21,6 +22,11 @@ import java.util.List;
 
 public final class FilmEditorMigrationLogicTest
 {
+    /* Anchors address their replay by stable id, so two different targets are two different ids
+     * rather than two different indices. */
+    private static final String TARGET_A = "aaaaaaaa";
+    private static final String TARGET_B = "bbbbbbbb";
+
     public static void main(String[] args) throws Exception
     {
         Runnable restoreClientRuntime = HeadlessClientTestBootstrap.install();
@@ -47,6 +53,7 @@ public final class FilmEditorMigrationLogicTest
             MultiViewRenderBehaviorTest.runAll();
             FilmViewNavigationTest.runAll();
             FilmFlightEditingTest.runAll();
+            FilmControllerActorMapTest.runAll();
             RecentFormCategoryTest.runAll();
             FormDataPreservationTest.runAll();
             PhysicsWeightRoundTripTest.runAll();
@@ -104,10 +111,10 @@ public final class FilmEditorMigrationLogicTest
     private static void testAnchorTransformInterpolation()
     {
         AnchorKeyframeFactory factory = new AnchorKeyframeFactory();
-        Anchor preA = anchor(1, 0F);
-        Anchor a = anchor(1, 10F);
-        Anchor b = anchor(1, 20F);
-        Anchor postB = anchor(1, 30F);
+        Anchor preA = anchor(TARGET_A, 0F);
+        Anchor a = anchor(TARGET_A, 10F);
+        Anchor b = anchor(TARGET_A, 20F);
+        Anchor postB = anchor(TARGET_A, 30F);
         Anchor sameTarget = factory.interpolate(preA, a, b, postB, Interpolations.LINEAR, 0.5F);
 
         check(sameTarget.transform.translate.x == 15F,
@@ -115,12 +122,12 @@ public final class FilmEditorMigrationLogicTest
         check(sameTarget.previous == null,
             "matching targets must not enter the attachment crossfade path");
 
-        Anchor differentTarget = anchor(2, 20F);
+        Anchor differentTarget = anchor(TARGET_B, 20F);
         Anchor crossfade = factory.interpolate(preA, a, differentTarget, postB, Interpolations.LINEAR, 0.5F);
 
         check(crossfade.transform.translate.x == 20F,
             "different targets must keep the destination transform for matrix crossfade");
-        check(crossfade.previous != null && crossfade.previous.replay == 1 && crossfade.x == 0.5F,
+        check(crossfade.previous != null && TARGET_A.equals(crossfade.previous.replay) && crossfade.x == 0.5F,
             "different targets must preserve existing attachment crossfade state");
     }
 
@@ -151,7 +158,7 @@ public final class FilmEditorMigrationLogicTest
             "a newly introduced order token was not inserted at its default position");
     }
 
-    private static Anchor anchor(int replay, float translateX)
+    private static Anchor anchor(String replay, float translateX)
     {
         Anchor anchor = new Anchor(replay, "body", false, false);
 

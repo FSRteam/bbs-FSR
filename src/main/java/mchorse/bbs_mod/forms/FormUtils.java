@@ -32,8 +32,6 @@ public class FormUtils
 
     public static final String PATH_SEPARATOR = "/";
 
-    private static final List<String> path = new ArrayList<>();
-
     public static boolean isPoseProperty(String name)
     {
         return name.startsWith("transform")
@@ -198,102 +196,90 @@ public class FormUtils
         return null;
     }
 
+    /**
+     * Resolve a body-part path — {@code /}-separated part ids — starting at {@code form}. Each
+     * segment names a part of the current form and steps into that part's form. A segment that is
+     * neither a part nor (in documents written before stable ids) a positional index ends the walk.
+     */
     public static Form getForm(Form form, String path)
     {
-        String[] split = path.split(PATH_SEPARATOR);
-
-        for (String s : split)
+        for (String s : path.split(PATH_SEPARATOR))
         {
-            try
-            {
-                int index = Integer.parseInt(s);
-                BodyPart safe = CollectionUtils.getSafe(form.parts.getAllTyped(), index);
+            BodyPart part = form.parts.get(s) instanceof BodyPart bodyPart ? bodyPart : null;
 
-                if (safe != null)
-                {
-                    form = safe.getForm();
-                }
-                else
-                {
-                    break;
-                }
+            if (part == null)
+            {
+                part = legacyPart(form, s);
             }
-            catch (Exception e)
+
+            if (part == null || part.getForm() == null)
             {
                 break;
             }
+
+            form = part.getForm();
         }
 
         return form;
     }
 
+    /**
+     * A path segment written before stable ids was the part's position in the list. The two can
+     * never be confused: a stable id is eight hex chars containing at least one letter, so a
+     * segment made only of digits is unambiguously a legacy index. Anything else is an orphaned
+     * path segment and resolves to nothing.
+     */
+    private static BodyPart legacyPart(Form form, String segment)
+    {
+        try
+        {
+            return CollectionUtils.getSafe(form.parts.getAllTyped(), Integer.parseInt(segment));
+        }
+        catch (NumberFormatException e)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * The body-part path of {@code form} from its root — the stable ids of the parts it hangs
+     * under, outermost first; empty for the root form itself.
+     */
     public static String getPath(Form form)
     {
-        if (form.getParent() == null)
-        {
-            return "";
-        }
+        List<String> path = new ArrayList<>();
 
-        path.clear();
-
-        while (form != null)
-        {
-            Form parent = form.getParentForm();
-
-            if (parent != null)
-            {
-                int i = 0;
-
-                for (BodyPart part : parent.parts.getAllTyped())
-                {
-                    if (part.getForm() == form)
-                    {
-                        path.add(String.valueOf(i));
-                    }
-
-                    i += 1;
-                }
-            }
-
-            form = parent;
-        }
-
+        appendPartPath(form, path);
         Collections.reverse(path);
 
         return String.join(PATH_SEPARATOR, path);
     }
 
-    /* Form properties utils */
-
-    public static String getPropertyPath(BaseValue property)
+    /** Collect the ids of the body parts above {@code form}, innermost first, into {@code path}. */
+    private static void appendPartPath(Form form, List<String> path)
     {
-        path.clear();
-        path.add(property.getId());
+        BaseValue value = form;
 
-        Form form = getForm(property);
-
-        while (form != null)
+        while (value != null)
         {
-            Form parent = form.getParentForm();
-
-            if (parent != null)
+            if (value instanceof BodyPart part)
             {
-                int i = 0;
-
-                for (BodyPart part : parent.parts.getAllTyped())
-                {
-                    if (part.getForm() == form)
-                    {
-                        path.add(String.valueOf(i));
-                    }
-
-                    i += 1;
-                }
+                path.add(part.getId());
             }
 
-            form = parent;
+            value = value.getParent();
         }
+    }
 
+    /* Form properties utils */
+
+    /** The property address: its owner form path with the property id as the last segment. */
+    public static String getPropertyPath(BaseValue property)
+    {
+        List<String> path = new ArrayList<>();
+
+        path.add(property.getId());
+        appendPartPath(getForm(property), path);
         Collections.reverse(path);
 
         return String.join(PATH_SEPARATOR, path);
@@ -334,16 +320,20 @@ public class FormUtils
             }
         }
 
-        List<BodyPart> all = form.parts.getAllTyped();
-
-        for (int i = 0; i < all.size(); i++)
+        for (BodyPart part : form.parts.getAllTyped())
         {
-            String newPrefix = StringUtils.combinePaths(prefix, String.valueOf(i));
+            String newPrefix = StringUtils.combinePaths(prefix, part.getId());
 
-            collectPropertyPaths(all.get(i).getForm(), properties, newPrefix);
+            collectPropertyPaths(part.getForm(), properties, newPrefix);
         }
     }
 
+    /**
+     * Resolve a property path — the stable ids of the body parts leading to the owning form,
+     * followed by the property's id. A segment that is neither a property nor a part of the
+     * current form ends the walk: the path is orphaned (its part was removed or the channel was
+     * authored against another form) and resolves to nothing.
+     */
     public static BaseValueBasic getProperty(Form form, String path)
     {
         if (form == null)
@@ -351,45 +341,28 @@ public class FormUtils
             return null;
         }
 
-        if (!path.contains(PATH_SEPARATOR))
+        for (String segment : path.split(PATH_SEPARATOR))
         {
-            return form.getAllMap().get(path);
-        }
-
-        String[] segments = path.split(PATH_SEPARATOR);
-
-        for (int i = 0; i < segments.length; i++)
-        {
-            String segment = segments[i];
             BaseValueBasic property = form.getAllMap().get(segment);
 
-            if (property == null)
-            {
-                try
-                {
-                    int index = Integer.parseInt(segment);
-
-                    if (CollectionUtils.inRange(form.parts.getAll(), index))
-                    {
-                        form = form.parts.getAllTyped().get(index).getForm();
-
-                        if (form == null)
-                        {
-                            return null;
-                        }
-                    }
-                    else
-                    {
-                        return null;
-                    }
-                }
-                catch (Exception e)
-                {}
-            }
-            else
+            if (property != null)
             {
                 return property;
             }
+
+            BodyPart part = form.parts.get(segment) instanceof BodyPart bodyPart ? bodyPart : null;
+
+            if (part == null)
+            {
+                part = legacyPart(form, segment);
+            }
+
+            if (part == null || part.getForm() == null)
+            {
+                return null;
+            }
+
+            form = part.getForm();
         }
 
         return null;

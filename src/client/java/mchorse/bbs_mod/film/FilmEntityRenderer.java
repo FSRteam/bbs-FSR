@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.api.client.events.FilmGizmoEvents;
 import mchorse.bbs_mod.api.client.events.FormPoseEvents;
@@ -44,6 +43,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
+import java.util.Map;
+
 /**
  * Drawing one replay's form into the world: the form itself, the gizmo axes and preview axes of
  * the bone being edited, the whole-form anchor gizmo, the ground shadow and the name tag.
@@ -64,7 +65,7 @@ public class FilmEntityRenderer
          * resolved below already sees it. */
         FormPoseEvents.ACTOR_BEFORE.invoker().prepare(context);
 
-        IntObjectMap<IEntity> entities = context.entities;
+        Map<String, IEntity> entities = context.entities;
         IEntity entity = context.entity;
         Camera camera = context.camera;
         PoseStack stack = context.stack;
@@ -388,7 +389,7 @@ public class FilmEntityRenderer
     }
 
     /** Capture or stencil the whole-form gizmo at the resolved anchor transform. */
-    private static void renderAnchorGizmo(IntObjectMap<IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, boolean local, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, PoseStack stack, FormFrameCache frame)
+    private static void renderAnchorGizmo(Map<String, IEntity> entities, IEntity entity, Matrix4f full, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, boolean local, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, PoseStack stack, FormFrameCache frame)
     {
         Form form = entity.getForm();
 

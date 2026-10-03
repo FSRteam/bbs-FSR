@@ -1,7 +1,5 @@
 package mchorse.bbs_mod.ui.film;
 
-import io.netty.util.collection.IntObjectHashMap;
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
@@ -738,9 +736,9 @@ public final class FilmFlightEditingTest
         }
 
         @Override
-        public IntObjectMap<IEntity> getEntities()
+        public Map<String, IEntity> getEntities()
         {
-            return new IntObjectHashMap<>();
+            return new LinkedHashMap<>();
         }
 
         @Override

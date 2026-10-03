@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.film.clips;
 
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerFrame;
 import mchorse.bbs_mod.camera.data.Angle;
@@ -18,6 +17,8 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import org.joml.Vector3d;
+
+import java.util.Map;
 
 public class UITrackerClip extends UIClip<TrackerClientClip>
 {
@@ -46,7 +47,7 @@ public class UITrackerClip extends UIClip<TrackerClientClip>
 
             if (panel != null)
             {
-                UIAnchorKeyframeFactory.displayActors(this.getContext(), panel.getController().getEntities(), this.clip.selector.get(), (i) -> this.clip.selector.set(i));
+                UIAnchorKeyframeFactory.displayActors(this.getContext(), panel.getController().getEntities(), this.clip.selector.get(), (id) -> this.clip.selector.set(id));
             }
         });
         this.selector.tooltip(UIKeys.CAMERA_PANELS_TARGET_TOOLTIP);
@@ -137,14 +138,14 @@ public class UITrackerClip extends UIClip<TrackerClientClip>
     {
         UIFilmPanel panel = this.getParent(UIFilmPanel.class);
         UIContext context = this.getContext();
-        int selector = this.clip.selector.get();
+        String selector = this.clip.selector.get();
 
-        if (panel == null || context == null || selector < 0)
+        if (panel == null || context == null || selector.isEmpty())
         {
             return null;
         }
 
-        IntObjectMap<IEntity> entities = panel.getController().getEntities();
+        Map<String, IEntity> entities = panel.getController().getEntities();
         TrackerFrame frame = TrackerFrame.resolve(
             entities,
             entities.get(selector),
