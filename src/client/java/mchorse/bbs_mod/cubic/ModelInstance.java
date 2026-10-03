@@ -23,6 +23,7 @@ import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.CubicVAOBuilderRenderer;
 import mchorse.bbs_mod.cubic.render.CubicVAORenderer;
 import mchorse.bbs_mod.cubic.render.GlintRenderState;
+import mchorse.bbs_mod.cubic.render.WeldGeometryCache;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
@@ -58,6 +59,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,8 +72,8 @@ public class ModelInstance implements IModelInstance
 {
     private static final Quaternionf ROTATE_Y_180 = Axis.YP.rotationDegrees(180F);
 
-    /** Identity NormalMat for the welded immediate draw — its normals are already CPU-transformed to world space. */
-    private static final Matrix3f WELD_NORMAL_MAT = new Matrix3f();
+    /** The frame the seams and the CPU bake are computed in: the model's root, camera-independent. */
+    private static final PoseStack ROOT = new PoseStack();
 
     public final String id;
     public IModel model;
@@ -102,6 +104,12 @@ public class ModelInstance implements IModelInstance
 
     /** Welds resolved against the model (groups/cubes/corners). Built lazily on first render, kept across frames. */
     private List<WeldBinding> weldBindings;
+
+    /** Every group that takes part in a weld, derived from the bindings once. */
+    private Set<ModelGroup> weldedGroups;
+
+    /** The baked CPU half of a welded model, keyed by pose — see {@link WeldGeometryCache}. */
+    private final WeldGeometryCache weldCache = new WeldGeometryCache();
 
     /** Whether the VAO bake skipped some groups (shape-keyed meshes) — those render immediate via the hybrid path. */
     private boolean partialVaos;
@@ -151,6 +159,7 @@ public class ModelInstance implements IModelInstance
         if (this.weldBindings == null)
         {
             this.weldBindings = new ArrayList<>();
+            this.weldedGroups = new HashSet<>();
 
             if (this.model instanceof Model model)
             {
@@ -161,6 +170,8 @@ public class ModelInstance implements IModelInstance
                     if (binding != null)
                     {
                         this.weldBindings.add(binding);
+                        this.weldedGroups.add(binding.sourceGroup);
+                        this.weldedGroups.add(binding.targetGroup);
                     }
                 }
             }
@@ -176,6 +187,8 @@ public class ModelInstance implements IModelInstance
     public void invalidateWelds()
     {
         this.weldBindings = null;
+        this.weldedGroups = null;
+        this.weldCache.invalidate();
         this.config.rebuild();
     }
 
@@ -356,6 +369,7 @@ public class ModelInstance implements IModelInstance
         }
 
         this.vaos.clear();
+        this.weldCache.delete();
     }
 
     /* Rendering */
@@ -518,8 +532,13 @@ public class ModelInstance implements IModelInstance
                 BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
 
                 CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
-                this.drawImmediate(builder.buildOrThrow(), shader, stack, null, stencilMap,
-                    BBSModClient.getTextures().getLastBound(), color.a);
+
+                /* The plain CPU path bakes in the caller's frame, so the global model-view applies as is. */
+                Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+
+                this.drawImmediate(builder.buildOrThrow(), null, shader, modelView, null,
+                    modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f())),
+                    stencilMap, BBSModClient.getTextures().getLastBound(), color.a, false);
 
                 this.renderGlintImmediate(stack, model, light, overlay, stencilMap, keys, null);
             }
@@ -768,62 +787,110 @@ public class ModelInstance implements IModelInstance
         }
     }
 
-    private void drawImmediate(MeshData mesh, ShaderInstance shader, PoseStack stack, Matrix3f normalMat,
-        StencilMap stencilMap, Texture texture, float alpha)
+    /**
+     * Draw the CPU bake. Two-pass translucency when needed: the opaque texels draw now and write
+     * depth, the semi-transparent ones replay from a retained vertex buffer when the frame's
+     * translucent queue flushes.
+     *
+     * <p>{@code cached} is the welded-geometry cache entry holding the bake, or null for the owned
+     * path. The distinction is the buffer's lifetime: a cached buffer is only BORROWED by the queue —
+     * it must stay untouched until the flush, which its owner guarantees by never rebuilding a lent
+     * entry within the frame (see {@link WeldGeometryCache}) and by not closing it here. An owned
+     * buffer (a throwaway upload of {@code mesh}) is handed over and freed by the flush.</p>
+     *
+     * <p>{@code mesh} is only read when {@code cached} is null. {@code rootFrame} says which frame
+     * that mesh is in: the hybrid bake is in {@link #ROOT}, so an owned fallback buffer must be drawn
+     * with the explicit model-view passed in, while the plain CPU path baked straight into the caller's
+     * frame — which is exactly what the global model-view already describes — and keeps drawing the
+     * mesh directly, as it did before this cache existed.</p>
+     */
+    private void drawImmediate(MeshData mesh, WeldGeometryCache.Entry cached, ShaderInstance shader,
+        Matrix4f modelView, Matrix3f normalMat, Vector3f origin, StencilMap stencilMap, Texture texture,
+        float alpha, boolean rootFrame)
     {
         boolean bbsModelShader = shader != null && shader.getUniform("PassMode") != null;
         boolean split = FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha);
         boolean whole = !split && FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, alpha);
+        boolean owned = cached == null;
 
-        if (!split && !whole)
+        /* The plain CPU path baked straight into the caller's frame, which is exactly what the global
+         * model-view already describes — so a single direct draw stays exactly as it was, with no GL
+         * buffer to create and free. Only the ROOT-frame hybrid bake needs one. */
+        if (owned && !rootFrame && !split && !whole)
         {
             drawWithStableModelColor(mesh, shader, bbsModelShader);
+
             return;
         }
 
-        VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
-        buffer.bind();
-        buffer.upload(mesh);
+        VertexBuffer buffer;
 
-        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
-
-        if (split && normalMat != null && shader.getUniform("NormalMat") != null)
+        if (owned)
         {
-            shader.getUniform("NormalMat").set(normalMat);
+            buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+            buffer.bind();
+            buffer.upload(mesh);
+        }
+        else
+        {
+            buffer = cached.buffer();
+            buffer.bind();
+        }
+
+        if (!split && !whole)
+        {
+            /* The ring was full, so this ROOT-frame bake is a throwaway: drawn here, freed here. */
+            drawWithStableModelColor(buffer, shader, modelView, bbsModelShader);
+            VertexBuffer.unbind();
+            buffer.close();
+
+            return;
         }
 
         if (split)
         {
+            if (normalMat != null && shader.getUniform("NormalMat") != null)
+            {
+                shader.getUniform("NormalMat").set(normalMat);
+            }
+
             FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
             drawWithStableModelColor(buffer, shader, modelView, bbsModelShader);
             FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
         }
+
         VertexBuffer.unbind();
 
-        Vector3f origin = modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f()));
+        if (!owned)
+        {
+            /* Handed to the queue: the cache must not rebuild this entry again this frame. */
+            cached.lentEpoch = BBSRendering.getSceneFrameId();
+        }
+
         if (split)
         {
             /* Depth stays on: this is solid geometry, so its semi-transparent texels must occlude
              * the ones behind them inside the same model. */
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TRANSLUCENT, true, texture, modelView, normalMat,
-                origin, this.isCulling(), null, null, true));
+                origin, this.isCulling(), null, null, owned));
         }
         else if (texture != null && texture.hasTranslucency())
         {
-            /* Keep texture-opaque texels as the depth/blend base for faded overlays. */
+            /* Keep texture-opaque texels as the depth/blend base for faded overlays. Both commands
+             * share one buffer, so only the second may free it at the flush. */
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView, normalMat,
                 origin, this.isCulling(), null, null, false));
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView, normalMat,
-                origin, this.isCulling(), null, null, true));
+                origin, this.isCulling(), null, null, owned));
         }
         else
         {
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_SINGLE, true, texture, modelView, normalMat,
-                origin, this.isCulling(), null, null, true));
+                origin, this.isCulling(), null, null, owned));
         }
     }
 
@@ -912,37 +979,115 @@ public class ModelInstance implements IModelInstance
      * with no VAO (shape-keyed meshes, or none baked yet) go through the immediate CPU path, where their
      * cubes deform against the seam or morph. A light capture pass fills the seams first — for picking
      * too, so the stencil matches the deformed geometry.
+     *
+     * <p>The CPU half is BAKED ONCE and kept on the GPU keyed by everything it depends on ({@link
+     * #weldKey}): a hit skips both the capture and the tessellation, so the same buffer serves every
+     * pass of the frame and every frame in which nothing moved. The bake is computed in {@link #ROOT}
+     * — the model's own frame, camera- and caller-independent — so the caller's stack is folded into
+     * the model-view at draw time instead of being baked into the vertices.</p>
      */
     private void renderHybrid(PoseStack stack, ShaderInstance shader, Color color, int light, int overlay, StencilMap stencilMap, ShapeKeys keys, Function<String, Link> textureResolver, Model model, List<WeldBinding> bindings)
     {
-        Set<ModelGroup> weldedGroups = new HashSet<>();
+        Set<ModelGroup> weldedGroups = this.weldedGroups;
 
-        for (WeldBinding binding : bindings)
-        {
-            weldedGroups.add(binding.sourceGroup);
-            weldedGroups.add(binding.targetGroup);
-        }
-
-        /* Capture the seams for the visible draw AND for picking: the stencil must match the deformed geometry, or
-         * hovering a bent welded bone highlights its wrong, un-sealed rest silhouette at the joint. */
-        if (!bindings.isEmpty())
-        {
-            this.captureWelds(bindings, stack, model, light, overlay, stencilMap, keys);
-        }
-
-        /* The welded cubes draw immediate with world-space corners, so — outside picking and the Iris pipeline, which
-         * run their own shader state — they go through the BBS model shader with NormalMat pinned to identity (the
-         * normals are already in world space, the same space the VAO path's NormalMat*Normal resolves to; else the
-         * first-person hand during video export inherits a foreign NormalMat and darkens). The VAO bones use the same
-         * shader so both halves of the model match. */
+        /* The welded cubes draw from a CPU bake, so — outside picking and the Iris pipeline, which run their own
+         * shader state — they go through the BBS model shader; the VAO bones use the same shader so both halves of
+         * the model match. */
         boolean explicitWeld = stencilMap == null && !(BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld());
         ShaderInstance drawShader = explicitWeld ? BBSShaders.getModel() : shader;
 
+        /* The bake is a function of the pose and the draw's own inputs: a miss redoes what used to happen every
+         * pass — capture the seams, decide which bones bend, tessellate them. */
+        long epoch = BBSRendering.getSceneFrameId();
+        long key = this.weldKey(model, keys, light, overlay, color, stencilMap);
+        WeldGeometryCache.Entry entry = this.weldCache.find(key);
+        Set<ModelGroup> cpuGroups;
+        BufferBuilder builder = null;
+
+        if (entry == null)
+        {
+            /* Capture the seams for the visible draw AND for picking: the stencil must match the deformed
+             * geometry, or hovering a bent welded bone highlights its un-sealed rest silhouette at the joint. */
+            if (!bindings.isEmpty())
+            {
+                this.captureWelds(bindings, ROOT, model, light, overlay, stencilMap, keys);
+            }
+
+            cpuGroups = this.collectCpuGroups(model, bindings, weldedGroups);
+
+            if (!cpuGroups.isEmpty())
+            {
+                CubicVAORenderer bake = new CubicVAORenderer(drawShader, this, light, overlay, stencilMap, keys, textureResolver);
+
+                bake.setColor(color.r, color.g, color.b, color.a);
+                bake.setWelds(bindings);
+                bake.setWeldedGroups(weldedGroups);
+                bake.setCpuGroups(cpuGroups);
+                bake.setHybridPasses(false, true);
+
+                builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
+                CubicRenderer.processRenderModel(bake, builder, ROOT, model);
+            }
+
+            entry = this.weldCache.acquire(epoch);
+
+            if (entry != null)
+            {
+                entry.key = key;
+                entry.cpuGroups = cpuGroups;
+                entry.hasGeometry = false;
+
+                if (builder != null)
+                {
+                    /* Since 1.21.1 an empty buffer builds to null, so the built result decides
+                     * whether this entry has any geometry at all. */
+                    MeshData baked = builder.build();
+
+                    if (baked != null)
+                    {
+                        entry.hasGeometry = true;
+
+                        VertexBuffer buffer = entry.buffer();
+
+                        buffer.bind();
+                        buffer.upload(baked);
+                        VertexBuffer.unbind();
+                    }
+
+                    builder = null;
+                }
+
+                /* Marked valid even with no geometry: it stops every later pass from re-walking the
+                 * tree for a pose that bakes nothing. */
+                entry.valid = true;
+            }
+        }
+        else
+        {
+            cpuGroups = entry.cpuGroups;
+        }
+
+        boolean cpuGeometry = !cpuGroups.isEmpty();
+
+        /* Past the ring's cap the caller owns its bake the old way. Built here (rather than with
+         * buildOrThrow()) so a bake that emitted nothing is a miss, not an exception. */
+        MeshData owned = null;
+
+        if (entry == null && builder != null)
+        {
+            owned = builder.build();
+        }
+
+        /* The VAO bones ride the GPU every pass, in the caller's frame; the CPU set is the bake's, so the two
+         * halves always agree on which bones are which — even when the cache serves a bake whose seams have
+         * since been re-captured for another pose. */
         CubicVAORenderer renderProcessor = new CubicVAORenderer(drawShader, this, light, overlay, stencilMap, keys, textureResolver);
 
         renderProcessor.setColor(color.r, color.g, color.b, color.a);
         renderProcessor.setWelds(bindings);
         renderProcessor.setWeldedGroups(weldedGroups);
+        renderProcessor.setCpuGroups(cpuGroups);
+        renderProcessor.setHybridPasses(true, false);
 
         RenderSystem.setShader(() -> drawShader);
 
@@ -951,36 +1096,30 @@ public class ModelInstance implements IModelInstance
          * (matches the old all-CPU path, which drew the welded cubes with that same default). */
         int defaultTexture = RenderSystem.getShaderTexture(0);
 
-        /* Open the shared CPU buffer only if some group actually renders on the CPU (a visible bending welded
-         * bone, or a visible bone with geometry but no VAO) — drawing an empty buffer would fail. */
-        Set<ModelGroup> cpuGroups = this.collectCpuGroups(model, bindings, weldedGroups);
-        boolean cpuGeometry = !cpuGroups.isEmpty();
-        BufferBuilder builder = null;
+        CubicRenderer.processRenderModel(renderProcessor, null, stack, model);
 
-        if (cpuGeometry)
-        {
-            builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
-        }
+        boolean hasGeometry = entry != null ? entry.hasGeometry : owned != null;
 
-        CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
-
-        if (cpuGeometry)
+        if (hasGeometry)
         {
             RenderSystem.setShaderTexture(0, defaultTexture);
 
-            if (explicitWeld)
-            {
-                Uniform normalMat = drawShader.getUniform("NormalMat");
+            /* Root-frame geometry drawn in the caller's frame: the caller's stack goes into the model-view, and
+             * its normal matrix takes the baked normals into the same space the VAO path's NormalMat*Normal lands
+             * in. The two products — (modelView * stack) * v here and modelView * (stack * v) before — are the
+             * same transform. */
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
+            Matrix3f normalMat = new Matrix3f(stack.last().normal());
+            Uniform normalUniform = drawShader.getUniform("NormalMat");
 
-                if (normalMat != null)
-                {
-                    normalMat.set(WELD_NORMAL_MAT);
-                }
+            if (normalUniform != null)
+            {
+                normalUniform.set(normalMat);
             }
 
-            this.drawImmediate(builder.buildOrThrow(), drawShader, stack,
-                explicitWeld ? WELD_NORMAL_MAT : null, stencilMap,
-                BBSModClient.getTextures().getLastBound(), color.a);
+            this.drawImmediate(owned, entry, drawShader, modelView, normalMat,
+                modelView.transformPosition(new Vector3f()), stencilMap,
+                BBSModClient.getTextures().getLastBound(), color.a, true);
         }
 
         /* Both base paths must finish before either glint path changes RenderType state.
@@ -991,6 +1130,93 @@ public class ModelInstance implements IModelInstance
         {
             this.renderGlintImmediate(stack, model, light, overlay, stencilMap, keys, cpuGroups);
         }
+    }
+
+    /**
+     * What the CPU bake depends on: which bones ride a VAO (the rest of them are what the bake emits),
+     * every bone's evaluated transform, colour and lighting (the pose the seams and the deformation come
+     * from), the draw's light/overlay/colour, the shape keys, and the picking mode (which bakes stencil ids
+     * into the light attribute). Anything here that a pass varies must be in the key, or a pass would be
+     * served a bake made for another one.
+     */
+    private long weldKey(Model model, ShapeKeys keys, int light, int overlay, Color color, StencilMap stencilMap)
+    {
+        long hash = weldPoseKey(this.vaos.size(), model.getAllGroups());
+
+        return weldDrawKey(hash, light, overlay, color.r, color.g, color.b, color.a,
+            stencilMap == null ? 0 : (stencilMap.increment ? 2 : 1),
+            keys == null ? 0 : keys.shapeKeys.hashCode());
+    }
+
+    /**
+     * The pose half of the weld key: everything about the bones that the bake's vertices, seams and
+     * normals are computed from. Kept apart from {@link #weldKey} — and free of any {@link ModelInstance}
+     * state beyond the VAO count — so the weld-cache regression can build its own bones and prove that
+     * dropping any single component changes the key. A key that lost one would keep serving geometry
+     * baked for the previous pose, which is this cache's most dangerous silent failure.
+     *
+     * @param vaoCount how many bones ride a VAO. Which bones ride one decides which bones the CPU bake
+     *                 must emit, and the VAO bake lands on a later tick than the first frames of a
+     *                 spawn — so it is an input of the bake like any other. The map only ever grows, in
+     *                 one atomic setup task, so its size is an exact generation counter.
+     */
+    static long weldPoseKey(int vaoCount, Collection<ModelGroup> groups)
+    {
+        long hash = 1125899906842597L;
+
+        hash = hash * 31 + vaoCount;
+
+        for (ModelGroup group : groups)
+        {
+            hash = hash * 31 + (group.visible ? 1 : 0);
+            hash = hash * 31 + poseHash(group.current);
+            hash = hash * 31 + poseHash(group.initial);
+            hash = hash * 31 + (group.orient == null ? 0 : group.orient.hashCode());
+            hash = hash * 31 + (group.offset == null ? 0 : group.offset.hashCode());
+            hash = hash * 31 + group.color.getARGBColor();
+            hash = hash * 31 + Float.floatToIntBits(group.lighting);
+        }
+
+        return hash;
+    }
+
+    /**
+     * The draw-input half of the weld key, kept apart so the weld-cache regression can prove that
+     * changing any single input changes the key — a key that dropped one component would silently
+     * serve one pass the buffer baked for another.
+     */
+    static long weldDrawKey(long hash, int light, int overlay, float r, float g, float b, float a, int stencilMode, int shapeKeysHash)
+    {
+        hash = hash * 31 + light;
+        hash = hash * 31 + overlay;
+        hash = hash * 31 + Float.floatToIntBits(r);
+        hash = hash * 31 + Float.floatToIntBits(g);
+        hash = hash * 31 + Float.floatToIntBits(b);
+        hash = hash * 31 + Float.floatToIntBits(a);
+        hash = hash * 31 + stencilMode;
+        hash = hash * 31 + shapeKeysHash;
+
+        return hash;
+    }
+
+    /**
+     * Pose hash of one bone: changes whenever any stored component changes, with no allocation. Upstream
+     * calls {@code Transform.contentHash()} (added by an unrelated upstream commit, {@code 1826f4431});
+     * FSR's {@link Transform} has no such method and the file lies outside this batch's write scope, so
+     * the same field mixing is inlined here. {@code initial} is included on top of upstream's set: it is
+     * the group's pivot and it enters the transform, and an included field can only cost a cache miss,
+     * never serve a stale bake.
+     */
+    private static int poseHash(Transform transform)
+    {
+        int hash = transform.translate.hashCode();
+
+        hash = 31 * hash + transform.scale.hashCode();
+        hash = 31 * hash + transform.rotate.hashCode();
+        hash = 31 * hash + transform.quat.hashCode();
+        hash = 31 * hash + transform.rotationMode.ordinal();
+
+        return hash;
     }
 
     /** Bones the immediate path will emit: visible bending welded bones, and visible bones with geometry but no VAO. */

@@ -254,6 +254,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    weldGeometryTest {
+        java.srcDirs = ['src/weldGeometryTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
     clientRegistrationTest {
         java.srcDirs = ['src/clientRegistrationTest/java', 'src/testSupport/java']
         resources.srcDirs = []
@@ -344,6 +350,8 @@ configurations {
     particleRuntimeTestRuntimeOnly.extendsFrom clientRuntimeOnly
     ikPhysicsTestImplementation.extendsFrom clientImplementation
     ikPhysicsTestRuntimeOnly.extendsFrom clientRuntimeOnly
+    weldGeometryTestImplementation.extendsFrom clientImplementation
+    weldGeometryTestRuntimeOnly.extendsFrom clientRuntimeOnly
     clientRegistrationTestImplementation.extendsFrom clientImplementation
     clientRegistrationTestRuntimeOnly.extendsFrom clientRuntimeOnly
     audioFormatTestImplementation.extendsFrom implementation
@@ -593,6 +601,14 @@ tasks.register('testIkPhysicsConsistency', JavaExec) {
     mainClass = 'mchorse.bbs_mod.cubic.ik.IKPhysicsConsistencyTest'
 }
 
+tasks.register('testWeldGeometryCache', JavaExec) {
+    group = 'verification'
+    description = 'Runs the welded-geometry cache key and lending regressions.'
+    dependsOn tasks.named('clientClasses'), tasks.named('weldGeometryTestClasses')
+    classpath = sourceSets.weldGeometryTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.cubic.WeldGeometryCacheTest'
+}
+
 tasks.register('testClientStructuralRegistration', JavaExec) {
     dependsOn tasks.named('clientClasses'), tasks.named('clientRegistrationTestClasses')
     classpath = sourceSets.clientRegistrationTest.runtimeClasspath
@@ -716,6 +732,7 @@ def bbsVerificationTaskNames = [
     'testFilmEditorMigration',
     'testParticleRuntimeConsistency',
     'testIkPhysicsConsistency',
+    'testWeldGeometryCache',
     'testCemParser',
     'apiCheck'
 ]
