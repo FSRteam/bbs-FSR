@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.utils.keyframes;
 
+import mchorse.bbs_mod.api.client.events.TimelineEvents;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.markers.FilmMarkers;
@@ -152,5 +153,14 @@ public class UIFilmKeyframes extends UIKeyframes
         }
 
         super.renderOverlay(context);
+
+        /* The actor dope sheet and every nested clip keyframe editor share this class, so wiring the
+         * overlay here covers both. The mapper includes the clip offset, so listeners receive
+         * absolute film ticks and land where the keyframes they describe are drawn. */
+        if (this.editor != null)
+        {
+            TimelineEvents.OVERLAY.invoker().render(this.editor.getFilm(), context, this.graphArea,
+                tick -> this.toGraphX((float) (tick - this.getClipOffset())));
+        }
     }
 }

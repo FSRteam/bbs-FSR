@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.api.client.events.TimelineEvents;
 import mchorse.bbs_mod.camera.clips.CameraClip;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.converters.IClipConverter;
@@ -1917,6 +1918,14 @@ public class UIClips extends UIElement
         }
 
         super.render(context);
+
+        /* After the clips themselves, so an overlay draws over them; the mapper takes absolute film
+         * ticks, which is what a clip timeline keys its own drawing on. */
+        if (this.delegate != null)
+        {
+            TimelineEvents.OVERLAY.invoker().render(this.delegate.getFilm(), context, this.area,
+                tick -> this.toGraphX((float) tick));
+        }
     }
 
     private void handleInput(int mouseX, int mouseY)

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.film;
 
 import io.netty.util.collection.IntObjectMap;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -68,6 +69,11 @@ public class FilmMatrices
 
     private static Pair<Matrix4f, Float> getTotalMatrix(IntObjectMap<IEntity> entities, Anchor value, Matrix4f defaultMatrix, double cx, double cy, double cz, float transition, int i, boolean fullMatrix, boolean placementAware, FormFrameCache frame)
     {
+        /* Substituting the anchor here rather than at each caller covers the whole chain, because
+         * this method resolves the anchor level by level - including the levels reached from a
+         * `previous` anchor just below. The stored anchor is never rewritten. */
+        value = FormPoseEvents.ANCHOR.invoker().resolve(value);
+
         /* Stupid recursion stop, I don't think anyone would need more than that */
         if (i > 5)
         {

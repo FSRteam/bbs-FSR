@@ -3,6 +3,8 @@ package mchorse.bbs_mod.film;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.api.client.events.FilmGizmoEvents;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
@@ -57,6 +59,11 @@ public class FilmEntityRenderer
 
     public static void renderEntity(FilmControllerContext context)
     {
+        /* Before anything is read off the actor: an observer that has to seed world state for this
+         * replay (a simulation, a cached body) writes it here, and every anchor and form transform
+         * resolved below already sees it. */
+        FormPoseEvents.ACTOR_BEFORE.invoker().prepare(context);
+
         IntObjectMap<IEntity> entities = context.entities;
         IEntity entity = context.entity;
         Camera camera = context.camera;
@@ -268,6 +275,23 @@ public class FilmEntityRenderer
 
     private static void renderAxes(String bone, boolean local, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
     {
+        /* A film tool may place the actor's handle itself. The check sits before the pose walk below:
+         * a handled gizmo skips an evaluation it is about to replace, and `stencilMap` distinguishes
+         * the visible capture (null) from the picking pass exactly as the default does.
+         *
+         * NOT SEMANTICALLY EQUIVALENT to upstream. Upstream fires this only from its
+         * `renderReplayGizmo`, i.e. inside the `gizmoTarget.is(Kind.ROOT)` branch. FSR has no
+         * `renderReplayGizmo` and no `FilmTarget`/ROOT branch at all (it is one of the upstream API
+         * gaps tracked in DIVERGENCES.md #3), so the event is posted here instead, when
+         * `context.bone != null`. A listener that keys on a ROOT target will not recognise this
+         * context; a listener that only wants to draw in the actor's frame gets the same
+         * `(context, stencil, stack)` upstream would hand it. This is the closest existing point,
+         * not an equivalent one - do not read it as a completed port of the ROOT branch. */
+        if (FilmGizmoEvents.DRAW.invoker().draw(FilmControllerContext.instance, stencilMap, stack))
+        {
+            return;
+        }
+
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
         MatrixCache map = FormFrameCache.collect(

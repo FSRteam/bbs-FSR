@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
@@ -656,6 +657,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.physicsAppliedThisRender = true;
+
+        /* The pose is animated and IK-solved by now; an external contributor gets its turn before the
+         * built-in chain physics, so what the listeners write is what the solver and the draw see. */
+        FormPoseEvents.MODEL_POSE.invoker().apply(this.form, target, model, transition, baseTransform, FormPoseEvents.Pass.RENDER);
         model.form = this.form;
         this.physicsRuntime.apply(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
     }
@@ -1593,6 +1598,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                     ModelConstraintsRuntime.apply(model);
 
                     this.applyIK(model, modelSemanticBase, allowWorldTargetOverrides);
+
+                    /* Bones are solved but not captured yet: a walk-side contributor writes here and
+                     * the capture below picks it up. No base transform is offered - this pass has no
+                     * absolute world frame, and a listener must not invent one from the render stack. */
+                    FormPoseEvents.MODEL_POSE.invoker().apply(this.form, entity, model, transition, null, FormPoseEvents.Pass.MATRICES);
 
                     if (modelSemanticBase != null)
                     {

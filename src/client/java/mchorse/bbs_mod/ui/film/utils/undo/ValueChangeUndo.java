@@ -18,6 +18,18 @@ public class ValueChangeUndo extends FilmEditorUndo
 
     private boolean mergable = true;
     private boolean invalid;
+    private BaseValue appliedValue;
+
+    /**
+     * The value the last {@link #undo(ValueGroup)}/{@link #redo(ValueGroup)} resolved and restored,
+     * or {@code null} when neither has run. Film editor change notifications carry these rather than
+     * the recorded paths: a path may address a value that only exists while the tree is live, and an
+     * undo that resolved nothing must not pretend a value changed.
+     */
+    public BaseValue getAppliedValue()
+    {
+        return this.appliedValue;
+    }
 
     public ValueChangeUndo(DataPath name, BaseType oldValue, BaseType newValue)
     {
@@ -114,7 +126,7 @@ public class ValueChangeUndo extends FilmEditorUndo
     @Override
     public void undo(ValueGroup context)
     {
-        BaseValue value = this.resolveValue(context);
+        BaseValue value = this.appliedValue = this.resolveValue(context);
 
         if (value != null)
         {
@@ -125,7 +137,7 @@ public class ValueChangeUndo extends FilmEditorUndo
     @Override
     public void redo(ValueGroup context)
     {
-        BaseValue value = this.resolveValue(context);
+        BaseValue value = this.appliedValue = this.resolveValue(context);
 
         if (value != null)
         {

@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors;
 
+import mchorse.bbs_mod.api.client.events.FilmEditEvents;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.IValueListener;
@@ -97,6 +98,18 @@ public class UIFormUndoHandler
      */
     protected void handleUndos(IUndo<ValueGroup> undo, boolean redo)
     {
+        /* Undo and redo have already moved the backing values when this callback runs, so an editor
+         * observer has to be told now - before the UI state is refreshed - or it would read the
+         * pre-undo value tree. The batch is one film's worth of resolved values; values outside a
+         * film are dropped inside notifyChanges, and nothing at all happens with no listeners. */
+        if (FilmEditEvents.CHANGED.hasListeners())
+        {
+            List<BaseValue> applied = new ArrayList<>();
+
+            collectAppliedValues(undo, applied);
+            FilmEditEvents.notifyChanges(applied, redo ? FilmEditEvents.Cause.REDO : FilmEditEvents.Cause.UNDO);
+        }
+
         IUndo<ValueGroup> anotherUndo = undo;
 
         if (anotherUndo instanceof CompoundUndo)
@@ -112,6 +125,26 @@ public class UIFormUndoHandler
         }
 
         this.handleUndoApplied(undo, redo);
+    }
+
+    /**
+     * Collects the values an undo actually restored, walking compound entries depth first. An entry
+     * that never resolved a live value contributes nothing: it did not change anything, so nothing
+     * may report it as a change.
+     */
+    private static void collectAppliedValues(IUndo<ValueGroup> undo, List<BaseValue> values)
+    {
+        if (undo instanceof CompoundUndo<ValueGroup> compound)
+        {
+            for (IUndo<ValueGroup> child : compound.getUndos())
+            {
+                collectAppliedValues(child, values);
+            }
+        }
+        else if (undo instanceof ValueChangeUndo change && change.getAppliedValue() != null)
+        {
+            values.add(change.getAppliedValue());
+        }
     }
 
     public void handlePreValues(BaseValue baseValue, int flag)
@@ -182,6 +215,14 @@ public class UIFormUndoHandler
             this.cacheMarkLastUndoNoMerging = false;
 
             this.undoManager.markLastUndoNoMerging();
+        }
+
+        /* One notification per committed batch, never one per drag sample: this is where the values
+         * are handed to history, and the cached set is exactly the batch. Loading, playback and the
+         * intermediate samples a drag produces never reach here. */
+        if (!committedValues.isEmpty() && FilmEditEvents.CHANGED.hasListeners())
+        {
+            FilmEditEvents.notifyChanges(committedValues, FilmEditEvents.Cause.EDIT);
         }
     }
 
