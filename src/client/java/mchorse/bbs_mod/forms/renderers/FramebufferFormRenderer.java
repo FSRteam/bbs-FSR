@@ -13,6 +13,7 @@ import mchorse.bbs_mod.graphics.Renderbuffer;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Quad;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -65,9 +66,21 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
         super(form);
     }
 
+    /**
+     * The palette thumbnail. A framebuffer form of its own draws nothing here: its picture is
+     * the body parts rendered into an off-screen texture by {@link #renderBodyParts}, which the
+     * world pass owns. An empty cell is indistinguishable from a gap in the grid, so a form with
+     * no body parts shows the camera icon instead - the same cell the form's editor tab wears
+     * (upstream 449f0058f).
+     */
     @Override
     protected void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
-    {}
+    {
+        if (this.form.parts.getAll().isEmpty())
+        {
+            context.batcher.icon(Icons.CAMERA, (x1 + x2) / 2, (y1 + y2) / 2, 0.5F, 0.5F);
+        }
+    }
 
     @Override
     public void renderBodyParts(FormRenderingContext context)

@@ -6,6 +6,7 @@ import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
+import mchorse.bbs_mod.forms.forms.FramebufferForm;
 import mchorse.bbs_mod.forms.forms.ItemForm;
 import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
@@ -58,6 +59,7 @@ public class ExtraFormSection extends FormSection
         TrailForm trail = new TrailForm();
         SoundSphereForm soundSphere = new SoundSphereForm();
         SoundConeForm soundCone = new SoundConeForm();
+        FramebufferForm framebuffer = new FramebufferForm();
 
         billboard.texture.set(Link.assets("textures/error.png"));
         extruded.texture.set(Link.assets("textures/error.png"));
@@ -75,6 +77,11 @@ public class ExtraFormSection extends FormSection
         extra.addForm(trail);
         extra.addForm(soundSphere);
         extra.addForm(soundCone);
+        /* Renders its body parts into a texture of its own and shows that texture in the world.
+         * The type was already registered (BBSMod#onConstructMod), so a hand-written film or a
+         * /bbs morph command could name it, but the palette - the only place a form can be picked
+         * by hand - had no cell for it. Re-exposed upstream the same way (449f0058f). */
+        extra.addForm(framebuffer);
 
         this.mobsAnimals = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_ANIMALS, this.parent.visibility.get("mobs_animals"));
         this.mobsNeutral = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_NEUTRAL, this.parent.visibility.get("mobs_neutral"));

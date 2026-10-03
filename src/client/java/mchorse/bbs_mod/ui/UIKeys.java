@@ -569,6 +569,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_BLOCK_EMPTY = L10n.lang("bbs.ui.forms.editors.block.empty");
     public static final IKey FORMS_EDITORS_BLOCK_PICKER_OPEN = L10n.lang("bbs.ui.forms.editors.block.picker.open");
     public static final IKey FORMS_EDITORS_EXTRUDED_TITLE = L10n.lang("bbs.ui.forms.editors.extruded.title");
+    public static final IKey FORMS_EDITORS_FRAMEBUFFER_TITLE = L10n.lang("bbs.ui.forms.editors.framebuffer.title");
     public static final IKey FORMS_EDITORS_GENERAL = L10n.lang("bbs.ui.forms.editors.general");
     public static final IKey FORMS_EDITORS_GENERAL_BONE_TRACKS = L10n.lang("bbs.ui.forms.editors.general.bone_tracks");
     public static final IKey FORMS_EDITORS_GENERAL_BONE_TRACKS_TOOLTIP = L10n.lang("bbs.ui.forms.editors.general.bone_tracks-tooltip");
