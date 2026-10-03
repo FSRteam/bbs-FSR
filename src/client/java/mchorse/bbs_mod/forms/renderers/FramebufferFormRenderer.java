@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
@@ -173,7 +174,14 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
 
                 try
                 {
+                    /* The nested forms render under an ortho projection into this framebuffer —
+                     * deferring their translucent pixels into the world's queue would replay them
+                     * with the wrong projection, so they render single-pass as before. Render-last
+                     * is off here for the same reason: a part postponed out of this buffer would
+                     * come back in the world. Both are suspended for the whole scope below, body
+                     * parts included, because the parts are what would defer. */
                     boolean queueWasActive = FormTranslucentQueue.suspend();
+                    boolean renderLastWasActive = FormRenderLast.suspend();
 
                     try
                     {
@@ -217,6 +225,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
                     finally
                     {
                         FormTranslucentQueue.restore(queueWasActive);
+                        FormRenderLast.restore(renderLastWasActive);
                     }
                 }
                 finally

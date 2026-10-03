@@ -995,6 +995,8 @@
 	"bbs.ui.forms.editors.general.lighting-tooltip": "Whether lighting is applied to the form like torch light, sky light, time of the day, etc.",
 	"bbs.ui.forms.editors.general.movement_speed": "Speed",
 	"bbs.ui.forms.editors.general.movement_speed-tooltip": "This option doesn't change the movement speed of a replay actor. Only for the morphed player!",
+	"bbs.ui.forms.editors.general.render_last": "Render last",
+	"bbs.ui.forms.editors.general.render_last-tooltip": "Draws the form after every other form of the pass, so its semi-transparent pixels blend over what is behind them instead of hiding it. Set it only on the form whose transparency breaks; several last-drawn forms keep the list order among themselves",
 	"bbs.ui.forms.editors.general.shader_shadow": "Shader's shadow",
 	"bbs.ui.forms.editors.general.step_height": "Step height",
 	"bbs.ui.forms.editors.general.track_name-tooltip": "When specified, a special prefix will be displayed in keyframe tracks and attachment picker instead of a path like \"0/1/2\"",

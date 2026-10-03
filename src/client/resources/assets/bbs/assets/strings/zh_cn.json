@@ -994,6 +994,8 @@
     "bbs.ui.forms.editors.general.lighting-tooltip": "形态是否接受光照，如火把光照、天空光照、昼夜环境光等",
     "bbs.ui.forms.editors.general.movement_speed": "速度",
     "bbs.ui.forms.editors.general.movement_speed-tooltip": "该选项不会更改回放演员的移动速度，仅适用于伪装的玩家！",
+    "bbs.ui.forms.editors.general.render_last": "最后绘制",
+    "bbs.ui.forms.editors.general.render_last-tooltip": "该形态会在同一趟绘制的最后才画，半透明像素因此叠在后面的东西之上，而不是把它们挡住。只给透明度出问题的那一个形态开启；多个「最后绘制」的形态之间仍按列表顺序",
     "bbs.ui.forms.editors.general.shader_shadow": "着色器阴影",
     "bbs.ui.forms.editors.general.step_height": "上楼高度",
     "bbs.ui.forms.editors.general.track_name-tooltip": "后，关键帧轨道和附件选择器中将显示特殊前缀，而非“0/1/2”这样的路径",

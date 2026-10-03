@@ -48,6 +48,12 @@ public abstract class Form extends ValueGroup
     public final ValueBoolean shaderShadow = new ValueBoolean("shaderShadow", true);
     public final ValueBoolean additiveColor = new ValueBoolean("additive_color", false);
 
+    /**
+     * Draw after every other form of the pass (the client's FormRenderLast): the per-form cure
+     * for a semi-transparent form hiding what is behind it, instead of reordering the list.
+     */
+    public final ValueBoolean renderLast = new ValueBoolean("render_last", false);
+
     /* Enchantment glint over the whole form: off, full, edge or vanilla. Model
      * forms drive their glint per bone from the pose instead, since a skeleton lets the
      * effect be placed far more precisely than one switch for the entire form. */
@@ -109,6 +115,7 @@ public abstract class Form extends ValueGroup
         this.uiScale.invisible();
         this.shaderShadow.invisible();
         this.additiveColor.invisible();
+        this.renderLast.invisible();
 
         this.add(this.visible);
         this.add(this.disabledTracks);
@@ -134,6 +141,7 @@ public abstract class Form extends ValueGroup
         this.add(this.anchor);
         this.add(this.shaderShadow);
         this.add(this.additiveColor);
+        this.add(this.renderLast);
 
         /* These remain persisted for the form editor and old Films, but the timeline now
          * exposes one dedicated glint-layer track instead of four implementation fields. */

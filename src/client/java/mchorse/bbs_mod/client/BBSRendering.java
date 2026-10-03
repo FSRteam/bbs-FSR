@@ -27,6 +27,7 @@ import mchorse.bbs_mod.client.render.multiview.ViewTargetSize;
 import mchorse.bbs_mod.client.render.multiview.ViewFramebuffer;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
+import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.ui.film.view.ViewDescriptor;
@@ -1085,6 +1086,7 @@ public class BBSRendering
                     {
                         /* A failed draw must never leave commands for the next camera. */
                         FormTranslucentQueue.abort();
+                        FormRenderLast.release();
                     }
 
                     target.finishForPresentation();
@@ -1221,6 +1223,7 @@ public class BBSRendering
         catch (RuntimeException | Error failure)
         {
             FormTranslucentQueue.abort();
+            FormRenderLast.release();
             pendingPrimaryFrame = null;
             pendingPrimaryIris = null;
 
@@ -1551,6 +1554,33 @@ public class BBSRendering
         batcher2D.textCard(label, iconX + 3, y + 4, BBSSettings.textColor(), Colors.A50);
     }
 
+    /** Whether the entity pass opened the render-last scope — false when one was already open. */
+    private static boolean entityPassRenderLast;
+
+    /**
+     * The world's entity pass: between these two calls vanilla draws the actors, model blocks
+     * and morphed players, and without a shader pack {@link #renderCoolStuff} draws the films
+     * at its end — one render-last scope spans it all, so a form set to render last draws after
+     * every other form of the frame. Under Iris the films run earlier, at the solid layer, in a
+     * scope of their own; this one still covers what the entity loop drew.
+     *
+     * <p>Opened after the terrain layers rather than before them, because the solid layer is
+     * where the Iris film pass draws: a scope already open there would swallow that pass's own
+     * scope, and the films' render-last forms would end up drawn after the entities instead of
+     * at the end of the film pass.</p>
+     */
+    public static void beginEntityPass()
+    {
+        entityPassRenderLast = FormRenderLast.open();
+    }
+
+    public static void endEntityPass()
+    {
+        FormRenderLast.close(entityPassRenderLast);
+
+        entityPassRenderLast = false;
+    }
+
     public static void renderCoolStuff(IBbsWorldRenderContext worldRenderContext)
     {
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
@@ -1560,6 +1590,12 @@ public class BBSRendering
         boolean oldDepthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
 
         modelViewStack.pushMatrix();
+
+        /* A scope over everything drawn here, for when this runs on its own — under Iris, at the
+         * solid layer: a form set to render last skips its turn and draws when this closes, after
+         * every other form of the pass. Inside the entity pass's scope this opens nothing and the
+         * forms wait for that one, which is what keeps one scope over the whole frame's forms. */
+        boolean renderLast = FormRenderLast.open();
 
         try
         {
@@ -1582,6 +1618,11 @@ public class BBSRendering
         }
         finally
         {
+            /* The postponed forms replay here — before the batch is ended and the camera matrices
+             * are put back — because their renderers read the same projection and model-view the
+             * forms drawn above did. */
+            FormRenderLast.close(renderLast);
+
             try
             {
                 try

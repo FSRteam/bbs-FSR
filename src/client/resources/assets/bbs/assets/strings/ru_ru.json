@@ -823,6 +823,8 @@
 	"bbs.ui.forms.editors.general.lighting-tooltip": "Используеться ли освещение по типу от факела, от неба, от времени дня и т.д.",
 	"bbs.ui.forms.editors.general.movement_speed": "Скорость",
 	"bbs.ui.forms.editors.general.movement_speed-tooltip": "Эта опция не меняет скорость передвижения актёра записи. Только действует на морфнутого игрока!",
+	"bbs.ui.forms.editors.general.render_last": "Рисовать последним",
+	"bbs.ui.forms.editors.general.render_last-tooltip": "Форма рисуется после всех остальных форм прохода — её полупрозрачные пиксели ложатся поверх того, что за ними, а не скрывают его. Включай только той форме, у которой ломается прозрачность; несколько «последних» между собой идут в порядке списка",
 	"bbs.ui.forms.editors.general.shader_shadow": "Тень шейдеров",
 	"bbs.ui.forms.editors.general.step_height": "Высота шага",
 	"bbs.ui.forms.editors.general.track_name-tooltip": "Когда указано, специальный префикс будет виден в треках ключевых кадрах и списках костях вместо путя наподобие \"0/1/2\"",
