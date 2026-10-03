@@ -340,9 +340,21 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
     public BaseType toData()
     {
         MapType data = new MapType();
+        String type = CollectionUtils.getKey(KeyframeFactories.FACTORIES, this.factory);
+
+        if (type == null)
+        {
+            /* A factory outside the registry has no name to write, so the channel goes out with a
+             * null type and cannot be read back — the lookup on load finds nothing. There is no
+             * value to substitute here, but it must not happen quietly. Stderr rather than a
+             * logger, for the same reason as the read side below: this class has to initialize on
+             * bare test-harness classpaths that ship no logging backend. */
+            System.err.println("[bbs] Keyframe channel \"" + this.getId() + "\" holds a factory that isn't registered ("
+                + this.factory + "); it is being saved with no value type and won't read back!");
+        }
 
         data.put("keyframes", super.toData());
-        data.putString("type", CollectionUtils.getKey(KeyframeFactories.FACTORIES, this.factory));
+        data.putString("type", type);
 
         return data;
     }
@@ -356,7 +368,8 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
         }
 
         MapType map = data.asMap();
-        IKeyframeFactory<T> factory = KeyframeFactories.FACTORIES.get(map.getString("type"));
+        String type = map.getString("type");
+        IKeyframeFactory<T> factory = KeyframeFactories.FACTORIES.get(type);
 
         if (factory == null)
         {
@@ -367,7 +380,7 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
              * written in a shape this build has no way to interpret. Stderr rather than a logger:
              * this class initializes on bare test-harness classpaths with no logging backend. */
             System.err.println("[bbs] Keyframe channel \"" + this.getId() + "\" has unknown value type \""
-                + map.getString("type") + "\"; its keyframes are left out.");
+                + type + "\"; its keyframes are left out.");
 
             return;
         }

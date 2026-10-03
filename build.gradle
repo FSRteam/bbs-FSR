@@ -188,6 +188,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
+    dataMigrationTest {
+        java.srcDirs = ['src/dataMigrationTest/java', 'src/testSupport/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
+    }
     interactionActionTest {
         java.srcDirs = ['src/interactionActionTest/java']
         resources.srcDirs = []
@@ -328,6 +334,8 @@ configurations {
     themeCoreTestRuntimeOnly.extendsFrom clientRuntimeOnly
     folderManagerTestImplementation.extendsFrom implementation
     folderManagerTestRuntimeOnly.extendsFrom runtimeOnly
+    dataMigrationTestImplementation.extendsFrom clientImplementation
+    dataMigrationTestRuntimeOnly.extendsFrom clientRuntimeOnly
     interactionActionTestImplementation.extendsFrom implementation
     interactionActionTestRuntimeOnly.extendsFrom runtimeOnly
     networkSecurityTestImplementation.extendsFrom implementation
@@ -527,6 +535,14 @@ tasks.register('testFolderManagerContainment', JavaExec) {
     mainClass = 'mchorse.bbs_mod.utils.manager.FolderManagerContainmentTest'
 }
 
+tasks.register('testSaveVersionMigration', JavaExec) {
+    group = 'verification'
+    description = 'Runs the save-format version stamping, legacy read, and newer-format refusal regressions.'
+    dependsOn tasks.named('clientClasses'), tasks.named('dataMigrationTestClasses')
+    classpath = sourceSets.dataMigrationTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.data.migration.SaveVersionMigrationTest'
+}
+
 tasks.register('testInteractionActions', JavaExec) {
     dependsOn tasks.named('interactionActionTestClasses')
     classpath = sourceSets.interactionActionTest.runtimeClasspath
@@ -717,6 +733,7 @@ def bbsVerificationTaskNames = [
     'testThemeCore',
     'testUiMotions',
     'testFolderManagerContainment',
+    'testSaveVersionMigration',
     'testFSRUpdates',
     'testInteractionActions',
     'testNetworkSecurity',
