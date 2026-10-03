@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.film;
 
 import mchorse.bbs_mod.forms.categories.RecentFormCategoryTest;
 import mchorse.bbs_mod.forms.FormDataPreservationTest;
+import mchorse.bbs_mod.forms.PhysicsWeightRoundTripTest;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -48,6 +49,7 @@ public final class FilmEditorMigrationLogicTest
             FilmFlightEditingTest.runAll();
             RecentFormCategoryTest.runAll();
             FormDataPreservationTest.runAll();
+            PhysicsWeightRoundTripTest.runAll();
 
             if (args.length == 0 || !"--logic-only".equals(args[0]))
             {
