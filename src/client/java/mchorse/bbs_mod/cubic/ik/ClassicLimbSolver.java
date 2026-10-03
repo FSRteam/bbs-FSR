@@ -63,7 +63,7 @@ final class ClassicLimbSolver
      * touched — when the chain cannot run here (wrong shape, missing frames,
      * degenerate geometry), so the caller can hand it to the core solver.
      */
-    static boolean apply(IModel model, List<String> workIds, Map<String, PivotFrame> frames, Vector3f target, Quaternionf tipTarget, Vector3f polePoint, float poleAngle, float softness, float weight, boolean stretch)
+    static boolean apply(IModel model, List<String> workIds, Map<String, PivotFrame> frames, Vector3f target, Quaternionf tipTarget, Vector3f polePoint, float poleAngle, float softness, float weight, boolean stretch, boolean squash)
     {
         if (!eligible(workIds) || !(model instanceof Model || model instanceof BOBJModel))
         {
@@ -100,6 +100,12 @@ final class ClassicLimbSolver
         Vector3f root = new Vector3f(positions.get(0));
         Vector3f goal = clampReach(root, target, total, softness);
 
+        /* Captured BEFORE the solve overwrites the positions: the second bone's
+         * length is what turns the solve's goal point back into the tip the
+         * chain actually reaches, which is what a stretch or a squash measures
+         * its gap from. */
+        float tipLength = positions.get(1).distance(positions.get(2));
+
         /* Bend direction: the live posed bend when the limb is actually bent,
          * else the authored REST bend (knee forward, elbow back) carried into
          * this frame, else a stable side axis — so the bend plane always exists
@@ -126,16 +132,25 @@ final class ClassicLimbSolver
          * stable twist through the reach boundary instead of jittering. */
         Vector3f bendSeed = orientBend(positions, hinge, polePoint, poleAngle);
 
-        /* IK stretch, the legacy in-pass flavour: the gap the rotation solve could
-         * not close is split among the bones as translations (see the orientation
-         * pass), weighted so it fades with the IK. */
+        /* IK stretch and squash, the legacy in-pass flavour: the gap the rotation
+         * solve could not close is split among the bones as translations (see the
+         * orientation pass), weighted so it fades with the IK. Measured from the
+         * tip the chain REACHES, not from the solve's goal point: the position
+         * pass writes the goal into the last position even when it is out of
+         * reach (short) or too close to fold onto (overshot), and only the
+         * reached tip tells the two apart. Which of the two boxes has to be
+         * ticked follows from that side — a leg keeping its foot planted as the
+         * body squats must not turn rubbery when the body rises again. */
         Vector3f stretchGap = null;
 
-        if (stretch)
+        if (stretch || squash)
         {
-            Vector3f gap = new Vector3f(target).sub(positions.get(2));
+            Vector3f tip = reachedTip(positions, tipLength);
+            Vector3f gap = new Vector3f(target).sub(tip);
+            Vector3f radial = new Vector3f(tip).sub(positions.get(0));
+            boolean shortfall = radial.lengthSquared() < EPS * EPS || gap.dot(radial) >= 0F;
 
-            if (gap.lengthSquared() > EPS * EPS)
+            if (gap.lengthSquared() > EPS * EPS && (shortfall ? stretch : squash))
             {
                 stretchGap = gap.mul(weight);
             }
@@ -226,6 +241,20 @@ final class ClassicLimbSolver
 
         p.get(1).set(root).fma(l1 * cosA, dir).fma(l1 * sinA, bend);
         p.get(2).set(goal);
+    }
+
+    /**
+     * The tip the chain actually REACHES, from the solved two-bone positions: the
+     * last bone's direction carried out by its own rest length. The position pass
+     * writes the clamped goal into {@code p.get(2)}, which is not where the tip
+     * lands when the goal was out of reach — this is what a stretch measures its
+     * shortfall from, and what a squash measures its overshoot from.
+     */
+    private static Vector3f reachedTip(List<Vector3f> p, float tipLength)
+    {
+        Vector3f dir = new Vector3f(p.get(2)).sub(p.get(1));
+
+        return normalize(dir) ? new Vector3f(p.get(1)).fma(tipLength, dir) : new Vector3f(p.get(2));
     }
 
     /**

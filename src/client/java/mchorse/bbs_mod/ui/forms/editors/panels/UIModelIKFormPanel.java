@@ -85,6 +85,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     public UISliderTrackpad stiffnessY;
     public UISliderTrackpad stiffnessZ;
     public UIToggle stretch;
+    public UIToggle squash;
 
     private String selectedBone = "";
     private Map<String, IKData> ikData = new HashMap<>();
@@ -106,6 +107,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         public boolean enabled = true;
         public boolean tipRotation = ModelIKConfig.DEFAULT_TIP_ROTATION;
         public boolean stretch = ModelIKConfig.DEFAULT_STRETCH;
+        public boolean squash = ModelIKConfig.DEFAULT_SQUASH;
         public boolean classic = ModelIKConfig.DEFAULT_CLASSIC;
     }
 
@@ -362,6 +364,20 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             data.stretch = b.getValue();
             this.commitChanges();
         });
+        this.stretch.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_STRETCH_TOOLTIP);
+
+        this.squash = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_SQUASH, (b) ->
+        {
+            if (this.syncingUI || this.selectedBone.isEmpty())
+            {
+                return;
+            }
+
+            IKData data = this.getOrCreateData(this.selectedBone);
+            data.squash = b.getValue();
+            this.commitChanges();
+        });
+        this.squash.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_SQUASH_TOOLTIP);
 
         this.classic = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_CLASSIC, (b) ->
         {
@@ -400,6 +416,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT, this.weight),
             this.tipRotation,
             this.stretch,
+            this.squash,
             this.classic
         );
 
@@ -644,6 +661,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.weight.setEnabled(enabled);
         this.tipRotation.setEnabled(enabled);
         this.stretch.setEnabled(enabled);
+        this.squash.setEnabled(enabled);
         this.classic.setEnabled(enabled);
         this.setJointEnabled(enabled);
     }
@@ -843,6 +861,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.weight.setValue(data == null ? ModelIKConfig.DEFAULT_WEIGHT : data.weight);
             this.tipRotation.setValue(data != null && data.tipRotation);
             this.stretch.setValue(data != null && data.stretch);
+            this.squash.setValue(data != null && data.squash);
             this.classic.setValue(data != null && data.classic);
 
             /* The classic toggle is loud about its fallback: a classic chain that
@@ -894,6 +913,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         this.weight.setEnabled(canEdit);
         this.tipRotation.setEnabled(canEdit);
         this.stretch.setEnabled(canEdit);
+        this.squash.setEnabled(canEdit);
         this.classic.setEnabled(canEdit);
     }
 
@@ -1028,6 +1048,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
                 data.enabled = chain.enabled();
                 data.tipRotation = chain.tipRotation();
                 data.stretch = chain.stretch();
+                data.squash = chain.squash();
                 data.classic = chain.classic();
                 this.ikData.put(chain.tip(), data);
             }
@@ -1077,7 +1098,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
                 continue;
             }
 
-            out.add(new ModelIKConfig.Chain(tip, data.target, data.chainLength, data.pole, data.poleTarget, data.poleAngle, data.softness, data.weight, data.enabled, data.tipRotation, data.stretch, data.classic));
+            out.add(new ModelIKConfig.Chain(tip, data.target, data.chainLength, data.pole, data.poleTarget, data.poleAngle, data.softness, data.weight, data.enabled, data.tipRotation, data.stretch, data.classic, data.squash));
         }
 
         Map<String, ModelIKConfig.JointDoF> joints = new HashMap<>();

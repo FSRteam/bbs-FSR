@@ -20,6 +20,7 @@ public record ModelIKConfig(List<Chain> chains, Map<String, JointDoF> bones)
     public static final int DEFAULT_CHAIN_LENGTH = 0;
     public static final boolean DEFAULT_TIP_ROTATION = false;
     public static final boolean DEFAULT_STRETCH = false;
+    public static final boolean DEFAULT_SQUASH = false;
     public static final boolean DEFAULT_CLASSIC = false;
 
     /**
@@ -32,16 +33,22 @@ public record ModelIKConfig(List<Chain> chains, Map<String, JointDoF> bones)
      * side comes from the pose (and the authored rest bend on a straight limb).
      * With {@code tipRotation} on, the tip bone copies the {@code target}
      * controller's orientation (Blender's "use tip rotation") instead of
-     * keeping its FK pose. With {@code stretch} on, a chain that comes up short
-     * telescopes onto its target: the gap is split among its bones as
+     * keeping its FK pose. With {@code stretch} on, a chain that comes up SHORT
+     * of its target telescopes onto it: the gap is split among its bones as
      * translations, so the joints open and the tip lands on the controller.
+     * With {@code squash} on, a chain that OVERSHOT (the goal sits closer than
+     * the chain can fold, so the tip swung past it) folds back in through the
+     * same distribution, with the gap measured the other way. The two are
+     * independent on purpose: a leg that keeps its foot planted while the body
+     * squats must not turn rubbery when the body rises again — so "short" only
+     * answers to {@code stretch} and "past" only to {@code squash}.
      * With {@code classic} on, a chain of exactly two bones is solved by the
      * analytic position-level solver (swing and roll assembled in quaternions,
      * no channel-space iteration) — the pre-redesign limb feel; it ignores
      * per-bone joint freedom and never merges with other chains, falling back
      * to the core solver when it overlaps one.
      */
-    public record Chain(String tip, String target, int chainLength, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean enabled, boolean tipRotation, boolean stretch, boolean classic)
+    public record Chain(String tip, String target, int chainLength, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean enabled, boolean tipRotation, boolean stretch, boolean classic, boolean squash)
     {
         public Chain
         {

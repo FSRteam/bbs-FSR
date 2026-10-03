@@ -14,6 +14,7 @@ import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -72,6 +73,9 @@ public final class IKPhysicsConsistencyTest
         testEffectorTracksControllerAndIsNotClamped();
         testPhysicsUsesConstrainedParentAndClampsTwist();
         testBobjPhysicsUsesConstrainedParentAndClampsTwist();
+        testSquashSerializationContract();
+        testCompileForwardsTheChainBehaviourFlags();
+        testStretchAndSquashAreIndependent();
 
         System.out.println("IKPhysicsConsistencyTest: OK");
     }
@@ -611,7 +615,7 @@ public final class IKPhysicsConsistencyTest
         CubicFixture fixture = cubicFixture();
         ModelForm form = createFormWithSettings(ModelForm::new);
         ModelIKConfig.Chain chain = new ModelIKConfig.Chain(
-            "tip", "target", 0, true, "pole", 0F, 0F, 1F, true, false, false, false
+            "tip", "target", 0, true, "pole", 0F, 0F, 1F, true, false, false, false, false
         );
 
         form.ik.set(ModelIKIO.toData(new ModelIKConfig(List.of(chain), Collections.emptyMap())));
@@ -630,7 +634,7 @@ public final class IKPhysicsConsistencyTest
 
         form.ikControlOverrides.clear();
         ModelIKConfig.Chain rotatingTip = new ModelIKConfig.Chain(
-            "tip", "target", 0, true, "pole", 0F, 0F, 1F, true, true, false, false
+            "tip", "target", 0, true, "pole", 0F, 0F, 1F, true, true, false, false, false
         );
 
         form.ik.set(ModelIKIO.toData(new ModelIKConfig(List.of(rotatingTip), Collections.emptyMap())));
@@ -1029,6 +1033,308 @@ public final class IKPhysicsConsistencyTest
     }
 
     /**
+     * The chain's squash flag travels under upstream's key name, {@code "squash"} —
+     * not {@code "ik_squash"}, which names the value-tree entry a bone carries and
+     * lives in a different layer. The key is asserted as a literal because the point
+     * of that spelling is that data written here loads upstream.
+     *
+     * <p>Run for BOTH data shapes `ModelIKIO.fromData` accepts: the wrapped one
+     * {@code toData} writes ({@code {chains: …}}), and the NON-wrapped legacy shape
+     * where the map of tip entries IS the root. They are separate code paths — the
+     * wrapped one also decides {@code defaultClassic} — so covering one says nothing
+     * about the other.
+     */
+    private static void testSquashSerializationContract()
+    {
+        ModelIKConfig.Chain squashed = new ModelIKConfig.Chain("tip", "target", 0, true, "pole", 0F, 0F, 1F, true, false, false, false, true);
+        ModelIKConfig.Chain plain = new ModelIKConfig.Chain("tip", "target", 0, true, "pole", 0F, 0F, 1F, true, false, false, false, false);
+
+        /* Wrapped, the shape toData writes. */
+        MapType wrapped = ModelIKIO.toData(new ModelIKConfig(List.of(squashed), Collections.emptyMap()));
+        MapType wrappedEntry = wrapped.getMap("chains").getMap("tip");
+
+        require(wrappedEntry.has("squash"), "squash=true was not written under the key \"squash\"");
+        require(wrappedEntry.getBool("squash", false), "squash=true was written as false");
+        assertSquashRoundTrip(wrapped, "wrapped", true);
+
+        MapType wrappedPlain = ModelIKIO.toData(new ModelIKConfig(List.of(plain), Collections.emptyMap()));
+        MapType wrappedPlainEntry = wrappedPlain.getMap("chains").getMap("tip");
+
+        require(wrappedPlainEntry.has("target"),
+            "the squash=false fixture did not serialize its chain at all, so the sparse check below is vacuous");
+        require(!wrappedPlainEntry.has("squash"),
+            "squash=false wrote the key anyway, so a chain that never used the feature no longer serializes sparsely");
+        assertSquashRoundTrip(wrappedPlain, "wrapped", false);
+
+        /* Non-wrapped: the chains map itself is the root, which is the legacy shape. */
+        MapType flat = new MapType();
+        flat.put("tip", wrappedEntry);
+        MapType flatPlain = new MapType();
+        flatPlain.put("tip", wrappedPlainEntry);
+
+        require(flat.has("tip", BaseType.TYPE_MAP),
+            "the non-wrapped fixture is not shaped as a flat map of tip entries, so this half of the check is vacuous");
+
+        assertSquashRoundTrip(flat, "non-wrapped", true);
+        assertSquashRoundTrip(flatPlain, "non-wrapped", false);
+    }
+
+    /** `fromData` must read {@code squash} back as {@code expected} from this data shape. */
+    private static void assertSquashRoundTrip(MapType data, String shape, boolean expected)
+    {
+        ModelIKConfig reloaded = ModelIKIO.fromData(data);
+
+        require(reloaded != null && reloaded.chains() != null && reloaded.chains().size() == 1,
+            "a chain carrying squash=" + expected + " did not survive a " + shape + " toData/fromData round trip");
+        require(reloaded.chains().get(0).squash() == expected,
+            "the " + shape + " path read squash back as " + reloaded.chains().get(0).squash()
+                + " where the data said " + expected);
+    }
+
+    /**
+     * {@code ModelIKCache.compile} copies the three behaviour flags out of a {@code Chain} and
+     * into a {@code CompiledChain} — and the two records do NOT list them in the same order:
+     *
+     * <pre>
+     *   ModelIKConfig.Chain  : (…, stretch, classic, squash)   // classic BEFORE squash
+     *   ModelIKCache.CompiledChain : (…, stretch, squash, classic)   // squash BEFORE classic
+     * </pre>
+     *
+     * All three are {@code boolean}, so swapping any two of them still compiles: the compiler
+     * cannot tell, and nothing else in this file would notice, because every other
+     * {@code CompiledChain} here is built by hand and never travels through {@code compile()}.
+     * The one runtime path that does go through it ({@code isRotationConstrained}) reads the
+     * joint degrees of freedom, not these flags. That is exactly the shape of a
+     * "looks wired up, but breaking it goes green" hole, so this asserts the forwarding itself.
+     *
+     * <p>The triple is asserted as a whole rather than flag by flag: with {@code (stretch,
+     * squash, classic) = (false, true, false)} every one of the six permutations of the flags
+     * puts the single {@code true} on a different component, so no mis-ordered pair can pass.
+     */
+    private static void testCompileForwardsTheChainBehaviourFlags()
+    {
+        CubicFixture fixture = cubicFixture();
+        ModelIKConfig.Chain chain = new ModelIKConfig.Chain(
+            "tip", "target", 0, true, "pole", 0F, 0F, 1F, true, false, false, false, true
+        );
+        MapType data = ModelIKIO.toData(new ModelIKConfig(List.of(chain), Collections.emptyMap()));
+
+        /* Read the config back the same way the cache does, so the fixture is known to carry
+         * squash=true in the shape compile() will see. */
+        require(ModelIKIO.fromData(data).chains().get(0).squash(),
+            "the compile() fixture lost squash=true before it reached the cache, so this check is vacuous");
+
+        ModelIKCache.Compiled compiled = ModelIKCache.getFromData(fixture.model, data);
+
+        require(compiled != null && compiled.chains() != null && compiled.chains().size() == 1,
+            "compile() did not produce exactly one chain for a chain that satisfies every filter, "
+                + "so the flags below cannot be inspected");
+
+        ModelIKCache.CompiledChain forwarded = compiled.chains().get(0);
+
+        require(!forwarded.stretch() && forwarded.squash() && !forwarded.classic(),
+            "compile() did not forward the chain's behaviour flags in order: compiled as (stretch="
+                + forwarded.stretch() + ", squash=" + forwarded.squash() + ", classic=" + forwarded.classic()
+                + ") where the config said (stretch=false, squash=true, classic=false). "
+                + "Chain is (…, stretch, classic, squash) but CompiledChain is "
+                + "(…, stretch, squash, classic) — the two records order these booleans differently");
+    }
+
+    /**
+     * Stretch and squash answer to opposite halves of the gap and nothing else. The table is
+     * built so that EXACTLY ONE of the two flags is on in every cell: with both on, a broken
+     * implementation that reads the wrong flag would still telescope and the cell would pass
+     * without testing anything. The all-off column is the negative control — nothing may move,
+     * in either direction.
+     *
+     * <p>Both solvers are covered, and the classic two-bone path is driven directly rather than
+     * through the applier: `ClassicLimbSolver.apply` falls back to the core solver when it
+     * declines, and a fall back produces the same offsets, so going through the applier could
+     * not tell the two apart. Each classic cell asserts the return value instead (see
+     * {@link #telescopeLength}), which is what rules out measuring the core solver twice.
+     */
+    private static void testStretchAndSquashAreIndependent()
+    {
+        for (boolean classic : new boolean[] {false, true})
+        {
+            String path = classic ? "classic two-bone" : "core";
+
+            require(telescopeLength(classic, true, false, false) > TELESCOPE_MIN,
+                path + ": stretch no longer telescopes a chain that fell SHORT of its controller, so the "
+                    + "feature lost the half it was written for");
+            require(telescopeLength(classic, false, true, false) <= TELESCOPE_MIN,
+                path + ": squash telescoped a chain that fell SHORT — squash must not answer to a shortfall");
+
+            require(telescopeLength(classic, false, true, true) > TELESCOPE_MIN,
+                path + ": squash no longer folds in a chain that OVERSHOT its controller, so a near goal "
+                    + "still leaves the tip swung past it");
+            require(telescopeLength(classic, true, false, true) <= TELESCOPE_MIN,
+                path + ": stretch folded in a chain that OVERSHOT — stretch must only answer to a shortfall");
+
+            /* Negative control: with both boxes off the chain may not telescope in EITHER
+             * direction. It must not go red under any of the production mutations (they only
+             * move which flag answers to which half), and it going red would mean the gate
+             * leaks an offset for a chain that asked for neither. */
+            for (boolean overshoot : new boolean[] {false, true})
+            {
+                require(telescopeLength(classic, false, false, overshoot) <= TELESCOPE_MIN,
+                    path + ": a chain with BOTH stretch and squash off still telescoped on "
+                        + (overshoot ? "an overshoot" : "a shortfall") + " input");
+            }
+        }
+    }
+
+    /** Anything a solve writes is metres/units of a limb, so this is far above float noise and far below a real shift. */
+    private static final float TELESCOPE_MIN = 1.0e-4F;
+
+    /**
+     * One solve on {@link #unequalMultiFixture()}: the length of the largest telescope offset it wrote,
+     * or {@code 0} when it wrote none. Every cell of the table — including the all-off control, whose
+     * whole claim is "nothing happened" — asserts here that the solve actually ran and wrote an
+     * orientation, so a silent no-op cannot be read as "correctly did not telescope".
+     */
+    private static float telescopeLength(boolean classic, boolean stretch, boolean squash, boolean overshoot)
+    {
+        CubicMultiFixture fixture = unequalMultiFixture();
+        List<String> workIds = List.of("root", "mid", "tip");
+        Map<String, CubicRenderer.PivotFrame> frames = new HashMap<>();
+
+        ModelPivotFrames.collect(fixture.model, Set.of("root", "mid", "tip", "target", "pole"), frames, null);
+
+        Vector3f root = new Vector3f(frames.get("root").position());
+        Vector3f radial = new Vector3f(frames.get("tip").position()).sub(root);
+        float first = root.distance(frames.get("mid").position());
+        float second = frames.get("mid").position().distance(frames.get("tip").position());
+        float near = 0.25F * radial.length();
+        float far = 3F * radial.length();
+
+        /* Guards on the INPUT geometry, not on the production classification: the near
+         * target has to sit inside the band a two-bone chain cannot fold onto, and the
+         * far one outside its reach. A chain can only fold down to the DIFFERENCE of its
+         * segment lengths, so these two numbers are what make an overshoot exist at all —
+         * without them the "overshoot" case could quietly be an ordinary shortfall and the
+         * table would pass while testing nothing. */
+        require(near < Math.abs(first - second),
+            "fixture guard: the near target (" + near + ") is not inside the chain's unreachable fold band ("
+                + Math.abs(first - second) + "), so the overshoot case would not overshoot");
+        require(far > first + second,
+            "fixture guard: the far target (" + far + ") is not beyond the chain's reach ("
+                + (first + second) + "), so the shortfall case would not fall short");
+
+        Vector3f target = new Vector3f(root).fma(overshoot ? 0.25F : 3F, radial);
+
+        if (classic)
+        {
+            require(ClassicLimbSolver.eligible(workIds),
+                "the unequal two-bone fixture is not eligible for the classic solver, so this case would "
+                    + "silently measure the core solver");
+            require(ClassicLimbSolver.apply(fixture.model, workIds, frames, target, null,
+                    new Vector3f(frames.get("pole").position()), 0F, 0F, 1F, stretch, squash),
+                "the classic solver declined a fixture it must be able to solve, so this case would "
+                    + "silently measure the core solver");
+        }
+        else
+        {
+            applyToTarget(fixture.model, chainWithStretchAndSquash(stretch, squash), target);
+        }
+
+        float length = 0F;
+
+        for (String bone : new String[] {"mid", "tip"})
+        {
+            Vector3f offset = fixture.model.getGroup(bone) == null ? null : fixture.model.getGroup(bone).offset;
+
+            if (offset != null)
+            {
+                length = Math.max(length, offset.length());
+            }
+        }
+
+        /* The solve ran -- on the classic path this is the branch that would otherwise be
+         * invisible, since its failure mode is to hand the chain back to the core solver. The
+         * return value above is asserted for that; this is the second, independent witness that
+         * an orientation reached the bones, and it is what makes a 0 reading mean "the gate
+         * declined" rather than "nothing was solved at all". */
+        require(fixture.model.getGroup("mid").orient != null || fixture.model.getGroup("tip").orient != null,
+            "no orientation was written for the " + (classic ? "classic" : "core") + " solve, so this cell's "
+                + "offset reading (" + length + ") says nothing about the gate");
+
+        System.out.println("  " + (classic ? "classic" : "core   ")
+            + " | target " + String.format(java.util.Locale.ROOT, "%.5f", target.distance(root))
+            + " of reach " + String.format(java.util.Locale.ROOT, "%.5f", first + second)
+            + " (fold floor " + String.format(java.util.Locale.ROOT, "%.5f", Math.abs(first - second)) + ")"
+            + " | stretch=" + stretch + " squash=" + squash + " " + (overshoot ? "OVERSHOOT" : "SHORT   ")
+            + " -> telescope " + String.format(java.util.Locale.ROOT, "%.5f", length));
+
+        return length;
+    }
+
+    /**
+     * The applier's production call shape for a chain driven by a resolved controller
+     * position — the film's target override — with no workspace, which is what makes
+     * the target absolute instead of a bind-relative delta.
+     */
+    private static void applyToTarget(IModel model, ModelIKCache.CompiledChain chain, Vector3f target)
+    {
+        ModelIKDlsApplier.apply(
+            model,
+            List.of(chain),
+            null,
+            Map.of("target", new Vector3f(target)),
+            null,
+            null,
+            null,
+            null,
+            (List<ModelIKChainWorkspace>) null,
+            Collections.emptyMap()
+        );
+    }
+
+    private static ModelIKCache.CompiledChain chainWithStretchAndSquash(boolean stretch, boolean squash)
+    {
+        /* "target" must be in the wanted set even though this solve drives the controller by
+         * an override: the applier still reads the target bone's frame, and a chain whose
+         * target frame is missing is refused before it ever reaches the solve. */
+        Set<String> wanted = new HashSet<>(List.of("root", "mid", "tip", "target", "pole"));
+
+        return new ModelIKCache.CompiledChain(
+            "tip", "target", true, "pole", 0F, 0F, 1F, false, stretch, squash, false,
+            List.of("root", "mid", "tip"), List.of("root", "mid", "tip"), null, Set.copyOf(wanted), 0
+        );
+    }
+
+    /**
+     * A two-bone chain whose bones differ a great deal in length. That difference IS the
+     * test fixture: a chain can only fold down to the difference of its segment lengths,
+     * so a long/short pair leaves a wide band of goals the tip cannot reach without
+     * swinging past them — the only place an overshoot exists at all. A near-equal pair
+     * folds to almost nothing and has no such band.
+     *
+     * <p>Cubic pivots are ABSOLUTE model-space points (the renderer derives a bone's vector
+     * from the pivot difference), so the tip is placed at its own absolute spot, not at an
+     * offset from its parent.
+     */
+    private static CubicMultiFixture unequalMultiFixture()
+    {
+        Model model = new Model(new MolangParser());
+        ModelGroup root = group("root", 0F, 0F, 0F);
+        ModelGroup mid = group("mid", 0F, -16F, 0F);
+        ModelGroup tip = group("tip", 0F, -17F, 0F);
+        ModelGroup target = group("target", 0F, -17F, 0F);
+        ModelGroup pole = group("pole", 16F, -8F, 0F);
+
+        root.children.add(mid);
+        mid.children.add(tip);
+        model.topGroups.add(root);
+        model.topGroups.add(target);
+        model.topGroups.add(pole);
+        model.initialize();
+        model.resetPose();
+
+        return new CubicMultiFixture(model, root, mid, tip, target, pole);
+    }
+
+    /**
      * One production solve: no DoF overrides, no film target/pole positions, just
      * the optional {@code ik} control overrides and the constraint stack, so the
      * tip-limit and pole-lifecycle tests observe exactly what the render path's
@@ -1114,8 +1420,12 @@ public final class IKPhysicsConsistencyTest
         wanted.add("target");
         wanted.add("pole");
 
+        /* All 16 components explicit: this helper exercises the tip/orientation path, so it
+         * deliberately leaves stretch, squash and classic OFF (both via the solver flags and
+         * via the compiled chain). */
         return new ModelIKCache.CompiledChain(
-            ids.get(ids.size() - 1), "target", pole, "pole", 0F, 0F, 1F, tipRotation, false,
+            ids.get(ids.size() - 1), "target", pole, "pole", 0F, 0F, 1F, tipRotation,
+            false /* stretch */, false /* squash */, false /* classic */,
             ids, ids, null, Set.copyOf(wanted), 0
         );
     }

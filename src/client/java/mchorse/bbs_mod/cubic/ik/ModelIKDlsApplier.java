@@ -205,7 +205,7 @@ final class ModelIKDlsApplier
                     continue;
                 }
 
-                if (ClassicLimbSolver.apply(model, r.workIds(), frames, r.target(), r.tipTarget(), r.polePoint(), r.poleAngle(), r.softness(), r.weight(), chain.stretch()))
+                if (ClassicLimbSolver.apply(model, r.workIds(), frames, r.target(), r.tipTarget(), r.polePoint(), r.poleAngle(), r.softness(), r.weight(), chain.stretch(), chain.squash()))
                 {
                     continue;
                 }
@@ -1270,7 +1270,7 @@ final class ModelIKDlsApplier
 
         for (ResolvedChain r : resolved)
         {
-            if (r.chain().stretch())
+            if (r.chain().stretch() || r.chain().squash())
             {
                 stretchToTarget(model, nodes, tree, r, frames, blendedParentOf, blendedWorld);
             }
@@ -1278,18 +1278,24 @@ final class ModelIKDlsApplier
     }
 
     /**
-     * Telescopes a chain that came up short onto its controller: whatever gap the
-     * rotation solve could not close is split among the chain's bones in
-     * proportion to their lengths and written as per-bone translations, so every
-     * joint slides out along the limb and the tip lands on the target. No bone is
-     * scaled — cubes keep their proportions and their texels, and the joints that
-     * open up are sealed by the model's welds.
+     * Telescopes a chain that missed its controller: whatever gap the rotation
+     * solve could not close is split among the chain's bones in proportion to
+     * their lengths and written as per-bone translations, so every joint slides
+     * along the limb and the tip lands on the target. No bone is scaled — cubes
+     * keep their proportions and their texels, and the joints that open up are
+     * sealed by the model's welds.
      *
      * <p>A post-process on purpose: the solve itself stays a pure rotation
      * problem, exactly as it is without stretching, so nothing about a chain's
-     * bend, pole or limits changes when the box is ticked — the chain simply
-     * stops falling short. The gap is faded by the chain's weight, so stretch
-     * comes and goes with the rest of the IK.
+     * bend, pole or limits changes when the box is ticked. The gap is faded by
+     * the chain's weight, so stretch comes and goes with the rest of the IK.
+     *
+     * <p>Which half of the gap this is decides which box has to be ticked: a
+     * chain that fell SHORT of its goal telescopes out only with {@code stretch},
+     * one that OVERSHOT (the goal sits closer than the chain can fold, so the tip
+     * swung past it) folds in only with {@code squash}. Independent on purpose: a
+     * leg that keeps its foot planted while the body squats must not turn rubbery
+     * when the body rises again.
      *
      * <p>The share is distributed only up to the last bone carrying GEOMETRY: a
      * chain ending in a bare end-marker (the auto-tail convention) would
@@ -1363,6 +1369,17 @@ final class ModelIKDlsApplier
             }
         }
 
+        /* Which half of the gap this is decides which box has to be ticked (see the
+         * method comment). Judged from the SOLVED positions, so it has to sit after
+         * them: the radial is the solved root-to-effector line, and the gap is
+         * measured from the effector the solve landed on. */
+        boolean shortfall = fellShort(gap, solved[0], tree.effectors[effectorIndex].position);
+
+        if (!(shortfall ? r.chain().stretch() : r.chain().squash()))
+        {
+            return;
+        }
+
         float total = 0F;
 
         for (int i = 0; i < reach; i++)
@@ -1388,6 +1405,21 @@ final class ModelIKDlsApplier
             cumulative.add(share);
             writeStretchOffset(model, bone, frames.get(bone), parentFrame, share, cumulative);
         }
+    }
+
+    /**
+     * Whether the solve landed the tip SHORT of the goal or PAST it. The gap ran
+     * from the effector to the goal, and the radial runs root to effector: a goal
+     * still ahead of the tip pulls the gap the same way as the radial (positive
+     * dot), while a goal the tip has already swung past pulls it back (negative
+     * dot). Degenerate radial (root and tip coincide) counts as short. Mirrors
+     * upstream's helper of the same name.
+     */
+    private static boolean fellShort(Vector3f gap, Vector3f root, Vector3f tip)
+    {
+        Vector3f radial = new Vector3f(tip).sub(root);
+
+        return radial.lengthSquared() < EPS * EPS || gap.dot(radial) >= 0F;
     }
 
     /**
