@@ -99,14 +99,30 @@ The registration events are in (`mchorse.bbs_mod.api.events` and
 `BBSClientReadyEvent`. Everything under `api` and its sub-packages is a contract, so those do not
 move without a version bump.
 
+These are also in: `FilmEvents`, `StructureRenderEvents`, and the runtime events `FilmEditEvents`,
+`FormPoseEvents`, `TimelineEvents`, `FormPreviewEvents`, `FilmGizmoEvents`.
+
 Still absent from FSR, and **absent rather than stubbed** — code importing them will not resolve:
 
-- `FilmEvents`, `StructureRenderEvents` — no counterpart yet.
-- The runtime events: `FilmEditEvents`, `FormPoseEvents`, `TimelineEvents`, `FormPreviewEvents`,
-  `FilmGizmoEvents`.
-- The remaining registration events: `RegisterL10nEvent`, `RegisterClientSettingsEvent`,
-  `RegisterDashboardPanelsEvent`, `RegisterFilmToolsEvent`, `RegisterFormPanelsEvent`,
-  `RegisterPreviewOverlaysEvent`, `RegisterReplayActionsEvent`.
+- `RegisterFilmToolsEvent` — its signature names `FilmEditorTool`, which does not exist. Upstream's
+  tool extends an element and is handed a `FilmTarget` per actor; neither the tool nor the target
+  has been designed here yet, so writing the signature now would freeze a shape before there is
+  anything to shape it to. It lands with the editor-tool work, not before.
+- `FormPoseEvents.CLAIM_CHAIN` — deliberately undefined. Its signature hands a `FormBone` to each
+  listener, and FSR has no per-bone group on a model form: a bone's physics settings live in the
+  form's `physics` blob instead of in a bone. A chain claim is addressed *by bone*, so a stand-in
+  signature would be a fake contract that changes the day the bone model arrives. It lands with
+  `ValueBones`/`FormBone` (P1, upstream `4339b076a`), and B9·B1b preserves a file's `bones` data
+  in the meantime so nothing is lost while it waits.
+
+Note that everything else listed as ported above is real: it compiles and dispatches. What is
+missing is named here one item at a time rather than dismissed by section, because an addon can
+afford to miss a feature and cannot afford to be told a class exists when it does not. An addon
+that registers into `RegisterFormPanelsEvent`, `RegisterPreviewOverlaysEvent` or
+`RegisterReplayActionsEvent` gets a factory it can read back from that event class
+(`getPanels()`/`getOverlays()`/`getActions()`); the wiring that turns those factories into panels
+and controls arrives with the editor work, and until it does the factories stay inert.
 
 They are being ported batch by batch; see the migration task's `research/fs26-api-addon.md` for
-the inventory and order. Do not write against them from an addon and expect them to appear.
+the inventory and order. Do not write against the two items above from an addon and expect them to
+appear.

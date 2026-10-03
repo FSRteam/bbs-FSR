@@ -38,6 +38,7 @@ public final class ClientStructuralRegistrationWindowTest
             ModelBlockItemRendererSourceTest.runAll();
             ModelRenderPerformanceSourceTest.runAll();
             MissingClipTimelineFallbackTest.runAll();
+            mchorse.bbs_mod.api.client.events.RegisterListEventTest.runAll();
             DashboardPanelRegistryTest.runAll();
             DashboardPanelLifecycleTest.runAll();
             DashboardGuideContractTest.runAll();
