@@ -716,11 +716,16 @@ def bbsVerificationTaskNames = [
     'testFilmEditorMigration',
     'testParticleRuntimeConsistency',
     'testIkPhysicsConsistency',
-    'testCemParser'
+    'testCemParser',
+    'apiCheck'
 ]
 
 bbsVerificationTaskNames.each { taskName ->
-    tasks.named(taskName, JavaExec).configure {
+    /* Matching plus configureEach rather than named(name, JavaExec): apiCheck is a plain Task, not
+     * a JavaExec, and it is registered further down this file, so named(...) would fail at
+     * configuration time. JavaExec tasks keep the output-scanner wiring below; apiCheck, which
+     * writes nothing to the test streams, is deliberately left alone. */
+    tasks.matching { it.name == taskName && it instanceof JavaExec }.configureEach {
         /* JavaExec exits are strict by default. A forced build is the only
          * opt-in path that lets packaging continue after a test failure. */
         ignoreExitValue = forceBuild

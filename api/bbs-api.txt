@@ -1,0 +1,1619 @@
+class mchorse.bbs_mod.api.client.film.BBSFilmPresence$1 {
+}
+
+public abstract class mchorse.bbs_mod.api.events.BaseRegisterClipsEvent {
+    public final mchorse.bbs_mod.utils.factory.MapFactory<mchorse.bbs_mod.utils.clips.Clip, mchorse.bbs_mod.camera.clips.ClipFactoryData> factory;
+    public mchorse.bbs_mod.api.events.BaseRegisterClipsEvent(mchorse.bbs_mod.utils.factory.MapFactory<mchorse.bbs_mod.utils.clips.Clip, mchorse.bbs_mod.camera.clips.ClipFactoryData>);
+}
+
+public abstract class mchorse.bbs_mod.api.events.BaseRegisterSettingsEvent {
+    public mchorse.bbs_mod.api.events.BaseRegisterSettingsEvent();
+    public void register(mchorse.bbs_mod.ui.utils.icons.Icon, java.lang.String, java.util.function.Consumer<mchorse.bbs_mod.settings.SettingsBuilder>);
+}
+
+public class mchorse.bbs_mod.api.EventBus {
+    public mchorse.bbs_mod.api.EventBus();
+    public static boolean hasSubscribers(java.lang.Class<?>);
+    public static final mchorse.bbs_mod.api.EventBus INSTANCE;
+    public void post(java.lang.Object);
+    public void register(java.lang.Object);
+}
+
+public class mchorse.bbs_mod.api.Subscription {
+    public final java.lang.Object target;
+    public final java.lang.reflect.Method method;
+    public mchorse.bbs_mod.api.Subscription(java.lang.Object, java.lang.reflect.Method);
+}
+
+public class mchorse.bbs_mod.api.client.events.BBSClientReadyEvent {
+    public mchorse.bbs_mod.api.client.events.BBSClientReadyEvent();
+}
+
+public class mchorse.bbs_mod.api.client.events.FilmEvents {
+    public mchorse.bbs_mod.api.client.events.FilmEvents();
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmEvents$Created> CREATED;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmEvents$Render> RENDER_AFTER;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmEvents$Shutdown> SHUTDOWN;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmEvents$Tick> TICK_AFTER;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmEvents$Tick> TICK_BEFORE;
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterClientSettingsEvent extends mchorse.bbs_mod.api.events.BaseRegisterSettingsEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterClientSettingsEvent();
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent {
+    public <T extends mchorse.bbs_mod.utils.clips.Clip> void register(java.lang.Class<T>, mchorse.bbs_mod.ui.film.clips.UIClip$IUIClipFactory<T>);
+    public mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent();
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent();
+    public void register(java.lang.Class<? extends mchorse.bbs_mod.utils.clips.Clip>, mchorse.bbs_mod.ui.film.clips.renderer.IUIClipRenderer);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterDashboardPanelsEvent {
+    public final mchorse.bbs_mod.ui.dashboard.UIDashboard dashboard;
+    public mchorse.bbs_mod.api.client.events.RegisterDashboardPanelsEvent(mchorse.bbs_mod.ui.dashboard.UIDashboard);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent();
+    public void register(java.lang.Class, java.util.function.Supplier<mchorse.bbs_mod.ui.forms.editors.forms.UIForm>);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterFormPanelsEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterFormPanelsEvent();
+    public static boolean unregister(java.util.function.Consumer<mchorse.bbs_mod.ui.forms.editors.forms.UIForm<?>>);
+    public static java.util.List<java.util.function.Consumer<mchorse.bbs_mod.ui.forms.editors.forms.UIForm<?>>> getPanels();
+    public void register(java.util.function.Consumer<mchorse.bbs_mod.ui.forms.editors.forms.UIForm<?>>);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterFormRenderersEvent {
+    public <T extends mchorse.bbs_mod.forms.forms.Form> void register(java.lang.Class<T>, mchorse.bbs_mod.forms.FormUtilsClient$IFormRendererFactory<T>);
+    public mchorse.bbs_mod.api.client.events.RegisterFormRenderersEvent();
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent();
+    public void register(java.util.function.Function<mchorse.bbs_mod.forms.FormCategories, mchorse.bbs_mod.forms.sections.FormSection>);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterImportersEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterImportersEvent();
+    public void register(mchorse.bbs_mod.importers.types.IImporter);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent();
+    public void register(java.lang.Class);
+    public void register(mchorse.bbs_mod.ui.utils.keys.KeyCombo);
+    public void registerCategoryIcon(java.lang.String, mchorse.bbs_mod.ui.utils.icons.Icon);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent {
+    public <T> void register(mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory<T>, mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory$IUIKeyframeFactoryFactory<T>);
+    public <T> void registerProperty(java.lang.String, mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory$IUIKeyframeFactoryFactory<T>);
+    public mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent();
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterL10nEvent {
+    public final mchorse.bbs_mod.l10n.L10n l10n;
+    public mchorse.bbs_mod.api.client.events.RegisterL10nEvent(mchorse.bbs_mod.l10n.L10n);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent();
+    public void register(java.util.function.Supplier<mchorse.bbs_mod.cubic.model.loaders.IModelLoader>);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterPreviewOverlaysEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterPreviewOverlaysEvent();
+    public static boolean unregister(java.util.function.Function<mchorse.bbs_mod.ui.film.UIFilmPreview, mchorse.bbs_mod.ui.framework.elements.UIElement>);
+    public static java.util.List<java.util.function.Function<mchorse.bbs_mod.ui.film.UIFilmPreview, mchorse.bbs_mod.ui.framework.elements.UIElement>> getOverlays();
+    public void register(java.util.function.Function<mchorse.bbs_mod.ui.film.UIFilmPreview, mchorse.bbs_mod.ui.framework.elements.UIElement>);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent();
+    public static boolean unregister(java.util.function.BiFunction<mchorse.bbs_mod.ui.film.UIFilmPanel, java.util.function.Supplier<mchorse.bbs_mod.film.replays.Replay>, mchorse.bbs_mod.ui.framework.elements.UIElement>);
+    public static java.util.List<java.util.function.BiFunction<mchorse.bbs_mod.ui.film.UIFilmPanel, java.util.function.Supplier<mchorse.bbs_mod.film.replays.Replay>, mchorse.bbs_mod.ui.framework.elements.UIElement>> getActions();
+    public void register(java.util.function.BiFunction<mchorse.bbs_mod.ui.film.UIFilmPanel, java.util.function.Supplier<mchorse.bbs_mod.film.replays.Replay>, mchorse.bbs_mod.ui.framework.elements.UIElement>);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent();
+    public void register(java.lang.String, mchorse.bbs_mod.ui.utils.icons.Icon, int);
+    public void register(java.lang.String, mchorse.bbs_mod.ui.utils.icons.Icon, int, mchorse.bbs_mod.l10n.keys.IKey);
+    public void registerLabel(java.lang.String, mchorse.bbs_mod.l10n.keys.IKey);
+}
+
+public class mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent {
+    public <T extends mchorse.bbs_mod.settings.values.base.BaseValue> void register(java.lang.Class<T>, mchorse.bbs_mod.settings.ui.UIValueMap$IUIValueFactory<T>);
+    public mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent();
+}
+
+public class mchorse.bbs_mod.api.events.BBSReadyEvent {
+    public mchorse.bbs_mod.api.events.BBSReadyEvent();
+}
+
+public class mchorse.bbs_mod.api.events.RegisterActionClipsEvent extends mchorse.bbs_mod.api.events.BaseRegisterClipsEvent {
+    public mchorse.bbs_mod.api.events.RegisterActionClipsEvent(mchorse.bbs_mod.utils.factory.MapFactory<mchorse.bbs_mod.utils.clips.Clip, mchorse.bbs_mod.camera.clips.ClipFactoryData>);
+}
+
+public class mchorse.bbs_mod.api.events.RegisterCameraClipsEvent extends mchorse.bbs_mod.api.events.BaseRegisterClipsEvent {
+    public mchorse.bbs_mod.api.events.RegisterCameraClipsEvent(mchorse.bbs_mod.utils.factory.MapFactory<mchorse.bbs_mod.utils.clips.Clip, mchorse.bbs_mod.camera.clips.ClipFactoryData>);
+}
+
+public class mchorse.bbs_mod.api.events.RegisterFormsEvent {
+    public final mchorse.bbs_mod.forms.FormArchitect forms;
+    public mchorse.bbs_mod.api.events.RegisterFormsEvent(mchorse.bbs_mod.forms.FormArchitect);
+}
+
+public class mchorse.bbs_mod.api.events.RegisterKeyframeFactoriesEvent {
+    public mchorse.bbs_mod.api.events.RegisterKeyframeFactoriesEvent();
+    public void register(java.lang.String, mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory);
+}
+
+public final class mchorse.bbs_mod.api.BBSApi {
+    public static boolean isAtLeast(int);
+    public static final int VERSION;
+    public static java.lang.String currentApiVersion();
+    public static java.lang.String getModVersion();
+    public static java.util.List<mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics> addonDiagnostics();
+    public static void registerAddon(java.util.function.Supplier<? extends mchorse.bbs_mod.api.addon.BBSAddon>);
+    public static void registerAddon(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, java.util.function.Supplier<? extends mchorse.bbs_mod.api.addon.BBSAddon>);
+    public static void requireVersion(java.lang.String, int);
+}
+
+public final class mchorse.bbs_mod.api.BBSApiVersion {
+    public static boolean isSupported(java.lang.String);
+    public static final int MAJOR;
+    public static final int MINOR;
+    public static final java.lang.String CURRENT;
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonCapability extends java.lang.Enum<mchorse.bbs_mod.api.addon.BBSAddonCapability> {
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability CLIENT_RENDER;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability CLIENT_UI;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability CLIPS;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability EVENTS;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability FORMS;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability NETWORK;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability PARTICLES;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability SETTINGS;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCapability SOURCE_PACKS;
+    public static mchorse.bbs_mod.api.addon.BBSAddonCapability valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.addon.BBSAddonCapability[] values();
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy extends java.lang.Enum<mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy> {
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy ALLOW_LEGACY_COMPAT;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy API2_ONLY;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy LEGACY_COMPAT_ONLY;
+    public static mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy[] values();
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonDescriptor {
+    public java.lang.String addonId();
+    public java.lang.String addonVersion();
+    public java.lang.String apiVersion();
+    public java.lang.String displayName();
+    public java.util.Set<java.lang.String> namespaces();
+    public java.util.Set<java.lang.String> optionalMods();
+    public java.util.Set<java.lang.String> requiredMods();
+    public java.util.Set<mchorse.bbs_mod.api.addon.BBSAddonCapability> capabilities();
+    public mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy compatPolicy();
+    public mchorse.bbs_mod.api.addon.BBSAddonSide side();
+    public static mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder builder(java.lang.String);
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder {
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor build();
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder addonVersion(java.lang.String);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder apiVersion(java.lang.String);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder capabilities(java.util.Collection<mchorse.bbs_mod.api.addon.BBSAddonCapability>);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder capability(mchorse.bbs_mod.api.addon.BBSAddonCapability);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder compatPolicy(mchorse.bbs_mod.api.addon.BBSAddonCompatPolicy);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder displayName(java.lang.String);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder namespace(java.lang.String);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder optionalMod(java.lang.String);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder requiredMod(java.lang.String);
+    public mchorse.bbs_mod.api.addon.BBSAddonDescriptor$Builder side(mchorse.bbs_mod.api.addon.BBSAddonSide);
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonDescriptorValidator {
+    public static java.util.List<java.lang.String> validate(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, java.util.function.Predicate<java.lang.String>);
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonPhase extends java.lang.Enum<mchorse.bbs_mod.api.addon.BBSAddonPhase> {
+    public static final mchorse.bbs_mod.api.addon.BBSAddonPhase CLIENT_SETUP;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonPhase COMMON_SETUP;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonPhase DISCOVER;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonPhase REGISTER_CLIENT;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonPhase REGISTER_COMMON;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonPhase RUNTIME;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonPhase UNLOAD;
+    public static mchorse.bbs_mod.api.addon.BBSAddonPhase valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.addon.BBSAddonPhase[] values();
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonProtocol extends java.lang.Enum<mchorse.bbs_mod.api.addon.BBSAddonProtocol> {
+    public static final mchorse.bbs_mod.api.addon.BBSAddonProtocol API1_REGISTERED;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonProtocol API2_DECLARED;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonProtocol CURRENT_COMPAT;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonProtocol INVALID;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonProtocol METADATA_ONLY;
+    public static mchorse.bbs_mod.api.addon.BBSAddonProtocol valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.addon.BBSAddonProtocol[] values();
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonSide extends java.lang.Enum<mchorse.bbs_mod.api.addon.BBSAddonSide> {
+    public static final mchorse.bbs_mod.api.addon.BBSAddonSide CLIENT;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonSide COMMON;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonSide DEDICATED_SERVER;
+    public static mchorse.bbs_mod.api.addon.BBSAddonSide valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.addon.BBSAddonSide[] values();
+}
+
+public final class mchorse.bbs_mod.api.addon.BBSAddonState extends java.lang.Enum<mchorse.bbs_mod.api.addon.BBSAddonState> {
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState ACCEPTED;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState BRIDGED_LEGACY;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState DISCOVERED;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState FAILED;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState READY;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState REGISTERED_CLIENT;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState REGISTERED_COMMON;
+    public static final mchorse.bbs_mod.api.addon.BBSAddonState SKIPPED;
+    public static mchorse.bbs_mod.api.addon.BBSAddonState valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.addon.BBSAddonState[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.BBSClientApi {
+    public static <E extends net.minecraft.world.level.block.entity.BlockEntity> void registerBlockEntityRenderer(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, net.minecraft.world.level.block.entity.BlockEntityType<E>, net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider<? super E>);
+    public static <E extends net.minecraft.world.level.block.entity.BlockEntity> void registerBlockEntityRenderer(net.minecraft.world.level.block.entity.BlockEntityType<E>, net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider<? super E>);
+    public static <T extends net.minecraft.world.entity.Entity> void registerEntityRenderer(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, net.minecraft.world.entity.EntityType<T>, net.minecraft.client.renderer.entity.EntityRendererProvider<T>);
+    public static <T extends net.minecraft.world.entity.Entity> void registerEntityRenderer(net.minecraft.world.entity.EntityType<T>, net.minecraft.client.renderer.entity.EntityRendererProvider<T>);
+    public static boolean sendNetworkToServer(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, net.minecraft.resources.ResourceLocation, net.minecraft.network.FriendlyByteBuf);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult> resolveDashboardAnchor(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, java.lang.String);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult> navigateDashboardPanel(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, java.lang.String);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.film.BBSFilmApplyResult> applyRemoteFilmMutations(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.film.BBSFilmMutationBatch);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.film.BBSFilmApplyResult> applyRemoteFilmSnapshot(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.film.BBSFilmSnapshotApplyRequest);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.film.BBSFilmApplyResult> observeFilmServerSequence(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.film.BBSFilmServerSequenceObserveRequest);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.film.BBSFilmPresenceResult> applyRemoteFilmPresence(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.film.BBSFilmRemotePresence);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.film.BBSFilmPresenceResult> clearAllRemoteFilmPresence(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, long);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.film.BBSFilmPresenceResult> clearRemoteFilmPresence(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.film.BBSFilmPresenceClearRequest);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.film.BBSFilmSnapshotResult> requestFilmSnapshot(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, long);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.ui.BBSUiInputResult> submitUiInput(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.ui.BBSUiInputBatch);
+    public static java.util.concurrent.CompletableFuture<mchorse.bbs_mod.api.client.ui.BBSUiOpenResult> requestDashboardOpen(mchorse.bbs_mod.api.addon.BBSAddonDescriptor);
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlaySubscription registerDashboardOverlay(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayFactory);
+    public static mchorse.bbs_mod.api.client.film.BBSFilmCollaborationSubscription registerFilmCollaboration(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.film.BBSFilmCollaborationListener);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiMirrorSubscription subscribeUiMirror(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.ui.BBSUiMirrorListener);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult registerDashboardPanel(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec, mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult registerNetworkReceiver(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, net.minecraft.resources.ResourceLocation, mchorse.bbs_mod.api.network.BBSAddonClientNetworkReceiver);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult registerRenderSurface(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.render.BBSRenderSurfaceListener);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult registerUiMirror(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, mchorse.bbs_mod.api.client.ui.BBSUiMirrorListener);
+    public static net.minecraft.client.KeyMapping registerKeyBinding(mchorse.bbs_mod.api.addon.BBSAddonDescriptor, net.minecraft.client.KeyMapping);
+    public static net.minecraft.client.KeyMapping registerKeyBinding(net.minecraft.client.KeyMapping);
+    public static net.minecraft.network.FriendlyByteBuf createNetworkBuffer();
+    public static void clearUiInput(mchorse.bbs_mod.api.addon.BBSAddonDescriptor);
+    public static void onAfterEntities(mchorse.bbs_mod.api.client.BBSClientApi$WorldRenderHandler);
+    public static void onAfterLevel(mchorse.bbs_mod.api.client.BBSClientApi$WorldRenderHandler);
+    public static void onClientStarted(java.util.function.Consumer<net.minecraft.client.Minecraft>);
+    public static void onClientStopping(java.util.function.Consumer<net.minecraft.client.Minecraft>);
+    public static void onDisconnect(mchorse.bbs_mod.client.compat.ClientApiCompat$DisconnectHandler);
+    public static void onEndClientTick(java.util.function.Consumer<net.minecraft.client.Minecraft>);
+    public static void onEndWorldTick(java.util.function.Consumer<net.minecraft.client.Minecraft>);
+    public static void onHudRender(mchorse.bbs_mod.api.client.BBSClientApi$HudRenderHandler);
+    public static void onStartClientTick(java.util.function.Consumer<net.minecraft.client.Minecraft>);
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult extends java.lang.Record {
+    public boolean available();
+    public boolean hittable();
+    public boolean visible();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int height();
+    public int width();
+    public int x();
+    public int y();
+    public java.lang.String anchorId();
+    public java.lang.String message();
+    public mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult(mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus, java.lang.String, int, int, int, int, boolean, boolean, java.lang.String);
+    public mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus status();
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus extends java.lang.Enum<mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus> {
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus AVAILABLE;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus CONTROL_HIDDEN;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus CONTROL_NOT_FOUND;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus DASHBOARD_NOT_CREATED;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus FAILED;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus NOT_DASHBOARD_SCREEN;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus OUTSIDE_VIEWPORT;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus PANEL_NOT_MOUNTED;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus REJECTED;
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchors {
+    public static final java.lang.String AUDIO_EDITOR;
+    public static final java.lang.String AUDIO_PICK;
+    public static final java.lang.String AUDIO_PLAY_PAUSE;
+    public static final java.lang.String AUDIO_SAVE_COLORS;
+    public static final java.lang.String FILM_ACTION_EDITOR;
+    public static final java.lang.String FILM_ACTION_TIMELINE;
+    public static final java.lang.String FILM_CAMERA_EDITOR;
+    public static final java.lang.String FILM_CAMERA_TIMELINE;
+    public static final java.lang.String FILM_DUPLICATE;
+    public static final java.lang.String FILM_OPEN_ACTION_EDITOR;
+    public static final java.lang.String FILM_OPEN_CAMERA_EDITOR;
+    public static final java.lang.String FILM_OPEN_MENU;
+    public static final java.lang.String FILM_OPEN_REPLAY_EDITOR;
+    public static final java.lang.String FILM_PREVIEW;
+    public static final java.lang.String FILM_RECORDER;
+    public static final java.lang.String FILM_REPLAY_EDITOR;
+    public static final java.lang.String FILM_REPLAY_TIMELINE;
+    public static final java.lang.String FILM_SELECTION;
+    public static final java.lang.String GRAPH_CANVAS;
+    public static final java.lang.String GRAPH_EXPRESSION;
+    public static final java.lang.String GRAPH_HELP;
+    public static final java.lang.String MODEL_BLOCKS_LIST;
+    public static final java.lang.String MODEL_BLOCKS_PICK_EDIT;
+    public static final java.lang.String MODEL_BLOCKS_TOGGLE_ENABLED;
+    public static final java.lang.String MODEL_BLOCKS_TOGGLE_GLOBAL;
+    public static final java.lang.String MODEL_BLOCKS_TOGGLE_LOOK_AT;
+    public static final java.lang.String MODEL_BLOCKS_TOGGLE_SHADOW;
+    public static final java.lang.String MODEL_EDITOR_GENERAL;
+    public static final java.lang.String MODEL_EDITOR_RENDERER;
+    public static final java.lang.String MODEL_EDITOR_SPLITTER;
+    public static final java.lang.String MORPHING_DEMORPH;
+    public static final java.lang.String MORPHING_FROM_MOB;
+    public static final java.lang.String MORPHING_PALETTE;
+    public static final java.lang.String MORPHING_PALETTE_EDITOR;
+    public static final java.lang.String MORPHING_PALETTE_LIST;
+    public static final java.lang.String PARTICLES_DOCK;
+    public static final java.lang.String PARTICLES_LAYOUT_PRESETS;
+    public static final java.lang.String PARTICLES_LOCK_LAYOUT;
+    public static final java.lang.String PARTICLES_PLAY_PAUSE;
+    public static final java.lang.String PARTICLES_RENDERER;
+    public static final java.lang.String PARTICLES_SELECTION;
+    public static final java.lang.String PLUGINS_AUTO_APPLY;
+    public static final java.lang.String PLUGINS_INSTALL;
+    public static final java.lang.String PLUGINS_LIST;
+    public static final java.lang.String PLUGINS_OPEN_FOLDER;
+    public static final java.lang.String PLUGINS_RESCAN;
+    public static final java.lang.String SELECTORS;
+    public static final java.lang.String SETTINGS;
+    public static final java.lang.String TEXTURES_PICKER;
+    public static java.lang.String panelButton(java.lang.String);
+    public static java.lang.String panelContent(java.lang.String);
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult extends java.lang.Record {
+    public boolean navigated();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.lang.String message();
+    public java.lang.String panelId();
+    public mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult(mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus, java.lang.String, java.lang.String);
+    public mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus status();
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus extends java.lang.Enum<mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus> {
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus ALREADY_ACTIVE;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus DASHBOARD_NOT_CREATED;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus FAILED;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus NAVIGATED;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus NOT_DASHBOARD_SCREEN;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus PANEL_NOT_FOUND;
+    public static final mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus REJECTED;
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelIds {
+    public static boolean isBuiltIn(java.lang.String);
+    public static final java.lang.String AUDIO;
+    public static final java.lang.String FILM;
+    public static final java.lang.String GRAPH;
+    public static final java.lang.String MODEL_BLOCKS;
+    public static final java.lang.String MODEL_EDITOR;
+    public static final java.lang.String MORPHING;
+    public static final java.lang.String PARTICLES;
+    public static final java.lang.String PLUGINS;
+    public static final java.lang.String TEXTURES;
+    public static final java.util.List<java.lang.String> BUILT_IN;
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec {
+    public java.lang.String id();
+    public mchorse.bbs_mod.l10n.keys.IKey title();
+    public mchorse.bbs_mod.ui.utils.icons.Icon icon();
+    public static boolean isValidId(java.lang.String);
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec$Builder builder(java.lang.String);
+}
+
+public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec$Builder {
+    public mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec build();
+    public mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec$Builder icon(mchorse.bbs_mod.ui.utils.icons.Icon);
+    public mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec$Builder title(mchorse.bbs_mod.l10n.keys.IKey);
+}
+
+public final class mchorse.bbs_mod.api.client.events.FilmEditEvents {
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmEditEvents$Changed> CHANGED;
+    public static void notifyChanges(java.util.List<mchorse.bbs_mod.settings.values.base.BaseValue>, mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause);
+}
+
+public final class mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause extends java.lang.Enum<mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause> {
+    public static final mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause EDIT;
+    public static final mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause REDO;
+    public static final mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause UNDO;
+    public static mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.events.FilmGizmoEvents {
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmGizmoEvents$Draw> DRAW;
+}
+
+public final class mchorse.bbs_mod.api.client.events.FormPoseEvents {
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ActorPrepare> ACTOR_BEFORE;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ModelPose> MODEL_POSE;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ParentFrame> PARENT_FRAME;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$PivotOffsets> PIVOT_OFFSETS;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ResolveAnchor> ANCHOR;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$TransformPose> TRANSFORM;
+}
+
+public final class mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass extends java.lang.Enum<mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass> {
+    public static final mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass MATRICES;
+    public static final mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass RENDER;
+    public static mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.events.FormPreviewEvents {
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPreviewEvents$Overlay> OVERLAY;
+}
+
+public final class mchorse.bbs_mod.api.client.events.FunctionalEvent<T> {
+    public T invoker();
+    public boolean hasListeners();
+    public boolean unregister(T);
+    public mchorse.bbs_mod.api.client.events.FunctionalEvent(java.util.function.Function<java.util.List<T>, T>);
+    public void register(T);
+}
+
+public final class mchorse.bbs_mod.api.client.events.StructureRenderEvents {
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.StructureRenderEvents$Render> RENDER;
+}
+
+public final class mchorse.bbs_mod.api.client.events.TimelineEvents {
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.TimelineEvents$Overlay> OVERLAY;
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmApplyResult extends java.lang.Record {
+    public boolean applied();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int appliedCount();
+    public java.lang.String message();
+    public long revision();
+    public long serverSeq();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmApplyResult(mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus, long, long, int, long, java.lang.String);
+    public mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus status();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason extends java.lang.Enum<mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason> {
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason BATCH_TOO_LARGE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason ENCODE_FAILED;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason PATH_LIMIT_EXCEEDED;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason TOO_MANY_MUTATIONS;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason VALUE_TOO_LARGE;
+    public static mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmCheckpointRequired extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public long localOpId();
+    public long revision();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason reason();
+    public mchorse.bbs_mod.api.client.film.BBSFilmCheckpointRequired(long, long, long, mchorse.bbs_mod.api.client.film.BBSFilmCheckpointReason);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmCollaborationLimits {
+    public static final int MAX_BATCH_BYTES;
+    public static final int MAX_MUTATIONS;
+    public static final int MAX_MUTATION_BYTES;
+    public static final int MAX_PATH_SEGMENTS;
+    public static final int MAX_PATH_UTF8_BYTES;
+    public static final int MAX_PRESENCE_CURSOR_ROW;
+    public static final int MAX_PRESENCE_SELECTIONS;
+    public static final int MAX_PRESENCE_SELECTION_SHEETS;
+    public static final int MAX_PRESENCE_SELECTION_SHEET_UTF8_BYTES;
+    public static final int MAX_PRESENCE_SHEET_ID_UTF8_BYTES;
+    public static final int MAX_SEGMENT_UTF8_BYTES;
+    public static final int MAX_SELECTED_KEYFRAMES;
+    public static final int MAX_SELECTED_REPLAYS;
+    public static final int MAX_SNAPSHOT_BYTES;
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus extends java.lang.Enum<mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus> {
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus CLOSED;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus INTERNAL_ERROR;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus INVALID_DATA;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus INVALID_PATH;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus INVALID_REQUEST;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus LIMIT_EXCEEDED;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus NOT_REGISTERED;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus NO_ACTIVE_SESSION;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus OK;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus RESYNC_REQUIRED;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus SESSION_MISMATCH;
+    public static mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmEditorKind extends java.lang.Enum<mchorse.bbs_mod.api.client.film.BBSFilmEditorKind> {
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorKind ACTION;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorKind CAMERA;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorKind NONE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorKind REPLAY;
+    public static mchorse.bbs_mod.api.client.film.BBSFilmEditorKind valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.film.BBSFilmEditorKind[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmEditorView extends java.lang.Enum<mchorse.bbs_mod.api.client.film.BBSFilmEditorView> {
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorView CLIP_TIMELINE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorView KEYFRAME_DOPE_SHEET;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorView KEYFRAME_GRAPH;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorView NONE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmEditorView REPLAY_LIST;
+    public static mchorse.bbs_mod.api.client.film.BBSFilmEditorView valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.film.BBSFilmEditorView[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmKeyframeSelection extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int keyframeIndex();
+    public java.lang.String sheetId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmKeyframeSelection(java.lang.String, int);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmMutation extends java.lang.Record {
+    public byte[] encodedBbsData();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int encodedByteLength();
+    public java.util.List<java.lang.String> pathSegments();
+    public mchorse.bbs_mod.api.client.film.BBSFilmMutation(mchorse.bbs_mod.api.client.film.BBSFilmMutationKind, java.util.List<java.lang.String>, byte[], mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint);
+    public mchorse.bbs_mod.api.client.film.BBSFilmMutationKind kind();
+    public mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint refreshHint();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmMutationBatch extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.util.List<mchorse.bbs_mod.api.client.film.BBSFilmMutation> mutations();
+    public long baseRevision();
+    public long localOpId();
+    public long serverSeq();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmMutationBatch(long, long, long, long, java.util.List<mchorse.bbs_mod.api.client.film.BBSFilmMutation>);
+    public static final long NO_SERVER_SEQUENCE;
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmMutationKind extends java.lang.Enum<mchorse.bbs_mod.api.client.film.BBSFilmMutationKind> {
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmMutationKind REPLACE_SUBTREE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmMutationKind SET;
+    public static mchorse.bbs_mod.api.client.film.BBSFilmMutationKind valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.film.BBSFilmMutationKind[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmPresence extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int playheadTick();
+    public int replayIndex();
+    public java.lang.String semanticCursorSheetId();
+    public java.util.List<java.lang.Integer> selectedReplayIndices();
+    public java.util.List<mchorse.bbs_mod.api.client.film.BBSFilmKeyframeSelection> selectedKeyframes();
+    public java.util.OptionalInt semanticCursorRow();
+    public java.util.OptionalInt semanticCursorTick();
+    public long revision();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmEditorKind editorKind();
+    public mchorse.bbs_mod.api.client.film.BBSFilmEditorView editorView();
+    public mchorse.bbs_mod.api.client.film.BBSFilmPresence(long, long, mchorse.bbs_mod.api.client.film.BBSFilmEditorKind, int, int, java.util.OptionalInt, java.util.OptionalInt, java.util.List<java.lang.Integer>);
+    public mchorse.bbs_mod.api.client.film.BBSFilmPresence(long, long, mchorse.bbs_mod.api.client.film.BBSFilmEditorKind, mchorse.bbs_mod.api.client.film.BBSFilmEditorView, int, int, java.util.OptionalInt, java.util.OptionalInt, java.lang.String, java.util.List<java.lang.Integer>, java.util.List<mchorse.bbs_mod.api.client.film.BBSFilmKeyframeSelection>);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmPresenceClearRequest extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.lang.String participantId();
+    public long expectedRevision();
+    public long serverSeq();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmPresenceClearRequest(long, long, long, java.lang.String);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmPresenceResult extends java.lang.Record {
+    public boolean accepted();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.lang.String message();
+    public java.lang.String participantId();
+    public long revision();
+    public long serverSeq();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus status();
+    public mchorse.bbs_mod.api.client.film.BBSFilmPresenceResult(mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus, long, long, java.lang.String, long, java.lang.String);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint extends java.lang.Enum<mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint> {
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint NONE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint REPLAY;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint STRUCTURE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint TIMELINE;
+    public static final mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint VALUE;
+    public static mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.film.BBSFilmRefreshHint[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmRemotePresence extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int argbColor();
+    public java.lang.String displayName();
+    public java.lang.String participantId();
+    public long serverSeq();
+    public mchorse.bbs_mod.api.client.film.BBSFilmPresence presence();
+    public mchorse.bbs_mod.api.client.film.BBSFilmRemotePresence(java.lang.String, java.lang.String, int, long, mchorse.bbs_mod.api.client.film.BBSFilmPresence);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmServerSequenceObserveRequest extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public long expectedRevision();
+    public long serverSeq();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmServerSequenceObserveRequest(long, long, long);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmSession extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.lang.String documentId();
+    public long revision();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmSession(long, java.lang.String, long);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmSnapshot extends java.lang.Record {
+    public byte[] encodedBbsData();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int encodedByteLength();
+    public long revision();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmSnapshot(long, long, byte[]);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmSnapshotApplyRequest extends java.lang.Record {
+    public byte[] encodedBbsData();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int encodedByteLength();
+    public long expectedRevision();
+    public long serverSeq();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.film.BBSFilmSnapshotApplyRequest(long, long, long, byte[]);
+}
+
+public final class mchorse.bbs_mod.api.client.film.BBSFilmSnapshotResult extends java.lang.Record {
+    public boolean successful();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.lang.String message();
+    public mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus status();
+    public mchorse.bbs_mod.api.client.film.BBSFilmSnapshot snapshot();
+    public mchorse.bbs_mod.api.client.film.BBSFilmSnapshotResult(mchorse.bbs_mod.api.client.film.BBSFilmCollaborationStatus, mchorse.bbs_mod.api.client.film.BBSFilmSnapshot, java.lang.String);
+}
+
+public final class mchorse.bbs_mod.api.client.render.BBSRenderSurfaceDemand {
+    public boolean isActive();
+    public int framesPerSecond();
+    public int jpegQuality();
+    public int maxHeight();
+    public int maxWidth();
+    public java.util.Set<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind> kinds();
+    public mchorse.bbs_mod.api.client.render.BBSRenderSurfaceDemand(java.util.Set<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind>, int, int, int, int);
+    public static final int MAX_FRAMES_PER_SECOND;
+    public static final int MAX_HEIGHT;
+    public static final int MAX_WIDTH;
+    public static mchorse.bbs_mod.api.client.render.BBSRenderSurfaceDemand desktop(java.util.Set<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind>);
+    public static mchorse.bbs_mod.api.client.render.BBSRenderSurfaceDemand mobile(java.util.Set<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind>);
+    public static mchorse.bbs_mod.api.client.render.BBSRenderSurfaceDemand none();
+}
+
+public final class mchorse.bbs_mod.api.client.render.BBSRenderSurfaceFrame {
+    public boolean flipY();
+    public int byteLength();
+    public int height();
+    public int width();
+    public java.lang.String mediaType();
+    public java.nio.ByteBuffer encodedBytes();
+    public java.util.Set<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind> kinds();
+    public long capturedAtNanos();
+    public long generation();
+    public long sequence();
+    public mchorse.bbs_mod.api.client.render.BBSRenderSurfaceFrame(java.util.Set<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind>, long, long, int, int, boolean, byte[]);
+    public mchorse.bbs_mod.api.client.render.BBSRenderSurfaceFrame(java.util.Set<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind>, long, long, long, int, int, boolean, byte[]);
+    public static final java.lang.String JPEG_MEDIA_TYPE;
+}
+
+public final class mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind extends java.lang.Enum<mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind> {
+    public static final mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind FILM_PREVIEW;
+    public static final mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind FORM_PREVIEW_ATLAS;
+    public static final mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind MORPH_WORLD_PREVIEW;
+    public static final mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind WORLD_REPLAY;
+    public static mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiAssetBytes {
+    public byte[] bytes();
+    public int length();
+    public java.lang.String contentHash();
+    public java.lang.String mediaType();
+    public mchorse.bbs_mod.api.client.ui.BBSUiAssetBytes(mchorse.bbs_mod.api.client.ui.BBSUiAssetRef, java.lang.String, java.lang.String, byte[]);
+    public mchorse.bbs_mod.api.client.ui.BBSUiAssetRef asset();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiAssetRef {
+    public int height();
+    public int width();
+    public java.lang.String id();
+    public mchorse.bbs_mod.api.client.ui.BBSUiAssetRef(java.lang.String, int, int);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiClipPop implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiClipPop INSTANCE;
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiClipPush implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public int height();
+    public int width();
+    public int x();
+    public int y();
+    public mchorse.bbs_mod.api.client.ui.BBSUiClipPush(int, int, int, int);
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiColoredMesh implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiVertex> vertices();
+    public mchorse.bbs_mod.api.client.ui.BBSUiColoredMesh(java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiVertex>);
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public static final int MAX_VERTICES;
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiCursor {
+    public float x();
+    public float y();
+    public mchorse.bbs_mod.api.client.ui.BBSUiCursor(float, float, mchorse.bbs_mod.api.client.ui.BBSUiCursorShape);
+    public mchorse.bbs_mod.api.client.ui.BBSUiCursorShape shape();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiCursorShape extends java.lang.Enum<mchorse.bbs_mod.api.client.ui.BBSUiCursorShape> {
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiCursorShape CROSSHAIR;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiCursorShape DEFAULT;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiCursorShape HAND;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiCursorShape HORIZONTAL_RESIZE;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiCursorShape TEXT;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiCursorShape VERTICAL_RESIZE;
+    public static mchorse.bbs_mod.api.client.ui.BBSUiCursorShape valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiCursorShape[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType extends java.lang.Enum<mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType> {
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType CLIP_POP;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType CLIP_PUSH;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType COLORED_MESH;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType GLYPH_RUN;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType QUAD;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType SURFACE_QUAD;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType TEXTURED_MESH;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType TEXTURE_QUAD;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType UNSUPPORTED;
+    public static mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiFrame {
+    public boolean truncated();
+    public int height();
+    public int width();
+    public java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand> commands();
+    public long capturedAtNanos();
+    public long sequence();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.ui.BBSUiCursor cursor();
+    public mchorse.bbs_mod.api.client.ui.BBSUiFrame(long, long, long, int, int, mchorse.bbs_mod.api.client.ui.BBSUiCursor, java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand>, boolean);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiGlyphRun implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public boolean shadow();
+    public java.lang.String text();
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiGlyphRun(java.lang.String, mchorse.bbs_mod.api.client.ui.BBSUiVertex, mchorse.bbs_mod.api.client.ui.BBSUiVertex, mchorse.bbs_mod.api.client.ui.BBSUiVertex, mchorse.bbs_mod.api.client.ui.BBSUiVertex, boolean);
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex bottomLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex bottomRight();
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex topLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex topRight();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiInputAction extends java.lang.Enum<mchorse.bbs_mod.api.client.ui.BBSUiInputAction> {
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputAction PRESS;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputAction RELEASE;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputAction REPEAT;
+    public static mchorse.bbs_mod.api.client.ui.BBSUiInputAction valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiInputAction[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiInputBatch {
+    public java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiInputEvent> events();
+    public long sequence();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputBatch(long, long, mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState, java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiInputEvent>);
+    public mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState state();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiInputEventType extends java.lang.Enum<mchorse.bbs_mod.api.client.ui.BBSUiInputEventType> {
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputEventType KEY;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputEventType MOUSE_BUTTON;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputEventType SCROLL;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputEventType TEXT;
+    public static mchorse.bbs_mod.api.client.ui.BBSUiInputEventType valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiInputEventType[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiInputResult {
+    public boolean applied();
+    public java.lang.String message();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputResult(mchorse.bbs_mod.api.client.ui.BBSUiInputStatus, java.lang.String);
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputStatus status();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiInputStatus extends java.lang.Enum<mchorse.bbs_mod.api.client.ui.BBSUiInputStatus> {
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputStatus APPLIED;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputStatus NO_SCREEN;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputStatus REJECTED;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputStatus STALE_SEQUENCE;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiInputStatus STALE_SESSION;
+    public static mchorse.bbs_mod.api.client.ui.BBSUiInputStatus valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiInputStatus[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiKeyEvent implements mchorse.bbs_mod.api.client.ui.BBSUiInputEvent {
+    public int keyCode();
+    public int modifiers();
+    public int scanCode();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputAction action();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputEventType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiKeyEvent(int, int, mchorse.bbs_mod.api.client.ui.BBSUiInputAction, int);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiMouseButtonEvent implements mchorse.bbs_mod.api.client.ui.BBSUiInputEvent {
+    public double x();
+    public double y();
+    public int button();
+    public int modifiers();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputAction action();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputEventType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiMouseButtonEvent(double, double, int, mchorse.bbs_mod.api.client.ui.BBSUiInputAction, int);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiOpenResult extends java.lang.Record {
+    public boolean opened();
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.lang.String message();
+    public mchorse.bbs_mod.api.client.ui.BBSUiOpenResult(mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus, java.lang.String);
+    public mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus status();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus extends java.lang.Enum<mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus> {
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus ALREADY_OPEN;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus BUSY;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus FAILED;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus NO_WORLD;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus OPENED;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus REJECTED;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus STALE;
+    public static mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiQuad implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiQuad(mchorse.bbs_mod.api.client.ui.BBSUiVertex, mchorse.bbs_mod.api.client.ui.BBSUiVertex, mchorse.bbs_mod.api.client.ui.BBSUiVertex, mchorse.bbs_mod.api.client.ui.BBSUiVertex);
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex bottomLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex bottomRight();
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex topLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex topRight();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState {
+    public boolean hasModifier(int);
+    public boolean isKeyPressed(int);
+    public boolean isMouseButtonPressed(int);
+    public double mouseX();
+    public double mouseY();
+    public int modifiers();
+    public int pressedMouseButtons();
+    public java.util.Set<java.lang.Integer> pressedKeys();
+    public mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState(double, double, int, java.util.Set<java.lang.Integer>, int);
+    public static final int MOD_ALT;
+    public static final int MOD_CONTROL;
+    public static final int MOD_SHIFT;
+    public static final int MOD_SUPER;
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiScrollEvent implements mchorse.bbs_mod.api.client.ui.BBSUiInputEvent {
+    public boolean hasSpecifiedModifiers();
+    public double horizontalAmount();
+    public double verticalAmount();
+    public double x();
+    public double y();
+    public int modifiers();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputEventType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiScrollEvent(double, double, double, double);
+    public mchorse.bbs_mod.api.client.ui.BBSUiScrollEvent(double, double, double, double, int);
+    public static final int UNSPECIFIED_MODIFIERS;
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiSessionInfo {
+    public int framebufferHeight();
+    public int framebufferWidth();
+    public int height();
+    public int width();
+    public long sessionId();
+    public mchorse.bbs_mod.api.client.ui.BBSUiSessionInfo(long, int, int, int, int);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiSurfaceQuad implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public int tint();
+    public mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind surfaceKind();
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiSurfaceQuad(mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, int);
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex bottomLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex bottomRight();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex topLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex topRight();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiTextEvent implements mchorse.bbs_mod.api.client.ui.BBSUiInputEvent {
+    public int modifiers();
+    public java.lang.String text();
+    public mchorse.bbs_mod.api.client.ui.BBSUiInputEventType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTextEvent(java.lang.String, int);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiTextureQuad implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public int tint();
+    public mchorse.bbs_mod.api.client.ui.BBSUiAssetRef asset();
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTextureQuad(mchorse.bbs_mod.api.client.ui.BBSUiAssetRef, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex, int);
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex bottomLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex bottomRight();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex topLeft();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex topRight();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiTexturedMesh implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiTexturedMeshVertex> vertices();
+    public mchorse.bbs_mod.api.client.ui.BBSUiAssetRef asset();
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedMesh(mchorse.bbs_mod.api.client.ui.BBSUiAssetRef, java.util.List<mchorse.bbs_mod.api.client.ui.BBSUiTexturedMeshVertex>);
+    public static final int MAX_VERTICES;
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiTexturedMeshVertex {
+    public float u();
+    public float v();
+    public float x();
+    public float y();
+    public int color();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedMeshVertex(float, float, float, float, int);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex {
+    public float u();
+    public float v();
+    public float x();
+    public float y();
+    public mchorse.bbs_mod.api.client.ui.BBSUiTexturedVertex(float, float, float, float);
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiUnsupported implements mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public int count();
+    public mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+    public mchorse.bbs_mod.api.client.ui.BBSUiUnsupported(mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason, int);
+    public mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason reason();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason extends java.lang.Enum<mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason> {
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason ASSET_UNAVAILABLE;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason CUSTOM_SHADER;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason DIRECT_DRAW;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason FRAME_COMMAND_LIMIT;
+    public static final mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason RAW_TEXTURE;
+    public static mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.client.ui.BBSUiUnsupportedReason[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.ui.BBSUiVertex {
+    public float x();
+    public float y();
+    public int color();
+    public mchorse.bbs_mod.api.client.ui.BBSUiVertex(float, float, int);
+}
+
+public final class mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics {
+    public java.lang.String addonId();
+    public java.lang.String addonVersion();
+    public java.lang.String apiVersion();
+    public java.lang.String displayName();
+    public java.lang.String lastErrorClass();
+    public java.util.List<java.lang.String> acceptedRegistrations();
+    public java.util.List<java.lang.String> errors();
+    public java.util.List<java.lang.String> rejectedRegistrations();
+    public java.util.List<java.lang.String> warnings();
+    public mchorse.bbs_mod.api.addon.BBSAddonPhase failedPhase();
+    public mchorse.bbs_mod.api.addon.BBSAddonProtocol protocol();
+    public mchorse.bbs_mod.api.addon.BBSAddonState state();
+    public mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics(java.lang.String, java.lang.String, java.lang.String, java.lang.String, mchorse.bbs_mod.api.addon.BBSAddonProtocol, mchorse.bbs_mod.api.addon.BBSAddonState, mchorse.bbs_mod.api.addon.BBSAddonPhase, java.lang.String, java.util.List<java.lang.String>, java.util.List<java.lang.String>, java.util.List<java.lang.String>, java.util.List<java.lang.String>);
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginApiVersion {
+    public static final int MAJOR;
+    public static final int MINOR;
+    public static final java.lang.String CURRENT;
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginArtifactLimits extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int maxCollectionEntries();
+    public int maxEntryCount();
+    public int maxEntryNameChars();
+    public int maxManifestBytes();
+    public int maxStringChars();
+    public long maxEntryBytes();
+    public long maxJarBytes();
+    public long maxTotalUncompressedBytes();
+    public mchorse.bbs_mod.api.plugin.BBSPluginArtifactLimits(long, int, long, long, int, int, int, int);
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginArtifactLimits DEFAULT;
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginCapability extends java.lang.Enum<mchorse.bbs_mod.api.plugin.BBSPluginCapability> {
+    public boolean hotSafe();
+    public java.lang.String wireName();
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability ACCESS_TRANSFORMER;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability BLOCK_ENTITY_RENDERER;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability CLIPS;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability COREMOD;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability DASHBOARD_PANELS;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability ENTITY_RENDERER;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability EVENTS;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability EXECUTORS;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability FILM_COLLABORATION;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability FORMS;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability JNI;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability KEY_MAPPINGS;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability MINECRAFT_REGISTRY;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability MIXIN;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability NATIVE_LIBRARY;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability NETWORK;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability PARTICLES;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability RENDER_SURFACE;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability RESOURCES;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability SETTINGS;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginCapability UI_MIRROR;
+    public static mchorse.bbs_mod.api.plugin.BBSPluginCapability fromWireName(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginCapability valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginCapability[] values();
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginDescriptor extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int schema();
+    public java.lang.String api();
+    public java.lang.String clientEntrypoint();
+    public java.lang.String commonEntrypoint();
+    public java.lang.String displayName();
+    public java.lang.String id();
+    public java.lang.String version();
+    public java.util.List<java.lang.String> dependencies();
+    public java.util.Set<mchorse.bbs_mod.api.plugin.BBSPluginCapability> capabilities();
+    public mchorse.bbs_mod.api.plugin.BBSPluginDescriptor(int, mchorse.bbs_mod.api.plugin.BBSPluginKind, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, mchorse.bbs_mod.api.plugin.BBSPluginSide, java.util.Set<mchorse.bbs_mod.api.plugin.BBSPluginCapability>, java.util.List<java.lang.String>, mchorse.bbs_mod.api.plugin.BBSPluginReloadMode);
+    public mchorse.bbs_mod.api.plugin.BBSPluginKind kind();
+    public mchorse.bbs_mod.api.plugin.BBSPluginReloadMode reload();
+    public mchorse.bbs_mod.api.plugin.BBSPluginSide side();
+    public static mchorse.bbs_mod.api.plugin.BBSPluginDescriptor from(mchorse.bbs_mod.api.plugin.BBSPluginManifest);
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginDiagnostic extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.lang.String code();
+    public java.lang.String errorType();
+    public java.lang.String message();
+    public long timestampMillis();
+    public mchorse.bbs_mod.api.plugin.BBSPluginDiagnostic(long, mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity, java.lang.String, java.lang.String);
+    public mchorse.bbs_mod.api.plugin.BBSPluginDiagnostic(long, mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity, java.lang.String, java.lang.String, java.lang.String);
+    public mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity severity();
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity extends java.lang.Enum<mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity> {
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity ERROR;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity INFO;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity WARNING;
+    public static mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity[] values();
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginKind extends java.lang.Enum<mchorse.bbs_mod.api.plugin.BBSPluginKind> {
+    public java.lang.String wireName();
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginKind CODE;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginKind CONTENT;
+    public static mchorse.bbs_mod.api.plugin.BBSPluginKind fromWireName(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginKind valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginKind[] values();
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginManifest extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public int schema();
+    public java.lang.String api();
+    public java.lang.String clientEntrypoint();
+    public java.lang.String commonEntrypoint();
+    public java.lang.String displayName();
+    public java.lang.String id();
+    public java.lang.String version();
+    public java.util.List<java.lang.String> dependencies();
+    public java.util.Set<mchorse.bbs_mod.api.plugin.BBSPluginCapability> capabilities();
+    public mchorse.bbs_mod.api.plugin.BBSPluginDescriptor descriptor();
+    public mchorse.bbs_mod.api.plugin.BBSPluginKind kind();
+    public mchorse.bbs_mod.api.plugin.BBSPluginManifest(int, mchorse.bbs_mod.api.plugin.BBSPluginKind, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, mchorse.bbs_mod.api.plugin.BBSPluginSide, java.util.Set<mchorse.bbs_mod.api.plugin.BBSPluginCapability>, java.util.List<java.lang.String>, mchorse.bbs_mod.api.plugin.BBSPluginReloadMode);
+    public mchorse.bbs_mod.api.plugin.BBSPluginReloadMode reload();
+    public mchorse.bbs_mod.api.plugin.BBSPluginSide side();
+    public static final int SCHEMA_VERSION;
+    public static final java.lang.String PATH;
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginReloadMode extends java.lang.Enum<mchorse.bbs_mod.api.plugin.BBSPluginReloadMode> {
+    public java.lang.String wireName();
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginReloadMode HOT;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginReloadMode RESTART;
+    public static mchorse.bbs_mod.api.plugin.BBSPluginReloadMode fromWireName(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginReloadMode valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginReloadMode[] values();
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginSide extends java.lang.Enum<mchorse.bbs_mod.api.plugin.BBSPluginSide> {
+    public java.lang.String wireName();
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginSide CLIENT;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginSide COMMON;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginSide DEDICATED_SERVER;
+    public static mchorse.bbs_mod.api.plugin.BBSPluginSide fromWireName(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginSide valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginSide[] values();
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginState extends java.lang.Enum<mchorse.bbs_mod.api.plugin.BBSPluginState> {
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState ACTIVE;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState DISABLED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState DISCOVERED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState DRAINING;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState FAILED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState INCOMPATIBLE;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState LOGICALLY_UNLOADED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState PREPARING;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState RELOAD_PENDING;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState RELOAD_REJECTED_BUSY;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState RESTART_REQUIRED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState STAGED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState UNLOADING;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginState VALIDATED;
+    public static mchorse.bbs_mod.api.plugin.BBSPluginState valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginState[] values();
+}
+
+public final class mchorse.bbs_mod.api.plugin.BBSPluginStopReason extends java.lang.Enum<mchorse.bbs_mod.api.plugin.BBSPluginStopReason> {
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginStopReason DISABLED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginStopReason FAILURE;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginStopReason RELOAD;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginStopReason REMOVED;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginStopReason ROLLBACK;
+    public static final mchorse.bbs_mod.api.plugin.BBSPluginStopReason SHUTDOWN;
+    public static mchorse.bbs_mod.api.plugin.BBSPluginStopReason valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.plugin.BBSPluginStopReason[] values();
+}
+
+public final class mchorse.bbs_mod.api.registry.BBSRegistrationResult {
+    public boolean accepted();
+    public java.lang.String id();
+    public java.lang.String keptBy();
+    public java.lang.String reason();
+    public java.lang.String toString();
+    public mchorse.bbs_mod.api.registry.BBSRegistrationStatus status();
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult accepted(java.lang.String);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult deferred(java.lang.String, java.lang.String);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult duplicate(java.lang.String, java.lang.String);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult rejected(java.lang.String, java.lang.String);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationResult skipped(java.lang.String, java.lang.String);
+}
+
+public final class mchorse.bbs_mod.api.registry.BBSRegistrationStatus extends java.lang.Enum<mchorse.bbs_mod.api.registry.BBSRegistrationStatus> {
+    public static final mchorse.bbs_mod.api.registry.BBSRegistrationStatus ACCEPTED;
+    public static final mchorse.bbs_mod.api.registry.BBSRegistrationStatus DEFERRED;
+    public static final mchorse.bbs_mod.api.registry.BBSRegistrationStatus DUPLICATE;
+    public static final mchorse.bbs_mod.api.registry.BBSRegistrationStatus REJECTED;
+    public static final mchorse.bbs_mod.api.registry.BBSRegistrationStatus SKIPPED;
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationStatus valueOf(java.lang.String);
+    public static mchorse.bbs_mod.api.registry.BBSRegistrationStatus[] values();
+}
+
+public interface mchorse.bbs_mod.api.BBSAddonMod {
+}
+
+public interface mchorse.bbs_mod.api.Subscribe extends java.lang.annotation.Annotation {
+}
+
+public interface mchorse.bbs_mod.api.addon.BBSAddon {
+    public abstract mchorse.bbs_mod.api.addon.BBSAddonDescriptor descriptor();
+    public default void discover(mchorse.bbs_mod.api.addon.BBSAddonContext);
+    public default void register(mchorse.bbs_mod.api.addon.BBSAddonRegistrationContext);
+    public default void setup(mchorse.bbs_mod.api.addon.BBSAddonSetupContext);
+    public default void unload(mchorse.bbs_mod.api.addon.BBSAddonContext);
+}
+
+public interface mchorse.bbs_mod.api.addon.BBSAddonContext {
+    public abstract boolean isDevelopmentEnvironment();
+    public abstract boolean isModLoaded(java.lang.String);
+    public abstract java.nio.file.Path gameDir();
+    public abstract java.util.Optional<java.lang.String> getModVersion(java.lang.String);
+    public abstract mchorse.bbs_mod.api.addon.BBSAddonDescriptor descriptor();
+    public abstract mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnosticSink diagnostics();
+}
+
+public interface mchorse.bbs_mod.api.addon.BBSAddonRegistrationContext extends mchorse.bbs_mod.api.addon.BBSAddonContext {
+    public abstract mchorse.bbs_mod.api.clips.BBSClipRegistry clips();
+    public abstract mchorse.bbs_mod.api.events.BBSEventRegistry events();
+    public abstract mchorse.bbs_mod.api.forms.BBSFormRegistry forms();
+    public abstract mchorse.bbs_mod.api.network.BBSNetworkRegistry network();
+    public abstract mchorse.bbs_mod.api.particles.BBSParticleRegistry particles();
+    public abstract mchorse.bbs_mod.api.resources.BBSResourceRegistry resources();
+    public abstract mchorse.bbs_mod.api.settings.BBSSettingsRegistry settings();
+}
+
+public interface mchorse.bbs_mod.api.addon.BBSAddonSetupContext extends mchorse.bbs_mod.api.addon.BBSAddonContext {
+}
+
+public interface mchorse.bbs_mod.api.client.BBSClientApi$HudRenderHandler {
+    public abstract void render(net.minecraft.client.gui.GuiGraphics, float);
+}
+
+public interface mchorse.bbs_mod.api.client.BBSClientApi$WorldRenderHandler {
+    public abstract void render(mchorse.bbs_mod.client.compat.BBSWorldRenderContext);
+}
+
+public interface mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayContent {
+    public abstract mchorse.bbs_mod.ui.framework.elements.UIElement root();
+    public default void onDashboardClose();
+    public default void onDashboardOpen();
+    public default void onHidden();
+    public default void onMounted();
+    public default void onShown();
+    public default void onUnmounted();
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayContent of(mchorse.bbs_mod.ui.framework.elements.UIElement);
+}
+
+public interface mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayFactory {
+    public abstract mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayContent create() throws java.lang.Exception;
+}
+
+public interface mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlaySubscription extends java.lang.AutoCloseable {
+    public abstract boolean visible();
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registration();
+    public abstract void close();
+    public abstract void setVisible(boolean);
+}
+
+public interface mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelContent {
+    public abstract mchorse.bbs_mod.ui.framework.elements.UIElement root();
+    public default boolean canPause();
+    public default boolean canRefresh();
+    public default boolean canToggleVisibility();
+    public default boolean needsBackground();
+    public default void onAppear();
+    public default void onClose();
+    public default void onDisappear();
+    public default void onOpen();
+    public default void onUpdate();
+    public static mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelContent of(mchorse.bbs_mod.ui.framework.elements.UIElement);
+}
+
+public interface mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory {
+    public abstract mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelContent create() throws java.lang.Exception;
+}
+
+public interface mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec, mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FilmEditEvents$Changed {
+    public abstract void changed(mchorse.bbs_mod.film.Film, java.util.List<mchorse.bbs_mod.settings.values.base.BaseValue>, mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FilmEvents$Created {
+    public abstract void onFilmCreated(mchorse.bbs_mod.film.BaseFilmController);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FilmEvents$Render {
+    public abstract void onFilmRender(mchorse.bbs_mod.film.BaseFilmController, mchorse.bbs_mod.client.compat.BBSWorldRenderContext);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FilmEvents$Shutdown {
+    public abstract void onFilmShutdown(mchorse.bbs_mod.film.BaseFilmController);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FilmEvents$Tick {
+    public abstract void onFilmTick(mchorse.bbs_mod.film.BaseFilmController, int);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FilmGizmoEvents$Draw {
+    public abstract boolean draw(mchorse.bbs_mod.film.FilmControllerContext, mchorse.bbs_mod.ui.framework.elements.utils.StencilMap, com.mojang.blaze3d.vertex.PoseStack);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$ActorPrepare {
+    public abstract void prepare(mchorse.bbs_mod.film.FilmControllerContext);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$ModelPose {
+    public abstract void apply(mchorse.bbs_mod.forms.forms.ModelForm, mchorse.bbs_mod.forms.entities.IEntity, mchorse.bbs_mod.cubic.ModelInstance, float, org.joml.Matrix4f, mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$ParentFrame {
+    public abstract void capture(mchorse.bbs_mod.forms.forms.Form, mchorse.bbs_mod.forms.entities.IEntity, org.joml.Matrix4f, java.lang.String, float);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$PivotOffsets {
+    public abstract boolean include(mchorse.bbs_mod.cubic.IModel);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$ResolveAnchor {
+    public abstract mchorse.bbs_mod.forms.forms.utils.Anchor resolve(mchorse.bbs_mod.forms.forms.utils.Anchor);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$TransformPose {
+    public abstract void apply(mchorse.bbs_mod.forms.forms.Form, mchorse.bbs_mod.utils.pose.Transform, float);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormPreviewEvents$Overlay {
+    public abstract void render(mchorse.bbs_mod.ui.forms.editors.utils.UIFormRenderer, mchorse.bbs_mod.ui.framework.UIContext);
+}
+
+public interface mchorse.bbs_mod.api.client.events.StructureRenderEvents$Render {
+    public abstract boolean render(mchorse.bbs_mod.forms.renderers.StructureFormRenderer, mchorse.bbs_mod.forms.forms.StructureForm, mchorse.bbs_mod.forms.structure.StructureRenderData, mchorse.bbs_mod.forms.renderers.FormRenderingContext);
+}
+
+public interface mchorse.bbs_mod.api.client.events.TimelineEvents$Overlay {
+    public abstract void render(mchorse.bbs_mod.film.Film, mchorse.bbs_mod.ui.framework.UIContext, mchorse.bbs_mod.ui.utils.Area, java.util.function.DoubleToIntFunction);
+}
+
+public interface mchorse.bbs_mod.api.client.film.BBSFilmCollaborationListener {
+    public default void onCheckpointRequired(mchorse.bbs_mod.api.client.film.BBSFilmCheckpointRequired);
+    public default void onLocalMutations(mchorse.bbs_mod.api.client.film.BBSFilmMutationBatch);
+    public default void onPresence(mchorse.bbs_mod.api.client.film.BBSFilmPresence);
+    public default void onSessionClosed(long);
+    public default void onSessionClosing(mchorse.bbs_mod.api.client.film.BBSFilmSession);
+    public default void onSessionOpened(mchorse.bbs_mod.api.client.film.BBSFilmSession);
+}
+
+public interface mchorse.bbs_mod.api.client.film.BBSFilmCollaborationSubscription extends java.lang.AutoCloseable {
+    public abstract boolean active();
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registration();
+    public abstract void close();
+}
+
+public interface mchorse.bbs_mod.api.client.render.BBSRenderSurfaceListener {
+    public abstract mchorse.bbs_mod.api.client.render.BBSRenderSurfaceDemand demand();
+    public abstract void onFrame(mchorse.bbs_mod.api.client.render.BBSRenderSurfaceFrame);
+}
+
+public interface mchorse.bbs_mod.api.client.render.BBSRenderSurfaceSubscription extends java.lang.AutoCloseable {
+    public abstract boolean active();
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registration();
+    public abstract void close();
+}
+
+public interface mchorse.bbs_mod.api.client.ui.BBSUiDrawCommand {
+    public abstract mchorse.bbs_mod.api.client.ui.BBSUiDrawCommandType type();
+}
+
+public interface mchorse.bbs_mod.api.client.ui.BBSUiInputEvent {
+    public abstract mchorse.bbs_mod.api.client.ui.BBSUiInputEventType type();
+}
+
+public interface mchorse.bbs_mod.api.client.ui.BBSUiMirrorListener {
+    public abstract void onFrame(mchorse.bbs_mod.api.client.ui.BBSUiFrame);
+    public default void onAssetAvailable(mchorse.bbs_mod.api.client.ui.BBSUiAssetBytes);
+    public default void onSessionClosed(long);
+    public default void onSessionOpened(mchorse.bbs_mod.api.client.ui.BBSUiSessionInfo);
+}
+
+public interface mchorse.bbs_mod.api.client.ui.BBSUiMirrorSubscription extends java.lang.AutoCloseable {
+    public abstract boolean active();
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registration();
+    public abstract void close();
+    public abstract void setActive(boolean);
+}
+
+public interface mchorse.bbs_mod.api.clips.BBSClipRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerActionClip(mchorse.bbs_mod.resources.Link, java.lang.Class<? extends mchorse.bbs_mod.utils.clips.Clip>, mchorse.bbs_mod.camera.clips.ClipFactoryData);
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerCameraClip(mchorse.bbs_mod.resources.Link, java.lang.Class<? extends mchorse.bbs_mod.utils.clips.Clip>, mchorse.bbs_mod.camera.clips.ClipFactoryData);
+}
+
+public interface mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnosticSink {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult record(mchorse.bbs_mod.api.registry.BBSRegistrationResult);
+    public abstract void error(java.lang.String, java.lang.Throwable);
+    public abstract void info(java.lang.String);
+    public abstract void warn(java.lang.String);
+}
+
+public interface mchorse.bbs_mod.api.events.BBSEventRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerSubscriber(java.lang.Object);
+}
+
+public interface mchorse.bbs_mod.api.forms.BBSFormRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(mchorse.bbs_mod.resources.Link, java.lang.Class<? extends mchorse.bbs_mod.forms.forms.Form>);
+}
+
+public interface mchorse.bbs_mod.api.network.BBSAddonClientNetworkReceiver {
+    public abstract void receive(net.minecraft.resources.ResourceLocation, net.minecraft.network.FriendlyByteBuf);
+}
+
+public interface mchorse.bbs_mod.api.network.BBSAddonServerNetworkReceiver {
+    public abstract void receive(net.minecraft.server.MinecraftServer, net.minecraft.server.level.ServerPlayer, net.minecraft.resources.ResourceLocation, net.minecraft.network.FriendlyByteBuf);
+}
+
+public interface mchorse.bbs_mod.api.network.BBSNetworkRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerLegacyServerReceiver(net.minecraft.resources.ResourceLocation, mchorse.bbs_mod.network.compat.NetworkCompat$ServerReceiver);
+    public default boolean sendToPlayer(net.minecraft.server.level.ServerPlayer, net.minecraft.resources.ResourceLocation, net.minecraft.network.FriendlyByteBuf);
+    public default boolean sendToPlayersTrackingEntity(net.minecraft.world.entity.Entity, net.minecraft.resources.ResourceLocation, net.minecraft.network.FriendlyByteBuf);
+    public default boolean sendToPlayersTrackingEntityAndSelf(net.minecraft.server.level.ServerPlayer, net.minecraft.resources.ResourceLocation, net.minecraft.network.FriendlyByteBuf);
+    public default mchorse.bbs_mod.api.registry.BBSRegistrationResult registerServerReceiver(net.minecraft.resources.ResourceLocation, mchorse.bbs_mod.api.network.BBSAddonServerNetworkReceiver);
+    public default net.minecraft.network.FriendlyByteBuf createBuffer();
+}
+
+public interface mchorse.bbs_mod.api.particles.BBSParticleRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerComponent(java.lang.String, java.lang.String);
+}
+
+public interface mchorse.bbs_mod.api.plugin.BBSPlugin {
+    public default void prepare(mchorse.bbs_mod.api.plugin.BBSPluginContext) throws java.lang.Exception;
+    public default void start() throws java.lang.Exception;
+    public default void stop(mchorse.bbs_mod.api.plugin.BBSPluginStopReason) throws java.lang.Exception;
+}
+
+public interface mchorse.bbs_mod.api.plugin.BBSPluginClipRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerActionClip(mchorse.bbs_mod.resources.Link, java.lang.Class<? extends mchorse.bbs_mod.utils.clips.Clip>, mchorse.bbs_mod.camera.clips.ClipFactoryData);
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerCameraClip(mchorse.bbs_mod.resources.Link, java.lang.Class<? extends mchorse.bbs_mod.utils.clips.Clip>, mchorse.bbs_mod.camera.clips.ClipFactoryData);
+}
+
+public interface mchorse.bbs_mod.api.plugin.BBSPluginContext {
+    public abstract <T extends java.lang.AutoCloseable> T own(T);
+    public abstract java.nio.file.Path dataDirectory();
+    public abstract long generation();
+    public abstract mchorse.bbs_mod.api.plugin.BBSPluginClipRegistry clips();
+    public abstract mchorse.bbs_mod.api.plugin.BBSPluginDescriptor descriptor();
+    public abstract mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSink diagnostics();
+    public abstract mchorse.bbs_mod.api.plugin.BBSPluginEventRegistry events();
+    public abstract mchorse.bbs_mod.api.plugin.BBSPluginFormRegistry forms();
+    public abstract mchorse.bbs_mod.api.plugin.BBSPluginParticleRegistry particles();
+    public default <T> T extension(java.lang.Class<T>);
+    public default java.lang.String pluginId();
+}
+
+public interface mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSink {
+    public abstract void report(mchorse.bbs_mod.api.plugin.BBSPluginDiagnosticSeverity, java.lang.String, java.lang.String);
+    public default void error(java.lang.String, java.lang.String);
+    public default void info(java.lang.String, java.lang.String);
+    public default void warn(java.lang.String, java.lang.String);
+}
+
+public interface mchorse.bbs_mod.api.plugin.BBSPluginEventRegistry {
+    public abstract <E> java.lang.AutoCloseable subscribe(java.lang.Class<E>, java.util.function.Consumer<? super E>);
+}
+
+public interface mchorse.bbs_mod.api.plugin.BBSPluginFormRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(mchorse.bbs_mod.resources.Link, java.lang.Class<? extends mchorse.bbs_mod.forms.forms.Form>);
+}
+
+public interface mchorse.bbs_mod.api.plugin.BBSPluginParticleRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerComponent(java.lang.String, java.lang.String);
+}
+
+public interface mchorse.bbs_mod.api.plugin.client.BBSPluginClientContext {
+    public abstract mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelRegistry dashboardPanels();
+    public abstract mchorse.bbs_mod.api.plugin.client.BBSPluginClipClientRegistry clips();
+    public abstract mchorse.bbs_mod.api.plugin.client.BBSPluginFormClientRegistry forms();
+    public abstract mchorse.bbs_mod.api.plugin.client.BBSPluginKeyMappingRegistry keyMappings();
+    public abstract mchorse.bbs_mod.api.plugin.client.BBSPluginRendererRegistry renderers();
+}
+
+public interface mchorse.bbs_mod.api.plugin.client.BBSPluginClipClientRegistry {
+    public abstract <T extends mchorse.bbs_mod.utils.clips.Clip> mchorse.bbs_mod.api.registry.BBSRegistrationResult registerEditor(java.lang.Class<T>, mchorse.bbs_mod.ui.film.clips.UIClip$IUIClipFactory<T>);
+}
+
+public interface mchorse.bbs_mod.api.plugin.client.BBSPluginFormClientRegistry {
+    public abstract <T extends mchorse.bbs_mod.forms.forms.Form> mchorse.bbs_mod.api.registry.BBSRegistrationResult registerRenderer(java.lang.Class<T>, mchorse.bbs_mod.forms.FormUtilsClient$IFormRendererFactory<T>);
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerEditor(java.lang.Class<? extends mchorse.bbs_mod.forms.forms.Form>, java.util.function.Supplier<mchorse.bbs_mod.ui.forms.editors.forms.UIForm>);
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerExtra(mchorse.bbs_mod.forms.forms.Form);
+}
+
+public interface mchorse.bbs_mod.api.plugin.client.BBSPluginKeyMappingRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(net.minecraft.client.KeyMapping);
+}
+
+public interface mchorse.bbs_mod.api.plugin.client.BBSPluginRendererRegistry {
+    public abstract <T extends net.minecraft.world.entity.Entity> mchorse.bbs_mod.api.registry.BBSRegistrationResult registerEntity(net.minecraft.world.entity.EntityType<T>, net.minecraft.client.renderer.entity.EntityRendererProvider<T>);
+    public abstract <T extends net.minecraft.world.level.block.entity.BlockEntity> mchorse.bbs_mod.api.registry.BBSRegistrationResult registerBlockEntity(net.minecraft.world.level.block.entity.BlockEntityType<T>, net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider<? super T>);
+}
+
+public interface mchorse.bbs_mod.api.resources.BBSResourceRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerSourcePack(mchorse.bbs_mod.resources.ISourcePack);
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerSourcePackFirst(mchorse.bbs_mod.resources.ISourcePack);
+}
+
+public interface mchorse.bbs_mod.api.settings.BBSSettingsRegistry {
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(mchorse.bbs_mod.ui.utils.icons.Icon, java.lang.String, java.io.File, java.util.function.Consumer<mchorse.bbs_mod.settings.SettingsBuilder>);
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(mchorse.bbs_mod.ui.utils.icons.Icon, java.lang.String, java.util.function.Consumer<mchorse.bbs_mod.settings.SettingsBuilder>);
+}
+
