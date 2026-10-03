@@ -25,14 +25,21 @@ public class PerLimbService
     public static record PhysicsTargetPath(String formPath, String rootBone)
     {}
 
+    /*
+     * Every predicate below goes through FormControlKeys.isChannelInNamespace, which attributes an
+     * id to the OUTERMOST namespace it spells. A substring test is not enough here: the last
+     * segment of these ids is a free-text NAME, and a bone called "ik_targets" would otherwise be
+     * read as an IK target track. See that method for the rule and for the ambiguity it leaves.
+     */
+
     public static boolean isPoseBoneChannel(String id)
     {
-        return id != null && id.contains(POSE_BONES);
+        return FormControlKeys.isChannelInNamespace(id, POSE_BONES);
     }
 
     public static boolean isMaterialTextureChannel(String id)
     {
-        return id != null && id.contains(MATERIAL_TEXTURES);
+        return FormControlKeys.isChannelInNamespace(id, MATERIAL_TEXTURES);
     }
 
     public static MaterialTexturePath parseMaterialTexturePath(String id)
@@ -72,17 +79,17 @@ public class PerLimbService
 
     public static boolean isIKTargetChannel(String id)
     {
-        return id != null && id.contains(IK_TARGETS);
+        return FormControlKeys.isChannelInNamespace(id, IK_TARGETS);
     }
 
     public static boolean isPoleTargetChannel(String id)
     {
-        return id != null && id.contains(POLE_TARGETS);
+        return FormControlKeys.isChannelInNamespace(id, POLE_TARGETS);
     }
 
     public static boolean isPhysicsTargetChannel(String id)
     {
-        return id != null && id.contains(PHYSICS_TARGETS);
+        return FormControlKeys.isChannelInNamespace(id, PHYSICS_TARGETS);
     }
 
     public static PoseBonePath parsePoseBonePath(String id)

@@ -99,6 +99,7 @@ public final class ReplayIndexRemappingTest
             testGroupedSoundLoopIntervalLifecycle();
             testBbsVolumeFieldsHaveNoFiniteUpperLimit();
             testReplayTrackCategories();
+            assertChannelNamespacePredicates();
             testGlintLayerKeyframes();
             testForeignChannelRoundTrip();
             testEnchantedEquipmentSerializationRoundTrip();
@@ -627,6 +628,41 @@ public final class ReplayIndexRemappingTest
         assertTrackCategory(PerLimbService.toPhysicsTargetKey("", "cape"), true, UIReplaysEditor.ReplayCategory.PHYSICS);
         assertTrackCategory(PerLimbService.toMaterialTextureKey("", "body"), true, UIReplaysEditor.ReplayCategory.MODEL);
 
+        /* A per-limb track addresses its limb by a NAME, and that name is free text: a bone,
+         * material or IK controller may legitimately be called "ik_controls". The whole-form
+         * control predicates must match the NAMESPACE, not a substring — "pose.bones.ik_controls"
+         * is a pose-bone track and "ik_targets/ik_controls" is an IK target track, whatever the
+         * trailing segment happens to spell. Before this was checked, all of the following were
+         * read as the whole-form IK-controls track. */
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toPoseBoneKey("", "ik_controls")),
+            "a pose bone named ik_controls was read as the whole-form IK-controls track");
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toPoseBoneKey("ik_controls", "arm")),
+            "a bone under a part named ik_controls was read as the whole-form IK-controls track");
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toIKTargetKey("", "ik_controls")),
+            "an IK target track for a controller named ik_controls was read as the whole-form IK-controls track");
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toPoleTargetKey("", "ik_controls")),
+            "a pole target track for a controller named ik_controls was read as the whole-form IK-controls track");
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toPhysicsTargetKey("", "ik_controls")),
+            "a physics target track for a root bone named ik_controls was read as the whole-form IK-controls track");
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toMaterialTextureKey("", "ik_controls")),
+            "a material texture track for a material named ik_controls was read as the whole-form IK-controls track");
+        assertTrue(!FormControlKeys.isIKControlChannel("not_ik_controls_really"),
+            "an unrelated id containing ik_controls was read as the whole-form IK-controls track");
+
+        assertTrackCategory(PerLimbService.toPoseBoneKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.POSE);
+        assertTrackCategory(PerLimbService.toPoseBoneKey("ik_controls", "arm"), true, UIReplaysEditor.ReplayCategory.POSE);
+        assertTrackCategory(PerLimbService.toIKTargetKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.IK);
+        assertTrackCategory(PerLimbService.toPoleTargetKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.IK);
+        assertTrackCategory(PerLimbService.toPhysicsTargetKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.PHYSICS);
+        assertTrackCategory(PerLimbService.toMaterialTextureKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.MODEL);
+        assertTrackCategory("not_ik_controls_really", true, UIReplaysEditor.ReplayCategory.MODEL);
+
+        /* The positive side must not have moved: the real control track is still owned by IK. */
+        assertTrue(FormControlKeys.isIKControlChannel(FormControlKeys.toIKControlKey("")),
+            "the whole-form IK-controls track stopped being recognised");
+        assertTrue(FormControlKeys.isIKControlChannel(FormControlKeys.toIKControlKey("part/0")),
+            "a nested form's IK-controls track stopped being recognised");
+
         UIKeyframeSheet physics = trackSheet(FormControlKeys.toPhysicsControlKey(""), true);
 
         assertTrue(UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PLAYER, true),
@@ -635,6 +671,92 @@ public final class ReplayIndexRemappingTest
             "player tab includes physics tracks");
         assertTrue(UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PHYSICS, false),
             "physics tab drops its own tracks");
+    }
+
+    /**
+     * A track id addresses exactly ONE namespace: the outermost one it spells. The last segment of
+     * a per-limb id is a free-text NAME — a bone, material or IK controller — and a name is allowed
+     * to spell another namespace's marker, so {@code ik_targets/pose.bones.arm} is an IK target
+     * track and {@code pose.bones.ik_targets} is a pose-bone track. Substring tests read every one
+     * of these wrong; see {@code FormControlKeys.isChannelInNamespace} for the rule.
+     *
+     * <p>Only ordinary form paths appear here. A form path that itself spells a namespace is the
+     * one case the rule cannot settle (both readings of the id are legal), and it is documented on
+     * that method rather than asserted.</p>
+     */
+    private static void assertChannelNamespacePredicates()
+    {
+        /* Each namespace still recognises its own ids. */
+        assertTrue(PerLimbService.isPoseBoneChannel(PerLimbService.toPoseBoneKey("", "arm")),
+            "a pose bone track stopped being recognised");
+        assertTrue(PerLimbService.isMaterialTextureChannel(PerLimbService.toMaterialTextureKey("", "body")),
+            "a material texture track stopped being recognised");
+        assertTrue(PerLimbService.isIKTargetChannel(PerLimbService.toIKTargetKey("", "hand")),
+            "an IK target track stopped being recognised");
+        assertTrue(PerLimbService.isPoleTargetChannel(PerLimbService.toPoleTargetKey("", "hand")),
+            "a pole target track stopped being recognised");
+        assertTrue(PerLimbService.isPhysicsTargetChannel(PerLimbService.toPhysicsTargetKey("", "cape")),
+            "a physics target track stopped being recognised");
+        assertTrue(FormControlKeys.isGlintControlChannel(FormControlKeys.toGlintControlKey("")),
+            "the glint-layer track stopped being recognised");
+        assertTrue(FormControlKeys.isIKControlChannel(FormControlKeys.toIKControlKey("")),
+            "the whole-form IK-controls track stopped being recognised");
+        assertTrue(FormControlKeys.isPhysicsControlChannel(FormControlKeys.toPhysicsControlKey("")),
+            "the whole-form physics-controls track stopped being recognised");
+        assertTrue(FormControlKeys.isWindControlChannel(FormControlKeys.toWindControlKey("")),
+            "the whole-form wind-controls track stopped being recognised");
+
+        /* The whole-form control keys must not be reachable from a target track's free-text name. */
+        assertTrue(!FormControlKeys.isGlintControlChannel(PerLimbService.toIKTargetKey("", "glint_layer")),
+            "an IK target track for a controller named glint_layer was read as the glint-layer track");
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toIKTargetKey("", "ik_controls")),
+            "an IK target track for a controller named ik_controls was read as the IK-controls track");
+        assertTrue(!FormControlKeys.isIKControlChannel(PerLimbService.toPoleTargetKey("", "ik_controls")),
+            "a pole target track for a controller named ik_controls was read as the IK-controls track");
+        assertTrue(!FormControlKeys.isPhysicsControlChannel(PerLimbService.toPoseBoneKey("", "physics_controls")),
+            "a pose bone named physics_controls was read as the physics-controls track");
+        assertTrue(!FormControlKeys.isWindControlChannel(PerLimbService.toIKTargetKey("", "wind_controls")),
+            "an IK target track for a controller named wind_controls was read as the wind-controls track");
+        assertTrue(!FormControlKeys.isPhysicsControlChannel("not_physics_controls_at_all"),
+            "an unrelated id containing physics_controls was read as the physics-controls track");
+        assertTrue(!FormControlKeys.isWindControlChannel("not_wind_controls_at_all"),
+            "an unrelated id containing wind_controls was read as the wind-controls track");
+
+        /* The per-limb keys must not be reachable from another track's free-text name either. */
+        assertTrue(!PerLimbService.isIKTargetChannel(PerLimbService.toPoseBoneKey("", "ik_targets")),
+            "a pose bone named ik_targets was read as an IK target track");
+        assertTrue(!PerLimbService.isIKTargetChannel(PerLimbService.toPoleTargetKey("", "ik_targets")),
+            "a pole target track for a controller named ik_targets was read as an IK target track");
+        assertTrue(!PerLimbService.isPoleTargetChannel(PerLimbService.toIKTargetKey("", "pole_targets")),
+            "an IK target track for a controller named pole_targets was read as a pole target track");
+        assertTrue(!PerLimbService.isPhysicsTargetChannel(PerLimbService.toPoseBoneKey("", "physics_targets")),
+            "a pose bone named physics_targets was read as a physics target track");
+        assertTrue(!PerLimbService.isPoseBoneChannel(PerLimbService.toIKTargetKey("", "pose.bones.arm")),
+            "an IK target track for a controller named pose.bones.arm was read as a pose bone track");
+        assertTrue(!PerLimbService.isPoseBoneChannel(PerLimbService.toMaterialTextureKey("", "pose.bones.arm")),
+            "a material texture track for a material named pose.bones.arm was read as a pose bone track");
+        assertTrue(!PerLimbService.isMaterialTextureChannel(PerLimbService.toIKTargetKey("", "texture.materials.body")),
+            "an IK target track for a controller named texture.materials.body was read as a material texture track");
+
+        /* Every predicate must reject a null and an empty id. */
+        assertTrue(!PerLimbService.isPoseBoneChannel(null) && !PerLimbService.isPoseBoneChannel(""),
+            "a pose bone predicate accepted a null/empty id");
+        assertTrue(!PerLimbService.isMaterialTextureChannel(null) && !PerLimbService.isMaterialTextureChannel(""),
+            "a material texture predicate accepted a null/empty id");
+        assertTrue(!PerLimbService.isIKTargetChannel(null) && !PerLimbService.isIKTargetChannel(""),
+            "an IK target predicate accepted a null/empty id");
+        assertTrue(!PerLimbService.isPoleTargetChannel(null) && !PerLimbService.isPoleTargetChannel(""),
+            "a pole target predicate accepted a null/empty id");
+        assertTrue(!PerLimbService.isPhysicsTargetChannel(null) && !PerLimbService.isPhysicsTargetChannel(""),
+            "a physics target predicate accepted a null/empty id");
+        assertTrue(!FormControlKeys.isGlintControlChannel(null) && !FormControlKeys.isGlintControlChannel(""),
+            "the glint-layer predicate accepted a null/empty id");
+        assertTrue(!FormControlKeys.isIKControlChannel(null) && !FormControlKeys.isIKControlChannel(""),
+            "the IK-controls predicate accepted a null/empty id");
+        assertTrue(!FormControlKeys.isPhysicsControlChannel(null) && !FormControlKeys.isPhysicsControlChannel(""),
+            "the physics-controls predicate accepted a null/empty id");
+        assertTrue(!FormControlKeys.isWindControlChannel(null) && !FormControlKeys.isWindControlChannel(""),
+            "the wind-controls predicate accepted a null/empty id");
     }
 
     private static void testForeignChannelRoundTrip()
