@@ -4,7 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJBone;
-import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig.BoneConstraint;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;

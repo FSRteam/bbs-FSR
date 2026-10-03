@@ -15,6 +15,7 @@ public class KeyframeFactories
     public static final PoseKeyframeFactory POSE = new PoseKeyframeFactory();
     public static final GlintKeyframeFactory GLINT = new GlintKeyframeFactory();
     public static final IKKeyframeFactory IK = new IKKeyframeFactory();
+    public static final BoneConstraintKeyframeFactory BONE_CONSTRAINT = new BoneConstraintKeyframeFactory();
     public static final PhysicsKeyframeFactory PHYSICS = new PhysicsKeyframeFactory();
     public static final WindKeyframeFactory WIND = new WindKeyframeFactory();
     public static final BooleanKeyframeFactory BOOLEAN = new BooleanKeyframeFactory();
@@ -87,6 +88,7 @@ public class KeyframeFactories
         FACTORIES.put("pose", POSE);
         FACTORIES.put("glint", GLINT);
         FACTORIES.put("ik", IK);
+        FACTORIES.put("bone_constraint", BONE_CONSTRAINT);
         FACTORIES.put("physics", PHYSICS);
         FACTORIES.put("wind", WIND);
         FACTORIES.put("boolean", BOOLEAN);

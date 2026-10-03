@@ -2,13 +2,18 @@ package mchorse.bbs_mod.forms.forms;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.animation.ActionsConfig;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraintsIO;
 import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.WindControl;
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.forms.utils.ValueBones;
 import mchorse.bbs_mod.forms.values.ValueActionsConfig;
 import mchorse.bbs_mod.forms.values.ValueShapeKeys;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueData;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
@@ -32,25 +37,23 @@ public class ModelForm extends Form implements PoseForm
     /**
      * Children of this form that a build newer than this one writes and this one does not model.
      *
-     * <p>Upstream moved the IK setup and the joint limits into a per-bone {@code bones} group and
-     * the form's global wind into {@code wind}, and it holds the per-material appearance overrides
-     * in {@code materials}. This build has none of the three — the same data travels in the
-     * {@code ik} / {@code constraints} / {@code physics} blobs it still shares with upstream's
-     * legacy reader, and it has no per-material layer at all — so nothing here claims those keys
-     * and, without this list, reading such a file and saving it would delete them.</p>
+     * <p>Upstream keeps the per-material appearance overrides in {@code materials} and the form's
+     * global wind in {@code wind}. This build has neither — it still carries the material data in
+     * its own {@code material_textures} layer and its wind in the {@code wind} blob upstream's
+     * legacy reader shares — so nothing here claims those keys and, without this list, reading such
+     * a file and saving it would delete them.</p>
      *
      * <p>Kept as raw data and written back untouched — see
      * {@link mchorse.bbs_mod.settings.values.core.ValueGroup#preservedUnknownKeys()}. That is a
-     * stopgap, not support: this build still shows no chain from such a file, and unpacking a
-     * {@code bones} entry into a chain is a real migration (its per-bone shape is not the
-     * {@code chains} shape the IK reader takes), deliberately not attempted here. What it prevents
-     * is the part that cannot be undone: the IK setup, every constraint and all physics used to
-     * disappear from disk with no warning and nothing in the editor to suggest anything had been
-     * there. Preserved, an upstream client still finds them — and one that reads this build's
-     * {@code ik} / {@code constraints} / {@code physics} on top of them prefers the newer values,
-     * because upstream applies its legacy blobs after the group.</p>
+     * stopgap, not support: this build still shows no material override from such a file. What it
+     * prevents is the part that cannot be undone: the overrides used to disappear from disk with no
+     * warning and nothing in the editor to suggest anything had been there.</p>
+     *
+     * <p>{@code bones} was on this list until this build learned to store constraints per bone —
+     * see {@link #bones}. The key is claimed by a real child now, so it is no longer an unknown
+     * child of this form.</p>
      */
-    private static final Set<String> PRESERVED_UNKNOWN_KEYS = Set.of("bones", "materials", "wind");
+    private static final Set<String> PRESERVED_UNKNOWN_KEYS = Set.of("materials", "wind");
 
     public final ValueLink texture = new ValueLink("texture", null);
     public final ValueLinks materialTextures = new ValueLinks("material_textures");
@@ -61,9 +64,15 @@ public class ModelForm extends Form implements PoseForm
     public final ValueColor color = new ValueColor("color", Color.white());
     public final ValueShapeKeys shapeKeys = new ValueShapeKeys("shape_keys", new ShapeKeys());
     public final ValueBoolean boneTracks = new ValueBoolean("bone_tracks", true);
+    /**
+     * The per-bone properties, in the shape a newer build writes them: one entry per bone the
+     * author ever touched. This is where the rotation limits live now — the form-level
+     * {@code constraints} blob they used to travel in is read once and unpacked into here, see
+     * {@link #fromData(BaseType)}.
+     */
+    public final ValueBones bones = new ValueBones("bones");
     public final ValueData ik = new ValueData("ik");
     public final ValueData physics = new ValueData("physics");
-    public final ValueData constraints = new ValueData("constraints");
     public final ValueData pickingOverrides = new ValueData("picking_overrides");
 
     /**
@@ -130,11 +139,11 @@ public class ModelForm extends Form implements PoseForm
 
         this.ik.invisible();
         this.physics.invisible();
-        this.constraints.invisible();
+        this.bones.invisible();
         this.pickingOverrides.invisible();
         this.add(this.ik);
         this.add(this.physics);
-        this.add(this.constraints);
+        this.add(this.bones);
         this.add(this.pickingOverrides);
 
         /* Visible, so each is a track of its own: a cat that sits down mid-take is a keyframe like
@@ -178,5 +187,41 @@ public class ModelForm extends Form implements PoseForm
     protected Set<String> preservedUnknownKeys()
     {
         return PRESERVED_UNKNOWN_KEYS;
+    }
+
+    /**
+     * An empty {@code bones} group is not written. The group is a container, not a value: a model
+     * form that was never given bone properties keeps exactly the fields it had, so opening and
+     * saving a project that predates the group does not rewrite every form in it.
+     */
+    @Override
+    protected boolean canPersist(BaseValue value)
+    {
+        return !(value == this.bones && this.bones.toData().asMap().isEmpty()) && super.canPersist(value);
+    }
+
+    /**
+     * The one-way migration at the read end.
+     *
+     * <p>Forms saved before the {@code bones} group kept the constraints as an opaque blob in the
+     * exchange format; unpack it into the per-bone properties. The reset flag is {@code false}
+     * because the blob and the group can name the same bones, and the blob is the older of the two
+     * writers: merging it over the group — which is what {@code false} does — reproduces upstream's
+     * order exactly, so the blob wins for the bones it names and the group keeps the rest, instead
+     * of a bone the blob omits losing what the group gave it.</p>
+     *
+     * <p>{@code constraints} is no longer a child of this form, so the key is not claimed by
+     * anything on the way back out and the blob disappears from the saved file. That is the point:
+     * this is a migration, not a second storage location.</p>
+     */
+    @Override
+    public void fromData(BaseType data)
+    {
+        super.fromData(data);
+
+        if (data instanceof MapType map && map.has("constraints", BaseType.TYPE_MAP))
+        {
+            BoneConstraintsIO.read(map.getMap("constraints"), this.bones, false);
+        }
     }
 }

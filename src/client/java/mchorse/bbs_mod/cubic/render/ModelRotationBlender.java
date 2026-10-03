@@ -2,7 +2,7 @@ package mchorse.bbs_mod.cubic.render;
 
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
-import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig.BoneConstraint;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
@@ -281,18 +281,18 @@ public final class ModelRotationBlender
         out.normalize();
     }
 
-    /** Clamp the exact quaternion assigned to cubic/BOBJ rendering. */
+    /** Clamp the exact quaternion assigned to cubic/BOBJ rendering, on the axes that are switched on. */
     static void clampFinalOrientation(Quaternionf orientation, BoneConstraint constraint, Workspace scratch)
     {
-        if (constraint == null || !constraint.enabled())
+        if (constraint == null || !constraint.isActive())
         {
             return;
         }
 
         Vector3f euler = Matrices.toEulerZYXDegrees(orientation, scratch.eulerDegrees, scratch.eulerScratch);
-        float x = clampRange(euler.x, constraint.minX(), constraint.maxX());
-        float y = clampRange(euler.y, constraint.minY(), constraint.maxY());
-        float z = clampRange(euler.z, constraint.minZ(), constraint.maxZ());
+        float x = constraint.limitX ? clampRange(euler.x, constraint.minX, constraint.maxX) : euler.x;
+        float y = constraint.limitY ? clampRange(euler.y, constraint.minY, constraint.maxY) : euler.y;
+        float z = constraint.limitZ ? clampRange(euler.z, constraint.minZ, constraint.maxZ) : euler.z;
 
         orientation.rotationZYX((float) Math.toRadians(z), (float) Math.toRadians(y), (float) Math.toRadians(x));
     }

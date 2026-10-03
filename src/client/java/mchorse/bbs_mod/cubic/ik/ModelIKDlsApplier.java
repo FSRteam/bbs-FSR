@@ -2,7 +2,7 @@ package mchorse.bbs_mod.cubic.ik;
 
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
-import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig.BoneConstraint;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.solver.IKJoint;
@@ -859,17 +859,25 @@ final class ModelIKDlsApplier
 
     private static void applyBoneConstraint(IKJoint joint, BoneConstraint constraint)
     {
-        if (constraint == null || !constraint.enabled())
+        if (constraint == null || !constraint.isActive())
         {
             return;
         }
 
         float toRad = (float) (Math.PI / 180.0);
-        float[] min = {constraint.minX() * toRad, constraint.minY() * toRad, constraint.minZ() * toRad};
-        float[] max = {constraint.maxX() * toRad, constraint.maxY() * toRad, constraint.maxZ() * toRad};
+        float[] min = {constraint.minX * toRad, constraint.minY * toRad, constraint.minZ * toRad};
+        float[] max = {constraint.maxX * toRad, constraint.maxY * toRad, constraint.maxZ * toRad};
+        boolean[] limited = {constraint.limitX, constraint.limitY, constraint.limitZ};
 
         for (int axis = 0; axis < 3; axis++)
         {
+            /* An axis whose switch is off leaves the joint's own freedom alone — the constraint
+             * has nothing to say about it. */
+            if (!limited[axis])
+            {
+                continue;
+            }
+
             if (joint.limited[axis])
             {
                 joint.limitMin[axis] = Math.max(joint.limitMin[axis], min[axis]);

@@ -184,6 +184,20 @@ public class ValueGroup extends BaseValueGroup
         return Collections.emptySet();
     }
 
+    /**
+     * Whether this group is currently holding data no child of it claimed — the read-time half of
+     * {@link #preservedUnknownKeys()}.
+     *
+     * <p>A group that overrides {@code preservedUnknownKeys()} has to ask: a child whose own
+     * properties are all neutral but that carries such data is <em>not</em> an absent child, and a
+     * parent that drops "neutral" children would drop the data with it. This is how that child
+     * asks.</p>
+     */
+    protected boolean hasPreservedUnknownKeys()
+    {
+        return this.foreign != null && !this.foreign.isEmpty();
+    }
+
     private static Map<String, BaseType> copyForeign(Map<String, BaseType> foreign)
     {
         Map<String, BaseType> copy = new LinkedHashMap<>();
