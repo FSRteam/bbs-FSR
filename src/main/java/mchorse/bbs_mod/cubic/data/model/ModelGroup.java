@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.cubic.data.model;
 
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.IMapSerializable;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -14,7 +15,7 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ModelGroup implements IMapSerializable
+public class ModelGroup implements IMapSerializable, RigBone
 {
     public final String id;
     public Model owner;
@@ -109,6 +110,58 @@ public class ModelGroup implements IMapSerializable
         {
             this.orient.mul(delta);
         }
+    }
+
+    /* RigBone implementation: every member reads or writes one of the fields above, so the two
+     * skeletons can be poser-ed through the same call without a wrapper in between. */
+
+    @Override
+    public String getBoneName()
+    {
+        return this.id;
+    }
+
+    @Override
+    public RigBone getParentBone()
+    {
+        return this.parent;
+    }
+
+    @Override
+    public Transform getBoneTransform()
+    {
+        return this.current;
+    }
+
+    @Override
+    public Quaternionf getOrient()
+    {
+        return this.orient;
+    }
+
+    @Override
+    public void setOrient(Quaternionf orient)
+    {
+        this.orient = orient;
+    }
+
+    /** Cubic keeps its euler channels in degrees — see {@link RigBone#isRotationInDegrees()}. */
+    @Override
+    public boolean isRotationInDegrees()
+    {
+        return true;
+    }
+
+    @Override
+    public Vector3f getOffset()
+    {
+        return this.offset;
+    }
+
+    @Override
+    public void setOffset(Vector3f offset)
+    {
+        this.offset = offset;
     }
 
     @Override

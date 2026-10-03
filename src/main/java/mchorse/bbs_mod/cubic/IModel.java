@@ -29,6 +29,13 @@ public interface IModel extends IBoneHierarchy
 
     public Collection<String> getAllGroupKeys();
 
+    /**
+     * The bone that name addresses, or null when this model has no such bone. The one lookup
+     * every poser needs: what used to be "is this a cubic model or a BOBJ one, and which of the
+     * two bone maps do I reach into" is now this call plus {@link RigBone}.
+     */
+    public RigBone getBone(String name);
+
     public Collection<String> getAllChildrenKeys(String key);
 
     public Collection<ModelGroup> getAllGroups();

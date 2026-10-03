@@ -5,6 +5,7 @@ import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.bobj.BOBJLoader;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.MolangHelper;
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelSimpleVAO;
@@ -238,6 +239,12 @@ public class BOBJModel implements IModel
     public Collection<ModelGroup> getAllGroups()
     {
         return Collections.emptyList();
+    }
+
+    @Override
+    public RigBone getBone(String name)
+    {
+        return this.armature.bones.get(name);
     }
 
     @Override

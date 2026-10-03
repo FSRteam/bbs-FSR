@@ -4,6 +4,7 @@ import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.CubicModelAnimator;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.MolangHelper;
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.data.IMapSerializable;
 import mchorse.bbs_mod.data.types.ListType;
@@ -94,6 +95,12 @@ public class Model implements IMapSerializable, IModel
     }
 
     /* IModel implementation */
+
+    @Override
+    public RigBone getBone(String name)
+    {
+        return this.getGroup(name);
+    }
 
     @Override
     public Pose createPose()

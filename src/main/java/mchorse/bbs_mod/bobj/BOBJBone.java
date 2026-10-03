@@ -1,12 +1,13 @@
 package mchorse.bbs_mod.bobj;
 
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-public class BOBJBone
+public class BOBJBone implements RigBone
 {
     /* Meta information */
     public int index;
@@ -172,5 +173,57 @@ public class BOBJBone
         this.transform.identity();
         this.orient = null;
         this.offset = null;
+    }
+
+    /* RigBone implementation: every member reads or writes one of the fields above, so the two
+     * skeletons can be poser-ed through the same call without a wrapper in between. */
+
+    @Override
+    public String getBoneName()
+    {
+        return this.name;
+    }
+
+    @Override
+    public RigBone getParentBone()
+    {
+        return this.parentBone;
+    }
+
+    @Override
+    public Transform getBoneTransform()
+    {
+        return this.transform;
+    }
+
+    @Override
+    public Quaternionf getOrient()
+    {
+        return this.orient;
+    }
+
+    @Override
+    public void setOrient(Quaternionf orient)
+    {
+        this.orient = orient;
+    }
+
+    /** BOBJ keeps its euler channels in radians — see {@link RigBone#isRotationInDegrees()}. */
+    @Override
+    public boolean isRotationInDegrees()
+    {
+        return false;
+    }
+
+    @Override
+    public Vector3f getOffset()
+    {
+        return this.offset;
+    }
+
+    @Override
+    public void setOffset(Vector3f offset)
+    {
+        this.offset = offset;
     }
 }
