@@ -115,8 +115,15 @@ Still absent from FSR, and **absent rather than stubbed** — code importing the
   `ValueBones`/`FormBone` (P1, upstream `4339b076a`), and B9·B1b preserves a file's `bones` data
   in the meantime so nothing is lost while it waits.
 
-Note that everything else listed as ported above is real: it compiles and dispatches. What is
-missing is named here one item at a time rather than dismissed by section, because an addon can
+Note that everything else listed as ported above is real: it compiles, and it is declared. Read
+that second word carefully for the runtime events named two paragraphs up — on `HEAD` all seven of
+them (`FilmEvents`, `FilmEditEvents`, `FilmGizmoEvents`, `FormPoseEvents`, `FormPreviewEvents`,
+`StructureRenderEvents`, `TimelineEvents`) compile and can be subscribed to, and **nothing
+dispatches them yet**: their `invoker()` call sites exist only in the in-flight `task-21` work (a
+`HEAD` count finds zero reachable dispatch points; the working tree has them). An addon that
+subscribes today is collected and never called — the same shape as the three registrations below,
+and the reason "it compiles" is not offered here as "it works". What is missing is named here one
+item at a time rather than dismissed by section, because an addon can
 afford to miss a feature and cannot afford to be told a class exists when it does not. An addon
 that registers into `RegisterFormPanelsEvent`, `RegisterPreviewOverlaysEvent` or
 `RegisterReplayActionsEvent` gets a factory it can read back from that event class
