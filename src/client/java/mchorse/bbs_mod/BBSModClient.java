@@ -29,6 +29,7 @@ import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
 import mchorse.bbs_mod.api.client.events.BBSClientReadyEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClientSettingsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent;
 import mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent;
@@ -37,12 +38,11 @@ import mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterImportersEvent;
 import mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterL10nEvent;
 import mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent;
 import mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent;
 import mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent;
 import mchorse.bbs_mod.cubic.model.ModelManager;
-import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
-import mchorse.bbs_mod.events.register.RegisterL10nEvent;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.film.Recorder;
@@ -481,16 +481,22 @@ public class BBSModClient
         fonts = new FontManager();
         l10n = new L10n();
         l10n.register((lang) -> Collections.singletonList(Link.assets("strings/" + lang + ".json")));
-        l10n.reload();
 
-        BBSMod.events.post(new RegisterL10nEvent(l10n));
-
-        /* The client half of the addons, picked up before anything client side is posted. Their
-         * common half is registered by BBSMod, from the "bbs-addon" entrypoint. */
+        /* The client half of the addons, picked up before anything is posted on the addon channel.
+         * Their common half is registered by BBSMod, from the "bbs-addon" entrypoint. */
         for (mchorse.bbs_mod.api.BBSAddonMod addon : mchorse.bbs_mod.loader.LoaderAccessHolder.get().getEntrypoints("bbs-client-addon", mchorse.bbs_mod.api.BBSAddonMod.class))
         {
             mchorse.bbs_mod.api.EventBus.INSTANCE.register(addon);
         }
+
+        /* Addons add their own language files here, so the event goes out before the load and not
+         * after it — otherwise every addon label would show its raw key until the next language
+         * switch, or every addon would have to reload the whole thing a second time. It goes out
+         * after the client entrypoints above for the same reason it does upstream: a listener
+         * registered later is not on the addon channel yet when this fires. */
+        postAddonEvent(new RegisterL10nEvent(l10n));
+
+        l10n.reload();
 
         /* Both of these are read by the objects made right below, and both lists are rebuilt on
          * every asset reload — so the moment to add to them is before the first build. */
@@ -538,7 +544,7 @@ public class BBSModClient
 
         BBSMod.setupConfig(Icons.KEY_CAP, "keybinds", new File(BBSMod.getSettingsFolder(), "keybinds.json"), KeybindSettings::register);
 
-        BBSMod.events.post(new RegisterClientSettingsEvent());
+        postAddonEvent(new RegisterClientSettingsEvent());
 
         /* The registries behind these fill themselves lazily, on first use, and every one of them
          * puts BBS's own entries in before an addon gets a chance to — a subscriber's register()
