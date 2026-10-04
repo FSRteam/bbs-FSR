@@ -101,6 +101,7 @@ public final class ReplayIndexRemappingTest
             testReplayTrackCategories();
             assertChannelNamespacePredicates();
             assertChannelNamespaceAttribution();
+            assertChannelNamespacePayload();
             testGlintLayerKeyframes();
             testForeignChannelRoundTrip();
             testEnchantedEquipmentSerializationRoundTrip();
@@ -808,6 +809,48 @@ public final class ReplayIndexRemappingTest
         }
     }
 
+    /** Rebuild an id from a parser's payload, with the same production helper that built it. */
+    private static String namespaceRebuild(String namespace, Object parsed)
+    {
+        switch (namespace)
+        {
+            case PerLimbService.POSE_BONES:
+            {
+                PerLimbService.PoseBonePath path = (PerLimbService.PoseBonePath) parsed;
+
+                return PerLimbService.toPoseBoneKey(path.formPath(), path.bone());
+            }
+            case PerLimbService.MATERIAL_TEXTURES:
+            {
+                PerLimbService.MaterialTexturePath path = (PerLimbService.MaterialTexturePath) parsed;
+
+                return PerLimbService.toMaterialTextureKey(path.formPath(), path.material());
+            }
+            case PerLimbService.IK_TARGETS:
+            {
+                PerLimbService.IKTargetPath path = (PerLimbService.IKTargetPath) parsed;
+
+                return PerLimbService.toIKTargetKey(path.formPath(), path.controller());
+            }
+            case PerLimbService.POLE_TARGETS:
+            {
+                PerLimbService.PoleTargetPath path = (PerLimbService.PoleTargetPath) parsed;
+
+                return PerLimbService.toPoleTargetKey(path.formPath(), path.controller());
+            }
+            case PerLimbService.PHYSICS_TARGETS:
+            {
+                PerLimbService.PhysicsTargetPath path = (PerLimbService.PhysicsTargetPath) parsed;
+
+                return PerLimbService.toPhysicsTargetKey(path.formPath(), path.rootBone());
+            }
+            case FormControlKeys.GLINT_CONTROLS: return FormControlKeys.toGlintControlKey((String) parsed);
+            case FormControlKeys.IK_CONTROLS: return FormControlKeys.toIKControlKey((String) parsed);
+            case FormControlKeys.PHYSICS_CONTROLS: return FormControlKeys.toPhysicsControlKey((String) parsed);
+            default: return FormControlKeys.toWindControlKey((String) parsed);
+        }
+    }
+
     /**
      * Ordinary ids: every namespace built by its own helper, at four form-path depths. The block
      * above only ever feeds an EMPTY form path to the per-limb predicates, so a namespace that is
@@ -969,6 +1012,77 @@ public final class ReplayIndexRemappingTest
         {
             assertTrue(FormControlKeys.namespaceOf(path) == null,
                 "the ordinary form path \"" + path + "\" was attributed to a namespace");
+        }
+    }
+
+    /**
+     * The other half of attribution: what a parser RETURNS, not merely that it answered.
+     *
+     * <p>{@link #assertChannelNamespaceAttribution} pins <em>which</em> namespace owns an id — it
+     * counts the parsers that answer and never looks at the payload. So a parser can name the right
+     * namespace and still slice the wrong place: {@code namespaceOf} looks for a marker that STARTS A
+     * SEGMENT, while the parsers searched for the bare text, and for an id whose FORM PATH contains a
+     * marker's text ({@code x_ik_targets/ik_targets/hand}) the two positions differ. The parser then
+     * reported the form path {@code x_}, and a caller resolving that path reaches nothing.</p>
+     *
+     * <p>The expectation is not written down. Every id here is built by a production {@code to*Key}
+     * helper, and the assertion is that parsing it and rebuilding the key the same way gives the id
+     * back — which is what a caller does with the payload, and what a mis-anchored slice breaks.</p>
+     *
+     * <p>A form path that contains a marker's text is not one production builds, since a body part's
+     * id is eight hex characters. A document can still carry any channel id, and the parser is the
+     * only thing standing between such an id and a write aimed at the wrong form.</p>
+     */
+    private static void assertChannelNamespacePayload()
+    {
+        List<String[]> corpus = new ArrayList<>();
+
+        /* "x" before a marker puts its text inside a segment without starting one; a form path that
+         * IS the marker makes the same text appear twice. */
+        for (String path : new String[] {
+            "x" + PerLimbService.POSE_BONES + "b",
+            "x" + PerLimbService.MATERIAL_TEXTURES + "b",
+            "x_" + PerLimbService.IK_TARGETS,
+            "x_" + PerLimbService.POLE_TARGETS,
+            "x_" + PerLimbService.PHYSICS_TARGETS,
+            "x" + FormControlKeys.GLINT_CONTROLS,
+            "x" + FormControlKeys.IK_CONTROLS,
+            "x" + FormControlKeys.PHYSICS_CONTROLS,
+            "x" + FormControlKeys.WIND_CONTROLS,
+            PerLimbService.IK_TARGETS,
+            FormControlKeys.IK_CONTROLS})
+        {
+            corpus.add(new String[] {PerLimbService.toPoseBoneKey(path, "arm"), PerLimbService.POSE_BONES});
+            corpus.add(new String[] {PerLimbService.toMaterialTextureKey(path, "body"), PerLimbService.MATERIAL_TEXTURES});
+            corpus.add(new String[] {PerLimbService.toIKTargetKey(path, "hand"), PerLimbService.IK_TARGETS});
+            corpus.add(new String[] {PerLimbService.toPoleTargetKey(path, "hand"), PerLimbService.POLE_TARGETS});
+            corpus.add(new String[] {PerLimbService.toPhysicsTargetKey(path, "cape"), PerLimbService.PHYSICS_TARGETS});
+            corpus.add(new String[] {FormControlKeys.toGlintControlKey(path), FormControlKeys.GLINT_CONTROLS});
+            corpus.add(new String[] {FormControlKeys.toIKControlKey(path), FormControlKeys.IK_CONTROLS});
+            corpus.add(new String[] {FormControlKeys.toPhysicsControlKey(path), FormControlKeys.PHYSICS_CONTROLS});
+            corpus.add(new String[] {FormControlKeys.toWindControlKey(path), FormControlKeys.WIND_CONTROLS});
+        }
+
+        for (String[] entry : corpus)
+        {
+            String id = entry[0];
+            String owner = entry[1];
+            boolean predicate = namespacePredicate(owner, id);
+            Object parsed = namespaceParse(owner, id);
+
+            assertTrue(predicate == (parsed != null),
+                "the " + owner + " predicate says " + predicate + " but its parser answered "
+                    + (parsed != null) + " for " + id);
+
+            if (parsed != null)
+            {
+                String rebuilt = namespaceRebuild(owner, parsed);
+
+                assertTrue(id.equals(rebuilt),
+                    "parsing " + id + " as " + owner + " and rebuilding the key gave \"" + rebuilt
+                        + "\": the parser sliced at a place the attribution rule does not name, so the"
+                        + " form path it reports is not the one this id was built with");
+            }
         }
     }
 

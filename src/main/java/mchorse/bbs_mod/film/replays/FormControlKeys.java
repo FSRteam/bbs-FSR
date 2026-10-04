@@ -123,6 +123,57 @@ public class FormControlKeys
         return found;
     }
 
+    /**
+     * Where in {@code id} the given namespace's marker starts, or -1 when the id does not address
+     * that namespace at all.
+     *
+     * <p>This is the position a parser has to slice at, and it comes from the SAME scan as
+     * {@link #namespaceOf} — a caller that asks the predicate and then searches the string again is
+     * how the two answers came apart. A bare {@code indexOf} finds the marker text wherever it
+     * appears, while attribution only counts a marker that STARTS A SEGMENT. With a form path such as
+     * {@code x_ik_targets} the two disagree, and a parser reported the form path {@code x_} for a
+     * track whose form path is {@code x_ik_targets}: the namespace was right and the payload was
+     * wrong, which no predicate can see.</p>
+     *
+     * <p>A TERMINAL marker is the one that ENDS the id, so the occurrence it owns is the TRAILING
+     * one even when an earlier segment spells the same text: {@code ik_controls/ik_controls} is the
+     * IK-controls track of the form {@code ik_controls}, not of the empty form. A non-terminal marker
+     * owns its FIRST occurrence, because attribution is outermost-wins.</p>
+     */
+    public static int namespaceOffset(String id, String namespace)
+    {
+        if (namespace == null || !namespace.equals(namespaceOf(id)))
+        {
+            return -1;
+        }
+
+        if (isTerminal(namespace))
+        {
+            /* namespaceOf selects a terminal marker only when the id ends with it, so this is that
+             * occurrence - not an earlier segment that happens to spell the same text. */
+            return id.length() - namespace.length();
+        }
+
+        /* Padded the way namespaceOf pads it: with an empty form path the id starts with the marker,
+         * and then the separator introducing it is the padding — whose index is also the marker's
+         * index in the unpadded id. */
+        return (FormUtils.PATH_SEPARATOR + id).indexOf(FormUtils.PATH_SEPARATOR + namespace);
+    }
+
+    /** Whether {@code namespace} is a whole-form control key, i.e. one that has to END the id. */
+    private static boolean isTerminal(String namespace)
+    {
+        for (ChannelNamespace candidate : CHANNEL_NAMESPACES)
+        {
+            if (candidate.marker().equals(namespace))
+            {
+                return candidate.terminal();
+            }
+        }
+
+        return false;
+    }
+
     public static boolean isIKControlChannel(String id)
     {
         return isChannelInNamespace(id, IK_CONTROLS);
@@ -180,16 +231,15 @@ public class FormControlKeys
      * {@code parseX(id) != null} are one and the same question. That matters where a caller
      * dispatches on "which parser answered first": an id whose free-text NAME spells another
      * namespace's key ({@code ik_targets/ik_controls}) is a real id, and a parser that merely finds
-     * the text claims it and sends it to the wrong handler.
+     * the text claims it and sends it to the wrong handler.</p>
+     *
+     * <p>And it slices where {@link #namespaceOffset} says the rule found the namespace, not at the
+     * first place the text occurs: the id {@code xik_controls/ik_controls} addresses the form
+     * {@code xik_controls}, and a bare {@code indexOf} answered {@code "x"}.</p>
      */
     private static String parseFormPath(String id, String suffix)
     {
-        if (!isChannelInNamespace(id, suffix))
-        {
-            return null;
-        }
-
-        int index = id.indexOf(suffix);
+        int index = namespaceOffset(id, suffix);
 
         if (index < 0)
         {

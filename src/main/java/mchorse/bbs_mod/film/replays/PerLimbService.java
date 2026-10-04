@@ -47,12 +47,10 @@ public class PerLimbService
 
     public static MaterialTexturePath parseMaterialTexturePath(String id)
     {
-        if (!FormControlKeys.isChannelInNamespace(id, MATERIAL_TEXTURES))
-        {
-            return null;
-        }
-
-        int index = id.indexOf(MATERIAL_TEXTURES);
+        /* namespaceOffset IS the guard: it answers -1 unless attribution gives this id to this
+         * namespace, and it answers WHERE the rule found that namespace. Asking the predicate and
+         * then searching with indexOf is what let the two disagree. */
+        int index = FormControlKeys.namespaceOffset(id, MATERIAL_TEXTURES);
 
         if (index < 0)
         {
@@ -97,12 +95,7 @@ public class PerLimbService
 
     public static PoseBonePath parsePoseBonePath(String id)
     {
-        if (!FormControlKeys.isChannelInNamespace(id, POSE_BONES))
-        {
-            return null;
-        }
-
-        int index = id.indexOf(POSE_BONES);
+        int index = FormControlKeys.namespaceOffset(id, POSE_BONES);
 
         if (index < 0)
         {
@@ -132,12 +125,7 @@ public class PerLimbService
 
     public static IKTargetPath parseIKTargetPath(String id)
     {
-        if (!FormControlKeys.isChannelInNamespace(id, IK_TARGETS))
-        {
-            return null;
-        }
-
-        int index = id.indexOf(IK_TARGETS);
+        int index = FormControlKeys.namespaceOffset(id, IK_TARGETS);
 
         if (index < 0)
         {
@@ -172,12 +160,7 @@ public class PerLimbService
 
     public static PoleTargetPath parsePoleTargetPath(String id)
     {
-        if (!FormControlKeys.isChannelInNamespace(id, POLE_TARGETS))
-        {
-            return null;
-        }
-
-        int index = id.indexOf(POLE_TARGETS);
+        int index = FormControlKeys.namespaceOffset(id, POLE_TARGETS);
 
         if (index < 0)
         {
@@ -212,12 +195,7 @@ public class PerLimbService
 
     public static PhysicsTargetPath parsePhysicsTargetPath(String id)
     {
-        if (!FormControlKeys.isChannelInNamespace(id, PHYSICS_TARGETS))
-        {
-            return null;
-        }
-
-        int index = id.indexOf(PHYSICS_TARGETS);
+        int index = FormControlKeys.namespaceOffset(id, PHYSICS_TARGETS);
 
         if (index < 0)
         {
