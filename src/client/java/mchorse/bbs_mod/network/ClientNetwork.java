@@ -1099,14 +1099,7 @@ public class ClientNetwork
         ClientNetwork.sendManagerData(RepositoryOperation.LOAD, mapType, consumer);
     }
 
-    /**
-     * Request the film home metadata list from the server. Every entry is a
-     * map with {@code id}, {@code created_at}, {@code updated_at},
-     * {@code description} (already truncated server-side) and {@code duration}
-     * (camera ticks). Malformed entries are skipped rather than failing the
-     * whole batch; the consumer always receives a list (empty when the server
-     * response was not a list).
-     */
+    /** Request the lightweight metadata projection used by the Film home page. */
     public static void requestFilmMeta(Consumer<List<MapType>> consumer)
     {
         ClientNetwork.sendManagerData(RepositoryOperation.FILM_META, new MapType(), (data) ->

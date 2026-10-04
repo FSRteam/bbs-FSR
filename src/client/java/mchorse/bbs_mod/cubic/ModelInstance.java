@@ -528,57 +528,157 @@ public class ModelInstance implements IModelInstance
 
                 model.getArmature().setupMatrices();
 
-                /* One draw per mesh; bind that mesh's resolved texture (mesh name = material). */
+                /* All meshes of one BOBJ share a single armature, so judge the pose change once per
+                 * draw instead of re-walking every bone for every material mesh. */
+                Matrix4f[] armatureMatrices = model.getArmature().matrices;
+                boolean armatureChanged = this.hasBOBJArmatureChanged(vaos, armatureMatrices);
+                /* Lazy shared snapshot: copied once when the first deferred command needs it, then
+                 * reused by every other command of this draw — the live matrices array keeps moving
+                 * with the next animation frame. */
+                Matrix4f[] deferredArmature = null;
+                boolean deferredSnapshotTaken = false;
+                /* Material -> resolved texture, resolved once per draw (a mesh name is its material). */
+                Map<String, Texture> textures = new HashMap<>();
+                List<BOBJModelVAO.BatchDraw> batch = new ArrayList<>();
+                Texture batchTexture = null;
+
                 for (BOBJModelVAO vao : vaos)
                 {
-                    Texture texture = null;
+                    Texture texture = this.resolveBOBJTexture(textures, textureResolver, vao.data.mesh.name);
 
-                    if (textureResolver != null)
-                    {
-                        Link link = textureResolver.apply(vao.data.mesh.name);
-
-                        if (link != null)
-                        {
-                            texture = BBSModClient.getTextures().getTexture(link);
-                            BBSModClient.getTextures().bindTexture(texture);
-                        }
-                    }
-
-                    if (texture == null)
-                    {
-                        texture = BBSModClient.getTextures().getLastBound();
-                    }
-
-                    vao.updateMesh(stencilMap);
+                    vao.updateMesh(stencilMap, armatureMatrices, armatureChanged);
                     Matrix4f modelView = ModelVAORenderer.captureModelView(stack);
                     Matrix3f normalMat = new Matrix3f(stack.last().normal());
 
                     if (FormTranslucentQueue.needsSplit(shader, stencilMap, texture, color.a))
                     {
+                        this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
+
                         FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
                         vao.render(shader, modelView, normalMat, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
                         FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+
+                        if (!deferredSnapshotTaken)
+                        {
+                            deferredArmature = vao.snapshotArmature();
+                            deferredSnapshotTaken = true;
+                        }
+
                         FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
-                            vao.snapshotArmature(), vao.getUploadCount(), texture, modelView, normalMat,
+                            deferredArmature, vao.getUploadCount(), texture, modelView, normalMat,
                             color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
                     }
                     else if (FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, color.a))
                     {
+                        this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
+
                         ShaderInstance capturedShader = shader;
-                        FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
-                            () -> capturedShader, FormTranslucentQueue.PASS_SINGLE, true,
-                            vao.snapshotArmature(), vao.getUploadCount(), texture, modelView, normalMat,
-                            color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+
+                        if (!deferredSnapshotTaken)
+                        {
+                            deferredArmature = vao.snapshotArmature();
+                            deferredSnapshotTaken = true;
+                        }
+
+                        int uploadCount = vao.getUploadCount();
+
+                        if (texture != null && texture.hasTranslucency())
+                        {
+                            FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                                () -> capturedShader, FormTranslucentQueue.PASS_TEX_OPAQUE, true,
+                                deferredArmature, uploadCount, texture, modelView, normalMat,
+                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                            FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                                () -> capturedShader, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true,
+                                deferredArmature, uploadCount, texture, modelView, normalMat,
+                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                        }
+                        else
+                        {
+                            FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                                () -> capturedShader, FormTranslucentQueue.PASS_SINGLE, true,
+                                deferredArmature, uploadCount, texture, modelView, normalMat,
+                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                        }
                     }
                     else
                     {
-                        vao.render(shader, stack, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
+                        /* Same-texture continuation only: an immediate mesh keeps the traversal
+                         * order of translucent mixes, while opaque runs could regroup freely. */
+                        if (!batch.isEmpty() && texture != batchTexture)
+                        {
+                            this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
+                        }
+
+                        batchTexture = texture;
+                        batch.add(new BOBJModelVAO.BatchDraw(vao, modelView, normalMat,
+                            color.r, color.g, color.b, color.a, light, overlay));
                     }
                 }
+
+                this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
 
                 stack.popPose();
             }
         }
+    }
+
+    /**
+     * Model-level armature change decision for BOBJ rendering. Every mesh of the model was last
+     * uploaded from the same shared armature, so the first mesh whose remembered snapshot differs
+     * marks the pose changed for all of them — no mesh then skips the skinning its neighbours do.
+     */
+    private boolean hasBOBJArmatureChanged(List<BOBJModelVAO> vaos, Matrix4f[] armatureMatrices)
+    {
+        for (BOBJModelVAO vao : vaos)
+        {
+            if (vao.hasBOBJArmatureChanged(armatureMatrices))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Texture resolveBOBJTexture(Map<String, Texture> textures, Function<String, Link> textureResolver, String material)
+    {
+        if (textureResolver == null)
+        {
+            return null;
+        }
+
+        if (textures.containsKey(material))
+        {
+            return textures.get(material);
+        }
+
+        Link link = textureResolver.apply(material);
+        Texture texture = link == null ? null : BBSModClient.getTextures().getTexture(link);
+
+        textures.put(material, texture);
+
+        return texture;
+    }
+
+    /**
+     * Flush the pending immediate meshes under one shared shader lifetime. A null texture keeps
+     * whatever is bound — matching the old path, which fell back to the last bound texture.
+     */
+    private void renderBOBJBatch(ShaderInstance shader, Texture texture, List<BOBJModelVAO.BatchDraw> batch, StencilMap stencilMap)
+    {
+        if (batch.isEmpty())
+        {
+            return;
+        }
+
+        if (texture != null)
+        {
+            BBSModClient.getTextures().bindTexture(texture);
+        }
+
+        BOBJModelVAO.renderBatch(shader, stencilMap, batch);
+        batch.clear();
     }
 
     /**
@@ -664,9 +764,13 @@ public class ModelInstance implements IModelInstance
     private void drawImmediate(MeshData mesh, ShaderInstance shader, PoseStack stack, Matrix3f normalMat,
         StencilMap stencilMap, Texture texture, float alpha)
     {
-        if (!FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha))
+        boolean bbsModelShader = shader != null && shader.getUniform("PassMode") != null;
+        boolean split = FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha);
+        boolean whole = !split && FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, alpha);
+
+        if (!split && !whole)
         {
-            BufferUploader.drawWithShader(mesh);
+            drawWithStableModelColor(mesh, shader, bbsModelShader);
             return;
         }
 
@@ -676,21 +780,94 @@ public class ModelInstance implements IModelInstance
 
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
 
-        if (normalMat != null && shader.getUniform("NormalMat") != null)
+        if (split && normalMat != null && shader.getUniform("NormalMat") != null)
         {
             shader.getUniform("NormalMat").set(normalMat);
         }
 
-        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
-        buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), shader);
-        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+        if (split)
+        {
+            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
+            drawWithStableModelColor(buffer, shader, modelView, bbsModelShader);
+            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+        }
         VertexBuffer.unbind();
 
         Vector3f origin = modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f()));
-        /* Depth stays on: this is solid geometry, so its semi-transparent texels must occlude
-         * the ones behind them inside the same model — see the split constructors' note. */
-        FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
-            true, texture, modelView, normalMat, origin, this.isCulling(), null, null));
+        if (split)
+        {
+            /* Depth stays on: this is solid geometry, so its semi-transparent texels must occlude
+             * the ones behind them inside the same model. */
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_TRANSLUCENT, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, true));
+        }
+        else if (texture != null && texture.hasTranslucency())
+        {
+            /* Keep texture-opaque texels as the depth/blend base for faded overlays. */
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, false));
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, true));
+        }
+        else
+        {
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_SINGLE, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, true));
+        }
+    }
+
+    /**
+     * BBS model vertices already contain the complete form/bone tint. Keep the global shader colour
+     * neutral while vanilla's buffer helpers copy it into {@code ColorModulator}; otherwise a UI or
+     * glint draw that left a zero channel behind darkens the whole model when its alpha changes.
+     */
+    private static void drawWithStableModelColor(MeshData mesh, ShaderInstance shader, boolean bbsModelShader)
+    {
+        float[] previous = bbsModelShader ? RenderSystem.getShaderColor().clone() : null;
+
+        if (bbsModelShader)
+        {
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+        }
+
+        try
+        {
+            BufferUploader.drawWithShader(mesh);
+        }
+        finally
+        {
+            if (previous != null)
+            {
+                RenderSystem.setShaderColor(previous[0], previous[1], previous[2], previous[3]);
+            }
+        }
+    }
+
+    private static void drawWithStableModelColor(VertexBuffer buffer, ShaderInstance shader,
+        Matrix4f modelView, boolean bbsModelShader)
+    {
+        float[] previous = bbsModelShader ? RenderSystem.getShaderColor().clone() : null;
+
+        if (bbsModelShader)
+        {
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+        }
+
+        try
+        {
+            buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), shader);
+        }
+        finally
+        {
+            if (previous != null)
+            {
+                RenderSystem.setShaderColor(previous[0], previous[1], previous[2], previous[3]);
+            }
+        }
     }
 
     /**

@@ -550,6 +550,31 @@ public final class ThemeCoreTest
         assertTrue(BBSSettings.migrateLegacySettings(root), "integer motion easing migration reports a change");
         assertEquals("exp_out", root.getMap("skins").getString("motion_easing"), "legacy snappy mode becomes exp_out");
         assertTrue(!BBSSettings.migrateLegacySettings(root), "string motion interpolation does not migrate twice");
+
+        root = DataToString.mapFromString("{"
+            + "\"editor\":{\"speed\":2,\"guides_color\":17,\"duration\":90,\"layout\":{\"preset\":3}},"
+            + "\"appearance\":{\"clip_auto_name\":false},"
+            + "\"personalization\":{\"track_width\":4},"
+            + "\"dc\":{\"enabled\":false},"
+            + "\"shader_curves\":{\"enabled\":false},"
+            + "\"multiskin\":{\"multithreaded\":false},"
+            + "\"entity_selectors\":{\"whitelist\":\"Name\"}"
+            + "}");
+        assertTrue(BBSSettings.migrateLegacySettings(root), "split settings migration reports a change");
+        assertEquals(2, root.getMap("camera").getInt("speed"), "camera value moves out of editor");
+        assertEquals(17, root.getMap("viewport").getInt("guides_color"), "viewport value moves out of editor");
+        assertEquals(90, root.getMap("timeline").getInt("duration"), "timeline value moves out of editor");
+        assertTrue(root.getMap("workspace").has("layout"), "workspace layout moves out of editor");
+        assertTrue(!root.getMap("workspace").getBool("clip_auto_name", true), "workspace receives appearance value");
+        assertEquals(4, root.getMap("timeline").getInt("track_width"), "timeline receives personalization value");
+        assertTrue(!root.getMap("misc").getBool("damage_control", true), "misc receives damage control");
+        assertTrue(!root.getMap("misc").getBool("shader_curves", true), "misc receives shader curves");
+        assertTrue(!root.getMap("misc").getBool("multiskin_multithreaded", true), "misc receives multiskin setting");
+        assertEquals("Name", root.getMap("misc").getString("entity_selectors_whitelist"), "misc receives selector whitelist");
+
+        root = DataToString.mapFromString("{ \"editor\": { \"speed\": 2 }, \"camera\": { \"speed\": 7 } }");
+        BBSSettings.migrateLegacySettings(root);
+        assertEquals(7, root.getMap("camera").getInt("speed"), "existing split setting wins over legacy value");
     }
 
     /**

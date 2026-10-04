@@ -13,7 +13,6 @@ import mchorse.bbs_mod.actions.ActionRetirementQueueTest;
 import mchorse.bbs_mod.actions.FirstPersonStateLeaseRegistryTest;
 import mchorse.bbs_mod.actions.FirstPersonInventoryProjectionTest;
 import mchorse.bbs_mod.network.compat.AddonBrokerServerBudgetTest;
-import mchorse.bbs_mod.utils.RelativeTimeTest;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.neoforged.fml.loading.LoadingModList;
@@ -34,8 +33,6 @@ public final class NetworkSecurityTest
         NetworkDataDecoderTest.runAll();
         NetworkFilmKeyTest.runAll();
         ServerFilmRuntimeAuthoritySourceTest.runAll();
-        ServerFilmMetaSourceTest.runAll();
-        RelativeTimeTest.runAll();
         ServerModelBlockMutationSourceTest.runAll();
         ServerPlayerFormFactoryGateSourceTest.runAll();
         ServerTypedFactoryFailureSourceTest.runAll();

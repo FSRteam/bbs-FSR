@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.camera.clips.misc;
 
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
+import mchorse.bbs_mod.camera.clips.CameraPoseClip;
 import mchorse.bbs_mod.camera.clips.modifiers.TrackerClip;
 import mchorse.bbs_mod.camera.data.Angle;
 import mchorse.bbs_mod.camera.data.Point;
@@ -12,7 +13,7 @@ import org.joml.Vector3d;
 
 import java.util.List;
 
-public class TrackerClientClip extends TrackerClip
+public class TrackerClientClip extends TrackerClip implements CameraPoseClip
 {
     /**
      * Position produced by the clips underneath at the tick this clip was last

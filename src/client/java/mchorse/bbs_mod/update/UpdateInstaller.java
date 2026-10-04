@@ -7,6 +7,9 @@ import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.utils.net.Hashes;
+import mchorse.bbs_mod.utils.net.HttpTransfer;
+import mchorse.bbs_mod.utils.net.SharedHttp;
 import net.minecraft.client.Minecraft;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
@@ -14,22 +17,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.stream.Stream;
 
 /**
- * In-game self updater: downloads the release jar, verifies its SHA-256
- * against the pushed hash, then swaps it with the running mod file — the
- * running jar is renamed to {@code *.jar.pre-update} (Windows allows
- * renaming open files) and the download takes its place. The user picks up
- * the new build on the next game start; stale {@code .pre-update} backups
- * are swept on later startups.
+ * In-game self updater: downloads the release jar through the shared
+ * download kernel (streamed to disk, SHA-256 digested during the transfer,
+ * capped), then swaps it with the running mod file — the running jar is
+ * renamed to {@code *.jar.pre-update} (Windows allows renaming open files)
+ * and the download takes its place. The user picks up the new build on the
+ * next game start; stale {@code .pre-update} backups are swept on later
+ * startups.
  *
  * <p>Only offered in a production environment with a hash-pinned release:
  * without the hash the popup falls back to the plain download link.
@@ -42,6 +44,7 @@ public class UpdateInstaller
     private static final String BACKUP_SUFFIX = ".jar.pre-update";
 
     private static volatile boolean cleanedUp;
+    private static volatile double downloadProgress = -1D;
 
     public static boolean canAutoInstall(FSRUpdates.Release release)
     {
@@ -49,6 +52,17 @@ public class UpdateInstaller
             && release != null
             && !release.sha256.isEmpty()
             && release.url.startsWith("https://");
+    }
+
+    /** 0..1 while a jar download is running, negative otherwise. */
+    public static double progress()
+    {
+        return downloadProgress;
+    }
+
+    public static boolean isDownloading()
+    {
+        return downloadProgress >= 0D;
     }
 
     public static void install(UIContext context, FSRUpdates.Release release)
@@ -66,11 +80,16 @@ public class UpdateInstaller
 
             try
             {
-                byte[] bytes = httpGet(release.url);
+                MessageDigest digest = Hashes.digest("SHA-256");
 
-                Files.write(temp, bytes);
+                HttpTransfer.download(SharedHttp.get(), URI.create(release.url), temp, -1L, MAX_JAR_BYTES,
+                    "BBS-FSR-Updates/" + FSRUpdates.currentVersion(), digest,
+                    (downloaded, total, speed, eta) ->
+                    {
+                        downloadProgress = total > 0L ? Math.min(1D, (double) downloaded / total) : -1D;
+                    });
 
-                String hash = sha256(bytes);
+                String hash = HexFormat.of().formatHex(digest.digest());
 
                 if (!hash.equals(release.sha256))
                 {
@@ -96,6 +115,10 @@ public class UpdateInstaller
                 {}
 
                 Minecraft.getInstance().execute(() -> notify(context, L10n.lang("bbs.updates.notify_download_failed").format(e.getMessage()).get(), true));
+            }
+            finally
+            {
+                downloadProgress = -1D;
             }
         });
     }
@@ -241,65 +264,6 @@ public class UpdateInstaller
     private static String sanitize(String version)
     {
         return version.replaceAll("[^a-zA-Z0-9.\\-]", "_");
-    }
-
-    private static byte[] httpGet(String url) throws IOException
-    {
-        HttpURLConnection connection = null;
-
-        try
-        {
-            connection = (HttpURLConnection) new URL(url).openConnection();
-            connection.setConnectTimeout(15_000);
-            connection.setReadTimeout(30_000);
-            connection.setRequestProperty("User-Agent", "BBS-FSR-Updates");
-
-            int code = connection.getResponseCode();
-
-            if (code != 200)
-            {
-                throw new IOException("HTTP " + code);
-            }
-
-            try (InputStream in = connection.getInputStream())
-            {
-                byte[] bytes = in.readNBytes((int) MAX_JAR_BYTES + 1);
-
-                if (bytes.length > MAX_JAR_BYTES)
-                {
-                    throw new IOException("payload too large");
-                }
-
-                return bytes;
-            }
-        }
-        finally
-        {
-            if (connection != null)
-            {
-                connection.disconnect();
-            }
-        }
-    }
-
-    private static String sha256(byte[] bytes)
-    {
-        try
-        {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            StringBuilder builder = new StringBuilder();
-
-            for (byte b : digest.digest(bytes))
-            {
-                builder.append(String.format("%02x", b));
-            }
-
-            return builder.toString();
-        }
-        catch (Exception e)
-        {
-            return "";
-        }
     }
 
     private static void notify(UIContext context, String message, boolean error)

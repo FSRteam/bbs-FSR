@@ -15,7 +15,7 @@ public final class FSRUpdatesSourceTest
     private static final Path CHECKER = Path.of("src/client/java/mchorse/bbs_mod/update/FSRUpdates.java");
     private static final Path POPUP = Path.of("src/client/java/mchorse/bbs_mod/update/UIUpdateOverlayPanel.java");
     private static final Path INSTALLER = Path.of("src/client/java/mchorse/bbs_mod/update/UpdateInstaller.java");
-    private static final Path WORKER = Path.of("../../film-home-publisher/worker/worker.js");
+    private static final Path WORKER = Path.of("../film-home-publisher/worker/worker.js");
     private static final Path EN_US = Path.of("src/client/resources/assets/bbs/assets/strings/en_us.json");
     private static final Path ZH_CN = Path.of("src/client/resources/assets/bbs/assets/strings/zh_cn.json");
 
@@ -89,4 +89,11 @@ public final class FSRUpdatesSourceTest
 
     private FSRUpdatesSourceTest()
     {}
+
+    public static void main(String[] args) throws IOException
+    {
+        runAll();
+
+        System.out.println("FSRUpdatesSourceTest: all tests passed");
+    }
 }

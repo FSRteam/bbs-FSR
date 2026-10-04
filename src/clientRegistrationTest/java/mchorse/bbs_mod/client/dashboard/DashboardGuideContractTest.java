@@ -1,13 +1,19 @@
 package mchorse.bbs_mod.client.dashboard;
 
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchors;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelIds;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Source-level guard for the public ids and their real Dashboard registration points. */
 public final class DashboardGuideContractTest
@@ -59,17 +65,122 @@ public final class DashboardGuideContractTest
             "panel-button anchors are no longer registered with built-in panels");
         check(dashboard.contains("BBSDashboardAnchors.panelContent(id)"),
             "panel-content anchors are no longer registered with built-in panels");
-        check(dashboard.contains("BBSDashboardAnchors.MORPHING_PALETTE")
-                && dashboard.contains("BBSDashboardAnchors.MORPHING_DEMORPH")
-                && dashboard.contains("BBSDashboardAnchors.MORPHING_FROM_MOB"),
-            "ch01-ch05 Morphing anchors are incomplete");
-        check(dashboard.contains("BBSDashboardAnchors.SETTINGS")
-                && dashboard.contains("BBSDashboardAnchors.SELECTORS"),
-            "Dashboard chrome anchors are incomplete");
+        verifyAnchorRegistrationSet(dashboard);
+        check(dashboard.contains("dashboardAnchors.putIfAbsent(anchorId, new AnchorTarget(panelId, element))"),
+            "Dashboard anchor registration no longer preserves duplicate-id protection");
+        check(dashboard.contains("throw new IllegalStateException(\"Duplicate Dashboard anchor id: \" + anchorId)"),
+            "Dashboard anchor registration no longer fails hard on duplicate ids");
         check(dashboard.contains("this.getRoot().addBefore(this.overlay, this.addonOverlayLayer);"),
             "addon guide layer is no longer below modal UIOverlay content");
         check(dashboard.contains("BBSDashboardOverlayHostRegistry.installAll(this);"),
             "Dashboard construction no longer installs registered guide overlays");
+    }
+
+    private static void verifyAnchorRegistrationSet(String dashboard)
+    {
+        Set<String> constants = new LinkedHashSet<>();
+
+        for (Field field : BBSDashboardAnchors.class.getDeclaredFields())
+        {
+            int modifiers = field.getModifiers();
+
+            if (field.getType() == String.class
+                    && Modifier.isPublic(modifiers)
+                    && Modifier.isStatic(modifiers)
+                    && Modifier.isFinal(modifiers))
+            {
+                constants.add(field.getName());
+            }
+        }
+
+        Pattern registrationPattern = Pattern.compile(
+            "registerAnchor\\(BBSDashboardAnchors\\.([A-Z0-9_]+),\\s*([^,]+),"
+        );
+        Matcher matcher = registrationPattern.matcher(dashboard);
+        Map<String, String> registrations = new LinkedHashMap<>();
+
+        while (matcher.find())
+        {
+            String name = matcher.group(1);
+            String panelId = matcher.group(2).trim();
+
+            check(constants.contains(name), "UIDashboard registers an unknown Dashboard anchor: " + name);
+            check(registrations.put(name, panelId) == null, "Dashboard anchor is registered more than once: " + name);
+        }
+
+        check(registrations.keySet().equals(constants),
+            "BBSDashboardAnchors constants and UIDashboard registrations drifted apart: constants="
+                + constants + ", registrations=" + registrations.keySet());
+
+        for (Field field : BBSDashboardAnchors.class.getDeclaredFields())
+        {
+            int modifiers = field.getModifiers();
+
+            if (field.getType() != String.class
+                    || !Modifier.isPublic(modifiers)
+                    || !Modifier.isStatic(modifiers)
+                    || !Modifier.isFinal(modifiers))
+            {
+                continue;
+            }
+
+            String value;
+
+            try
+            {
+                value = (String) field.get(null);
+            }
+            catch (ReflectiveOperationException error)
+            {
+                throw new AssertionError("could not read Dashboard anchor constant " + field.getName(), error);
+            }
+
+            String prefix = value.substring(0, value.indexOf('.'));
+            String registration = registrations.get(field.getName());
+
+            if ("dashboard".equals(prefix))
+            {
+                check("null".equals(registration),
+                    "Dashboard chrome anchor must not have a panel id: " + field.getName());
+            }
+            else
+            {
+                String panelConstant = panelConstantFor(prefix);
+                check(("BBSDashboardPanelIds." + panelConstant).equals(registration),
+                    "Dashboard anchor has the wrong panel id: " + field.getName()
+                        + " expected " + panelConstant + " but found " + registration);
+            }
+        }
+    }
+
+    private static String panelConstantFor(String panelId)
+    {
+        for (Field field : BBSDashboardPanelIds.class.getDeclaredFields())
+        {
+            int modifiers = field.getModifiers();
+
+            if (field.getType() != String.class
+                    || !Modifier.isPublic(modifiers)
+                    || !Modifier.isStatic(modifiers)
+                    || !Modifier.isFinal(modifiers))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (panelId.equals(field.get(null)))
+                {
+                    return field.getName();
+                }
+            }
+            catch (ReflectiveOperationException error)
+            {
+                throw new AssertionError("could not read Dashboard panel id " + field.getName(), error);
+            }
+        }
+
+        throw new AssertionError("unknown Dashboard panel id prefix: " + panelId);
     }
 
     private static int count(String source, String marker)

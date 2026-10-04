@@ -89,6 +89,8 @@ public class FilmEditorController extends BaseFilmController
             replay.applyClientActions(ticks, entity, this.film);
         }
 
+        this.applyReplayItemUse(replay, ticks, entity);
+
         if (entity == this.controller.getControlled() && this.controller.isRecording() && this.controller.panel.getRunner().isRunning())
         {
             replay.keyframes.record(this.controller.panel.getCursor(), entity, groups);

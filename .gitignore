@@ -54,4 +54,3 @@ javac.*.args
 
 # local temporary compile/test material
 /temp/
-temp-shots/ 

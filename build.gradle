@@ -387,11 +387,19 @@ repositories {
     /* Optional GeckoLib for Iron's Spellbooks / Iron's Lib armor rendering.
      * compileOnly only: the runtime jar never embeds gecko, and the armor branch
      * is guarded by a Class.forName presence probe so a BBS install without
-     * GeckoLib behaves exactly as before. */
-    maven {
-        name = 'GeckoLib Cloudsmith'
-        url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
-        content { includeGroup 'software.bernie.geckolib' }
+     * GeckoLib behaves exactly as before. Exclusive because the artifact is
+     * not published on the NeoForge maven at all — a hard network error while
+     * probing that repo must never abort GeckoLib resolution. */
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'GeckoLib Cloudsmith'
+                url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+            }
+        }
+        filter {
+            includeGroup 'software.bernie.geckolib'
+        }
     }
 }
 
@@ -449,6 +457,14 @@ tasks.register('testFFMpegDownload', JavaExec) {
     dependsOn tasks.named('compileJava'), tasks.named('ffmpegDownloadTestClasses')
     classpath = sourceSets.ffmpegDownloadTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.utils.FFMpegDownloadManagerTest'
+}
+
+tasks.register('testFSRUpdates', JavaExec) {
+    group = 'verification'
+    description = 'Runs FSR update checker/installer logic and push-platform contract regressions.'
+    dependsOn tasks.named('clientClasses'), tasks.named('filmEditorTestClasses')
+    classpath = sourceSets.filmEditorTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.update.FSRUpdatesSourceTest'
 }
 
 tasks.register('testMatrixUtils', JavaExec) {
@@ -655,6 +671,7 @@ def bbsVerificationTaskNames = [
     'testThemeCore',
     'testUiMotions',
     'testFolderManagerContainment',
+    'testFSRUpdates',
     'testInteractionActions',
     'testNetworkSecurity',
     'testAddonLifecycle',

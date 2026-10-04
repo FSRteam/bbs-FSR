@@ -57,6 +57,7 @@ public class ActionPlayer
     private final boolean allowFirstPersonState;
     private final FirstPersonStateLeaseRegistry.Lease<ServerPlayer> firstPersonLease;
     private ServerLevel level;
+    private final SuperFakePlayer fakePlayer;
     private int duration;
 
     private Map<String, LivingEntity> actors = new HashMap<>();
@@ -176,6 +177,7 @@ public class ActionPlayer
         }
 
         this.level = level;
+        this.fakePlayer = SuperFakePlayer.create(level);
         this.film = film;
         this.tick = tick;
         this.countdown = countdown;
@@ -844,7 +846,6 @@ public class ActionPlayer
             return;
         }
 
-        SuperFakePlayer fakePlayer = SuperFakePlayer.get(this.level);
         List<Replay> list = this.film.replays.getList();
 
         ActionCommandContext.withRequester(this.requester, () ->
@@ -886,7 +887,7 @@ public class ActionPlayer
                 {
                     return replay.applyActions(
                         actor,
-                        fakePlayer,
+                            this.fakePlayer,
                         this.film,
                         this.tick,
                         () -> this.hasRuntimeAuthority(authorityRequired)
@@ -901,6 +902,10 @@ public class ActionPlayer
                 }
             }
         })));
+
+        /* Chests the clips of this tick still hold open go up, the rest come
+         * down - including when the film was scrubbed rather than played */
+        this.fakePlayer.flushLids();
     }
 
     public void syncData(DataPath key, BaseType data)
@@ -1121,10 +1126,17 @@ public class ActionPlayer
         this.requestStop();
 
         ActionTeardown.runAll(
+            this::closeAllContainerLids,
             this::discardCurrentActors,
             this::restoreFirstPersonState,
             this::clearAllBreakProgressSessions
         );
+    }
+
+    /** Nothing asks for a lid any more, so every one the film opened closes. */
+    private void closeAllContainerLids()
+    {
+        this.fakePlayer.flushLids();
     }
 
     private void requestFullResync()

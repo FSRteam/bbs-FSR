@@ -1,9 +1,7 @@
 package mchorse.bbs_mod.ui.film.home;
 
 import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.graphics.texture.Texture;
-import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.resources.Pixels;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -73,9 +71,9 @@ public class WebImages
     {}
 
     /**
-     * Resolves a content image reference: http(s) URLs go through the async
-     * web cache (null while pending), anything else loads through the asset
-     * provider ({@code film_home/} relative). Null also means "not ready".
+     * Resolves a remote content image through the async web cache. Local asset
+     * paths are intentionally rejected because film-home editorial content is
+     * delivered entirely by the remote publisher.
      */
     public static Texture resolve(String image)
     {
@@ -84,21 +82,7 @@ public class WebImages
             return null;
         }
 
-        if (isRemote(image))
-        {
-            return get(image);
-        }
-
-        try
-        {
-            Texture texture = BBSModClient.getTextures().getTexture(Link.assets("film_home/" + image), GL11.GL_NEAREST, true);
-
-            return texture == BBSModClient.getTextures().getError() ? null : texture;
-        }
-        catch (Exception e)
-        {
-            return null;
-        }
+        return isRemote(image) ? get(image) : null;
     }
 
     /** Whether this reference should currently show its loading animation. */

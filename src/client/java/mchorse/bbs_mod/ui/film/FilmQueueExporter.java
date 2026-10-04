@@ -162,7 +162,7 @@ public class FilmQueueExporter
     private void beginRecordingCurrent(UIContext context)
     {
         Film film = this.panel.getData();
-        int duration = film.camera.calculateDuration();
+        int duration = film.calculateDuration();
 
         if (duration <= 0)
         {

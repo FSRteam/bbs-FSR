@@ -10,6 +10,12 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 public class IntegerKeyframeFactory implements IKeyframeFactory<Integer>
 {
     @Override
+    public boolean isStepped()
+    {
+        return true;
+    }
+
+    @Override
     public Integer fromData(BaseType data)
     {
         return data.isNumeric() ? data.asNumeric().intValue() : 0;

@@ -2,6 +2,7 @@ package mchorse.bbs_mod.client.renderer.entity;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.cubic.render.vanilla.ArmorRenderer;
+import mchorse.bbs_mod.client.renderer.DeathPose;
 import mchorse.bbs_mod.client.renderer.MorphRenderer;
 import mchorse.bbs_mod.film.FilmActorTimeline;
 import mchorse.bbs_mod.entity.ActorEntity;
@@ -31,6 +32,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         armorRenderer = new ArmorRenderer(
             new HumanoidModel<>(ctx.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
             new HumanoidModel<>(ctx.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
+            ctx.bakeLayer(ModelLayers.ELYTRA),
             ctx.getModelManager()
         );
 
@@ -81,11 +83,6 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
             matrices.mulPose(Axis.YP.rotationDegrees(-bodyYaw));
         }
 
-        if (entity.deathTime > 0)
-        {
-            float deathAngle = (entity.deathTime + tickDelta - 1F) / 20F * 1.6F;
-
-            matrices.mulPose(Axis.ZP.rotationDegrees(Math.min(Mth.sqrt(deathAngle), 1F) * 90F));
-        }
+        DeathPose.apply(matrices, entity.deathTime, tickDelta);
     }
 }

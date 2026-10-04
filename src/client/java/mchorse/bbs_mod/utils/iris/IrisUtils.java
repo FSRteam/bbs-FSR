@@ -24,9 +24,12 @@ import net.irisshaders.iris.pbr.loader.PBRTextureLoaderRegistry;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.FloatCachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.IntCachedUniform;
+import net.irisshaders.iris.vertices.ImmediateState;
+import net.irisshaders.iris.vertices.IrisExtendedBufferBuilder;
 import net.irisshaders.iris.vertices.NormI8;
 import net.irisshaders.iris.vertices.NormalHelper;
 import net.irisshaders.iris.vertices.views.TriView;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -190,6 +193,59 @@ public class IrisUtils
     public static boolean isShadowPass()
     {
         return IrisApi.getInstance().isRenderingShadowPass();
+    }
+
+    /**
+     * Keep Iris' upload-time vertex format in sync with the actual builder. Iris 1.8.8
+     * temporarily enables its extended entity stride while the world is rendered, but
+     * vanilla builders still contain the 36-byte entity format. Uploading one of those
+     * builders with the extended flag set makes the later VAO read the wrong offsets,
+     * which presents as black/missing materials or torn geometry.
+     */
+    public static boolean beginBufferUpload(BufferBuilder builder)
+    {
+        boolean previous = ImmediateState.renderWithExtendedVertexFormat;
+
+        if (builder instanceof IrisExtendedBufferBuilder extended && !extended.iris$extending())
+        {
+            ImmediateState.renderWithExtendedVertexFormat = false;
+        }
+
+        return previous;
+    }
+
+    public static void endBufferUpload(boolean previous)
+    {
+        ImmediateState.renderWithExtendedVertexFormat = previous;
+    }
+
+    /**
+     * Read the vertex layout Iris currently pins around a buffer being flushed. Iris picks that
+     * layout twice: the buffer's own format when the render layer begins (extended — tangents and
+     * mid-texture coordinates — only while the level renders), and the vertex array layout again
+     * at draw time, where a plain entity format is set up with the <em>extended</em> stride
+     * whenever {@code ImmediateState.renderWithExtendedVertexFormat} is up. The two agree inside
+     * the layer's own flush (Iris drops the flag there for plain buffers), so a snapshot taken
+     * there describes the mesh honestly.
+     */
+    public static boolean captureBufferLayout()
+    {
+        return ImmediateState.renderWithExtendedVertexFormat;
+    }
+
+    /**
+     * Force the layout flag for a deferred draw and return the previous value. Anything that
+     * uploads and draws a captured mesh outside the flush it was captured in has to keep the
+     * pair honest, or the vertex array reads vanilla 36 byte vertices at the extended stride and
+     * the geometry tears into a fan of stretched triangles.
+     */
+    public static boolean applyBufferLayout(boolean extended)
+    {
+        boolean previous = ImmediateState.renderWithExtendedVertexFormat;
+
+        ImmediateState.renderWithExtendedVertexFormat = extended;
+
+        return previous;
     }
 
     public static float[] calculateTangents(float[] v, float[] n, float[] u)

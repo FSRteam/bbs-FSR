@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.compat.ClientApiCompat;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
+import mchorse.bbs_mod.client.renderer.ModelBlockRenderLastQueue;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
@@ -157,10 +158,26 @@ public final class BBSClientNeoEvents
                 return;
             }
 
+            /* The block-entity pass runs right after this stage — open the render-last
+             * scope so render-last model blocks defer into the queue instead of drawing. */
+            ModelBlockRenderLastQueue.begin();
+
             BBSModClient.onRenderAfterEntities(createWorldRenderContext(event, stack));
+        }
+        else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES)
+        {
+            /* Replay deferred render-last model blocks after every block entity has drawn,
+             * before the translucent terrain boundary — matching Blockbuster's renderLastEntities.
+             * Each entry replays through the pose stack captured at enqueue time, so the
+             * event's own camera-relative stack is not used here. */
+            ModelBlockRenderLastQueue.flush(Minecraft.getInstance().renderBuffers().bufferSource());
         }
         else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL)
         {
+            /* Safety net: a frame that never reached AFTER_BLOCK_ENTITIES (a mod redirecting
+             * the stage, an exception mid-render) must not leak entries into the next frame. */
+            ModelBlockRenderLastQueue.release();
+
             BBSModClient.onRenderAfterLevel();
 
             if (!ClientApiCompat.hasLastHandlers())

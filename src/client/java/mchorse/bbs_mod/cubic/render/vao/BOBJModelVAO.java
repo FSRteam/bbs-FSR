@@ -14,8 +14,14 @@ import org.joml.Vector4f;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30;
 
+import java.util.List;
+
 public class BOBJModelVAO
 {
+    public static record BatchDraw(BOBJModelVAO vao, Matrix4f modelView, Matrix3f normalMat,
+        float r, float g, float b, float a, int light, int overlay)
+    {}
+
     public BOBJLoader.CompiledData data;
     public BOBJArmature armature;
 
@@ -152,6 +158,16 @@ public class BOBJModelVAO
         return this.uploadCount;
     }
 
+    /**
+     * Whether the live armature differs from this mesh's last GPU upload. The model-level BOBJ
+     * render asks one mesh and applies the answer to every mesh, since they all uploaded from the
+     * same shared armature array.
+     */
+    public boolean hasBOBJArmatureChanged(Matrix4f[] matrices)
+    {
+        return this.hasArmatureChanged(matrices);
+    }
+
     public Matrix4f[] snapshotArmature()
     {
         Matrix4f[] snapshot = new Matrix4f[this.armature.matrices.length];
@@ -167,7 +183,25 @@ public class BOBJModelVAO
 
     public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices)
     {
+        boolean armatureChanged = false;
+
         if (this.hasArmatureChanged(matrices))
+        {
+            armatureChanged = true;
+        }
+
+        this.updateMesh(stencilMap, matrices, armatureChanged);
+    }
+
+    /**
+     * Update using a model-level armature comparison. The caller can compare the shared pose once
+     * for all BOBJ meshes instead of repeating the same bone walk for every material mesh.
+     */
+    public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices, boolean armatureChanged)
+    {
+        if (armatureChanged || this.uploadedMatrices == null
+            || matrices == null && this.uploadedMatrices.length != 0
+            || matrices != null && matrices.length != this.uploadedMatrices.length)
         {
             this.updateGeometry(matrices);
             this.rememberArmature(matrices);
@@ -359,6 +393,34 @@ public class BOBJModelVAO
 
         shader.apply();
 
+        try
+        {
+            this.renderBound(shader, r, g, b, a, stencilMap, light, overlay);
+        }
+        finally
+        {
+            shader.clear();
+
+            GL30.glBindVertexArray(currentVAO);
+            GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
+        }
+    }
+
+    /** Draw this mesh while the caller owns the shader lifetime and GL restore boundary. */
+    public void renderBound(ShaderInstance shader, float r, float g, float b, float a,
+        StencilMap stencilMap, int light, int overlay)
+    {
+        if (shader == null)
+        {
+            return;
+        }
+
+        boolean hasShaders = BBSRendering.isIrisShadersEnabled();
+
+        GL30.glVertexAttrib4f(Attributes.COLOR, r, g, b, a);
+        GL30.glVertexAttribI2i(Attributes.OVERLAY_UV, overlay & '\uffff', overlay >> 16 & '\uffff');
+        GL30.glVertexAttribI2i(Attributes.LIGHTMAP_UV, light & '\uffff', light >> 16 & '\uffff');
+
         GL30.glBindVertexArray(this.vao);
 
         GL30.glEnableVertexAttribArray(Attributes.POSITION);
@@ -378,10 +440,41 @@ public class BOBJModelVAO
         if (stencilMap != null) GL30.glDisableVertexAttribArray(Attributes.LIGHTMAP_UV);
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.TANGENTS);
         if (hasShaders) GL30.glDisableVertexAttribArray(Attributes.MID_TEXTURE_UV);
+    }
 
-        shader.clear();
+    public static void renderBatch(ShaderInstance shader, StencilMap stencilMap, List<BatchDraw> draws)
+    {
+        if (shader == null || draws == null || draws.isEmpty())
+        {
+            return;
+        }
 
-        GL30.glBindVertexArray(currentVAO);
-        GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
+        int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
+        int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
+        BatchDraw first = draws.get(0);
+
+        ModelVAORenderer.setupUniforms(shader, first.modelView(), first.normalMat());
+        shader.apply();
+
+        try
+        {
+            for (int i = 0; i < draws.size(); i++)
+            {
+                BatchDraw draw = draws.get(i);
+
+                if (i > 0)
+                {
+                    ModelVAORenderer.uploadDrawUniforms(shader, draw.modelView(), draw.normalMat());
+                }
+
+                draw.vao().renderBound(shader, draw.r(), draw.g(), draw.b(), draw.a(), stencilMap, draw.light(), draw.overlay());
+            }
+        }
+        finally
+        {
+            shader.clear();
+            GL30.glBindVertexArray(currentVAO);
+            GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
+        }
     }
 }

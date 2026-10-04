@@ -2,6 +2,7 @@ package mchorse.bbs_mod.forms;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.shaders.Uniform;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
@@ -12,6 +13,8 @@ import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Transform;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.GraphicsStatus;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -40,6 +43,9 @@ public final class FormTranslucentQueue
     public static final int PASS_SINGLE = 0;
     public static final int PASS_OPAQUE = 1;
     public static final int PASS_TRANSLUCENT = 2;
+    /** Texture-alpha partition used while a uniformly faded model is replayed. */
+    public static final int PASS_TEX_OPAQUE = 3;
+    public static final int PASS_TEX_TRANSLUCENT = 4;
 
     private static final List<DrawCommand> commands = new ArrayList<>();
     private static boolean active;
@@ -57,13 +63,13 @@ public final class FormTranslucentQueue
     public static void begin()
     {
         release();
-        active = true;
+        active = BBSSettings.translucencyQueue.get();
     }
 
     /** Start a scope lazily for NeoForge's AFTER_ENTITIES form callbacks. */
     public static void ensureStarted()
     {
-        if (!active && suspensionDepth == 0)
+        if (BBSSettings.translucencyQueue.get() && !active && suspensionDepth == 0)
         {
             begin();
         }
@@ -72,6 +78,13 @@ public final class FormTranslucentQueue
     public static void end()
     {
         flush();
+    }
+
+    /** Discard an optional failed world pass before another camera starts drawing. */
+    public static void abort()
+    {
+        active = false;
+        release();
     }
 
     public static boolean suspend()
@@ -123,15 +136,18 @@ public final class FormTranslucentQueue
 
     public static boolean needsSplit(ShaderInstance shader, Object stencilMap, Texture texture, float alpha)
     {
-        boolean translucent = alpha < 1F || texture != null && texture.hasTranslucency();
-        return translucent && isActive() && stencilMap == null && shader != null && shader.getUniform("PassMode") != null;
+        return alpha >= 1F && texture != null && texture.hasTranslucency()
+            && isActive() && stencilMap == null && shader != null && shader.getUniform("PassMode") != null
+            && !BBSRendering.isIrisWorldForms();
     }
 
     public static boolean needsWholeDefer(ShaderInstance shader, Object stencilMap, Texture texture, float alpha)
     {
-        boolean translucent = alpha < 1F || texture != null && texture.hasTranslucency();
-        return translucent && isActive() && stencilMap == null && shader != null
-            && shader.getUniform("PassMode") == null && BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld();
+        /* A uniform colour fade belongs to the BBS shader's sorted path. Under
+         * Iris the owning renderer suspends this queue and lets the pack handle
+         * transparency in its own render phase. */
+        return alpha < 1F && isActive() && stencilMap == null && shader != null
+            && shader.getUniform("PassMode") != null && !BBSRendering.isIrisWorldForms();
     }
 
     public static void setPassMode(ShaderInstance shader, int mode)
@@ -166,18 +182,25 @@ public final class FormTranslucentQueue
         List<DrawCommand> pending = new ArrayList<>(commands);
         commands.clear();
         int released = 0;
-
         try
         {
             if (!pending.isEmpty())
             {
+                /* Fabulous clears vanilla's translucent targets and can leave the default
+                 * framebuffer bound here. Rebind the main target before replay so the final
+                 * Fabulous blit does not overwrite the queued forms. */
+                if (Minecraft.getInstance().options.graphicsMode().get() == GraphicsStatus.FABULOUS)
+                {
+                    Minecraft.getInstance().getMainRenderTarget().bindWrite(false);
+                }
+
                 RenderSystem.enableDepthTest();
                 RenderSystem.depthFunc(GL11.GL_LEQUAL);
-                RenderSystem.enableBlend();
-                RenderSystem.defaultBlendFunc();
 
                 for (DrawCommand command : pending)
                 {
+                    resetBlend();
+
                     /* Solid geometry keeps depth writes for correct self-occlusion — the sort
                      * already ordered the commands between forms. Flat single-quad forms don't
                      * write, so they can't occlude each other or anything drawn after this pass. */
@@ -210,6 +233,44 @@ public final class FormTranslucentQueue
         }
     }
 
+    /**
+     * Re-establish the two vanilla auxiliary samplers used by entity/model shaders.
+     *
+     * <p>The deferred queue runs after the renderer that submitted a form has finished. Every
+     * vanilla {@link RenderType} is allowed to clear its lightmap and overlay state, so opening
+     * these layers once at the beginning of {@link #flush()} is insufficient when commands are
+     * interleaved. Model commands call this immediately before capturing shader samplers and
+     * restore the same state afterwards.</p>
+     */
+    private static void setupModelSamplers()
+    {
+        Minecraft game = Minecraft.getInstance();
+
+        game.gameRenderer.lightTexture().turnOnLightLayer();
+        game.gameRenderer.overlayTexture().setupOverlayColor();
+    }
+
+    private static void teardownModelSamplers()
+    {
+        Minecraft game = Minecraft.getInstance();
+
+        game.gameRenderer.lightTexture().turnOffLightLayer();
+        game.gameRenderer.overlayTexture().teardownOverlayColor();
+    }
+
+    /**
+     * Blending is per-command state, not per-pass: a {@link RenderLayerCommand} ends with the
+     * layer's own clearRenderState, and every vanilla translucent layer disables blending there.
+     * The command replayed next — a label's background quad right after its text, a billboard
+     * after a block — would then draw with GL_BLEND off and lose its alpha entirely. Each
+     * command (and each child inside a group) starts from the same known state instead.
+     */
+    private static void resetBlend()
+    {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+    }
+
     private static void release()
     {
         for (DrawCommand command : commands) command.release();
@@ -217,6 +278,15 @@ public final class FormTranslucentQueue
         if (group != null) group.release();
         group = null;
         sortOrigin = null;
+    }
+
+    /** Camera-space normal of a quad defined in a model matrix's local z=0 plane. */
+    public static Vector3f quadPlaneNormal(Matrix4f modelView, Matrix4f modelMatrix)
+    {
+        Matrix4f full = new Matrix4f(modelView).mul(modelMatrix);
+
+        return new Vector3f(full.m00(), full.m01(), full.m02())
+            .cross(full.m10(), full.m11(), full.m12());
     }
 
     public abstract static class DrawCommand
@@ -227,7 +297,25 @@ public final class FormTranslucentQueue
 
         protected DrawCommand(Vector3f origin, boolean cull, boolean depthWrite)
         {
-            this.distanceSq = origin.lengthSquared();
+            this(origin, null, cull, depthWrite);
+        }
+
+        protected DrawCommand(Vector3f origin, Vector3f planeNormal, boolean cull, boolean depthWrite)
+        {
+            float sortKey = origin.lengthSquared();
+
+            if (planeNormal != null)
+            {
+                float normalLengthSq = planeNormal.lengthSquared();
+
+                if (normalLengthSq > 1e-12F)
+                {
+                    float dot = planeNormal.dot(origin);
+                    sortKey = dot * dot / normalLengthSq;
+                }
+            }
+
+            this.distanceSq = sortKey;
             this.cull = cull;
             this.depthWrite = depthWrite;
         }
@@ -283,11 +371,21 @@ public final class FormTranslucentQueue
         {
             ShaderInstance program = this.shader.get();
             if (program == null) return;
-            if (this.texture != null) BBSModClient.getTextures().bindTexture(this.texture);
-            setPassMode(program, this.passMode);
-            ModelVAORenderer.render(program, this.vao, this.modelView, this.normalMat,
-                this.r, this.g, this.b, this.a, this.light, this.overlay);
-            setPassMode(program, PASS_SINGLE);
+
+            setupModelSamplers();
+
+            try
+            {
+                if (this.texture != null) BBSModClient.getTextures().bindTexture(this.texture);
+                setPassMode(program, this.passMode);
+                ModelVAORenderer.render(program, this.vao, this.modelView, this.normalMat,
+                    this.r, this.g, this.b, this.a, this.light, this.overlay);
+            }
+            finally
+            {
+                setPassMode(program, PASS_SINGLE);
+                teardownModelSamplers();
+            }
         }
     }
 
@@ -416,15 +514,25 @@ public final class FormTranslucentQueue
         {
             ShaderInstance program = this.shader.get();
             if (program == null) return;
-            if (this.texture != null) BBSModClient.getTextures().bindTexture(this.texture);
-            if (this.vao.getUploadCount() != this.uploadCount)
+
+            setupModelSamplers();
+
+            try
             {
-                this.vao.updateMesh(null, this.armatureSnapshot);
+                if (this.texture != null) BBSModClient.getTextures().bindTexture(this.texture);
+                if (this.vao.getUploadCount() != this.uploadCount)
+                {
+                    this.vao.updateMesh(null, this.armatureSnapshot);
+                }
+                setPassMode(program, this.passMode);
+                this.vao.render(program, this.modelView, this.normalMat, this.r, this.g, this.b,
+                    this.a, null, this.light, this.overlay);
             }
-            setPassMode(program, this.passMode);
-            this.vao.render(program, this.modelView, this.normalMat, this.r, this.g, this.b,
-                this.a, null, this.light, this.overlay);
-            setPassMode(program, PASS_SINGLE);
+            finally
+            {
+                setPassMode(program, PASS_SINGLE);
+                teardownModelSamplers();
+            }
         }
     }
 
@@ -434,13 +542,15 @@ public final class FormTranslucentQueue
         private final VertexBuffer buffer;
         private final Matrix4f modelView;
         private final Runnable prepare;
+        private final boolean extendedLayout;
 
         public RenderLayerCommand(
             RenderType layer,
             VertexBuffer buffer,
             Matrix4f modelView,
             Vector3f origin,
-            Runnable prepare
+            Runnable prepare,
+            boolean extendedLayout
         )
         {
             /* Depth writes stay on, matching what these vanilla entity layers do when they draw
@@ -453,6 +563,7 @@ public final class FormTranslucentQueue
             this.buffer = buffer;
             this.modelView = modelView;
             this.prepare = prepare;
+            this.extendedLayout = extendedLayout;
         }
 
         @Override
@@ -472,12 +583,19 @@ public final class FormTranslucentQueue
 
                 buffer.bind();
 
+                /* Pin Iris' vertex-array layout flag to what the mesh was captured with: at this
+                 * point in the frame the flag describes whatever Iris is flushing now, and a
+                 * vanilla-format mesh drawn under a raised flag gets its 36 byte vertices read
+                 * at the extended stride — the geometry shreds into a fan of triangles. */
+                boolean previousLayout = BBSRendering.applyIrisVertexLayout(this.extendedLayout);
+
                 try
                 {
                     buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
                 }
                 finally
                 {
+                    BBSRendering.restoreIrisVertexLayout(previousLayout);
                     VertexBuffer.unbind();
                 }
             }
@@ -498,11 +616,13 @@ public final class FormTranslucentQueue
     {
         private final VertexBuffer buffer;
         private final Supplier<ShaderInstance> shader;
+        private final int passMode;
         private final Texture texture;
         private final Matrix4f modelView;
         private final Matrix3f normalMat;
         private final Runnable preDraw;
         private final Runnable postDraw;
+        private final boolean closeBuffer;
 
         /**
          * The flat-form replay: a single quad (billboard, framebuffer screen, a label's parts)
@@ -513,21 +633,49 @@ public final class FormTranslucentQueue
             Texture texture, Matrix4f modelView, Matrix3f normalMat, Vector3f origin,
             boolean cull, Runnable preDraw, Runnable postDraw)
         {
-            this(buffer, shader, false, texture, modelView, normalMat, origin, cull, preDraw, postDraw);
+            this(buffer, shader, PASS_TRANSLUCENT, false, texture, modelView, normalMat, origin, null,
+                cull, preDraw, postDraw, true);
+        }
+
+        public VertexBufferCommand(VertexBuffer buffer, Supplier<ShaderInstance> shader,
+            Texture texture, Matrix4f modelView, Matrix3f normalMat, Vector3f origin,
+            Vector3f planeNormal, boolean cull, Runnable preDraw, Runnable postDraw)
+        {
+            this(buffer, shader, PASS_TRANSLUCENT, false, texture, modelView, normalMat, origin, planeNormal,
+                cull, preDraw, postDraw, true);
         }
 
         public VertexBufferCommand(VertexBuffer buffer, Supplier<ShaderInstance> shader,
             boolean depthWrite, Texture texture, Matrix4f modelView, Matrix3f normalMat,
             Vector3f origin, boolean cull, Runnable preDraw, Runnable postDraw)
         {
-            super(origin, cull, depthWrite);
+            this(buffer, shader, PASS_TRANSLUCENT, depthWrite, texture, modelView, normalMat,
+                origin, null, cull, preDraw, postDraw, true);
+        }
+
+        public VertexBufferCommand(VertexBuffer buffer, Supplier<ShaderInstance> shader,
+            int passMode, boolean depthWrite, Texture texture, Matrix4f modelView, Matrix3f normalMat,
+            Vector3f origin, boolean cull, Runnable preDraw, Runnable postDraw, boolean closeBuffer)
+        {
+            this(buffer, shader, passMode, depthWrite, texture, modelView, normalMat, origin, null,
+                cull, preDraw, postDraw, closeBuffer);
+        }
+
+        public VertexBufferCommand(VertexBuffer buffer, Supplier<ShaderInstance> shader,
+            int passMode, boolean depthWrite, Texture texture, Matrix4f modelView, Matrix3f normalMat,
+            Vector3f origin, Vector3f planeNormal, boolean cull, Runnable preDraw, Runnable postDraw,
+            boolean closeBuffer)
+        {
+            super(origin, planeNormal, cull, depthWrite);
             this.buffer = buffer;
             this.shader = shader;
+            this.passMode = passMode;
             this.texture = texture;
             this.modelView = modelView;
             this.normalMat = normalMat;
             this.preDraw = preDraw;
             this.postDraw = postDraw;
+            this.closeBuffer = closeBuffer;
         }
 
         @Override
@@ -535,22 +683,48 @@ public final class FormTranslucentQueue
         {
             ShaderInstance program = shader.get();
             if (program == null) return;
-            if (texture != null) BBSModClient.getTextures().bindTexture(texture);
-            if (preDraw != null) preDraw.run();
-            Uniform normalUniform = program.getUniform("NormalMat");
-            if (normalUniform != null && this.normalMat != null) normalUniform.set(this.normalMat);
-            setPassMode(program, PASS_TRANSLUCENT);
-            buffer.bind();
-            buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), program);
-            VertexBuffer.unbind();
-            setPassMode(program, PASS_SINGLE);
-            if (postDraw != null) postDraw.run();
+
+            setupModelSamplers();
+
+            try
+            {
+                if (texture != null) BBSModClient.getTextures().bindTexture(texture);
+                if (preDraw != null) preDraw.run();
+                Uniform normalUniform = program.getUniform("NormalMat");
+                if (normalUniform != null && this.normalMat != null) normalUniform.set(this.normalMat);
+                setPassMode(program, this.passMode);
+                float[] previousShaderColor = RenderSystem.getShaderColor().clone();
+
+                /* CPU model vertices already carry their complete tint and alpha. VertexBuffer's
+                 * setDefaultUniforms() otherwise copies the process-wide ColorModulator, which may
+                 * have been changed by a later UI or glint draw before this command is replayed. */
+                RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+                try
+                {
+                    buffer.bind();
+                    buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), program);
+                }
+                finally
+                {
+                    VertexBuffer.unbind();
+                    setPassMode(program, PASS_SINGLE);
+                    RenderSystem.setShaderColor(previousShaderColor[0], previousShaderColor[1], previousShaderColor[2], previousShaderColor[3]);
+                    if (postDraw != null) postDraw.run();
+                }
+            }
+            finally
+            {
+                teardownModelSamplers();
+            }
         }
 
         @Override
         public void release()
         {
-            buffer.close();
+            if (this.closeBuffer)
+            {
+                buffer.close();
+            }
         }
     }
 
@@ -558,7 +732,7 @@ public final class FormTranslucentQueue
     {
         private final List<DrawCommand> children = new ArrayList<>();
         GroupCommand(Vector3f origin, boolean cull) { super(origin, cull, false); }
-        @Override public void draw() { for (DrawCommand child : children) child.draw(); }
+        @Override public void draw() { for (DrawCommand child : children) { resetBlend(); child.draw(); } }
         @Override public void release() { for (DrawCommand child : children) child.release(); }
     }
 }

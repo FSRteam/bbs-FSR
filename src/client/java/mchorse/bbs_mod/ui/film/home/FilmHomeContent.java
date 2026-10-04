@@ -1,11 +1,9 @@
 package mchorse.bbs_mod.ui.film.home;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.resources.Link;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,18 +25,18 @@ import java.util.concurrent.Executors;
  *
  * <p>Content resolution, in order of freshness:
  * <ol>
- * <li>local {@code film_home/*.json} (config override, then jar bundle) is
- * applied synchronously so the home paints instantly;</li>
+ * <li>the last successful disk cache is applied synchronously so the home can
+ * paint immediately without bundling editorial content in the mod;</li>
  * <li>remote content ({@code film_home/remote.json} URL chain) is fetched on
  * a background thread — success replaces the lists, bumps the version, is
  * persisted to the disk cache and notifies the UI callback;</li>
  * <li>when every remote URL fails, the last successful cached copy is used;
- * with no cache at all the local lists simply stay put.</li>
+ * with no cache at all the corresponding section stays empty.</li>
  * </ol>
  *
  * <p>Everything degrades silently: malformed JSON, missing files and network
  * failures never crash or throw into the UI, and all IO happens off the
- * render thread (the only synchronous work is the initial local read).
+ * render thread (the only synchronous work is the initial cache read).
  */
 public class FilmHomeContent
 {
@@ -46,7 +44,7 @@ public class FilmHomeContent
 
     public static final FilmHomeContent INSTANCE = new FilmHomeContent();
 
-    /** Where the currently displayed lists came from. */
+    /** Where the currently displayed lists came from. LOCAL means no cache yet. */
     public enum Source
     {
         LOCAL, CACHED, REMOTE
@@ -85,14 +83,9 @@ public class FilmHomeContent
         public String summary = "";
         /** Optional Markdown body rendered in the detail overlay; wins over summary. */
         public String markdown = "";
-        /** Optional path relative to film_home/, or an http(s) URL. */
+        /** Optional HTTPS image URL supplied by the remote publisher. */
         public String image = "";
         public String url = "";
-
-        public Link imageLink()
-        {
-            return WebImages.isRemote(this.image) || this.image.isEmpty() ? null : Link.assets("film_home/" + this.image);
-        }
     }
 
     /**
@@ -102,15 +95,10 @@ public class FilmHomeContent
      */
     public static class AdItem
     {
-        /** File name under film_home/, or an http(s) URL. */
+        /** HTTPS image URL supplied by the remote publisher. */
         public String image = "";
         public String link = "";
         public String markdown = "";
-
-        public Link imageLink()
-        {
-            return WebImages.isRemote(this.image) || this.image.isEmpty() ? null : Link.assets("film_home/" + this.image);
-        }
     }
 
     private static final ExecutorService POOL = Executors.newFixedThreadPool(1, (r) ->
@@ -128,40 +116,53 @@ public class FilmHomeContent
     {
         this.loaded = true;
 
-        /* Local files only seed fresh lists; once remote (or cached) content
-         * is on display a local re-read must not roll it back. */
+        /* Editorial content is remote-only. A cache gives the home an instant,
+         * offline-friendly first paint without shipping JSON or ad images. */
         if (this.adsSource == Source.LOCAL)
         {
-            this.ads = new ArrayList<>();
-
-            JsonObject json = readJson("ads.json");
-
-            if (json != null)
-            {
-                List<AdItem> items = parseAds(json);
-
-                if (!items.isEmpty())
-                {
-                    this.ads = items;
-                }
-            }
+            this.loadCached("ads");
         }
 
         if (this.newsSource == Source.LOCAL)
         {
-            this.news = new ArrayList<>();
+            this.loadCached("news");
+        }
+    }
 
-            JsonObject json = readJson("news.json");
+    private void loadCached(String kind)
+    {
+        String cached = readCache(kind);
 
-            if (json != null)
+        if (cached == null)
+        {
+            return;
+        }
+
+        try
+        {
+            JsonObject json = JsonParser.parseString(cached).getAsJsonObject();
+
+            if (!json.has("items") || !json.get("items").isJsonArray())
             {
-                List<NewsItem> items = parseNews(json);
-
-                if (!items.isEmpty())
-                {
-                    this.news = items;
-                }
+                return;
             }
+
+            if (kind.equals("ads"))
+            {
+                this.ads = parseAds(json);
+                this.adsRaw = cached;
+                this.adsSource = Source.CACHED;
+            }
+            else
+            {
+                this.news = parseNews(json);
+                this.newsRaw = cached;
+                this.newsSource = Source.CACHED;
+            }
+        }
+        catch (Exception e)
+        {
+            LOGGER.warn("[BBS-SEM] topic=film_home phase=cache result=skip reason=malformed_json kind={}", kind);
         }
     }
 
@@ -277,8 +278,8 @@ public class FilmHomeContent
             }
         }
 
-        /* Every URL failed: fall back to the last successful copy, but only
-         * when the UI is currently showing something less fresh (local). */
+        /* Every URL failed: recover a cache created after startup if the UI is
+         * still empty. Otherwise the already displayed cache remains intact. */
         if ((kind.equals("ads") ? this.adsSource : this.newsSource) == Source.LOCAL)
         {
             String cached = readCache(kind);
@@ -540,6 +541,11 @@ public class FilmHomeContent
                 item.image = string(object, "image");
                 item.url = string(object, "url");
 
+                if (!item.image.isEmpty() && !WebImages.isRemote(item.image))
+                {
+                    item.image = "";
+                }
+
                 if (!item.title.isEmpty())
                 {
                     items.add(item);
@@ -570,7 +576,7 @@ public class FilmHomeContent
                 item.link = string(object, "link");
                 item.markdown = string(object, "markdown");
 
-                if (!item.image.isEmpty())
+                if (WebImages.isRemote(item.image))
                 {
                     items.add(item);
                 }
@@ -581,8 +587,9 @@ public class FilmHomeContent
     }
 
     /**
-     * User override first ({@code config/bbs/assets/film_home/<name>}), then
-     * the jar-bundled default. Returns null when neither exists.
+     * Reads a film-home configuration JSON: user override first, then the jar
+     * default. Editorial ads and news are deliberately not read through this
+     * path; only remote configuration remains bundled.
      */
     private static JsonObject readJson(String name)
     {

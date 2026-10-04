@@ -80,6 +80,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     public UIToggle shadow;
     public UIToggle global;
     public UIToggle lookAt;
+    public UIToggle renderLast;
     public UIPropTransform transform;
 
     private final StencilFormFramebuffer gizmoStencil = new StencilFormFramebuffer();
@@ -194,12 +195,13 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             Minecraft.getInstance().levelRenderer.allChanged();
         });
         this.lookAt = new UIToggle(UIKeys.CAMERA_PANELS_LOOK_AT, (b) -> this.modelBlock.getProperties().setLookAt(b.getValue()));
+        this.renderLast = new UIToggle(UIKeys.MODEL_BLOCKS_RENDER_LAST, (b) -> this.modelBlock.getProperties().setRenderLast(b.getValue()));
 
         this.transform = new UIPropTransform();
         this.transform.enableHotkeys();
         this.transform.hotkeyDrag(this::buildGizmoDrag);
 
-        this.editor = UI.column(this.pickEdit, this.enabled, this.shadow, this.global, this.lookAt, this.transform);
+        this.editor = UI.column(this.pickEdit, this.enabled, this.shadow, this.global, this.lookAt, this.renderLast, this.transform);
 
         this.scrollView = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, this.modelBlocks, this.editor);
         this.scrollView.scroll.opposite().cancelScrolling();
@@ -595,6 +597,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.shadow.setValue(properties.isShadow());
         this.global.setValue(properties.isGlobal());
         this.lookAt.setValue(properties.isLookAt());
+        this.renderLast.setValue(properties.isRenderLast());
     }
 
     private void save(ModelBlockEntity modelBlock)

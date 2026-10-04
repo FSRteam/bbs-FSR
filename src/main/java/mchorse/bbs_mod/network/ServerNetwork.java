@@ -2682,17 +2682,7 @@ public class ServerNetwork
         });
     }
 
-    /**
-     * Batch film metadata for the client's film home list: one
-     * {@code {id, created_at, updated_at, description, duration}} entry per film.
-     *
-     * <p>Deliberately uses {@link FilmManager#loadRaw(String)} instead of
-     * {@code create}: raw maps must never reach addon clip factories here, and
-     * metadata extraction needs only plain map leaves. loadRaw is disk IO plus
-     * decompression, so a repository with several hundred films is scanned on
-     * the server thread inside the caller's {@code server.execute(...)}; per-film
-     * failures are skipped and counted (one bounded warn, no per-film logging).
-     */
+    /** Send a factory-free metadata projection for every persisted film. */
     private static void sendFilmMetaData(ServerPlayer player, int callbackId, RepositoryOperation op, FilmManager films)
     {
         ListType list = new ListType();
@@ -2727,24 +2717,14 @@ public class ServerNetwork
         if (skipped > 0)
         {
             LOGGER.warn("[BBS-SEM] topic=net.film_repository phase=meta result=partial reason=unreadable_films player={} skipped={} total={}",
-                player.getGameProfile().getName(),
-                skipped,
-                list.size());
+                player.getGameProfile().getName(), skipped, list.size());
         }
 
         sendManagerData(player, callbackId, op, list);
     }
 
-    /** Description is truncated to keep one metadata packet bounded for large repositories. */
     private static final int FILM_META_MAX_DESCRIPTION_CHARS = 120;
 
-    /**
-     * Extract one film's metadata from its raw persisted map without invoking
-     * Film or addon clip factories. Duration is derived from the camera clip
-     * list's {@code tick + duration} leaves (mirrors
-     * {@link Clips#calculateDuration()}); if the camera data is missing or has
-     * no readable clips, duration is 0.
-     */
     private static MapType filmMetaData(String id, MapType raw)
     {
         MapType meta = new MapType();
@@ -2754,9 +2734,8 @@ public class ServerNetwork
         meta.putString("updated_at", raw.getString("updated_at"));
 
         String description = raw.getString("description");
-        int length = description.length();
 
-        meta.putString("description", length > FILM_META_MAX_DESCRIPTION_CHARS
+        meta.putString("description", description.length() > FILM_META_MAX_DESCRIPTION_CHARS
             ? description.substring(0, FILM_META_MAX_DESCRIPTION_CHARS)
             : description);
         meta.putInt("duration", rawCameraDuration(raw));
@@ -2764,11 +2743,6 @@ public class ServerNetwork
         return meta;
     }
 
-    /**
-     * Max {@code tick + duration} over the raw camera clip list. Reads only
-     * integer leaves from already-deserialized maps, so it stays side-effect
-     * free and factory free.
-     */
     private static int rawCameraDuration(MapType raw)
     {
         BaseType camera = raw.get("camera");

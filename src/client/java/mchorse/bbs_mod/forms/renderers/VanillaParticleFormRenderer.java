@@ -7,6 +7,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
 import mchorse.bbs_mod.forms.forms.utils.ParticleSettings;
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.particles.vanilla.VanillaParticleScene;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -38,10 +39,16 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     private Vector3f vel = new Vector3f();
     private Matrix3f rot = new Matrix3f();
     private Matrix4f renderMatrix = new Matrix4f();
-    private Matrix4f cameraViewMatrix = new Matrix4f();
     private Vector3d renderTranslation = new Vector3d();
     private Vector3f tempOffset = new Vector3f();
     private int tick;
+    private VanillaParticleScene scene;
+    private int previewTicks;
+    private int worldRenderTicks;
+    private long lastPreviewTick = Long.MIN_VALUE;
+
+    private static final int RENDER_GRACE_TICKS = 4;
+    private static final int MAX_CATCHUP = 10;
 
     public VanillaParticleFormRenderer(VanillaParticleForm form)
     {
@@ -71,113 +78,211 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     {
         super.render3D(context);
 
-        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
         Matrix4f matrix = this.renderMatrix.set(context.camera.view).invert();
 
         matrix.mul(context.stack.last().pose());
 
         Vector3f translation = matrix.getTranslation(Vectors.TEMP_3F);
-        Vec3 cameraPosition = camera.getPosition();
-
         this.renderTranslation.set(translation.x, translation.y, translation.z);
-        this.renderTranslation.add(cameraPosition.x, cameraPosition.y, cameraPosition.z);
-        context.stack.pushPose();
-        context.stack.setIdentity();
-        context.stack.mulPose(this.cameraViewMatrix.set(context.camera.view));
+        if (context.modelRenderer)
+        {
+            this.renderTranslation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
+        }
+        else
+        {
+            Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+            Vec3 cameraPosition = camera.getPosition();
+            this.renderTranslation.add(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+            this.worldRenderTicks = RENDER_GRACE_TICKS;
+        }
 
         this.pos.set(this.renderTranslation);
         this.vel.set(0F, 0F, 1F);
         this.rot.set(matrix).transform(this.vel);
 
-        context.stack.popPose();
+        if (context.modelRenderer && !context.isPicking())
+        {
+            this.previewTicks = RENDER_GRACE_TICKS;
+            this.updatePreview(context.modelRendererTick);
+            this.getScene().render(context.camera, context.getTransition());
+        }
+    }
+
+    private VanillaParticleScene getScene()
+    {
+        if (this.scene == null)
+        {
+            this.scene = new VanillaParticleScene();
+        }
+
+        return this.scene;
+    }
+
+    private void updatePreview(long previewTick)
+    {
+        VanillaParticleScene scene = this.getScene();
+
+        if (this.lastPreviewTick == Long.MIN_VALUE)
+        {
+            this.lastPreviewTick = previewTick;
+        }
+
+        long elapsed = previewTick - this.lastPreviewTick;
+        this.lastPreviewTick = previewTick;
+
+        if (elapsed > MAX_CATCHUP)
+        {
+            scene.clear();
+            elapsed = 1;
+        }
+
+        for (long i = 0; i < elapsed; i++)
+        {
+            scene.tick();
+            this.emitTick(scene::spawn);
+        }
     }
 
     @Override
     public void tick(IEntity entity)
     {
-        Level world = entity.level();
-        boolean paused = this.form.paused.get();
-        Vector3f temp3f = this.tempOffset;
-
-        if (world != null && !paused)
+        if (this.previewTicks > 0)
         {
-            float velocity = this.form.velocity.get();
-            int count = this.form.count.get();
-            int frequency = this.form.frequency.get();
+            this.previewTicks -= 1;
+            return;
+        }
 
-            if (this.tick <= 0)
+        if (this.scene != null)
+        {
+            this.scene = null;
+            this.lastPreviewTick = Long.MIN_VALUE;
+        }
+
+        Level world = entity.level();
+        if (world == null)
+        {
+            return;
+        }
+
+        if (this.worldRenderTicks > 0)
+        {
+            this.worldRenderTicks -= 1;
+        }
+        else
+        {
+            this.updateFromEntity(entity);
+        }
+
+        this.emitTick((effect, x, y, z, velocityX, velocityY, velocityZ) ->
+            world.addParticle(effect, true, x, y, z, velocityX, velocityY, velocityZ));
+    }
+
+    private void updateFromEntity(IEntity entity)
+    {
+        Matrix4f matrix = new Matrix4f().rotateY(MathUtils.toRad(-entity.getBodyYaw()));
+
+        matrix.mul(this.createTransform().createMatrix());
+
+        Vector3f translation = matrix.getTranslation(new Vector3f());
+
+        this.pos.set(entity.getX() + translation.x, entity.getY() + translation.y, entity.getZ() + translation.z);
+        this.rot.set(matrix);
+        this.vel.set(0F, 0F, 1F);
+        this.rot.transform(this.vel);
+    }
+
+    private void emitTick(ParticleSink sink)
+    {
+        if (this.form.paused.get())
+        {
+            return;
+        }
+
+        if (this.tick <= 0)
+        {
+            this.emit(sink);
+            this.tick = this.form.frequency.get();
+        }
+
+        this.tick -= 1;
+    }
+
+    private void emit(ParticleSink sink)
+    {
+        Matrix3f m = Matrices.TEMP_3F;
+        Vector3f v = Vectors.TEMP_3F;
+        Vector3f temp3f = this.tempOffset;
+        float velocity = this.form.velocity.get();
+        int count = this.form.count.get();
+        ParticleOptions effect = this.getEffect();
+        for (int i = 0; i < count; i++)
+        {
+            float velocityX = this.vel.x * velocity;
+            float velocityY = this.vel.y * velocity;
+            float velocityZ = this.vel.z * velocity;
+            float sh = MathUtils.toRad(this.form.scatteringYaw.get()) * (float) (Math.random() - 0.5D);
+            float sv = MathUtils.toRad(this.form.scatteringPitch.get()) * (float) (Math.random() - 0.5D);
+
+            m.identity().rotateY(sh).rotateX(sv).transform(v.set(velocityX, velocityY, velocityZ));
+            temp3f.set(
+                (Math.random() * 2F - 1F) * this.form.offsetX.get(),
+                (Math.random() * 2F - 1F) * this.form.offsetY.get(),
+                (Math.random() * 2F - 1F) * this.form.offsetZ.get()
+            );
+
+            if (this.form.local.get())
             {
-                Matrix3f m = Matrices.TEMP_3F;
-                Vector3f v = Vectors.TEMP_3F;
-                ParticleSettings settings = this.form.settings.get();
-                ParticleOptions effect = ParticleTypes.FLAME;
-
-                try
-                {
-                    /* Bare id convenience: since 1.21.1 block/item particle arguments use the
-                     * {...} compound syntax, so a plain "dirt" or "apple" wouldn't parse anymore */
-                    String args = settings.arguments.trim();
-                    ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.get(settings.particle);
-                    boolean bareId = !args.isEmpty() && args.charAt(0) != '{';
-
-                    if (bareId && type == ParticleTypes.BLOCK)
-                    {
-                        effect = new BlockParticleOption(ParticleTypes.BLOCK, BuiltInRegistries.BLOCK.get(ResourceLocation.parse(args)).defaultBlockState());
-                    }
-                    else if (bareId && type == ParticleTypes.ITEM)
-                    {
-                        effect = new ItemParticleOption(ParticleTypes.ITEM, new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(args))));
-                    }
-                    else
-                    {
-                        String particle = settings.particle.toString();
-
-                        if (!settings.arguments.isEmpty())
-                        {
-                            particle += " " + settings.arguments;
-                        }
-
-                        effect = ParticleArgument.readParticle(new StringReader(particle), world.registryAccess());
-                    }
-                }
-                catch (Exception e)
-                {}
-
-                for (int i = 0; i < count; i++)
-                {
-                    float velocityX = this.vel.x * velocity;
-                    float velocityY = this.vel.y * velocity;
-                    float velocityZ = this.vel.z * velocity;
-                    float sh = MathUtils.toRad(this.form.scatteringYaw.get()) * (float) (Math.random() - 0.5D);
-                    float sv = MathUtils.toRad(this.form.scatteringPitch.get()) * (float) (Math.random() - 0.5D);
-
-                    m.identity()
-                        .rotateY(sh)
-                        .rotateX(sv)
-                        .transform(v.set(velocityX, velocityY, velocityZ));
-
-                    temp3f.set(
-                        (Math.random() * 2F - 1F) * this.form.offsetX.get(),
-                        (Math.random() * 2F - 1F) * this.form.offsetY.get(),
-                        (Math.random() * 2F - 1F) * this.form.offsetZ.get()
-                    );
-
-                    if (this.form.local.get())
-                    {
-                        this.rot.transform(temp3f);
-                    }
-
-                    double x = this.pos.x + temp3f.x;
-                    double y = this.pos.y + temp3f.y;
-                    double z = this.pos.z + temp3f.z;
-
-                    world.addParticle(effect, true, x, y, z, v.x, v.y, v.z);
-                }
-
-                this.tick = frequency;
+                this.rot.transform(temp3f);
             }
 
-            this.tick -= 1;
+            sink.spawn(effect, this.pos.x + temp3f.x, this.pos.y + temp3f.y, this.pos.z + temp3f.z,
+                v.x, v.y, v.z);
         }
+    }
+
+    private ParticleOptions getEffect()
+    {
+        ParticleSettings settings = this.form.settings.get();
+        ParticleOptions effect = ParticleTypes.FLAME;
+        Level world = Minecraft.getInstance().level;
+
+        try
+        {
+            if (world != null)
+            {
+                String args = settings.arguments.trim();
+                ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.get(settings.particle);
+                boolean bareId = !args.isEmpty() && args.charAt(0) != '{';
+
+                if (bareId && type == ParticleTypes.BLOCK)
+                {
+                    effect = new BlockParticleOption(ParticleTypes.BLOCK, BuiltInRegistries.BLOCK.get(ResourceLocation.parse(args)).defaultBlockState());
+                }
+                else if (bareId && type == ParticleTypes.ITEM)
+                {
+                    effect = new ItemParticleOption(ParticleTypes.ITEM, new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(args))));
+                }
+                else
+                {
+                    String particle = settings.particle.toString();
+
+                    if (!settings.arguments.isEmpty())
+                    {
+                        particle += " " + settings.arguments;
+                    }
+
+                    effect = ParticleArgument.readParticle(new StringReader(particle), world.registryAccess());
+                }
+            }
+        }
+        catch (Exception ignored)
+        {}
+
+        return effect;
+    }
+
+    private interface ParticleSink
+    {
+        void spawn(ParticleOptions effect, double x, double y, double z, double velocityX, double velocityY, double velocityZ);
     }
 }

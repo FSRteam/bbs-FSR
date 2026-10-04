@@ -142,7 +142,15 @@ public class UIKeyframeEditor extends UIElement
             }
             else if (replacement != null)
             {
-                replacement.relative(this).x(1F, -this.propertiesWidth).w(this.propertiesWidth);
+                /* Embedded camera clip editors own the right-side inspector. Set
+                 * its full bounds explicitly; a fresh keyframe factory has no
+                 * default height, so omitting h(1F) leaves the value controls
+                 * mounted at zero height. */
+                replacement.relative(this)
+                    .x(1F, -this.propertiesWidth)
+                    .y(0)
+                    .w(this.propertiesWidth)
+                    .h(1F);
             }
         }
 

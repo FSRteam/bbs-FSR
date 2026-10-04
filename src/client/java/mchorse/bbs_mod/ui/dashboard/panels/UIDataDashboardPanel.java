@@ -876,7 +876,14 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     public void forceSave()
     {
-        this.pinRepository().save(this.data.getId(), this.data.toData().asMap());
+        IRepository<T> repository = this.getRepository();
+
+        if (this.data == null || this.data.getId() == null || repository == null)
+        {
+            return;
+        }
+
+        repository.save(this.data.getId(), this.data.toData().asMap());
     }
 
     @Override

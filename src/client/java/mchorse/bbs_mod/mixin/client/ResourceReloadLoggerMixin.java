@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.mixin.client;
 
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.BBSRendering;
 import net.minecraft.client.ResourceLoadStateTracker;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,6 +14,7 @@ public class ResourceReloadLoggerMixin
     @Inject(method = "finishReload", at = @At("TAIL"))
     public void onOnFinishedLoading(CallbackInfo info)
     {
+        BBSRendering.releaseViewResources();
         BBSModClient.getSounds().deleteSounds();
     }
 }

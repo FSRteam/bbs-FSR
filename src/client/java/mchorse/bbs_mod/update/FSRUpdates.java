@@ -342,6 +342,13 @@ public class FSRUpdates
         String when = formatLastCheck();
         String suffix = " · " + L10n.lang("bbs.updates.last_check").format(when).get();
 
+        if (UpdateInstaller.isDownloading())
+        {
+            int percent = (int) Math.round(Math.max(0D, Math.min(1D, UpdateInstaller.progress())) * 100D);
+
+            return L10n.lang("bbs.updates.status_downloading").format(INSTANCE.available == null ? "?" : INSTANCE.available.version, percent).get();
+        }
+
         switch (status)
         {
             case CHECKING: return L10n.lang("bbs.updates.status_checking").get() + suffix;

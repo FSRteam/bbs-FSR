@@ -65,6 +65,7 @@ public class UIContext implements IViewportStack
 
     public UIViewportStack viewportStack = new UIViewportStack();
     private PointerEventFrame activePointerEvent;
+    private long pointerGestureGeneration;
 
     public UIContext(UIBaseMenu menu)
     {
@@ -77,6 +78,23 @@ public class UIContext implements IViewportStack
     public long getTick()
     {
         return this.tick;
+    }
+
+    /** Changes on a new press or scroll, not on cursor motion or release. */
+    public long getPointerGestureGeneration()
+    {
+        return this.pointerGestureGeneration;
+    }
+
+    void notePointerGesture()
+    {
+        this.pointerGestureGeneration = this.pointerGestureGeneration == Long.MAX_VALUE
+            ? 1L : this.pointerGestureGeneration + 1L;
+    }
+
+    public long getContextMenuIntentGeneration()
+    {
+        return this.contextMenuIntentGeneration;
     }
 
     public void setTransition(float transition)
@@ -130,6 +148,19 @@ public class UIContext implements IViewportStack
         frame.retainCurrentPointerState();
 
         return frame;
+    }
+
+    /** Execute a deferred click at its captured position without dispatching new input. */
+    public void withPointerState(int mouseX, int mouseY, int mouseButton, Runnable action)
+    {
+        try (PointerEventFrame frame = this.beginPointerEvent())
+        {
+            frame.retainCurrentPointerState();
+            this.mouseX = mouseX;
+            this.mouseY = mouseY;
+            this.mouseButton = mouseButton;
+            action.run();
+        }
     }
 
     PointerEventFrame beginPointerScrollEvent(int mouseX, int mouseY, double horizontal, double vertical)
