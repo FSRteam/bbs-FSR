@@ -239,10 +239,11 @@ public final class ModelIKRuntime
      * IK-controls keyframe start from", so that the editor's keyframe sheets and the bake's
      * disable-these-chains pass cannot drift apart.
      *
-     * <p>Today only this method exists: the editor still seeds from its own private
-     * {@code UIReplaysEditorUtils.buildIKControls}, which was verified field-for-field equivalent
-     * ({@code research/w1-interface-review.md} §5), and the bake is not written yet. The claim above
-     * becomes true when those two call this instead — until then, keep them in step by hand.
+     * <p>Both callers go through here. The editor seeds from this, having dropped the private copy it
+     * used to keep in {@code UIReplaysEditorUtils}, and the bake's disable pass reads it directly.
+     * The two used to have to be kept in step by hand; that a fixture of the dropped copy agrees
+     * field for field is what let it go, and the probe behind that is in
+     * {@code research/r5-3-implementation.md} §W4a.2.
      */
     public static IKControls ikControls(ModelForm form)
     {
