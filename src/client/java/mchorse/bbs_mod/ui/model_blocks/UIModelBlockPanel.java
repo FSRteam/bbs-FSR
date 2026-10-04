@@ -4,7 +4,10 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.shaders.Uniform;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.blocks.ModelBlockSound;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
+import mchorse.bbs_mod.blocks.entities.ModelBody;
+import mchorse.bbs_mod.blocks.entities.ModelEquipment;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.CameraUtils;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -13,29 +16,35 @@ import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
-import mchorse.bbs_mod.ui.dashboard.panels.IFlightSupported;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanel;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.forms.UINestedEdit;
 import mchorse.bbs_mod.ui.forms.UIToggleEditorEvent;
+import mchorse.bbs_mod.ui.forms.editors.panels.widgets.UIItemStack;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.events.UIRemovedEvent;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
+import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
+import mchorse.bbs_mod.ui.framework.elements.utils.UISplitter;
 import mchorse.bbs_mod.ui.model_blocks.camera.ImmersiveModelBlockCameraController;
+import mchorse.bbs_mod.ui.model_blocks.camera.OrbitModelBlockCameraController;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
@@ -46,6 +55,8 @@ import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.AABB;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
@@ -55,6 +66,7 @@ import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.core.BlockPos;
@@ -64,23 +76,65 @@ import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
-public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSupported, GizmoViewport
+public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
 {
-    public static boolean toggleRendering;
+    /** Show the real form while its editor is open (the editor normally hides it and draws its
+     * own preview); flipped by a keybind while editing. Session state of THIS panel — the block
+     * renderer asks the panel instead of a mod-wide static. FSR note: this is the upstream
+     * "render toggle" (38774d5a5) and is unrelated to {@link ModelProperties#isRenderLast},
+     * FSR's own render-last queue flag, which keeps its place in the editor column. */
+    private boolean toggleRendering;
+
+    public boolean isRenderingToggled()
+    {
+        return this.toggleRendering;
+    }
+
+    /** Slots in the order they are listed in the equipment section. */
+    private static final EquipmentSlot[] EQUIPMENT_SLOTS = {
+        EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS,
+        EquipmentSlot.FEET, EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND
+    };
+
+    /** Fold state of the sections, kept across panel rebuilds like the form editor does. */
+    private static final Map<String, Boolean> sectionFolds = new HashMap<>();
 
     public UIScrollView scrollView;
+    public UISplitter draggable;
     public UIElement editor;
     public UIModelBlockEntityList modelBlocks;
+    public UISearchList<ModelBlockEntity> modelBlocksSearch;
     public UINestedEdit pickEdit;
     public UIToggle enabled;
     public UIToggle shadow;
     public UIToggle global;
     public UIToggle lookAt;
+    public UIToggle renderLast;
     public UIPropTransform transform;
+
+    public UISection bodySection;
+    public UISection equipmentSection;
+    public UICirculate hitboxMode;
+    public UIElement hitboxManual;
+    public UITrackpad hitboxMinX;
+    public UITrackpad hitboxMinY;
+    public UITrackpad hitboxMinZ;
+    public UITrackpad hitboxMaxX;
+    public UITrackpad hitboxMaxY;
+    public UITrackpad hitboxMaxZ;
+    public UIToggle solid;
+    public UIToggle cameraCollision;
+    public UITrackpad hardness;
+    public UITrackpad lightLevel;
+    public UICirculate sound;
+    public Map<EquipmentSlot, UIItemStack> equipmentSlots = new EnumMap<>(EquipmentSlot.class);
 
     private final StencilFormFramebuffer gizmoStencil = new StencilFormFramebuffer();
     private final StencilMap gizmoStencilMap = new StencilMap();
@@ -95,6 +149,14 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     private Set<ModelBlockEntity> toSave = new HashSet<>();
 
     private ImmersiveModelBlockCameraController cameraController;
+
+    /**
+     * How this panel is flown: turning around the selected block, the way the film's viewport
+     * turns around a replay. It replaces the dashboard's flight here rather than sitting beside
+     * it - a block is a thing one walks around, and two ways of moving would only split the
+     * muscle memory in half.
+     */
+    public final OrbitModelBlockCameraController orbit = new OrbitModelBlockCameraController(this);
     private UIElement keyDude;
 
     public UIModelBlockPanel(UIDashboard dashboard)
@@ -124,7 +186,10 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             if (this.modelBlock != null) menu.action(UIKeys.MODEL_BLOCKS_KEYS_TELEPORT, this::teleport);
         });
         this.modelBlocks.background();
-        this.modelBlocks.h(UIStringList.DEFAULT_HEIGHT * 9);
+
+        this.modelBlocksSearch = new UISearchList<>(this.modelBlocks);
+        this.modelBlocksSearch.label(UIKeys.GENERAL_SEARCH);
+        this.modelBlocksSearch.h(20 + UIModelBlockEntityList.ROW * 9);
 
         this.pickEdit = new UINestedEdit((editing) ->
         {
@@ -154,10 +219,10 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             }
 
             palette.immersive();
-            palette.editor.keys().register(Keys.MODEL_BLOCKS_TOGGLE_RENDERING, () -> toggleRendering = !toggleRendering);
+            palette.editor.keys().register(Keys.MODEL_BLOCKS_TOGGLE_RENDERING, () -> this.toggleRendering = !this.toggleRendering);
             palette.editor.renderer.full(dashboard.getRoot());
             palette.editor.renderer.setTarget(editingBlock.getEntity());
-            palette.editor.renderer.setRenderForm(() -> !toggleRendering);
+            palette.editor.renderer.setRenderForm(() -> !this.toggleRendering);
             palette.getEvents().register(UIToggleEditorEvent.class, (e) ->
             {
                 if (e.editing)
@@ -173,6 +238,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             {
                 this.removeCameraController();
                 this.scrollView.setVisible(true);
+                this.draggable.setVisible(true);
             });
 
             palette.resize();
@@ -183,6 +249,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             }
 
             this.scrollView.setVisible(false);
+            this.draggable.setVisible(false);
         });
         this.pickEdit.keybinds();
 
@@ -194,22 +261,145 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             Minecraft.getInstance().levelRenderer.allChanged();
         });
         this.lookAt = new UIToggle(UIKeys.CAMERA_PANELS_LOOK_AT, (b) -> this.modelBlock.getProperties().setLookAt(b.getValue()));
+        this.renderLast = new UIToggle(UIKeys.MODEL_BLOCKS_RENDER_LAST, (b) -> this.modelBlock.getProperties().setRenderLast(b.getValue()));
 
         this.transform = new UIPropTransform();
         this.transform.enableHotkeys();
         this.transform.hotkeyDrag(this::buildGizmoDrag);
 
-        this.editor = UI.column(this.pickEdit, this.enabled, this.shadow, this.global, this.lookAt, this.transform);
+        /* Body: the block's physical side (hitbox, solidity, light, sound). */
+        this.hitboxMode = new UICirculate((b) ->
+        {
+            this.getBody().setHitboxMode(ModelBody.HitboxMode.values()[b.getValue()]);
+            this.updateHitboxManualVisibility();
+        });
+        this.hitboxMode.addLabel(UIKeys.MODEL_BLOCKS_BODY_HITBOX_CUBE);
+        this.hitboxMode.addLabel(UIKeys.MODEL_BLOCKS_BODY_HITBOX_FORM);
+        this.hitboxMode.addLabel(UIKeys.MODEL_BLOCKS_BODY_HITBOX_MANUAL);
 
-        this.scrollView = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, this.modelBlocks, this.editor);
+        this.hitboxMinX = new UITrackpad((v) -> this.getBody().getHitboxMin().x = v.floatValue());
+        this.hitboxMinY = new UITrackpad((v) -> this.getBody().getHitboxMin().y = v.floatValue());
+        this.hitboxMinZ = new UITrackpad((v) -> this.getBody().getHitboxMin().z = v.floatValue());
+        this.hitboxMaxX = new UITrackpad((v) -> this.getBody().getHitboxMax().x = v.floatValue());
+        this.hitboxMaxY = new UITrackpad((v) -> this.getBody().getHitboxMax().y = v.floatValue());
+        this.hitboxMaxZ = new UITrackpad((v) -> this.getBody().getHitboxMax().z = v.floatValue());
+
+        this.hitboxManual = UI.column(
+            UI.label(UIKeys.MODEL_BLOCKS_BODY_HITBOX_MIN),
+            UI.row(this.hitboxMinX, this.hitboxMinY, this.hitboxMinZ),
+            UI.label(UIKeys.MODEL_BLOCKS_BODY_HITBOX_MAX),
+            UI.row(this.hitboxMaxX, this.hitboxMaxY, this.hitboxMaxZ)
+        );
+        this.hitboxManual.setVisible(false);
+
+        this.solid = new UIToggle(UIKeys.MODEL_BLOCKS_BODY_SOLID, (b) -> this.getBody().setSolid(b.getValue()));
+        this.cameraCollision = new UIToggle(UIKeys.MODEL_BLOCKS_BODY_CAMERA, (b) -> this.getBody().setCameraCollision(b.getValue()));
+
+        /* The server steps break progress from its own copy of the body, so
+         * hardness saves right away — otherwise it would still break instantly
+         * until the panel saves. */
+        this.hardness = new UITrackpad((v) ->
+        {
+            this.getBody().setHardness(v.floatValue());
+            this.save(this.modelBlock);
+        });
+        this.hardness.limit(0).tooltip(UIKeys.MODEL_BLOCKS_BODY_HARDNESS_TOOLTIP);
+
+        /* Light and sound live in the block state server side, so these two
+         * save right away — otherwise nothing visible happens until the panel
+         * saves on switching blocks or closing. */
+        this.lightLevel = new UITrackpad((v) ->
+        {
+            this.getBody().setLightLevel(v.intValue());
+            this.save(this.modelBlock);
+        });
+        this.lightLevel.limit(0, 15, true);
+
+        this.sound = new UICirculate((b) ->
+        {
+            this.getBody().setSound(ModelBlockSound.values()[b.getValue()]);
+            this.save(this.modelBlock);
+        });
+        this.sound.addLabel(UIKeys.MODEL_BLOCKS_BODY_SOUND_STONE);
+        this.sound.addLabel(UIKeys.MODEL_BLOCKS_BODY_SOUND_WOOD);
+        this.sound.addLabel(UIKeys.MODEL_BLOCKS_BODY_SOUND_METAL);
+        this.sound.addLabel(UIKeys.MODEL_BLOCKS_BODY_SOUND_GLASS);
+        this.sound.addLabel(UIKeys.MODEL_BLOCKS_BODY_SOUND_WOOL);
+        this.sound.addLabel(UIKeys.MODEL_BLOCKS_BODY_SOUND_GRASS);
+        this.sound.addLabel(UIKeys.MODEL_BLOCKS_BODY_SOUND_NONE);
+
+        this.bodySection = new UISection(UIKeys.MODEL_BLOCKS_BODY).remember(sectionFolds, "body", false);
+
+        this.bodySection.fields.add(
+            this.hitboxMode,
+            this.hitboxManual,
+            this.solid,
+            this.cameraCollision,
+            UI.labelRow(UIKeys.MODEL_BLOCKS_BODY_HARDNESS, this.hardness),
+            UI.labelRow(UIKeys.MODEL_BLOCKS_BODY_LIGHT, this.lightLevel),
+            this.sound
+        );
+
+        /* Equipment: six vanilla slots rendered by the existing armor and
+         * held item renderers. A 2×3 grid of slots — the slot's name lives in
+         * its tooltip, and the BBS armor icons tell the slots apart (the hand
+         * icons follow the replay tracks: hotbar for the main hand, limb for
+         * the off hand). */
+        IKey[] slotTooltips = {
+            UIKeys.MODEL_BLOCKS_EQUIPMENT_HEAD, UIKeys.MODEL_BLOCKS_EQUIPMENT_CHEST,
+            UIKeys.MODEL_BLOCKS_EQUIPMENT_LEGS, UIKeys.MODEL_BLOCKS_EQUIPMENT_FEET,
+            UIKeys.MODEL_BLOCKS_EQUIPMENT_MAINHAND, UIKeys.MODEL_BLOCKS_EQUIPMENT_OFFHAND
+        };
+        Icon[] slotIcons = {
+            Icons.ARMOR_HELMET, Icons.ARMOR_CHESTPLATE,
+            Icons.ARMOR_LEGGINGS, Icons.ARMOR_BOOTS,
+            Icons.HOTBAR, Icons.LIMB
+        };
+
+        for (int i = 0; i < EQUIPMENT_SLOTS.length; i++)
+        {
+            EquipmentSlot slot = EQUIPMENT_SLOTS[i];
+            UIItemStack stackUI = new UIItemStack((stack) -> this.getEquipment().set(slot, stack));
+
+            stackUI.placeholder(slotIcons[i]).tooltip(slotTooltips[i]);
+            this.equipmentSlots.put(slot, stackUI);
+        }
+
+        this.equipmentSection = new UISection(UIKeys.MODEL_BLOCKS_EQUIPMENT).remember(sectionFolds, "equipment", false);
+
+        this.equipmentSection.fields.add(
+            UI.row(this.equipmentSlots.get(EquipmentSlot.HEAD), this.equipmentSlots.get(EquipmentSlot.CHEST)),
+            UI.row(this.equipmentSlots.get(EquipmentSlot.LEGS), this.equipmentSlots.get(EquipmentSlot.FEET)),
+            UI.row(this.equipmentSlots.get(EquipmentSlot.MAINHAND), this.equipmentSlots.get(EquipmentSlot.OFFHAND))
+        );
+
+        this.editor = UI.column(this.pickEdit, this.enabled, this.shadow, this.global, this.lookAt, this.renderLast, this.transform);
+
+        this.scrollView = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING, this.modelBlocksSearch, this.editor, this.bodySection, this.equipmentSection);
         this.scrollView.scroll.opposite().cancelScrolling();
-        this.scrollView.relative(this).w(200).h(1F);
+
+        /* The sidebar resizes like the form editor's options column: a draggable
+         * splitter whose share is remembered, double click resets it. */
+        this.draggable = UISplitter.fraction("model_blocks.options", 0.2F, 0F, 0.5F);
+        this.draggable.measure(this).onChange(() ->
+        {
+            this.scrollView.w(this.draggable.getValue()).resize();
+            this.draggable.resize();
+        });
+
+        this.scrollView.relative(this).w(this.draggable.getValue()).minW(120).h(1F);
+        this.draggable.relative(this.scrollView).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
         this.fill(null, false);
 
         this.keys().register(Keys.MODEL_BLOCKS_TELEPORT, this::teleport);
+        this.keys().register(Keys.MODEL_BLOCKS_TELEPORT_ORBIT, () ->
+        {
+            this.orbit.teleportPivotToSubject();
+            UIUtils.playClick();
+        }).strict().active(() -> this.modelBlock != null);
 
-        this.add(this.scrollView);
+        this.add(this.scrollView, this.draggable);
     }
 
     private void teleport()
@@ -224,18 +414,14 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     }
 
     @Override
-    public boolean supportsRollFOVControl()
-    {
-        return false;
-    }
-
-    @Override
     public void appear()
     {
         super.appear();
 
         this.getContext().menu.main.add(this.keyDude);
-        this.dashboard.orbitKeysUI.setEnabled(() -> this.getChildren(UIFormPalette.class).isEmpty());
+
+        this.orbit.enabled = true;
+        BBSModClient.getCameraController().add(this.orbit);
 
         if (this.cameraController != null)
         {
@@ -249,9 +435,14 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         super.disappear();
 
         this.keyDude.removeFromParent();
-        this.dashboard.orbitKeysUI.setEnabled(null);
         this.gizmo.cancel();
 
+        this.orbit.enabled = false;
+        BBSModClient.getCameraController().remove(this.orbit);
+
+        /* Detached from the global controller, but the field is kept: coming back to this panel
+         * hands the same controller over again in appear(). Dropping it (see
+         * removeCameraController) is for leaving the screen for good. */
         if (this.cameraController != null)
         {
             BBSModClient.getCameraController().remove(this.cameraController);
@@ -537,12 +728,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
     private void updateList()
     {
-        this.modelBlocks.clear();
+        this.modelBlocks.setBlocks(BBSRendering.capturedModelBlocks);
 
-        for (ModelBlockEntity modelBlock : BBSRendering.capturedModelBlocks)
-        {
-            this.modelBlocks.add(modelBlock);
-        }
+        /* Filling resets the list's filter, but the search box keeps its text - reapply
+         * so what you see matches the query. */
+        this.modelBlocks.filter(this.modelBlocksSearch.search.getText());
 
         this.fill(this.modelBlock, true);
     }
@@ -559,19 +749,41 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
             this.toSave.add(modelBlock);
         }
 
+        boolean switched = modelBlock != null && modelBlock != this.modelBlock;
+
         this.modelBlock = modelBlock;
+
+        /* Another block is another subject: the orbit goes to it instead of leaving the user
+         * turning around where the last one stood. C brings it back over afterwards. */
+        if (switched)
+        {
+            this.orbit.teleportPivotToSubject();
+        }
 
         if (modelBlock != null)
         {
             this.fillData();
         }
 
-        this.editor.setVisible(modelBlock != null);
+        this.setEditorVisible(modelBlock != null);
 
         if (select)
         {
             this.modelBlocks.setCurrentScroll(modelBlock);
         }
+    }
+
+    private void setEditorVisible(boolean visible)
+    {
+        if (this.editor.isVisible() == visible)
+        {
+            return;
+        }
+
+        this.editor.setVisible(visible);
+        this.bodySection.setVisible(visible);
+        this.equipmentSection.setVisible(visible);
+        this.scrollView.resize();
     }
 
     private void closeFormPalettes()
@@ -583,6 +795,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
 
         this.removeCameraController();
         this.scrollView.setVisible(true);
+        this.draggable.setVisible(true);
     }
 
     private void fillData()
@@ -595,6 +808,30 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.shadow.setValue(properties.isShadow());
         this.global.setValue(properties.isGlobal());
         this.lookAt.setValue(properties.isLookAt());
+        this.renderLast.setValue(properties.isRenderLast());
+
+        ModelBody body = properties.getBody();
+
+        this.hitboxMode.setValue(body.getHitboxMode().ordinal());
+        this.hitboxMinX.setValue(body.getHitboxMin().x);
+        this.hitboxMinY.setValue(body.getHitboxMin().y);
+        this.hitboxMinZ.setValue(body.getHitboxMin().z);
+        this.hitboxMaxX.setValue(body.getHitboxMax().x);
+        this.hitboxMaxY.setValue(body.getHitboxMax().y);
+        this.hitboxMaxZ.setValue(body.getHitboxMax().z);
+        this.solid.setValue(body.isSolid());
+        this.cameraCollision.setValue(body.isCameraCollision());
+        this.hardness.setValue(body.getHardness());
+        this.lightLevel.setValue(body.getLightLevel());
+        this.sound.setValue(body.getSound().ordinal());
+        this.updateHitboxManualVisibility();
+
+        ModelEquipment equipment = properties.getEquipment();
+
+        for (EquipmentSlot slot : EQUIPMENT_SLOTS)
+        {
+            this.equipmentSlots.get(slot).setStack(equipment.get(slot));
+        }
     }
 
     private void save(ModelBlockEntity modelBlock)
@@ -602,6 +839,42 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         if (modelBlock != null)
         {
             ClientNetwork.sendModelBlockForm(modelBlock.getBlockPos(), modelBlock);
+        }
+    }
+
+    /** The selected block's body; the editor is only visible while a block is selected. */
+    private ModelBody getBody()
+    {
+        return this.modelBlock.getProperties().getBody();
+    }
+
+    private ModelEquipment getEquipment()
+    {
+        return this.modelBlock.getProperties().getEquipment();
+    }
+
+    private void updateHitboxManualVisibility()
+    {
+        boolean manual = this.getBody().getHitboxMode() == ModelBody.HitboxMode.MANUAL;
+
+        if (this.hitboxManual.isVisible() != manual)
+        {
+            this.hitboxManual.setVisible(manual);
+            this.scrollView.resize();
+        }
+    }
+
+    /** While a form is being edited in place, the palette owns the viewport and its own camera. */
+    private boolean canOrbit()
+    {
+        return this.getChildren(UIFormPalette.class).isEmpty();
+    }
+
+    private void startOrbit(UIContext context)
+    {
+        if (this.canOrbit() && this.area.isInside(context))
+        {
+            this.orbit.start(context);
         }
     }
 
@@ -634,15 +907,36 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         if (this.hovered != null && context.mouseButton == 0 && BBSSettings.clickModelBlocks.get() && !sphereHovered)
         {
             this.fill(this.hovered, true);
+
+            /* Picking a block and turning around it are the same gesture: the press chooses,
+             * and carrying on with the button down orbits */
+            this.startOrbit(context);
+
+            return false;
         }
 
+        this.startOrbit(context);
+
         return false;
+    }
+
+    @Override
+    protected boolean subMouseScrolled(UIContext context)
+    {
+        if (this.canOrbit() && this.area.isInside(context) && this.orbit.zoom(context.mouseWheel))
+        {
+            return true;
+        }
+
+        return super.subMouseScrolled(context);
     }
 
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
         boolean consumed = this.gizmo.mouseReleased(context);
+
+        this.orbit.stop();
 
         return super.subMouseReleased(context) || consumed;
     }
@@ -653,18 +947,30 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         long generation = this.gizmo.gestureGeneration();
 
         this.gizmo.cancel(context.mouseButton, generation);
+        this.orbit.stop();
         super.subMouseCanceled(context);
     }
 
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
+        if (this.canOrbit() && this.orbit.keyPressed(context, this.area))
+        {
+            return true;
+        }
+
         return super.subKeyPressed(context);
     }
 
     @Override
     public void render(UIContext context)
     {
+        if (this.canOrbit())
+        {
+            this.orbit.handleOrbiting(context);
+            this.orbit.update(context);
+        }
+
         /* Pick first (UI pass): the stencil must be read before the visual's hover
          * (gizmo.update / renderGizmoHover both consume the picked index). */
         this.renderGizmoStencilInterface(context);
@@ -682,7 +988,27 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         int y = this.area.ey() - font.getHeight() - 5;
 
         context.batcher.textCard(label, x, y, BBSSettings.textColor(), Colors.A50);
-        super.render(context);
+
+        /* Solid backdrop under the sidebar, same surface as the form editor's
+         * options column. Skipped while the sidebar is hidden (form palette
+         * open) — the backdrop is painted here, not by the sidebar itself. */
+        if (this.scrollView.isVisible())
+        {
+            this.scrollView.area.render(context.batcher, BBSSettings.deepSurface());
+        }
+
+        /* Light inputs on the deep backdrop, the film editor's scoping — the
+         * sections drop them back to deep on their raised cards themselves. */
+        BBSSettings.lightInputs = true;
+
+        try
+        {
+            super.render(context);
+        }
+        finally
+        {
+            BBSSettings.lightInputs = false;
+        }
 
         this.renderGizmoHover(context);
         this.gizmo.renderSphereHighlight(context);
@@ -751,13 +1077,17 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
                 context.matrixStack().pushPose();
                 context.matrixStack().translate(blockPos.getX() - pos.x, blockPos.getY() - pos.y, blockPos.getZ() - pos.z);
 
+                /* The frame shows the block's actual hitbox (its body shape),
+                 * so shaping the body gives immediate feedback in the world. */
+                net.minecraft.world.phys.AABB box = entity.getShape().bounds();
+
                 if (this.hovered == entity || entity == this.modelBlock)
                 {
-                    Draw.renderBox(context.matrixStack(), 0D, 0D, 0D, 1D, 1D, 1D, 0, 0.5F, 1F);
+                    Draw.renderBox(context.matrixStack(), box.minX, box.minY, box.minZ, box.maxX - box.minX, box.maxY - box.minY, box.maxZ - box.minZ, 0, 0.5F, 1F);
                 }
                 else
                 {
-                    Draw.renderBox(context.matrixStack(), 0D, 0D, 0D, 1D, 1D, 1D);
+                    Draw.renderBox(context.matrixStack(), box.minX, box.minY, box.minZ, box.maxX - box.minX, box.maxY - box.minY, box.maxZ - box.minZ);
                 }
 
                 context.matrixStack().popPose();
@@ -819,8 +1149,12 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     private AABB getHitbox(ModelBlockEntity closest)
     {
         BlockPos pos = closest.getBlockPos();
+        net.minecraft.world.phys.AABB box = closest.getShape().bounds();
 
-        return new AABB(pos.getX(), pos.getY(), pos.getZ(), 1D, 1D, 1D);
+        return new AABB(
+            pos.getX() + box.minX, pos.getY() + box.minY, pos.getZ() + box.minZ,
+            box.maxX - box.minX, box.maxY - box.minY, box.maxZ - box.minZ
+        );
     }
 
     public boolean isEditing(ModelBlockEntity entity)

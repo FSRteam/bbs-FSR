@@ -44,6 +44,26 @@ public class Importers
         importers.add(new WAVImporter());
     }
 
+    /**
+     * Adds an importer — what happens to a file of some type dragged into an assets folder.
+     *
+     * <p>The javadoc above has called this class a registry since it was written; until now it
+     * was one only for BBS itself.</p>
+     */
+    public static void register(IImporter importer)
+    {
+        if (importer != null)
+        {
+            importers.add(importer);
+        }
+    }
+
+    /** Removes a previously added importer; returns whether it was there. */
+    public static boolean unregister(IImporter importer)
+    {
+        return importer != null && importers.remove(importer);
+    }
+
     public static List<IImporter> getImporters()
     {
         return Collections.unmodifiableList(importers);

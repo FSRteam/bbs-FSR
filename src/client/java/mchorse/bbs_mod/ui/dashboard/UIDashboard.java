@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult;
@@ -10,6 +9,7 @@ import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelIds;
+import mchorse.bbs_mod.api.client.events.RegisterDashboardPanelsEvent;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.OrbitCamera;
@@ -19,7 +19,6 @@ import mchorse.bbs_mod.client.dashboard.BBSDashboardPanelHostRegistry;
 import mchorse.bbs_mod.client.dashboard.BBSDashboardOverlayHostRegistry;
 import mchorse.bbs_mod.client.dashboard.DashboardPanelContribution;
 import mchorse.bbs_mod.client.dashboard.DashboardOverlayContribution;
-import mchorse.bbs_mod.events.register.RegisterDashboardPanelsEvent;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
@@ -48,10 +47,12 @@ import mchorse.bbs_mod.ui.model_blocks.UIModelBlockPanel;
 import mchorse.bbs_mod.ui.model_editor.UIModelEditorPanel;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.update.FSRUpdates;
 import mchorse.bbs_mod.ui.selectors.UISelectorsOverlayPanel;
 import mchorse.bbs_mod.ui.utility.UIUtilityOverlayPanel;
 import mchorse.bbs_mod.ui.utility.audio.UIAudioEditorPanel;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.InterfaceBlur;
 import mchorse.bbs_mod.ui.utils.UIChalkboard;
 import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -115,7 +116,9 @@ public class UIDashboard extends UIBaseMenu
         this.registerPanels();
         BBSDashboardPanelHostRegistry.installAll(this);
 
-        BBSMod.events.post(new RegisterDashboardPanelsEvent(this));
+        /* Posted straight on the addon channel: it carries api.client.events to addons, and the
+         * private static BBSModClient#postAddonEvent is not reachable from this package. */
+        mchorse.bbs_mod.api.EventBus.INSTANCE.post(new RegisterDashboardPanelsEvent(this));
 
         this.main.add(this.panels);
         this.addonOverlayLayer.full(this.getRoot()).eventPropagataion(EventPropagation.PASS);
@@ -180,8 +183,16 @@ public class UIDashboard extends UIBaseMenu
                 return;
             }
 
-            UIOverlay.addOverlay(this.context, new UIUtilityOverlayPanel(UIKeys.UTILITY_TITLE, null), 240, 160);
+            /* Just tall enough for the panel's own content, and never taller than the screen -
+             * an overlay only has its position bounded, so an oversized one gets cut off. */
+            int height = Math.min(300, (int) (this.height * 0.9F));
+
+            UIOverlay.addOverlay(this.context, new UIUtilityOverlayPanel(UIKeys.UTILITY_TITLE, null), 240, height);
         });
+
+        /* Kicks the throttled FSR update check; popups only land once the
+         * dashboard is actually on screen. */
+        FSRUpdates.onDashboardOpened(this);
 
         this.showAnnoyingPopups();
     }
@@ -397,12 +408,125 @@ public class UIDashboard extends UIBaseMenu
 
         if (panel instanceof UIMorphingPanel morphing)
         {
-            this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE, id, () -> morphing.palette);
-            this.registerAnchor(BBSDashboardAnchors.MORPHING_DEMORPH, id, () -> morphing.demorph);
-            this.registerAnchor(BBSDashboardAnchors.MORPHING_FROM_MOB, id, () -> morphing.fromMob);
+            this.registerMorphingAnchors(morphing);
+        }
+        else if (panel instanceof UIFilmPanel film)
+        {
+            this.registerFilmAnchors(film);
+        }
+        else if (panel instanceof UIModelBlockPanel modelBlocks)
+        {
+            this.registerModelBlocksAnchors(modelBlocks);
+        }
+        else if (panel instanceof UIParticleSchemePanel particles)
+        {
+            this.registerParticlesAnchors(particles);
+        }
+        else if (panel instanceof UIModelEditorPanel modelEditor)
+        {
+            this.registerModelEditorAnchors(modelEditor);
+        }
+        else if (panel instanceof UITextureManagerPanel textures)
+        {
+            this.registerTexturesAnchors(textures);
+        }
+        else if (panel instanceof UIAudioEditorPanel audio)
+        {
+            this.registerAudioAnchors(audio);
+        }
+        else if (panel instanceof UIGraphPanel graph)
+        {
+            this.registerGraphAnchors(graph);
+        }
+        else if (panel instanceof UIPluginsPanel plugins)
+        {
+            this.registerPluginsAnchors(plugins);
         }
 
         return button;
+    }
+
+    private void registerMorphingAnchors(UIMorphingPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE, BBSDashboardPanelIds.MORPHING, () -> panel.palette);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE_LIST, BBSDashboardPanelIds.MORPHING, () -> panel.palette.list);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_PALETTE_EDITOR, BBSDashboardPanelIds.MORPHING, () -> panel.palette.editor);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_DEMORPH, BBSDashboardPanelIds.MORPHING, () -> panel.demorph);
+        this.registerAnchor(BBSDashboardAnchors.MORPHING_FROM_MOB, BBSDashboardPanelIds.MORPHING, () -> panel.fromMob);
+    }
+
+    private void registerFilmAnchors(UIFilmPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.FILM_SELECTION, BBSDashboardPanelIds.FILM, () -> panel.selectionPanel);
+        this.registerAnchor(BBSDashboardAnchors.FILM_RECORDER, BBSDashboardPanelIds.FILM, () -> panel.recorder);
+        this.registerAnchor(BBSDashboardAnchors.FILM_PREVIEW, BBSDashboardPanelIds.FILM, () -> panel.preview);
+        this.registerAnchor(BBSDashboardAnchors.FILM_DUPLICATE, BBSDashboardPanelIds.FILM, () -> panel.duplicateFilm);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_MENU, BBSDashboardPanelIds.FILM, () -> panel.openFilmMenu);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_CAMERA_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.openCameraEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_REPLAY_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.openReplayEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_OPEN_ACTION_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.openActionEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_CAMERA_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.cameraEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_REPLAY_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.replayEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_ACTION_EDITOR, BBSDashboardPanelIds.FILM, () -> panel.actionEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_CAMERA_TIMELINE, BBSDashboardPanelIds.FILM, () -> panel.cameraEditor.clips);
+        this.registerAnchor(BBSDashboardAnchors.FILM_REPLAY_TIMELINE, BBSDashboardPanelIds.FILM, () -> panel.replayEditor.keyframeEditor);
+        this.registerAnchor(BBSDashboardAnchors.FILM_ACTION_TIMELINE, BBSDashboardPanelIds.FILM, () -> panel.actionEditor.clips);
+    }
+
+    private void registerModelBlocksAnchors(UIModelBlockPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_LIST, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.modelBlocks);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_PICK_EDIT, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.pickEdit);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_ENABLED, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.enabled);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_SHADOW, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.shadow);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_GLOBAL, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.global);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_BLOCKS_TOGGLE_LOOK_AT, BBSDashboardPanelIds.MODEL_BLOCKS, () -> panel.lookAt);
+    }
+
+    private void registerParticlesAnchors(UIParticleSchemePanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_RENDERER, BBSDashboardPanelIds.PARTICLES, () -> panel.renderer);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_SELECTION, BBSDashboardPanelIds.PARTICLES, () -> panel.selectionPanel);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_DOCK, BBSDashboardPanelIds.PARTICLES, () -> panel.dock);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_LOCK_LAYOUT, BBSDashboardPanelIds.PARTICLES, () -> panel.lockLayoutButton);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_LAYOUT_PRESETS, BBSDashboardPanelIds.PARTICLES, () -> panel.layoutPresetsButton);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_PLAY_PAUSE, BBSDashboardPanelIds.PARTICLES, () -> panel.playPauseBtn);
+    }
+
+    private void registerModelEditorAnchors(UIModelEditorPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.MODEL_EDITOR_GENERAL, BBSDashboardPanelIds.MODEL_EDITOR, () -> panel.general);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_EDITOR_RENDERER, BBSDashboardPanelIds.MODEL_EDITOR, () -> panel.renderer);
+        this.registerAnchor(BBSDashboardAnchors.MODEL_EDITOR_SPLITTER, BBSDashboardPanelIds.MODEL_EDITOR, () -> panel.splitter);
+    }
+
+    private void registerTexturesAnchors(UITextureManagerPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.TEXTURES_PICKER, BBSDashboardPanelIds.TEXTURES, () -> panel.picker);
+    }
+
+    private void registerAudioAnchors(UIAudioEditorPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_PICK, BBSDashboardPanelIds.AUDIO, () -> panel.pickAudio);
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_PLAY_PAUSE, BBSDashboardPanelIds.AUDIO, () -> panel.plause);
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_SAVE_COLORS, BBSDashboardPanelIds.AUDIO, () -> panel.saveColors);
+        this.registerAnchor(BBSDashboardAnchors.AUDIO_EDITOR, BBSDashboardPanelIds.AUDIO, () -> panel.audioEditor);
+    }
+
+    private void registerGraphAnchors(UIGraphPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.GRAPH_CANVAS, BBSDashboardPanelIds.GRAPH, () -> panel.canvas);
+        this.registerAnchor(BBSDashboardAnchors.GRAPH_EXPRESSION, BBSDashboardPanelIds.GRAPH, () -> panel.expression);
+        this.registerAnchor(BBSDashboardAnchors.GRAPH_HELP, BBSDashboardPanelIds.GRAPH, () -> panel.help);
+    }
+
+    private void registerPluginsAnchors(UIPluginsPanel panel)
+    {
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_LIST, BBSDashboardPanelIds.PLUGINS, () -> panel.list);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_RESCAN, BBSDashboardPanelIds.PLUGINS, () -> panel.rescan);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_OPEN_FOLDER, BBSDashboardPanelIds.PLUGINS, () -> panel.openFolder);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_INSTALL, BBSDashboardPanelIds.PLUGINS, () -> panel.install);
+        this.registerAnchor(BBSDashboardAnchors.PLUGINS_AUTO_APPLY, BBSDashboardPanelIds.PLUGINS, () -> panel.autoApply);
     }
 
     public <T> T getPanel(Class<T> clazz)
@@ -724,6 +848,13 @@ public class UIDashboard extends UIBaseMenu
         if (background == null)
         {
             background = ThemeManager.current().background;
+        }
+
+        /* The world shows through the tint (and through the image, tinted) — blur it, unless
+         * the tint is solid and there is nothing to see */
+        if (background == null || Colors.getA(color) < 1F)
+        {
+            InterfaceBlur.applyUnder();
         }
 
         UIThemeBackdrop.renderBackground(context, background, color, this.width, this.height);

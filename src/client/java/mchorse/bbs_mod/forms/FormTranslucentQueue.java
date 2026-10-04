@@ -80,6 +80,13 @@ public final class FormTranslucentQueue
         flush();
     }
 
+    /** Discard an optional failed world pass before another camera starts drawing. */
+    public static void abort()
+    {
+        active = false;
+        release();
+    }
+
     public static boolean suspend()
     {
         boolean previous = active;

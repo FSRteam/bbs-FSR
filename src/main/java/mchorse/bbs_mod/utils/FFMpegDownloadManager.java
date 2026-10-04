@@ -1,55 +1,42 @@
 package mchorse.bbs_mod.utils;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.utils.net.ArchiveExtractor;
+import mchorse.bbs_mod.utils.net.AtomicFiles;
+import mchorse.bbs_mod.utils.net.Hashes;
+import mchorse.bbs_mod.utils.net.HttpTransfer;
+import mchorse.bbs_mod.utils.net.SharedHttp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.PosixFilePermission;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
+/**
+ * FFmpeg asset installer on top of the shared download kernel
+ * ({@link mchorse.bbs_mod.utils.net.HttpTransfer} and siblings):
+ * manifest-driven platform selection, proxy-first multi-source transfer,
+ * SHA-256 pinning and a validated staging publication. Transfer, hashing,
+ * archive and file primitives live in the kernel — this class only owns
+ * the FFmpeg policy.
+ */
 public final class FFMpegDownloadManager
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("bbs-ffmpeg-download");
     static final String MANAGED_VERSION = "8.1.2-20260816";
     private static final String PROXY_PREFIX = "https://gh-proxy.cn/";
-    private static final Pattern CONTENT_RANGE = Pattern.compile("bytes\\s+(\\d+)-(\\d+)/(\\d+|\\*)", Pattern.CASE_INSENSITIVE);
-    private static final int BUFFER_SIZE = 64 * 1024;
-    private static final long PROGRESS_INTERVAL_NS = Duration.ofMillis(200L).toNanos();
-    private static final Duration REQUEST_TIMEOUT = Duration.ofHours(2L);
-    private static final int FILE_OPERATION_ATTEMPTS = 5;
-    private static final long FILE_OPERATION_RETRY_MS = 200L;
 
     private static final List<Asset> ASSETS = List.of(
         new Asset(OS.WINDOWS, "x86_64", "windows-x86_64", PackageType.ZIP,
@@ -225,7 +212,7 @@ public final class FFMpegDownloadManager
 
         Path staging = versionRoot.resolve(selected.platformId() + ".installing");
 
-        deleteTree(versionRoot, staging);
+        AtomicFiles.deleteTree(versionRoot, staging);
         Files.createDirectories(staging);
         this.status = new Status(Phase.INSTALLING, Failure.NONE, selected.size(), selected.size(), 0D, 0L, "", null);
 
@@ -243,8 +230,8 @@ public final class FFMpegDownloadManager
             Files.writeString(staging.resolve(".ready"), selected.sha256() + System.lineSeparator(),
                 StandardCharsets.US_ASCII, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
 
-            deleteTree(versionRoot, finalRoot);
-            moveDirectory(staging, finalRoot);
+            AtomicFiles.deleteTree(versionRoot, finalRoot);
+            AtomicFiles.moveDirectory(staging, finalRoot);
             published = true;
 
             try
@@ -264,7 +251,7 @@ public final class FFMpegDownloadManager
             {
                 try
                 {
-                    deleteTree(versionRoot, staging);
+                    AtomicFiles.deleteTree(versionRoot, staging);
                 }
                 catch (IOException cleanup)
                 {
@@ -279,125 +266,12 @@ public final class FFMpegDownloadManager
     {
         try
         {
-            Files.createDirectories(partial.getParent());
-            long existing = Files.exists(partial) ? Files.size(partial) : 0L;
-
-            if (existing > selected.size())
-            {
-                Files.delete(partial);
-                existing = 0L;
-            }
-
-            if (existing == selected.size())
-            {
-                return;
-            }
-
-            HttpRequest.Builder request = HttpRequest.newBuilder(uri)
-                .timeout(REQUEST_TIMEOUT)
-                .header("Accept", "application/octet-stream")
-                .header("Accept-Encoding", "identity")
-                .header("User-Agent", "BBS-FSR-FFmpeg/" + MANAGED_VERSION)
-                .GET();
-
-            if (existing > 0L)
-            {
-                request.header("Range", "bytes=" + existing + "-");
-            }
-
-            this.status = new Status(Phase.DOWNLOADING, Failure.NONE, existing, selected.size(), 0D, -1L,
-                uri.getHost() == null ? "" : uri.getHost(), null);
-
-            HttpResponse<InputStream> response;
-
-            try
-            {
-                response = this.client.send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-
-                throw new IOException("Interrupted while downloading FFmpeg", e);
-            }
-
-            try (InputStream input = response.body())
-            {
-                int statusCode = response.statusCode();
-                long writeOffset;
-                boolean append;
-
-                if (statusCode == 206)
+            HttpTransfer.download(this.client, uri, partial, selected.size(), selected.size(),
+                "BBS-FSR-FFmpeg/" + MANAGED_VERSION, null, (downloaded, total, speed, eta) ->
                 {
-                    ContentRange range = parseContentRange(response.headers().firstValue("Content-Range").orElse(null));
-
-                    if (range == null || range.start() != existing || range.end() != selected.size() - 1L
-                        || range.total() != selected.size())
-                    {
-                        throw new IOException("Invalid Content-Range response");
-                    }
-
-                    writeOffset = existing;
-                    append = existing > 0L;
-                }
-                else if (statusCode == 200)
-                {
-                    writeOffset = 0L;
-                    append = false;
-                }
-                else if (statusCode == 416 && existing == selected.size())
-                {
-                    return;
-                }
-                else
-                {
-                    throw new IOException("Unexpected HTTP status " + statusCode);
-                }
-
-                StandardOpenOption[] options = append
-                    ? new StandardOpenOption[] {StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND}
-                    : new StandardOpenOption[] {StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING};
-                long started = System.nanoTime();
-                long lastProgress = started;
-                long written = writeOffset;
-                byte[] buffer = new byte[BUFFER_SIZE];
-
-                try (OutputStream output = Files.newOutputStream(partial, options))
-                {
-                    int count;
-
-                    while ((count = input.read(buffer)) >= 0)
-                    {
-                        if (count == 0)
-                        {
-                            continue;
-                        }
-
-                        output.write(buffer, 0, count);
-                        written += count;
-
-                        if (written > selected.size())
-                        {
-                            throw new IOException("FFmpeg response exceeded the expected size");
-                        }
-
-                        long now = System.nanoTime();
-
-                        if (now - lastProgress >= PROGRESS_INTERVAL_NS || written == selected.size())
-                        {
-                            this.updateDownloadProgress(selected, written, writeOffset, started, now, uri.getHost());
-                            lastProgress = now;
-                        }
-                    }
-                }
-
-                if (written != selected.size())
-                {
-                    throw new IOException("FFmpeg response ended before the expected size");
-                }
-
-                this.updateDownloadProgress(selected, written, writeOffset, started, System.nanoTime(), uri.getHost());
-            }
+                    this.status = new Status(Phase.DOWNLOADING, Failure.NONE, downloaded, selected.size(),
+                        speed, eta, uri.getHost() == null ? "" : uri.getHost(), null);
+                });
         }
         catch (IOException e)
         {
@@ -454,7 +328,7 @@ public final class FFMpegDownloadManager
 
             if (selected.os() != OS.WINDOWS)
             {
-                makeExecutable(executable);
+                AtomicFiles.makeExecutable(executable);
             }
 
             return executable;
@@ -469,72 +343,15 @@ public final class FFMpegDownloadManager
         }
     }
 
-    private void updateDownloadProgress(Asset selected, long downloaded, long initial, long started, long now, String source)
-    {
-        double seconds = Math.max((now - started) / 1_000_000_000D, 0.001D);
-        double speed = Math.max(downloaded - initial, 0L) / seconds;
-        long eta = speed <= 0D ? -1L : Math.max(0L, (long) Math.ceil((selected.size() - downloaded) / speed));
-
-        this.status = new Status(Phase.DOWNLOADING, Failure.NONE, downloaded, selected.size(), speed, eta,
-            source == null ? "" : source, null);
-    }
-
     static void extractZip(Path archive, Path staging, String executableName) throws InstallException
     {
-        Path normalizedStaging = staging.toAbsolutePath().normalize();
-        boolean found = false;
-
-        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(archive)))
+        try
         {
-            ZipEntry entry;
-
-            while ((entry = zip.getNextEntry()) != null)
-            {
-                Path relative;
-
-                try
-                {
-                    relative = Path.of(entry.getName().replace('\\', '/')).normalize();
-                }
-                catch (InvalidPathException e)
-                {
-                    throw new InstallException(Failure.ARCHIVE, "Invalid FFmpeg ZIP entry", e);
-                }
-
-                Path resolved = normalizedStaging.resolve(relative).normalize();
-
-                if (relative.isAbsolute() || !resolved.startsWith(normalizedStaging))
-                {
-                    throw new InstallException(Failure.ARCHIVE, "FFmpeg ZIP entry escapes the installation directory");
-                }
-
-                if (!entry.isDirectory() && relative.getFileName() != null
-                    && relative.getFileName().toString().equalsIgnoreCase(executableName))
-                {
-                    if (found)
-                    {
-                        throw new InstallException(Failure.ARCHIVE, "FFmpeg ZIP contains multiple executables");
-                    }
-
-                    Files.copy(zip, staging.resolve(executableName), StandardCopyOption.REPLACE_EXISTING);
-                    found = true;
-                }
-
-                zip.closeEntry();
-            }
-        }
-        catch (InstallException e)
-        {
-            throw e;
+            ArchiveExtractor.extractEntry(archive, staging, executableName);
         }
         catch (IOException e)
         {
-            throw new InstallException(Failure.ARCHIVE, "Failed to extract FFmpeg ZIP", e);
-        }
-
-        if (!found)
-        {
-            throw new InstallException(Failure.ARCHIVE, "FFmpeg ZIP does not contain the executable");
+            throw new InstallException(Failure.ARCHIVE, e.getMessage(), e);
         }
     }
 
@@ -542,30 +359,9 @@ public final class FFMpegDownloadManager
     {
         try
         {
-            if (!Files.isRegularFile(file) || Files.size(file) != selected.size())
-            {
-                return false;
-            }
-
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-
-            try (InputStream input = Files.newInputStream(file))
-            {
-                byte[] buffer = new byte[BUFFER_SIZE];
-                int count;
-
-                while ((count = input.read(buffer)) >= 0)
-                {
-                    if (count > 0)
-                    {
-                        digest.update(buffer, 0, count);
-                    }
-                }
-            }
-
-            return HexFormat.of().formatHex(digest.digest()).equals(selected.sha256());
+            return Hashes.matches(file, "SHA-256", selected.sha256(), selected.size());
         }
-        catch (IOException | NoSuchAlgorithmException e)
+        catch (IOException e)
         {
             throw new InstallException(Failure.CHECKSUM, "Failed to verify FFmpeg", e);
         }
@@ -598,165 +394,6 @@ public final class FFMpegDownloadManager
         };
     }
 
-    static void deleteTree(Path managedRoot, Path target) throws IOException
-    {
-        retryAccessDenied(() -> deleteTreeOnce(managedRoot, target));
-    }
-
-    private static void deleteTreeOnce(Path managedRoot, Path target) throws IOException
-    {
-        Path normalizedRoot = managedRoot.toAbsolutePath().normalize();
-        Path normalizedTarget = target.toAbsolutePath().normalize();
-
-        if (normalizedTarget.equals(normalizedRoot) || !normalizedTarget.startsWith(normalizedRoot))
-        {
-            throw new IOException("Refusing to delete outside the FFmpeg managed directory");
-        }
-
-        if (!Files.exists(normalizedTarget))
-        {
-            return;
-        }
-
-        Files.walkFileTree(normalizedTarget, new SimpleFileVisitor<>()
-        {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException
-            {
-                Files.delete(file);
-
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path directory, IOException error) throws IOException
-            {
-                if (error != null)
-                {
-                    throw error;
-                }
-
-                Files.delete(directory);
-
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private static void makeExecutable(Path executable) throws IOException
-    {
-        try
-        {
-            Set<PosixFilePermission> permissions = Files.getPosixFilePermissions(executable);
-
-            permissions = new java.util.HashSet<>(permissions);
-            permissions.add(PosixFilePermission.OWNER_EXECUTE);
-            permissions.add(PosixFilePermission.GROUP_EXECUTE);
-            permissions.add(PosixFilePermission.OTHERS_EXECUTE);
-            Files.setPosixFilePermissions(executable, permissions);
-        }
-        catch (UnsupportedOperationException e)
-        {
-            executable.toFile().setExecutable(true, false);
-        }
-
-        if (!Files.isExecutable(executable))
-        {
-            throw new IOException("FFmpeg executable permission could not be set");
-        }
-    }
-
-    private static ContentRange parseContentRange(String header)
-    {
-        if (header == null)
-        {
-            return null;
-        }
-
-        Matcher matcher = CONTENT_RANGE.matcher(header.trim());
-
-        if (!matcher.matches() || matcher.group(3).equals("*"))
-        {
-            return null;
-        }
-
-        try
-        {
-            long start = Long.parseLong(matcher.group(1));
-            long end = Long.parseLong(matcher.group(2));
-            long total = Long.parseLong(matcher.group(3));
-
-            return start <= end && end < total ? new ContentRange(start, end, total) : null;
-        }
-        catch (NumberFormatException e)
-        {
-            return null;
-        }
-    }
-
-    private static void moveDirectory(Path source, Path target) throws IOException
-    {
-        try
-        {
-            moveDirectoryWithRetry(source, target, StandardCopyOption.ATOMIC_MOVE);
-        }
-        catch (AtomicMoveNotSupportedException e)
-        {
-            moveDirectoryWithRetry(source, target);
-        }
-    }
-
-    private static void moveDirectoryWithRetry(Path source, Path target, StandardCopyOption... options) throws IOException
-    {
-        retryAccessDenied(() -> Files.move(source, target, options));
-    }
-
-    private static void retryAccessDenied(FileOperation operation) throws IOException
-    {
-        AccessDeniedException denied = null;
-
-        for (int attempt = 0; attempt < FILE_OPERATION_ATTEMPTS; attempt += 1)
-        {
-            try
-            {
-                operation.run();
-
-                return;
-            }
-            catch (AccessDeniedException e)
-            {
-                denied = e;
-
-                if (attempt + 1 < FILE_OPERATION_ATTEMPTS)
-                {
-                    pauseBeforeRetry(attempt, e);
-                }
-            }
-        }
-
-        throw denied;
-    }
-
-    private static void pauseBeforeRetry(int attempt, AccessDeniedException failure) throws IOException
-    {
-        try
-        {
-            Thread.sleep(FILE_OPERATION_RETRY_MS * (attempt + 1L));
-        }
-        catch (InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-            failure.addSuppressed(e);
-            throw failure;
-        }
-    }
-
-    @FunctionalInterface
-    private interface FileOperation
-    {
-        void run() throws IOException;
-    }
-
     private static Throwable unwrap(Throwable error)
     {
         Throwable current = error;
@@ -774,10 +411,7 @@ public final class FFMpegDownloadManager
     {
         private static final FFMpegDownloadManager INSTANCE = new FFMpegDownloadManager(
             BBSMod.getSettingsPath("tools/ffmpeg").toPath(),
-            HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15L))
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build(),
+            SharedHttp.get(),
             selectAsset(OS.CURRENT, System.getProperty("os.arch")),
             (candidate) -> FFMpegUtils.validateFFMPEG(candidate).usable()
         );
@@ -791,9 +425,6 @@ public final class FFMpegDownloadManager
 
     record Asset(OS os, String architecture, String platformId, PackageType packageType,
                  String assetName, String executableName, long size, String sha256, URI directUrl)
-    {}
-
-    record ContentRange(long start, long end, long total)
     {}
 
     @FunctionalInterface

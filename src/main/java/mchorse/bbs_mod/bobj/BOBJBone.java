@@ -1,12 +1,13 @@
 package mchorse.bbs_mod.bobj;
 
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-public class BOBJBone
+public class BOBJBone implements RigBone
 {
     /* Meta information */
     public int index;
@@ -151,9 +152,16 @@ public class BOBJBone
 
     /**
      * Composes one rotation layer into {@link #orient} (BOBJ rotations are radians). Mirrors
-     * {@link mchorse.bbs_mod.cubic.data.model.ModelGroup#composeOrient}: the first layer seeds from the euler
-     * accumulated so far (rotate folded with rotate2) so a single layer is byte-identical; later layers
-     * multiply their delta. Call AFTER the layer's additive euler readback to {@code transform.rotate}.
+     * {@link mchorse.bbs_mod.cubic.data.model.ModelGroup#composeOrient}: the first layer seeds from the rotation
+     * the transform holds as of this point in the pipeline (this layer's own {@code +=} included) so a
+     * single layer is byte-identical; later layers multiply their delta. Call AFTER the layer's
+     * additive euler readback to {@code transform.rotate}.
+     *
+     * <p>The seed is mode-aware ({@link Transform#createRotation()}), and so is
+     * {@link #evaluatedRotation()} — same class, same question, same answer. {@code BOBJModel.applyPose}
+     * has a third copy of this seed for the pose layer, where {@code orient} can still be null (the
+     * action phase composed nothing for that bone, or {@code fix} just dropped it); it must make the
+     * same read. {@code Model.applyPose} / {@code ModelGroup.composeOrient} carry the cubic pair.
      */
     public void composeOrient(Quaternionf delta)
     {
@@ -172,5 +180,57 @@ public class BOBJBone
         this.transform.identity();
         this.orient = null;
         this.offset = null;
+    }
+
+    /* RigBone implementation: every member reads or writes one of the fields above, so the two
+     * skeletons can be poser-ed through the same call without a wrapper in between. */
+
+    @Override
+    public String getBoneName()
+    {
+        return this.name;
+    }
+
+    @Override
+    public RigBone getParentBone()
+    {
+        return this.parentBone;
+    }
+
+    @Override
+    public Transform getBoneTransform()
+    {
+        return this.transform;
+    }
+
+    @Override
+    public Quaternionf getOrient()
+    {
+        return this.orient;
+    }
+
+    @Override
+    public void setOrient(Quaternionf orient)
+    {
+        this.orient = orient;
+    }
+
+    /** BOBJ keeps its euler channels in radians — see {@link RigBone#isRotationInDegrees()}. */
+    @Override
+    public boolean isRotationInDegrees()
+    {
+        return false;
+    }
+
+    @Override
+    public Vector3f getOffset()
+    {
+        return this.offset;
+    }
+
+    @Override
+    public void setOffset(Vector3f offset)
+    {
+        this.offset = offset;
     }
 }

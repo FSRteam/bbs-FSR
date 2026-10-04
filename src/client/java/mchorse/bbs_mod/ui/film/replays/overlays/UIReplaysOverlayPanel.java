@@ -134,7 +134,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
                 return;
             }
 
-            UIAnchorKeyframeFactory.displayAttachments(filmPanel, CollectionUtils.getIndex(filmPanel.getData().replays.getList(), replay), replay.axesPreviewBone.get(), (s) -> this.edit((r) -> r.axesPreviewBone.set(s)));
+            UIAnchorKeyframeFactory.displayAttachments(filmPanel, replay.getId(), replay.axesPreviewBone.get(), (s) -> this.edit((r) -> r.axesPreviewBone.set(s)));
         });
 
         this.properties = UI.scrollView(5, 6,

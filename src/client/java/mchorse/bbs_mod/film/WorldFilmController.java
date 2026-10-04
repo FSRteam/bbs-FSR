@@ -1,11 +1,11 @@
 package mchorse.bbs_mod.film;
 
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.camera.CameraPoseEvaluator;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.utils.clips.Clip;
-import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 
 import java.util.List;
 import java.util.Map;
@@ -17,6 +17,10 @@ public class WorldFilmController extends BaseFilmController
 
     public int tick;
     public int duration;
+    private final CameraPoseEvaluator cameraPoseEvaluator = new CameraPoseEvaluator();
+    private long cameraFrameId;
+    private int sampledTick = Integer.MIN_VALUE;
+    private float sampledTransition;
 
     public WorldFilmController(Film film)
     {
@@ -24,9 +28,10 @@ public class WorldFilmController extends BaseFilmController
 
         this.createEntities();
 
-        this.duration = film.camera.calculateDuration();
+        this.duration = film.calculateDuration();
         this.context = new CameraClipContext();
         this.context.clips = film.camera;
+        this.context.entities = this.getEntities();
     }
 
     @Override
@@ -59,16 +64,43 @@ public class WorldFilmController extends BaseFilmController
     }
 
     @Override
-    public void render(IBbsWorldRenderContext context)
+    public void startRenderFrame(float transition)
     {
-        super.render(context);
+        super.startRenderFrame(transition);
+        this.sampleCameraFrame(transition);
+    }
 
+    public CameraClipContext getCameraContext()
+    {
+        return this.context;
+    }
+
+    public Position getOutputCameraPosition(float transition)
+    {
+        float delta = this.paused ? 0F : transition;
+
+        if (this.sampledTick != Math.max(this.tick, 0) || this.sampledTransition != delta)
+        {
+            this.sampleCameraFrame(delta);
+        }
+
+        return this.cameraPoseEvaluator.evaluateOutput(this.position);
+    }
+
+    private void sampleCameraFrame(float transition)
+    {
+        float delta = this.paused ? 0F : transition;
         int tick = Math.max(this.tick, 0);
-        List<Clip> clips = this.context.clips.getClips(tick);
+
+        /* Film.camera owns soundtrack, curves, subtitles and extension effects.
+         * Camera cuts change visual sampling, never this playback owner. */
+        this.context.clips = this.film.camera;
+
+        List<Clip> clips = this.context.clips == null ? List.of() : this.context.clips.getClips(tick);
 
         this.context.clipData.clear();
         this.context.playing = !this.paused;
-        this.context.setup(tick, context.tickDelta());
+        this.context.setup(tick, delta);
 
         for (Clip clip : clips)
         {
@@ -78,6 +110,10 @@ public class WorldFilmController extends BaseFilmController
         this.context.currentLayer = 0;
 
         AudioClientClip.manageSounds(this.context);
+        this.cameraPoseEvaluator.beginFrame(++this.cameraFrameId, this.film, tick, delta, !this.paused, this.getEntities());
+        this.cameraPoseEvaluator.seedLegacyPose(this.position);
+        this.sampledTick = tick;
+        this.sampledTransition = delta;
     }
 
     @Override
@@ -88,5 +124,6 @@ public class WorldFilmController extends BaseFilmController
         this.context.shutdown();
         this.context.resetPlaybackOwner();
         this.context.clipData.clear();
+        this.cameraPoseEvaluator.close();
     }
 }

@@ -4,11 +4,15 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.platform.InputConstants;
 import mchorse.bbs_mod.audio.MinecraftSoundCapture;
 import mchorse.bbs_mod.audio.SoundManager;
+import mchorse.bbs_mod.blocks.ModelBlock;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
+import mchorse.bbs_mod.camera.clips.misc.VideoClientClip;
+import mchorse.bbs_mod.fonts.FontManager;
+import mchorse.bbs_mod.video.VideoManager;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -20,12 +24,25 @@ import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
 import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
 import mchorse.bbs_mod.cubic.animation.ItemUsePose;
+import mchorse.bbs_mod.cubic.jem.VanillaRigs;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
+import mchorse.bbs_mod.api.client.events.BBSClientReadyEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClientSettingsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterImportersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterL10nEvent;
+import mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent;
+import mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent;
 import mchorse.bbs_mod.cubic.model.ModelManager;
-import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
-import mchorse.bbs_mod.events.register.RegisterL10nEvent;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.film.Recorder;
@@ -37,6 +54,9 @@ import mchorse.bbs_mod.film.WorldVideoExportSession;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.forms.structure.BakedStructure;
+import mchorse.bbs_mod.forms.structure.StructureSelection;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.forms.categories.UserFormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Draw;
@@ -76,6 +96,7 @@ import mchorse.bbs_mod.utils.ScreenshotRecorder;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.resources.CemSourcePack;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -112,6 +133,8 @@ public class BBSModClient
     private static TextureManager textures;
     private static FramebufferManager framebuffers;
     private static SoundManager sounds;
+    private static VideoManager videos;
+    private static FontManager fonts;
     private static L10n l10n;
 
     private static ModelManager models;
@@ -136,6 +159,9 @@ public class BBSModClient
     private static KeyMapping keyTeleport;
     private static KeyMapping keyZoom;
 
+    /* Temporary multiview validation: Ctrl+M toggles the second off-screen render pass. */
+    private static KeyMapping keyDebugMultiview;
+
     private static UIDashboard dashboard;
 
     private static CameraController cameraController = new CameraController();
@@ -147,6 +173,41 @@ public class BBSModClient
 
     private static float originalFramebufferScale;
     private static boolean customGUIScale;
+
+    /** The OptiFine CEM models of the installed resource packs; null until the client has started. */
+    private static CemSourcePack cemSourcePack;
+
+    /** Minecraft's own textures; null until the client has started. */
+    private static MinecraftSourcePack minecraftSourcePack;
+
+    public static CemSourcePack getCemSourcePack()
+    {
+        return cemSourcePack;
+    }
+
+    /**
+     * Read the resource packs again and drop everything built on what they said before. A pack going
+     * on or off changes which models and textures exist, and nothing else would notice: the watchdog
+     * watches BBS's own folder, and a link a pack serves has no file behind it to watch.
+     */
+    public static void onResourcePacksReloaded()
+    {
+        /* The first reload runs before the client has started; both packs index themselves when made. */
+        if (cemSourcePack == null)
+        {
+            return;
+        }
+
+        minecraftSourcePack.setupPaths();
+        cemSourcePack.reindex();
+        VanillaRigs.clear();
+
+        /* Baked structures hold sprite UVs — stale after resource reload (pack switch, F3+T) */
+        BakedStructure.invalidateAll();
+
+        getModels().forgetFolder(CemSourcePack.NAME + "/");
+        getFormCategories().setup();
+    }
 
     public static TextureManager getTextures()
     {
@@ -161,6 +222,16 @@ public class BBSModClient
     public static SoundManager getSounds()
     {
         return sounds;
+    }
+
+    public static VideoManager getVideos()
+    {
+        return videos;
+    }
+
+    public static FontManager getFonts()
+    {
+        return fonts;
     }
 
     public static L10n getL10n()
@@ -406,11 +477,31 @@ public class BBSModClient
         textures = new TextureManager(provider);
         framebuffers = new FramebufferManager();
         sounds = new SoundManager(provider);
+        videos = new VideoManager();
+        fonts = new FontManager();
         l10n = new L10n();
         l10n.register((lang) -> Collections.singletonList(Link.assets("strings/" + lang + ".json")));
+
+        /* The client half of the addons, picked up before anything is posted on the addon channel.
+         * Their common half is registered by BBSMod, from the "bbs-addon" entrypoint. */
+        for (mchorse.bbs_mod.api.BBSAddonMod addon : mchorse.bbs_mod.loader.LoaderAccessHolder.get().getEntrypoints("bbs-client-addon", mchorse.bbs_mod.api.BBSAddonMod.class))
+        {
+            mchorse.bbs_mod.api.EventBus.INSTANCE.register(addon);
+        }
+
+        /* Addons add their own language files here, so the event goes out before the load and not
+         * after it — otherwise every addon label would show its raw key until the next language
+         * switch, or every addon would have to reload the whole thing a second time. It goes out
+         * after the client entrypoints above for the same reason it does upstream: a listener
+         * registered later is not on the addon channel yet when this fires. */
+        postAddonEvent(new RegisterL10nEvent(l10n));
+
         l10n.reload();
 
-        BBSMod.events.post(new RegisterL10nEvent(l10n));
+        /* Both of these are read by the objects made right below, and both lists are rebuilt on
+         * every asset reload — so the moment to add to them is before the first build. */
+        postAddonEvent(new RegisterModelLoadersEvent());
+        postAddonEvent(new RegisterFormSectionsEvent());
 
         File parentFile = BBSMod.getSettingsFolder().getParentFile();
 
@@ -426,6 +517,20 @@ public class BBSModClient
 
         BBSResources.init();
 
+        /* While the dashboard is open or a model block is held, model blocks
+         * are targetable as at least a full cube even with a tiny hitbox. */
+        ModelBlock.editingCheck = () ->
+        {
+            if (UIScreen.getCurrentMenu() instanceof UIDashboard)
+            {
+                return true;
+            }
+
+            Minecraft mc = Minecraft.getInstance();
+
+            return mc.player != null && mc.player.getMainHandItem().is(BBSMod.MODEL_BLOCK_ITEM.get());
+        };
+
         URLRepository repository = new URLRepository(new File(parentFile, "url_cache"));
 
         provider.register(new URLSourcePack("http", repository));
@@ -433,9 +538,26 @@ public class BBSModClient
 
         KeybindSettings.registerClasses();
 
+        /* Before the settings file below is built: it reads the classes, and the addon combos
+         * have to be among them. */
+        postAddonEvent(new RegisterKeybindsEvent());
+
         BBSMod.setupConfig(Icons.KEY_CAP, "keybinds", new File(BBSMod.getSettingsFolder(), "keybinds.json"), KeybindSettings::register);
 
-        BBSMod.events.post(new RegisterClientSettingsEvent());
+        postAddonEvent(new RegisterClientSettingsEvent());
+
+        /* The registries behind these fill themselves lazily, on first use, and every one of them
+         * puts BBS's own entries in before an addon gets a chance to — a subscriber's register()
+         * call is what initializes the class. So the only thing that matters here is that the
+         * posts happen before anything reads the finished picture. */
+        postAddonEvent(new RegisterFormRenderersEvent());
+        postAddonEvent(new RegisterFormEditorsEvent());
+        postAddonEvent(new RegisterClipPanelsEvent());
+        postAddonEvent(new RegisterKeyframeEditorsEvent());
+        postAddonEvent(new RegisterValueWidgetsEvent());
+        postAddonEvent(new RegisterClipRenderersEvent());
+        postAddonEvent(new RegisterTrackStylesEvent());
+        postAddonEvent(new RegisterImportersEvent());
 
         BBSSettings.language.postCallback((v, f) -> reloadLanguage(getLanguageKey()));
         BBSSettings.userIntefaceScale.postCallback((v, f) ->
@@ -502,6 +624,7 @@ public class BBSModClient
         /* Replace audio clip with client version that plays audio */
         BBSMod.getFactoryCameraClips()
             .register(Link.bbs("audio"), AudioClientClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
+            .register(Link.bbs("video"), VideoClientClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
             .register(Link.bbs("tracker"), TrackerClientClip.class, new ClipFactoryData(Icons.USER, 0x4cedfc))
             .register(Link.bbs("curve"), CurveClientClip.class, new ClipFactoryData(Icons.ARC, 0xff1493));
 
@@ -529,6 +652,8 @@ public class BBSModClient
 
         BBSRendering.setup();
 
+        StructureWand.register();
+
         /* Network */
         ClientNetwork.setup();
 
@@ -546,6 +671,13 @@ public class BBSModClient
             BBSMod.getAssetsPath("models/player/" + path + "/").mkdirs();
         }
 
+        postAddonEvent(new BBSClientReadyEvent());
+    }
+
+    /** Sends an addon-facing event down the addon channel; a no-op while no addon subscribed. */
+    private static void postAddonEvent(Object event)
+    {
+        mchorse.bbs_mod.api.EventBus.INSTANCE.post(event);
     }
 
     public static void registerKeyMappings(Consumer<KeyMapping> register)
@@ -565,10 +697,13 @@ public class BBSModClient
         register.accept(keyDemorph);
         register.accept(keyTeleport);
         register.accept(keyZoom);
+        register.accept(keyDebugMultiview);
     }
 
     public static void onRenderAfterEntities(IBbsWorldRenderContext context)
     {
+        StructureWand.renderWorld(context);
+
         if (!BBSRendering.isIrisShadersEnabled())
         {
             BBSRendering.renderCoolStuff(context);
@@ -622,7 +757,7 @@ public class BBSModClient
     {
         FormTranslucentQueue.flush();
 
-        if (videoRecorder.isRecording() && BBSRendering.canRender)
+        if (videoRecorder.isRecording() && BBSRendering.canRender && !BBSRendering.isApplyingSecondaryCamera())
         {
             minecraftSoundCapture.captureFrame();
             videoRecorder.recordFrame();
@@ -641,6 +776,8 @@ public class BBSModClient
             runClientLifecycleStep("notify addon disconnect", () -> ClientApiCompat.emitDisconnect(Minecraft.getInstance()));
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
             runClientLifecycleStep("stop Minecraft sound capture", minecraftSoundCapture::end);
+            runClientLifecycleStep("release video decoders", () -> videos.delete());
+            runClientLifecycleStep("release Film view resources", BBSRendering::releaseViewResources);
             runClientLifecycleStep("reset UI mirror", () -> BBSUiMirrorRuntime.reset());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
         }
@@ -649,6 +786,10 @@ public class BBSModClient
             /* Identity clearing is unconditional and independent of callbacks. */
             dashboard = null;
         }
+
+        /* Corners are raw coordinates: kept across a world change they would point the wand
+         * at whatever now stands in their place */
+        runClientLifecycleStep("clear structure selection", StructureSelection::clear);
 
         runClientLifecycleStep("reset Film controller state", () -> films.reset());
         runClientLifecycleStep("replace Film controller", () -> films = new Films());
@@ -679,6 +820,7 @@ public class BBSModClient
             () -> UIAudioRecorder.cancelActive(filmPanel));
         runClientLifecycleStep("replace exact client network player scope",
             () -> ClientNetwork.onClientPlayerClone(connection, oldPlayer, newPlayer));
+        runClientLifecycleStep("release Film view resources for client-player clone", BBSRendering::releaseViewResources);
         runClientLifecycleStep("reset Film controller state for client-player clone", () ->
         {
             if (!surviveDeathRespawn && films != null)
@@ -728,6 +870,13 @@ public class BBSModClient
     {
         LivePlayerItemUse.endFrame();
         ClientApiCompat.emitStartClientTick(Minecraft.getInstance());
+
+        /* Wind down decoders of video clips and forms that left the screen */
+        videos.update();
+
+        /* Give back the glyph atlases of fonts nobody has drawn lately */
+        fonts.update();
+
         BBSRendering.startTick();
     }
 
@@ -762,6 +911,13 @@ public class BBSModClient
             films.update();
             modelBlockItemRenderer.update();
             gunItemRenderer.update();
+        }
+
+        /* Animated textures keep going in BBS's own screens even while the game is paused
+         * under them — the texture manager pauses it, the film editor doesn't, and a preview
+         * should play in both. With no BBS screen the clock stops with the world, as vanilla's does. */
+        if (!mc.isPaused() || mc.screen instanceof UIScreen)
+        {
             textures.update();
         }
 
@@ -786,6 +942,37 @@ public class BBSModClient
         }
         while (keyDemorph.consumeClick()) ClientNetwork.sendPlayerForm(null);
         while (keyTeleport.consumeClick()) keyTeleport();
+
+        while (keyDebugMultiview.consumeClick())
+        {
+            if (!mchorse.bbs_mod.graphics.window.Window.isCtrlPressed())
+            {
+                continue;
+            }
+
+            boolean on = !BBSRendering.isSecondaryViewEnabled();
+
+            if (on && UIScreen.getCurrentMenu() instanceof UIDashboard dashboard
+                && dashboard.getPanels().panel instanceof UIFilmPanel panel)
+            {
+                panel.ensurePreview2Visible();
+            }
+
+            BBSRendering.setSecondaryViewEnabled(on);
+
+            if (mc.player != null)
+            {
+                net.minecraft.client.Camera cam = mc.gameRenderer.getMainCamera();
+                String yaw = cam != null ? String.valueOf(cam.getYRot()) : "null-cam";
+
+                mc.player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal(
+                        "multiview debug: " + (on ? "ON" : "OFF") + " (mainYaw=" + yaw + ")"
+                    ),
+                    true
+                );
+            }
+        }
 
         if (mc.player != null)
         {
@@ -836,6 +1023,8 @@ public class BBSModClient
             runClientLifecycleStep("stop hot plugin runtime", () ->
                 BBSPluginClientStructuralBridge.runBlockingShutdown(BBSMod::stopHotPluginRuntime));
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
+            runClientLifecycleStep("release video decoders", () -> videos.delete());
+            runClientLifecycleStep("release Film view resources", BBSRendering::releaseViewResources);
             runClientLifecycleStep("shutdown UI mirror", () -> BBSUiMirrorRuntime.shutdown());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
         }
@@ -969,7 +1158,16 @@ public class BBSModClient
     {
         ItemUsePose.setSource(ThirdPersonItemUse::get);
         BBSRendering.setupFramebuffer();
-        BBSMod.getProvider().register(new MinecraftSourcePack());
+
+        minecraftSourcePack = new MinecraftSourcePack();
+
+        BBSMod.getProvider().register(minecraftSourcePack);
+
+        /* Last under "assets", so the user's own folder and the jar win over a resource pack's
+         * models - which is what lets a pack model be given a config.json or replaced outright. */
+        cemSourcePack = new CemSourcePack();
+
+        BBSMod.getProvider().register(cemSourcePack);
 
         BBSUiOpenDispatcher.start(Minecraft.getInstance());
 
@@ -999,6 +1197,7 @@ public class BBSModClient
         keyDemorph = createKey("demorph", GLFW.GLFW_KEY_PERIOD);
         keyTeleport = createKey("teleport", GLFW.GLFW_KEY_Y);
         keyZoom = createKeyMouse("zoom", 2);
+        keyDebugMultiview = createKey("debug_multiview", GLFW.GLFW_KEY_M);
     }
 
     private static void keyRecordVideo(Minecraft mc)

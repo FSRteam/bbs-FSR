@@ -8,9 +8,10 @@ import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
-
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Keyframe channel
@@ -278,11 +279,52 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
         return index;
     }
 
+    /**
+     * {@link #insert}, and a keyframe born between two others takes the left one's interpolation,
+     * style, duration and handles — the way a hand-placed keyframe does, so a value laid onto a
+     * shaped curve keeps the curve's shape. Returns the keyframe at the tick.
+     */
+    public Keyframe<T> insertInheriting(float tick, T value)
+    {
+        KeyframeSegment<T> segment = this.find(tick);
+        Keyframe<T> template = segment == null ? null : segment.a;
+        Keyframe<T> keyframe = this.get(this.insert(tick, value));
+
+        if (template != null && template != keyframe)
+        {
+            keyframe.copyOverExtra(template);
+        }
+
+        return keyframe;
+    }
+
     public void sort()
     {
-        this.list.sort((a, b) -> (int) (a.getTick() - b.getTick()));
+        /* Float.compare rather than (int) (a - b): two distinct fractional ticks less than one
+         * apart would truncate to an equal comparison and leave the list unsorted, and segment
+         * lookup assumes the keys are ordered. */
+        this.list.sort((a, b) -> Float.compare(a.getTick(), b.getTick()));
 
         this.sync();
+    }
+
+    /**
+     * Sort after a move, keeping the moved keyframe at each occupied tick: a key dropped onto a
+     * tick another key already holds replaces it instead of sharing the tick. The caller records
+     * the whole edit through its before/after snapshots, exactly as with {@link #sort()}.
+     */
+    public void sort(List<Keyframe<T>> moved)
+    {
+        Map<Float, Keyframe<T>> replacements = new HashMap<>();
+
+        for (Keyframe<T> keyframe : moved)
+        {
+            replacements.put(keyframe.getTick(), keyframe);
+        }
+
+        this.list.removeIf(keyframe -> replacements.containsKey(keyframe.getTick())
+            && replacements.get(keyframe.getTick()) != keyframe);
+        this.sort();
     }
 
     public void simplify()
@@ -341,9 +383,21 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
     public BaseType toData()
     {
         MapType data = new MapType();
+        String type = CollectionUtils.getKey(KeyframeFactories.FACTORIES, this.factory);
+
+        if (type == null)
+        {
+            /* A factory outside the registry has no name to write, so the channel goes out with a
+             * null type and cannot be read back — the lookup on load finds nothing. There is no
+             * value to substitute here, but it must not happen quietly. Stderr rather than a
+             * logger, for the same reason as the read side below: this class has to initialize on
+             * bare test-harness classpaths that ship no logging backend. */
+            System.err.println("[bbs] Keyframe channel \"" + this.getId() + "\" holds a factory that isn't registered ("
+                + this.factory + "); it is being saved with no value type and won't read back!");
+        }
 
         data.put("keyframes", super.toData());
-        data.putString("type", CollectionUtils.getKey(KeyframeFactories.FACTORIES, this.factory));
+        data.putString("type", type);
 
         return data;
     }
@@ -357,7 +411,22 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
         }
 
         MapType map = data.asMap();
-        IKeyframeFactory<T> factory = KeyframeFactories.FACTORIES.get(map.getString("type"));
+        String type = map.getString("type");
+        IKeyframeFactory<T> factory = KeyframeFactories.FACTORIES.get(type);
+
+        if (factory == null)
+        {
+            /* An unknown value type used to be assigned regardless, which left the channel holding
+             * a null factory: reading the first keyframe then threw, and wherever that throw was
+             * swallowed the whole channel disappeared without a trace. Keep the factory the channel
+             * was constructed with, say so out loud, and leave the keyframes unread — they are
+             * written in a shape this build has no way to interpret. Stderr rather than a logger:
+             * this class initializes on bare test-harness classpaths with no logging backend. */
+            System.err.println("[bbs] Keyframe channel \"" + this.getId() + "\" has unknown value type \""
+                + type + "\"; its keyframes are left out.");
+
+            return;
+        }
 
         this.factory = factory;
 

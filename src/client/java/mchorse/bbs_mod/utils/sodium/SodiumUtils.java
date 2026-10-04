@@ -5,11 +5,12 @@ import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexSodiumConsumer;
 import mchorse.bbs_mod.utils.colors.Color;
 import java.lang.reflect.Method;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 
 public class SodiumUtils
 {
-    private static boolean savedBlockFaceCulling;
-    private static boolean savedFogOcclusion;
+    private static Method optionsAccessor;
+    private static CullingState pointCameraCulling;
 
     public static VertexConsumer createVertexBuffer(VertexConsumer b, Color color)
     {
@@ -18,88 +19,96 @@ public class SodiumUtils
 
     public static void disablePointCameraCulling()
     {
-        Object performance = performance();
+        pointCameraCulling = captureCameraCulling();
 
-        if (performance == null)
+        if (pointCameraCulling != null)
         {
-            return;
+            pointCameraCulling.apply(true);
         }
-
-        savedBlockFaceCulling = getBoolean(performance, "useBlockFaceCulling");
-        savedFogOcclusion = getBoolean(performance, "useFogOcclusion");
-        setBoolean(performance, "useBlockFaceCulling", false);
-        setBoolean(performance, "useFogOcclusion", false);
     }
 
     public static void restorePointCameraCulling()
     {
-        Object performance = performance();
-
-        if (performance == null)
+        if (pointCameraCulling != null)
         {
-            return;
+            pointCameraCulling.apply(false);
+            pointCameraCulling = null;
         }
-
-        setBoolean(performance, "useBlockFaceCulling", savedBlockFaceCulling);
-        setBoolean(performance, "useFogOcclusion", savedFogOcclusion);
     }
 
-    private static Object performance()
+    public static CullingState captureCameraCulling()
     {
         try
         {
-            Class<?> owner = Class.forName("net.caffeinemc.mods.sodium.client.SodiumClientMod");
-            Method selected = null;
-
-            for (Method candidate : owner.getDeclaredMethods())
+            if (optionsAccessor == null)
             {
-                if (java.lang.reflect.Modifier.isStatic(candidate.getModifiers())
-                    && candidate.getParameterCount() == 0
-                    && candidate.getReturnType().getName().contains("SodiumGameOptions"))
-                {
-                    selected = candidate;
-
-                    break;
-                }
+                optionsAccessor = Class.forName("net.caffeinemc.mods.sodium.client.SodiumClientMod").getMethod("options");
             }
 
-            if (selected == null)
-            {
-                return null;
-            }
-
-            Object options = selected.invoke(null);
+            /* Sodium 0.8 changed the return type from SodiumGameOptions to SodiumOptions. */
+            Object options = optionsAccessor.invoke(null);
             Field field = options.getClass().getField("performance");
 
-            return field.get(options);
+            return captureCameraCulling(field.get(options));
         }
-        catch (Throwable ignored)
+        catch (InvocationTargetException failure)
         {
-            /* Sodium's options accessor changed between 0.6 and 0.8. Ortho is
-             * optional; an incompatible Sodium must not crash camera rendering. */
+            if (failure.getCause() instanceof Error error)
+            {
+                throw error;
+            }
+
+            throw new IllegalStateException("Could not read Sodium camera culling settings", failure.getCause());
+        }
+        catch (ReflectiveOperationException | LinkageError ignored)
+        {
             return null;
         }
     }
 
-    private static boolean getBoolean(Object object, String name)
+    public static CullingState captureCameraCulling(Object performance)
     {
         try
         {
-            return object.getClass().getField(name).getBoolean(object);
+            Field faces = performance.getClass().getField("useBlockFaceCulling");
+            Field fog = performance.getClass().getField("useFogOcclusion");
+
+            return new CullingState(performance, faces, fog, faces.getBoolean(performance), fog.getBoolean(performance));
         }
-        catch (Throwable ignored)
+        catch (ReflectiveOperationException failure)
         {
-            return false;
+            throw new IllegalStateException("Unsupported Sodium camera culling settings", failure);
         }
     }
 
-    private static void setBoolean(Object object, String name, boolean value)
+    public static final class CullingState
     {
-        try
+        private final Object performance;
+        private final Field facesField;
+        private final Field fogField;
+        private final boolean faces;
+        private final boolean fog;
+
+        private CullingState(Object performance, Field facesField, Field fogField, boolean faces, boolean fog)
         {
-            object.getClass().getField(name).setBoolean(object, value);
+            this.performance = performance;
+            this.facesField = facesField;
+            this.fogField = fogField;
+            this.faces = faces;
+            this.fog = fog;
         }
-        catch (Throwable ignored)
-        {}
+
+        public void apply(boolean orthographic)
+        {
+            try
+            {
+                this.facesField.setBoolean(this.performance, this.faces && !orthographic);
+                this.fogField.setBoolean(this.performance, this.fog && !orthographic);
+            }
+            catch (IllegalAccessException failure)
+            {
+                throw new IllegalStateException("Could not restore Sodium camera culling settings", failure);
+            }
+        }
     }
 }

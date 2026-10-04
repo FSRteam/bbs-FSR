@@ -529,17 +529,17 @@ public final class BBSAddonLifecycleTest
         Map<?, ?> c2s = staticMap(NetworkCompat.class, "C2S_BINDINGS");
         Map<?, ?> s2c = staticMap(NetworkCompat.class, "S2C_BINDINGS");
 
-        check(c2s.size() == 15, "frozen C2S table no longer spans s1..s15");
-        check(s2c.size() == 19, "frozen S2C table no longer spans c1..c19");
+        check(c2s.size() == 17, "frozen C2S table no longer spans s1..s17");
+        check(s2c.size() == 21, "frozen S2C table no longer spans c1..c21");
 
-        for (int i = 1; i <= 15; i += 1)
+        for (int i = 1; i <= 17; i += 1)
         {
             ResourceLocation id = ResourceLocation.fromNamespaceAndPath("bbs", "s" + i);
 
             check(c2s.containsKey(id), "frozen C2S table is missing " + id);
         }
 
-        for (int i = 1; i <= 19; i += 1)
+        for (int i = 1; i <= 21; i += 1)
         {
             ResourceLocation id = ResourceLocation.fromNamespaceAndPath("bbs", "c" + i);
 

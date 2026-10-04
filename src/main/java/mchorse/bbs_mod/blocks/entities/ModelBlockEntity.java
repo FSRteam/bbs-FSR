@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.blocks.entities;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.blocks.ModelBlock;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
@@ -18,6 +19,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 public class ModelBlockEntity extends BlockEntity
@@ -98,9 +100,20 @@ public class ModelBlockEntity extends BlockEntity
     {
         ModelBlockEntityUpdateCallback.EVENT.invoker().update(this);
 
+        this.properties.getEquipment().apply(this.entity);
+
         this.entity.update();
         this.entity.setWorld(world);
         this.properties.update(this.entity);
+    }
+
+    /**
+     * The block's physical shape, built from the body settings against the
+     * current form and transform.
+     */
+    public VoxelShape getShape()
+    {
+        return this.properties.getBody().buildShape(this.properties.getForm(), this.properties.getTransform());
     }
 
     @Nullable
@@ -160,6 +173,15 @@ public class ModelBlockEntity extends BlockEntity
             this.properties = previous;
 
             throw e;
+        }
+
+        /* Light and sound live in the block STATE (the engine reads them from
+         * there), but their source of truth is the body data — mirror it, after
+         * the new properties are committed (upstream mutates in place first,
+         * here the swap is transactional). */
+        if (!world.isClientSide)
+        {
+            ModelBlock.mirrorBlockState(world, pos);
         }
     }
 }

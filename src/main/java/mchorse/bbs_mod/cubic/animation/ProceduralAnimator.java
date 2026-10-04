@@ -133,6 +133,10 @@ public class ProceduralAnimator implements IAnimator
         float limbPhase = target.getLimbPos(transition);
         float leaningPitch = target.getLeaningPitch(transition);
 
+        /* Holding something up stops the swimming stroke - vanilla checks isUsingItem, and a
+         * use pose is exactly what that resolves to here. */
+        boolean usingItem = ItemUsePose.get(target, true) != null || ItemUsePose.get(target, false) != null;
+
         float coefficient = 1F;
 
         if (isRolling)
@@ -166,6 +170,9 @@ public class ProceduralAnimator implements IAnimator
             ModelGroup leftArm = null;
             ModelGroup rightArm = null;
             ModelGroup torso = null;
+            ModelGroup body = null;
+            ModelGroup leftLeg = null;
+            ModelGroup rightLeg = null;
             ModelGroup headGroup = null;
 
             for (ModelGroup group : model.getAllGroups())
@@ -256,20 +263,37 @@ public class ProceduralAnimator implements IAnimator
                 {
                     torso = group;
                 }
+                else if (group.id.equals("body"))
+                {
+                    body = group;
+                }
                 else if (group.id.equals("right_leg"))
                 {
                     group.current.rotate.x = MathUtils.toDeg(Mth.cos(limbPhase * 0.6662F + 3.1415927F) * 1.4F * limbSpeed / coefficient);
+
+                    rightLeg = group;
                 }
                 else if (group.id.equals("left_leg"))
                 {
                     group.current.rotate.x = MathUtils.toDeg(Mth.cos(limbPhase * 0.6662F) * 1.4F * limbSpeed / coefficient);
+
+                    leftLeg = group;
                 }
+            }
+
+            /* The bone a swing twists is vanilla's "body"; BBS's own rigs name it "torso". A model
+             * built on the vanilla rig - every CEM model is - carries the vanilla name, and without this
+             * the swing below found no bone to turn and was skipped whole, so the arm never swung.
+             * "torso" wins where a rig has both, being the name BBS's own models use. */
+            if (torso == null)
+            {
+                torso = body;
             }
 
             if (leftArm != null && rightArm != null)
             {
                 VanillaArmPoses.apply(
-                    cubicArm(rightArm), cubicArm(leftArm),
+                    cubicBone(rightArm), cubicBone(leftArm),
                     headGroup == null ? MathUtils.toRad(pitch) : -MathUtils.toRad(headGroup.current.rotate.x),
                     headGroup == null ? MathUtils.toRad(yaw) : -MathUtils.toRad(headGroup.current.rotate.y),
                     main, offhand, ItemUsePose.get(target, true), ItemUsePose.get(target, false),
@@ -308,6 +332,16 @@ public class ProceduralAnimator implements IAnimator
                 attackArm.current.rotate.y += torso.current.rotate.y * 2F;
                 attackArm.current.rotate.z += MathUtils.toDeg(Mth.sin(handSwingProgress * MathUtils.PI) * -0.4F) * direction;
             }
+
+            /* Last, the way vanilla does it: the stroke overrides the walk the limbs were given
+             * above, weighted by how flat the body has gone. */
+            if (leaningPitch > 0F)
+            {
+                VanillaSwimPose.apply(
+                    cubicBone(rightArm), cubicBone(leftArm), cubicBone(rightLeg), cubicBone(leftLeg),
+                    leaningPitch, limbPhase, handSwingProgress, usingItem
+                );
+            }
         }
         /* For BOBJ models */
         else
@@ -315,6 +349,8 @@ public class ProceduralAnimator implements IAnimator
             BOBJBone bobjLeftArm = null;
             BOBJBone bobjRightArm = null;
             BOBJBone bobjHead = null;
+            BOBJBone bobjLeftLeg = null;
+            BOBJBone bobjRightLeg = null;
 
             for (BOBJBone bone : model.getAllBOBJBones())
             {
@@ -401,17 +437,21 @@ public class ProceduralAnimator implements IAnimator
                 else if (bone.name.equals("right_leg"))
                 {
                     bone.transform.rotate.x = Mth.cos(limbPhase * 0.6662F + 3.1415927F) * 1.4F * limbSpeed / coefficient;
+
+                    bobjRightLeg = bone;
                 }
                 else if (bone.name.equals("left_leg"))
                 {
                     bone.transform.rotate.x = Mth.cos(limbPhase * 0.6662F) * 1.4F * limbSpeed / coefficient;
+
+                    bobjLeftLeg = bone;
                 }
             }
 
             if (bobjLeftArm != null && bobjRightArm != null)
             {
                 VanillaArmPoses.apply(
-                    bobjArm(bobjRightArm), bobjArm(bobjLeftArm),
+                    bobjBone(bobjRightArm), bobjBone(bobjLeftArm),
                     bobjHead == null ? MathUtils.toRad(pitch) : bobjHead.transform.rotate.x,
                     bobjHead == null ? MathUtils.toRad(yaw) : -bobjHead.transform.rotate.y,
                     main, offhand, ItemUsePose.get(target, true), ItemUsePose.get(target, false),
@@ -449,6 +489,16 @@ public class ProceduralAnimator implements IAnimator
                 attackArm.transform.rotate.y -= MathUtils.toRad(rotate * 2F);
                 attackArm.transform.rotate.z -= Mth.sin(handSwingProgress * MathUtils.PI) * -0.4F * direction;
             }
+
+            /* Last, the way vanilla does it: the stroke overrides the walk the limbs were given
+             * above, weighted by how flat the body has gone. */
+            if (leaningPitch > 0F)
+            {
+                VanillaSwimPose.apply(
+                    bobjBone(bobjRightArm), bobjBone(bobjLeftArm), bobjBone(bobjRightLeg), bobjBone(bobjLeftLeg),
+                    leaningPitch, limbPhase, handSwingProgress, usingItem
+                );
+            }
         }
 
         if (this.basePost != null)
@@ -471,25 +521,46 @@ public class ProceduralAnimator implements IAnimator
         return b + a * factor;
     }
 
-    private static VanillaArmPoses.Arm cubicArm(ModelGroup group)
+    /**
+     * A cubic bone spoken in vanilla: degrees flipped into radians, x = -pitch, y = -yaw,
+     * z = +roll (the arm bob above writes the roll that way).
+     */
+    private static VanillaBone cubicBone(ModelGroup group)
     {
-        return new VanillaArmPoses.Arm()
+        if (group == null)
+        {
+            return null;
+        }
+
+        return new VanillaBone()
         {
             public float pitch() { return -MathUtils.toRad(group.current.rotate.x); }
             public void pitch(float value) { group.current.rotate.x = -MathUtils.toDeg(value); }
             public float yaw() { return -MathUtils.toRad(group.current.rotate.y); }
             public void yaw(float value) { group.current.rotate.y = -MathUtils.toDeg(value); }
+            public float roll() { return MathUtils.toRad(group.current.rotate.z); }
+            public void roll(float value) { group.current.rotate.z = MathUtils.toDeg(value); }
         };
     }
 
-    private static VanillaArmPoses.Arm bobjArm(BOBJBone bone)
+    /**
+     * A BOBJ bone spoken in vanilla: already radians, x = -pitch, y = +yaw, z = -roll.
+     */
+    private static VanillaBone bobjBone(BOBJBone bone)
     {
-        return new VanillaArmPoses.Arm()
+        if (bone == null)
+        {
+            return null;
+        }
+
+        return new VanillaBone()
         {
             public float pitch() { return -bone.transform.rotate.x; }
             public void pitch(float value) { bone.transform.rotate.x = -value; }
             public float yaw() { return bone.transform.rotate.y; }
             public void yaw(float value) { bone.transform.rotate.y = value; }
+            public float roll() { return -bone.transform.rotate.z; }
+            public void roll(float value) { bone.transform.rotate.z = -value; }
         };
     }
 }

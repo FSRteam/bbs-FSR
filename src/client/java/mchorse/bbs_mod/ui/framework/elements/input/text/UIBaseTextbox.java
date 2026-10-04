@@ -74,7 +74,7 @@ public abstract class UIBaseTextbox extends UIElement implements IFocusedUIEleme
 
     protected void requestTextCursor(UIContext context)
     {
-        if (this.isEnabled() && (this.isFocused() || this.area.isInside(context)))
+        if (this.isEnabled() && this.area.isInside(context))
         {
             context.requestCursor(GLFW.GLFW_IBEAM_CURSOR);
         }

@@ -16,11 +16,22 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
 
 public class FormCategories implements IWatchDogListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(FormCategories.class);
+
+    /**
+     * Sections an addon added to the palette.
+     *
+     * <p>Factories rather than sections, because {@link #setup()} runs again on every asset reload
+     * and rebuilds its list from scratch — a section handed over once would be thrown away the
+     * first time the user touched a file.</p>
+     */
+    private static final List<Function<FormCategories, FormSection>> EXTRA_SECTIONS = new ArrayList<>();
 
     public final VisibilityManager visibility = new VisibilityManager();
 
@@ -30,6 +41,32 @@ public class FormCategories implements IWatchDogListener
     private ExtraFormSection extraForms = new ExtraFormSection(this);
 
     private long lastUpdate;
+
+    /**
+     * Adds a section — a top-level tab — to the form palette.
+     *
+     * <p>Without this, an addon's forms worked but had nowhere to be picked from: the list of
+     * sections was private and built from scratch in {@link #setup()}.</p>
+     */
+    public static void registerSection(Function<FormCategories, FormSection> factory)
+    {
+        if (factory != null)
+        {
+            EXTRA_SECTIONS.add(factory);
+        }
+    }
+
+    /** Removes a previously added section factory; returns whether it was there. */
+    public static boolean unregisterSection(Function<FormCategories, FormSection> factory)
+    {
+        return factory != null && EXTRA_SECTIONS.remove(factory);
+    }
+
+    /** The section factories added so far, in registration order. */
+    public static List<Function<FormCategories, FormSection>> getRegisteredSections()
+    {
+        return Collections.unmodifiableList(EXTRA_SECTIONS);
+    }
 
     /* Setup */
 
@@ -43,6 +80,16 @@ public class FormCategories implements IWatchDogListener
         this.sections.add(new ModelFormSection(this));
         this.sections.add(new ParticleFormSection(this));
         this.sections.add(this.extraForms);
+
+        for (Function<FormCategories, FormSection> factory : EXTRA_SECTIONS)
+        {
+            FormSection section = factory.apply(this);
+
+            if (section != null)
+            {
+                this.sections.add(section);
+            }
+        }
 
         for (FormSection section : this.sections)
         {

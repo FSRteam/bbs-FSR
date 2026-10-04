@@ -16,6 +16,9 @@ import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
 import mchorse.bbs_mod.ui.forms.editors.panels.widgets.UIModelPicker;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.shapes.UIShapeKeys;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -30,6 +33,20 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
     public UIColor color;
     public UIShapeKeys shapeKeys;
     public UISection shapeKeysSection;
+
+    /** Only for a model that carries a CEM program — see {@link mchorse.bbs_mod.cubic.jem.CemStatus}. */
+    public UISection cemSection;
+
+    /* The CEM state widgets, built once and refreshed per form in startEdit — see buildCemSection(). */
+    private UIToggle cemSitting;
+    private UIToggle cemTamed;
+    private UIToggle cemAggressive;
+    private UIToggle cemOnShoulder;
+    private UIToggle cemBurning;
+    private UIToggle cemInLava;
+    private UIToggle cemClimbing;
+    private UIToggle cemCrawling;
+    private UITrackpad cemHealth;
 
     public UIButton pickModel;
     public UIButton pick;
@@ -88,6 +105,42 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
         });
 
         this.options.add(this.pickModel, this.pick, this.color, this.poseEditor);
+
+        this.buildCemSection();
+    }
+
+    /**
+     * The states a CEM pack asks about that a form cannot know — whether the creature sits, is tamed,
+     * is angry. In the world a morph reads them off the entity it rides; a film's actor is a stand-in
+     * with no owner and no target, so here they are set by hand, and each is a track of its own.
+     */
+    private void buildCemSection()
+    {
+        this.cemSitting = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_SITTING, false, (b) -> this.form.cemSitting.set(b.getValue()));
+        this.cemTamed = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_TAMED, false, (b) -> this.form.cemTamed.set(b.getValue()));
+        this.cemAggressive = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_AGGRESSIVE, false, (b) -> this.form.cemAggressive.set(b.getValue()));
+        this.cemOnShoulder = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_ON_SHOULDER, false, (b) -> this.form.cemOnShoulder.set(b.getValue()));
+        this.cemBurning = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_BURNING, false, (b) -> this.form.cemBurning.set(b.getValue()));
+        this.cemInLava = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_IN_LAVA, false, (b) -> this.form.cemInLava.set(b.getValue()));
+        this.cemClimbing = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CLIMBING, false, (b) -> this.form.cemClimbing.set(b.getValue()));
+        this.cemCrawling = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CRAWLING, false, (b) -> this.form.cemCrawling.set(b.getValue()));
+        this.cemHealth = new UITrackpad((v) -> this.form.cemHealth.set(v.floatValue()));
+
+        this.cemHealth.limit(0D, 1D).tooltip(UIKeys.FORMS_EDITOR_MODEL_CEM_HEALTH_TOOLTIP);
+
+        this.cemSection = this.section(UIKeys.FORMS_EDITOR_MODEL_CEM, "model.cem", false);
+        this.cemSection.fields.add(
+            this.cemSitting,
+            this.cemTamed,
+            this.cemAggressive,
+            this.cemOnShoulder,
+            this.cemBurning,
+            this.cemInLava,
+            this.cemClimbing,
+            this.cemCrawling,
+            UI.labelRow(UIKeys.FORMS_EDITOR_MODEL_CEM_HEALTH, this.cemHealth)
+        );
+        this.cemSection.title.tooltip(UIKeys.FORMS_EDITOR_MODEL_CEM_TOOLTIP);
     }
 
     /**
@@ -158,6 +211,24 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
         this.shapeKeysSection.removeFromParent();
         this.options.add(this.shapeKeysSection);
         this.shapeKeys.setShapeKeys(model == null ? "" : model.getPoseGroup(), modelShapeKeys, this.form.shapeKeys.get());
+
+        /* Nothing reads these unless a CEM program is what animates the model, so they only show there. */
+        this.cemSection.removeFromParent();
+
+        if (model != null && model.cemAnimation != null && model.config.cemAnimation.get())
+        {
+            this.cemSitting.setValue(this.form.cemSitting.get());
+            this.cemTamed.setValue(this.form.cemTamed.get());
+            this.cemAggressive.setValue(this.form.cemAggressive.get());
+            this.cemOnShoulder.setValue(this.form.cemOnShoulder.get());
+            this.cemBurning.setValue(this.form.cemBurning.get());
+            this.cemInLava.setValue(this.form.cemInLava.get());
+            this.cemClimbing.setValue(this.form.cemClimbing.get());
+            this.cemCrawling.setValue(this.form.cemCrawling.get());
+            this.cemHealth.setValue(this.form.cemHealth.get());
+
+            this.options.add(this.cemSection);
+        }
 
         this.options.resize();
     }

@@ -303,7 +303,7 @@ public class UITrackpad extends UINumericInput<UITrackpad>
         boolean minus = !dragging && this.minusOne.isInside(context);
         int radius = BBSSettings.cornerWidget();
 
-        if (this.isEnabled() && (this.textbox.isFocused() || (!dragging && this.area.isInside(context))))
+        if (this.isEnabled() && this.area.isInside(context) && (this.textbox.isFocused() || !dragging))
         {
             context.requestCursor(GLFW.GLFW_IBEAM_CURSOR);
         }

@@ -26,6 +26,10 @@ public class InputRenderer
 {
     private static boolean disabledForFrame = false;
 
+    /** Footprint of {@link #renderMouseButtons}, for callers laying anything out beside it. */
+    public static final int MOUSE_WIDTH = 14;
+    public static final int MOUSE_HEIGHT = 18;
+
     private List<PressedKey> pressedKeys = new ArrayList<>();
     private float lastQX = 1;
     private float lastQY = 0;

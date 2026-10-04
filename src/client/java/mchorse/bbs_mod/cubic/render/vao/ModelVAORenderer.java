@@ -11,8 +11,15 @@ import org.joml.Matrix4f;
 import org.joml.Matrix3f;
 import org.lwjgl.opengl.GL30;
 
+import java.util.List;
+
 public class ModelVAORenderer
 {
+    /** Per-VAO state used by a texture batch. The texture is owned by the caller. */
+    public static record BatchDraw(IModelVAO vao, Matrix4f modelView, Matrix3f normalMat,
+        float r, float g, float b, float a, int light, int overlay)
+    {}
+
     public static Matrix4f captureModelView(PoseStack stack)
     {
         return new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
@@ -41,6 +48,66 @@ public class ModelVAORenderer
 
         GL30.glBindVertexArray(currentVAO);
         GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
+    }
+
+    /**
+     * Render several VAOs while keeping the shader program bound for the whole texture batch.
+     * Model-view and normal uniforms are uploaded between draws, so group transforms remain
+     * independent without paying a full shader apply/clear and GL state query per VAO.
+     */
+    public static void renderBatch(ShaderInstance shader, List<BatchDraw> draws)
+    {
+        if (shader == null || draws == null || draws.isEmpty())
+        {
+            return;
+        }
+
+        int currentVAO = GL30.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
+        int currentElementArrayBuffer = GL30.glGetInteger(GL30.GL_ELEMENT_ARRAY_BUFFER_BINDING);
+
+        BatchDraw first = draws.get(0);
+        setupUniforms(shader, first.modelView(), first.normalMat());
+        shader.apply();
+
+        try
+        {
+            for (int i = 0; i < draws.size(); i++)
+            {
+                BatchDraw draw = draws.get(i);
+
+                if (i > 0)
+                {
+                    uploadDrawUniforms(shader, draw.modelView(), draw.normalMat());
+                }
+
+                draw.vao().render(shader.getVertexFormat(), draw.r(), draw.g(), draw.b(), draw.a(), draw.light(), draw.overlay());
+            }
+        }
+        finally
+        {
+            shader.clear();
+            GL30.glBindVertexArray(currentVAO);
+            GL30.glBindBuffer(GL30.GL_ELEMENT_ARRAY_BUFFER, currentElementArrayBuffer);
+        }
+    }
+
+    public static void uploadDrawUniforms(ShaderInstance shader, Matrix4f modelView, Matrix3f normalMat)
+    {
+        Uniform modelViewUniform = shader.getUniform("ModelViewMat");
+
+        if (modelViewUniform != null)
+        {
+            modelViewUniform.set(modelView);
+            modelViewUniform.upload();
+        }
+
+        Uniform normalUniform = shader.getUniform("NormalMat");
+
+        if (normalUniform != null)
+        {
+            normalUniform.set(normalMat);
+            normalUniform.upload();
+        }
     }
 
     public static void setupUniforms(PoseStack stack, ShaderInstance shader)

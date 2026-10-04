@@ -2,6 +2,7 @@ package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -447,7 +448,7 @@ public abstract class FormRenderer <T extends Form>
 
     protected void applyTransforms(PoseStack stack, boolean origin, float transition)
     {
-        Transform transform = this.setupTransform(this.combinedTransform);
+        Transform transform = this.createEvaluatedTransform(this.combinedTransform, transition);
 
         if (origin)
         {
@@ -461,12 +462,29 @@ public abstract class FormRenderer <T extends Form>
 
     protected void applyTransforms(Matrix4f matrix, float transition)
     {
-        matrix.mul(this.setupTransform(this.combinedTransform).setupMatrix(this.transformMatrix.identity()));
+        matrix.mul(this.createEvaluatedTransform(this.combinedTransform, transition).setupMatrix(this.transformMatrix.identity()));
     }
 
     protected Transform createTransform()
     {
         return this.setupTransform(new Transform());
+    }
+
+    /**
+     * Saved animation plus overlays and external pose contributions, written into a caller-owned
+     * transform: the render and matrix-walk paths pass their own scratch ({@link #combinedTransform})
+     * rather than allocating one per call. The evaluation itself is the same one the form is drawn
+     * with, so a listener that edits it moves what the eye sees and whatever attaches to it.
+     *
+     * <p>Deliberately not folded into {@link #createTransform()}: callers that only need the saved
+     * animation (the particle form's quad placement) must not pick up external contributions.</p>
+     */
+    protected Transform createEvaluatedTransform(Transform transform, float transition)
+    {
+        this.setupTransform(transform);
+        FormPoseEvents.TRANSFORM.invoker().apply(this.form, transform, transition);
+
+        return transform;
     }
 
     protected Transform setupTransform(Transform transform)
@@ -653,6 +671,11 @@ public abstract class FormRenderer <T extends Form>
 
     public final void collectMatrices(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, PoseStack stack, MatrixCache matrices, String prefix, float transition)
     {
+        /* Every matrix walk funnels through here, and the stack is still the untouched parent frame
+         * at this point - the form's own transform goes on inside. One capture per renderer per
+         * prefix, which is what a listener keying on the path expects. */
+        FormPoseEvents.PARENT_FRAME.invoker().capture(this.form, entity, stack.last().pose(), prefix, transition);
+
         boolean statesApplied = false;
 
         try

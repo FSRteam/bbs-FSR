@@ -75,13 +75,20 @@ public class MapFactory <T, D> implements IFactory<T, D>
 
     public Link getTypeSilent(T object)
     {
+        /* A stand-in answers for the type it stands in for, so saving one writes back the type
+         * the data named rather than failing over a class this factory never registered. */
+        if (object instanceof IUnknownType unknown)
+        {
+            return unknown.getUnknownType();
+        }
+
         return this.factoryInverse.get(object.getClass());
     }
 
     @Override
     public Link getType(T object)
     {
-        Link type = this.factoryInverse.get(object.getClass());
+        Link type = this.getTypeSilent(object);
 
         if (type != null)
         {

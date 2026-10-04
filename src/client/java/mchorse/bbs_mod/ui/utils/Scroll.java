@@ -73,6 +73,12 @@ public class Scroll
      */
     public boolean cancelScrollEdge = false;
 
+    /** How close to the edge a drag or a band starts scrolling the view along. */
+    public static final int AUTO_SCROLL_EDGE = 24;
+
+    /** How fast it scrolls, in pixels per frame. */
+    public static final int AUTO_SCROLL_SPEED = 6;
+
     /**
      * Whether the scrollbar should be rendered and handled by input methods
      */
@@ -252,6 +258,32 @@ public class Scroll
     public void scrollBy(double x)
     {
         this.scrollTo(this.targetScroll + x);
+    }
+
+    /**
+     * While something is dragged or a band is stretched inside the area, scroll along when the
+     * cursor comes near either edge of the scrolling direction, so it can reach what's out of sight.
+     */
+    public void autoScrollAt(int x, int y, int edge, double speed)
+    {
+        if (!this.area.isInside(x, y))
+        {
+            return;
+        }
+
+        boolean vertical = this.direction == ScrollDirection.VERTICAL;
+        int position = vertical ? y : x;
+        int start = vertical ? this.area.y : this.area.x;
+        int end = vertical ? this.area.ey() : this.area.ex();
+
+        if (position < start + edge)
+        {
+            this.scrollBy(-speed);
+        }
+        else if (position > end - edge)
+        {
+            this.scrollBy(speed);
+        }
     }
 
     /**

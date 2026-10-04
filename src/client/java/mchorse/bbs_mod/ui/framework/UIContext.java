@@ -65,6 +65,15 @@ public class UIContext implements IViewportStack
 
     public UIViewportStack viewportStack = new UIViewportStack();
     private PointerEventFrame activePointerEvent;
+    private long pointerGestureGeneration;
+
+    /**
+     * Elements whose layout went stale since the last frame (children added/removed, visibility
+     * flipped). They get resized once, before the next render, instead of every mutation
+     * paying for its own resize() pass. Ported from upstream's layout refactor (b70b1fff0).
+     */
+    private final Set<UIElement> pendingLayout = new LinkedHashSet<>();
+    private boolean flushingLayout;
 
     public UIContext(UIBaseMenu menu)
     {
@@ -77,6 +86,23 @@ public class UIContext implements IViewportStack
     public long getTick()
     {
         return this.tick;
+    }
+
+    /** Changes on a new press or scroll, not on cursor motion or release. */
+    public long getPointerGestureGeneration()
+    {
+        return this.pointerGestureGeneration;
+    }
+
+    void notePointerGesture()
+    {
+        this.pointerGestureGeneration = this.pointerGestureGeneration == Long.MAX_VALUE
+            ? 1L : this.pointerGestureGeneration + 1L;
+    }
+
+    public long getContextMenuIntentGeneration()
+    {
+        return this.contextMenuIntentGeneration;
     }
 
     public void setTransition(float transition)
@@ -130,6 +156,19 @@ public class UIContext implements IViewportStack
         frame.retainCurrentPointerState();
 
         return frame;
+    }
+
+    /** Execute a deferred click at its captured position without dispatching new input. */
+    public void withPointerState(int mouseX, int mouseY, int mouseButton, Runnable action)
+    {
+        try (PointerEventFrame frame = this.beginPointerEvent())
+        {
+            frame.retainCurrentPointerState();
+            this.mouseX = mouseX;
+            this.mouseY = mouseY;
+            this.mouseButton = mouseButton;
+            action.run();
+        }
     }
 
     PointerEventFrame beginPointerScrollEvent(int mouseX, int mouseY, double horizontal, double vertical)
@@ -695,6 +734,62 @@ public class UIContext implements IViewportStack
     public void popViewport()
     {
         this.viewportStack.popViewport();
+    }
+
+    public void invalidateLayout(UIElement element)
+    {
+        this.pendingLayout.add(element);
+    }
+
+    /**
+     * Resize everything queued by {@link #invalidateLayout(UIElement)}. Called once per frame
+     * before rendering. An element whose ancestor is also queued is covered by that ancestor's
+     * pass; anything invalidated while flushing lands in the fresh set and waits for the next
+     * frame, so a resize() that invalidates can't spin this loop.
+     */
+    public void flushLayout()
+    {
+        if (this.pendingLayout.isEmpty() || this.flushingLayout)
+        {
+            return;
+        }
+
+        Set<UIElement> pending = new LinkedHashSet<>(this.pendingLayout);
+
+        this.pendingLayout.clear();
+        this.flushingLayout = true;
+
+        try
+        {
+            this.pushViewport(this.menu.viewport);
+
+            for (UIElement element : pending)
+            {
+                if (element.getRoot() != null && !this.hasPendingAncestor(element, pending))
+                {
+                    element.resize();
+                }
+            }
+
+            this.popViewport();
+        }
+        finally
+        {
+            this.flushingLayout = false;
+        }
+    }
+
+    private boolean hasPendingAncestor(UIElement element, Set<UIElement> pending)
+    {
+        for (UIElement parent = element.getParent(); parent != null; parent = parent.getParent())
+        {
+            if (pending.contains(parent))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     @Override

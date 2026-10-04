@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.cubic.physics;
 
-import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.core.BlockPos;
@@ -207,7 +207,7 @@ final class ChainSolver
         }
     }
 
-    static void step(Level world, int age, float transition, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
+    static void step(Level world, int age, float transition, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -667,10 +667,11 @@ final class ChainSolver
      * Holds each bone within its constraint's per-axis angle limits. Walking the chain from the root out,
      * each bone's swing is expressed as a local euler rotation off its rest direction (relative to the
      * running parent-world frame), clamped to the bone's min/max on X/Y/Z, and the child point is rewritten
-     * along the clamped direction. Only enabled constraints clamp; every bone still advances the parent
-     * frame so the next bone is measured in the right space.
+     * along the clamped direction. Only a constraint with at least one axis switched on clamps, and
+     * only on those axes; every bone still advances the parent frame so the next bone is measured in
+     * the right space.
      */
-    private static void applyAngleConstraints(ModelPhysicsCache.CompiledChain chain, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation, ChainState state)
+    private static void applyAngleConstraints(ModelPhysicsCache.CompiledChain chain, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, BoneConstraint> constraints, Quaternionf rootParentRotation, ChainState state)
     {
         int boneCount = ids.size();
 
@@ -691,7 +692,7 @@ final class ChainSolver
         for (int i = 0; i < boneCount; i++)
         {
             String boneId = ids.get(i);
-            ModelConstraintsConfig.BoneConstraint c = boneId == null ? null : constraints.get(boneId);
+            BoneConstraint c = boneId == null ? null : constraints.get(boneId);
 
             Vector3f restDirLocal = restDirections[i];
             Vector3f desiredDirWorld = state.constraintDesiredWorld.set(pos[i + 1]).sub(pos[i]);
@@ -717,16 +718,16 @@ final class ChainSolver
             Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
             Quaternionf applied = localRot;
 
-            if (c != null && c.enabled())
+            if (c != null && c.isActive())
             {
                 Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
 
-                float minX = c.minX();
-                float minY = c.minY();
-                float minZ = c.minZ();
-                float maxX = c.maxX();
-                float maxY = c.maxY();
-                float maxZ = c.maxZ();
+                float minX = c.minX;
+                float minY = c.minY;
+                float minZ = c.minZ;
+                float maxX = c.maxX;
+                float maxY = c.maxY;
+                float maxZ = c.maxZ;
 
                 if (minX > maxX)
                 {
@@ -749,9 +750,11 @@ final class ChainSolver
                     maxZ = t;
                 }
 
-                eulerDeg.x = clampAngleArc(eulerDeg.x, minX, maxX);
-                eulerDeg.y = clampAngleArc(eulerDeg.y, minY, maxY);
-                eulerDeg.z = clampAngleArc(eulerDeg.z, minZ, maxZ);
+                /* An axis whose switch is off stays free — the same rule the constraint stack's own
+                 * clamp follows. */
+                eulerDeg.x = c.limitX ? clampAngleArc(eulerDeg.x, minX, maxX) : eulerDeg.x;
+                eulerDeg.y = c.limitY ? clampAngleArc(eulerDeg.y, minY, maxY) : eulerDeg.y;
+                eulerDeg.z = c.limitZ ? clampAngleArc(eulerDeg.z, minZ, maxZ) : eulerDeg.z;
 
                 applied = Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z);
                 Vector3f dirLocal = state.constraintDirection.set(restDirLocal);

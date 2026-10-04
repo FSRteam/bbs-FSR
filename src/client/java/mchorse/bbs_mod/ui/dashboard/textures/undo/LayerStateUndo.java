@@ -52,12 +52,12 @@ public class LayerStateUndo implements IUndo<Document>
     @Override
     public void undo(Document context)
     {
-        context.fromData(this.before);
+        context.restore(this.before);
     }
 
     @Override
     public void redo(Document context)
     {
-        context.fromData(this.after);
+        context.restore(this.after);
     }
 }

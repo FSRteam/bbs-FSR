@@ -8,6 +8,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.themes.UIThemeMotion;
 import mchorse.bbs_mod.ui.themes.UIThemeMotionTracks;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.InterfaceBlur;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.ui.utils.resizers.Flex;
@@ -286,6 +287,13 @@ public class UIOverlay extends UIElement
         }
 
         int background = this.background == null ? BBSSettings.overlayBackground() : this.background;
+
+        /* An overlay that asked for no background of its own gets no blur either; the
+         * dim turned down to zero is a different thing — that is the veil off, not the glass */
+        if (this.background == null || Colors.getA(this.background) > 0F)
+        {
+            InterfaceBlur.apply();
+        }
 
         if (this.appear.isSettled())
         {

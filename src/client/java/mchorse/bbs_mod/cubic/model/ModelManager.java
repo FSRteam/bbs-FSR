@@ -8,6 +8,7 @@ import mchorse.bbs_mod.cubic.model.loaders.BOBJModelLoader;
 import mchorse.bbs_mod.cubic.model.loaders.CubicModelLoader;
 import mchorse.bbs_mod.cubic.model.loaders.GeoCubicModelLoader;
 import mchorse.bbs_mod.cubic.model.loaders.IModelLoader;
+import mchorse.bbs_mod.cubic.model.loaders.JemModelLoader;
 import mchorse.bbs_mod.cubic.model.loaders.VoxModelLoader;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.MapType;
@@ -31,12 +32,26 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class ModelManager implements IWatchDogListener
 {
     public static final String MODELS_PREFIX = "models/";
 
+    /**
+     * Model loaders an addon added.
+     *
+     * <p>Suppliers rather than loaders: the list is rebuilt from scratch on every asset reload,
+     * so anything appended to it directly would survive exactly until the user saved a file in the
+     * assets folder.</p>
+     */
+    private static final List<Supplier<IModelLoader>> EXTRA_LOADERS = new ArrayList<>();
+
     public final Map<String, ModelInstance> models = new HashMap<>();
+
+    /** Keys ever queued for the background loader — a failed load is never retried until forgotten. */
+    private final Set<String> requested = new HashSet<>();
+
     public final List<IModelLoader> loaders = new ArrayList<>();
     public final AssetProvider provider;
     public final MolangParser parser;
@@ -53,13 +68,45 @@ public class ModelManager implements IWatchDogListener
         this.setupLoaders();
     }
 
+    /** Teaches BBS to read a model format of an addon's. */
+    public static void registerLoader(Supplier<IModelLoader> loader)
+    {
+        if (loader != null)
+        {
+            EXTRA_LOADERS.add(loader);
+        }
+    }
+
+    /** Removes a previously added loader supplier; returns whether it was there. */
+    public static boolean unregisterLoader(Supplier<IModelLoader> loader)
+    {
+        return loader != null && EXTRA_LOADERS.remove(loader);
+    }
+
+    /** The loader suppliers added so far, in registration order. */
+    public static List<Supplier<IModelLoader>> getRegisteredLoaders()
+    {
+        return java.util.Collections.unmodifiableList(EXTRA_LOADERS);
+    }
+
     private void setupLoaders()
     {
         this.loaders.clear();
         this.loaders.add(new BOBJModelLoader());
         this.loaders.add(new CubicModelLoader());
         this.loaders.add(new GeoCubicModelLoader());
+        this.loaders.add(new JemModelLoader());
         this.loaders.add(new VoxModelLoader());
+
+        for (Supplier<IModelLoader> extra : EXTRA_LOADERS)
+        {
+            IModelLoader loader = extra.get();
+
+            if (loader != null)
+            {
+                this.loaders.add(loader);
+            }
+        }
     }
 
     /**
@@ -95,13 +142,19 @@ public class ModelManager implements IWatchDogListener
 
     public ModelInstance getModel(String id)
     {
-        if (this.models.containsKey(id))
+        ModelInstance model = this.models.get(id);
+
+        if (model != null)
         {
-            return this.models.get(id);
+            return model;
         }
 
-        this.models.put(id, null);
-        this.loader.add(id);
+        /* Queued exactly once; a failed load stays in requested and is never retried, which
+         * is what the old null-in-the-map marker meant. */
+        if (this.requested.add(id))
+        {
+            this.loader.add(id);
+        }
 
         return null;
     }
@@ -132,9 +185,8 @@ public class ModelManager implements IWatchDogListener
             System.out.println("Model \"" + id + "\" was loaded!");
 
             model.setup();
+            this.models.put(id, model);
         }
-
-        this.models.put(id, model);
 
         return model;
     }
@@ -188,6 +240,7 @@ public class ModelManager implements IWatchDogListener
         }
 
         this.models.clear();
+        this.requested.clear();
         PoseManager.INSTANCE.clear();
         ShapeKeysManager.INSTANCE.clear();
         this.setupLoaders();
@@ -210,6 +263,8 @@ public class ModelManager implements IWatchDogListener
             || link.path.endsWith(".bobj")
             || link.path.endsWith(".obj")
             || link.path.endsWith(".animation.json")
+            || link.path.endsWith(".jem")
+            || link.path.endsWith(".jpm")
             || link.path.endsWith(".vox")
             || link.path.endsWith("/config.json");
     }
@@ -228,15 +283,79 @@ public class ModelManager implements IWatchDogListener
             return;
         }
 
+        if (!link.path.startsWith(MODELS_PREFIX))
+        {
+            return;
+        }
+
+        String modelPath = link.path.substring(MODELS_PREFIX.length());
+
         if (this.isRelodable(link))
         {
-            String key = StringUtils.parentPath(link.path.substring(MODELS_PREFIX.length()));
-            ModelInstance model = this.models.remove(key);
+            /* A model is the folder the file sits in. */
+            this.forget(StringUtils.parentPath(modelPath));
 
-            if (model != null)
+            return;
+        }
+
+        /* Not a file a loader reads. A deleted model folder arrives exactly this way - by the time the
+         * event is handled the path is no longer a directory, so it names the model itself - and without
+         * this a model deleted and put back under the same name came back as the copy still in memory,
+         * which is what made a rejoin the only way to see it change. */
+        this.forget(modelPath);
+
+        for (String key : new ArrayList<>(this.models.keySet()))
+        {
+            if (key.startsWith(modelPath + "/"))
             {
-                model.delete();
+                this.forget(key);
             }
+        }
+    }
+
+    /**
+     * Drop every model of a folder, so the next request loads them again. For a source BBS does not
+     * watch — the models a resource pack serves — where a change arrives as one event for all of them
+     * rather than as a file the watchdog saw.
+     */
+    public void forgetFolder(String prefix)
+    {
+        for (String key : new ArrayList<>(this.models.keySet()))
+        {
+            if (key.startsWith(prefix))
+            {
+                this.forget(key);
+            }
+        }
+
+        /* A model that failed to load is remembered as requested and never retried, so it has to go
+         * too, or a pack that arrives later can never be picked up. */
+        for (String key : new ArrayList<>(this.requested))
+        {
+            if (key.startsWith(prefix))
+            {
+                this.requested.remove(key);
+            }
+        }
+    }
+
+    /** Drop a model from the cache so the next request loads it from disk again. */
+    private void forget(String key)
+    {
+        if (key.isEmpty())
+        {
+            return;
+        }
+
+        ModelInstance model = this.models.remove(key);
+
+        /* Un-mark it too, or the next getModel would treat the key as already queued and
+         * the edited model would never reload. */
+        this.requested.remove(key);
+
+        if (model != null)
+        {
+            model.delete();
         }
     }
 }

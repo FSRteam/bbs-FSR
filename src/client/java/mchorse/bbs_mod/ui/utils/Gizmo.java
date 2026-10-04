@@ -173,6 +173,31 @@ public class Gizmo
     private Gizmo()
     {}
 
+    /** Copies presentation state only; the active transform remains a single shared gesture. */
+    public void captureVisualState(VisualState state)
+    {
+        state.renderMatrix.set(this.lastRenderMatrix);
+        state.sphereMatrix.set(this.lastSphereMatrix);
+        state.hasRenderMatrix = this.hasLastRenderMatrix;
+        state.hasSphereMatrix = this.hasLastSphereMatrix;
+        state.sphereLocalRadius = this.lastSphereLocalRadius;
+        state.viewportScale = this.viewportScale;
+        state.space = this.lastSpace;
+        state.sphereHovered = this.sphereHovered;
+    }
+
+    public void restoreVisualState(VisualState state)
+    {
+        this.lastRenderMatrix.set(state.renderMatrix);
+        this.lastSphereMatrix.set(state.sphereMatrix);
+        this.hasLastRenderMatrix = state.hasRenderMatrix;
+        this.hasLastSphereMatrix = state.hasSphereMatrix;
+        this.lastSphereLocalRadius = state.sphereLocalRadius;
+        this.viewportScale = state.viewportScale;
+        this.lastSpace = state.space;
+        this.sphereHovered = state.sphereHovered;
+    }
+
     /**
      * Reconstruct the world-space origin of the gizmo from the most recent
      * render matrix and the camera that drove that render. The stack at
@@ -664,7 +689,11 @@ public class Gizmo
      */
     public void captureVisual(PoseStack stack)
     {
-        if (BBSRendering.isIrisShadowPass())
+        /* The secondary monitor is display-only. Its world pass uses a different
+         * camera and framebuffer, while this singleton's captured frame belongs
+         * to the interactive main preview. Do not let the secondary matrix
+         * replace the main preview's gizmo frame. */
+        if (BBSRendering.isIrisShadowPass() || BBSRendering.isApplyingSecondaryCamera())
         {
             return;
         }
@@ -1995,5 +2024,17 @@ public class Gizmo
 
             return null;
         }
+    }
+
+    public static final class VisualState
+    {
+        private final Matrix4f renderMatrix = new Matrix4f();
+        private final Matrix4f sphereMatrix = new Matrix4f();
+        private boolean hasRenderMatrix;
+        private boolean hasSphereMatrix;
+        private float sphereLocalRadius;
+        private float viewportScale = 1F;
+        private TransformSpace space;
+        private boolean sphereHovered;
     }
 }

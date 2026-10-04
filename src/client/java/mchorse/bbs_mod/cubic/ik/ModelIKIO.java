@@ -40,6 +40,10 @@ public final class ModelIKIO
     private static final String KEY_ENABLED = "enabled";
     private static final String KEY_TIP_ROTATION = "tip_rotation";
     private static final String KEY_STRETCH = "stretch";
+    /* Upstream's key name, deliberately NOT "ik_squash": that is the name of the
+     * bone's value-tree entry, while this is the key inside a chain's serialized
+     * entry — the same one upstream BoneIKIO reads, so data written here loads there. */
+    private static final String KEY_SQUASH = "squash";
     private static final String KEY_CLASSIC = "classic";
 
     private static final String KEY_LOCK = "lock";
@@ -96,8 +100,9 @@ public final class ModelIKIO
             boolean tipRotation = entry.getBool(KEY_TIP_ROTATION, ModelIKConfig.DEFAULT_TIP_ROTATION);
             boolean stretch = entry.getBool(KEY_STRETCH, ModelIKConfig.DEFAULT_STRETCH);
             boolean classic = entry.getBool(KEY_CLASSIC, defaultClassic);
+            boolean squash = entry.getBool(KEY_SQUASH, ModelIKConfig.DEFAULT_SQUASH);
 
-            chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleTarget, poleAngle, softness, weight, enabled, tipRotation, stretch, classic));
+            chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleTarget, poleAngle, softness, weight, enabled, tipRotation, stretch, classic, squash));
         }
 
         Map<String, ModelIKConfig.JointDoF> bones = new HashMap<>();
@@ -191,6 +196,11 @@ public final class ModelIKIO
                 if (chain.classic() != ModelIKConfig.DEFAULT_CLASSIC)
                 {
                     entry.putBool(KEY_CLASSIC, chain.classic());
+                }
+
+                if (chain.squash() != ModelIKConfig.DEFAULT_SQUASH)
+                {
+                    entry.putBool(KEY_SQUASH, chain.squash());
                 }
 
                 chains.put(chain.tip(), entry);

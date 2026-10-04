@@ -1,13 +1,17 @@
 package mchorse.bbs_mod;
 
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.settings.SettingsBuilder;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.numeric.ValueLong;
 import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.settings.values.ui.ValueEditorLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueIKDebug;
@@ -40,6 +44,9 @@ public class BBSSettings {
 	public static ValueStringKeys disabledSheets;
 	public static mchorse.bbs_mod.settings.values.ui.ValueTrackStyles trackStyles;
 	public static ValueStringKeys disabledMorphFormCategories;
+	public static ValueInt textureCellSize;
+	public static ValueString textureSort;
+	public static mchorse.bbs_mod.settings.values.core.ValueLinkList texturePins;
 	public static ValueLanguage language;
 	public static ValueInt primaryColor;
 	public static ValueInt stencilHighlightColor;
@@ -64,6 +71,8 @@ public class BBSSettings {
 	public static ValueBoolean freezeModels;
 	public static ValueBoolean freezeFormAnimations;
 	public static ValueBoolean listModelPreview;
+	/** Replay frustum culling (upstream {@code e08d8ac92}); read as the {@code frustum_culling} config key. */
+	public static ValueBoolean frustumCulling;
 	public static ValueBoolean morphingFocusSearch;
 	public static ValueFloat axesScale;
 	public static ValueFloat axesThickness;
@@ -109,6 +118,7 @@ public class BBSSettings {
 	public static ValueFloat scrollingSensitivity;
 	public static ValueFloat scrollingSensitivityHorizontal;
 	public static ValueBoolean scrollingSmoothness;
+	public static ValueFloat scrollingSmoothnessIntensity;
 	public static ValueBoolean scrollingDisableSmoothnessInEditors;
 	public static ValueBoolean scrollingUseThemeCurve;
 	public static ValueString scrollingMotionEasing;
@@ -170,6 +180,9 @@ public class BBSSettings {
 	public static ValueIKDebug ikDebug;
 	public static ValuePhysicsDebug physicsDebug;
 	public static ValueBoolean editorSnapToMarkers;
+	public static ValueBoolean editorSnapToTicks;
+	/** Snapping to the film's own markers — unlike {@link #editorSnapToMarkers}, which is the ruler's notches. */
+	public static ValueBoolean editorSnapToFilmMarkers;
 	public static ValueBoolean editorClipPreview;
 	public static ValueBoolean editorRewind;
 	public static ValueBoolean editorRestartOnSeek;
@@ -196,6 +209,13 @@ public class BBSSettings {
 	public static ValueBoolean recordingCameraPreview;
 	public static ValueBoolean recordingTeleport;
 
+	public static ValueBoolean updateEnabled;
+	public static ValueInt updateChannel;
+	public static ValueInt updateInterval;
+	public static ValueString updateSkippedVersion;
+	public static ValueLong updateLastCheck;
+	public static ValueBoolean updateCheckTrigger;
+
 	public static ValueBoolean renderAllModelBlocks;
 	public static ValueBoolean clickModelBlocks;
 
@@ -208,6 +228,8 @@ public class BBSSettings {
 	public static ValueBoolean interfaceHighlights;
 	public static ValueFloat overlayBackgroundOpacity;
 	public static ValueBoolean overlayGradientBorder;
+	public static ValueBoolean interfaceBlur;
+	public static ValueInt interfaceBlurRadius;
 
 	public static ValueBoolean shaderCurvesEnabled;
 	public static ValueBoolean translucencyQueue;
@@ -518,6 +540,11 @@ public class BBSSettings {
 		return duration == null ? 30 : duration.get();
 	}
 
+	/** Shared strength for smooth scrolling and timeline zoom; zero selects immediate movement. */
+	public static float getScrollSmoothingIntensity() {
+		return scrollingSmoothness.get() ? scrollingSmoothnessIntensity.get() : 0F;
+	}
+
 	public static float getFov() {
 		return MathUtils.toRad(BBSSettings.fov.get());
 	}
@@ -699,7 +726,25 @@ public class BBSSettings {
 		layoutMigrated |= migrateLegacyValue(root, "multiskin", "multithreaded", "misc", "multiskin_multithreaded");
 		layoutMigrated |= migrateLegacyValue(root, "entity_selectors", "whitelist", "misc", "entity_selectors_whitelist");
 
-		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated || layoutMigrated;
+		/* Extra hotbar slots now fold under slot 0 instead of being filtered away by
+		 * default. Clear that old filter once; manual filtering afterwards must survive
+		 * reloads, so the flag is what keeps this from running again. */
+		boolean hotbarFilterMigrated = false;
+
+		if (!appearance.getBool("hotbar_filter_migrated")) {
+			HashSet<String> slots = new HashSet<>();
+
+			for (int i = 1; i < ReplayKeyframes.HOTBAR_SIZE; i++) {
+				slots.add(ReplayKeyframes.hotbarChannelId(i));
+			}
+
+			appearance.getList("disabled_sheets").elements.removeIf(value -> value.isString() && slots.contains(value.asString()));
+			appearance.putBool("hotbar_filter_migrated", true);
+			root.put("appearance", appearance);
+			hotbarFilterMigrated = true;
+		}
+
+		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated || layoutMigrated || hotbarFilterMigrated;
 	}
 
 	private static boolean migrateLegacyCategory(MapType root, String oldCategory, String newCategory, String... keys) {
@@ -741,25 +786,19 @@ public class BBSSettings {
 	}
 
 	public static void register(SettingsBuilder builder) {
-		HashSet<String> defaultFilters = new HashSet<>();
-
-		defaultFilters.add("item_off_hand");
-		defaultFilters.add("item_head");
-		defaultFilters.add("item_chest");
-		defaultFilters.add("item_legs");
-		defaultFilters.add("item_feet");
-		defaultFilters.add("vX");
-		defaultFilters.add("vY");
-		defaultFilters.add("vZ");
-		defaultFilters.add("grounded");
-		defaultFilters.add("stick_rx");
-		defaultFilters.add("stick_ry");
-		defaultFilters.add("trigger_l");
-		defaultFilters.add("trigger_r");
-		defaultFilters.add("extra1_x");
-		defaultFilters.add("extra1_y");
-		defaultFilters.add("extra2_x");
-		defaultFilters.add("extra2_y");
+		/* Channels the timeline keeps folded away until they are asked for: the
+		 * armour, the states the entity is put into, the velocity readout, and the
+		 * gamepad axes nothing binds by default. Hotbar slots past the first are no
+		 * longer hidden: they fold under slot 0 in the timeline instead (B7a-3 D). */
+		HashSet<String> defaultFilters = new HashSet<>(Arrays.asList(
+			"selected_slot",
+			"item_head", "item_chest", "item_legs", "item_feet",
+			"swimming", "riding", "flying", "gliding",
+			"grounded", "leaning", "yaw", "roll",
+			"vX", "vY", "vZ",
+			"stick_rx", "stick_ry", "trigger_l", "trigger_r",
+			"extra1_x", "extra1_y", "extra2_x", "extra2_y"
+		));
 
 		builder.category("appearance", Icons.LAYOUT);
 		builder.register(language = new ValueLanguage("language"));
@@ -775,13 +814,18 @@ public class BBSSettings {
 		morphingFocusSearch = builder.getBoolean("morphing_focus_search", false);
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
+		textureCellSize = builder.getInt("texture_cell_size", 80, 40, 200).slider();
+		textureSort = builder.getString("texture_sort", "name");
+		texturePins = new mchorse.bbs_mod.settings.values.core.ValueLinkList("texture_pins", List.of(mchorse.bbs_mod.resources.Link.assets("textures/")));
+		texturePins.invisible();
 		favoriteColors = new ValueColors("favorite_colors");
 		recentColors = new ValueColors("recent_colors").limit(33);
-		disabledSheets = new ValueStringKeys("disabled_sheets");
-		disabledSheets.set(defaultFilters);
+		disabledSheets = new ValueStringKeys("disabled_sheets", defaultFilters);
 		builder.register(favoriteColors);
 		builder.register(recentColors);
 		builder.register(disabledSheets);
+		builder.getBoolean("hotbar_filter_migrated", true).invisible();
+		builder.register(texturePins);
 		trackStyles = new mchorse.bbs_mod.settings.values.ui.ValueTrackStyles("track_styles");
 		builder.register(trackStyles);
 		disabledMorphFormCategories = new ValueStringKeys("disabled_morph_form_categories");
@@ -793,6 +837,10 @@ public class BBSSettings {
 		interfaceHighlights = builder.getBoolean("interface_highlights", false);
 		overlayBackgroundOpacity = builder.getFloat("overlay_background_opacity", DEFAULT_OVERLAY_BACKGROUND_OPACITY, 0F, 1F).slider();
 		overlayGradientBorder = builder.getBoolean("overlay_gradient_border", true);
+		/* Dual kawase background blur: off by default — the framebuffer ping-pong needs an
+		 * in-game Iris/Sodium smoke before it can be FSR's default (upstream ships it on). */
+		interfaceBlur = builder.getBoolean("interface_blur", false);
+		interfaceBlurRadius = builder.getInt("interface_blur_radius", 12, 1, 30).slider();
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
 		stencilHighlightColor = builder.getInt("stencil_highlight_color", 0x2EFFFFFF).colorAlpha();
 
@@ -865,6 +913,7 @@ public class BBSSettings {
 		scrollingSensitivity = builder.getFloat("sensitivity", 3F, 0F, 10F).slider();
 		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 3F, 0F, 10F).slider();
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
+		scrollingSmoothnessIntensity = builder.getFloat("smoothness_intensity", 0.75F, 0F, 2F).slider();
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", false);
 		scrollingUseThemeCurve = builder.getBoolean("use_theme_curve", true);
 		scrollingMotionEasing = builder.getString("motion_easing", DEFAULT_MOTION_EASING);
@@ -953,8 +1002,10 @@ public class BBSSettings {
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
+		editorSnapToTicks = builder.getBoolean("snap_to_ticks", true);
+		editorSnapToFilmMarkers = builder.getBoolean("snap_to_film_markers", true);
 		editorRewind = builder.getBoolean("rewind", true);
-		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", true);
+		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", false);
 		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);
 		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
 
@@ -986,6 +1037,10 @@ public class BBSSettings {
 		shaderCurvesEnabled = builder.getBoolean("shader_curves", true);
 		translucencyQueue = builder.getBoolean("translucency_queue", false);
 		multiskinMultiThreaded = builder.getBoolean("multiskin_multithreaded", true);
+		/* Upstream keeps this in its "performance" category; FSR never grew that category and
+		 * parks the other two performance toggles above, so it lives here too. The config key
+		 * itself is upstream's, verbatim. */
+		frustumCulling = builder.getBoolean("frustum_culling", true);
 
 		builder.category("audio", Icons.SOUND);
 		audioWaveformVisibleInPreview = builder.getBoolean("waveform_visible_preview", true);
@@ -1000,5 +1055,18 @@ public class BBSSettings {
 		builder.category("cdn", Icons.SERVER);
 		cdnUrl = builder.getString("url", "");
 		cdnToken = builder.getString("token", "");
+
+		builder.category("fsr_updates", Icons.DOWNLOAD);
+		updateEnabled = builder.getBoolean("update_enabled", true);
+		updateChannel = builder.getInt("update_channel", 0, 0, 1);
+		updateInterval = builder.getInt("update_interval", 2, 0, 4);
+		updateSkippedVersion = builder.getString("update_skipped_version", "");
+		updateSkippedVersion.invisible();
+		updateLastCheck = new ValueLong("update_last_check", 0L);
+		updateLastCheck.invisible();
+		builder.register(updateLastCheck);
+		/* Invisible trigger value whose settings row hosts the "check now"
+		 * button and the live update status line. */
+		updateCheckTrigger = builder.getBoolean("update_check_trigger", false);
 	}
 }

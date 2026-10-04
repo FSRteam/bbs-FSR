@@ -2,13 +2,14 @@ package mchorse.bbs_mod.cubic.ik;
 
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
-import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig.BoneConstraint;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.List;
@@ -203,6 +204,102 @@ public final class ModelIKRuntime
         }
 
         return false;
+    }
+
+    /**
+     * The chains the form's config compiles to on this model — the bones each one spans, root
+     * to tip, keyed by the tip bone that names it, in the order the solver itself walks them:
+     * shallowest chain root first ({@code ModelIKCache.compile} sorts by chain-root depth; the sort
+     * is stable, so chains at equal depth keep the config's order). For tools that act on a chain as
+     * a whole (the bake) without re-deriving the topology the solver uses. Note that this is NOT
+     * simply the config's order — a tool that depends on ordering must mean this one.
+     */
+    public static Map<String, List<String>> getChains(IModel model, ModelForm form)
+    {
+        ModelIKCache.Compiled compiled = compileFor(model, form);
+
+        if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+
+        Map<String, List<String>> chains = new LinkedHashMap<>();
+
+        for (ModelIKCache.CompiledChain chain : compiled.chains())
+        {
+            chains.put(chain.tip(), List.copyOf(chain.chainRootToEffector()));
+        }
+
+        return chains;
+    }
+
+    /**
+     * The per-chain IK scalars the form's config seeds — one entry per enabled chain, keyed by
+     * the tip that names it. This is meant to be the single source of truth for "what does a fresh
+     * IK-controls keyframe start from", so that the editor's keyframe sheets and the bake's
+     * disable-these-chains pass cannot drift apart.
+     *
+     * <p>Both callers go through here. The editor seeds from this, having dropped the private copy it
+     * used to keep in {@code UIReplaysEditorUtils}, and the bake's disable pass reads it directly.
+     * The two used to have to be kept in step by hand; that a fixture of the dropped copy agrees
+     * field for field is what let it go, and the probe behind that is in
+     * {@code research/r5-3-implementation.md} §W4a.2.
+     */
+    public static IKControls ikControls(ModelForm form)
+    {
+        IKControls controls = new IKControls();
+
+        if (form == null || !(form.ik.get() instanceof MapType map))
+        {
+            return controls;
+        }
+
+        ModelIKConfig config = ModelIKIO.fromData(map);
+
+        if (config == null || config.chains() == null)
+        {
+            return controls;
+        }
+
+        for (ModelIKConfig.Chain chain : config.chains())
+        {
+            if (chain == null || !chain.enabled() || chain.tip() == null || chain.tip().isEmpty())
+            {
+                continue;
+            }
+
+            IKControl control = controls.get(chain.tip());
+
+            control.weight = chain.weight();
+            control.softness = chain.softness();
+            control.poleAngle = chain.poleAngle();
+            control.pole = chain.pole();
+            control.enabled = chain.enabled();
+        }
+
+        return controls;
+    }
+
+    /**
+     * The compiled config of a form, or null when there is nothing to compile. Both callers
+     * above need the same three guards, and {@link ModelIKCache#getFromData} answers null for a
+     * null model or a null map rather than throwing — so the null has to be carried, not
+     * dereferenced.
+     *
+     * <p>Deliberately {@code getFromData} and not {@code ModelIKCache.compile}: the other two
+     * readers in this class ({@link #isRotationConstrained} and {@link #getControllers}) go
+     * through {@code getFromData} too, and it serves the per-frame {@code WeakHashMap} memo, so
+     * every caller of this class sees the same {@code Compiled} the solver does. That keeps
+     * {@code compile} private.
+     */
+    private static ModelIKCache.Compiled compileFor(IModel model, ModelForm form)
+    {
+        if (model == null || form == null || !(form.ik.get() instanceof MapType map))
+        {
+            return null;
+        }
+
+        return ModelIKCache.getFromData(model, map);
     }
 
     public static List<String> getControllers(ModelInstance instance)

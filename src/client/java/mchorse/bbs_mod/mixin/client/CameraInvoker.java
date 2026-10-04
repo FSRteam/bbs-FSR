@@ -13,4 +13,7 @@ public interface CameraInvoker
 
     @Invoker("setRotation")
     void bbs$setRotation(float yaw, float pitch);
+
+    @Invoker(value = "setRotation", remap = false)
+    void bbs$setRotation(float yaw, float pitch, float roll);
 }

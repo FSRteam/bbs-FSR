@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.cubic.data.model;
 
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.IMapSerializable;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -14,7 +15,7 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ModelGroup implements IMapSerializable
+public class ModelGroup implements IMapSerializable, RigBone
 {
     public final String id;
     public Model owner;
@@ -94,21 +95,92 @@ public class ModelGroup implements IMapSerializable
 
     /**
      * Composes one rotation layer into {@link #orient}, the quaternion the renderer applies in place of the
-     * euler triples. The FIRST layer on a bone seeds orient from the euler accumulated so far (this layer's
+     * euler triples. The FIRST layer on a bone seeds orient from what the channels say so far (this layer's
      * own {@code +=} included), so a single layer renders byte-identically to the euler path; every later
      * layer multiplies its delta as a quaternion, so stacked layers compose without the euler-pole flip.
      * Call this AFTER the layer has applied its additive euler readback to {@code current.rotate}.
+     *
+     * <p>The seed is mode-aware, the same read {@link #evaluatedRotation()} and
+     * {@code ModelRotationBlender.cubicLocal} make: in {@link Transform.RotationMode#QUATERNION} mode
+     * {@code current.rotate} is the euler readback of the channels and no longer describes the rotation —
+     * {@code current.quat} does. Some writers leave the channels behind and author the quaternion directly
+     * (the riptide spin, {@code ProceduralAnimator}); seeding from the stale euler there would drop the
+     * orientation they just wrote. In EULER mode this is the previous expression, character for character.
+     *
+     * <p>Upstream seeds from {@code toLocalRotationZYXDegrees(current.rotate)} unconditionally, and its
+     * {@code BOBJBone.composeOrient} seeds through the mode-aware {@code Transform.createRotation()} —
+     * so the two skeletons disagree upstream. This keeps the unit cubic needs (degrees) while following
+     * BOBJ's mode-aware behaviour, which is what {@link RigBone#composeOrient} documents.
+     *
+     * <p>{@code Model.applyPose} has a second, older copy of this seed (its QUATERNION branch) for the
+     * pose layer, where {@code orient} can still be null — the action phase composed nothing for that
+     * bone, or {@code fix} just dropped it. It must make the same read; the two are kept in step and
+     * each points at the other. {@code BOBJModel.applyPose} carries the same pair of sites.
      */
     public void composeOrient(Quaternionf delta)
     {
         if (this.orient == null)
         {
-            this.orient = Matrices.toLocalRotationZYXDegrees(this.current.rotate);
+            this.orient = this.current.rotationMode == Transform.RotationMode.QUATERNION
+                ? new Quaternionf(this.current.quat)
+                : Matrices.toLocalRotationZYXDegrees(this.current.rotate);
         }
         else
         {
             this.orient.mul(delta);
         }
+    }
+
+    /* RigBone implementation: every member reads or writes one of the fields above, so the two
+     * skeletons can be poser-ed through the same call without a wrapper in between. */
+
+    @Override
+    public String getBoneName()
+    {
+        return this.id;
+    }
+
+    @Override
+    public RigBone getParentBone()
+    {
+        return this.parent;
+    }
+
+    @Override
+    public Transform getBoneTransform()
+    {
+        return this.current;
+    }
+
+    @Override
+    public Quaternionf getOrient()
+    {
+        return this.orient;
+    }
+
+    @Override
+    public void setOrient(Quaternionf orient)
+    {
+        this.orient = orient;
+    }
+
+    /** Cubic keeps its euler channels in degrees — see {@link RigBone#isRotationInDegrees()}. */
+    @Override
+    public boolean isRotationInDegrees()
+    {
+        return true;
+    }
+
+    @Override
+    public Vector3f getOffset()
+    {
+        return this.offset;
+    }
+
+    @Override
+    public void setOffset(Vector3f offset)
+    {
+        this.offset = offset;
     }
 
     @Override

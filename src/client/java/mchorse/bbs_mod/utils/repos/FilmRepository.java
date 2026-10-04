@@ -98,6 +98,31 @@ public class FilmRepository implements IRepository<Film>
     }
 
     @Override
+    public void requestBackups(String id, Consumer<Collection<String>> callback)
+    {
+        MapType mapType = new MapType();
+
+        mapType.putString("id", id);
+
+        ClientNetwork.sendManagerData(RepositoryOperation.BACKUPS, mapType, (data) ->
+        {
+            if (!data.isList())
+            {
+                return;
+            }
+
+            List<String> list = new ArrayList<>();
+
+            for (BaseType element : data.asList())
+            {
+                list.add(element.asString());
+            }
+
+            callback.accept(list);
+        });
+    }
+
+    @Override
     public File getFolder()
     {
         return null;

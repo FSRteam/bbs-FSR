@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -37,51 +36,45 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
     private UIToggle scale;
     public UIPropTransform transform;
 
-    public static void displayActors(UIContext context, IntObjectMap<IEntity> entities, int value, Consumer<Integer> callback)
+    public static void displayActors(UIContext context, Map<String, IEntity> entities, String value, Consumer<String> callback)
     {
         List<UIFilmPanel> children = context.menu.main.getChildren(UIFilmPanel.class);
         UIFilmPanel panel = children.isEmpty() ? null : children.get(0);
         List<Replay> replays = panel != null ? panel.getData().replays.getList() : null;
 
-        /* The map is keyed by the replay's index in the film, and disabled replays
-         * get no entity, so its size() isn't the range of keys: iterating up to it
-         * drops the last actor for every disabled one above it */
-        int count = replays == null ? 0 : replays.size();
-
-        for (Map.Entry<Integer, IEntity> entry : entities.entrySet())
-        {
-            count = Math.max(count, entry.getKey() + 1);
-        }
-
-        final int total = count;
-
         context.replaceContextMenu((menu) ->
         {
-            menu.action(Icons.CLOSE, UIKeys.GENERAL_NONE, BBSSettings.negativeColor() & Colors.RGB, () -> callback.accept(-1));
+            menu.action(Icons.CLOSE, UIKeys.GENERAL_NONE, BBSSettings.negativeColor() & Colors.RGB, () -> callback.accept(Anchor.NO_ATTACHMENT));
 
-            for (int i = 0; i < total; i++)
+            if (replays == null)
             {
-                final int actor = i;
-                IEntity entity = entities.get(i);
+                return;
+            }
+
+            /* Walked by list position, not by the entity map. The rows still show the replay's list
+             * position — that is how the animator counts actors — but what the choice hands back
+             * (and what the data stores) is the id. Disabled replays have no entity and are skipped. */
+            for (int i = 0; i < replays.size(); i++)
+            {
+                Replay replay = replays.get(i);
+                IEntity entity = entities.get(replay.getId());
 
                 if (entity == null)
                 {
                     continue;
                 }
 
-                Replay replay = replays == null || i >= replays.size() ? null : replays.get(i);
-                Form form = entity.getForm();
-                String stringLabel = i + (replay != null ? " - " + replay.getName() : (form == null ? "" : " - " + form.getFormIdOrName()));
+                String stringLabel = i + " - " + replay.getName();
                 IKey label = IKey.constant(stringLabel);
 
-                menu.action(Icons.CLOSE, label, actor == value, () -> callback.accept(actor));
+                menu.action(Icons.CLOSE, label, replay.getId().equals(value), () -> callback.accept(replay.getId()));
             }
         });
     }
 
-    public static void displayAttachments(UIFilmPanel panel, int index, String value, Consumer<String> consumer)
+    public static void displayAttachments(UIFilmPanel panel, String replayId, String value, Consumer<String> consumer)
     {
-        IEntity entity = panel.getController().getEntities().get(index);
+        IEntity entity = panel.getController().getEntities().get(replayId);
 
         if (entity == null || entity.getForm() == null)
         {
@@ -131,7 +124,7 @@ public class UIAnchorKeyframeFactory extends UIKeyframeFactory<Anchor>
         displayActors(this.getContext(), panel.getController().getEntities(), this.keyframe.getValue().replay, this::setActor);
     }
 
-    private void setActor(int actor)
+    private void setActor(String actor)
     {
         BaseValue.edit(this.keyframe, (value) -> value.getValue().replay = actor);
     }

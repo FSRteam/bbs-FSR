@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "ads": ["https://fsrapi.twiap.studio/api/ads"],
+  "news": ["https://fsrapi.twiap.studio/api/news"],
+  "refresh_minutes": 30
+}

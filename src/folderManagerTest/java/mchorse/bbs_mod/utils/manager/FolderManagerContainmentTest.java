@@ -191,9 +191,26 @@ public final class FolderManagerContainmentTest
 
         check(manager.getFile("linked/secret") == null, "external symbolic link passed file containment");
         check(manager.getFolder("linked") == null, "external symbolic link passed folder containment");
+        check(manager.getFile("linked/new/film") == null, "missing file beneath an external symbolic link passed containment");
+        check(manager.getFolder("linked/new/folder") == null, "missing folder beneath an external symbolic link passed containment");
+        check(!manager.addFolder("linked/new/folder"), "folder creation followed an external symbolic link");
         check(!manager.delete("linked/secret"), "delete followed an external symbolic link");
         check(!manager.getKeys().contains("linked/secret"), "listing followed an external symbolic link");
         check(Files.readString(secret).equals("keep"), "external symbolic-link target was changed");
+
+        Path missingTarget = sandbox.resolve("missing-library");
+        Path danglingLink = root.resolve("dangling");
+
+        Files.createDirectory(missingTarget);
+        Files.createSymbolicLink(danglingLink, missingTarget.toAbsolutePath());
+        Files.delete(missingTarget);
+        check(manager.getFolder("dangling") == null, "dangling symbolic link passed folder containment");
+        check(manager.getFile("dangling/new/film") == null, "dangling symbolic link passed destination containment");
+
+        Path internal = Files.createDirectory(root.resolve("internal-library"));
+
+        Files.createSymbolicLink(root.resolve("internal-linked"), internal.toAbsolutePath());
+        assertEquals(internal.toRealPath().resolve("new/film.dat").toFile(), manager.getFile("internal-linked/new/film"));
     }
 
     private static void assertEquals(Object expected, Object actual)

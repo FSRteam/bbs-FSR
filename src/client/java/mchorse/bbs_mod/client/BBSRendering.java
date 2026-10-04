@@ -6,20 +6,46 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
+import mchorse.bbs_mod.camera.clips.misc.ImageClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind;
 import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceRuntime;
+import mchorse.bbs_mod.client.render.multiview.FilmViewRenderer;
+import mchorse.bbs_mod.client.render.multiview.MultiViewManager;
+import mchorse.bbs_mod.client.render.multiview.ViewBudgetScheduler;
+import mchorse.bbs_mod.client.render.multiview.ViewGpuTiming;
+import mchorse.bbs_mod.client.render.multiview.ViewPerformanceMonitor;
+import mchorse.bbs_mod.client.render.multiview.ViewRenderState;
+import mchorse.bbs_mod.client.render.multiview.RenderPassScope;
+import mchorse.bbs_mod.client.render.multiview.RenderGlState;
+import mchorse.bbs_mod.client.render.multiview.RenderStateRestorer;
+import mchorse.bbs_mod.client.render.multiview.SodiumViewAdapter;
+import mchorse.bbs_mod.client.render.multiview.ViewPassContext;
+import mchorse.bbs_mod.client.render.multiview.ViewTargetSize;
+import mchorse.bbs_mod.client.render.multiview.ViewFramebuffer;
+import mchorse.bbs_mod.camera.controller.CameraController;
+import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
+import mchorse.bbs_mod.forms.FormRenderLast;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.ui.film.view.ViewDescriptor;
+import net.minecraft.client.DeltaTracker;
+import mchorse.bbs_mod.client.render.view.IrisViewBackend;
+import mchorse.bbs_mod.utils.iris.IrisViewState;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiFrameRecorder;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.UIImageRenderer;
 import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -30,11 +56,12 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
 import mchorse.bbs_mod.utils.iris.ShaderCurves;
-import mchorse.bbs_mod.utils.sodium.SodiumUtils;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.loader.LoaderAccessHolder;
 import mchorse.bbs_mod.mixin.client.MinecraftAccessor;
+import mchorse.bbs_mod.mixin.client.WindowDimensionsAccessor;
+import net.minecraft.client.Camera;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.pipeline.MainTarget;
@@ -60,7 +87,9 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
@@ -88,11 +117,31 @@ public class BBSRendering
 
     /* Re-armed by the orbit controller on every orthographic frame. */
     private static float orthoDistance = -1F;
+    private static boolean sceneSmartCull;
+    private static boolean sceneCullingCaptured;
+    private static int renderFrameDepth;
+    private static boolean releaseViewResourcesPending;
 
     private static boolean toggleFramebuffer;
     private static RenderTarget framebuffer;
     private static RenderTarget clientFramebuffer;
     private static Texture texture;
+    private static Texture primaryStagingTexture;
+
+    private static boolean secondaryViewEnabled;
+    private static final MultiViewManager MULTI_VIEW_MANAGER = new MultiViewManager();
+    private static final ViewBudgetScheduler VIEW_BUDGET = new ViewBudgetScheduler();
+    private static final FilmViewRenderer FILM_VIEW_RENDERER = new FilmViewRenderer();
+    private static final ViewGpuTiming FRAME_TIMING = new ViewGpuTiming();
+    private static ViewGpuTiming.Spec frameTimingSpec;
+    private static boolean frameTimingActive;
+    private static Object timingLevel;
+    private static UIBaseMenu timingMenu;
+    private static long sceneFrameId;
+    private static ViewPassContext pendingPrimaryFrame;
+    private static IrisViewState.Scope pendingPrimaryIris;
+    private static long pendingPrimaryCpuNanos;
+    private static boolean primaryFrameCompleted;
 
     private static volatile long exportFrameGeneration;
     private static final ExportResolutionActionGate EXPORT_RESOLUTION_ACTIONS =
@@ -244,6 +293,186 @@ public class BBSRendering
         return texture;
     }
 
+    /** Stable scene frame id shared by all camera evaluators and view passes. */
+    public static long getSceneFrameId()
+    {
+        return sceneFrameId;
+    }
+
+    public static MultiViewManager getMultiViewManager()
+    {
+        return MULTI_VIEW_MANAGER;
+    }
+
+    public static ViewRenderState getViewRenderState(String id)
+    {
+        if (id == null || id.isBlank())
+        {
+            id = MultiViewManager.MAIN_ID;
+        }
+
+        ViewRenderState state = MULTI_VIEW_MANAGER.get(id);
+
+        if (state == null && MultiViewManager.MAIN_ID.equals(id))
+        {
+            state = MULTI_VIEW_MANAGER.register(id, getVideoWidth(), getVideoHeight(), true);
+            MULTI_VIEW_MANAGER.attachTarget(id, framebuffer, getTexture());
+        }
+
+        return state;
+    }
+
+    /** Returns the last successfully published image for a logical viewport. */
+    public static Texture getViewTexture(String id)
+    {
+        ViewRenderState state = getViewRenderState(id);
+
+        return state == null ? null : state.getTexture();
+    }
+
+    public static boolean isViewPassActive()
+    {
+        return ViewPassContext.current() != null;
+    }
+
+    public static String getActiveViewId()
+    {
+        ViewPassContext context = ViewPassContext.current();
+        return context == null ? MultiViewManager.MAIN_ID : context.view().getId();
+    }
+
+    public static boolean isSecondaryViewEnabled()
+    {
+        return secondaryViewEnabled;
+    }
+
+    public static void setSecondaryViewEnabled(boolean enabled)
+    {
+        secondaryViewEnabled = enabled;
+    }
+
+    public static boolean isApplyingSecondaryCamera()
+    {
+        ViewPassContext context = ViewPassContext.current();
+        return context != null && !context.view().isPrimary();
+    }
+
+    public static boolean hasViewCamera()
+    {
+        ViewPassContext context = ViewPassContext.current();
+        return context != null && context.managedCamera();
+    }
+
+    public static mchorse.bbs_mod.camera.Camera getViewCamera()
+    {
+        ViewPassContext context = ViewPassContext.current();
+        return context == null ? null : context.camera();
+    }
+
+    public static int getActiveTargetWidth()
+    {
+        ViewPassContext context = ViewPassContext.current();
+        return context == null ? 0 : context.width();
+    }
+
+    public static int getActiveTargetHeight()
+    {
+        ViewPassContext context = ViewPassContext.current();
+        return context == null ? 0 : context.height();
+    }
+
+    public static double getSecondaryCameraX()
+    {
+        return hasViewCamera() ? getViewCamera().position.x : 0D;
+    }
+
+    public static double getSecondaryCameraY()
+    {
+        return hasViewCamera() ? getViewCamera().position.y : 0D;
+    }
+
+    public static double getSecondaryCameraZ()
+    {
+        return hasViewCamera() ? getViewCamera().position.z : 0D;
+    }
+
+    public static float getSecondaryCameraYaw()
+    {
+        return hasViewCamera() ? (float) Math.toDegrees(getViewCamera().rotation.y - Math.PI) : 0F;
+    }
+
+    public static float getSecondaryCameraPitch()
+    {
+        return hasViewCamera() ? (float) Math.toDegrees(getViewCamera().rotation.x) : 0F;
+    }
+
+    public static double getSecondaryCameraFov()
+    {
+        return hasViewCamera() ? Math.toDegrees(getViewCamera().fov) : Double.NaN;
+    }
+
+    public static float getSecondaryRenderAspect()
+    {
+        return getActiveTargetHeight() == 0 ? 0F : getActiveTargetWidth() / (float) getActiveTargetHeight();
+    }
+
+    public static Matrix4f fitSecondaryProjection(Matrix4f projection)
+    {
+        float aspect = getSecondaryRenderAspect();
+        return projection == null || aspect <= 0F ? projection : new Matrix4f(projection).m00(projection.m11() / aspect);
+    }
+
+    public static Matrix4f getViewProjection(GameRenderer renderer, Matrix4f original)
+    {
+        ViewPassContext context = ViewPassContext.current();
+        return context == null || !context.managedCamera() ? original : context.projection(renderer.getDepthFar());
+    }
+
+    public static void captureViewMatrices(Camera camera, Matrix4f viewMatrix, Matrix4f projection)
+    {
+        ViewPassContext context = ViewPassContext.current();
+
+        if (context != null && !isIrisShadowPass())
+        {
+            context.capture(camera, viewMatrix, projection);
+        }
+    }
+
+    private static int getPhysicalWindowWidth(Minecraft mc)
+    {
+        Object windowObject = mc.getWindow();
+
+        if (windowObject instanceof WindowDimensionsAccessor accessor)
+        {
+            return Math.max(1, accessor.bbs$getRawWidth());
+        }
+
+        return Math.max(1, mc.getWindow().getWidth());
+    }
+
+    private static int getPhysicalWindowHeight(Minecraft mc)
+    {
+        Object windowObject = mc.getWindow();
+
+        if (windowObject instanceof WindowDimensionsAccessor accessor)
+        {
+            return Math.max(1, accessor.bbs$getRawHeight());
+        }
+
+        return Math.max(1, mc.getWindow().getHeight());
+    }
+
+    public static Texture getSecondaryTexture()
+    {
+        return getViewTexture(ViewDescriptor.SECONDARY_ID);
+    }
+
+    public static RenderTarget getSecondaryFramebuffer()
+    {
+        ViewRenderState view = MULTI_VIEW_MANAGER.get(ViewDescriptor.SECONDARY_ID);
+        return view == null ? null : view.getFramebuffer();
+    }
+
     public static void startTick()
     {
         capturedModelBlocks.clear();
@@ -280,9 +509,20 @@ public class BBSRendering
 
     public static void setupFramebuffer()
     {
-        Window window = Minecraft.getInstance().getWindow();
+        if (framebuffer != null)
+        {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        Window window = mc.getWindow();
 
         framebuffer = new MainTarget(window.getWidth(), window.getHeight());
+        MULTI_VIEW_MANAGER.attachTarget(MultiViewManager.MAIN_ID, framebuffer, getTexture());
+        ViewRenderState mainState = getViewRenderState(MultiViewManager.MAIN_ID);
+        mainState.setRequestedSize(window.getWidth(), window.getHeight());
+        mainState.setActive(true);
+        mainState.setVisible(true);
     }
 
     public static void resizeExtraFramebuffers()
@@ -301,6 +541,7 @@ public class BBSRendering
         {
             resizeFramebuffer(buffer);
         }
+
     }
 
     public static void resizeFramebuffer(RenderTarget framebuffer)
@@ -331,44 +572,59 @@ public class BBSRendering
 
         Minecraft mc = Minecraft.getInstance();
 
-        BBSRendering.toggleFramebuffer = toggleFramebuffer;
-
         if (toggleFramebuffer)
         {
+            setupFramebuffer();
             int w = mc.getWindow().getWidth();
             int h = mc.getWindow().getHeight();
+            RenderTarget previous = mc.getMainRenderTarget();
 
-            resizeExtraFramebuffers();
-
-            if (framebuffer.width != w || framebuffer.height != h)
+            try
             {
-                framebuffer.resize(w, h, Minecraft.ON_OSX);
+                resizeExtraFramebuffers();
+
+                if (framebuffer.width != w || framebuffer.height != h)
+                {
+                    framebuffer.resize(w, h, Minecraft.ON_OSX);
+                }
+
+                clientFramebuffer = previous;
+                reassignFramebuffer(framebuffer);
+                framebuffer.bindWrite(true);
+                BBSRendering.toggleFramebuffer = true;
             }
-
-            clientFramebuffer = mc.getMainRenderTarget();
-
-            reassignFramebuffer(framebuffer);
-
-            framebuffer.bindWrite(true);
+            catch (RuntimeException | Error failure)
+            {
+                reassignFramebuffer(previous);
+                previous.bindWrite(true);
+                throw failure;
+            }
         }
         else
         {
+            restoreClientFramebuffer(true);
+        }
+    }
+
+    private static void restoreClientFramebuffer(boolean present)
+    {
+        if (!toggleFramebuffer)
+        {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        reassignFramebuffer(clientFramebuffer);
+        clientFramebuffer.bindWrite(true);
+        toggleFramebuffer = false;
+        clientFramebuffer = null;
+
+        /* World recording presents the copied frame to the real window. Film
+         * editors compose their own previews; teardown never presents a frame. */
+        if (present && customSize && UIScreen.getCurrentMenu() == null)
+        {
             Window window = mc.getWindow();
-
-            reassignFramebuffer(clientFramebuffer);
-
-            mc.getMainRenderTarget().bindWrite(true);
-
-            /* F4/F6 world export renders the live world into our private target.
-             * The encoder reads its copied texture, but the player still needs
-             * that same current frame presented to the vanilla window target;
-             * otherwise the window keeps showing the last pre-recording frame.
-             * Film/Morph editors render the private target inside their own UI,
-             * so never stretch it over a live BBS screen. */
-            if (customSize && UIScreen.getCurrentMenu() == null)
-            {
-                framebuffer.blitToScreen(window.getWidth(), window.getHeight());
-            }
+            framebuffer.blitToScreen(window.getWidth(), window.getHeight());
         }
     }
 
@@ -379,38 +635,132 @@ public class BBSRendering
 
     /* Rendering */
 
-    public static void onWorldRenderBegin()
+    public static void onRenderFrameBegin()
     {
-        if (orthoDistance > 0F)
-        {
-            Minecraft.getInstance().smartCull = true;
-
-            if (sodium)
-            {
-                SodiumUtils.restorePointCameraCulling();
-            }
-        }
-
-        orthoDistance = -1F;
+        renderFrameDepth++;
 
         Minecraft mc = Minecraft.getInstance();
-        BBSModClient.getFilms().startRenderFrame(getTickDelta(mc));
 
-        UIBaseMenu menu = UIScreen.getCurrentMenu();
-
-        if (menu != null)
+        if (renderFrameDepth == 1 && mc.level != null)
         {
-            menu.startRenderFrame(getTickDelta(mc));
+            for (ViewRenderState view : MULTI_VIEW_MANAGER.all())
+            {
+                view.getTiming().poll();
+            }
+
+            UIBaseMenu menu = UIScreen.getCurrentMenu();
+            boolean changedOwner = timingLevel != mc.level || timingMenu != menu;
+
+            if (changedOwner)
+            {
+                FRAME_TIMING.close();
+                timingLevel = mc.level;
+                timingMenu = menu;
+            }
+
+            ViewRenderState primary = MULTI_VIEW_MANAGER.get(MultiViewManager.MAIN_ID);
+            frameTimingSpec = new ViewGpuTiming.Spec(customSize ? getVideoWidth() : getPhysicalWindowWidth(mc),
+                customSize ? getVideoHeight() : getPhysicalWindowHeight(mc), primary == null || primary.isShadersEnabled());
+            frameTimingActive = true;
+            FRAME_TIMING.begin(frameTimingSpec);
+
+            if (changedOwner)
+            {
+                FRAME_TIMING.markPreparation();
+            }
+        }
+    }
+
+    public static void onRenderFrameEnd()
+    {
+        renderFrameDepth--;
+
+        if (renderFrameDepth == 0)
+        {
+            try
+            {
+                if (frameTimingActive)
+                {
+                    FRAME_TIMING.end();
+                    ViewPerformanceMonitor.record(FRAME_TIMING.getLastNanos(), FRAME_TIMING.getLastGpuNanos(),
+                        MULTI_VIEW_MANAGER.all());
+                }
+            }
+            finally
+            {
+                frameTimingActive = false;
+                restoreSceneCulling();
+
+                if (releaseViewResourcesPending)
+                {
+                    releaseViewResources();
+                }
+            }
+        }
+    }
+
+    public static void onWorldRenderBegin()
+    {
+        if (!FILM_VIEW_RENDERER.isActive() && !isApplyingSecondaryCamera())
+        {
+            prepareSceneFrame();
         }
 
         renderingWorld = true;
 
-        if (!customSize)
+        if (!isApplyingSecondaryCamera() && customSize)
         {
-            return;
+            toggleFramebuffer(true);
+        }
+    }
+
+    private static void prepareSceneFrame()
+    {
+        /* The budgeted tail of model loading: VAO bakes for whatever the background loader
+         * finished, a few milliseconds' worth per frame instead of all of them at once. */
+        ModelSetupQueue.drain();
+        restoreSceneCulling();
+        Minecraft mc = Minecraft.getInstance();
+        sceneSmartCull = mc.smartCull;
+        sceneCullingCaptured = true;
+
+        if (sodium)
+        {
+            SodiumViewAdapter.captureFrameCulling();
         }
 
-        toggleFramebuffer(true);
+        orthoDistance = -1F;
+        sceneFrameId++;
+        primaryFrameCompleted = false;
+        pendingPrimaryFrame = null;
+        pendingPrimaryIris = null;
+        float transition = getTickDelta(mc);
+
+        /* Marks which owned video decoders nobody asked for during this frame - the
+         * idle ones can be adopted by a fresh owner of the same file (no black flash). */
+        BBSModClient.getVideos().startFrame();
+
+        BBSModClient.getFilms().startRenderFrame(transition);
+        UIBaseMenu menu = UIScreen.getCurrentMenu();
+
+        if (menu != null)
+        {
+            menu.startRenderFrame(transition);
+        }
+    }
+
+    private static void restoreSceneCulling()
+    {
+        if (sceneCullingCaptured)
+        {
+            sceneCullingCaptured = false;
+            Minecraft.getInstance().smartCull = sceneSmartCull;
+
+            if (sodium)
+            {
+                SodiumViewAdapter.restoreFrameCulling();
+            }
+        }
     }
 
     /** Whether the main world target currently contains a Replay playback. */
@@ -430,6 +780,13 @@ public class BBSRendering
 
     public static void onWorldRenderEnd()
     {
+        if (isApplyingSecondaryCamera())
+        {
+            renderingWorld = false;
+            return;
+        }
+
+        primaryFrameCompleted = true;
         Minecraft mc = Minecraft.getInstance();
         EnumSet<BBSRenderSurfaceKind> surfaces = EnumSet.noneOf(BBSRenderSurfaceKind.class);
         PlayCameraController playback = currentWorldReplayController();
@@ -441,6 +798,7 @@ public class BBSRendering
             if (currentMenu instanceof UIDashboard dashboard && dashboard.getPanels().panel instanceof UIFilmPanel panel)
             {
                 filmPanel = panel;
+                UIImageRenderer.renderImages(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, ImageClip.getImages(panel.getRunner().getContext()));
                 UISubtitleRenderer.renderSubtitles(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
                 surfaces.add(BBSRenderSurfaceKind.FILM_PREVIEW);
             }
@@ -456,6 +814,7 @@ public class BBSRendering
                 GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
                 Batcher2D batcher = new Batcher2D(drawContext);
 
+                UIImageRenderer.renderImages(batcher.getContext().pose(), batcher, ImageClip.getImages(playback.getContext()));
                 UISubtitleRenderer.renderSubtitles(batcher.getContext().pose(), batcher, SubtitleClip.getSubtitles(playback.getContext()));
             }
 
@@ -501,6 +860,528 @@ public class BBSRendering
             : null;
     }
 
+    /**
+     * Outer render entry point used by GameRendererMixin. Scene simulation is
+     * prepared once, auxiliary views are sampled under their own budgets, and
+     * the supplied primary pass runs last so Sodium's shared terrain state ends
+     * on the camera users see in the game window.
+     */
+    public static void renderWorldFrame(GameRenderer renderer, DeltaTracker deltaTracker, Runnable primaryPass)
+    {
+        if (primaryPass == null)
+        {
+            return;
+        }
+
+        if (FILM_VIEW_RENDERER.isActive() || isApplyingSecondaryCamera())
+        {
+            primaryPass.run();
+            return;
+        }
+
+        /* Once per real frame, and only the frame the window shows: the framebuffer form's
+         * diagnostic (see FramebufferDebug) logs one frame per second, counted from here. */
+        FramebufferDebug.newFrame();
+
+        PreparedFrame frame = new PreparedFrame();
+
+        try
+        {
+            FILM_VIEW_RENDERER.renderFrame(() ->
+            {
+                prepareSceneFrame();
+                frame.panel = activeFilmPanel();
+                frame.primary = getViewRenderState(MultiViewManager.MAIN_ID);
+                Minecraft mc = Minecraft.getInstance();
+                int targetWidth = customSize ? getVideoWidth() : getPhysicalWindowWidth(mc);
+                int targetHeight = customSize ? getVideoHeight() : getPhysicalWindowHeight(mc);
+                frame.primary.setRequestedSize(targetWidth, targetHeight);
+
+                if (frame.panel != null && frame.panel.getData() != null)
+                {
+                    CameraController controller = BBSModClient.getCameraController();
+                    controller.setup(controller.camera, getTickDelta(Minecraft.getInstance()));
+                    ViewDescriptor descriptor = frame.panel.getPrimaryView();
+                    syncView(frame.primary, descriptor);
+                    frame.camera = new mchorse.bbs_mod.camera.Camera();
+                    frame.exporting = frame.panel.recorder.isExporting();
+                    frame.camera.copy(frame.exporting ? controller.camera : descriptor.resolveCamera(getTickDelta(Minecraft.getInstance())));
+                    frame.orthoDistance = frame.exporting ? -1F : descriptor.getOrthoDistance();
+                    syncViewCamera(frame.primary, descriptor, frame.exporting);
+                }
+                else
+                {
+                    frame.primary.setActive(true);
+                    frame.primary.setVisible(true);
+                    frame.primary.setShadersEnabled(true);
+                    PlayCameraController playback = currentWorldReplayController();
+
+                    if (playback != null && playback.getContext().clips != null
+                        && playback.getContext().clips.getParent() instanceof Film film)
+                    {
+                        frame.primary.syncCameraSource(film, playback.getContext().ticks, Film.LEGACY_CAMERA_ID, true, false);
+                    }
+                    else
+                    {
+                        frame.primary.syncCameraSource(null, 0, null, false, false);
+                    }
+                }
+
+                if (iris && IrisViewBackend.isAvailable())
+                {
+                    IrisViewBackend.prepareMain();
+                }
+
+                ViewGpuTiming timing = frameTimingActive ? FRAME_TIMING : frame.primary.getTiming();
+                timing.poll();
+                ViewGpuTiming.Spec spec = frameTimingActive ? frameTimingSpec
+                    : new ViewGpuTiming.Spec(targetWidth, targetHeight, frame.primary.isShadersEnabled());
+                VIEW_BUDGET.setBudgetFraction(frame.panel == null ? ViewBudgetScheduler.DEFAULT_BUDGET_FRACTION
+                    : frame.panel.getAuxiliaryBudgetFraction());
+                VIEW_BUDGET.beginFrame(timing.getEstimatedNanos(spec), timing.hasGpuSample(spec));
+            }, () -> renderAuxiliaryViews(frame, deltaTracker), () -> renderPrimaryView(frame, primaryPass));
+        }
+        finally
+        {
+            renderingWorld = false;
+
+            if (sodium)
+            {
+                SodiumViewAdapter.endFrame();
+            }
+        }
+    }
+
+    private static UIFilmPanel activeFilmPanel()
+    {
+        UIBaseMenu menu = UIScreen.getCurrentMenu();
+        return menu instanceof UIDashboard dashboard && dashboard.getPanels().panel instanceof UIFilmPanel panel ? panel : null;
+    }
+
+    private static void syncView(ViewRenderState view, ViewDescriptor descriptor)
+    {
+        view.setVisible(descriptor.isVisible());
+        view.setActive(descriptor.isActive());
+        view.setShadersEnabled(descriptor.isShadersEnabled());
+        view.setRequestedRefreshRate(descriptor.getRefreshRate());
+        view.syncRequest(descriptor.getLastRequestedFrame(), descriptor.getHistoryEpoch());
+    }
+
+    private static void renderAuxiliaryViews(PreparedFrame frame, DeltaTracker deltaTracker)
+    {
+        List<ViewRenderState> candidates = new ArrayList<>();
+        Map<String, ViewDescriptor> descriptors = new LinkedHashMap<>();
+
+        if (frame.panel != null)
+        {
+            for (ViewDescriptor descriptor : frame.panel.getViewDescriptors())
+            {
+                if (descriptor.isPrimary())
+                {
+                    continue;
+                }
+
+                descriptors.put(descriptor.getId(), descriptor);
+                ViewRenderState view = MULTI_VIEW_MANAGER.getOrCreate(descriptor.getId(), descriptor.getWidth(), descriptor.getHeight());
+                syncView(view, descriptor);
+                view.syncPerformancePreferences(VIEW_BUDGET.getBudgetFraction(), descriptor.getResolutionWidth());
+                syncViewCamera(view, descriptor, false);
+
+                if (secondaryViewEnabled && !frame.exporting && view.isVisible() && view.isActive())
+                {
+                    candidates.add(view);
+                }
+                else
+                {
+                    releaseAuxiliaryView(view);
+                }
+            }
+        }
+
+        for (ViewRenderState view : MULTI_VIEW_MANAGER.auxiliary())
+        {
+            if (!descriptors.containsKey(view.getId()))
+            {
+                releaseAuxiliaryView(view);
+            }
+        }
+
+        long now = System.nanoTime();
+        candidates.sort(VIEW_BUDGET.priority(now));
+
+        for (ViewRenderState view : candidates)
+        {
+            if (!VIEW_BUDGET.shouldRender(view, System.nanoTime()))
+            {
+                continue;
+            }
+
+            if (sodium && !SodiumViewAdapter.isMultiViewFrame())
+            {
+                SodiumViewAdapter.beginFrame();
+            }
+
+            renderAuxiliaryView(descriptors.get(view.getId()), view, deltaTracker);
+        }
+    }
+
+    private static void renderAuxiliaryView(ViewDescriptor descriptor, ViewRenderState view, DeltaTracker deltaTracker)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        long started = System.nanoTime();
+        ViewPassContext context = null;
+        IrisViewState.Scope irisScope = null;
+        ViewTargetSize size = view.targetSize(started);
+        mchorse.bbs_mod.camera.Camera resolved = new mchorse.bbs_mod.camera.Camera();
+        boolean previousRenderingWorld = renderingWorld;
+        boolean measured = false;
+        try
+        {
+            view.getTiming().begin(view.timingSpec(size));
+            measured = true;
+
+            if (view.requiresTargetAllocation(size))
+            {
+                view.getTiming().markPreparation();
+            }
+
+            resolved.copy(descriptor.resolveCamera(getTickDelta(mc)));
+            syncViewCamera(view, descriptor, false);
+
+            try (RenderPassScope scope = RenderPassScope.capture(mc))
+            {
+                ViewFramebuffer target = view.prepareTarget(size);
+                context = ViewPassContext.open(view, resolved, size.width(), size.height(), descriptor.getOrthoDistance());
+
+                try (ViewPassContext ignored = context;
+                     SodiumViewAdapter.CullingScope ignoredCulling = sodium ? SodiumViewAdapter.openCameraCulling(context.orthographic()) : null)
+                {
+                    Camera camera = view.getWorldCamera();
+                    camera.setup(mc.level, mc.getCameraEntity() == null ? mc.player : mc.getCameraEntity(), false, false, getTickDelta(mc));
+                    scope.use(target, camera, sceneSmartCull && !context.orthographic());
+
+                    if (sodium)
+                    {
+                        SodiumViewAdapter.prepareForView();
+                    }
+
+                    irisScope = openIrisView(view, false);
+
+                    try (IrisViewState.Scope ignoredIris = irisScope)
+                    {
+                        target.target().setClearColor(0F, 0F, 0F, 1F);
+                        RenderSystem.disableScissor();
+                        RenderSystem.colorMask(true, true, true, true);
+                        RenderSystem.depthMask(true);
+                        target.target().clear(Minecraft.ON_OSX);
+                        target.target().bindWrite(true);
+                        mc.gameRenderer.renderLevel(deltaTracker);
+
+                        if (!context.captured())
+                        {
+                            throw new IllegalStateException("The Film view produced no world matrices");
+                        }
+                    }
+                    finally
+                    {
+                        /* A failed draw must never leave commands for the next camera. */
+                        FormTranslucentQueue.abort();
+                        FormRenderLast.release();
+                    }
+
+                    target.finishForPresentation();
+                }
+            }
+
+            long elapsed = view.getTiming().end();
+            view.publish(sceneFrameId, context.camera().view, context.camera().projection, context.camera(), elapsed);
+
+            if (irisScope != null)
+            {
+                irisScope.commit();
+            }
+
+            if (view.getTiming().wasLastSamplePreparation())
+            {
+                view.setStatus(ViewRenderState.Status.WARMING_UP);
+            }
+            else
+            {
+                VIEW_BUDGET.record(view, elapsed);
+            }
+        }
+        catch (Throwable failure)
+        {
+            view.fail(failure, System.nanoTime() - started);
+            VIEW_BUDGET.recordAt(view, view.getLastCpuNanos(), started);
+
+            if (iris)
+            {
+                IrisViewBackend.markFailure(view.getId(), failure);
+            }
+
+            LOGGER.error("Film view {} failed; retaining its last completed image", view.getId(), failure);
+
+            if (failure instanceof VirtualMachineError fatal)
+            {
+                throw fatal;
+            }
+
+            if (failure instanceof ThreadDeath fatal)
+            {
+                throw fatal;
+            }
+        }
+        finally
+        {
+            view.getTiming().end();
+
+            if (measured && frameTimingActive)
+            {
+                FRAME_TIMING.exclude(view.getTiming().getLastSample());
+            }
+
+            renderingWorld = previousRenderingWorld;
+        }
+    }
+
+    private static IrisViewState.Scope openIrisView(ViewRenderState view, boolean primary)
+    {
+        if (!iris || !IrisViewBackend.isAvailable())
+        {
+            return null;
+        }
+
+        return primary ? IrisViewBackend.openPrimary(view.getId(), view.isShadersEnabled(), view.getHistoryEpoch())
+            : IrisViewBackend.open(view.getId(), view.isShadersEnabled(), view.getHistoryEpoch());
+    }
+
+    private static void syncViewCamera(ViewRenderState view, ViewDescriptor descriptor, boolean exporting)
+    {
+        boolean cameraView = descriptor.getNavigation().isInCameraView();
+
+        view.syncCameraSource(descriptor.getPanel().getData(), descriptor.getPanel().getCursor(),
+            cameraView ? descriptor.getCameraId() : null, exporting || cameraView && descriptor.isFollowOutput(),
+            !exporting && descriptor.getOrthoDistance() > 0F);
+    }
+
+    private static void renderPrimaryView(PreparedFrame frame, Runnable pass)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        int targetWidth = customSize ? getVideoWidth() : getPhysicalWindowWidth(mc);
+        int targetHeight = customSize ? getVideoHeight() : getPhysicalWindowHeight(mc);
+        ViewGpuTiming timing = frame.primary.getTiming();
+        ViewPassContext context = ViewPassContext.open(frame.primary, frame.camera, targetWidth, targetHeight, frame.orthoDistance);
+        IrisViewState.Scope irisScope = null;
+
+        try (ViewPassContext ignored = context;
+             SodiumViewAdapter.CullingScope ignoredCulling = sodium ? SodiumViewAdapter.openCameraCulling(context.orthographic()) : null)
+        {
+            mc.smartCull = sceneSmartCull && !context.orthographic();
+            if (sodium && SodiumViewAdapter.isMultiViewFrame())
+            {
+                SodiumViewAdapter.prepareForView();
+            }
+
+            if (customSize)
+            {
+                toggleFramebuffer(true);
+            }
+
+            timing.begin(new ViewGpuTiming.Spec(targetWidth, targetHeight, frame.primary.isShadersEnabled()));
+
+            try
+            {
+                irisScope = openIrisView(frame.primary, true);
+
+                try (IrisViewState.Scope ignoredIris = irisScope)
+                {
+                    pass.run();
+                }
+            }
+            finally
+            {
+                pendingPrimaryCpuNanos = timing.end();
+
+                if (timing.wasLastSamplePreparation())
+                {
+                    FRAME_TIMING.markPreparation();
+                }
+            }
+
+            if (primaryFrameCompleted && context.captured())
+            {
+                pendingPrimaryFrame = context;
+                pendingPrimaryIris = irisScope;
+
+                if (!toggleFramebuffer)
+                {
+                    publishPrimaryFrame();
+                }
+            }
+        }
+        catch (RuntimeException | Error failure)
+        {
+            FormTranslucentQueue.abort();
+            FormRenderLast.release();
+            pendingPrimaryFrame = null;
+            pendingPrimaryIris = null;
+
+            if (toggleFramebuffer)
+            {
+                restoreClientFramebuffer(false);
+            }
+
+            throw failure;
+        }
+    }
+
+    private static void publishPrimaryFrame()
+    {
+        ViewPassContext context = pendingPrimaryFrame;
+
+        if (context != null)
+        {
+            context.view().publish(sceneFrameId, context.camera().view, context.camera().projection, context.camera(), pendingPrimaryCpuNanos);
+            context.view().setStatus(ViewRenderState.Status.LIVE);
+
+            if (pendingPrimaryIris != null)
+            {
+                pendingPrimaryIris.commit();
+            }
+        }
+
+        pendingPrimaryFrame = null;
+        pendingPrimaryIris = null;
+    }
+
+    private static void releaseAuxiliaryView(ViewRenderState view)
+    {
+        if (view.getStatus() != ViewRenderState.Status.HIDDEN || view.hasRenderResources())
+        {
+            try (RenderGlState ignored = new RenderGlState();
+                 RenderStateRestorer releases = new RenderStateRestorer())
+            {
+                releases.add(view::dispose);
+
+                if (iris)
+                {
+                    releases.add(() -> IrisViewBackend.release(view.getId()));
+                }
+            }
+        }
+
+        view.setStatus(ViewRenderState.Status.HIDDEN);
+    }
+
+    /** Retire view resources at a complete render-frame boundary. */
+    public static void releaseViewResources()
+    {
+        if (!RenderSystem.isOnRenderThread())
+        {
+            RenderSystem.recordRenderCall(BBSRendering::releaseViewResources);
+            return;
+        }
+
+        if (renderFrameDepth > 0 || FILM_VIEW_RENDERER.isActive() || ViewPassContext.current() != null)
+        {
+            releaseViewResourcesPending = true;
+            return;
+        }
+
+        releaseViewResourcesPending = false;
+        restoreClientFramebuffer(false);
+        restoreSceneCulling();
+        RenderTarget retiredFramebuffer = framebuffer;
+        Texture retiredTexture = texture;
+        Texture retiredStagingTexture = primaryStagingTexture;
+        IrisViewState.Scope retiredScope = pendingPrimaryIris;
+
+        try (RenderGlState ignored = new RenderGlState();
+             RenderStateRestorer releases = new RenderStateRestorer())
+        {
+            framebuffer = null;
+            texture = null;
+            primaryStagingTexture = null;
+            pendingPrimaryFrame = null;
+            pendingPrimaryIris = null;
+            pendingPrimaryCpuNanos = 0L;
+            primaryFrameCompleted = false;
+
+            if (retiredTexture != null)
+            {
+                releases.add(retiredTexture::delete);
+            }
+
+            if (retiredStagingTexture != null && retiredStagingTexture != retiredTexture)
+            {
+                releases.add(retiredStagingTexture::delete);
+            }
+
+            if (retiredFramebuffer != null)
+            {
+                releases.add(retiredFramebuffer::destroyBuffers);
+            }
+
+            releases.add(FRAME_TIMING::close);
+            frameTimingSpec = null;
+            timingLevel = null;
+            timingMenu = null;
+
+            for (ViewRenderState view : MULTI_VIEW_MANAGER.all())
+            {
+                releases.add(view::dispose);
+            }
+
+            if (iris)
+            {
+                releases.add(IrisViewBackend::releaseAll);
+            }
+
+            if (retiredScope != null)
+            {
+                releases.add(retiredScope::close);
+            }
+        }
+    }
+
+    private static void copyRenderTarget(RenderTarget target, Texture destination)
+    {
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+
+        try
+        {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, target.frameBufferId);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            destination.bind();
+
+            if (destination.width != target.width || destination.height != target.height)
+            {
+                FRAME_TIMING.markPreparation();
+                destination.setSize(target.width, target.height);
+            }
+
+            GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, target.width, target.height);
+        }
+        finally
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+        }
+    }
+
+    private static final class PreparedFrame
+    {
+        private UIFilmPanel panel;
+        private ViewRenderState primary;
+        private mchorse.bbs_mod.camera.Camera camera;
+        private float orthoDistance = -1F;
+        private boolean exporting;
+    }
+
     public static void onRenderBeforeScreen()
     {
         if (!toggleFramebuffer)
@@ -510,37 +1391,30 @@ public class BBSRendering
 
         try
         {
-            if (customSize && framebuffer != null)
+            if (customSize && framebuffer != null && primaryFrameCompleted)
             {
-                int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
-                int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
                 int previousTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
 
                 try
                 {
-                    Texture texture = getTexture();
-
-                    GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer.frameBufferId);
-                    GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
-
-                    texture.bind();
-
-                    /* Keep the preview texture allocation stable across frames. Besides avoiding a
-                     * needless glTexImage2D stall, this is important for remote surface capture:
-                     * consumers can reuse their GPU/PBO resources until the preview size changes. */
-                    if (texture.width != framebuffer.width || texture.height != framebuffer.height)
+                    if (primaryStagingTexture == null)
                     {
-                        texture.setSize(framebuffer.width, framebuffer.height);
+                        primaryStagingTexture = new Texture();
+                        primaryStagingTexture.setFormat(TextureFormat.RGB_U8);
+                        primaryStagingTexture.setFilter(GL11.GL_NEAREST);
                     }
 
-                    GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, framebuffer.width, framebuffer.height);
+                    copyRenderTarget(framebuffer, primaryStagingTexture);
+                    Texture previous = texture;
+                    texture = primaryStagingTexture;
+                    primaryStagingTexture = previous;
+                    MULTI_VIEW_MANAGER.attachTarget(MultiViewManager.MAIN_ID, framebuffer, texture);
                     exportFrameGeneration += 1L;
+                    publishPrimaryFrame();
                 }
                 finally
                 {
                     GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
-                    GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
-                    GL11.glReadBuffer(previousReadBuffer);
                 }
             }
 
@@ -624,6 +1498,7 @@ public class BBSRendering
         Batcher2D batcher2D = new Batcher2D(drawContext);
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+        StructureWand.renderHud(batcher2D);
     }
 
     /**
@@ -679,6 +1554,33 @@ public class BBSRendering
         batcher2D.textCard(label, iconX + 3, y + 4, BBSSettings.textColor(), Colors.A50);
     }
 
+    /** Whether the entity pass opened the render-last scope — false when one was already open. */
+    private static boolean entityPassRenderLast;
+
+    /**
+     * The world's entity pass: between these two calls vanilla draws the actors, model blocks
+     * and morphed players, and without a shader pack {@link #renderCoolStuff} draws the films
+     * at its end — one render-last scope spans it all, so a form set to render last draws after
+     * every other form of the frame. Under Iris the films run earlier, at the solid layer, in a
+     * scope of their own; this one still covers what the entity loop drew.
+     *
+     * <p>Opened after the terrain layers rather than before them, because the solid layer is
+     * where the Iris film pass draws: a scope already open there would swallow that pass's own
+     * scope, and the films' render-last forms would end up drawn after the entities instead of
+     * at the end of the film pass.</p>
+     */
+    public static void beginEntityPass()
+    {
+        entityPassRenderLast = FormRenderLast.open();
+    }
+
+    public static void endEntityPass()
+    {
+        FormRenderLast.close(entityPassRenderLast);
+
+        entityPassRenderLast = false;
+    }
+
     public static void renderCoolStuff(IBbsWorldRenderContext worldRenderContext)
     {
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
@@ -688,6 +1590,12 @@ public class BBSRendering
         boolean oldDepthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
 
         modelViewStack.pushMatrix();
+
+        /* A scope over everything drawn here, for when this runs on its own — under Iris, at the
+         * solid layer: a form set to render last skips its turn and draws when this closes, after
+         * every other form of the pass. Inside the entity pass's scope this opens nothing and the
+         * forms wait for that one, which is what keeps one scope over the whole frame's forms. */
+        boolean renderLast = FormRenderLast.open();
 
         try
         {
@@ -710,6 +1618,11 @@ public class BBSRendering
         }
         finally
         {
+            /* The postponed forms replay here — before the batch is ended and the camera matrices
+             * are put back — because their renderers read the same projection and model-view the
+             * forms drawn above did. */
+            FormRenderLast.close(renderLast);
+
             try
             {
                 try
@@ -758,7 +1671,7 @@ public class BBSRendering
 
             if (sodium)
             {
-                SodiumUtils.disablePointCameraCulling();
+                SodiumViewAdapter.applyCameraCulling(true);
             }
         }
     }
@@ -793,13 +1706,37 @@ public class BBSRendering
             return false;
         }
 
-        return IrisUtils.isShaderPackEnabled();
+        ViewPassContext context = ViewPassContext.current();
+        return (context == null || context.view().isShadersEnabled()) && IrisUtils.isShaderPackEnabled();
     }
 
     /** True while forms are rendered inside Iris' shader-pack world pass. */
     public static boolean isIrisWorldForms()
     {
         return isRenderingWorld() && isIrisShadersEnabled();
+    }
+
+    /**
+     * Whether a shader pack is shading this very draw. Unlike {@link #isIrisShadersEnabled()} it
+     * also reports no inside {@link #renderOffscreen(Runnable)}, where our own framebuffer forms
+     * draw off-screen and Iris' programs must not take over the vanilla render types we use there.
+     */
+    public static boolean isIrisWorldShadersEnabled()
+    {
+        return iris && renderingWorld && isIrisShadersEnabled() && IrisUtils.shouldOverrideShaders();
+    }
+
+    /** Render into a framebuffer of ours: see {@link IrisUtils#renderOffscreen(Runnable)}. */
+    public static void renderOffscreen(Runnable render)
+    {
+        if (iris)
+        {
+            IrisUtils.renderOffscreen(render);
+        }
+        else
+        {
+            render.run();
+        }
     }
 
     public static boolean isIrisShadowPass()
@@ -832,30 +1769,14 @@ public class BBSRendering
         }
     }
 
-    /**
-     * Snapshot of Iris' extended-vertex-layout flag, taken while a render layer's buffer is still
-     * inside its own flush (where Iris pins the flag to match the buffer). The translucent queue
-     * draws captured meshes later in the frame, when the flag may describe a different buffer —
-     * pinning the captured value during that draw keeps the vertex array layout matched to the
-     * data (a mismatch shreds the geometry into a fan of stretched triangles).
-     */
     public static boolean captureIrisVertexLayout()
     {
         return iris && IrisUtils.captureBufferLayout();
     }
 
-    /**
-     * Force the extended-vertex-layout flag for the duration of a deferred draw. Returns the
-     * previous value, to be handed to {@link #restoreIrisVertexLayout(boolean)}.
-     */
     public static boolean applyIrisVertexLayout(boolean extended)
     {
-        if (!iris)
-        {
-            return false;
-        }
-
-        return IrisUtils.applyBufferLayout(extended);
+        return iris && IrisUtils.applyBufferLayout(extended);
     }
 
     public static void restoreIrisVertexLayout(boolean previous)
@@ -1025,10 +1946,8 @@ public class BBSRendering
 
     public static Function<VertexConsumer, VertexConsumer> getColorConsumer(Color color)
     {
-        /* Sodium's 0.8 vertex writer bypasses the normal consumer color path and
-         * its optional mixin is not stable across Connector versions. Keep the
-         * vanilla consumer here; this is also the correct path for block/particle
-         * texture colors, which must not be replaced by a stale global tint. */
+        /* Keep form tint and alpha on the normal VertexConsumer contract. Sodium's bulk writer
+         * bypasses setColor(), which can leave model layers with stale RGB/alpha values. */
         return (b) -> new RecolorVertexConsumer(b, color);
     }
 

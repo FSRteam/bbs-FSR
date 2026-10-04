@@ -326,6 +326,7 @@ public abstract class UIModelRenderer extends UIElement
         }
 
         this.renderUserModel(context);
+        this.renderUserModelOverlay(context);
 
         Lighting.setupForFlatItems();
 
@@ -418,6 +419,18 @@ public abstract class UIModelRenderer extends UIElement
      * Draw your model here
      */
     protected abstract void renderUserModel(UIContext context);
+
+    /**
+     * Runs right after {@link #renderUserModel(UIContext)}, still inside the model's projection and
+     * view, before the frame is torn down - an overlay that belongs in the model's own space draws
+     * here. Restore whatever GL state it changes; the caller unwinds the matrices either way.
+     *
+     * <p>Part of the base class on purpose: a subclass that overrides `renderUserModel` without
+     * calling super (the pickable form preview does) would silently drop an override-only hook, and
+     * both preview flavours have to offer the same point.</p>
+     */
+    protected void renderUserModelOverlay(UIContext context)
+    {}
 
     /**
      * Render block of grass under the model (which signify where

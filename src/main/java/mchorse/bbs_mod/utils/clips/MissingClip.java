@@ -1,9 +1,11 @@
 package mchorse.bbs_mod.utils.clips;
 
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.utils.factory.IUnknownType;
 
 /** Non-executing, data-preserving placeholder for an unavailable clip type. */
-public final class MissingClip extends Clip
+public final class MissingClip extends Clip implements IUnknownType
 {
     private final MapType source;
 
@@ -25,6 +27,16 @@ public final class MissingClip extends Clip
     public String typeId()
     {
         return this.source.getString("type", "missing:clip");
+    }
+
+    /**
+     * The placeholder answers for the type it stands in for, so a factory asked to save one
+     * writes back the original type id instead of failing over an unregistered class.
+     */
+    @Override
+    public Link getUnknownType()
+    {
+        return Link.create(this.typeId());
     }
 
     @Override

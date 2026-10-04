@@ -10,6 +10,7 @@ import mchorse.bbs_mod.ui.framework.elements.IViewport;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.IViewportStack;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.InterfaceBlur;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
@@ -147,6 +148,7 @@ public abstract class UIBaseMenu
 
     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton)
     {
+        this.context.notePointerGesture();
         boolean result = false;
 
         try (UIContext.PointerEventFrame ignored = this.context.beginPointerEvent(mouseX, mouseY, mouseButton))
@@ -187,6 +189,7 @@ public abstract class UIBaseMenu
 
     public boolean mouseScrolled(int x, int y, double h, double v)
     {
+        this.context.notePointerGesture();
         boolean result = false;
 
         try (UIContext.PointerEventFrame ignored = this.context.beginPointerScrollEvent(x, y, h, v))
@@ -432,6 +435,10 @@ public abstract class UIBaseMenu
         }
         else
         {
+            /* No theme texture: the world still shows through the veil, so the optional
+             * blur layer has something to soften. The theme backdrop itself is untouched. */
+            InterfaceBlur.apply();
+
             this.context.batcher.box(0, 0, this.width, this.height, Colors.A50);
         }
 
@@ -446,8 +453,12 @@ public abstract class UIBaseMenu
         this.context.resetMatrix();
         this.context.setMouse(mouseX, mouseY);
         this.context.resetCursor();
+        InterfaceBlur.beginFrame();
 
         this.preRenderMenu(context);
+
+        /* One unified re-layout pass for everything invalidated since the last frame */
+        this.context.flushLayout();
 
         if (this.root.isVisible())
         {

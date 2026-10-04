@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film;
 
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.camera.CameraPoseEditing;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.data.DataStorageUtils;
@@ -86,6 +87,14 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     {
         if (this.panel != null)
         {
+            if (this == this.filmPanel.cameraEditor)
+            {
+                this.panel.editClip(CameraPoseEditing.toClipPosition(this.getFilm(), this.filmPanel.getEditedCameraId(),
+                    this.panel.clip, this.getCursor(), position, this.filmPanel.getController().getEntities()));
+
+                return;
+            }
+
             Map<Clip, Position> snapshots = this.filmPanel.getRunner().getContext().getSnapshots();
             Position newPosition = new Position();
             Position snapshot = snapshots.get(this.panel.clip);
@@ -132,7 +141,9 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     @Override
     public Camera getCamera()
     {
-        return this.filmPanel.getCamera();
+        return this == this.filmPanel.cameraEditor
+            && this.filmPanel.getEditedCameraId().equals(this.filmPanel.getActivePreview().getViewDescriptor().resolveCameraId())
+            ? this.filmPanel.getActivePreview().getDisplayedCamera() : this.filmPanel.getCamera();
     }
 
     @Override
@@ -150,6 +161,13 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     @Override
     public void pickClip(Clip clip)
     {
+        boolean wasFlying = this.filmPanel.isFlying();
+
+        if (this.panel == null || this.panel.clip != clip)
+        {
+            this.filmPanel.prepareClipSelection(this);
+        }
+
         UIClip.saveScroll(this.panel);
 
         if (this.panel != null)
@@ -200,7 +218,7 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
             this.panel.setVisible(this.propertiesVisible);
             this.panel.restoreScroll();
 
-            if (this.filmPanel.isFlying())
+            if (wasFlying)
             {
                 this.setCursor(clip.tick.get());
             }
@@ -247,7 +265,19 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     }
 
     @Override
+    public float getCursor(float transition)
+    {
+        return this.filmPanel.getCursor(transition);
+    }
+
+    @Override
     public void setCursor(int tick)
+    {
+        this.filmPanel.setCursor(tick);
+    }
+
+    @Override
+    public void setCursor(float tick)
     {
         this.filmPanel.setCursor(tick);
     }

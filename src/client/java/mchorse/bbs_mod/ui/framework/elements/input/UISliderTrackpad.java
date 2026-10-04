@@ -379,20 +379,13 @@ public class UISliderTrackpad extends UINumericInput<UISliderTrackpad>
 
             if (this.textbox.isFocused())
             {
-                if (this.wasInside)
-                {
-                    /* The track owns the left button even while the value is
-                     * being typed — submit the text and take the click */
-                    context.focus(null);
-                }
-                else
-                {
-                    this.textbox.mouseClicked(context.mouseX, context.mouseY, context.mouseButton);
+                /* The click is handed to the textbox first, so the caret lands where it
+                 * was clicked; a click that misses the text area then drops the focus */
+                this.textbox.mouseClicked(context.mouseX, context.mouseY, context.mouseButton);
 
-                    if (!this.textbox.isFocused())
-                    {
-                        context.focus(null);
-                    }
+                if (!this.textbox.isFocused())
+                {
+                    context.focus(null);
                 }
             }
 

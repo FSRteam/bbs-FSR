@@ -4,8 +4,12 @@ import mchorse.bbs_mod.settings.values.core.ValueGroup;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -283,7 +287,7 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
         {
             File root = this.getFolder();
 
-            return root == null ? null : root.getCanonicalFile();
+            return root == null ? null : root.toPath().toRealPath().toFile();
         }
         catch (IOException | SecurityException e)
         {
@@ -295,20 +299,50 @@ public abstract class FolderManager <T extends ValueGroup> implements IManager<T
     {
         try
         {
-            File canonical = candidate.getCanonicalFile();
-            Path path = canonical.toPath();
+            Path path = this.resolveRealPath(candidate.toPath());
 
             if (!path.startsWith(root) || (!allowRoot && path.equals(root)))
             {
                 return null;
             }
 
-            return canonical;
+            return path.toFile();
         }
         catch (IOException | SecurityException e)
         {
             return null;
         }
+    }
+
+    private Path resolveRealPath(Path candidate) throws IOException
+    {
+        Path absolute = candidate.toAbsolutePath().normalize();
+        Path existing = absolute;
+
+        /* Resolve links before appending a not-yet-created save destination. */
+        while (true)
+        {
+            try
+            {
+                Files.readAttributes(existing, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+
+                break;
+            }
+            catch (NoSuchFileException exception)
+            {
+                Path parent = existing.getParent();
+
+                if (parent == null)
+                {
+                    throw exception;
+                }
+
+                existing = parent;
+            }
+        }
+
+        /* An existing dangling link must fail here rather than become a missing directory. */
+        return existing.toRealPath().resolve(existing.relativize(absolute));
     }
 
     protected String getExtension()

@@ -22,6 +22,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.MeshData;
 import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -56,10 +58,66 @@ public class Batcher2D
         return fontRenderer;
     }
 
+    /* Quad batching. A scope opened with beginBatch() collects every solid quad (box,
+     * outline, gradientVBox and friends all funnel into box) into one dedicated buffer
+     * and draws it once at endBatch() - instead of a begin/setShader/draw per rectangle.
+     * Order stays exact because only homogeneous solid quads batch: every other primitive
+     * (textures, text, clip) flushes the pending quads first. The buffer is our own, not
+     * the shared Tesselator one, so code that builds on the Tesselator directly can never
+     * collide with an open batch. */
+    private ByteBufferBuilder batchAllocator;
+    private BufferBuilder batchBuilder;
+    private boolean batching;
+    private boolean batchStarted;
+
     public Batcher2D(GuiGraphics context)
     {
         this.context = context;
         this.font = getDefaultTextRenderer();
+    }
+
+    public boolean isBatching()
+    {
+        return this.batching;
+    }
+
+    /** Open a quad batch. Nested calls are folded into the outermost scope. */
+    public void beginBatch()
+    {
+        this.batching = true;
+    }
+
+    /** Close the scope opened by {@link #beginBatch()} and draw the collected quads. */
+    public void endBatch()
+    {
+        this.batching = false;
+        this.flushBatch();
+    }
+
+    private void flushBatch()
+    {
+        if (!this.batchStarted)
+        {
+            return;
+        }
+
+        this.batchStarted = false;
+
+        /* Same UI blend/depth state management as the immediate box() path, so an
+         * open batch stays multiview/iris safe. */
+        this.prepareUiBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+
+        MeshData mesh = this.batchBuilder.build();
+
+        this.batchBuilder = null;
+
+        if (mesh != null)
+        {
+            BufferUploader.drawWithShader(mesh);
+        }
+
+        this.restoreDepth();
     }
 
     public GuiGraphics getContext()
@@ -75,6 +133,19 @@ public class Batcher2D
     public FontRenderer getFont()
     {
         return this.font;
+    }
+
+    /**
+     * Swap the font every text call of this batcher goes through, handing back the
+     * previous one so the caller can put it back. A null restores the default one.
+     */
+    public FontRenderer setFont(FontRenderer font)
+    {
+        FontRenderer previous = this.font;
+
+        this.font = font == null ? getDefaultTextRenderer() : font;
+
+        return previous;
     }
 
     public void pushAlpha(float mul)
@@ -128,6 +199,7 @@ public class Batcher2D
      */
     public void clip(int x, int y, int w, int h, int sw, int sh)
     {
+        this.flushBatch();
         BBSUiFrameRecorder.recordClipPush(x, y, w, h);
         this.context.enableScissor(x, y, x + w, y + h);
     }
@@ -139,6 +211,7 @@ public class Batcher2D
 
     public void unclip(int sw, int sh)
     {
+        this.flushBatch();
         BBSUiFrameRecorder.recordClipPop();
         this.context.disableScissor();
     }
@@ -173,6 +246,29 @@ public class Batcher2D
         color4 = this.applyGlobalAlpha(color4);
 
         Matrix4f matrix4f = this.context.pose().last().pose();
+
+        /* The matrix bakes into the vertices right here, so quads from different
+         * matrix contexts share one batch safely. */
+        if (this.batching)
+        {
+            if (!this.batchStarted)
+            {
+                if (this.batchAllocator == null)
+                {
+                    this.batchAllocator = new ByteBufferBuilder(262144);
+                }
+
+                /* Since 1.21.1 a builder is born already begun, out of an allocator -
+                 * ours stays our own, so the shared Tesselator can never collide with
+                 * an open batch. */
+                this.batchBuilder = new BufferBuilder(this.batchAllocator, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+                this.batchStarted = true;
+            }
+
+            this.fillRect(this.batchBuilder, matrix4f, x, y, w, h, color1, color2, color3, color4);
+
+            return;
+        }
 
         flushBeforeTesselator();
 
@@ -1199,6 +1295,10 @@ public class Batcher2D
 
     private void drawTextDirect(String label, float x, float y, int color, boolean shadow)
     {
+        /* Text draws through the batcher's own batch buffer via GuiGraphics - any
+         * pending solid quads have to be on screen before the first glyph lands. */
+        this.flushBatch();
+
         if (Colors.getA(color) <= 0F)
         {
             color = Colors.opaque(color);
@@ -1328,6 +1428,7 @@ public class Batcher2D
      */
     private void flushBeforeTesselator()
     {
+        this.flushBatch();
         this.context.flush();
     }
 

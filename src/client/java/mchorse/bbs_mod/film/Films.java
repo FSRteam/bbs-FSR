@@ -78,9 +78,8 @@ public class Films
 
         if (withCamera && !film.hasFirstPerson())
         {
-            PlayCameraController controller = new PlayCameraController(film.getId(), film.camera);
+            PlayCameraController controller = new PlayCameraController(filmController);
 
-            controller.getContext().entities.putAll(filmController.getEntities());
             BBSModClient.getCameraController().add(controller);
         }
 

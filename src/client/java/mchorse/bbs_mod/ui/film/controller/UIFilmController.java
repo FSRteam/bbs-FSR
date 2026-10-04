@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.film.controller;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -18,23 +19,21 @@ import org.lwjgl.opengl.GL30;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
-import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 
-import io.netty.util.collection.IntObjectHashMap;
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.render.multiview.ViewRenderState;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.data.types.BaseType;
-import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmControllerContext;
+import mchorse.bbs_mod.film.FilmEntityRenderer;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -58,6 +57,12 @@ import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.UIFilmPreview;
+import mchorse.bbs_mod.ui.film.view.ViewCameraSnapshot;
+import mchorse.bbs_mod.ui.film.view.FilmCameraMarkers;
+import mchorse.bbs_mod.ui.film.view.FilmViewMenus;
+import mchorse.bbs_mod.ui.film.view.ViewFrameGeometry;
+import mchorse.bbs_mod.ui.film.view.ViewportPickIntent;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.film.replays.UIRecordOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplayList;
@@ -93,6 +98,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
+import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import com.mojang.blaze3d.shaders.Uniform;
@@ -126,6 +132,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
     private static final int REPLAY_STENCIL_OFFSET = Gizmo.STENCIL_MAX + 1;
 
     public final UIFilmPanel panel;
+    private final boolean sceneOwner;
+    private UIFilmPreview preview;
+    private final FilmCameraMarkers cameraMarkers = new FilmCameraMarkers();
 
     public FilmEditorController editorController;
     private Map<String, Integer> actors;
@@ -158,11 +167,39 @@ public class UIFilmController extends UIElement implements GizmoViewport
     private boolean paused;
 
     private IBbsWorldRenderContext worldRenderContext;
+    private final Camera renderingCamera = new Camera();
+    private final ViewCameraSnapshot pickingCamera = new ViewCameraSnapshot();
+    private final Gizmo.VisualState visualState = new Gizmo.VisualState();
+    private final Gizmo.VisualState pendingVisualState = new Gizmo.VisualState();
+    private final Gizmo.VisualState previousVisualState = new Gizmo.VisualState();
+    private boolean renderingView;
+    private long worldContextFrame = -1L;
+    private long stencilFrame = -1L;
+    private boolean stencilAlt;
+    private Replay stencilReplay;
+    private final ViewportPickIntent<ViewportPick> pendingViewportPick = new ViewportPickIntent<>();
+    private long pendingPickOrbitGeneration;
+    private long queuedPickGeneration;
+
+    private record ViewportPick(Replay replay, Pair<Form, String> form, boolean empty)
+    {}
 
     public UIFilmController(UIFilmPanel panel)
     {
+        this(panel, true);
+    }
+
+    public UIFilmController(UIFilmPanel panel, boolean sceneOwner)
+    {
         this.panel = panel;
-        this.setPov(BBSSettings.editorCameraMode.get());
+        this.sceneOwner = sceneOwner;
+        this.setPov(sceneOwner ? BBSSettings.editorCameraMode.get() : CAMERA_MODE_CAMERA);
+        this.noCulling();
+
+        if (!sceneOwner)
+        {
+            return;
+        }
 
         IKey category = UIKeys.FILM_CONTROLLER_KEYS_CATEGORY;
 
@@ -176,25 +213,37 @@ public class UIFilmController extends UIElement implements GizmoViewport
             UIUtils.playClick();
         }).active(hasActor).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_CONTROL, this::toggleControl).category(category);
-        this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ORBIT_MODE, this::toggleOrbitMode).category(category);
-        this.keys().register(Keys.FILM_CONTROLLER_TELEPORT_ORBIT, this::teleportOrbitPivotToReplay).strict().active(() -> this.getPovMode() == CAMERA_MODE_ORBIT).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ORBIT_MODE, () -> this.getActiveViewController().toggleOrbitMode()).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_TELEPORT_ORBIT, () ->
+        {
+            this.getActiveViewController().teleportOrbitPivotToReplay();
+            this.panel.saveViewSettings();
+        }).strict().active(() -> this.getActiveViewController().getPovMode() == CAMERA_MODE_ORBIT).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_ATTACH_ORBIT, () ->
         {
-            this.toggleOrbitAttachment();
+            this.getActiveViewController().toggleOrbitAttachment();
+            this.panel.saveViewSettings();
             UIUtils.playClick();
-        }).strict().active(() -> this.getPovMode() == CAMERA_MODE_ORBIT).category(category);
+        }).strict().active(() -> this.getActiveViewController().getPovMode() == CAMERA_MODE_ORBIT).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ORTHO, () ->
         {
-            this.orbit.toggleOrtho();
+            this.getActiveViewController().orbit.toggleOrtho();
+            this.panel.saveViewSettings();
             UIUtils.playClick();
-        }).strict().active(() -> this.getPovMode() == CAMERA_MODE_ORBIT).category(category);
+        }).strict().active(() -> this.getActiveViewController().getPovMode() == CAMERA_MODE_ORBIT).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_REPLAY_MENU, this::toggleReplayMenu).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_MOVE_REPLAY_TO_CURSOR, () ->
         {
-            Area area = this.panel.preview.getViewport();
+            UIFilmController controller = this.getActiveViewController();
+            Area area = controller.getViewArea();
             UIContext context = this.getContext();
             Level world = Minecraft.getInstance().level;
-            Camera camera = this.panel.getCamera();
+            Camera camera = controller.getViewCamera();
+
+            if (world == null || controller.preview == null || !controller.preview.isInsideFrame(context))
+            {
+                return;
+            }
 
             Vector3f rayOffset = new Vector3f();
             Vector3f rayDirection = camera.getMouseRay(context.mouseX, context.mouseY, area.x, area.y, area.w, area.h, rayOffset);
@@ -214,18 +263,20 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.keys().register(Keys.FILM_CONTROLLER_RESTART_ACTIONS, this.panel::restartActions).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ONION_SKIN, () ->
         {
-            this.getOnionSkin().enabled.toggle();
+            this.getActiveViewController().getOnionSkin().enabled.toggle();
+            this.panel.saveViewSettings();
 
             UIUtils.playClick();
         }).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_MOTION_PATH, () ->
         {
-            this.getMotionPath().enabled.toggle();
+            this.getActiveViewController().getMotionPath().enabled.toggle();
+            this.panel.saveViewSettings();
             UIUtils.playClick();
         }).strict().active(() -> !this.panel.hasSelectedClip()).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_MOTION_PATH_PIN, () ->
         {
-            this.toggleMotionPathPin();
+            this.getActiveViewController().toggleMotionPathPin();
             UIUtils.playClick();
         }).category(category);
         this.keys().register(Keys.FILM_CONTROLLER_OPEN_REPLAYS, () ->
@@ -236,6 +287,65 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.keys().register(Keys.FILM_CONTROLLER_NEXT_REPLAY, () -> this.switchReplay(1)).active(hasTwoOrMoreReplays).category(category);
 
         this.noCulling();
+    }
+
+    public void bindPreview(UIFilmPreview preview)
+    {
+        this.preview = preview;
+    }
+
+    @Override
+    public UIContext getContext()
+    {
+        return this.panel == null ? null : this.panel.getContext();
+    }
+
+    public boolean isSceneOwner()
+    {
+        return this.sceneOwner;
+    }
+
+    public Camera getViewCamera()
+    {
+        if (this.renderingView)
+        {
+            return this.renderingCamera;
+        }
+
+        return this.preview == null ? this.panel.getCamera() : this.preview.getDisplayedCamera();
+    }
+
+    public Area getViewArea()
+    {
+        return this.preview == null ? this.panel.preview.getViewport() : this.preview.getViewport();
+    }
+
+    public boolean isViewFlying()
+    {
+        return this.preview != null && this.panel.isViewFlying(this.preview);
+    }
+
+    public void setViewOrthoDistance(float distance)
+    {
+        if (this.preview != null)
+        {
+            this.preview.getViewDescriptor().setOrthoDistance(distance);
+        }
+
+        if (this.sceneOwner)
+        {
+            BBSRendering.setOrthoDistance(distance);
+        }
+    }
+
+    private boolean isViewActive()
+    {
+        return this.preview == null || this.panel.getActivePreview() == this.preview;
+    }
+
+    private UIFilmController getActiveViewController()
+    {
+        return this.panel.getActivePreview().getViewController();
     }
 
     private void switchReplay(int direction)
@@ -252,21 +362,35 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public boolean isInstantKeyframes()
     {
-        return this.instantKeyframes;
+        return this.sceneOwner ? this.instantKeyframes : this.panel.getController().isInstantKeyframes();
     }
 
     public void toggleInstantKeyframes()
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().toggleInstantKeyframes();
+
+            return;
+        }
+
         this.instantKeyframes = !this.instantKeyframes;
     }
 
     public boolean isPaused()
     {
-        return this.paused;
+        return this.sceneOwner ? this.paused : this.panel.getController().isPaused();
     }
 
     public void setPaused(boolean paused)
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().setPaused(paused);
+
+            return;
+        }
+
         this.paused = paused;
     }
 
@@ -286,12 +410,12 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public ValueOnionSkin getOnionSkin()
     {
-        return BBSSettings.editorOnionSkin;
+        return this.preview == null ? BBSSettings.editorOnionSkin : this.preview.getViewDescriptor().getOnionSkin();
     }
 
     public ValueMotionPath getMotionPath()
     {
-        return BBSSettings.editorMotionPath;
+        return this.preview == null ? BBSSettings.editorMotionPath : this.preview.getViewDescriptor().getMotionPath();
     }
 
     private Replay pinnedReplay;
@@ -299,7 +423,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public boolean isMotionPathPinned()
     {
-        if (this.pinnedReplay != null && this.panel.getData() != null && !this.panel.getData().replays.getList().contains(this.pinnedReplay))
+        if (this.pinnedReplay != null && this.panel.getData() != null && CollectionUtils.getIndex(this.panel.getData().replays.getList(), this.pinnedReplay) < 0)
         {
             this.unpinMotionPath();
         }
@@ -361,9 +485,10 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return null;
         }
 
-        int idx = this.getCurrentReplayIndex();
+        /* The entity map is keyed by the replay's stable id, never by its position in the list. */
+        Replay replay = this.getReplay();
 
-        return idx < 0 ? null : this.getEntities().get(idx);
+        return replay == null ? null : this.getEntities().get(replay.getId());
     }
 
     public int getPovMode()
@@ -380,10 +505,24 @@ public class UIFilmController extends UIElement implements GizmoViewport
             this.cancelOrbitGesture();
         }
 
+        if (this.preview != null && mode != this.getPovMode())
+        {
+            this.preview.onCameraModeChanged(this.getPovMode(), mode);
+        }
+
         this.pov = mode;
         this.orbit.enabled = mode > CAMERA_MODE_FREE;
 
-        BBSSettings.editorCameraMode.set(mode);
+        if (this.sceneOwner)
+        {
+            BBSSettings.editorCameraMode.set(mode);
+        }
+    }
+
+    public void restorePov(int pov)
+    {
+        this.pov = Math.floorMod(pov, CAMERA_MODE_COUNT);
+        this.orbit.enabled = this.pov > CAMERA_MODE_FREE;
     }
 
     private int getMouseMode()
@@ -423,6 +562,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void createEntities()
     {
+        if (!this.sceneOwner)
+        {
+            return;
+        }
+
         this.stopRecording();
 
         if (this.controlled != null)
@@ -438,7 +582,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.editorController = new FilmEditorController(this.panel.getData(), this);
         this.editorController.createEntities();
 
-        IntObjectMap<IEntity> entities = this.panel.getRunner().getContext().entities;
+        Map<String, IEntity> entities = this.panel.getRunner().getContext().entities;
 
         entities.clear();
         entities.putAll(this.editorController.getEntities());
@@ -446,24 +590,38 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void shutdown()
     {
-        if (this.editorController != null)
+        this.resetViewInteraction();
+
+        if (this.sceneOwner && this.editorController != null)
         {
             this.editorController.shutdown();
         }
     }
 
-    public IntObjectMap<IEntity> getEntities()
+    public Map<String, IEntity> getEntities()
     {
-        return this.editorController == null ? new IntObjectHashMap<>() : this.editorController.getEntities();
+        if (!this.sceneOwner)
+        {
+            return this.panel.getController().getEntities();
+        }
+
+        return this.editorController == null ? new LinkedHashMap<>() : this.editorController.getEntities();
     }
 
     public Map<String, Integer> getActors()
     {
-        return this.actors;
+        return this.sceneOwner ? this.actors : this.panel.getController().getActors();
     }
 
     public void updateActors(Map<String, Integer> actors)
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().updateActors(actors);
+
+            return;
+        }
+
         this.actors = actors;
     }
 
@@ -471,16 +629,23 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public IEntity getControlled()
     {
-        return this.controlled;
+        return this.sceneOwner ? this.controlled : this.panel.getController().getControlled();
     }
 
     public boolean isControlling()
     {
-        return this.controlled != null;
+        return this.getControlled() != null;
     }
 
     public void toggleControl()
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().toggleControl();
+
+            return;
+        }
+
         this.getContext().unfocus();
 
         if (this.panel.replayEditor.isVisible())
@@ -489,7 +654,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
 
         boolean replacePlayer = ClientNetwork.isIsBBSModOnServer();
-        IntObjectMap<IEntity> entities = this.getEntities();
+        Map<String, IEntity> entities = this.getEntities();
 
         if (this.controlled != null)
         {
@@ -497,11 +662,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
             {
                 this.controlled.setForm(this.playerForm);
 
-                Integer controlledIndex = CollectionUtils.getKey(entities, this.controlled);
+                String controlledId = CollectionUtils.getKey(entities, this.controlled);
 
-                if (controlledIndex != null)
+                if (controlledId != null)
                 {
-                    entities.put(controlledIndex, this.previousEntity);
+                    entities.put(controlledId, this.previousEntity);
                 }
 
                 this.previousEntity = null;
@@ -522,11 +687,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 player.copy(this.controlled);
                 PlayerUtils.teleport(this.controlled.getX(), this.controlled.getY(), this.controlled.getZ(), this.controlled.getHeadYaw(), this.controlled.getBodyYaw(), this.controlled.getPitch());
-                Integer controlledIndex = CollectionUtils.getKey(entities, this.controlled);
+                String controlledId = CollectionUtils.getKey(entities, this.controlled);
 
-                if (controlledIndex != null)
+                if (controlledId != null)
                 {
-                    entities.put(controlledIndex, player);
+                    entities.put(controlledId, player);
                 }
 
                 this.controlled = player;
@@ -565,17 +730,17 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public boolean isRecording()
     {
-        return this.recording;
+        return this.sceneOwner ? this.recording : this.panel.getController().isRecording();
     }
 
     public int getRecordingCountdown()
     {
-        return this.recordingCountdown;
+        return this.sceneOwner ? this.recordingCountdown : this.panel.getController().getRecordingCountdown();
     }
 
     public List<String> getRecordingGroups()
     {
-        return this.recordingGroups;
+        return this.sceneOwner ? this.recordingGroups : this.panel.getController().getRecordingGroups();
     }
 
     private boolean hasTransformRecordingGroup()
@@ -585,6 +750,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public boolean isTransformRecording()
     {
+        if (!this.sceneOwner)
+        {
+            return this.panel.getController().isTransformRecording();
+        }
+
         return this.recording
             && this.recordingCountdown <= 0
             && this.hasTransformRecordingGroup();
@@ -592,6 +762,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void startRecording(List<String> groups)
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().startRecording(groups);
+
+            return;
+        }
+
         if (groups != null && groups.contains("outside"))
         {
             Film film = this.panel.getData();
@@ -689,6 +866,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void stopRecording()
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().stopRecording();
+
+            return;
+        }
+
         if (!this.recording)
         {
             return;
@@ -768,9 +952,19 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     protected boolean subMouseClicked(UIContext context)
     {
+        if (this.preview != null && !this.preview.isInsideFrame(context))
+        {
+            return false;
+        }
+
         if (this.canControl())
         {
             return true;
+        }
+
+        if (!this.hasDisplayedStencil(Window.isAltPressed()))
+        {
+            return false;
         }
 
         boolean gizmoShown = this.canShowGizmo();
@@ -798,12 +992,12 @@ public class UIFilmController extends UIElement implements GizmoViewport
     /** Start a preview-owned Gizmo press through the controller's ownership state. */
     public boolean startViewportGizmo(UIContext context)
     {
-        return this.canShowGizmo() && this.gizmo.mouseClickedHandle(context);
+        return this.hasDisplayedStencil(Window.isAltPressed()) && this.canShowGizmo() && this.gizmo.mouseClickedHandle(context);
     }
 
     public boolean startViewportSoundGuide(UIContext context)
     {
-        if (this.panel.isFlying() || this.controlled != null)
+        if (this.isViewFlying() || this.isControlling() || !this.hasDisplayedStencil(Window.isAltPressed()))
         {
             return false;
         }
@@ -811,8 +1005,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
         return SoundGuideInteraction.tryStartFilm(
             this,
             this.stencil,
-            this.panel.getCamera(),
-            this.panel.preview.getViewport(),
+            this.getViewCamera(),
+            this.getViewArea(),
             context,
             this.panel.replayEditor.getReplay(),
             this.panel.getCursor()
@@ -833,13 +1027,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     public Matrix4f getGizmoProjection()
     {
-        return this.panel.lastProjection;
+        return this.getViewCamera().projection;
     }
 
     @Override
     public Area getGizmoArea()
     {
-        return this.panel.preview.getViewport();
+        return this.getViewArea();
     }
 
     @Override
@@ -847,7 +1041,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     {
         float gizmoTransition = this.isPlaying() ? context.getTransition() : 0F;
 
-        return UIReplaysEditorUtils.startFilmGizmo(this.panel, context, stencilIndex, gizmoTransition);
+        return UIReplaysEditorUtils.startFilmGizmo(this.panel, this.getViewCamera(), this.getViewArea(), context, stencilIndex, gizmoTransition);
     }
 
     @Override
@@ -871,6 +1065,266 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.gizmo.cancel();
     }
 
+    public void resetViewInteraction()
+    {
+        this.cancelPendingViewportPick();
+        SoundGuideInteraction.cancel(this, 0);
+        this.cancelOrbitGesture();
+        this.orbit.resetVelocity();
+        this.orbitGizmo.cancel();
+        this.gizmo.cancel();
+        this.hoveredReplayIndex = -1;
+        this.stencil.clearPicking();
+        this.stencilFrame = -1L;
+        this.stencilReplay = null;
+    }
+
+    public boolean clickViewport(UIContext context)
+    {
+        if (this.preview == null || !this.preview.isInsideFrame(context))
+        {
+            return false;
+        }
+
+        this.cancelPendingViewportPick();
+        Gizmo.INSTANCE.restoreVisualState(this.visualState);
+        ViewRenderState state = BBSRendering.getViewRenderState(this.preview.getViewDescriptor().getId());
+
+        this.cameraMarkers.publish(state);
+        this.prepareViewportPick(context);
+
+        if (!this.isViewFlying() && !this.isControlling() && context.mouseButton < 2)
+        {
+            String cameraId = this.cameraMarkers.pick(this.panel, this.preview, context);
+
+            if (cameraId != null)
+            {
+                this.panel.selectCameraTrack(cameraId);
+
+                if (context.mouseButton == 1)
+                {
+                    context.replaceContextMenu(menu -> FilmViewMenus.cameraActions(this.panel, this.preview, cameraId, menu));
+                }
+
+                return true;
+            }
+        }
+
+        if (this.startViewportSoundGuide(context) || this.subMouseClicked(context))
+        {
+            return true;
+        }
+
+        return this.panel.replayEditor.clickViewport(context, this.getViewArea(), this);
+    }
+
+    /** A navigation gesture emits its short context click only after release. */
+    public boolean clickViewportOnRelease(UIContext context)
+    {
+        boolean handled = this.clickViewport(context);
+
+        this.releaseViewportPick(context, false, 0L);
+
+        return handled;
+    }
+
+    public boolean deferViewportPick(UIContext context, long orbitGeneration)
+    {
+        if (this.preview == null || !this.preview.isInsideFrame(context) || this.isViewFlying() || this.isControlling())
+        {
+            return false;
+        }
+
+        ViewportPickIntent.Input input = new ViewportPickIntent.Input(context.mouseX, context.mouseY, context.mouseButton,
+            Window.isAltPressed(), Window.isCtrlPressed(), Window.isShiftPressed());
+        long generation = this.pendingViewportPick.begin(this.viewportPickTarget(), input,
+            context.getPointerGestureGeneration(), context.getContextMenuIntentGeneration());
+
+        this.pendingPickOrbitGeneration = orbitGeneration;
+        this.queuedPickGeneration = 0L;
+
+        if (generation == 0L)
+        {
+            return false;
+        }
+
+        if (!input.alt() && (this.getCurrentEntity() == null || this.pov == CAMERA_MODE_FIRST_PERSON))
+        {
+            this.pendingViewportPick.resolve(generation, new ViewportPick(null, null, true));
+        }
+        else if (this.hasDisplayedStencil(input.alt()))
+        {
+            this.readViewStencil(context);
+            this.resolveViewportPick();
+        }
+        else
+        {
+            this.preview.requestRefresh();
+        }
+
+        return true;
+    }
+
+    private ViewportPickIntent.Target viewportPickTarget()
+    {
+        Area frame = this.getViewArea();
+
+        return new ViewportPickIntent.Target(this.preview, this.panel.getData(), this.getReplay(),
+            this.preview.getViewDescriptor().getHistoryEpoch(), this.pov, this.panel.getCursor(),
+            new ViewFrameGeometry(frame.x, frame.y, frame.w, frame.h));
+    }
+
+    private boolean updatePendingViewportPick(UIContext context)
+    {
+        if (this.pendingViewportPick.generation() == 0L)
+        {
+            return false;
+        }
+
+        this.pendingViewportPick.move(context.mouseX, context.mouseY);
+
+        return this.pendingViewportPick.validate(this.viewportPickTarget(),
+            context.getPointerGestureGeneration(), context.getContextMenuIntentGeneration(),
+            this.isViewActive() && this.preview.canBeSeen() && !this.isViewFlying() && !this.isControlling()
+                && !context.hasContextMenu() && !UIOverlay.has(context));
+    }
+
+    private void resolveViewportPick()
+    {
+        ViewportPickIntent.Input input = this.pendingViewportPick.input();
+
+        if (input == null || this.pendingViewportPick.isResolved() || !this.hasDisplayedStencil(input.alt()))
+        {
+            return;
+        }
+
+        Replay replay = null;
+        Pair<Form, String> form = null;
+
+        if (this.stencil.hasPicked())
+        {
+            int index = this.stencil.getIndex() - REPLAY_STENCIL_OFFSET;
+            List<Replay> replays = this.panel.getData().replays.getList();
+
+            if (input.alt() && input.button() == 0 && index >= 0 && index < replays.size()
+                && index != this.getCurrentReplayIndex())
+            {
+                replay = replays.get(index);
+            }
+            else
+            {
+                Pair<Form, String> picked = this.stencil.getPicked();
+
+                if (picked != null && picked.a != null)
+                {
+                    form = new Pair<>(picked.a, picked.b);
+                }
+            }
+        }
+
+        this.pendingViewportPick.resolve(this.pendingViewportPick.generation(), new ViewportPick(replay, form, !this.stencil.hasPicked()));
+    }
+
+    public boolean releaseViewportPick(UIContext context, boolean dragged, long orbitGeneration)
+    {
+        if (this.pendingPickOrbitGeneration != orbitGeneration || !this.pendingViewportPick.isOwnedBy(context.mouseButton))
+        {
+            return false;
+        }
+
+        long generation = this.pendingViewportPick.generation();
+        boolean released = this.pendingViewportPick.release(context.mouseButton, generation, context.mouseX, context.mouseY, dragged);
+
+        if (this.updatePendingViewportPick(context))
+        {
+            this.commitViewportPick(context, generation);
+        }
+
+        return released;
+    }
+
+    public void cancelViewportPick(long orbitGeneration)
+    {
+        if (this.pendingPickOrbitGeneration == orbitGeneration)
+        {
+            this.cancelPendingViewportPick();
+        }
+    }
+
+    public void cancelPendingViewportPick()
+    {
+        this.pendingViewportPick.cancel();
+        this.pendingPickOrbitGeneration = 0L;
+        this.queuedPickGeneration = 0L;
+    }
+
+    private void queueViewportPick(UIContext context)
+    {
+        long generation = this.pendingViewportPick.generation();
+
+        if (this.pendingViewportPick.isReady() && this.queuedPickGeneration != generation)
+        {
+            this.queuedPickGeneration = generation;
+            context.render.postRunnable(() -> this.commitViewportPick(context, generation));
+        }
+    }
+
+    private void commitViewportPick(UIContext context, long generation)
+    {
+        if (!this.updatePendingViewportPick(context))
+        {
+            return;
+        }
+
+        ViewportPickIntent.Completion<ViewportPick> completion = this.pendingViewportPick.take(generation);
+
+        if (completion == null || completion.result() == null)
+        {
+            return;
+        }
+
+        ViewportPick pick = completion.result();
+        ViewportPickIntent.Input input = completion.input();
+
+        context.withPointerState(input.x(), input.y(), input.button(), () ->
+        {
+            if (pick.replay() != null)
+            {
+                int index = CollectionUtils.getIndex(this.panel.getData().replays.getList(), pick.replay());
+
+                if (index >= 0)
+                {
+                    this.pickReplay(index);
+                }
+            }
+            else if (pick.form() != null)
+            {
+                this.panel.replayEditor.pickViewportFormWithOffers(context, pick.form(), input);
+            }
+            else if (pick.empty() && input.button() == 1)
+            {
+                this.panel.replayEditor.openViewportContextMenu(context, this.getViewArea(), this, input.shift());
+            }
+        });
+    }
+
+    public void releaseViewResources()
+    {
+        this.resetViewInteraction();
+        Link id = Link.bbs("stencil_film_" + (this.preview == null ? "preview" : this.preview.getViewDescriptor().getId()));
+
+        if (this.stencil.getFramebuffer() != null
+            && BBSModClient.getFramebuffers().framebuffers.remove(id, this.stencil.getFramebuffer()))
+        {
+            this.stencil.getFramebuffer().delete();
+        }
+
+        this.stencil = new StencilFormFramebuffer();
+        this.worldRenderContext = null;
+        this.worldContextFrame = -1L;
+        this.cameraMarkers.clear();
+    }
+
     public void resetOrbit()
     {
         long generation = this.orbit.gestureGeneration();
@@ -879,7 +1333,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         if (generation != 0L && this.panel.replayEditor != null)
         {
-            this.panel.replayEditor.cancelViewportPick(generation);
+            this.panel.replayEditor.cancelViewportPick(this, generation);
         }
     }
 
@@ -891,7 +1345,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         if (generation != 0L && this.panel.replayEditor != null)
         {
-            this.panel.replayEditor.cancelViewportPick(generation);
+            this.panel.replayEditor.cancelViewportPick(this, generation);
         }
     }
 
@@ -910,14 +1364,28 @@ public class UIFilmController extends UIElement implements GizmoViewport
     {
         boolean controlling = this.canControl();
         long orbitGeneration = this.orbit.gestureGeneration();
+        Throwable failure = null;
+
+        try
+        {
+            if (this.orbit.isGestureOwnedBy(context.mouseButton))
+            {
+                this.orbit.handleOrbiting(context);
+            }
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = mergeInputFailure(failure, exception);
+            this.cancelViewportPick(orbitGeneration);
+        }
+
         boolean orbitDragged = this.orbit.wasDragged();
-        long dashboardOrbitGeneration = this.panel.isFlying() && context.mouseButton == 2
+        long dashboardOrbitGeneration = this.isViewFlying() && context.mouseButton == 2
             ? this.panel.dashboard.orbitUI.gestureGeneration()
             : 0L;
         boolean consumed = false;
         boolean orbitReleased = false;
         boolean inherited = false;
-        Throwable failure = null;
 
         try
         {
@@ -936,7 +1404,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
             if (orbitReleased)
             {
-                this.panel.replayEditor.releaseViewport(context, orbitDragged, orbitGeneration);
+                this.panel.replayEditor.releaseViewport(context, orbitDragged, this, orbitGeneration);
+            }
+            else if (this.pendingPickOrbitGeneration == 0L)
+            {
+                consumed = this.releaseViewportPick(context, false, 0L) || consumed;
             }
         }
         catch (RuntimeException | Error exception)
@@ -946,7 +1418,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         try
         {
-            if (this.panel.isFlying() && context.mouseButton == 2)
+            if (this.isViewFlying() && context.mouseButton == 2)
             {
                 this.panel.dashboard.orbitUI.stopGesture(context.mouseButton, dashboardOrbitGeneration);
             }
@@ -976,22 +1448,27 @@ public class UIFilmController extends UIElement implements GizmoViewport
     /** Cancel a sibling-owned viewport gesture without committing its deferred pick. */
     public void cancelViewportGesture(UIContext context)
     {
+        if (this.pendingViewportPick.isOwnedBy(context.mouseButton))
+        {
+            this.cancelPendingViewportPick();
+        }
+
         SoundGuideInteraction.cancel(this, context.mouseButton);
         this.orbitGizmo.cancel();
 
         long gizmoGeneration = this.gizmo.gestureGeneration();
         long orbitGeneration = this.orbit.gestureGeneration();
-        long dashboardOrbitGeneration = this.panel.isFlying() && context.mouseButton == 2
+        long dashboardOrbitGeneration = this.isViewFlying() && context.mouseButton == 2
             ? this.panel.dashboard.orbitUI.gestureGeneration()
             : 0L;
 
         if (this.orbit.stop(context.mouseButton, orbitGeneration)
             && this.panel.replayEditor != null)
         {
-            this.panel.replayEditor.cancelViewportPick(orbitGeneration);
+            this.panel.replayEditor.cancelViewportPick(this, orbitGeneration);
         }
 
-        if (this.panel.isFlying() && context.mouseButton == 2)
+        if (this.isViewFlying() && context.mouseButton == 2)
         {
             this.panel.dashboard.orbitUI.stopGesture(context.mouseButton, dashboardOrbitGeneration);
         }
@@ -1084,6 +1561,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void pickRecording()
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().pickRecording();
+
+            return;
+        }
+
         if (this.panel.replayEditor.getReplay() == null)
         {
             return;
@@ -1165,7 +1649,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void toggleOrbitMode()
     {
-        if (this.controlled != null)
+        if (this.isControlling())
         {
             this.setPov(this.pov + (Window.isShiftPressed() ? -1 : 1));
 
@@ -1216,6 +1700,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void handleCamera(Camera camera, float transition)
     {
+        this.setViewOrthoDistance(-1F);
+
         if (this.orbit.enabled)
         {
             int mode = this.getPovMode();
@@ -1224,7 +1710,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
             {
                 this.orbit.setup(camera, transition);
 
-                if (!this.panel.isFlying())
+                if (!this.isViewFlying() && this.preview == null)
                 {
                     camera.fov = BBSSettings.getFov();
                 }
@@ -1263,7 +1749,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             camera.position.set(position);
             camera.rotation.set(rotation.x, rotation.y + MathUtils.PI, 0F);
-            camera.fov = BBSSettings.getFov();
+            camera.fov = this.getNavigationFov();
 
             return;
         }
@@ -1289,11 +1775,24 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         camera.position.set(position);
         camera.rotation.set(rotation.x * (back ? -1 : 1), rotation.y + (back ? 0 : MathUtils.PI), 0);
-        camera.fov = BBSSettings.getFov();
+        camera.fov = this.getNavigationFov();
+    }
+
+    private float getNavigationFov()
+    {
+        return this.preview == null ? BBSSettings.getFov()
+            : MathUtils.toRad(this.preview.getViewDescriptor().getNavigation().getFreePose().angle.fov);
     }
 
     public void insertFrame()
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().insertFrame();
+
+            return;
+        }
+
         Replay replay = this.getReplay();
 
         if (replay == null)
@@ -1357,6 +1856,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
     /** Insert the live player's position and rotation at the current tick. */
     public void insertPlayerFrame()
     {
+        if (!this.sceneOwner)
+        {
+            this.panel.getController().insertPlayerFrame();
+
+            return;
+        }
+
         Replay replay = this.getReplay();
 
         if (replay == null || Minecraft.getInstance().player == null)
@@ -1392,6 +1898,11 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void update()
     {
+        if (!this.sceneOwner)
+        {
+            return;
+        }
+
         Film film = this.panel.getData();
 
         if (film == null)
@@ -1475,10 +1986,41 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void renderHUD(UIContext context, Area area)
     {
-        FontRenderer font = context.batcher.getFont();
-        int mode = this.getMouseMode();
+        Gizmo.INSTANCE.captureVisualState(this.previousVisualState);
 
-        if (this.controlled != null)
+        ViewRenderState state = this.preview == null ? null : BBSRendering.getViewRenderState(this.preview.getViewDescriptor().getId());
+        this.cameraMarkers.publish(state);
+
+        if (state != null && state.hasFrame() && state.getSampleFrameId() == this.worldContextFrame)
+        {
+            Gizmo.INSTANCE.restoreVisualState(this.pendingVisualState);
+            Gizmo.INSTANCE.captureVisualState(this.visualState);
+        }
+
+        Gizmo.INSTANCE.restoreVisualState(this.visualState);
+
+        try
+        {
+            this.renderViewHUD(context, area);
+            if (this.preview != null)
+            {
+                this.cameraMarkers.renderOverlay(this.panel, this.preview, context);
+            }
+            Gizmo.INSTANCE.captureVisualState(this.visualState);
+        }
+        finally
+        {
+            Gizmo.INSTANCE.restoreVisualState(this.previousVisualState);
+        }
+    }
+
+    private void renderViewHUD(UIContext context, Area area)
+    {
+        FontRenderer font = context.batcher.getFont();
+        UIFilmController scene = this.panel.getController();
+        int mode = scene.getMouseMode();
+
+        if (scene.controlled != null)
         {
             /* Render helpful guides for sticks and triggers controls */
             if (mode > 0)
@@ -1512,27 +2054,27 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 context.batcher.outline(x, y, x + ww, y + hh, color);
 
-                int bx = area.x + area.w / 2 + (int) ((this.mouseStick.y) * ww / 2);
-                int by = area.y + area.h / 2 + (int) ((this.mouseStick.x) * hh / 2);
+                int bx = area.x + area.w / 2 + (int) (scene.mouseStick.y * ww / 2);
+                int by = area.y + area.h / 2 + (int) (scene.mouseStick.x * hh / 2);
 
                 context.batcher.box(bx - 4, by - 4, bx + 4, by + 4, color);
             }
 
             /* Render recording overlay */
-            if (this.recording)
+            if (scene.recording)
             {
                 int x = area.x + 5 + 16;
                 int y = area.y + 5;
 
                 context.batcher.icon(Icons.SPHERE, Colors.RED | Colors.A100, x, y, 1F, 0F);
 
-                if (this.recordingCountdown <= 0)
+                if (scene.recordingCountdown <= 0)
                 {
                     context.batcher.textCard(UIKeys.FILM_CONTROLLER_TICKS.format(this.getTick()).get(), x + 3, y + 4, Colors.WHITE, Colors.A50);
                 }
                 else
                 {
-                    context.batcher.textCard(String.valueOf(this.recordingCountdown / 20F), x + 3, y + 4, Colors.WHITE, Colors.A50);
+                    context.batcher.textCard(String.valueOf(scene.recordingCountdown / 20F), x + 3, y + 4, Colors.WHITE, Colors.A50);
                 }
             }
         }
@@ -1547,7 +2089,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
             y += 16 + 5;
         }
 
-        if (this.panel.isFlying())
+        if (this.isViewFlying())
         {
             String label = UIKeys.FILM_CONTROLLER_SPEED.format(this.panel.dashboard.orbit.speed.getValue()).get();
             int w = font.getWidth(label);
@@ -1601,12 +2143,17 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     private void renderPickingPreview(UIContext context, Area area)
     {
-        if (this.panel.isFlying() || this.worldRenderContext == null)
+        boolean pending = this.updatePendingViewportPick(context);
+
+        if (this.isViewFlying() || this.worldRenderContext == null || !this.isViewActive()
+            || (this.preview != null && !this.preview.isInsideFrame(context) && !pending))
         {
+            this.hoveredReplayIndex = -1;
+
             return;
         }
 
-        boolean altPressed = Window.isAltPressed();
+        boolean altPressed = pending ? this.pendingViewportPick.input().alt() : Window.isAltPressed();
 
         context.batcher.flush();
         RenderSystem.depthFunc(GL11.GL_LESS);
@@ -1617,8 +2164,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         try
         {
-            RenderSystem.setProjectionMatrix(this.panel.lastProjection, VertexSorting.DISTANCE_TO_ORIGIN);
-            InverseView.set(new Matrix3f(this.panel.lastView).invert());
+            RenderSystem.setProjectionMatrix(this.getViewCamera().projection, VertexSorting.DISTANCE_TO_ORIGIN);
+            InverseView.set(new Matrix3f(this.getViewCamera().view).invert());
 
             /* Render the stencil */
             PoseStack worldStack = this.worldRenderContext.matrixStack();
@@ -1628,8 +2175,8 @@ public class UIFilmController extends UIElement implements GizmoViewport
             try
             {
                 worldStack.setIdentity();
-                MatrixStackUtils.multiply(worldStack, this.panel.lastView);
-                this.renderStencil(this.worldRenderContext, this.getContext(), altPressed);
+                MatrixStackUtils.multiply(worldStack, this.getViewCamera().view);
+                this.updateViewStencil(context, altPressed);
             }
             finally
             {
@@ -1646,6 +2193,19 @@ public class UIFilmController extends UIElement implements GizmoViewport
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
         this.hoveredReplayIndex = -1;
+
+        if (pending)
+        {
+            this.resolveViewportPick();
+            this.queueViewportPick(context);
+
+            if (!this.preview.isInsideFrame(context) || altPressed != Window.isAltPressed())
+            {
+                RenderSystem.depthFunc(GL11.GL_LEQUAL);
+
+                return;
+            }
+        }
 
         if (this.canShowGizmo())
         {
@@ -1730,41 +2290,179 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void startRenderFrame(float tickDelta)
     {
-        if (this.editorController != null)
+        if (this.sceneOwner && this.editorController != null)
         {
             this.editorController.startRenderFrame(tickDelta);
         }
     }
 
-    public void renderFrame(IBbsWorldRenderContext context)
+    private void updateViewStencil(UIContext context, boolean altPressed)
     {
-        this.worldRenderContext = context;
+        ViewRenderState state = this.preview == null ? null : BBSRendering.getViewRenderState(this.preview.getViewDescriptor().getId());
+        long sample = state == null ? this.worldContextFrame : state.getSampleFrameId();
 
-        RenderSystem.enableDepthTest();
-
-        if (this.editorController != null)
+        if (sample != this.stencilFrame || this.stencilAlt != altPressed || this.stencilReplay != this.getReplay())
         {
-            this.editorController.render(context);
-
-            int povMode = this.panel.getController().getPovMode();
-
-            if (povMode != UIFilmController.CAMERA_MODE_CAMERA && BBSSettings.recordingCameraPreview.get())
+            if (sample != this.worldContextFrame || sample != BBSRendering.getSceneFrameId())
             {
-                Recorder.renderCameraPreview(this.panel.getRunner().getPosition(), context.camera(), context.matrixStack());
+                if (this.preview != null)
+                {
+                    this.preview.requestRefresh();
+                }
+
+                this.stencil.clearPicking();
+                this.stencilFrame = -1L;
+
+                return;
             }
+
+            boolean rendered = this.renderStencil(this.worldRenderContext, context, altPressed);
+
+            this.stencilFrame = rendered ? sample : -1L;
+            this.stencilAlt = altPressed;
+            this.stencilReplay = this.getReplay();
+
+            return;
         }
 
-        this.renderOrbitCenterMarker(context);
+        this.readViewStencil(context);
+    }
 
-        ValueMotionPath motionPath = this.getMotionPath();
+    private boolean hasDisplayedStencil(boolean altPressed)
+    {
+        ViewRenderState state = this.preview == null ? null : BBSRendering.getViewRenderState(this.preview.getViewDescriptor().getId());
 
-        if (motionPath.enabled.get() && !this.isRecording())
+        return state != null && state.hasFrame() && this.stencilFrame >= 0L
+            && this.stencilFrame == state.getSampleFrameId() && this.stencilAlt == altPressed
+            && this.stencilReplay == this.getReplay();
+    }
+
+    public boolean isViewportPickReady()
+    {
+        return this.hasDisplayedStencil(Window.isAltPressed());
+    }
+
+    private void prepareViewportPick(UIContext context)
+    {
+        boolean altPressed = Window.isAltPressed();
+
+        this.hoveredReplayIndex = -1;
+
+        if (!this.hasDisplayedStencil(altPressed))
         {
-            boolean pinned = this.isMotionPathPinned();
-            Replay replay = pinned ? this.pinnedReplay : this.getReplay();
-            Pair<String, Boolean> bone = pinned ? this.pinnedBone : this.getBone();
+            this.stencil.clearPicking();
+            this.stencilFrame = -1L;
+            this.preview.requestRefresh();
 
-            MotionPath.render(context, motionPath, this, replay, bone, replay == null ? 0F : replay.getTick(this.getTick()));
+            return;
+        }
+
+        this.readViewStencil(context);
+
+        if (altPressed && this.stencil.hasPicked() && this.panel.getData() != null)
+        {
+            int index = this.stencil.getIndex() - REPLAY_STENCIL_OFFSET;
+
+            if (index >= 0 && index < this.panel.getData().replays.getList().size() && index != this.getCurrentReplayIndex())
+            {
+                this.hoveredReplayIndex = index;
+            }
+        }
+    }
+
+    private void readViewStencil(UIContext context)
+    {
+        ViewportPickIntent.Input input = this.pendingViewportPick.input();
+        int mouseX = input == null ? context.mouseX : input.x();
+        int mouseY = input == null ? context.mouseY : input.y();
+
+        if (this.stencil.getFramebuffer() != null)
+        {
+            Area viewport = this.getViewArea();
+            Texture texture = this.stencil.getFramebuffer().getMainTexture();
+            int x = (int) ((mouseX - viewport.x) / (float) viewport.w * texture.width);
+            int y = (int) ((1F - (mouseY - viewport.y) / (float) viewport.h) * texture.height);
+            int radius = Math.round(BBSSettings.gizmoHoverTolerance.get() * texture.width / (float) viewport.w);
+
+            try
+            {
+                this.stencil.getFramebuffer().bind();
+                this.stencil.pick(x, y, radius, Gizmo.STENCIL_MAX);
+            }
+            finally
+            {
+                Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+            }
+        }
+    }
+
+    public void renderFrame(IBbsWorldRenderContext context)
+    {
+        FilmEditorController shared = this.panel.getController().editorController;
+        boolean shadow = BBSRendering.isIrisShadowPass();
+        boolean export = this.panel.recorder.isExporting();
+        UIFilmController previousController = shared == null ? null : shared.controller;
+
+        this.renderingCamera.copy(this.preview == null ? this.panel.getCamera() : this.preview.getViewDescriptor().getCamera());
+        this.renderingCamera.view.set(context.modelViewMatrix());
+        this.renderingCamera.projection.set(context.projectionMatrix());
+        this.renderingView = true;
+        Gizmo.INSTANCE.captureVisualState(this.previousVisualState);
+        Gizmo.INSTANCE.restoreVisualState(this.visualState);
+        RenderSystem.enableDepthTest();
+
+        try
+        {
+            if (shared != null)
+            {
+                shared.controller = this;
+                shared.render(context);
+            }
+
+            if (!shadow && !export)
+            {
+                if (this.preview != null)
+                {
+                    this.cameraMarkers.sampleWorld(this.panel, this.preview);
+                }
+
+                this.renderOrbitCenterMarker(context);
+                ValueMotionPath motionPath = this.getMotionPath();
+
+                if (motionPath.enabled.get() && !this.isRecording())
+                {
+                    boolean pinned = this.isMotionPathPinned();
+                    Replay replay = pinned ? this.pinnedReplay : this.getReplay();
+                    Pair<String, Boolean> bone = pinned ? this.pinnedBone : this.getBone();
+
+                    MotionPath.render(context, motionPath, this, replay, bone, replay == null ? 0F : replay.getTick(this.getTick()));
+                }
+
+                this.pickingCamera.capture(context.camera());
+                PoseStack pickingStack = new PoseStack();
+
+                MatrixStackUtils.multiply(pickingStack, context.modelViewMatrix());
+                this.worldRenderContext = new BbsWorldRenderContext(this.pickingCamera, pickingStack, context.consumers(),
+                    context.tickDelta(), context.modelViewMatrix(), context.projectionMatrix());
+                this.worldContextFrame = BBSRendering.getSceneFrameId();
+                Gizmo.INSTANCE.captureVisualState(this.pendingVisualState);
+            }
+        }
+        finally
+        {
+            if (shared != null)
+            {
+                shared.controller = previousController;
+            }
+
+            this.renderingView = false;
+            Gizmo.INSTANCE.restoreVisualState(this.previousVisualState);
+            RenderSystem.disableDepthTest();
+        }
+
+        if (!this.sceneOwner || shadow)
+        {
+            return;
         }
 
         MouseHandler mouse = Minecraft.getInstance().mouseHandler;
@@ -1852,7 +2550,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public Matrix4f getGizmoView()
     {
-        return this.panel.getCamera().view;
+        return this.getViewCamera().view;
     }
 
     public boolean isAnchorGizmo()
@@ -1876,20 +2574,23 @@ public class UIFilmController extends UIElement implements GizmoViewport
         /* A disabled replay is skipped by the render pass, so its gizmo placement
          * stops being captured. Hide the gizmo instead of letting it linger on the
          * last captured (stale) matrix. */
-        return UIBaseMenu.shouldRenderAxes() && !this.isRecording()
+        return this.isViewActive() && UIBaseMenu.shouldRenderAxes() && !this.isRecording()
             && (replay == null || replay.enabled.get())
             && (this.getBone() != null || this.isAnchorGizmo());
     }
 
-    private void renderStencil(IBbsWorldRenderContext renderContext, UIContext context, boolean altPressed)
+    private boolean renderStencil(IBbsWorldRenderContext renderContext, UIContext context, boolean altPressed)
     {
-        Area viewport = this.panel.preview.getViewport();
+        Area viewport = this.getViewArea();
+        ViewportPickIntent.Input input = this.pendingViewportPick.input();
+        int mouseX = input == null ? context.mouseX : input.x();
+        int mouseY = input == null ? context.mouseY : input.y();
 
-        if (!viewport.isInside(context) || this.controlled != null)
+        if (!viewport.isInside(mouseX, mouseY) || this.isControlling())
         {
             this.stencil.clearPicking();
 
-            return;
+            return false;
         }
 
         IEntity entity = this.getCurrentEntity();
@@ -1898,7 +2599,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             this.stencil.clearPicking();
 
-            return;
+            return false;
         }
 
         Replay selectedReplay = this.panel.replayEditor.getReplay();
@@ -1907,7 +2608,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             this.stencil.clearPicking();
 
-            return;
+            return false;
         }
 
         this.ensureStencilFramebuffer();
@@ -1920,10 +2621,20 @@ public class UIFilmController extends UIElement implements GizmoViewport
         Texture mainTexture = this.stencil.getFramebuffer().getMainTexture();
         boolean applied = false;
 
+        context.batcher.flush();
+
+        boolean scissorEnabled = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        int[] scissor = new int[4];
+
+        if (scissorEnabled)
+        {
+            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, scissor);
+        }
+
         try
         {
             this.stencilMap.setup();
-            context.batcher.flush();
+            RenderSystem.disableScissor();
             this.stencil.apply();
             applied = true;
 
@@ -1935,22 +2646,23 @@ public class UIFilmController extends UIElement implements GizmoViewport
                 int selectedReplayIndex = this.getCurrentReplayIndex();
                 Pair<String, Boolean> bone = this.getBone();
 
-                for (Map.Entry<Integer, IEntity> entry : this.getEntities().entrySet())
+                for (int i = 0; i < replays.size(); i++)
                 {
-                    Replay replay = CollectionUtils.getSafe(replays, entry.getKey());
+                    Replay replay = replays.get(i);
+                    IEntity replayEntity = this.getEntities().get(replay.getId());
 
-                    if (replay == null)
+                    if (replayEntity == null)
                     {
                         continue;
                     }
 
                     FilmControllerContext filmContext = FilmControllerContext.instance
-                        .setup(this.getEntities(), entry.getValue(), replay, renderContext)
+                        .setup(this.getEntities(), replayEntity, replay, renderContext)
                         .transition(isPlaying ? renderContext.tickDelta() : 0)
                         .stencil(this.stencilMap)
                         .relative(replay.relative.get());
 
-                    if (entry.getKey() == selectedReplayIndex)
+                    if (i == selectedReplayIndex)
                     {
                         this.stencilMap.objectIndex = replays.size() + REPLAY_STENCIL_OFFSET;
                         this.stencilMap.setIncrement(true);
@@ -1962,11 +2674,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
                     }
                     else
                     {
-                        this.stencilMap.objectIndex = entry.getKey() + REPLAY_STENCIL_OFFSET;
+                        /* The stencil object index IS the replay's position in the list — never its
+                         * stable id. The pick pass hands that number back to the replay list. */
+                        this.stencilMap.objectIndex = i + REPLAY_STENCIL_OFFSET;
                         this.stencilMap.setIncrement(false);
                     }
 
-                    BaseFilmController.renderEntity(filmContext);
+                    FilmEntityRenderer.renderEntity(filmContext);
                 }
             }
             else
@@ -1975,7 +2689,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
                 this.stencilMap.setIncrement(true);
 
-                BaseFilmController.renderEntity(FilmControllerContext.instance
+                FilmEntityRenderer.renderEntity(FilmControllerContext.instance
                     .setup(this.getEntities(), entity, selectedReplay, renderContext)
                     .transition(isPlaying ? renderContext.tickDelta() : 0)
                     .stencil(this.stencilMap)
@@ -1985,11 +2699,13 @@ public class UIFilmController extends UIElement implements GizmoViewport
                     .anchorGizmo(this.isAnchorGizmo(), this.getAnchorLocal()));
             }
 
-            int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
-            int y = (int) ((1F - (context.mouseY - viewport.y) / (float) viewport.h) * mainTexture.height);
+            int x = (int) ((mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
+            int y = (int) ((1F - (mouseY - viewport.y) / (float) viewport.h) * mainTexture.height);
             int radius = Math.round(BBSSettings.gizmoHoverTolerance.get() * mainTexture.width / (float) viewport.w);
 
             this.stencil.pick(x, y, radius, Gizmo.STENCIL_MAX);
+
+            return true;
         }
         finally
         {
@@ -2019,7 +2735,14 @@ public class UIFilmController extends UIElement implements GizmoViewport
              * survives into other screens (observed: leftovers on the title screen). */
             RenderSystem.colorMask(true, true, true, true);
             RenderSystem.depthMask(true);
-            GlStateManager._disableScissorTest();
+            if (scissorEnabled)
+            {
+                RenderSystem.enableScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+            }
+            else
+            {
+                RenderSystem.disableScissor();
+            }
             RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
             RenderSystem.disableBlend();
             RenderSystem.defaultBlendFunc();
@@ -2028,15 +2751,16 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     private void ensureStencilFramebuffer()
     {
-        this.stencil.setup(Link.bbs("stencil_film"));
+        this.stencil.setup(Link.bbs("stencil_film_" + (this.preview == null ? "preview" : this.preview.getViewDescriptor().getId())));
 
         Texture mainTexture = this.stencil.getFramebuffer().getMainTexture();
-        int w = BBSRendering.getVideoWidth();
-        int h = BBSRendering.getVideoHeight();
+        ViewRenderState state = this.preview == null ? null : BBSRendering.getViewRenderState(this.preview.getViewDescriptor().getId());
+        int w = state == null ? BBSRendering.getVideoWidth() : state.getWidth();
+        int h = state == null ? BBSRendering.getVideoHeight() : state.getHeight();
 
         if (mainTexture.width != w || mainTexture.height != h)
         {
-            this.stencil.resizeGUI(w, h);
+            this.stencil.resize(w, h);
         }
     }
 }

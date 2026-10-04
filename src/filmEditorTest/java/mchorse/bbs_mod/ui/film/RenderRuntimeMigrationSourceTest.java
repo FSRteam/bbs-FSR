@@ -14,6 +14,12 @@ import java.util.HexFormat;
 /** Source-level guards for render-state migrations that require an in-game visual smoke. */
 public final class RenderRuntimeMigrationSourceTest
 {
+    /** preview2 requires a real second monitor; keep that smoke check opt-in. */
+    private static final boolean ENABLE_PREVIEW2_TESTS = Boolean.getBoolean("bbs.test.preview2");
+    private static final Path BBS_RENDERING = Path.of("src/client/java/mchorse/bbs_mod/client/BBSRendering.java");
+    private static final Path GAME_RENDERER_MIXIN = Path.of("src/client/java/mchorse/bbs_mod/mixin/client/GameRendererMixin.java");
+    private static final Path WINDOW_MIXIN = Path.of("src/client/java/mchorse/bbs_mod/mixin/client/WindowMixin.java");
+
     private static final Path FRAMEBUFFER_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/FramebufferFormRenderer.java");
     private static final Path FORM_FRAME_CACHE = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/utils/FormFrameCache.java");
     private static final Path ORBIT_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/ui/film/controller/OrbitFilmCameraController.java");
@@ -27,6 +33,8 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path BLOCK_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/BlockFormRenderer.java");
     private static final Path SODIUM_UTILS = Path.of("src/client/java/mchorse/bbs_mod/utils/sodium/SodiumUtils.java");
     private static final Path FILM_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/film/BaseFilmController.java");
+    private static final Path FILM_ENTITY_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/film/FilmEntityRenderer.java");
+    private static final Path FILM_MATRICES = Path.of("src/client/java/mchorse/bbs_mod/film/FilmMatrices.java");
     private static final Path TRANSLUCENT_QUEUE = Path.of("src/client/java/mchorse/bbs_mod/forms/FormTranslucentQueue.java");
     private static final Path VERTEX_CONSUMERS = Path.of("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
     private static final Path MODEL_INSTANCE = Path.of("src/client/java/mchorse/bbs_mod/cubic/ModelInstance.java");
@@ -38,7 +46,7 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path RENDER_LAYER_MIXIN = Path.of("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
     private static final Path CLIENT_MIXINS = Path.of("src/client/resources/bbs.client.mixins.json");
     private static final Path ICONS = Path.of("src/client/resources/assets/bbs/assets/textures/icons.png");
-    private static final String ICONS_SHA256 = "c07f2b7db84e1e0afb7623126ef88744b6d0ec804cee78f6ff4ebbfb9b9bfe3b";
+    private static final String ICONS_SHA256 = "e8e8297585374629b14de90cef480c589e643b7de1570d1cb0df5899e38c1a41";
 
     private static final String[] MIGRATED_LANGUAGE_KEYS = {
         "bbs.config.workspace.keyframe_panel_width",
@@ -57,6 +65,16 @@ public final class RenderRuntimeMigrationSourceTest
         "bbs.config.camera.orbit_gizmo-comment",
         "bbs.ui.bone_picker.click_bone",
         "bbs.ui.film.controller.keys.toggle_ortho",
+        "bbs.ui.film.replay.bake_ik.bake",
+        "bbs.ui.film.replay.bake_ik.chains",
+        "bbs.ui.film.replay.bake_ik.disable",
+        "bbs.ui.film.replay.bake_ik.disable-tooltip",
+        "bbs.ui.film.replay.bake_ik.end",
+        "bbs.ui.film.replay.bake_ik.range",
+        "bbs.ui.film.replay.bake_ik.start",
+        "bbs.ui.film.replay.bake_ik.step",
+        "bbs.ui.film.replay.bake_ik.title",
+        "bbs.ui.film.replay.context.bake_ik",
         "bbs.ui.forms.editors.model.ik.advanced",
         "bbs.ui.forms.editors.model.ik.chain_empty",
         "bbs.ui.forms.editors.model.ik.classic",
@@ -141,9 +159,9 @@ public final class RenderRuntimeMigrationSourceTest
     public static void runAll() throws Exception
     {
         Path root = findProjectRoot();
-        String film = compact(Files.readString(root.resolve(FILM_CONTROLLER)));
+        String filmEntityRenderer = compact(Files.readString(root.resolve(FILM_ENTITY_RENDERER)));
         String framebuffer = compact(Files.readString(root.resolve(FRAMEBUFFER_RENDERER)));
-        String relativeRender = section(film, "stack.pushPose(); try", "if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)");
+        String relativeRender = section(filmEntityRenderer, "stack.pushPose(); try", "if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)");
 
         check(relativeRender.contains("stack.last().pose().rotate(context.camera.rotation());")
                 && relativeRender.contains("stack.last().normal().rotate(context.camera.rotation());")
@@ -171,6 +189,30 @@ public final class RenderRuntimeMigrationSourceTest
         checkCrashGuards(root);
         checkResources(root);
         checkSliderWiring(root);
+
+        if (ENABLE_PREVIEW2_TESTS)
+        {
+            checkPreview2StateIsolation(root);
+            check(Files.exists(root.resolve(BBS_RENDERING)),
+                "preview2 visual smoke requires the multiview renderer source");
+        }
+    }
+
+    private static void checkPreview2StateIsolation(Path root) throws IOException
+    {
+        String rendering = compact(Files.readString(root.resolve(BBS_RENDERING)));
+        String gameRenderer = compact(Files.readString(root.resolve(GAME_RENDERER_MIXIN)));
+        String window = compact(Files.readString(root.resolve(WINDOW_MIXIN)));
+        check(rendering.contains("if (secondaryViewEnabled) { renderSecondaryView(); }")
+                && !rendering.contains("saveSodiumCameraPos")
+                && !rendering.contains("saveSodiumProjection"),
+            "preview2 still renders after the primary pass or rolls back Sodium's shared terrain lists");
+        check(window.contains("BBSRendering.canReplaceFramebuffer() && !BBSRendering.isApplyingSecondaryCamera()")
+                && occurrences(window, "!BBSRendering.isApplyingSecondaryCamera()") >= 6,
+            "preview2 still inherits export-size Window dimensions during its world pass");
+        check(gameRenderer.contains("if (BBSRendering.isApplyingSecondaryCamera())")
+                && gameRenderer.contains("return projection;"),
+            "preview2 projection path is not isolated from the primary ortho conversion");
     }
 
     private static void checkCrashGuards(Path root) throws IOException
@@ -195,7 +237,7 @@ public final class RenderRuntimeMigrationSourceTest
                 && block.contains("consumers.setSubstitute(null);"),
             "block and fluid forms can still start from black or replace vanilla vertex colors");
         check(sodium.contains("Class.forName(\"net.caffeinemc.mods.sodium.client.SodiumClientMod\")")
-                && sodium.contains("catch (Throwable ignored)"),
+                && sodium.contains("getMethod(\"options\")"),
             "Sodium camera compatibility still links directly to one version's options accessor");
         check(film.contains("this.applyReplayItemUse(replay, ticks, entity)")
                 && film.contains("ItemUseEffects.tick(replay, actorEntity, ticks)")
@@ -207,7 +249,8 @@ public final class RenderRuntimeMigrationSourceTest
     private static void checkFormFrameCacheWiring(Path root) throws IOException
     {
         String cache = compact(Files.readString(root.resolve(FORM_FRAME_CACHE)));
-        String film = compact(Files.readString(root.resolve(FILM_CONTROLLER)));
+        String film = compact(Files.readString(root.resolve(FILM_ENTITY_RENDERER)))
+            + " " + compact(Files.readString(root.resolve(FILM_MATRICES)));
         String orbit = compact(Files.readString(root.resolve(ORBIT_CONTROLLER)));
 
         check(cache.contains("entry.entity == entity")

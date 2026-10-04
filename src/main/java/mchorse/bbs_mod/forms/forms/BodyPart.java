@@ -11,8 +11,22 @@ import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.utils.pose.Transform;
 
+import java.util.Set;
+
 public class BodyPart extends ValueGroup
 {
+    /**
+     * The attachment switches a build newer than this one writes.
+     *
+     * <p>Upstream lets a part ride only some components of its bone's frame; this build always
+     * takes the bone whole, so it has no child to claim the three flags. Dropping them would make
+     * a sight that follows a hand without turning with it — or a form that keeps its size on a
+     * stretched bone — come back as an ordinary attachment, and the authoring choice would be
+     * gone rather than merely ignored. Kept as raw data; see
+     * {@link ValueGroup#preservedUnknownKeys()}.</p>
+     */
+    private static final Set<String> PRESERVED_UNKNOWN_KEYS = Set.of("inheritPosition", "inheritRotation", "inheritScale");
+
     private Form form;
 
     public final ValueTransform transform = new ValueTransform("transform", new Transform());
@@ -126,5 +140,11 @@ public class BodyPart extends ValueGroup
 
             this.setInternalForm(form);
         }
+    }
+
+    @Override
+    protected Set<String> preservedUnknownKeys()
+    {
+        return PRESERVED_UNKNOWN_KEYS;
     }
 }
