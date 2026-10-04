@@ -26,10 +26,13 @@ public class PerLimbService
     {}
 
     /*
-     * Every predicate below goes through FormControlKeys.isChannelInNamespace, which attributes an
-     * id to the OUTERMOST namespace it spells. A substring test is not enough here: the last
-     * segment of these ids is a free-text NAME, and a bone called "ik_targets" would otherwise be
-     * read as an IK target track. See that method for the rule and for the ambiguity it leaves.
+     * Every predicate AND every parser below goes through FormControlKeys.isChannelInNamespace,
+     * which attributes an id to the OUTERMOST namespace it spells. A substring test is not enough
+     * here: the last segment of these ids is a free-text NAME, and a bone called "ik_targets" would
+     * otherwise be read as an IK target track. The parsers use the same rule so that
+     * `isX(id)` and `parseX(id) != null` are the same question; a caller that dispatches on which
+     * parser answered first then cannot be handed a track it does not own. See that method for the
+     * rule and for the ambiguity it leaves.
      */
 
     public static boolean isPoseBoneChannel(String id)
@@ -44,7 +47,7 @@ public class PerLimbService
 
     public static MaterialTexturePath parseMaterialTexturePath(String id)
     {
-        if (id == null)
+        if (!FormControlKeys.isChannelInNamespace(id, MATERIAL_TEXTURES))
         {
             return null;
         }
@@ -94,7 +97,7 @@ public class PerLimbService
 
     public static PoseBonePath parsePoseBonePath(String id)
     {
-        if (id == null)
+        if (!FormControlKeys.isChannelInNamespace(id, POSE_BONES))
         {
             return null;
         }
@@ -129,7 +132,7 @@ public class PerLimbService
 
     public static IKTargetPath parseIKTargetPath(String id)
     {
-        if (id == null)
+        if (!FormControlKeys.isChannelInNamespace(id, IK_TARGETS))
         {
             return null;
         }
@@ -169,7 +172,7 @@ public class PerLimbService
 
     public static PoleTargetPath parsePoleTargetPath(String id)
     {
-        if (id == null)
+        if (!FormControlKeys.isChannelInNamespace(id, POLE_TARGETS))
         {
             return null;
         }
@@ -209,7 +212,7 @@ public class PerLimbService
 
     public static PhysicsTargetPath parsePhysicsTargetPath(String id)
     {
-        if (id == null)
+        if (!FormControlKeys.isChannelInNamespace(id, PHYSICS_TARGETS))
         {
             return null;
         }

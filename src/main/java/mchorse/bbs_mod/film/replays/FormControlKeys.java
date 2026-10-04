@@ -44,12 +44,17 @@ public class FormControlKeys
     {}
 
     /**
-     * Every namespace a track id can spell, per-limb and whole-form alike.
+     * The namespaces this attribution rule has to know about, per-limb and whole-form alike.
      *
-     * <p>The whole-form entries beyond the two named here ({@code physics_controls},
-     * {@code wind_controls}) are listed so attribution is complete, not because their predicates
-     * were touched: a namespace missing from this list would be invisible to the "outermost wins"
-     * rule and could be claimed by a predicate that sits later in the id.</p>
+     * <p>This is NOT "every namespace a track id can spell". A plain property track's last segment
+     * is an arbitrary property id — {@code pose}, and anything {@link FormUtils#getPropertyPath}
+     * can build — and the grouped sound tracks end in {@code $sound…}; neither family is listed,
+     * because nothing here is asked to attribute them.</p>
+     *
+     * <p>What the list does have to be complete about is the namespaces a predicate consults: a
+     * marker missing from here is invisible to the "outermost wins" rule, so a predicate sitting
+     * later in the id could still claim that id. The whole-form entries beyond the four predicates
+     * are listed for exactly that reason.</p>
      */
     private static final ChannelNamespace[] CHANNEL_NAMESPACES = {
         new ChannelNamespace(PerLimbService.POSE_BONES, false),
@@ -100,6 +105,10 @@ public class FormControlKeys
         String found = null;
         int at = Integer.MAX_VALUE;
 
+        /* The smallest position wins. A tie is settled by the ORDER of CHANNEL_NAMESPACES - the
+         * first entry wins - but no marker above is a prefix of another, so two markers can never
+         * match at the same index today and `<` is indistinguishable from `<=`. Adding a marker
+         * that IS a prefix of another would turn this array's order into a silent priority rule. */
         for (ChannelNamespace candidate : CHANNEL_NAMESPACES)
         {
             int index = padded.indexOf(FormUtils.PATH_SEPARATOR + candidate.marker());
@@ -162,9 +171,20 @@ public class FormControlKeys
         return toKey(formPath, WIND_CONTROLS);
     }
 
+    /**
+     * The form path a whole-form control id addresses, or null when the id does not address this
+     * namespace at all.
+     *
+     * <p>Parsing answers under the SAME attribution rule as the predicate — {@link
+     * #isChannelInNamespace} — rather than with a substring test, so {@code isX(id)} and
+     * {@code parseX(id) != null} are one and the same question. That matters where a caller
+     * dispatches on "which parser answered first": an id whose free-text NAME spells another
+     * namespace's key ({@code ik_targets/ik_controls}) is a real id, and a parser that merely finds
+     * the text claims it and sends it to the wrong handler.
+     */
     private static String parseFormPath(String id, String suffix)
     {
-        if (id == null)
+        if (!isChannelInNamespace(id, suffix))
         {
             return null;
         }

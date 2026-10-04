@@ -100,6 +100,7 @@ public final class ReplayIndexRemappingTest
             testBbsVolumeFieldsHaveNoFiniteUpperLimit();
             testReplayTrackCategories();
             assertChannelNamespacePredicates();
+            assertChannelNamespaceAttribution();
             testGlintLayerKeyframes();
             testForeignChannelRoundTrip();
             testEnchantedEquipmentSerializationRoundTrip();
@@ -680,9 +681,12 @@ public final class ReplayIndexRemappingTest
      * track and {@code pose.bones.ik_targets} is a pose-bone track. Substring tests read every one
      * of these wrong; see {@code FormControlKeys.isChannelInNamespace} for the rule.
      *
-     * <p>Only ordinary form paths appear here. A form path that itself spells a namespace is the
-     * one case the rule cannot settle (both readings of the id are legal), and it is documented on
-     * that method rather than asserted.</p>
+     * <p>Only ids written the ordinary way appear here, where the FORM PATH is a body-part path or
+     * empty. A form path that itself spells a namespace is the one cell the rule settles without
+     * being able to tell the two readings apart — {@code ik_targets/pole_targets/hand} is an IK
+     * target track by the rule, and only its author can say whether the part was meant to be called
+     * {@code ik_targets}. That cell is asserted in {@link #assertChannelNamespaceAttribution}, where
+     * the expectation is derived from {@code namespaceOf} rather than written out.</p>
      */
     private static void assertChannelNamespacePredicates()
     {
@@ -757,6 +761,215 @@ public final class ReplayIndexRemappingTest
             "the physics-controls predicate accepted a null/empty id");
         assertTrue(!FormControlKeys.isWindControlChannel(null) && !FormControlKeys.isWindControlChannel(""),
             "the wind-controls predicate accepted a null/empty id");
+    }
+
+    /** The nine namespaces attribution knows about, in the order the controller's dispatch tries them. */
+    private static final String[] ATTRIBUTION_NAMESPACES = {
+        PerLimbService.POSE_BONES,
+        PerLimbService.MATERIAL_TEXTURES,
+        PerLimbService.IK_TARGETS,
+        PerLimbService.POLE_TARGETS,
+        PerLimbService.PHYSICS_TARGETS,
+        FormControlKeys.GLINT_CONTROLS,
+        FormControlKeys.IK_CONTROLS,
+        FormControlKeys.PHYSICS_CONTROLS,
+        FormControlKeys.WIND_CONTROLS
+    };
+
+    private static boolean namespacePredicate(String namespace, String id)
+    {
+        switch (namespace)
+        {
+            case PerLimbService.POSE_BONES: return PerLimbService.isPoseBoneChannel(id);
+            case PerLimbService.MATERIAL_TEXTURES: return PerLimbService.isMaterialTextureChannel(id);
+            case PerLimbService.IK_TARGETS: return PerLimbService.isIKTargetChannel(id);
+            case PerLimbService.POLE_TARGETS: return PerLimbService.isPoleTargetChannel(id);
+            case PerLimbService.PHYSICS_TARGETS: return PerLimbService.isPhysicsTargetChannel(id);
+            case FormControlKeys.GLINT_CONTROLS: return FormControlKeys.isGlintControlChannel(id);
+            case FormControlKeys.IK_CONTROLS: return FormControlKeys.isIKControlChannel(id);
+            case FormControlKeys.PHYSICS_CONTROLS: return FormControlKeys.isPhysicsControlChannel(id);
+            default: return FormControlKeys.isWindControlChannel(id);
+        }
+    }
+
+    private static Object namespaceParse(String namespace, String id)
+    {
+        switch (namespace)
+        {
+            case PerLimbService.POSE_BONES: return PerLimbService.parsePoseBonePath(id);
+            case PerLimbService.MATERIAL_TEXTURES: return PerLimbService.parseMaterialTexturePath(id);
+            case PerLimbService.IK_TARGETS: return PerLimbService.parseIKTargetPath(id);
+            case PerLimbService.POLE_TARGETS: return PerLimbService.parsePoleTargetPath(id);
+            case PerLimbService.PHYSICS_TARGETS: return PerLimbService.parsePhysicsTargetPath(id);
+            case FormControlKeys.GLINT_CONTROLS: return FormControlKeys.parseGlintControlFormPath(id);
+            case FormControlKeys.IK_CONTROLS: return FormControlKeys.parseIKControlFormPath(id);
+            case FormControlKeys.PHYSICS_CONTROLS: return FormControlKeys.parsePhysicsControlFormPath(id);
+            default: return FormControlKeys.parseWindControlFormPath(id);
+        }
+    }
+
+    /**
+     * Ordinary ids: every namespace built by its own helper, at four form-path depths. The block
+     * above only ever feeds an EMPTY form path to the per-limb predicates, so a namespace that is
+     * recognised only in the id's first segment passes every one of its lines - which is the shape
+     * of over-narrowing that a rewrite of the attribution rule would produce.
+     */
+    private static List<String[]> namespacePositives()
+    {
+        List<String[]> corpus = new ArrayList<>();
+
+        for (String path : new String[] {"", "part/0", "a/b/c", "part/0/deep/1"})
+        {
+            corpus.add(new String[] {PerLimbService.toPoseBoneKey(path, "arm"), PerLimbService.POSE_BONES});
+            corpus.add(new String[] {PerLimbService.toMaterialTextureKey(path, "body"), PerLimbService.MATERIAL_TEXTURES});
+            corpus.add(new String[] {PerLimbService.toIKTargetKey(path, "hand"), PerLimbService.IK_TARGETS});
+            corpus.add(new String[] {PerLimbService.toPoleTargetKey(path, "hand"), PerLimbService.POLE_TARGETS});
+            corpus.add(new String[] {PerLimbService.toPhysicsTargetKey(path, "cape"), PerLimbService.PHYSICS_TARGETS});
+            corpus.add(new String[] {FormControlKeys.toGlintControlKey(path), FormControlKeys.GLINT_CONTROLS});
+            corpus.add(new String[] {FormControlKeys.toIKControlKey(path), FormControlKeys.IK_CONTROLS});
+            corpus.add(new String[] {FormControlKeys.toPhysicsControlKey(path), FormControlKeys.PHYSICS_CONTROLS});
+            corpus.add(new String[] {FormControlKeys.toWindControlKey(path), FormControlKeys.WIND_CONTROLS});
+        }
+
+        return corpus;
+    }
+
+    /**
+     * Ids whose free-text NAME spells another namespace's key - the field a user or a model file
+     * controls. The owner must still accept its own track; the block above only ever asserts the
+     * complement ({@code !isIKTargetChannel(...)}), which a predicate that rejected everything
+     * would satisfy.
+     */
+    private static List<String[]> namespaceCrossNamed()
+    {
+        List<String[]> corpus = new ArrayList<>();
+
+        corpus.add(new String[] {PerLimbService.toIKTargetKey("", "ik_controls"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPoleTargetKey("", "ik_targets"), PerLimbService.POLE_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPoleTargetKey("", "ik_controls"), PerLimbService.POLE_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPhysicsTargetKey("", "ik_targets"), PerLimbService.PHYSICS_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPhysicsTargetKey("", "pole_targets"), PerLimbService.PHYSICS_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPhysicsTargetKey("", "ik_controls"), PerLimbService.PHYSICS_TARGETS});
+        corpus.add(new String[] {PerLimbService.toIKTargetKey("", "pose.bones.arm"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toIKTargetKey("", "texture.materials.body"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toIKTargetKey("", "glint_layer"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toIKTargetKey("part/0", "ik_controls"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPoseBoneKey("", "ik_targets"), PerLimbService.POSE_BONES});
+        corpus.add(new String[] {PerLimbService.toMaterialTextureKey("", "wind_controls"), PerLimbService.MATERIAL_TEXTURES});
+
+        return corpus;
+    }
+
+    /**
+     * Ids whose FORM PATH itself spells a namespace. The rule settles them — outermost wins — even
+     * though it cannot tell the author's intent apart: {@code ik_targets/pole_targets/hand} may be a
+     * pole-target track under a body part called {@code ik_targets}, and it is an IK target track
+     * either way. This is the cell the javadoc on {@code assertChannelNamespacePredicates} used to
+     * call "documented rather than asserted"; it is asserted here, and the expectation comes from
+     * {@code namespaceOf}, so what the rule does is pinned rather than narrated.
+     *
+     * <p>{@code toPoseBoneKey("ik_controls", "arm")} is the interesting one: the whole-form markers
+     * are terminal (a whole-form track's marker ends the id), so a form path spelling one is NOT
+     * outermost — {@code pose.bones.} is, and the id is a pose-bone track.
+     */
+    private static List<String[]> namespaceSpelledFormPath()
+    {
+        List<String[]> corpus = new ArrayList<>();
+
+        corpus.add(new String[] {PerLimbService.toPoleTargetKey(PerLimbService.IK_TARGETS, "hand"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toIKTargetKey(PerLimbService.POLE_TARGETS, "hand"), PerLimbService.POLE_TARGETS});
+        corpus.add(new String[] {PerLimbService.toIKTargetKey(PerLimbService.PHYSICS_TARGETS, "hand"), PerLimbService.PHYSICS_TARGETS});
+        corpus.add(new String[] {PerLimbService.toIKTargetKey(FormControlKeys.IK_CONTROLS, "hand"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPhysicsTargetKey(PerLimbService.IK_TARGETS, "cape"), PerLimbService.IK_TARGETS});
+        corpus.add(new String[] {PerLimbService.toPoseBoneKey(FormControlKeys.IK_CONTROLS, "arm"), PerLimbService.POSE_BONES});
+        corpus.add(new String[] {PerLimbService.toPoseBoneKey(FormControlKeys.WIND_CONTROLS, "arm"), PerLimbService.POSE_BONES});
+        /* Both segments spell a TERMINAL whole-form marker. Only the trailing one can match - a
+         * terminal marker is not recognised mid-id - so the id belongs to the marker it ENDS with,
+         * whatever the form path spells. */
+        corpus.add(new String[] {FormControlKeys.toIKControlKey(FormControlKeys.WIND_CONTROLS), FormControlKeys.IK_CONTROLS});
+
+        return corpus;
+    }
+
+    /**
+     * A track id is written form-path first and namespace second, and the last segment of a per-limb
+     * id is a free-text NAME. So attribution is single-valued - the OUTERMOST namespace the id
+     * spells - and the predicates and the parsers must both answer that one question.
+     *
+     * <p>The two things the block above cannot pin, and this one does:
+     *
+     * <ul>
+     * <li>an id whose name spells another namespace's key belongs to its OWNER, and a per-limb
+     *     namespace is attributed the same way behind a non-empty form path;</li>
+     * <li>{@code isX(id)} and {@code parseX(id) != null} are the SAME question. Without that,
+     *     {@code BaseFilmController.applyTargetOverrides} - which dispatches on "which parser
+     *     answered first", IK then POLE then PHYSICS - hands a pole track to the IK handler and
+     *     {@code continue}s past the pole branch, so the track silently stops applying while its
+     *     keyframes stay on disk.</li>
+     * </ul>
+     *
+     * <p>Every id is built by a production {@code to*Key} helper and every expectation is derived
+     * from {@link FormControlKeys#namespaceOf}, so this block cannot smuggle in one hand-written
+     * opinion per line.
+     */
+    private static void assertChannelNamespaceAttribution()
+    {
+        List<String[]> everything = new ArrayList<>();
+
+        everything.addAll(namespacePositives());
+        everything.addAll(namespaceCrossNamed());
+        everything.addAll(namespaceSpelledFormPath());
+
+        for (String[] entry : everything)
+        {
+            String id = entry[0];
+            String owner = entry[1];
+            String namespaceOf = FormControlKeys.namespaceOf(id);
+
+            assertTrue(owner.equals(namespaceOf),
+                "the id " + id + " built for " + owner + " is attributed to " + namespaceOf);
+
+            assertTrue(namespacePredicate(owner, id),
+                "the " + owner + " predicate rejects its own track " + id);
+
+            int predicates = 0;
+            int parsers = 0;
+
+            for (String namespace : ATTRIBUTION_NAMESPACES)
+            {
+                boolean predicate = namespacePredicate(namespace, id);
+                boolean parser = namespaceParse(namespace, id) != null;
+
+                assertTrue(predicate == parser,
+                    "the " + namespace + " predicate says " + predicate + " but its parser says "
+                        + parser + " for " + id);
+
+                if (predicate)
+                {
+                    predicates++;
+                }
+
+                if (parser)
+                {
+                    parsers++;
+                }
+            }
+
+            assertTrue(predicates == 1,
+                predicates + " namespaces claim the id " + id + "; a track id addresses exactly one");
+            assertTrue(parsers == 1,
+                parsers + " parsers answer for the id " + id + "; a caller that dispatches on which"
+                    + " parser answered first would pick the wrong one");
+        }
+
+        /* An ordinary form path is not a namespace. This is the negative control of the whole
+         * block: it is green under every variant of the rule and pins only that attribution does
+         * not invent a namespace where none is spelled. */
+        for (String path : new String[] {"", "part/0", "a/b/c", "0", "2", "deadbeef"})
+        {
+            assertTrue(FormControlKeys.namespaceOf(path) == null,
+                "the ordinary form path \"" + path + "\" was attributed to a namespace");
+        }
     }
 
     private static void testForeignChannelRoundTrip()
