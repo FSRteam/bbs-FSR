@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class FormUtils
 {
@@ -200,12 +202,28 @@ public class FormUtils
      * Resolve a body-part path — {@code /}-separated part ids — starting at {@code form}. Each
      * segment names a part of the current form and steps into that part's form. A segment that is
      * neither a part nor (in documents written before stable ids) a positional index ends the walk.
+     *
+     * <p>An empty path is an <em>address</em> for {@code form} itself and answers with it. A path
+     * that names no part is not the same thing: the walk stops without having arrived, and answers
+     * with {@code null}. Callers write through whatever comes back (an override map, a pose's
+     * runtime value, a material texture), so answering with the form reached so far would retarget
+     * the write at an ancestor — a track whose path was mangled by a deleted body part would quietly
+     * animate the root instead of failing, which is how this used to read. {@link #getProperty}
+     * takes the same line for the same path shape; this method used to differ only because the empty
+     * path and the broken path happened to leave the loop the same way.
      */
     public static Form getForm(Form form, String path)
     {
-        for (String s : path.split(PATH_SEPARATOR))
+        if (path == null || path.isEmpty())
         {
-            BodyPart part = form.parts.get(s) instanceof BodyPart bodyPart ? bodyPart : null;
+            return form;
+        }
+
+        /* -1 keeps trailing empty segments, so "/" and "a/" are walked (and rejected) rather than
+         * silently collapsing into fewer segments than the path has. */
+        for (String s : path.split(PATH_SEPARATOR, -1))
+        {
+            BodyPart part = s.isEmpty() ? null : (form.parts.get(s) instanceof BodyPart bodyPart ? bodyPart : null);
 
             if (part == null)
             {
@@ -214,13 +232,41 @@ public class FormUtils
 
             if (part == null || part.getForm() == null)
             {
-                break;
+                warnUnresolvedPath(path, s, form);
+
+                return null;
             }
 
             form = part.getForm();
         }
 
         return form;
+    }
+
+    /**
+     * Paths already reported as unresolvable. A track is resolved once per frame while a film
+     * plays, so an orphaned address would otherwise repeat its warning for as long as the film
+     * runs; the set is bounded because a document can carry any number of them.
+     */
+    private static final Set<String> REPORTED_UNRESOLVED_PATHS = ConcurrentHashMap.newKeySet();
+
+    private static final int MAXIMUM_REPORTED_UNRESOLVED_PATHS = 64;
+
+    /**
+     * Report once per orphaned path. The walk used to be indistinguishable from a successful one,
+     * so the rate limiting is the price of the warning being useful rather than a flood.
+     */
+    private static void warnUnresolvedPath(String path, String segment, Form form)
+    {
+        if (REPORTED_UNRESOLVED_PATHS.size() >= MAXIMUM_REPORTED_UNRESOLVED_PATHS
+            || !REPORTED_UNRESOLVED_PATHS.add(path))
+        {
+            return;
+        }
+
+        LOGGER.warn("Form path \"{}\" does not resolve: no body part \"{}\" under \"{}\". The address"
+            + " is orphaned and resolves to nothing; the caller's write is dropped rather than"
+            + " retargeted at an ancestor.", path, segment, form.getId());
     }
 
     /**
