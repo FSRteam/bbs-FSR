@@ -78,9 +78,10 @@ public class ModelMesh implements IMapSerializable
 
         for (Vector3f v : this.baseData.vertices)
         {
-            vertices.addFloat(v.x);
-            vertices.addFloat(v.y);
-            vertices.addFloat(v.z);
+            /* Runtime vertices include the pivot; the file stores them relative to it. */
+            vertices.addFloat(v.x - this.origin.x);
+            vertices.addFloat(v.y - this.origin.y);
+            vertices.addFloat(v.z - this.origin.z);
         }
 
         for (Vector2f v : this.baseData.uvs)
