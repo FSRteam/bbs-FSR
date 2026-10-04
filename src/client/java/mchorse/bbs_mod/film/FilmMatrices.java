@@ -19,6 +19,7 @@ import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Vector3d;
 import org.joml.Vector3f;
 import java.util.Map;
 import java.util.Objects;
@@ -412,9 +413,11 @@ public class FilmMatrices
 
         if (relative)
         {
-            cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
-            cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
-            cz = replay.keyframes.z.interpolate(0F) + replay.relativeOffset.get().z;
+            Vector3d origin = replay.getRelativeOrigin();
+
+            cx = origin.x;
+            cy = origin.y;
+            cz = origin.z;
         }
 
         Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cx, cy, cz, transition);
@@ -498,9 +501,11 @@ public class FilmMatrices
 
         if (relative)
         {
-            cx = replay.keyframes.x.interpolate(0F) + replay.relativeOffset.get().x;
-            cy = replay.keyframes.y.interpolate(0F) + replay.relativeOffset.get().y;
-            cz = replay.keyframes.z.interpolate(0F) + replay.relativeOffset.get().z;
+            Vector3d origin = replay.getRelativeOrigin();
+
+            cx = origin.x;
+            cy = origin.y;
+            cz = origin.z;
         }
 
         Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cx, cy, cz, transition);
