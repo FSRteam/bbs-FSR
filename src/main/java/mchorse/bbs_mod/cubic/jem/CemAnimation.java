@@ -7,6 +7,7 @@ import mchorse.bbs_mod.math.IExpression;
 import mchorse.bbs_mod.math.Variable;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.pose.Transform;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -373,8 +374,8 @@ public class CemAnimation
     /** Feed the entity's render parameters into the parser for this frame. */
     private void setParameters(IEntity target, float transition, CemStatus status, int ticksAgo)
     {
-        float headYaw = Lerps.lerp(target.getPrevHeadYaw(), target.getHeadYaw(), transition);
-        float bodyYaw = Lerps.lerp(target.getPrevBodyYaw(), target.getBodyYaw(), transition);
+        float headYaw = Mth.rotLerp(transition, target.getPrevHeadYaw(), target.getHeadYaw());
+        float bodyYaw = Mth.rotLerp(transition, target.getPrevBodyYaw(), target.getBodyYaw());
         float pitch = Lerps.lerp(target.getPrevPitch(), target.getPitch(), transition);
         float yaw = Lerps.lerp(target.getPrevYaw(), target.getYaw(), transition);
         double age = target.getAge() + transition + ticksAgo + (target.isStandIn() ? SPAWN_SETTLED : 0);
@@ -387,7 +388,8 @@ public class CemAnimation
         this.parser.setValue("limb_speed", target.getLimbSpeed(transition));
         this.parser.setValue("age", age);
         this.parser.setValue("time", age);
-        this.parser.setValue("head_yaw", headYaw - bodyYaw);
+        /* Head and body may differ by whole turns; the packs clamp this relative angle before using it. */
+        this.parser.setValue("head_yaw", Mth.wrapDegrees(headYaw - bodyYaw));
         this.parser.setValue("head_pitch", pitch);
         this.parser.setValue("swing_progress", target.getHandSwingProgress(transition));
 
