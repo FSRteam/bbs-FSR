@@ -565,10 +565,27 @@ public class ModelInstance implements IModelInstance
                     else if (FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, color.a))
                     {
                         ShaderInstance capturedShader = shader;
-                        FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
-                            () -> capturedShader, FormTranslucentQueue.PASS_SINGLE, true,
-                            vao.snapshotArmature(), vao.getUploadCount(), texture, modelView, normalMat,
-                            color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                        Matrix4f[] armature = vao.snapshotArmature();
+                        int uploadCount = vao.getUploadCount();
+
+                        if (texture != null && texture.hasTranslucency())
+                        {
+                            FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                                () -> capturedShader, FormTranslucentQueue.PASS_TEX_OPAQUE, true,
+                                armature, uploadCount, texture, modelView, normalMat,
+                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                            FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                                () -> capturedShader, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true,
+                                armature, uploadCount, texture, modelView, normalMat,
+                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                        }
+                        else
+                        {
+                            FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
+                                () -> capturedShader, FormTranslucentQueue.PASS_SINGLE, true,
+                                armature, uploadCount, texture, modelView, normalMat,
+                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                        }
                     }
                     else
                     {
@@ -664,9 +681,13 @@ public class ModelInstance implements IModelInstance
     private void drawImmediate(MeshData mesh, ShaderInstance shader, PoseStack stack, Matrix3f normalMat,
         StencilMap stencilMap, Texture texture, float alpha)
     {
-        if (!FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha))
+        boolean bbsModelShader = shader != null && shader.getUniform("PassMode") != null;
+        boolean split = FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha);
+        boolean whole = !split && FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, alpha);
+
+        if (!split && !whole)
         {
-            BufferUploader.drawWithShader(mesh);
+            drawWithStableModelColor(mesh, shader, bbsModelShader);
             return;
         }
 
@@ -676,21 +697,94 @@ public class ModelInstance implements IModelInstance
 
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
 
-        if (normalMat != null && shader.getUniform("NormalMat") != null)
+        if (split && normalMat != null && shader.getUniform("NormalMat") != null)
         {
             shader.getUniform("NormalMat").set(normalMat);
         }
 
-        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
-        buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), shader);
-        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+        if (split)
+        {
+            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
+            drawWithStableModelColor(buffer, shader, modelView, bbsModelShader);
+            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+        }
         VertexBuffer.unbind();
 
         Vector3f origin = modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f()));
-        /* Depth stays on: this is solid geometry, so its semi-transparent texels must occlude
-         * the ones behind them inside the same model — see the split constructors' note. */
-        FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
-            true, texture, modelView, normalMat, origin, this.isCulling(), null, null));
+        if (split)
+        {
+            /* Depth stays on: this is solid geometry, so its semi-transparent texels must occlude
+             * the ones behind them inside the same model. */
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_TRANSLUCENT, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, true));
+        }
+        else if (texture != null && texture.hasTranslucency())
+        {
+            /* Keep texture-opaque texels as the depth/blend base for faded overlays. */
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, false));
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, true));
+        }
+        else
+        {
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
+                FormTranslucentQueue.PASS_SINGLE, true, texture, modelView, normalMat,
+                origin, this.isCulling(), null, null, true));
+        }
+    }
+
+    /**
+     * BBS model vertices already contain the complete form/bone tint. Keep the global shader colour
+     * neutral while vanilla's buffer helpers copy it into {@code ColorModulator}; otherwise a UI or
+     * glint draw that left a zero channel behind darkens the whole model when its alpha changes.
+     */
+    private static void drawWithStableModelColor(MeshData mesh, ShaderInstance shader, boolean bbsModelShader)
+    {
+        float[] previous = bbsModelShader ? RenderSystem.getShaderColor().clone() : null;
+
+        if (bbsModelShader)
+        {
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+        }
+
+        try
+        {
+            BufferUploader.drawWithShader(mesh);
+        }
+        finally
+        {
+            if (previous != null)
+            {
+                RenderSystem.setShaderColor(previous[0], previous[1], previous[2], previous[3]);
+            }
+        }
+    }
+
+    private static void drawWithStableModelColor(VertexBuffer buffer, ShaderInstance shader,
+        Matrix4f modelView, boolean bbsModelShader)
+    {
+        float[] previous = bbsModelShader ? RenderSystem.getShaderColor().clone() : null;
+
+        if (bbsModelShader)
+        {
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+        }
+
+        try
+        {
+            buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), shader);
+        }
+        finally
+        {
+            if (previous != null)
+            {
+                RenderSystem.setShaderColor(previous[0], previous[1], previous[2], previous[3]);
+            }
+        }
     }
 
     /**

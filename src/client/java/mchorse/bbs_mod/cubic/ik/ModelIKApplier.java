@@ -430,6 +430,7 @@ final class ModelIKApplier
             ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, workIds, workspace.solvedArray(), weight, boneLimits, workspace.rotationWorkspace);
             applyShortChainTip(model, workIds, rootParentRotation, weight, tipTarget, limits, workspace);
         }
+
     }
 
     /**

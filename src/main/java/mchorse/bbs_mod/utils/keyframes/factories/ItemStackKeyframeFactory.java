@@ -20,6 +20,12 @@ import java.util.function.Supplier;
 
 public class ItemStackKeyframeFactory implements IKeyframeFactory<ItemStack>
 {
+    @Override
+    public boolean isStepped()
+    {
+        return true;
+    }
+
     /**
      * Item components such as enchantments encode registry holders through
      * {@code RegistryFixedCodec}, which fails with a plain {@code NbtOps}.

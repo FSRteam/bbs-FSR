@@ -267,6 +267,27 @@ public abstract class UINumericInput <T extends UINumericInput<T>> extends UIBas
         return this.values(0.1D, 0.01D, 1);
     }
 
+    /**
+     * An angle bounded to half a turn either way — a rotation limit, a pole
+     * angle, a cone half-angle. Every such field in the mod goes through here,
+     * so they all drag and scroll by the same amount and none of them accepts
+     * letters: the same knob has to feel the same wherever the animator meets
+     * it, whether it is on the constraints tab, in an IK joint or in physics.
+     */
+    public T angle180()
+    {
+        return this.degrees().onlyNumbers().limit(-180D, 180D);
+    }
+
+    /**
+     * A normalized 0..1 factor — weight, softness, stiffness, damping. Same
+     * reasoning as {@link #angle180()}: one set of steps for the whole family.
+     */
+    public T normalized()
+    {
+        return this.onlyNumbers().values(0.05D, 0.01D, 0.2D).increment(0.01D).limit(0D, 1D);
+    }
+
     /* Value */
 
     /**
@@ -400,6 +421,18 @@ public abstract class UINumericInput <T extends UINumericInput<T>> extends UIBas
         }
     }
 
+    /** Apply this field's own gesture while keeping a focused textbox in sync. */
+    protected void setValueFromGesture(double value)
+    {
+        this.setValueAndNotify(value);
+
+        if (this.textbox.isFocused())
+        {
+            this.updateTextField();
+            this.textbox.moveCursorToEnd();
+        }
+    }
+
     protected void updateTextField()
     {
         if (Window.isAltPressed())
@@ -485,13 +518,13 @@ public abstract class UINumericInput <T extends UINumericInput<T>> extends UIBas
         {
             if (context.isHeld(GLFW.GLFW_KEY_UP))
             {
-                this.setValueAndNotify(this.value + this.getValueModifier());
+                this.setValueFromGesture(this.value + this.getValueModifier());
 
                 return true;
             }
             else if (context.isHeld(GLFW.GLFW_KEY_DOWN))
             {
-                this.setValueAndNotify(this.value - this.getValueModifier());
+                this.setValueFromGesture(this.value - this.getValueModifier());
 
                 return true;
             }

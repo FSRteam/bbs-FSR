@@ -86,7 +86,7 @@
         "notification":  { "enabled": true, "type": "ease", "duration": 150, "easing": "back_out" },
         "context_menu":  { "enabled": true, "type": "ease", "duration": 100, "easing": "quad_out" },
         "scrollbar":     { "enabled": true, "type": "ease", "duration": 200, "easing": "sine_inout" },
-        "scroll_smooth": { "enabled": true },
+        "scroll_smooth": { "enabled": true, "type": "ease", "duration": 100, "easing": "sine_out" },
         "hover_scale":   { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
         "press":         { "enabled": false, "duration": 80, "easing": "sine_out", "scale": 1.0 },
         "layout":        { "enabled": false, "duration": 200, "easing": "sine_inout" },

@@ -25,12 +25,15 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
@@ -41,10 +44,16 @@ import java.util.function.LongConsumer;
  */
 public final class BBSUiFrameRecorder
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger("bbs-client-ui-mirror");
     private static final int MAX_COMMANDS_PER_FRAME = 100_000;
     private static final int MAX_DRAW_COMMANDS_PER_FRAME = MAX_COMMANDS_PER_FRAME - BBSUiUnsupportedReason.values().length - 1;
+    private static final long ACTIVE_FRAME_LEAK_WARN_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(5L);
     private static final AtomicLong NEXT_SESSION_ID = new AtomicLong(1L);
     private static final AtomicLong STANDALONE_WORLD_REPLAY_SESSION_ID = new AtomicLong();
+    private static final AtomicLong BEGIN_FRAME_NO_DEMAND = new AtomicLong();
+    private static final AtomicLong BEGIN_FRAME_ALREADY_ACTIVE = new AtomicLong();
+    private static final AtomicLong BEGIN_FRAME_SESSION_MISSING = new AtomicLong();
+    private static final AtomicLong NEXT_ACTIVE_FRAME_LEAK_WARN_NANOS = new AtomicLong();
     private static final Map<Long, SessionState> SESSIONS = new ConcurrentHashMap<>();
     private static final ThreadLocal<FrameBuilder> ACTIVE_FRAME = new ThreadLocal<>();
     private static final Object SESSION_LIFECYCLE_LOCK = new Object();
@@ -311,6 +320,24 @@ public final class BBSUiFrameRecorder
         int framebufferHeight
     )
     {
+        publishStandaloneWorldReplayFrame(
+            width,
+            height,
+            framebufferWidth,
+            framebufferHeight,
+            () -> recordFullscreenSurface(BBSRenderSurfaceKind.WORLD_REPLAY, width, height)
+        );
+    }
+
+    /** Test seam: identical lifecycle to the public overload with an injectable frame body. */
+    static void publishStandaloneWorldReplayFrame(
+        int width,
+        int height,
+        int framebufferWidth,
+        int framebufferHeight,
+        Runnable frameBody
+    )
+    {
         if (width < 1 || height < 1 || framebufferWidth < 1 || framebufferHeight < 1 || !BBSUiMirrorRegistry.hasActiveDemand())
         {
             closeStandaloneWorldReplaySession();
@@ -343,8 +370,18 @@ public final class BBSUiFrameRecorder
 
         if (beginFrame(sessionId, width, height))
         {
-            recordFullscreenSurface(BBSRenderSurfaceKind.WORLD_REPLAY, width, height);
-            endFrame(GLFW.GLFW_ARROW_CURSOR, width / 2F, height / 2F);
+            try
+            {
+                frameBody.run();
+                endFrame(GLFW.GLFW_ARROW_CURSOR, width / 2F, height / 2F);
+            }
+            finally
+            {
+                /* endFrame already cleared ACTIVE_FRAME on success; this only
+                 * discards the half-recorded frame after a mid-frame failure,
+                 * so beginFrame keeps working on this render thread. */
+                abortFrame();
+            }
         }
     }
 
@@ -361,8 +398,17 @@ public final class BBSUiFrameRecorder
 
     public static boolean beginFrame(long sessionId, int width, int height)
     {
-        if (!BBSUiMirrorRegistry.hasActiveDemand() || ACTIVE_FRAME.get() != null)
+        if (!BBSUiMirrorRegistry.hasActiveDemand())
         {
+            BEGIN_FRAME_NO_DEMAND.incrementAndGet();
+
+            return false;
+        }
+
+        if (ACTIVE_FRAME.get() != null)
+        {
+            warnLeakedActiveFrame(BEGIN_FRAME_ALREADY_ACTIVE.incrementAndGet());
+
             return false;
         }
 
@@ -370,12 +416,70 @@ public final class BBSUiFrameRecorder
 
         if (session == null)
         {
+            BEGIN_FRAME_SESSION_MISSING.incrementAndGet();
+
             return false;
         }
 
         ACTIVE_FRAME.set(new FrameBuilder(session, width, height));
 
         return true;
+    }
+
+    /**
+     * Read-only capture-gate accounting. {@code frameAlreadyActive} > 0 means a
+     * frame leaked {@code ACTIVE_FRAME} on some render thread, which should
+     * never happen and silently disables capture on that thread.
+     */
+    public static Diagnostics diagnostics()
+    {
+        long frameAlreadyActive = BEGIN_FRAME_ALREADY_ACTIVE.get();
+
+        return new Diagnostics(
+            BEGIN_FRAME_NO_DEMAND.get(),
+            frameAlreadyActive,
+            BEGIN_FRAME_SESSION_MISSING.get(),
+            frameAlreadyActive > 0L
+        );
+    }
+
+    /** Read-only snapshot of beginFrame rejection reasons. */
+    public record Diagnostics(
+        long noDemand,
+        long frameAlreadyActive,
+        long sessionMissing,
+        boolean activeFrameLeaked
+    )
+    {}
+
+    static void resetDiagnosticsForTests()
+    {
+        BEGIN_FRAME_NO_DEMAND.set(0L);
+        BEGIN_FRAME_ALREADY_ACTIVE.set(0L);
+        BEGIN_FRAME_SESSION_MISSING.set(0L);
+        NEXT_ACTIVE_FRAME_LEAK_WARN_NANOS.set(0L);
+    }
+
+    private static void warnLeakedActiveFrame(long occurrences)
+    {
+        long now = System.nanoTime();
+        long next = NEXT_ACTIVE_FRAME_LEAK_WARN_NANOS.get();
+
+        if (next != 0L && now - next < 0L)
+        {
+            return;
+        }
+
+        if (!NEXT_ACTIVE_FRAME_LEAK_WARN_NANOS.compareAndSet(next, now + ACTIVE_FRAME_LEAK_WARN_INTERVAL_NANOS))
+        {
+            return;
+        }
+
+        LOGGER.warn(
+            "[bbs-client-ui-mirror] beginFrame rejected: a previous frame leaked ACTIVE_FRAME on thread '{}' ({} occurrences); UI capture stays disabled on this thread",
+            Thread.currentThread().getName(),
+            occurrences
+        );
     }
 
     public static void endFrame(int cursorShape, float mouseX, float mouseY)

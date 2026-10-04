@@ -41,7 +41,7 @@ public class ReplayKeyframes extends ValueGroup
         return "item_slot_" + slot;
     }
 
-    public static final List<String> CURATED_CHANNELS = Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw", "sneaking", "sprinting", "item_slot_0", "item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4", "item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "grounded", "damage", "vX", "vY", "vZ");
+    public static final List<String> CURATED_CHANNELS = Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw", "sneaking", "sprinting", "item_slot_0", "item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4", "item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "grounded", "damage", "death", "vX", "vY", "vZ");
 
     public final KeyframeChannel<Double> x = new KeyframeChannel<>("x", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> y = new KeyframeChannel<>("y", KeyframeFactories.DOUBLE);
@@ -61,6 +61,7 @@ public class ReplayKeyframes extends ValueGroup
     public final KeyframeChannel<Double> grounded = new KeyframeChannel<>("grounded", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> fall = new KeyframeChannel<>("fall", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> damage = new KeyframeChannel<>("damage", KeyframeFactories.DOUBLE);
+    public final KeyframeChannel<Double> death = new KeyframeChannel<>("death", KeyframeFactories.DOUBLE);
 
     public final KeyframeChannel<Double> stickLeftX = new KeyframeChannel<>("stick_lx", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> stickLeftY = new KeyframeChannel<>("stick_ly", KeyframeFactories.DOUBLE);
@@ -102,6 +103,7 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.grounded);
         this.add(this.fall);
         this.add(this.damage);
+        this.add(this.death);
         this.add(this.stickLeftX);
         this.add(this.stickLeftY);
         this.add(this.stickRightX);
@@ -322,6 +324,7 @@ public class ReplayKeyframes extends ValueGroup
         this.sprinting.insert(tick, entity.isSprinting() ? 1D : 0D);
         this.grounded.insert(tick, entity.isOnGround() ? 1D : 0D);
         this.damage.insert(tick, (double) entity.getHurtTimer());
+        this.death.insert(tick, entity.isDead() ? 1D : 0D);
 
         if (rotation)
         {
@@ -444,6 +447,8 @@ public class ReplayKeyframes extends ValueGroup
         entity.setOnGround(this.grounded.interpolate(tick) != 0D);
         entity.setHurtTimer(this.damage.interpolate(tick).intValue());
 
+        this.applyDeath(tick, entity);
+
         float[] sticks = entity.getExtraVariables();
 
         if (leftStick)
@@ -477,6 +482,32 @@ public class ReplayKeyframes extends ValueGroup
         }
 
         this.applyEquipment(tick, entity);
+    }
+
+    /**
+     * Apply only the death channel on the given entity. Used for actors whose other state
+     * is driven by the underlying Minecraft entity tick rather than the keyframes.
+     *
+     * <p>The channel value (0..1) is mapped onto the 0..20 vanilla death-time range so the
+     * actor's topple rotation animates through the keyframe ramp instead of snapping.</p>
+     */
+    public void applyDeath(int tick, IEntity entity)
+    {
+        if (this.death.isEmpty())
+        {
+            return;
+        }
+
+        float death = this.death.interpolate(tick).floatValue();
+
+        entity.setDeath(Math.max(0F, Math.min(1F, death)) * 20F);
+
+        if (death > 0F)
+        {
+            /* Keep the red flash active while dead so the overlay reads it even for
+             * entities whose death flag is independent of hurtTime. */
+            entity.setHurtTimer(Math.max(entity.getHurtTimer(), 1));
+        }
     }
 
     /**

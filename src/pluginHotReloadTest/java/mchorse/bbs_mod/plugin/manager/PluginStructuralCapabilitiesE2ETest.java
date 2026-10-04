@@ -5,6 +5,7 @@ import mchorse.bbs_mod.api.plugin.BBSPluginState;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.events.EventBus;
 import mchorse.bbs_mod.forms.FormArchitect;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MissingForm;
 import mchorse.bbs_mod.plugin.manager.BBSPluginManager.PluginStatus;
@@ -168,6 +169,13 @@ public final class PluginStructuralCapabilitiesE2ETest
             check(degradedForm instanceof MissingForm, "delete did not degrade the live form to a missing placeholder");
             check("marker-v1".equals(((MissingForm) degradedForm).sourceData().getString("name")),
                 "delete did not retain the form's data in the missing placeholder");
+
+            Form copiedMissingForm = FormUtils.copy(degradedForm);
+
+            check(copiedMissingForm instanceof MissingForm,
+                "copying a missing form tried to serialize it through the unavailable plugin factory");
+            check("marker-v1".equals(((MissingForm) copiedMissingForm).sourceData().getString("name")),
+                "copying a missing form lost its preserved source data");
 
             Clip degradedClip = clipsHolder.get(0);
             check(degradedClip instanceof MissingClip, "delete did not degrade the live clip to a missing placeholder");

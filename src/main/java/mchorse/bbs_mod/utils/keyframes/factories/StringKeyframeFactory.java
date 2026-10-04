@@ -7,6 +7,12 @@ import mchorse.bbs_mod.utils.interps.IInterp;
 public class StringKeyframeFactory implements IKeyframeFactory<String>
 {
     @Override
+    public boolean isStepped()
+    {
+        return true;
+    }
+
+    @Override
     public String fromData(BaseType data)
     {
         return data.isString() ? data.asString() : "";

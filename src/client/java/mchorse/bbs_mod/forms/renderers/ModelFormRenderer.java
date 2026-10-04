@@ -7,6 +7,9 @@ import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
+import mchorse.bbs_mod.client.renderer.ItemPredicateDonor;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.animation.ActionsConfig;
 import mchorse.bbs_mod.cubic.animation.Animator;
@@ -21,6 +24,7 @@ import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsDebug;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
+import mchorse.bbs_mod.cubic.render.vanilla.GeoArmorSupport;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
@@ -28,6 +32,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
+import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
@@ -56,8 +61,11 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.item.ItemDisplayContext;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import com.mojang.math.Axis;
 import org.joml.Matrix4f;
@@ -89,7 +97,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private ActionsConfig lastConfigs;
     private IAnimator animator;
     private ModelInstance lastModel;
-    private final ModelIKRuntime ikRuntime = new ModelIKRuntime();
     private final ModelPhysicsRuntime physicsRuntime = new ModelPhysicsRuntime();
     private final Matrix4f ikInverseBase = new Matrix4f();
     private final Map<String, Vector3f> ikLocalTargets = new HashMap<>();
@@ -106,6 +113,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private final PreviewPoseSnapshot previewPoseSnapshot = new PreviewPoseSnapshot();
 
     private IEntity entity = new StubEntity();
+    private boolean geoArmorRenderedThisPass;
 
     @Override
     protected void applyTransforms(PoseStack stack, boolean origin, float transition)
@@ -393,6 +401,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.ikAppliedThisRender = false;
         this.physicsAppliedThisRender = false;
         this.constraintsAppliedThisRender = false;
+        this.geoArmorRenderedThisPass = false;
 
         if (!model.isCulling())
         {
@@ -431,7 +440,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             if (solvePose)
             {
                 this.applyConstraintsOnce(model);
-                this.applyIKOnce(model, simulationOwner == null ? target : simulationOwner, baseTransform, allowWorldTargetOverrides);
+                this.applyIKOnce(model, baseTransform, allowWorldTargetOverrides);
                 this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
             }
 
@@ -513,12 +522,29 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             for (Map.Entry<ArmorType, ArmorSlot> entry : model.getArmorSlots().entrySet())
             {
+                ArmorType armorType = entry.getKey();
+
+                /* GeckoLib geo armor renders at entity level, not bone level. A single
+                 * entity-level call renders all four slots at once (like vanilla does
+                 * through HumanoidArmorLayer), so skip the per-bone loop bodies for geo
+                 * items and let the first detected geo item do the entire batch. */
+                if (!this.geoArmorRenderedThisPass && armorType.slot != null)
+                {
+                    ItemStack slotStack = target.getEquipmentStack(armorType.slot);
+
+                    if (GeoArmorSupport.isGeoArmor(slotStack))
+                    {
+                        this.renderGeoArmorAtEntityLevel(target, stack, light);
+                        this.geoArmorRenderedThisPass = true;
+                    }
+                }
+
                 this.renderArmor(target, stack, entry.getKey(), entry.getValue(), color, overlay, light);
             }
         }
     }
 
-    private void applyIKOnce(ModelInstance model, Object simulationOwner, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
+    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         if (this.ikAppliedThisRender)
         {
@@ -526,10 +552,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.ikAppliedThisRender = true;
-        this.applyIK(model, simulationOwner, baseTransform, allowWorldTargetOverrides);
+        this.applyIK(model, baseTransform, allowWorldTargetOverrides);
     }
 
-    private void applyIK(ModelInstance model, Object simulationOwner, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
+    private void applyIK(ModelInstance model, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         model.form = this.form;
 
@@ -538,7 +564,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (!hasOverrides)
         {
-            this.ikRuntime.apply(simulationOwner, model, null, null);
+            ModelIKRuntime.apply(model, null, null);
             return;
         }
 
@@ -549,11 +575,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (this.ikLocalTargets.isEmpty() && this.ikLocalPoles.isEmpty())
         {
-            this.ikRuntime.apply(simulationOwner, model, null, null);
+            ModelIKRuntime.apply(model, null, null);
             return;
         }
 
-        this.ikRuntime.apply(simulationOwner, model, this.ikLocalTargets.isEmpty() ? null : this.ikLocalTargets, this.ikLocalPoles.isEmpty() ? null : this.ikLocalPoles);
+        ModelIKRuntime.apply(model, this.ikLocalTargets.isEmpty() ? null : this.ikLocalTargets, this.ikLocalPoles.isEmpty() ? null : this.ikLocalPoles);
     }
 
     /** World-space target overrides into the model's local space (the space the solver and pivot frames use). */
@@ -622,6 +648,17 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
         if (matrix != null)
         {
+            /* GeckoLib geo armor renders at entity level, not bone level. GeoArmorRenderer
+             * is a full-mesh model and must receive the entity-level pose stack without the
+             * per-bone matrix transform, so that all slots (head/chest/legs/feet) align to
+             * the same coordinate space. */
+            ItemStack itemStack = target.getEquipmentStack(type.slot);
+
+            if (GeoArmorSupport.isGeoArmor(itemStack))
+            {
+                return;
+            }
+
             CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
             Matrix4f bendDelta = this.getArmorBendDelta(type, armorSlot);
             PoseStack lowerStack = null;
@@ -672,6 +709,51 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         MatrixStackUtils.multiply(stack, matrix);
         MatrixStackUtils.applyTransform(stack, armorSlot.transform);
         stack.mulPose(ROTATE_X_180);
+    }
+
+    private void renderGeoArmorAtEntityLevel(IEntity target, PoseStack stack, int light)
+    {
+        LivingEntity livingEntity = this.resolveLivingEntity(target);
+
+        if (livingEntity == null)
+        {
+            return;
+        }
+
+        /* GeoArmorRenderer expects a vanilla entity-level pose stack and renders all slots
+         * (head/chest/legs/feet) itself, same as the GeckoLib HumanoidArmorLayer mixin does.
+         * This call runs once per render pass, before the bone-level renderArmor loop. */
+        for (EquipmentSlot slot : EquipmentSlot.values())
+        {
+            if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR)
+            {
+                continue;
+            }
+
+            ItemStack slotStack = target.getEquipmentStack(slot);
+
+            if (!slotStack.isEmpty() && GeoArmorSupport.isGeoArmor(slotStack))
+            {
+                HumanoidModel<?> baseModel = ActorEntityRenderer.armorRenderer.getModel(slot);
+
+                GeoArmorSupport.renderGeoArmor(stack, FormUtilsClient.getProvider(), livingEntity, slotStack, slot, baseModel, light);
+            }
+        }
+    }
+
+    private LivingEntity resolveLivingEntity(IEntity target)
+    {
+        if (target instanceof MCEntity mcEntity && mcEntity.getMcEntity() instanceof LivingEntity living)
+        {
+            return living;
+        }
+
+        if (target instanceof StubEntity stub && stub.getMcEntity() instanceof LivingEntity living)
+        {
+            return living;
+        }
+
+        return null;
     }
 
     /**
@@ -763,7 +845,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                         }
                     }
 
-                    Minecraft.getInstance().getItemRenderer().renderStatic(null, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
+                    boolean mainHand = slot == EquipmentSlot.MAINHAND;
+                    ItemUsePose.Use use = ThirdPersonItemUse.get(target, mainHand);
+                    LivingEntity holder = use == null ? this.resolveLivingEntity(target) : ItemPredicateDonor.get(itemStack, use);
+
+                    Minecraft.getInstance().getItemRenderer().renderStatic(holder, itemStack, mode, mode == ItemDisplayContext.THIRD_PERSON_LEFT_HAND, stack, consumers, target.level(), light, overlay, 0);
                     consumers.endBatch();
                 }
                 finally
@@ -864,7 +950,16 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 RenderSystem.enableBlend();
 
                 this.renderingArm = true;
-                this.renderModel(this.armSimulationClock, simulationOwner, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F, this.armSimulationWorld, false, false);
+                ItemUsePose.setSuppressed(true);
+
+                try
+                {
+                    this.renderModel(this.armSimulationClock, simulationOwner, mainShader, matrices, model, light, OverlayTexture.NO_OVERLAY, color, false, null, 0F, this.armSimulationWorld, false, false);
+                }
+                finally
+                {
+                    ItemUsePose.setSuppressed(false);
+                }
 
                 return true;
             }
@@ -929,6 +1024,22 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             boolean irisWorld = BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld();
             boolean cutout = irisWorld && textureObject != null && textureObject.hasTranslucency()
                 && color.a >= 1F && !this.form.additiveColor.get();
+
+            /* Death topple from the replay's death channel. Vanilla entities get this from
+             * the renderer reading livingEntity.deathTime; BBS's own models render outside
+             * the vanilla entity renderer, so apply the same Z-axis fall rotation here. */
+            if (context.entity != null)
+            {
+                float death = context.entity.getDeath();
+
+                if (death > 0F)
+                {
+                    float deathAngle = (death + context.getTransition() - 1F) / 20F * 1.6F;
+                    float angle = Math.min(Mth.sqrt(deathAngle), 1F) * 90F;
+
+                    context.stack.mulPose(Axis.ZP.rotationDegrees(angle));
+                }
+            }
 
             BBSModClient.getTextures().bindTexture(textureObject);
 
@@ -1414,7 +1525,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                     ModelConstraintsRuntime.apply(model);
 
-                    this.applyIK(model, owner, modelSemanticBase, allowWorldTargetOverrides);
+                    this.applyIK(model, modelSemanticBase, allowWorldTargetOverrides);
 
                     if (modelSemanticBase != null)
                     {

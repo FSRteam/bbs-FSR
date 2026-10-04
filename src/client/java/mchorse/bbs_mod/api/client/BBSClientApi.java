@@ -9,6 +9,12 @@ import mchorse.bbs_mod.api.addon.BBSAddonDescriptorValidator;
 import mchorse.bbs_mod.api.addon.BBSAddonPhase;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayFactory;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlaySubscription;
 import mchorse.bbs_mod.api.client.film.BBSFilmApplyResult;
 import mchorse.bbs_mod.api.client.film.BBSFilmCollaborationListener;
 import mchorse.bbs_mod.api.client.film.BBSFilmCollaborationSubscription;
@@ -33,6 +39,9 @@ import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
 import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceRegistry;
 import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationRegistry;
 import mchorse.bbs_mod.client.dashboard.BBSDashboardPanelHostRegistry;
+import mchorse.bbs_mod.client.dashboard.BBSDashboardGuideDispatcher;
+import mchorse.bbs_mod.client.dashboard.BBSDashboardOverlayHostRegistry;
+import mchorse.bbs_mod.client.dashboard.DashboardOverlayContribution;
 import mchorse.bbs_mod.client.dashboard.DashboardPanelContribution;
 import mchorse.bbs_mod.network.compat.AddonPayloadBroker;
 import net.minecraft.client.KeyMapping;
@@ -135,6 +144,66 @@ public final class BBSClientApi
         return result;
     }
 
+    /** Register one initially hidden, addon-owned Dashboard guide overlay. */
+    public static BBSDashboardOverlaySubscription registerDashboardOverlay(
+        BBSAddonDescriptor descriptor,
+        BBSDashboardOverlayFactory factory
+    )
+    {
+        String addonId = descriptor == null ? "<unknown>" : descriptor.addonId();
+        String resultId = addonId == null || addonId.isBlank()
+            ? "<blank>:dashboard_overlay"
+            : addonId + ":dashboard_overlay";
+        BBSRegistrationResult rejected = validateDashboardOverlay(descriptor, factory, resultId);
+
+        if (rejected != null)
+        {
+            recordDashboardDiagnostic(descriptor, BBSAddonPhase.REGISTER_CLIENT, rejected, null);
+            return BBSDashboardOverlayHostRegistry.subscription(rejected, null);
+        }
+
+        AtomicBoolean setupRecorded = new AtomicBoolean();
+        DashboardOverlayContribution contribution = new DashboardOverlayContribution(
+            addonId,
+            descriptor,
+            descriptor.displayName(),
+            factory,
+            (failed, phase, error) -> recordDashboardDiagnostic(
+                descriptor,
+                BBSAddonPhase.CLIENT_SETUP,
+                BBSRegistrationResult.rejected(failed.fullId(), "Dashboard overlay " + phase + " failed"),
+                error
+            ),
+            () ->
+            {
+                if (setupRecorded.compareAndSet(false, true))
+                {
+                    recordDashboardDiagnostic(
+                        descriptor,
+                        BBSAddonPhase.CLIENT_SETUP,
+                        BBSRegistrationResult.accepted(resultId),
+                        null
+                    );
+                }
+            }
+        );
+        BBSRegistrationResult result;
+
+        try
+        {
+            result = BBSDashboardOverlayHostRegistry.install(contribution);
+        }
+        catch (Exception | LinkageError error)
+        {
+            result = BBSRegistrationResult.rejected(resultId, "Dashboard overlay projection failed");
+            recordDashboardDiagnostic(descriptor, BBSAddonPhase.CLIENT_SETUP, result, error);
+        }
+
+        recordDashboardDiagnostic(descriptor, BBSAddonPhase.REGISTER_CLIENT, result, null);
+
+        return BBSDashboardOverlayHostRegistry.subscription(result, contribution);
+    }
+
     private static BBSRegistrationResult validateDashboardPanel(
         BBSAddonDescriptor descriptor,
         BBSDashboardPanelSpec spec,
@@ -176,6 +245,35 @@ public final class BBSClientApi
         if (factory == null)
         {
             return BBSRegistrationResult.rejected(resultId, "Dashboard panel factory is null");
+        }
+
+        return null;
+    }
+
+    private static BBSRegistrationResult validateDashboardOverlay(
+        BBSAddonDescriptor descriptor,
+        BBSDashboardOverlayFactory factory,
+        String resultId
+    )
+    {
+        if (descriptor == null)
+        {
+            return BBSRegistrationResult.rejected(resultId, "addon descriptor is null");
+        }
+
+        java.util.List<String> descriptorIssues = BBSAddonDescriptorValidator.validate(descriptor, (id) -> true);
+
+        if (!descriptorIssues.isEmpty())
+        {
+            return BBSRegistrationResult.rejected(resultId, descriptorIssues.get(0));
+        }
+        if (!descriptor.capabilities().contains(BBSAddonCapability.CLIENT_UI))
+        {
+            return BBSRegistrationResult.rejected(resultId, "addon did not declare CLIENT_UI capability");
+        }
+        if (factory == null)
+        {
+            return BBSRegistrationResult.rejected(resultId, "Dashboard overlay factory is null");
         }
 
         return null;
@@ -280,6 +378,63 @@ public final class BBSClientApi
     public static CompletableFuture<BBSUiOpenResult> requestDashboardOpen(BBSAddonDescriptor descriptor)
     {
         return BBSUiOpenDispatcher.requestDashboardOpen(descriptor);
+    }
+
+    /**
+     * Switch the current native Dashboard panel by stable host or addon id.
+     * The future completes on the client thread after the switch takes effect.
+     */
+    public static CompletableFuture<BBSDashboardNavigationResult> navigateDashboardPanel(
+        BBSAddonDescriptor descriptor,
+        String panelId
+    )
+    {
+        CompletableFuture<BBSDashboardNavigationResult> future =
+            BBSDashboardGuideDispatcher.navigate(descriptor, panelId);
+
+        future.thenAccept((result) ->
+        {
+            if (result.status() == BBSDashboardNavigationStatus.REJECTED
+                || result.status() == BBSDashboardNavigationStatus.PANEL_NOT_FOUND
+                || result.status() == BBSDashboardNavigationStatus.FAILED)
+            {
+                recordDashboardDiagnostic(
+                    descriptor,
+                    BBSAddonPhase.RUNTIME,
+                    BBSRegistrationResult.rejected("dashboard-panel:" + result.panelId(), result.message()),
+                    null
+                );
+            }
+        });
+
+        return future;
+    }
+
+    /** Resolve a fresh screen-space snapshot for one stable Dashboard anchor. */
+    public static CompletableFuture<BBSDashboardAnchorResult> resolveDashboardAnchor(
+        BBSAddonDescriptor descriptor,
+        String anchorId
+    )
+    {
+        CompletableFuture<BBSDashboardAnchorResult> future =
+            BBSDashboardGuideDispatcher.resolveAnchor(descriptor, anchorId);
+
+        future.thenAccept((result) ->
+        {
+            if (result.status() == BBSDashboardAnchorStatus.REJECTED
+                || result.status() == BBSDashboardAnchorStatus.CONTROL_NOT_FOUND
+                || result.status() == BBSDashboardAnchorStatus.FAILED)
+            {
+                recordDashboardDiagnostic(
+                    descriptor,
+                    BBSAddonPhase.RUNTIME,
+                    BBSRegistrationResult.rejected("dashboard-anchor:" + result.anchorId(), result.message()),
+                    null
+                );
+            }
+        });
+
+        return future;
     }
 
     /**

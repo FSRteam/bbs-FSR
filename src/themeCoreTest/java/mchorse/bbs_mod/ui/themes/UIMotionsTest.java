@@ -86,6 +86,9 @@ public final class UIMotionsTest
         UITheme previousTheme = (UITheme) currentField.get(null);
         String previousId = (String) currentIdField.get(null);
         ValueBoolean previousSmoothness = BBSSettings.scrollingSmoothness;
+        ValueBoolean previousUseThemeCurve = BBSSettings.scrollingUseThemeCurve;
+        ValueString previousScrollingEasing = BBSSettings.scrollingMotionEasing;
+        ValueString previousGlobalEasing = BBSSettings.motionEasing;
 
         try
         {
@@ -95,6 +98,12 @@ public final class UIMotionsTest
             currentField.set(null, builder.build());
             currentIdField.set(null, "dark");
             BBSSettings.scrollingSmoothness = new ValueBoolean("scrolling_smoothness_test", true);
+            BBSSettings.scrollingUseThemeCurve = new ValueBoolean("scrolling_use_theme_curve_test", true);
+            BBSSettings.scrollingMotionEasing = new ValueString("scrolling_motion_easing_test", "bounce_out");
+            BBSSettings.motionEasing = new ValueString("global_motion_easing_test", "linear");
+
+            assertEquals(UIThemeMotion.MotionType.SPRING, UIMotions.scrollType(builder.scrollSmooth), "theme scroll curve keeps spring type");
+            assertEquals(builder.scrollSmooth.easing, UIMotions.scrollEasing(builder.scrollSmooth), "theme scroll curve bypasses the global override");
 
             Scroll scroll = new Scroll(new Area(0, 0, 100, 100));
 
@@ -114,6 +123,25 @@ public final class UIMotionsTest
             update.invoke(scroll, start + 200L);
             assertNear(expected, (float) scroll.getScroll(), 0.01F, "scroll_smooth consumes the theme spring curve");
 
+            BBSSettings.scrollingUseThemeCurve.set(false);
+            BBSSettings.scrollingMotionEasing.set("linear");
+
+            assertEquals(UIThemeMotion.MotionType.EASE, UIMotions.scrollType(builder.scrollSmooth), "custom scroll curve replaces spring mode");
+            assertEquals(Interpolations.LINEAR, UIMotions.scrollEasing(builder.scrollSmooth), "custom scroll curve is selected independently");
+
+            Scroll custom = new Scroll(new Area(0, 0, 100, 100));
+
+            custom.scrollSize = 1000;
+            custom.setScroll(0D);
+            custom.scrollTo(100D);
+            update.invoke(custom, System.currentTimeMillis());
+
+            UITween customTween = (UITween) field(Scroll.class, "scrollTween").get(custom);
+            long customStart = getLongField(customTween, "startMs");
+
+            update.invoke(custom, customStart + 400L);
+            assertNear(50F, (float) custom.getScroll(), 0.01F, "custom linear curve drives scroll_smooth");
+
             BBSSettings.scrollingSmoothness.set(false);
             scroll.scrollTo(240D);
             update.invoke(scroll, start + 201L);
@@ -126,6 +154,9 @@ public final class UIMotionsTest
             currentField.set(null, previousTheme);
             currentIdField.set(null, previousId);
             BBSSettings.scrollingSmoothness = previousSmoothness;
+            BBSSettings.scrollingUseThemeCurve = previousUseThemeCurve;
+            BBSSettings.scrollingMotionEasing = previousScrollingEasing;
+            BBSSettings.motionEasing = previousGlobalEasing;
         }
     }
 

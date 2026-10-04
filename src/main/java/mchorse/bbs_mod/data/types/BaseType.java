@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.data.types;
 
 import mchorse.bbs_mod.data.DataStorageContext;
+import mchorse.bbs_mod.math.Operation;
 
 import java.io.IOException;
 
@@ -83,6 +84,69 @@ public abstract class BaseType
     public static boolean is(BaseType data, byte type)
     {
         return data != null && data.getTypeId() == type;
+    }
+
+    /** Compare data trees while treating equal numeric values as the same type. */
+    public static boolean equals(BaseType a, BaseType b)
+    {
+        if (a == b)
+        {
+            return true;
+        }
+
+        if (a == null || b == null)
+        {
+            return false;
+        }
+
+        if (a.isNumeric() && b.isNumeric())
+        {
+            return Operation.equals(a.asNumeric().doubleValue(), b.asNumeric().doubleValue());
+        }
+
+        if (a.isMap() && b.isMap())
+        {
+            MapType mapA = a.asMap();
+            MapType mapB = b.asMap();
+
+            if (mapA.size() != mapB.size())
+            {
+                return false;
+            }
+
+            for (String key : mapA.keys())
+            {
+                if (!mapB.has(key) || !equals(mapA.get(key), mapB.get(key)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (a.isList() && b.isList())
+        {
+            ListType listA = a.asList();
+            ListType listB = b.asList();
+
+            if (listA.size() != listB.size())
+            {
+                return false;
+            }
+
+            for (int i = 0; i < listA.size(); i++)
+            {
+                if (!equals(listA.get(i), listB.get(i)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return a.equals(b);
     }
 
     public void traverseKeys(DataStorageContext context)

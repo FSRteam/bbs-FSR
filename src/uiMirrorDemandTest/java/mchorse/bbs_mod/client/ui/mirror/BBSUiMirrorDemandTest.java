@@ -37,6 +37,7 @@ public final class BBSUiMirrorDemandTest
         {
             uiMirrorDemandZeroOneZero();
             slowAndThrowingListenerLifecycle();
+            BBSUiMirrorFailureRecoveryTest.run();
         }
         finally
         {

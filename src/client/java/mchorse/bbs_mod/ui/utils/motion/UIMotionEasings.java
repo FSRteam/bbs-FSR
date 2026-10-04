@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.utils.motion;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.utils.interps.IInterp;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 
@@ -21,7 +22,12 @@ public final class UIMotionEasings
 
     public static IInterp selected()
     {
-        String key = BBSSettings.motionEasing == null ? Interpolations.SINE_OUT.getKey() : BBSSettings.motionEasing.get();
+        return selected(BBSSettings.motionEasing);
+    }
+
+    public static IInterp selected(ValueString setting)
+    {
+        String key = setting == null ? Interpolations.SINE_OUT.getKey() : setting.get();
 
         return Interpolations.MAP.getOrDefault(key, Interpolations.SINE_OUT);
     }

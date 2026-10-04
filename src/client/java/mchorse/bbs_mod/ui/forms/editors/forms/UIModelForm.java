@@ -26,9 +26,14 @@ public class UIModelForm extends UIPoseForm<ModelForm>
         this.setupPosePanel(this.modelPanel);
         this.modelPanel.poseEditor.transform.rotationConstrained(() ->
         {
-            ModelInstance instance = this.form == null ? null : ModelFormRenderer.getModel(this.form);
+            ModelForm form = this.form;
+            ModelInstance instance = form == null ? null : ModelFormRenderer.getModel(form);
 
-            return instance != null && ModelIKRuntime.isRotationConstrained(instance.model, this.form, this.modelPanel.poseEditor.getTransformBone());
+            return instance != null && ModelIKRuntime.isRotationConstrained(
+                instance.model,
+                form,
+                this.modelPanel.poseEditor.getTransformBone()
+            );
         });
         this.defaultPanel = this.modelPanel;
 

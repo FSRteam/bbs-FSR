@@ -15,6 +15,12 @@ import java.util.Optional;
 public class BlockStateKeyframeFactory implements IKeyframeFactory<BlockState>
 {
     @Override
+    public boolean isStepped()
+    {
+        return true;
+    }
+
+    @Override
     public BlockState fromData(BaseType data)
     {
         DataResult<Pair<BlockState, Tag>> decode = BlockState.CODEC.decode(NbtOps.INSTANCE, DataStorageUtils.toNbt(data));

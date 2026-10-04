@@ -2,7 +2,9 @@ package mchorse.bbs_mod.forms;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import net.minecraft.client.renderer.RenderType;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -24,6 +26,8 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
 
     private Function<VertexConsumer, VertexConsumer> substitute;
     private boolean ui;
+    /** Builder currently being ended; consumed by the RenderType mixin during layer.draw(). */
+    private static final ThreadLocal<BufferBuilder> endingBuilder = new ThreadLocal<>();
 
     public static boolean drawLayer(RenderType layer, MeshData meshData)
     {
@@ -40,15 +44,33 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
         }
 
         VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
-        buffer.bind();
-        buffer.upload(meshData);
-        VertexBuffer.unbind();
+        BufferBuilder source = endingBuilder.get();
+        /* RenderType.draw() can also be called directly, outside this provider's
+         * endBatch override. In that case preserve the actual Iris flag instead
+         * of restoring a guessed false value after the upload. */
+        boolean previousLayout = source == null
+            ? BBSRendering.captureIrisVertexLayout()
+            : BBSRendering.beginIrisBufferUpload(source);
+        boolean extendedLayout = BBSRendering.captureIrisVertexLayout();
+
+        try
+        {
+            buffer.bind();
+            buffer.upload(meshData);
+            VertexBuffer.unbind();
+        }
+        finally
+        {
+            BBSRendering.endIrisBufferUpload(previousLayout);
+        }
+
         FormTranslucentQueue.add(new FormTranslucentQueue.RenderLayerCommand(
             layer,
             buffer,
             new Matrix4f(RenderSystem.getModelViewMatrix()),
             new Vector3f(origin),
-            captureLayerPreparation(layer)
+            captureLayerPreparation(layer),
+            extendedLayout
         ));
         return true;
     }
@@ -135,6 +157,48 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
     {
         String name = layer.toString();
         return name.contains("translucent") && !name.contains("glint");
+    }
+
+    /**
+     * Mirrors BufferSource.endBatch(RenderType), retaining the original BufferBuilder so
+     * Iris can distinguish a plain builder from an Iris-extended one at upload time.
+     */
+    @Override
+    public void endBatch(RenderType layer)
+    {
+        BufferBuilder builder = this.startedBuilders.remove(layer);
+
+        if (builder == null)
+        {
+            return;
+        }
+
+        MeshData meshData = builder.build();
+
+        if (meshData != null)
+        {
+            if (layer.sortOnUpload())
+            {
+                ByteBufferBuilder allocator = this.fixedBuffers.getOrDefault(layer, this.sharedBuffer);
+                meshData.sortQuads(allocator, RenderSystem.getVertexSorting());
+            }
+
+            endingBuilder.set(builder);
+
+            try
+            {
+                layer.draw(meshData);
+            }
+            finally
+            {
+                endingBuilder.remove();
+            }
+        }
+
+        if (layer.equals(this.lastSharedType))
+        {
+            this.lastSharedType = null;
+        }
     }
 
     public void draw()

@@ -183,7 +183,8 @@ public final class BBSUiInputDispatcherTest
         runIsolated(BBSUiInputDispatcherTest::assertReliableMailboxCapacity);
         runIsolated(BBSUiInputDispatcherTest::assertStateTailOnlyCoalescesNewerSequences);
         runIsolated(BBSUiInputDispatcherTest::assertScreenAndAddonGenerationsInvalidatePendingInput);
-        runIsolated(BBSUiInputDispatcherTest::assertRemoteLeaseEndsLocalGestureFirst);
+        runIsolated(BBSUiInputDispatcherTest::assertLocalGestureBlocksRemoteLease);
+        runIsolated(BBSUiInputDispatcherTest::assertLocalInputPreemptsRemoteLease);
         runIsolated(BBSUiInputDispatcherTest::assertBatchStopsWhenTargetChanges);
         runIsolated(BBSUiInputDispatcherTest::assertRemoteLeaseExcludesLocalHeldState);
         runIsolated(BBSUiInputDispatcherTest::assertSyntheticMouseAndKeyRelease);
@@ -751,7 +752,7 @@ public final class BBSUiInputDispatcherTest
             "mid-batch screen change retained the remote held-state lease");
     }
 
-    private static void assertRemoteLeaseEndsLocalGestureFirst()
+    private static void assertLocalGestureBlocksRemoteLease()
     {
         RecordingTarget target = new RecordingTarget();
         target.localGestureHeld = true;
@@ -769,12 +770,42 @@ public final class BBSUiInputDispatcherTest
 
         executor.runAll();
 
-        check(completed(future, "local-to-remote transfer").applied(),
-            "remote lease did not apply after releasing the local gesture");
+        check(completed(future, "local-priority rejection").status() == BBSUiInputStatus.REJECTED,
+            "remote lease displaced an active local gesture");
+        check(target.localGestureHeld,
+            "remote lease acquisition cleared an active local gesture");
+        check(target.actions.isEmpty(),
+            "remote event ran while physical FSR input owned the gesture");
+    }
+
+    private static void assertLocalInputPreemptsRemoteLease()
+    {
+        RecordingTarget target = new RecordingTarget();
+        ManualExecutor executor = install(target, SESSION);
+        BBSAddonDescriptor addon = descriptor("remote-to-local-preemption");
+        BBSUiRemoteInputState held = state(4D, 5D, 0, Set.of(GLFW.GLFW_KEY_A), 0);
+        CompletableFuture<BBSUiInputResult> future = BBSUiInputDispatcher.submit(
+            addon,
+            eventBatch(
+                SESSION,
+                1L,
+                held,
+                new BBSUiKeyEvent(GLFW.GLFW_KEY_A, 0, BBSUiInputAction.PRESS, 0)
+            )
+        );
+
+        executor.runAll();
+
+        check(completed(future, "remote-to-local setup").applied(),
+            "remote lease setup was rejected while local input was idle");
+        check(BBSUiInputDispatcher.preemptForLocalInput(target, SESSION),
+            "physical FSR input could not preempt the remote lease");
         check(target.actions.equals(List.of(
-            "local-gesture-release",
-            keyAction(GLFW.GLFW_KEY_A, GLFW.GLFW_PRESS)
-        )), "remote event ran before the prior local gesture released ownership");
+            keyAction(GLFW.GLFW_KEY_A, GLFW.GLFW_PRESS),
+            keyAction(GLFW.GLFW_KEY_A, GLFW.GLFW_RELEASE)
+        )), "local preemption did not release the remote held key in order");
+        check(!BBSUiRemoteHeldState.isActive(),
+            "local preemption retained the remote held-state lease");
     }
 
     private static void assertRemoteLeaseExcludesLocalHeldState()
@@ -3009,13 +3040,9 @@ public final class BBSUiInputDispatcherTest
         }
 
         @Override
-        public void releaseLocalGestures()
+        public boolean tryAcquireRemoteInput()
         {
-            if (this.localGestureHeld)
-            {
-                this.localGestureHeld = false;
-                this.record("local-gesture-release");
-            }
+            return !this.localGestureHeld;
         }
 
         private void observeSyntheticReleaseLease()

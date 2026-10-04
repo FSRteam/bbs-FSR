@@ -7,6 +7,11 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
+import mchorse.bbs_mod.client.renderer.ItemUseEffects;
+import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
+import mchorse.bbs_mod.film.replays.ReplayItemUse;
 import mchorse.bbs_mod.cubic.ik.IKControl;
 import mchorse.bbs_mod.cubic.ik.IKControls;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
@@ -59,6 +64,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.chat.Component;
@@ -159,7 +165,7 @@ public abstract class BaseFilmController
         int sky = entity.level().getBrightness(LightLayer.SKY, pos);
         int torch = entity.level().getBrightness(LightLayer.BLOCK, pos);
         int light = LightTexture.pack(torch, sky);
-        int overlay = OverlayTexture.pack(OverlayTexture.u(0F), OverlayTexture.v(entity.getHurtTimer() > 0));
+        int overlay = OverlayTexture.pack(OverlayTexture.u(0F), OverlayTexture.v(entity.getHurtTimer() > 0 || entity.isDead()));
 
         FormRenderingContext formContext = new FormRenderingContext()
             .set(FormRenderType.ENTITY, entity, stack, light, overlay, transition)
@@ -976,6 +982,11 @@ public abstract class BaseFilmController
                 IEntity entity = new StubEntity(world);
                 int ticks = replay.getTick(this.getTick());
 
+                if (entity instanceof StubEntity stub)
+                {
+                    stub.setEntityOverride(this.resolvePreviewLivingEntity());
+                }
+
                 entity.setForm(FormUtils.copy(replay.form.get()));
                 replay.keyframes.apply(ticks, entity);
                 entity.setPrevX(entity.getX());
@@ -992,6 +1003,18 @@ public abstract class BaseFilmController
 
             i += 1;
         }
+
+    }
+
+    /**
+     * Returns the backing {@link LivingEntity} used by preview entities so modded armor can
+     * resolve its custom model through {@code IClientItemExtensions}. Defaults to
+     * {@code null} (world playback keeps the vanilla model path); the Film editor overrides
+     * this to return the local player.
+     */
+    protected LivingEntity resolvePreviewLivingEntity()
+    {
+        return null;
     }
 
     public abstract Map<String, Integer> getActors();
@@ -1129,6 +1152,24 @@ public abstract class BaseFilmController
                         player.setOnGround(grounded);
                         player.setSprinting(replay.keyframes.sprinting.interpolate(replayTick) > 0);
 
+                        /* World first-person playback is driven through the real
+                         * client player in this end-of-world phase. Publish the
+                         * replay's held-item use here as well; the StubEntity
+                         * update path has no backing LivingEntity in world mode. */
+                        ItemUsePose.Use use = ReplayItemUse.compute(replay, replayTick, true, player);
+                        ItemUsePose.Use offUse = ReplayItemUse.compute(replay, replayTick, false, player);
+                        LivePlayerItemUse.apply(player, use, offUse);
+
+                        /* The use clips are answered back to vanilla only during the
+                         * render pass (LivingEntityFilmUseMixin is render-gated), so
+                         * the player's own tick never runs shouldSpawnConsumptionEffects
+                         * on a held item they are not actually using. Emit the eating/
+                         * drinking crumbs, sound and final burp from the clip here, the
+                         * same way applyActorReplay does for an ActorEntity actor. The
+                         * MCEntity wrapper gives ItemUseEffects the real ClientLevel and
+                         * coordinates the crumbs spawn from. */
+                        ItemUseEffects.tick(replay, new MCEntity(player), replayTick);
+
                         /* First person teleports the player from keyframes instead of walking it, so vanilla's
                          * bob amplitude (the view-bobbing stride) is computed from a zero velocity and stays
                          * flat. Re-derive it from the actual per-tick displacement (the same source as the limb
@@ -1172,6 +1213,28 @@ public abstract class BaseFilmController
     {
         replay.keyframes.apply(ticks, entity);
         replay.applyClientActions(ticks, entity, this.film);
+
+        this.applyReplayItemUse(replay, ticks, entity);
+    }
+
+    /** Publish all replay-side item effects after a controller applies keyframes/actions. */
+    protected void applyReplayItemUse(Replay replay, int ticks, IEntity entity)
+    {
+        if (replay.actor.get())
+        {
+            return;
+        }
+
+        LivingEntity user = ItemUsePose.livingOf(entity);
+        ItemUsePose.Use use = ReplayItemUse.compute(replay, ticks, true, user);
+        ItemUsePose.Use offUse = ReplayItemUse.compute(replay, ticks, false, user);
+        ThirdPersonItemUse.set(ThirdPersonItemUse.keyOf(entity), use, offUse);
+        ItemUseEffects.tick(replay, entity, ticks);
+
+        if (user != null)
+        {
+            LivePlayerItemUse.apply(user, use, offUse);
+        }
     }
 
     private void applyActorReplay(Replay replay, int ticks, ActorEntity actor, IEntity editorEntity)
@@ -1182,6 +1245,26 @@ public abstract class BaseFilmController
         actorEntity.update();
         replay.keyframes.apply(ticks, actorEntity, List.of(ReplayKeyframes.GROUP_POSITION));
         actorEntity.setHurtTimer(Math.max(hurtTimer, actorEntity.getHurtTimer()));
+
+        /* ActorEntity is teleported to keyframes, so vanilla never sees a floor
+         * collision and never runs its step/sprint effects. Probe the floor with
+         * the recorded delta, then snap back to the exact keyframe position. */
+        double x = replay.keyframes.x.interpolate(ticks);
+        double y = replay.keyframes.y.interpolate(ticks);
+        double z = replay.keyframes.z.interpolate(ticks);
+        boolean grounded = replay.keyframes.grounded.interpolate(ticks) > 0;
+        Vec3 actorPos = actor.position();
+        double dY = y - actorPos.y - (grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D);
+
+        actor.move(MoverType.SELF, new Vec3(x - actorPos.x, dY, z - actorPos.z));
+        actor.setPos(x, y, z);
+        actor.setOnGround(grounded);
+        actor.setSprinting(replay.keyframes.sprinting.interpolate(ticks) > 0);
+
+        /* The death channel drives the actor's topple rotation and red overlay. ActorEntity
+         * is a real LivingEntity, so writing deathTime here lets ActorEntityRenderer apply
+         * the same fall-over it already uses for vanilla knockback deaths. */
+        replay.keyframes.applyDeath(ticks, actorEntity);
 
         if (this.getTransition(editorEntity, 1F) == 0F)
         {
@@ -1195,6 +1278,10 @@ public abstract class BaseFilmController
         }
 
         replay.applyClientActions(ticks, actorEntity, this.film);
+        ItemUsePose.Use use = ReplayItemUse.compute(replay, ticks, true, actorEntity.getMcEntity() instanceof LivingEntity living ? living : null);
+        ItemUsePose.Use offUse = ReplayItemUse.compute(replay, ticks, false, actorEntity.getMcEntity() instanceof LivingEntity living ? living : null);
+        ThirdPersonItemUse.set(ThirdPersonItemUse.keyOf(actorEntity), use, offUse);
+        ItemUseEffects.tick(replay, actorEntity, ticks);
     }
 
     public void startRenderFrame(float transition)
@@ -1315,6 +1402,7 @@ public abstract class BaseFilmController
                 }
             }
         }
+
     }
 
     private Entity getReplayActor(Replay replay)
@@ -1827,6 +1915,9 @@ public abstract class BaseFilmController
         }
 
         FilmActorTimeline.clearOwner(this, this::releaseActorForm);
+        ThirdPersonItemUse.clear();
+        ItemUseEffects.clear();
+        LivePlayerItemUse.clear();
     }
 
     private void clearActorTimeline(Entity entity)

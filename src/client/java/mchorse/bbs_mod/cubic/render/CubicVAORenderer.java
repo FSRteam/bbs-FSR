@@ -143,9 +143,21 @@ public class CubicVAORenderer extends CubicCubeRenderer
 
                 this.deferredBase = true;
 
-                FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
-                    () -> program, FormTranslucentQueue.PASS_SINGLE, true, texture, modelView,
-                    normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                if (texture != null && texture.hasTranslucency())
+                {
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
+                        () -> program, FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView,
+                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
+                        () -> program, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView,
+                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                }
+                else
+                {
+                    FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
+                        () -> program, FormTranslucentQueue.PASS_SINGLE, true, texture, modelView,
+                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                }
             }
             else
             {

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -138,6 +139,7 @@ public class UIReplaysEditor extends UIElement {
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
     private final Map<String, Set<String>> expandedPoseTabsByReplay = new HashMap<>();
+    private String keyframeEditorReplayId;
 
     public enum ReplayCategory {
         PLAYER(
@@ -308,21 +310,9 @@ public class UIReplaysEditor extends UIElement {
         return Colors.BLUE;
     }
 
-    /** The key a sheet is identified by in track filters (global and per-form). */
+    /** Stable key shared by filters and global track styles. */
     public static String getSheetFilterKey(UIKeyframeSheet sheet) {
-        if (sheet.isBoneTrack)
-        {
-            PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(sheet.id);
-
-            if (path != null)
-            {
-                return path.formPath().isEmpty() ? path.bone() : path.formPath() + "/" + path.bone();
-            }
-
-            return sheet.title.get();
-        }
-
-        return StringUtils.fileName(sheet.id);
+        return sheet.getFilterKey();
     }
 
     /** The form a sheet belongs to, whether it backs a form property or carries its owner directly (bones, materials, IK). */
@@ -631,8 +621,9 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void setFilm(Film film) {
-        this.savePoseTabState(this.replay);
+        this.savePoseTabState();
         this.expandedPoseTabsByReplay.clear();
+        this.keyframeEditorReplayId = null;
         this.film = film;
 
         if (film != null) {
@@ -668,7 +659,7 @@ public class UIReplaysEditor extends UIElement {
         this.settingReplay = true;
 
         try {
-            this.savePoseTabState(this.replay);
+            this.savePoseTabState();
             this.replay = replay;
 
             if (orbit == OrbitReaction.RESET) {
@@ -703,6 +694,7 @@ public class UIReplaysEditor extends UIElement {
     }
 
     public void updateChannelsList() {
+        this.savePoseTabState();
         UIKeyframeEditor previousEditor = this.keyframeEditor;
         UIKeyframes lastEditor = previousEditor != null ? previousEditor.view : null;
         boolean resetView = lastEditor == null || this.keyframeEditorResetPending;
@@ -712,6 +704,7 @@ public class UIReplaysEditor extends UIElement {
 
         this.keyframeEditorGeneration = editorGeneration;
         this.keyframeEditor = null;
+        this.keyframeEditorReplayId = null;
         this.keyframeEditorResetPending = false;
 
         if (this.replay == null) {
@@ -746,11 +739,12 @@ public class UIReplaysEditor extends UIElement {
 
         Set<String> disabled = BBSSettings.disabledSheets.get();
 
-        sheets.removeIf(v -> {
-            if (!shouldShowTrack(v, this.category, this.showAllTracks())) {
-                return true;
-            }
+        sheets.removeIf(v -> !shouldShowTrack(v, this.category, this.showAllTracks()));
 
+        /* The tab isn't empty by itself - so if the filter empties it, the timeline has to stay (see below). */
+        boolean hadTracks = !sheets.isEmpty();
+
+        sheets.removeIf(v -> {
             String filterKey = getSheetFilterKey(v);
             for (String s : disabled) {
                 if (filterKey.equals(s) || v.id.equals(s) || v.id.endsWith("/" + s)) {
@@ -768,6 +762,13 @@ public class UIReplaysEditor extends UIElement {
 
             return false;
         });
+
+        /*
+         * Filtering every track off used to drop the timeline itself, and the track filter lives in its
+         * context menu - so "disable all" locked the user out of the only way back. Keep the (empty)
+         * timeline whenever the tab had tracks before the filter ran; the dope sheet says why it's blank.
+         */
+        boolean filteredOutEverything = hadTracks && sheets.isEmpty();
 
         Set<UIKeyframeSheet> kept = new LinkedHashSet<>(sheets);
 
@@ -791,7 +792,7 @@ public class UIReplaysEditor extends UIElement {
             lastForm = form;
         }
 
-        if (!sheets.isEmpty()) {
+        if (!sheets.isEmpty() || filteredOutEverything) {
             this.keyframeEditor = new UIKeyframeEditor(consumer
                     -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute()
             )
@@ -806,6 +807,7 @@ public class UIReplaysEditor extends UIElement {
             editor.setUndoId("replay_keyframe_editor");
             editor.setTimelineVisible(this.timelineVisible);
             editor.setPropertiesVisible(this.propertiesVisible);
+            view.getDopeSheet().setEmptyState(UIKeys.KEYFRAMES_EMPTY_FILTERED, UIKeys.KEYFRAMES_EMPTY_FILTERED_HINT);
 
             /* Reset */
             if (lastEditor != null) {
@@ -941,6 +943,7 @@ public class UIReplaysEditor extends UIElement {
                 Collections.emptySet()
             );
             view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
+            this.keyframeEditorReplayId = this.replay == null ? null : this.replay.getId();
 
         }
 
@@ -1016,9 +1019,7 @@ public class UIReplaysEditor extends UIElement {
             BaseValue value = this.replay.keyframes.get(key);
             KeyframeChannel channel = (KeyframeChannel) value;
 
-            sheets.add(
-                    new UIKeyframeSheet(getColor(key), false, channel, null).icon(ICONS.get(key))
-            );
+            sheets.add(new UIKeyframeSheet(getColor(key), false, channel, null).icon(getIcon(key)));
         }
     }
 
@@ -1272,14 +1273,23 @@ public class UIReplaysEditor extends UIElement {
         sheets.addAll(orderedFormSheets);
     }
 
-    private void savePoseTabState(Replay replay)
+    public Set<String> getExpandedPoseTabIds()
     {
-        if (replay == null || this.keyframeEditor == null)
+        return this.keyframeEditor == null ? Collections.emptySet() : this.keyframeEditor.view.getDopeSheet().getExpandedPoseTabIds();
+    }
+
+    private void savePoseTabState()
+    {
+        if (this.keyframeEditorReplayId == null || this.keyframeEditor == null)
         {
             return;
         }
 
-        this.expandedPoseTabsByReplay.put(replay.getId(), this.keyframeEditor.view.getDopeSheet().getExpandedPoseTabIds());
+        UIKeyframeDopeSheet dopeSheet = this.keyframeEditor.view.getDopeSheet();
+        Set<String> saved = new HashSet<>(this.expandedPoseTabsByReplay.getOrDefault(this.keyframeEditorReplayId, Collections.emptySet()));
+        saved.removeAll(dopeSheet.getPoseTabIds());
+        saved.addAll(dopeSheet.getExpandedPoseTabIds());
+        this.expandedPoseTabsByReplay.put(this.keyframeEditorReplayId, saved);
     }
 
     /**
@@ -1516,25 +1526,9 @@ public class UIReplaysEditor extends UIElement {
             return;
         }
 
-        Replay replay = this.getReplay();
-
-        if (replay != null) {
-            int tick = this.filmPanel.getCursor();
-            double x = replay.keyframes.x.interpolate(tick);
-            double y = replay.keyframes.y.interpolate(tick);
-            double z = replay.keyframes.z.interpolate(tick);
-            float yaw = replay.keyframes.yaw.interpolate(tick).floatValue();
-            float headYaw = replay.keyframes.headYaw.interpolate(tick).floatValue();
-            float bodyYaw = replay.keyframes.bodyYaw.interpolate(tick).floatValue();
-            float pitch = replay.keyframes.pitch.interpolate(tick).floatValue();
-            LocalPlayer player = Minecraft.getInstance().player;
-
-            PlayerUtils.teleport(x, y, z, headYaw, pitch);
-            player.setYRot(yaw);
-            player.setYHeadRot(headYaw);
-            player.setYBodyRot(bodyYaw);
-            player.setXRot(pitch);
-        }
+        /* Through the shared helper so the teleport key and a take started on the mark
+         * can never drift apart (and a replay without position keyframes is left alone) */
+        PlayerUtils.teleportToReplay(this.getReplay(), this.filmPanel.getCursor());
     }
 
     @Override

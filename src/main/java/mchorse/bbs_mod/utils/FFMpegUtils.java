@@ -10,15 +10,18 @@ import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 public class FFMpegUtils
 {
@@ -26,6 +29,8 @@ public class FFMpegUtils
     private static final Set<String> SKIP_DIRS = Set.of("Windows", "Program Files", "Program Files (x86)", "$Recycle.Bin", "System Volume Information", "AppData");
     private static final long HEALTH_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5L);
     private static final long TERMINATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1L);
+    private static final Pattern LIBX264_ENCODER = Pattern.compile("(?m)^\\s*V\\S*\\s+libx264\\s");
+    private static final Pattern AAC_ENCODER = Pattern.compile("(?m)^\\s*A\\S*\\s+aac\\s");
 
     /**
      * People usually are not bright enough, even though everything is stated
@@ -76,7 +81,7 @@ public class FFMpegUtils
     public static String getFFMPEG()
     {
         String encoder = BBSSettings.videoEncoderPath.get();
-        File encoderPath = findFFMPEG(BBSSettings.videoEncoderPath.get());
+        File encoderPath = findFFMPEG(encoder);
 
         if (encoderPath.isFile())
         {
@@ -88,12 +93,90 @@ public class FFMpegUtils
 
     public static boolean checkFFMPEG()
     {
+        try
+        {
+            return checkFFMPEG(Path.of(getFFMPEG()));
+        }
+        catch (InvalidPathException e)
+        {
+            return false;
+        }
+    }
+
+    public static boolean checkFFMPEG(Path candidate)
+    {
+        File executable = resolveFFMPEG(candidate);
         List<String> args = new ArrayList<>();
 
-        args.add(getFFMPEG());
+        args.add(executable.getAbsolutePath());
         args.add("-version");
 
         return executeCommand(BBSMod.getGameFolder(), BBSMod.getSettingsPath("converter.log"), args, HEALTH_CHECK_TIMEOUT_MS);
+    }
+
+    public static File resolveFFMPEG(Path candidate)
+    {
+        return findFFMPEG(candidate.toAbsolutePath().normalize().toString());
+    }
+
+    public static Validation validateFFMPEG(Path candidate)
+    {
+        File executable = resolveFFMPEG(candidate);
+
+        if (!executable.isFile())
+        {
+            return new Validation(executable.toPath(), false, false, false);
+        }
+
+        Path settings = BBSMod.getSettingsFolder().toPath();
+        Path log = null;
+
+        try
+        {
+            Files.createDirectories(settings);
+            log = Files.createTempFile(settings, "ffmpeg-validation-", ".log");
+
+            List<String> version = List.of(executable.getAbsolutePath(), "-hide_banner", "-version");
+
+            if (!executeCommand(BBSMod.getGameFolder(), log.toFile(), version, HEALTH_CHECK_TIMEOUT_MS))
+            {
+                return new Validation(executable.toPath(), false, false, false);
+            }
+
+            List<String> encoders = List.of(executable.getAbsolutePath(), "-hide_banner", "-encoders");
+
+            if (!executeCommand(BBSMod.getGameFolder(), log.toFile(), encoders, HEALTH_CHECK_TIMEOUT_MS))
+            {
+                return new Validation(executable.toPath(), true, false, false);
+            }
+
+            String output = Files.readString(log);
+            boolean libx264 = LIBX264_ENCODER.matcher(output).find();
+            boolean aac = AAC_ENCODER.matcher(output).find();
+
+            return new Validation(executable.toPath(), true, libx264, aac);
+        }
+        catch (Exception | LinkageError e)
+        {
+            LOGGER.warn("[BBS-SEM] topic=ffmpeg.process phase=validate result=failed error_class={}",
+                e.getClass().getName());
+
+            return new Validation(executable.toPath(), false, false, false);
+        }
+        finally
+        {
+            if (log != null)
+            {
+                try
+                {
+                    Files.deleteIfExists(log);
+                }
+                catch (IOException e)
+                {
+                    LOGGER.debug("Failed to delete FFmpeg validation log {}", log, e);
+                }
+            }
+        }
     }
 
     public static boolean execute(File folder, String... arguments)
@@ -186,29 +269,38 @@ public class FFMpegUtils
                     if (!process.waitFor(TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
                     {
                         process.destroyForcibly();
-                        process.waitFor(TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                     }
                 }
             }
             catch (InterruptedException e)
             {
                 interrupted = true;
-
-                try
-                {
-                    process.destroyForcibly();
-                }
-                catch (Exception | LinkageError ignored)
-                {}
             }
             catch (Exception | LinkageError e)
+            {}
+
+            if (process.isAlive())
             {
                 try
                 {
                     process.destroyForcibly();
+
+                    if (!process.waitFor(TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+                    {
+                        LOGGER.warn("[BBS-SEM] topic=ffmpeg.process phase=terminate result=timeout");
+                    }
+                }
+                catch (InterruptedException e1)
+                {
+                    interrupted = true;
                 }
                 catch (Exception | LinkageError ignored)
                 {}
+            }
+
+            if (process.isAlive())
+            {
+                LOGGER.warn("[BBS-SEM] topic=ffmpeg.process phase=terminate result=alive");
             }
 
             if (interrupted)
@@ -315,6 +407,31 @@ public class FFMpegUtils
         public FFMpegFoundException(Path foundPath)
         {
             this.foundPath = foundPath;
+        }
+    }
+
+    public record Validation(Path executable, boolean runs, boolean libx264, boolean aac)
+    {
+        public boolean usable()
+        {
+            return this.runs && this.libx264 && this.aac;
+        }
+
+        public String missingCapabilities()
+        {
+            List<String> missing = new ArrayList<>();
+
+            if (!this.runs)
+            {
+                missing.add("ffmpeg");
+            }
+            else
+            {
+                if (!this.libx264) missing.add("libx264");
+                if (!this.aac) missing.add("aac");
+            }
+
+            return String.join(", ", missing).toLowerCase(Locale.ROOT);
         }
     }
 }
