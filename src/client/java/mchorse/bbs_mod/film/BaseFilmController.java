@@ -153,6 +153,13 @@ public abstract class BaseFilmController
             return;
         }
 
+        /* See startRenderFrame: an unloaded film is a normal state here, and the walk no longer
+         * skips it for free by starting from an empty entity map. */
+        if (this.film == null)
+        {
+            return;
+        }
+
         List<Replay> replays = this.film.replays.getList();
 
         for (int i = 0; i < replays.size(); i++)
@@ -216,6 +223,12 @@ public abstract class BaseFilmController
         Level level = Minecraft.getInstance().level;
 
         if (level == null)
+        {
+            return;
+        }
+
+        /* See startRenderFrame. */
+        if (this.film == null)
         {
             return;
         }
@@ -402,6 +415,16 @@ public abstract class BaseFilmController
 
     public void startRenderFrame(float transition)
     {
+        /* No film, no replays. This controller is built before a film is loaded and is driven
+         * anyway, so the empty case is normal. The walk used to run off the entity map, which is
+         * empty in that state, and the list was read inside the loop body where it was never
+         * reached; now the replays are read first, so the film has to be checked here or this
+         * throws on the dashboard with nothing open. */
+        if (this.film == null)
+        {
+            return;
+        }
+
         /* Phase 1: every replay receives this frame's ordinary properties and
          * scalar procedural controls before any target channel samples another
          * replay's bones. This removes replay iteration order from simulation. */
@@ -963,6 +986,14 @@ public abstract class BaseFilmController
          * A cached frustum would follow the primary view into the side viewports and cull what
          * they can see. */
         Frustum frustum = context.frustum();
+
+        /* Kept after the depth-test call on purpose: that call is part of this pass's setup and ran
+         * whether or not there was anything to draw. See startRenderFrame for why the film is
+         * checked at all. */
+        if (this.film == null)
+        {
+            return;
+        }
 
         List<Replay> renderReplays = this.film.replays.getList();
 
