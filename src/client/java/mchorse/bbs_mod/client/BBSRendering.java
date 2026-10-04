@@ -1739,6 +1739,12 @@ public class BBSRendering
         }
     }
 
+    /** True while forms are rendered inside Iris' shader-pack world pass. */
+    public static boolean isIrisWorldForms()
+    {
+        return isRenderingWorld() && isIrisShadersEnabled();
+    }
+
     public static boolean isIrisShadowPass()
     {
         if (!iris)
@@ -1769,14 +1775,39 @@ public class BBSRendering
         }
     }
 
+<<<<<<< HEAD
+=======
+    /**
+     * Snapshot of Iris' extended-vertex-layout flag, taken while a render layer's buffer is still
+     * inside its own flush (where Iris pins the flag to match the buffer). The translucent queue
+     * draws captured meshes later in the frame, when the flag may describe a different buffer —
+     * pinning the captured value during that draw keeps the vertex array layout matched to the
+     * data (a mismatch shreds the geometry into a fan of stretched triangles).
+     */
+>>>>>>> origin/master
     public static boolean captureIrisVertexLayout()
     {
         return iris && IrisUtils.captureBufferLayout();
     }
 
+<<<<<<< HEAD
     public static boolean applyIrisVertexLayout(boolean extended)
     {
         return iris && IrisUtils.applyBufferLayout(extended);
+=======
+    /**
+     * Force the extended-vertex-layout flag for the duration of a deferred draw. Returns the
+     * previous value, to be handed to {@link #restoreIrisVertexLayout(boolean)}.
+     */
+    public static boolean applyIrisVertexLayout(boolean extended)
+    {
+        if (!iris)
+        {
+            return false;
+        }
+
+        return IrisUtils.applyBufferLayout(extended);
+>>>>>>> origin/master
     }
 
     public static void restoreIrisVertexLayout(boolean previous)
@@ -1946,8 +1977,15 @@ public class BBSRendering
 
     public static Function<VertexConsumer, VertexConsumer> getColorConsumer(Color color)
     {
+<<<<<<< HEAD
         /* Keep form tint and alpha on the normal VertexConsumer contract. Sodium's bulk writer
          * bypasses setColor(), which can leave model layers with stale RGB/alpha values. */
+=======
+        /* Sodium's 0.8 vertex writer bypasses the normal consumer color path and
+         * its optional mixin is not stable across Connector versions. Keep the
+         * vanilla consumer here; this is also the correct path for block/particle
+         * texture colors, which must not be replaced by a stale global tint. */
+>>>>>>> origin/master
         return (b) -> new RecolorVertexConsumer(b, color);
     }
 

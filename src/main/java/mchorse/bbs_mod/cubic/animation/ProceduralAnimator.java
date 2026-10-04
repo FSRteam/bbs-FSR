@@ -170,9 +170,12 @@ public class ProceduralAnimator implements IAnimator
             ModelGroup leftArm = null;
             ModelGroup rightArm = null;
             ModelGroup torso = null;
+<<<<<<< HEAD
             ModelGroup body = null;
             ModelGroup leftLeg = null;
             ModelGroup rightLeg = null;
+=======
+>>>>>>> origin/master
             ModelGroup headGroup = null;
 
             for (ModelGroup group : model.getAllGroups())
@@ -281,6 +284,7 @@ public class ProceduralAnimator implements IAnimator
                 }
             }
 
+<<<<<<< HEAD
             /* The bone a swing twists is vanilla's "body"; BBS's own rigs name it "torso". A model
              * built on the vanilla rig - every CEM model is - carries the vanilla name, and without this
              * the swing below found no bone to turn and was skipped whole, so the arm never swung.
@@ -294,6 +298,12 @@ public class ProceduralAnimator implements IAnimator
             {
                 VanillaArmPoses.apply(
                     cubicBone(rightArm), cubicBone(leftArm),
+=======
+            if (leftArm != null && rightArm != null)
+            {
+                VanillaArmPoses.apply(
+                    cubicArm(rightArm), cubicArm(leftArm),
+>>>>>>> origin/master
                     headGroup == null ? MathUtils.toRad(pitch) : -MathUtils.toRad(headGroup.current.rotate.x),
                     headGroup == null ? MathUtils.toRad(yaw) : -MathUtils.toRad(headGroup.current.rotate.y),
                     main, offhand, ItemUsePose.get(target, true), ItemUsePose.get(target, false),
@@ -349,8 +359,11 @@ public class ProceduralAnimator implements IAnimator
             BOBJBone bobjLeftArm = null;
             BOBJBone bobjRightArm = null;
             BOBJBone bobjHead = null;
+<<<<<<< HEAD
             BOBJBone bobjLeftLeg = null;
             BOBJBone bobjRightLeg = null;
+=======
+>>>>>>> origin/master
 
             for (BOBJBone bone : model.getAllBOBJBones())
             {
@@ -451,7 +464,11 @@ public class ProceduralAnimator implements IAnimator
             if (bobjLeftArm != null && bobjRightArm != null)
             {
                 VanillaArmPoses.apply(
+<<<<<<< HEAD
                     bobjBone(bobjRightArm), bobjBone(bobjLeftArm),
+=======
+                    bobjArm(bobjRightArm), bobjArm(bobjLeftArm),
+>>>>>>> origin/master
                     bobjHead == null ? MathUtils.toRad(pitch) : bobjHead.transform.rotate.x,
                     bobjHead == null ? MathUtils.toRad(yaw) : -bobjHead.transform.rotate.y,
                     main, offhand, ItemUsePose.get(target, true), ItemUsePose.get(target, false),
@@ -521,6 +538,7 @@ public class ProceduralAnimator implements IAnimator
         return b + a * factor;
     }
 
+<<<<<<< HEAD
     /**
      * A cubic bone spoken in vanilla: degrees flipped into radians, x = -pitch, y = -yaw,
      * z = +roll (the arm bob above writes the roll that way).
@@ -533,11 +551,17 @@ public class ProceduralAnimator implements IAnimator
         }
 
         return new VanillaBone()
+=======
+    private static VanillaArmPoses.Arm cubicArm(ModelGroup group)
+    {
+        return new VanillaArmPoses.Arm()
+>>>>>>> origin/master
         {
             public float pitch() { return -MathUtils.toRad(group.current.rotate.x); }
             public void pitch(float value) { group.current.rotate.x = -MathUtils.toDeg(value); }
             public float yaw() { return -MathUtils.toRad(group.current.rotate.y); }
             public void yaw(float value) { group.current.rotate.y = -MathUtils.toDeg(value); }
+<<<<<<< HEAD
             public float roll() { return MathUtils.toRad(group.current.rotate.z); }
             public void roll(float value) { group.current.rotate.z = MathUtils.toDeg(value); }
         };
@@ -554,13 +578,24 @@ public class ProceduralAnimator implements IAnimator
         }
 
         return new VanillaBone()
+=======
+        };
+    }
+
+    private static VanillaArmPoses.Arm bobjArm(BOBJBone bone)
+    {
+        return new VanillaArmPoses.Arm()
+>>>>>>> origin/master
         {
             public float pitch() { return -bone.transform.rotate.x; }
             public void pitch(float value) { bone.transform.rotate.x = -value; }
             public float yaw() { return bone.transform.rotate.y; }
             public void yaw(float value) { bone.transform.rotate.y = value; }
+<<<<<<< HEAD
             public float roll() { return -bone.transform.rotate.z; }
             public void roll(float value) { bone.transform.rotate.z = -value; }
+=======
+>>>>>>> origin/master
         };
     }
 }

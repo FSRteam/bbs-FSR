@@ -402,6 +402,7 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
             Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
             Vector3f planeNormal = FormTranslucentQueue.quadPlaneNormal(modelView, matrix);
+<<<<<<< HEAD
 
             /* The quad's opaque texels also draw right here, writing depth (67f23fe9c), because
              * the sort alone cannot order this quad against a model it sits inside: a
@@ -421,6 +422,8 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
                 VertexBuffer.unbind();
             }
 
+=======
+>>>>>>> origin/master
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
                 () -> capturedShader, texture, modelView, null, origin, planeNormal, true, null, null));
         }

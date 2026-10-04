@@ -160,6 +160,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private boolean restartPending;
     private int lastRestartCursor = -1;
 
+    private boolean restartPending;
+    private int lastRestartCursor = -1;
+
     public UIIcon duplicateFilm;
 
     /* Main editors */
@@ -3181,6 +3184,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     }
 
     /**
+<<<<<<< HEAD
      * Drops a marker where the playhead stands, or opens the one already standing there &mdash;
      * pressing the key twice on the same tick is how you get to naming it without the mouse.
      */
@@ -3205,6 +3209,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     }
 
     /**
+=======
+>>>>>>> origin/master
      * Restart the actions and recreate the actors, the same way {@link Keys#FILM_CONTROLLER_RESTART_ACTIONS}
      * does it manually.
      */

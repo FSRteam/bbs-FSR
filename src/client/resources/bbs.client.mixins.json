@@ -46,7 +46,10 @@
         "KeyboardMixin",
         "KeyMappingAccessor",
         "EntityRenderersAccessor",
-        "BlockEntityRenderersAccessor"
+        "BlockEntityRenderersAccessor",
+        "CameraInvoker",
+        "ParticleEngineInvoker",
+        "ParticleMixin"
     ],
     "injectors": {
         "defaultRequire": 1

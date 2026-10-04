@@ -982,6 +982,7 @@ public class UIFilmPreview extends UIElement
         return super.subMouseScrolled(context);
     }
 
+<<<<<<< HEAD
     private boolean beginNavigation(UIContext context, boolean frame, boolean camera)
     {
         if (camera && this.panel.isRunning())
@@ -1007,6 +1008,8 @@ public class UIFilmPreview extends UIElement
         this.requestRefresh();
     }
 
+=======
+>>>>>>> origin/master
     /**
      * The icon bar can be set to stay out of the way until the mouse comes over the
      * preview. A context menu opened from an icon takes the mouse out of the preview,
@@ -1158,6 +1161,7 @@ public class UIFilmPreview extends UIElement
             Area a = this.icons.area;
 
             /* Render icon bar */
+<<<<<<< HEAD
             int barShade = BBSSettings.color(BBSSettings.chromeSurface(), Colors.A50);
             context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
 
@@ -1168,6 +1172,18 @@ public class UIFilmPreview extends UIElement
             if (this.getViewController().getOnionSkin().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.onionSkin.area, Direction.BOTTOM);
             if (this.getViewController().getMotionPath().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.motionPath.area, Direction.BOTTOM);
             if (this.getViewController().isControlling())
+=======
+            int barShade = BBSSettings.isLightTheme() ? (Colors.A50 | 0xFFFFFF) : Colors.A50;
+            context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
+
+            if (this.panel.isFlying()) UIDashboardPanels.renderHighlight(context.batcher, this.flight.area, Direction.BOTTOM);
+            if (this.panel.getController().isControlling()) UIDashboardPanels.renderHighlight(context.batcher, this.control.area, Direction.BOTTOM);
+            if (this.panel.getController().isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordReplay.area, Direction.BOTTOM);
+            if (this.panel.recorder.isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordVideo.area, Direction.BOTTOM);
+            if (this.panel.getController().getOnionSkin().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.onionSkin.area, Direction.BOTTOM);
+            if (this.panel.getController().getMotionPath().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.motionPath.area, Direction.BOTTOM);
+            if (this.panel.getController().isControlling())
+>>>>>>> origin/master
             {
                 String s = UIKeys.FILM_CONTROLLER_CONTROL_MODE_TOOLTIP.format(KeyCodes.getName(Keys.FILM_CONTROLLER_TOGGLE_CONTROL.getMainKey())).get();
                 int w = context.batcher.getFont().getWidth(s);

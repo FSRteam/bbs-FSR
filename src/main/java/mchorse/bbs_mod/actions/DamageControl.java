@@ -72,6 +72,7 @@ public class DamageControl
     }
 
     /**
+<<<<<<< HEAD
      * Drop a region from the snapshot: whatever the film did in there stops mattering, because the
      * region itself is being taken out of the world on purpose.
      *
@@ -88,6 +89,8 @@ public class DamageControl
     }
 
     /**
+=======
+>>>>>>> origin/master
      * Put the world back the way it was found.
      *
      * <p>The caller is expected to have dropped this snapshot from the manager before

@@ -68,6 +68,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     private Set<UIKeyframeSheet> poseTabParents = new HashSet<>();
     private Set<UIKeyframeSheet> expandedPoseTabs = new HashSet<>();
 
+<<<<<<< HEAD
     /** Section header rows in first-appearance order, rebuilt by every {@link #updateScrollSize()}. */
     private final Map<UIKeyframeSheet.Section, Integer> sectionYCache = new LinkedHashMap<>();
 
@@ -80,6 +81,8 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     /** Y of the header emitted by the last {@link #applySectionHeader(UIKeyframeSheet, int)} call, or -1. */
     private int lastHeaderY = -1;
 
+=======
+>>>>>>> origin/master
     /** What to draw when there are no tracks at all - see {@link #setEmptyState(IKey, IKey)}. */
     private IKey emptyLabel;
     private IKey emptyHint;

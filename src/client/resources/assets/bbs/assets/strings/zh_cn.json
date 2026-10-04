@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
     "bbs.ui.film.view.choose_camera": "选择摄像机 / 输出…",
     "bbs.ui.film.view.camera_actions": "摄像机与输出操作…",
     "bbs.ui.film.view.options": "视图选项",
@@ -47,6 +48,8 @@
     "bbs.ui.film.view.reset_frame": "适配取景框",
     "bbs.ui.film.panels.keys.toggle_multiview": "切换副预览视图",
     "bbs.ui.model_blocks.render_last": "最后渲染",
+=======
+>>>>>>> origin/master
 	"bbs.config.workspace.keyframe_panel_width": "关键帧面板宽度",
 	"bbs.config.workspace.keyframe_panel_width-comment": "设置编辑器中关键帧属性面板的宽度。",
 	"bbs.config.viewport.preview_icons_auto_hide": "自动隐藏预览图标",
@@ -2207,6 +2210,7 @@
     "bbs.ui.film.panels.preview": "预览",
     "bbs.ui.film.panels.edit_area": "属性",
     "bbs.ui.film.panels.replays_list": "回放",
+<<<<<<< HEAD
     "bbs.ui.film.panels.replay_props": "回放属性",
     "bbs.ui.film.home.count": "共 %d 部",
     "bbs.ui.film.home.empty": "还没有影片",
@@ -2293,4 +2297,7 @@
     "bbs.updates.notify_manual_ready": "更新已下载到 %s,请关闭游戏后手动替换模组 jar。",
     "bbs.updates.restart_title": "更新就绪",
     "bbs.updates.restart_body": "更新 v%s 已安装,重启游戏后生效。"
+=======
+    "bbs.ui.film.panels.replay_props": "回放属性"
+>>>>>>> origin/master
 }

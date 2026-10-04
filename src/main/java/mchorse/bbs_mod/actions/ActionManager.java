@@ -1238,16 +1238,21 @@ public class ActionManager
         }
     }
 
+<<<<<<< HEAD
     /**
      * Take a region out of the world's snapshot. Block changes land in the snapshot of the world
      * they happen in (see {@link #changedBlock}), so the region only stays gone if it leaves that
      * same snapshot too.
      */
     public void forgetBlocks(ServerLevel world, BlockPos min, BlockPos max)
+=======
+    public void spawnedEntity(ServerLevel world, Entity entity)
+>>>>>>> origin/master
     {
         DamageControl control = this.dc.get(world);
 
         if (control != null)
+<<<<<<< HEAD
         {
             control.forget(min, max);
         }
@@ -1258,6 +1263,8 @@ public class ActionManager
         DamageControl control = this.dc.get(world);
 
         if (control != null)
+=======
+>>>>>>> origin/master
         {
             control.addEntity(entity);
         }
