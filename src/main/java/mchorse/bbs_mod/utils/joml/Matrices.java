@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.utils.joml;
 
+import mchorse.bbs_mod.utils.pose.Transform;
+import mchorse.bbs_mod.utils.pose.Transform.RotationMode;
 import org.joml.Matrix3d;
 import org.joml.Matrix3f;
 import org.joml.Matrix4d;
@@ -22,13 +24,6 @@ public class Matrices
 
     private static final Matrix3f rotation = new Matrix3f();
     private static final Vector3f forward = new Vector3f();
-
-    private static final Matrix3f lerpA = new Matrix3f();
-    private static final Matrix3f lerpB = new Matrix3f();
-    private static final Quaternionf lerpQa = new Quaternionf();
-    private static final Quaternionf lerpQb = new Quaternionf();
-    private static final Vector3f lerpVa = new Vector3f();
-    private static final Vector3f lerpVb = new Vector3f();
 
     public static Vector3f rotate(Vector3f vector, float pitch, float yaw)
     {
@@ -99,15 +94,23 @@ public class Matrices
 
     public static Matrix4f lerp(Matrix4f a, Matrix4f b, float t, Matrix4f dest)
     {
-        Quaternionf q1 = lerpQa.setFromNormalized(lerpA.set(a));
-        Quaternionf q2 = lerpQb.setFromNormalized(lerpB.set(b));
+        if (t == 0F) return dest.set(a);
+        if (t == 1F) return dest.set(b);
 
-        q1.slerp(q2, t);
+        /* Reuse the signed-scale decomposition used by anchor rebasing. Reading a scaled
+         * basis as a normalized rotation corrupts both its rotation and its scale.
+         * As with Transform.fromMatrix, shear is approximated by TRS between endpoints. */
+        Transform first = new Transform();
+        Transform second = new Transform();
 
-        dest.identity().rotate(q1);
-        dest.setTranslation(a.getTranslation(lerpVa).lerp(b.getTranslation(lerpVb), t));
+        first.rotationMode = second.rotationMode = RotationMode.QUATERNION;
+        first.fromMatrix(a);
+        second.fromMatrix(b);
+        first.quat.normalize();
+        second.quat.normalize();
+        first.lerp(second, t);
 
-        return dest;
+        return first.setupMatrix(dest.identity());
     }
 
     public static String toString(Matrix3f m)

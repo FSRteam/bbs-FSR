@@ -5,8 +5,7 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.film.BaseFilmController;
-import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -24,7 +23,6 @@ import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
-import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -533,16 +531,14 @@ public class OrbitFilmCameraController implements ICameraController
 
     private IEntity resolveEntity(Replay replay)
     {
-        Film film = this.controller.panel.getData();
-
-        if (film == null)
+        /* Addressed by the replay's stable id, not by its position: the entity map is keyed by id
+         * since identity moved off the list index, and a positional lookup would silently miss. */
+        if (replay == null || this.controller.panel.getData() == null)
         {
             return null;
         }
 
-        int index = CollectionUtils.getIndex(film.replays.getList(), replay);
-
-        return index < 0 ? null : this.controller.getEntities().get(index);
+        return this.controller.getEntities().get(replay.getId());
     }
 
     private Vector3d toWorld(Vector3d pivot)
@@ -671,7 +667,7 @@ public class OrbitFilmCameraController implements ICameraController
         Replay replay = this.controller.panel.replayEditor.getReplay();
         boolean relative = replay != null && replay.relative.get();
 
-        if (form != null && !relative && !BaseFilmController.isRelativeReplayEntity(entity))
+        if (form != null && !relative && !FilmMatrices.isRelativeReplayEntity(entity))
         {
             FormRenderer<?> renderer = FormUtilsClient.getRenderer(form);
 
@@ -692,9 +688,9 @@ public class OrbitFilmCameraController implements ICameraController
                 }
 
                 Anchor v = form.anchor.get();
-                Matrix4f defaultMatrix = BaseFilmController.getMatrixForRenderWithRotation(entity, x, y, z, transition);
+                Matrix4f defaultMatrix = FilmMatrices.getMatrixForRenderWithRotation(entity, x, y, z, transition);
                 FormFrameCache frame = new FormFrameCache();
-                Pair<Matrix4f, Float> totalMatrix = BaseFilmController.getTotalMatrix(
+                Pair<Matrix4f, Float> totalMatrix = FilmMatrices.getTotalMatrix(
                     this.controller.getEntities(),
                     v,
                     defaultMatrix,

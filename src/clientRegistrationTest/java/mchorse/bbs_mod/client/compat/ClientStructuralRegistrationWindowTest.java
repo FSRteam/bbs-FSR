@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.client.compat;
 
+import mchorse.bbs_mod.api.client.events.AddonRegistrationDispatchTest;
+import mchorse.bbs_mod.forms.FormRenderLastTest;
 import mchorse.bbs_mod.client.dashboard.DashboardPanelRegistryTest;
 import mchorse.bbs_mod.client.dashboard.DashboardGuideContractTest;
 import mchorse.bbs_mod.client.dashboard.DashboardOverlayRegistryTest;
@@ -38,11 +40,14 @@ public final class ClientStructuralRegistrationWindowTest
             ModelBlockItemRendererSourceTest.runAll();
             ModelRenderPerformanceSourceTest.runAll();
             MissingClipTimelineFallbackTest.runAll();
+            mchorse.bbs_mod.api.client.events.RegisterListEventTest.runAll();
             DashboardPanelRegistryTest.runAll();
             DashboardPanelLifecycleTest.runAll();
             DashboardGuideContractTest.runAll();
             DashboardOverlayRegistryTest.runAll();
             DashboardOverlayLifecycleTest.runAll();
+            AddonRegistrationDispatchTest.runAll();
+            FormRenderLastTest.runAll();
             acceptsBeforeEventAndRejectsLateCalls();
             closesBeforeInvokingNeoForgeRegistrations();
             isolatesRegistrationFailures();

@@ -3,6 +3,8 @@ package mchorse.bbs_mod.utils.keyframes.factories;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.utils.interps.IInterp;
+import mchorse.bbs_mod.utils.interps.Interpolations;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
 
 public class AnchorKeyframeFactory implements IKeyframeFactory<Anchor>
 {
@@ -42,10 +44,38 @@ public class AnchorKeyframeFactory implements IKeyframeFactory<Anchor>
     }
 
     @Override
+    public Anchor interpolate(Keyframe<Anchor> preA, Keyframe<Anchor> a, Keyframe<Anchor> b, Keyframe<Anchor> postB, IInterp interpolation, float x)
+    {
+        if (a.getValue().hasSameTarget(b.getValue())
+            && (interpolation.has(Interpolations.AUTO) || interpolation.has(Interpolations.AUTO_CLAMPED)))
+        {
+            /* Offsets belonging to another target are in a different coordinate system, so they
+             * must not shape this segment's tangents; fall back to the segment's own endpoints. */
+            if (!preA.getValue().hasSameTarget(a.getValue())) preA = a;
+            if (!postB.getValue().hasSameTarget(b.getValue())) postB = b;
+
+            Anchor anchor = b.getValue().copy();
+
+            anchor.transform.autoLerp(
+                preA.getValue().transform, a.getValue().transform, b.getValue().transform, postB.getValue().transform,
+                preA.getTick(), a.getTick(), b.getTick(), postB.getTick(),
+                interpolation.has(Interpolations.AUTO_CLAMPED), x
+            );
+
+            return anchor;
+        }
+
+        return IKeyframeFactory.super.interpolate(preA, a, b, postB, interpolation, x);
+    }
+
+    @Override
     public Anchor interpolate(Anchor preA, Anchor a, Anchor b, Anchor postB, IInterp interpolation, float x)
     {
         if (a.hasSameTarget(b))
         {
+            if (!preA.hasSameTarget(a)) preA = a;
+            if (!postB.hasSameTarget(b)) postB = b;
+
             Anchor anchor = b.copy();
 
             anchor.transform.copy(this.transform.interpolate(preA.transform, a.transform, b.transform, postB.transform, interpolation, x));

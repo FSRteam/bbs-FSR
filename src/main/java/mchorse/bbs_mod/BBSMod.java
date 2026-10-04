@@ -46,7 +46,9 @@ import mchorse.bbs_mod.camera.clips.converters.PathToDollyConverter;
 import mchorse.bbs_mod.camera.clips.converters.PathToKeyframeConverter;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
+import mchorse.bbs_mod.camera.clips.misc.ImageClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
+import mchorse.bbs_mod.camera.clips.misc.VideoClip;
 import mchorse.bbs_mod.camera.clips.modifiers.AngleClip;
 import mchorse.bbs_mod.camera.clips.modifiers.DollyZoomClip;
 import mchorse.bbs_mod.camera.clips.modifiers.DragClip;
@@ -80,6 +82,7 @@ import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.ParticleForm;
+import mchorse.bbs_mod.forms.forms.StructureForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.TrailForm;
@@ -107,6 +110,7 @@ import mchorse.bbs_mod.settings.SettingsManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.clips.Clip;
+import mchorse.bbs_mod.utils.clips.ClipFactory;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.MapFactory;
 import net.minecraft.commands.Commands;
@@ -236,7 +240,11 @@ public class BBSMod
         .noLootTable()
         .noCollission()
         .noOcclusion()
-        .strength(0F)));
+        .strength(0F)
+        /* The hitbox comes from the block entity, so the state's shape cache
+         * must stay off — with it on, the per-block shape would never be asked. */
+        .dynamicShape()
+        .lightLevel((state) -> state.getValue(ModelBlock.LIGHT_LEVEL))));
     public static final DeferredHolder<Block, Block> CHROMA_RED_BLOCK = BLOCKS.register("chroma_red", BBSMod::createChromaBlock);
     public static final DeferredHolder<Block, Block> CHROMA_GREEN_BLOCK = BLOCKS.register("chroma_green", BBSMod::createChromaBlock);
     public static final DeferredHolder<Block, Block> CHROMA_BLUE_BLOCK = BLOCKS.register("chroma_blue", BBSMod::createChromaBlock);
@@ -248,6 +256,10 @@ public class BBSMod
 
     public static final DeferredHolder<Item, ModelBlockItem> MODEL_BLOCK_ITEM = ITEMS.register("model", () -> new ModelBlockItem(MODEL_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<Item, GunItem> GUN_ITEM = ITEMS.register("gun", () -> new GunItem(new Item.Properties().stacksTo(1)));
+
+    /* The structure wand stays a plain Item on purpose: every bit of its behaviour lives on the
+     * client, in StructureWand, and an Item subclass would exist for nothing. */
+    public static final DeferredHolder<Item, Item> STRUCTURE_WAND_ITEM = ITEMS.register("structure_wand", () -> new Item(new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item, BlockItem> CHROMA_RED_BLOCK_ITEM = ITEMS.register("chroma_red", () -> new BlockItem(CHROMA_RED_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> CHROMA_GREEN_BLOCK_ITEM = ITEMS.register("chroma_green", () -> new BlockItem(CHROMA_GREEN_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> CHROMA_BLUE_BLOCK_ITEM = ITEMS.register("chroma_blue", () -> new BlockItem(CHROMA_BLUE_BLOCK.get(), new Item.Properties()));
@@ -279,6 +291,7 @@ public class BBSMod
             entries.accept(new ItemStack(CHROMA_BLACK_BLOCK_ITEM.get()));
             entries.accept(new ItemStack(CHROMA_WHITE_BLOCK_ITEM.get()));
             entries.accept(new ItemStack(GUN_ITEM.get()));
+            entries.accept(new ItemStack(STRUCTURE_WAND_ITEM.get()));
         })
         .build());
 
@@ -530,6 +543,14 @@ public class BBSMod
         BBSAddonProtocolSelfCheck.run(loader, this.addonCollector);
         List<BBSAddonMod> addonEntrypoints = loader.getEntrypoints("bbs-addon", BBSAddonMod.class);
         LOGGER.info("[bbs-addon] loader resolved {} registered addon(s)", addonEntrypoints.size());
+
+        /* The api marker reaches the addon channel rather than the v1 collector above: an addon
+         * written against the upstream contract declares this one, and its event handlers are
+         * found by their @Subscribe methods when it is registered. */
+        for (mchorse.bbs_mod.api.BBSAddonMod addon : loader.getEntrypoints("bbs-addon", mchorse.bbs_mod.api.BBSAddonMod.class))
+        {
+            mchorse.bbs_mod.api.EventBus.INSTANCE.register(addon);
+        }
         LOGGER.info("[bbs-addon] common setup sees collected addon ids: {}", this.addonCollector.getAddonIds());
         this.addonManager.closeRegistrationWindow();
         assetsFolder = new File(gameFolder, "config/bbs/assets");
@@ -554,6 +575,10 @@ public class BBSMod
         LOGGER.info("[bbs-addon] posting RegisterSourcePacksEvent");
         events.post(new RegisterSourcePacksEvent(provider));
 
+        /* Before the forms, because a form of an addon's may well animate a value type of the
+         * same addon's. */
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterKeyframeFactoriesEvent());
+
         forms = new FormArchitect();
         forms
             .register(Link.bbs("billboard"), BillboardForm.class, null)
@@ -569,14 +594,16 @@ public class BBSMod
             .register(Link.bbs("trail"), TrailForm.class, null)
             .register(Link.bbs("framebuffer"), FramebufferForm.class, null)
             .register(Link.bbs("sound_sphere"), SoundSphereForm.class, null)
-            .register(Link.bbs("sound_cone"), SoundConeForm.class, null);
+            .register(Link.bbs("sound_cone"), SoundConeForm.class, null)
+            .register(Link.bbs("structure"), StructureForm.class, null);
 
         LOGGER.info("[bbs-addon] posting RegisterFormsEvent");
         events.post(new RegisterFormsEvent(forms));
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterFormsEvent(forms));
 
         films = new FilmManager(() -> new File(worldFolder, "bbs/films"));
 
-        factoryCameraClips = new MapFactory<Clip, ClipFactoryData>()
+        factoryCameraClips = new ClipFactory()
             .register(Link.bbs("idle"), IdleClip.class, new ClipFactoryData(Icons.FRUSTUM, 0x159e64)
                 .withConverter(Link.bbs("dolly"), new IdleToDollyConverter())
                 .withConverter(Link.bbs("path"), new IdleToPathConverter())
@@ -601,11 +628,13 @@ public class BBSMod
             .register(Link.bbs("remapper"), RemapperClip.class, new ClipFactoryData(Icons.TIME, 0x222222))
             .register(Link.bbs("audio"), AudioClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
             .register(Link.bbs("subtitle"), SubtitleClip.class, new ClipFactoryData(Icons.FONT, 0x888899))
+            .register(Link.bbs("image"), ImageClip.class, new ClipFactoryData(Icons.IMAGE, 0x2d4fd2))
+            .register(Link.bbs("video"), VideoClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
             .register(Link.bbs("curve"), CurveClip.class, new ClipFactoryData(Icons.ARC, 0xff1493))
             .register(Link.bbs("tracker"), TrackerClip.class, new ClipFactoryData(Icons.USER, 0xffffff))
             .register(Link.bbs("dolly_zoom"), DollyZoomClip.class, new ClipFactoryData(Icons.FILTER, 0x7d56c9));
 
-        factoryActionClips = new MapFactory<Clip, ClipFactoryData>()
+        factoryActionClips = new ClipFactory()
             .register(Link.bbs("chat"), ChatActionClip.class, new ClipFactoryData(Icons.BUBBLE, Colors.YELLOW))
             .register(Link.bbs("command"), CommandActionClip.class, new ClipFactoryData(Icons.PROPERTIES, Colors.ACTIVE))
             .register(Link.bbs("place_block"), PlaceBlockActionClip.class, new ClipFactoryData(Icons.BLOCK, Colors.INACTIVE))
@@ -620,10 +649,17 @@ public class BBSMod
             .register(Link.bbs("damage"), DamageActionClip.class, new ClipFactoryData(Icons.SKULL, Colors.CURSOR))
             .register(Link.bbs("swipe"), SwipeActionClip.class, new ClipFactoryData(Icons.LIMB, Colors.ORANGE));
 
+        /* Both clip factories are complete, and the addon channel is told so before the addons
+         * get their turn at the registries below — adding a clip is done from the event. */
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterCameraClipsEvent(factoryCameraClips));
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterActionClipsEvent(factoryActionClips));
+
         this.addonManager.runCommonRegistration(settingsFolder, provider, forms, factoryCameraClips, factoryActionClips, events);
         this.runLegacyInitialization();
         events.post(new RegisterSettingsEvent());
         this.addonManager.runCommonSetup();
+
+        postAddonEvent(new mchorse.bbs_mod.api.events.BBSReadyEvent());
 
         ServerNetwork.setup();
 
@@ -640,6 +676,12 @@ public class BBSMod
         {
             this.pluginManager.start();
         }
+    }
+
+    /** Sends an addon-facing event down the addon channel; a no-op while no addon subscribed. */
+    private static void postAddonEvent(Object event)
+    {
+        mchorse.bbs_mod.api.EventBus.INSTANCE.post(event);
     }
 
     private void runLegacyInitialization()

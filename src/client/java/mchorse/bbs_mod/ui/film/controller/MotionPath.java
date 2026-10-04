@@ -7,12 +7,11 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.cubic.animation.ActionConfig;
 import mchorse.bbs_mod.cubic.animation.ActionsConfig;
-import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -35,6 +34,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -374,7 +374,7 @@ public class MotionPath
             return null;
         }
 
-        IntObjectMap<IEntity> entities = controller.getEntities();
+        Map<String, IEntity> entities = controller.getEntities();
 
         /* Recompute only when the animation data actually changes (a content signature including
          * keyframe values). The previous per-frame "resample and compare" check was both the
@@ -428,7 +428,7 @@ public class MotionPath
         return true;
     }
 
-    private static BoneTrajectory computeBoneTrajectory(IntObjectMap<IEntity> entities, Replay replay, String bonePath)
+    private static BoneTrajectory computeBoneTrajectory(Map<String, IEntity> entities, Replay replay, String bonePath)
     {
         float[] range = range(replay);
 
@@ -470,7 +470,7 @@ public class MotionPath
     }
 
     /** Pose the scratch entity at {@code tick} and read the bone's world position (camera at origin). */
-    private static boolean sampleBoneWorld(IntObjectMap<IEntity> entities, Replay replay, String bonePath, int tick, Vector3d out)
+    private static boolean sampleBoneWorld(Map<String, IEntity> entities, Replay replay, String bonePath, int tick, Vector3d out)
     {
         StubEntity entity = scratchEntity;
 
@@ -479,7 +479,7 @@ public class MotionPath
         entity.getForm().update(entity);
         replay.properties.applyProperties(entity.getForm(), tick);
 
-        Matrix4f matrix = BaseFilmController.getBoneCompositeMatrix(entities, entity, replay, 0D, 0D, 0D, 0F, bonePath, false);
+        Matrix4f matrix = FilmMatrices.getBoneCompositeMatrix(entities, entity, replay, 0D, 0D, 0D, 0F, bonePath, false);
 
         if (matrix == null)
         {

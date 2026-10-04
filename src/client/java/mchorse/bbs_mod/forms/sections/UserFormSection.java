@@ -55,11 +55,11 @@ public class UserFormSection extends FormSection
                 break;
             }
 
-            UserFormCategory category = new UserFormCategory(IKey.EMPTY, this.parent.visibility.get(UUID.randomUUID().toString()), this);
-
             try
             {
                 MapType data = (MapType) DataToString.read(file);
+                String id = data.has("id") ? data.getString("id") : UUID.randomUUID().toString();
+                UserFormCategory category = new UserFormCategory(IKey.EMPTY, this.parent.visibility.get(id), this);
 
                 category.fromData(data);
                 this.categories.add(category);

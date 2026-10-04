@@ -94,6 +94,14 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         public int iterations = DEFAULT_ITERATIONS;
         public boolean collisions;
         public float radius = DEFAULT_RADIUS;
+
+        /**
+         * Carried through unedited: the runtime blends a chain by this, and {@code weight <= 0} is
+         * what the editor leaves a chain in to switch it off. There is no control for it here yet,
+         * but it has to survive a save — rebuilding a chain without it wrote the default back and
+         * silently reset every project's weights the moment anything else in the panel changed.
+         */
+        public float weight = ModelPhysicsConfig.DEFAULT_WEIGHT;
     }
 
     private static class WindData
@@ -808,6 +816,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
             d.iterations = bone.iterations();
             d.collisions = bone.collisions();
             d.radius = bone.radius();
+            d.weight = bone.weight();
 
             if (!d.targetBone.isEmpty() && !this.availableBones.isEmpty() && !this.availableBones.contains(d.targetBone))
             {
@@ -849,7 +858,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
                 target = "";
             }
 
-            bones.put(root, new ModelPhysicsConfig.Bone(d.end, target, d.gravity, d.damping, d.stiffness, d.iterations, d.relativeGravity, d.relativeGravityRotateX, d.relativeGravityRotateY, d.relativeGravityRotateZ, d.collisions, d.radius, ModelPhysicsConfig.DEFAULT_WEIGHT));
+            bones.put(root, new ModelPhysicsConfig.Bone(d.end, target, d.gravity, d.damping, d.stiffness, d.iterations, d.relativeGravity, d.relativeGravityRotateX, d.relativeGravityRotateY, d.relativeGravityRotateZ, d.collisions, d.radius, d.weight));
         }
 
         ModelPhysicsConfig.Wind wind = this.wind.toWind();

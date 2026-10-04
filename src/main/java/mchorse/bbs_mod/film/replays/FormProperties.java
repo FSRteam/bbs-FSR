@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +42,13 @@ public class FormProperties extends ValueGroup
     private static final String POSE_PROPERTY = "pose";
 
     public final Map<String, KeyframeChannel> properties = new HashMap<>();
+
+    /**
+     * Channels that were read but could not be understood — the value factory
+     * of this build is missing (an addon is not loaded). They are kept
+     * verbatim and written back out on save.
+     */
+    private final Map<String, MapType> foreignChannels = new LinkedHashMap<>();
 
     public FormProperties(String id)
     {
@@ -83,6 +91,11 @@ public class FormProperties extends ValueGroup
         if (FormControlKeys.isGlintControlChannel(key))
         {
             return this.registerChannel(key, KeyframeFactories.GLINT);
+        }
+
+        if (FormControlKeys.isIKControlChannel(key))
+        {
+            return this.registerChannel(key, KeyframeFactories.IK);
         }
 
         if (PerLimbService.isPoseBoneChannel(key))
@@ -569,6 +582,7 @@ public class FormProperties extends ValueGroup
 
         this.removeAll();
         this.properties.clear();
+        this.foreignChannels.clear();
 
         if (!data.isMap())
         {
@@ -637,7 +651,36 @@ public class FormProperties extends ValueGroup
                 this.properties.put(key, property);
                 this.add(property);
             }
+            else
+            {
+                /* A channel whose value factory this build does not know (its
+                 * addon is not loaded). Keep it verbatim and write it back out
+                 * on save: dropping it made opening a film once without the
+                 * addon erase its animation on the next save. */
+                this.foreignChannels.put(key, (MapType) mapType.copy());
+            }
         }
+    }
+
+    @Override
+    public BaseType toData()
+    {
+        BaseType data = super.toData();
+
+        if (data.isMap() && !this.foreignChannels.isEmpty())
+        {
+            MapType map = data.asMap();
+
+            for (Map.Entry<String, MapType> entry : this.foreignChannels.entrySet())
+            {
+                if (!map.has(entry.getKey()))
+                {
+                    map.put(entry.getKey(), entry.getValue().copy());
+                }
+            }
+        }
+
+        return data;
     }
 
     @Override

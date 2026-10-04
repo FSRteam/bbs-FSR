@@ -82,9 +82,11 @@ public final class ModelIKDebug
             stack.mulPose(Axis.YP.rotation(MathUtils.PI));
         }
 
+        float unit = DebugOverlay.modelUnit(model);
+
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
-            drawChain(stack, frames, chain, selectedTip, config);
+            drawChain(stack, frames, chain, selectedTip, config, unit);
         }
 
         stack.popPose();
@@ -109,7 +111,14 @@ public final class ModelIKDebug
         }
 
         Map<String, PivotFrame> frames = new HashMap<>(wanted.size() * 2);
-        ModelPivotFrames.collect(model, wanted, frames);
+
+        /* applyStretch = true: the overlay must read the pose the renderer actually
+         * draws. Without it the frames are the UN-stretched pose, so the dashed line
+         * to the goal aimed at where the tip would be with the stretch/squash
+         * checkbox off — a foot pinned to the floor drew its line down through the
+         * controller. The overlay runs after the IK pass, so the same frame's
+         * shifted positions are available. */
+        ModelPivotFrames.collect(model, wanted, frames, null, true);
 
         return frames;
     }
@@ -158,10 +167,10 @@ public final class ModelIKDebug
 
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
+        float unit = DebugOverlay.modelUnit(model);
+
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
-            float unit = chainUnit(frames, chain.chainRootToEffector());
-
             if (targets)
             {
                 Vector3f goal = position(frames, chain.target());
@@ -202,37 +211,7 @@ public final class ModelIKDebug
         stencilMap.addPicking(form, bone);
     }
 
-    /** Clickable goal half-size, scaled to the bone span so it fits any rig. */
-    private static float chainUnit(Map<String, PivotFrame> frames, List<String> ids)
-    {
-        float total = 0F;
-        int segments = 0;
-        Vector3f prev = null;
-
-        for (String id : ids)
-        {
-            Vector3f p = position(frames, id);
-
-            if (p == null)
-            {
-                prev = null;
-
-                continue;
-            }
-
-            if (prev != null)
-            {
-                total += prev.distance(p);
-                segments++;
-            }
-
-            prev = p;
-        }
-
-        return segments > 0 ? total / segments : 0.5F;
-    }
-
-    private static void drawChain(PoseStack stack, Map<String, PivotFrame> frames, ModelIKCache.CompiledChain chain, String selectedTip, ValueIKDebug config)
+    private static void drawChain(PoseStack stack, Map<String, PivotFrame> frames, ModelIKCache.CompiledChain chain, String selectedTip, ValueIKDebug config, float unit)
     {
         List<String> ids = chain.chainRootToEffector();
         int n = ids.size();
@@ -266,14 +245,6 @@ public final class ModelIKDebug
         Vector3f pole = chain.poleTarget() == null || chain.poleTarget().isEmpty() ? null : position(frames, chain.poleTarget());
         Vector3f tip = pts.get(n - 1);
 
-        float total = 0F;
-
-        for (int i = 0; i < n - 1; i++)
-        {
-            total += pts.get(i).distance(pts.get(i + 1));
-        }
-
-        float unit = total / (n - 1);
         boolean sel = selectedTip == null || selectedTip.isEmpty() || chain.tip().equals(selectedTip);
         float a = (sel ? 1F : 0.4F) * config.opacity.get();
 

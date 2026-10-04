@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = 'https://maven.neoforged.net/releases' }
+        mavenCentral()
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == 'net.neoforged.gradle.userdev') {
+                useModule("net.neoforged.gradle:userdev:${requested.version}")
+            }
+        }
+    }
+}
+
+rootProject.name = 'bbs-addon-template'

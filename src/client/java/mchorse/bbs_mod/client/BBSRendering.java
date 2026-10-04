@@ -6,6 +6,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
+import mchorse.bbs_mod.camera.clips.misc.ImageClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
@@ -25,6 +26,8 @@ import mchorse.bbs_mod.client.render.multiview.ViewPassContext;
 import mchorse.bbs_mod.client.render.multiview.ViewTargetSize;
 import mchorse.bbs_mod.client.render.multiview.ViewFramebuffer;
 import mchorse.bbs_mod.camera.controller.CameraController;
+import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
+import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.ui.film.view.ViewDescriptor;
@@ -33,13 +36,16 @@ import mchorse.bbs_mod.client.render.view.IrisViewBackend;
 import mchorse.bbs_mod.utils.iris.IrisViewState;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiFrameRecorder;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.InverseView;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.film.UIImageRenderer;
 import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -710,6 +716,9 @@ public class BBSRendering
 
     private static void prepareSceneFrame()
     {
+        /* The budgeted tail of model loading: VAO bakes for whatever the background loader
+         * finished, a few milliseconds' worth per frame instead of all of them at once. */
+        ModelSetupQueue.drain();
         restoreSceneCulling();
         Minecraft mc = Minecraft.getInstance();
         sceneSmartCull = mc.smartCull;
@@ -726,6 +735,11 @@ public class BBSRendering
         pendingPrimaryFrame = null;
         pendingPrimaryIris = null;
         float transition = getTickDelta(mc);
+
+        /* Marks which owned video decoders nobody asked for during this frame - the
+         * idle ones can be adopted by a fresh owner of the same file (no black flash). */
+        BBSModClient.getVideos().startFrame();
+
         BBSModClient.getFilms().startRenderFrame(transition);
         UIBaseMenu menu = UIScreen.getCurrentMenu();
 
@@ -784,6 +798,7 @@ public class BBSRendering
             if (currentMenu instanceof UIDashboard dashboard && dashboard.getPanels().panel instanceof UIFilmPanel panel)
             {
                 filmPanel = panel;
+                UIImageRenderer.renderImages(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, ImageClip.getImages(panel.getRunner().getContext()));
                 UISubtitleRenderer.renderSubtitles(currentMenu.context.batcher.getContext().pose(), currentMenu.context.batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
                 surfaces.add(BBSRenderSurfaceKind.FILM_PREVIEW);
             }
@@ -799,6 +814,7 @@ public class BBSRendering
                 GuiGraphics drawContext = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
                 Batcher2D batcher = new Batcher2D(drawContext);
 
+                UIImageRenderer.renderImages(batcher.getContext().pose(), batcher, ImageClip.getImages(playback.getContext()));
                 UISubtitleRenderer.renderSubtitles(batcher.getContext().pose(), batcher, SubtitleClip.getSubtitles(playback.getContext()));
             }
 
@@ -862,6 +878,10 @@ public class BBSRendering
             primaryPass.run();
             return;
         }
+
+        /* Once per real frame, and only the frame the window shows: the framebuffer form's
+         * diagnostic (see FramebufferDebug) logs one frame per second, counted from here. */
+        FramebufferDebug.newFrame();
 
         PreparedFrame frame = new PreparedFrame();
 
@@ -1066,6 +1086,7 @@ public class BBSRendering
                     {
                         /* A failed draw must never leave commands for the next camera. */
                         FormTranslucentQueue.abort();
+                        FormRenderLast.release();
                     }
 
                     target.finishForPresentation();
@@ -1202,6 +1223,7 @@ public class BBSRendering
         catch (RuntimeException | Error failure)
         {
             FormTranslucentQueue.abort();
+            FormRenderLast.release();
             pendingPrimaryFrame = null;
             pendingPrimaryIris = null;
 
@@ -1476,6 +1498,7 @@ public class BBSRendering
         Batcher2D batcher2D = new Batcher2D(drawContext);
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+        StructureWand.renderHud(batcher2D);
     }
 
     /**
@@ -1531,6 +1554,33 @@ public class BBSRendering
         batcher2D.textCard(label, iconX + 3, y + 4, BBSSettings.textColor(), Colors.A50);
     }
 
+    /** Whether the entity pass opened the render-last scope — false when one was already open. */
+    private static boolean entityPassRenderLast;
+
+    /**
+     * The world's entity pass: between these two calls vanilla draws the actors, model blocks
+     * and morphed players, and without a shader pack {@link #renderCoolStuff} draws the films
+     * at its end — one render-last scope spans it all, so a form set to render last draws after
+     * every other form of the frame. Under Iris the films run earlier, at the solid layer, in a
+     * scope of their own; this one still covers what the entity loop drew.
+     *
+     * <p>Opened after the terrain layers rather than before them, because the solid layer is
+     * where the Iris film pass draws: a scope already open there would swallow that pass's own
+     * scope, and the films' render-last forms would end up drawn after the entities instead of
+     * at the end of the film pass.</p>
+     */
+    public static void beginEntityPass()
+    {
+        entityPassRenderLast = FormRenderLast.open();
+    }
+
+    public static void endEntityPass()
+    {
+        FormRenderLast.close(entityPassRenderLast);
+
+        entityPassRenderLast = false;
+    }
+
     public static void renderCoolStuff(IBbsWorldRenderContext worldRenderContext)
     {
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
@@ -1540,6 +1590,12 @@ public class BBSRendering
         boolean oldDepthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
 
         modelViewStack.pushMatrix();
+
+        /* A scope over everything drawn here, for when this runs on its own — under Iris, at the
+         * solid layer: a form set to render last skips its turn and draws when this closes, after
+         * every other form of the pass. Inside the entity pass's scope this opens nothing and the
+         * forms wait for that one, which is what keeps one scope over the whole frame's forms. */
+        boolean renderLast = FormRenderLast.open();
 
         try
         {
@@ -1562,6 +1618,11 @@ public class BBSRendering
         }
         finally
         {
+            /* The postponed forms replay here — before the batch is ended and the camera matrices
+             * are put back — because their renderers read the same projection and model-view the
+             * forms drawn above did. */
+            FormRenderLast.close(renderLast);
+
             try
             {
                 try
@@ -1653,6 +1714,29 @@ public class BBSRendering
     public static boolean isIrisWorldForms()
     {
         return isRenderingWorld() && isIrisShadersEnabled();
+    }
+
+    /**
+     * Whether a shader pack is shading this very draw. Unlike {@link #isIrisShadersEnabled()} it
+     * also reports no inside {@link #renderOffscreen(Runnable)}, where our own framebuffer forms
+     * draw off-screen and Iris' programs must not take over the vanilla render types we use there.
+     */
+    public static boolean isIrisWorldShadersEnabled()
+    {
+        return iris && renderingWorld && isIrisShadersEnabled() && IrisUtils.shouldOverrideShaders();
+    }
+
+    /** Render into a framebuffer of ours: see {@link IrisUtils#renderOffscreen(Runnable)}. */
+    public static void renderOffscreen(Runnable render)
+    {
+        if (iris)
+        {
+            IrisUtils.renderOffscreen(render);
+        }
+        else
+        {
+            render.run();
+        }
     }
 
     public static boolean isIrisShadowPass()

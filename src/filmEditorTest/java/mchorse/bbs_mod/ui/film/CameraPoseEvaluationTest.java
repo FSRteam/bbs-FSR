@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.ui.film;
 
-import io.netty.util.collection.IntObjectHashMap;
+import java.util.LinkedHashMap;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.camera.Camera;
@@ -25,6 +25,10 @@ import mchorse.bbs_mod.utils.clips.Clips;
 /** Runtime tests for camera sampling, recursive policies and the shared playback owner. */
 public final class CameraPoseEvaluationTest
 {
+    /* Actor maps are keyed by the replay's stable id, not by its list index. The value here is
+     * never dereferenced -- only the key's presence is asserted. */
+    private static final String ACTOR = "aaaaaaaa";
+
     private CameraPoseEvaluationTest()
     {}
 
@@ -58,7 +62,7 @@ public final class CameraPoseEvaluationTest
         CameraClipContext context = new CameraClipContext().poseOnly(true);
         context.clips = clips;
         context.setup(5, 0.25F);
-        context.entities.put(7, null);
+        context.entities.put(ACTOR, null);
         Position position = new Position();
         check(context.apply(recursive, position), "recursive pose clip did not run");
         check(position.point.x == 5.25D && position.point.y == 1D, "nested pose result was incorrect");
@@ -69,7 +73,7 @@ public final class CameraPoseEvaluationTest
         check(!context.applyLast(audio, position) && audio.applies == 0, "endpoint bypassed the no-audio policy");
         context.shutdown();
         check(effect.shutdowns == 0 && recursive.shutdowns == 0, "pose shutdown invoked effectful clip teardown");
-        check(context.entities.containsKey(7), "pose shutdown cleared the shared actor map");
+        check(context.entities.containsKey(ACTOR), "pose shutdown cleared the shared actor map");
 
         CameraClipContext full = new CameraClipContext();
         full.clips = clips;
@@ -135,7 +139,7 @@ public final class CameraPoseEvaluationTest
         evaluator.beginFrame(1L, film, 12, 0.2F, false, null);
         evaluator.evaluateOutput(null);
         check(clip.applies == 2, "paused camera sampled again for irrelevant partial tick");
-        evaluator.beginFrame(1L, film, 12, 0F, false, new IntObjectHashMap<>());
+        evaluator.beginFrame(1L, film, 12, 0F, false, new LinkedHashMap<>());
         evaluator.evaluateOutput(null);
         check(clip.applies == 3, "changed actor bindings retained a stale camera sample");
         evaluator.beginFrame(2L, film, 3, 0.5F, true, null);

@@ -8,6 +8,7 @@ import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmManager;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.core.StableIds;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
@@ -336,6 +337,15 @@ public final class FilmActionAuthorityPolicy
             }
             catch (NumberFormatException e)
             {
+                /* A list under a stable-id list holds its elements' ids, not their positions: the
+                 * list, not the element, owns the id, and getPathSegments() reads the element id. The
+                 * two cases cannot collide -- a stable id always contains a letter, so it is never
+                 * all decimal digits, and a positional segment always is. */
+                listIndex = indexOfStableId(list, segment);
+            }
+
+            if (listIndex < 0)
+            {
                 return null;
             }
 
@@ -361,6 +371,28 @@ public final class FilmActionAuthorityPolicy
         }
 
         return null;
+    }
+
+    /**
+     * The position of the element whose persisted stable id is {@code segment}, or -1.
+     *
+     * <p>Only an element that carries the id key can match, so a positional list whose elements
+     * happen to hold an unrelated {@code "id"} field is not a hazard: the positional case never
+     * reaches this method, because a positional segment parses as an integer.
+     */
+    private static int indexOfStableId(ListType list, String segment)
+    {
+        for (int i = 0; i < list.size(); i++)
+        {
+            BaseType element = list.get(i);
+
+            if (element != null && element.isMap() && segment.equals(element.asMap().getString(StableIds.KEY)))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     public static boolean hasRequiredAuthority(@Nullable Film film, @Nullable ServerPlayer requester)

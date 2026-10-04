@@ -265,7 +265,19 @@ public class UIClipsPanel extends UIElement implements IUIClipsDelegate
     }
 
     @Override
+    public float getCursor(float transition)
+    {
+        return this.filmPanel.getCursor(transition);
+    }
+
+    @Override
     public void setCursor(int tick)
+    {
+        this.filmPanel.setCursor(tick);
+    }
+
+    @Override
+    public void setCursor(float tick)
     {
         this.filmPanel.setCursor(tick);
     }

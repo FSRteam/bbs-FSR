@@ -1,0 +1,35 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+description="A worked example of BBS FSR's addon API 2.0 on NeoForge 1.21.1."
+authors="Your name here"
+
+[[dependencies.${mod_id}]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="BOTH"
+
+# Required, and ordered AFTER: BBS has to be up before this addon's @Mod constructor registers
+# with it. BBS does queue an addon that arrives early rather than dropping it, so a missing
+# ordering is not always fatal — but it is not something to rely on, and the symptom when it does
+# go wrong is a line in BBS's addon diagnostics rather than a crash.
+[[dependencies.${mod_id}]]
+modId="bbs"
+type="required"
+versionRange="[0.0.11,)"
+ordering="AFTER"
+side="BOTH"

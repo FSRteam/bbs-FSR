@@ -6,7 +6,7 @@ import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.camera.values.ValuePoint;
 import mchorse.bbs_mod.forms.entities.IEntity;
-import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 
 import java.util.Collections;
@@ -27,7 +27,7 @@ public abstract class EntityClip extends CameraClip
      */
     public Position position = new Position(0, 0, 0, 0, 0);
 
-    public final ValueInt selector = new ValueInt("selector", -1);
+    public final ValueString selector = new ValueString("selector", "");
     public final ValuePoint offset = new ValuePoint("offset", new Point(0, 0, 0));
 
     public EntityClip()
@@ -38,15 +38,21 @@ public abstract class EntityClip extends CameraClip
         this.add(this.offset);
     }
 
+    /**
+     * Stable id of the tracked replay (empty = none) — not a list index, see
+     * {@link mchorse.bbs_mod.forms.forms.utils.Anchor#replay}.
+     */
     public List<IEntity> getEntities(ClipContext context)
     {
-        int index = this.selector.get();
+        String id = this.selector.get();
 
-        if (context instanceof CameraClipContext cameraClipContext && index >= 0)
+        if (context instanceof CameraClipContext cameraClipContext && !id.isEmpty())
         {
-            if (cameraClipContext.entities.containsKey(index))
+            IEntity entity = cameraClipContext.entities.get(id);
+
+            if (entity != null)
             {
-                return Collections.singletonList(cameraClipContext.entities.get(index));
+                return Collections.singletonList(entity);
             }
         }
 

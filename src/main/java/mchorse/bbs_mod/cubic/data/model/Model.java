@@ -4,6 +4,7 @@ import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.CubicModelAnimator;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.MolangHelper;
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.data.IMapSerializable;
 import mchorse.bbs_mod.data.types.ListType;
@@ -96,6 +97,12 @@ public class Model implements IMapSerializable, IModel
     /* IModel implementation */
 
     @Override
+    public RigBone getBone(String name)
+    {
+        return this.getGroup(name);
+    }
+
+    @Override
     public Pose createPose()
     {
         Pose pose = new Pose();
@@ -149,7 +156,7 @@ public class Model implements IMapSerializable, IModel
                 group.current.lerp(group.initial, transform.fix);
 
                 /* fix blends toward the bind pose, so any composed orientation from earlier layers no longer
-                 * applies — drop it and let composeOrient below re-seed from the fix-lerped euler. */
+                 * applies — drop it and let the seed below take the fix-lerped rotation. */
                 group.orient = null;
             }
 
@@ -168,7 +175,15 @@ public class Model implements IMapSerializable, IModel
             {
                 if (group.orient == null)
                 {
-                    group.orient = Matrices.toLocalRotationZYXDegrees(group.current.rotate);
+                    /* Same mode-aware seed as ModelGroup.composeOrient and evaluatedRotation(): in
+                     * QUATERNION mode `current.rotate` is a stale readback and `current.quat` is the
+                     * rotation, so seeding from the euler there drops whatever authored the
+                     * quaternion — the riptide spin writes `current.quat` and never touches `rotate`,
+                     * and this branch runs when the action phase composed no orientation for this
+                     * bone (or the fix above just dropped it). Keep the two in step. */
+                    group.orient = group.current.rotationMode == Transform.RotationMode.QUATERNION
+                        ? new Quaternionf(group.current.quat)
+                        : Matrices.toLocalRotationZYXDegrees(group.current.rotate);
                 }
 
                 group.orient.mul(transform.createRotation());

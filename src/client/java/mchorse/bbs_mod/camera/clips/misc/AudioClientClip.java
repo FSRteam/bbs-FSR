@@ -33,8 +33,8 @@ public class AudioClientClip extends AudioClip
         super();
     }
 
-    /** Erased JVM descriptor remains Map getPlayback(ClipContext). Keys now use clip identity. */
-    public static Map<AudioClientClip, Playback> getPlayback(ClipContext context)
+    /** Erased JVM descriptor remains Map getPlayback(ClipContext). Keys now use clip identity (any AudioClip subclass). */
+    public static Map<AudioClip, Playback> getPlayback(ClipContext context)
     {
         return context.clipData.get("audio.voices", IdentityHashMap::new);
     }
@@ -49,13 +49,13 @@ public class AudioClientClip extends AudioClip
             return;
         }
 
-        Map<AudioClientClip, Playback> playback = getPlayback(context);
+        Map<AudioClip, Playback> playback = getPlayback(context);
         IdentityHashMap<Object, SoundManager.VoiceRequest> desired = new IdentityHashMap<>();
         boolean muteFilmAudioDuringVideoCapture = BBSSettings.videoMuteAudioWhileRender.get()
             && BBSModClient.getVideoRecorder() != null
             && BBSModClient.getVideoRecorder().isRecording();
 
-        for (Map.Entry<AudioClientClip, Playback> entry : playback.entrySet())
+        for (Map.Entry<AudioClip, Playback> entry : playback.entrySet())
         {
             Playback state = entry.getValue();
             float gain = muteFilmAudioDuringVideoCapture ? 0F : state.gain;
@@ -102,6 +102,42 @@ public class AudioClientClip extends AudioClip
         if (seconds >= 0F)
         {
             getPlayback(context).put(this, new Playback(link, seconds, this.volume.get()));
+        }
+    }
+
+    /**
+     * Schedule a clip's audio track for this frame. Shared entry point for clips whose
+     * audio rides this clip's playback machinery (the video clip's audio track) - the
+     * audio clip itself keeps its own {@link #applyClip} gating.
+     *
+     * @param loopSeconds when positive, the playback position wraps around this
+     *                    period (the video clip loops its audio with its picture)
+     */
+    public static void scheduleAudio(ClipContext context, AudioClip clip, float gain, float loopSeconds)
+    {
+        Link link = clip.audio.get();
+        float localTick = context.relativeTick + context.transition;
+
+        if (link == null || localTick < 0F || localTick >= clip.duration.get())
+        {
+            return;
+        }
+
+        float position = TimeUtils.toSeconds(clip.offset.get()) + localTick / 20F;
+
+        if (loopSeconds > 0F)
+        {
+            position = position % loopSeconds;
+
+            if (position < 0F)
+            {
+                position += loopSeconds;
+            }
+        }
+
+        if (position >= 0F)
+        {
+            getPlayback(context).put(clip, new Playback(link, position, gain));
         }
     }
 

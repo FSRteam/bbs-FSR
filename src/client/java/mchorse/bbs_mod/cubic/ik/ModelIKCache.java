@@ -20,12 +20,12 @@ final class ModelIKCache
     {
     }
 
-    public record CompiledChain(String tip, String target, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean tipRotation, boolean stretch, boolean classic, List<String> chainRootToEffector, List<String> workRootToEffector, String tailId, Set<String> wantedBones, int rootDepth)
+    /* No shortened constructor on purpose: the flags in the middle of this record
+     * (stretch, squash, classic) each select a different behaviour, and an alias that
+     * silently pins some of them is how a chain configured upstream loses a flag it
+     * was authored with. Every caller spells all 16 components out. */
+    public record CompiledChain(String tip, String target, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean tipRotation, boolean stretch, boolean squash, boolean classic, List<String> chainRootToEffector, List<String> workRootToEffector, String tailId, Set<String> wantedBones, int rootDepth)
     {
-        public CompiledChain(String tip, String target, boolean pole, String poleTarget, float poleAngle, float softness, float weight, boolean tipRotation, boolean stretch, List<String> chainRootToEffector, List<String> workRootToEffector, String tailId, Set<String> wantedBones, int rootDepth)
-        {
-            this(tip, target, pole, poleTarget, poleAngle, softness, weight, tipRotation, stretch, false, chainRootToEffector, workRootToEffector, tailId, wantedBones, rootDepth);
-        }
     }
 
     public record Compiled(List<CompiledChain> chains, Map<String, ModelIKConfig.JointDoF> bones, List<String> controllers, List<String> poleControllers)
@@ -126,9 +126,13 @@ final class ModelIKCache
             }
 
             controllers.add(chain.target());
+
+            /* Ordered (stretch, squash, classic) here, but ModelIKConfig.Chain is
+             * (stretch, classic, squash) -- all three are boolean, so a swap compiles.
+             * testCompileForwardsTheChainBehaviourFlags pins this order. */
             out.add(new CompiledChain(
                 chain.tip(), chain.target(), chain.pole(), poleTarget, chain.poleAngle(), chain.softness(), chain.weight(),
-                chain.tipRotation(), chain.stretch(), chain.classic(), chainIds, workIds, tailId,
+                chain.tipRotation(), chain.stretch(), chain.squash(), chain.classic(), chainIds, workIds, tailId,
                 Collections.unmodifiableSet(wanted), rootDepth(model, workIds)
             ));
         }

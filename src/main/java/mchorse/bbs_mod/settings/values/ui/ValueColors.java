@@ -38,6 +38,10 @@ public class ValueColors extends BaseValue
         return this.colors;
     }
 
+    /**
+     * The newest color goes in front, so the list reads in the order the palette shows it —
+     * oldest entries fall off the tail.
+     */
     public void addColor(Color color)
     {
         int i = this.colors.indexOf(color);
@@ -45,22 +49,28 @@ public class ValueColors extends BaseValue
         if (i == -1)
         {
             this.preNotify();
-            this.colors.add(color.copy());
+            this.colors.add(0, color.copy());
             this.trim();
             this.postNotify();
         }
     }
 
+    /** Drop the oldest entries — the tail, since the newest is put in front. */
     private void trim()
     {
         while (this.limit > 0 && this.colors.size() > this.limit)
         {
-            this.colors.remove(0);
+            this.colors.remove(this.colors.size() - 1);
         }
     }
 
     public void remove(int index)
     {
+        if (index < 0 || index >= this.colors.size())
+        {
+            return;
+        }
+
         this.preNotify();
         this.colors.remove(index);
         this.postNotify();

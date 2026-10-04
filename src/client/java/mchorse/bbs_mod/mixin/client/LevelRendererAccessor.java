@@ -1,11 +1,15 @@
 package mchorse.bbs_mod.mixin.client;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.culling.Frustum;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import net.minecraft.server.level.BlockDestructionProgress;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
+
+import java.util.SortedSet;
 
 /**
  * Exposes per-camera targets and culling state for optional world passes.
@@ -15,6 +19,15 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(LevelRenderer.class)
 public interface LevelRendererAccessor
 {
+    /**
+     * The per-block mining cracks vanilla steps while a player breaks it. The
+     * model block renderer reads them to paint the crack decal onto the body's
+     * hitbox (the block itself renders INVISIBLE, so vanilla's crumbling pass
+     * has nothing to draw on).
+     */
+    @Accessor("destructionProgress")
+    Long2ObjectMap<SortedSet<BlockDestructionProgress>> bbs$getDestructionProgress();
+
     @Accessor("cullingFrustum")
     Frustum bbs$getCullingFrustum();
 

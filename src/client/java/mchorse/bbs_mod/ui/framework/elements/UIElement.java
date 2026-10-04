@@ -272,6 +272,7 @@ public class UIElement implements IUIElement, IUndoElement
             {
                 this.children.add(0, element);
                 this.markChild(element);
+                this.invalidateLayout();
             }, element);
         }
     }
@@ -284,6 +285,7 @@ public class UIElement implements IUIElement, IUndoElement
             {
                 this.children.add(element);
                 this.markChild(element);
+                this.invalidateLayout();
             }, element);
         }
     }
@@ -307,6 +309,8 @@ public class UIElement implements IUIElement, IUndoElement
                     this.markChild(element);
                 }
             }
+
+            this.invalidateLayout();
         }, additions);
     }
 
@@ -386,7 +390,11 @@ public class UIElement implements IUIElement, IUndoElement
 
         List<IUIElement> removals = new ArrayList<>(this.children);
 
-        this.runHierarchyRemoval(() -> this.removeAllNow(removals), removals.toArray(new IUIElement[0]));
+        this.runHierarchyRemoval(() ->
+        {
+            this.removeAllNow(removals);
+            this.invalidateLayout();
+        }, removals.toArray(new IUIElement[0]));
     }
 
     private void removeAllNow(List<IUIElement> removals)
@@ -423,6 +431,21 @@ public class UIElement implements IUIElement, IUndoElement
         }
     }
 
+    /**
+     * Mark this element's layout stale: it gets resized once before the next frame (see
+     * {@link UIContext#flushLayout()}). Nothing happens while detached — attaching to a
+     * tree resizes anyway.
+     */
+    public void invalidateLayout()
+    {
+        UIContext context = this.getContext();
+
+        if (context != null)
+        {
+            context.invalidateLayout(this);
+        }
+    }
+
     public void remove(IUIElement element)
     {
         if (element instanceof UIElement)
@@ -452,6 +475,8 @@ public class UIElement implements IUIElement, IUndoElement
         {
             return;
         }
+
+        this.invalidateLayout();
 
         long attachmentGeneration = element.parentAttachmentGeneration;
         IResizer removalResizer = this.resizer;
@@ -1213,12 +1238,23 @@ public class UIElement implements IUIElement, IUndoElement
 
     public void setVisible(boolean visible)
     {
+        if (this.visible == visible)
+        {
+            return;
+        }
+
         this.visible = visible;
+
+        /* Layout resizers skip hidden children, so the parent's layout is what changed */
+        if (this.parent != null)
+        {
+            this.parent.invalidateLayout();
+        }
     }
 
     public void toggleVisible()
     {
-        this.visible = !this.visible;
+        this.setVisible(!this.visible);
     }
 
     /**

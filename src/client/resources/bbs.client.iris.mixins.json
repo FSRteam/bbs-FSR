@@ -27,6 +27,7 @@
         "JcppProcessorMixin",
         "ShaderPackMixin",
         "IrisMixin",
+        "HandRendererMixin",
         "SliderElementWidgetMixin",
         "StringElementWidgetInvoker"
     ],

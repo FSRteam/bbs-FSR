@@ -1,7 +1,5 @@
 package mchorse.bbs_mod.ui.film;
 
-import io.netty.util.collection.IntObjectHashMap;
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.actions.ActionState;
@@ -75,6 +73,9 @@ public final class FilmFlightEditingTest
             setting(settings, "editorOnionSkin", new ValueOnionSkin("onion_skin"));
             setting(settings, "editorMotionPath", new ValueMotionPath("motion_path"));
             setting(settings, "editorCameraSmoothness", new ValueFloat("smoothness", 0F));
+            /* Authoring reads these while writing a keyframe; leave them at their shipped defaults. */
+            setting(settings, "editorSnapToTicks", new ValueBoolean("editorSnapToTicks", true));
+            setting(settings, "editorSnapToFilmMarkers", new ValueBoolean("editorSnapToFilmMarkers", true));
 
             for (String name : List.of("editorRuleOfThirds", "editorCenterLines", "editorCrosshair", "editorRestartOnSeek", "editorLoop",
                 "editorSnapToMarkers", "scrollingDisableSmoothnessInEditors"))
@@ -735,9 +736,9 @@ public final class FilmFlightEditingTest
         }
 
         @Override
-        public IntObjectMap<IEntity> getEntities()
+        public Map<String, IEntity> getEntities()
         {
-            return new IntObjectHashMap<>();
+            return new LinkedHashMap<>();
         }
 
         @Override

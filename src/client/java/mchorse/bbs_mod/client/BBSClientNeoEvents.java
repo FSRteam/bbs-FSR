@@ -9,6 +9,9 @@ import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.BBSItemRenderers;
 import mchorse.bbs_mod.client.rendering.context.BbsWorldRenderContext;
+import mchorse.bbs_mod.film.FilmFrustumCulling;
+import mchorse.bbs_mod.forms.FormRenderLast;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.window.Window;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -149,20 +152,41 @@ public final class BBSClientNeoEvents
 
     private static void onRenderLevelStage(RenderLevelStageEvent event)
     {
-        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES)
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS)
         {
-            PoseStack stack = event.getPoseStack();
-
-            if (stack == null)
+            /* The last stage before the entity loop, and after the solid layer where the Iris
+             * film pass draws. Opening the render-last scope here is the FSR equivalent of the
+             * upstream BEFORE_ENTITIES hook: one scope then spans the whole entity pass — actors,
+             * morphed players, model blocks — and the films, so a form set to render last draws
+             * after every other form of the frame, not only the film ones. */
+            BBSRendering.beginEntityPass();
+        }
+        else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES)
+        {
+            try
             {
-                return;
+                PoseStack stack = event.getPoseStack();
+
+                if (stack == null)
+                {
+                    return;
+                }
+
+                /* The block-entity pass runs right after this stage — open the render-last
+                 * scope so render-last model blocks defer into the queue instead of drawing. */
+                ModelBlockRenderLastQueue.begin();
+
+                BBSModClient.onRenderAfterEntities(createWorldRenderContext(event, stack));
             }
-
-            /* The block-entity pass runs right after this stage — open the render-last
-             * scope so render-last model blocks defer into the queue instead of drawing. */
-            ModelBlockRenderLastQueue.begin();
-
-            BBSModClient.onRenderAfterEntities(createWorldRenderContext(event, stack));
+            finally
+            {
+                /* Closed here, right after the films and before the chroma sky quad, matching
+                 * upstream's ordering. In a finally because the scope must never outlive its
+                 * pass: a return or a throw above would otherwise leave it open, and an open
+                 * scope owns every render-last form of the next frame — forms drawn into the
+                 * wrong pass, which is worse than render-last not working at all. */
+                BBSRendering.endEntityPass();
+            }
         }
         else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES)
         {
@@ -177,6 +201,11 @@ public final class BBSClientNeoEvents
             /* Safety net: a frame that never reached AFTER_BLOCK_ENTITIES (a mod redirecting
              * the stage, an exception mid-render) must not leak entries into the next frame. */
             ModelBlockRenderLastQueue.release();
+
+            /* The same net for the entity pass's render-last scope: a frame whose render threw
+             * before AFTER_ENTITIES leaves a scope that no later close can end, because a close
+             * only ends the scope its own open() opened. */
+            FormRenderLast.release();
 
             BBSModClient.onRenderAfterLevel();
 
@@ -272,6 +301,12 @@ public final class BBSClientNeoEvents
         {
             Window.setVerticalScroll(scrollY);
         }
+
+        /* The structure wand spends the notch on reshaping its box: the hotbar must not get it */
+        if (StructureWand.onScroll(event.getScrollDeltaY()))
+        {
+            event.setCanceled(true);
+        }
     }
 
     private static void onScreenMouseScroll(ScreenEvent.MouseScrolled.Pre event)
@@ -293,13 +328,21 @@ public final class BBSClientNeoEvents
         worldStack.last().pose().set(stack.last().pose());
         worldStack.last().normal().set(stack.last().normal());
 
+        /* Diagnostic only (off by default). Placed on the factory rather than on any one user of
+         * the context, so it measures the frustum and camera every pass hands out, with or without
+         * a film in the scene. */
+        FilmFrustumCulling.probePass(event.getFrustum(), event.getCamera());
+
         return new BbsWorldRenderContext(
             event.getCamera(),
             worldStack,
             mc.renderBuffers().bufferSource(),
             resolveTickDelta(event.getPartialTick()),
             event.getModelViewMatrix(),
-            event.getProjectionMatrix()
+            event.getProjectionMatrix(),
+            /* The frustum of this very pass: each viewport runs its own world render, and that
+             * render rebuilds it from its own camera and projection. */
+            event.getFrustum()
         );
     }
 

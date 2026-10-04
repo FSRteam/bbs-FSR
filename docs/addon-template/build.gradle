@@ -1,0 +1,60 @@
+plugins {
+    id 'net.neoforged.gradle.userdev' version '7.1.21'
+}
+
+version = project.mod_version
+group = project.mod_group
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+}
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+}
+
+/*
+ * BBS is not published to any repository, so the addon compiles against a jar the developer puts
+ * in libs/ by hand. The jar is used as-is, without remapping: this only works because both sides
+ * are NeoForge 1.21.1 with Mojmap names. A Fabric-era BBS jar will not link.
+ */
+def bbsJar = file("libs/bbs-fsr-${bbs_version}.jar")
+
+if (!bbsJar.exists()) {
+    throw new GradleException(
+        "BBS jar not found: ${bbsJar}\n" +
+        "BBS is not published to a repository, so its jar goes in libs/ by hand. " +
+        "Expected libs/bbs-fsr-${bbs_version}.jar (bbs_version comes from gradle.properties); " +
+        "take it from a BBS FSR release or from build/libs/ of a BBS FSR checkout after 'gradle build'."
+    )
+}
+
+dependencies {
+    implementation "net.neoforged:neoforge:${neo_version}"
+    implementation files(bbsJar)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = java_version as int
+}
+
+/* The mod metadata lives in one place: ${mod_id} and friends are expanded from gradle.properties. */
+processResources {
+    inputs.properties(mod_id: mod_id, mod_name: mod_name, mod_version: mod_version)
+
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand project.properties
+    }
+}
+
+runs {
+    client {
+        // Everything in this skeleton is common code, so the run takes the main source set as its
+        // mod source and BBS travels in on the classpath with it.
+        modSource sourceSets.main
+    }
+}

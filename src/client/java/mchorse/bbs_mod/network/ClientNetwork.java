@@ -16,6 +16,8 @@ import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.structure.StructureCut;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.items.GunProperties;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
@@ -140,6 +142,8 @@ public class ClientNetwork
         registerClientReceiver(ServerNetwork.CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, ClientNetwork::handleAnimationStateModelBlockPacket);
         registerClientReceiver(ServerNetwork.CLIENT_REFRESH_MODEL_BLOCKS, ClientNetwork::handleRefreshModelBlocksPacket);
         registerClientReceiver(ServerNetwork.CLIENT_REQUEST_FILM_RESYNC, ClientNetwork::handleRequestFilmResync);
+        registerClientReceiver(ServerNetwork.CLIENT_STRUCTURE_SAVED, ClientNetwork::handleStructureSaved);
+        registerClientReceiver(ServerNetwork.CLIENT_STRUCTURE_CUT, ClientNetwork::handleStructureCut);
         registerClientReceiver(ServerNetwork.CLIENT_ADDON_BROKER, ClientNetwork::handleAddonBrokerPacket);
 
         if (!lifecycleListenerRegistered)
@@ -1067,6 +1071,44 @@ public class ClientNetwork
         });
     }
 
+    /** The server's word on the wand's save — forwarded to the wand on the client thread. */
+    private static void handleStructureSaved(Minecraft client, ClientPayloadScope scope, FriendlyByteBuf buf)
+    {
+        boolean saved;
+        String name;
+
+        try
+        {
+            saved = buf.readBoolean();
+            name = buf.readUtf(256);
+        }
+        catch (RuntimeException e)
+        {
+            return;
+        }
+
+        executeIfCurrent(client, scope, true, () -> StructureWand.onSaved(saved, name));
+    }
+
+    /** The server's word on the film's cut — forwarded to the cut coordinator on the client thread. */
+    private static void handleStructureCut(Minecraft client, ClientPayloadScope scope, FriendlyByteBuf buf)
+    {
+        boolean saved;
+        String name;
+
+        try
+        {
+            saved = buf.readBoolean();
+            name = buf.readUtf(256);
+        }
+        catch (RuntimeException e)
+        {
+            return;
+        }
+
+        executeIfCurrent(client, scope, true, () -> StructureCut.onCut(saved, name));
+    }
+
     /* API */
     
     public static void sendModelBlockForm(BlockPos pos, ModelBlockEntity modelBlock)
@@ -1260,6 +1302,30 @@ public class ClientNetwork
         buf.writeBoolean(zoom);
 
         NetworkCompatClient.sendToServer(ServerNetwork.SERVER_ZOOM, buf);
+    }
+
+    /** Hand the wand's two corners to the server, which writes the structure file for it. */
+    public static void sendSaveStructure(String name, BlockPos from, BlockPos to)
+    {
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
+
+        buf.writeUtf(name, 256);
+        buf.writeBlockPos(from);
+        buf.writeBlockPos(to);
+
+        NetworkCompatClient.sendToServer(ServerNetwork.SERVER_SAVE_STRUCTURE, buf);
+    }
+
+    /** Ask for the cut: the region saved as a structure, and — once written — emptied out. */
+    public static void sendCutStructure(String name, BlockPos from, BlockPos to)
+    {
+        FriendlyByteBuf buf = NetworkCompat.createBuffer();
+
+        buf.writeUtf(name, 256);
+        buf.writeBlockPos(from);
+        buf.writeBlockPos(to);
+
+        NetworkCompatClient.sendToServer(ServerNetwork.SERVER_CUT_STRUCTURE, buf);
     }
 
     public static void sendPauseFilm(String filmId)

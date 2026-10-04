@@ -6,18 +6,36 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 public final class ReplayIdentityLookupSourceTest
 {
+    /**
+     * Sources that still look a replay up inside the film's replay list. A Replay is structurally
+     * comparable, so a positional or equality-based lookup can select an actor other than the one
+     * the caller is holding; each of these must go through the shared identity lookup instead.
+     */
     private static final List<String> REPLAY_INDEX_SOURCES = List.of(
         "src/client/java/mchorse/bbs_mod/BBSModClient.java",
         "src/client/java/mchorse/bbs_mod/client/film/collaboration/BBSFilmCollaborationBridge.java",
         "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java",
-        "src/client/java/mchorse/bbs_mod/ui/film/controller/OrbitFilmCameraController.java",
         "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplayList.java",
-        "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditor.java",
+        "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditor.java"
+    );
+
+    /**
+     * Sources that used to look a replay up by position and no longer look one up at all, because
+     * what they hand out is the replay's stable id. Here the list lookup is not merely optional —
+     * putting one back would put the bug back — so it has to be absent, and the stable-id
+     * replacement is asserted in its place rather than assumed from the lookup's disappearance.
+     */
+    private static final Map<String, String> STABLE_ID_REPLACEMENTS = Map.of(
+        "src/client/java/mchorse/bbs_mod/ui/film/controller/OrbitFilmCameraController.java",
+        "this.controller.getEntities().get(replay.getId())",
         "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplayPropertiesPanel.java",
-        "src/client/java/mchorse/bbs_mod/ui/film/replays/overlays/UIReplaysOverlayPanel.java"
+        "UIAnchorKeyframeFactory.displayAttachments(filmPanel,replay.getId(),",
+        "src/client/java/mchorse/bbs_mod/ui/film/replays/overlays/UIReplaysOverlayPanel.java",
+        "UIAnchorKeyframeFactory.displayAttachments(filmPanel,replay.getId(),"
     );
 
     private ReplayIdentityLookupSourceTest()
@@ -27,10 +45,72 @@ public final class ReplayIdentityLookupSourceTest
     {
         verifiesIdentityLookupContract();
         verifiesReplayUiCallSites();
+        verifiesReplayMutationHasNoReferenceRewriting();
         verifiesAllTracksCollectorContract();
         verifiesSoundGuideVisibilityOwnership();
         verifiesSoundLoopIntervalUiContract();
     }
+
+    /**
+     * Strict pins on the two UI entry points that used to run the index remapper, taken over the
+     * code with comments stripped.
+     *
+     * <p>These are <em>text contracts</em> (source pins), not behavioural coverage, and they are
+     * deliberately strict: the assertion is that the whole compressed run of code from the call
+     * that mutates the replay list to the {@code postNotify} that closes the edit contains nothing
+     * but the mutation itself. A looser pin already exists above for the tail of {@code removeReplay}
+     * ({@code List<Replay>remaining=...}), but its anchor sits <em>after</em> the old call site, so
+     * pasting {@code remapReplayReferences(film, previousOrder);} back where it used to be would
+     * leave it satisfied. This one cannot be satisfied by insertion: any statement added inside the
+     * pinned run changes it.</p>
+     *
+     * <p>The cost is stated plainly: any legitimate edit inside these two runs also reddens the
+     * test. That is acceptable here — both runs are a deliberate deletion site, and the only edit
+     * either of them should ever receive is the one that would undo the stable-id work, which is
+     * worth forcing someone to look at.</p>
+     */
+    private static void verifiesReplayMutationHasNoReferenceRewriting()
+    {
+        Path project = findProjectRoot();
+        String replayList = compactCode(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplayList.java"
+        )));
+
+        check(replayList.contains(START_REMOVE_REPLAY + END_REMOVE_REPLAY),
+            "UIReplayList.removeReplay no longer deletes the selected replays and closes the edit as the "
+                + "stable-id rewrite left it: something was inserted into, removed from, or reordered inside "
+                + "the deletion transaction (the index remapper belongs there again)");
+
+        check(replayList.contains(START_HANDLE_SWAP + END_HANDLE_SWAP),
+            "UIReplayList.handleSwap no longer swaps the two replays and closes the edit as the stable-id "
+                + "rewrite left it: something was inserted into, removed from, or reordered inside the swap "
+                + "transaction (the index remapper belongs there again)");
+
+        check(occurrences(replayList, START_REMOVE_REPLAY) == 1 && occurrences(replayList, START_HANDLE_SWAP) == 1,
+            "UIReplayList declares removeReplay or handleSwap more than once, so the pins above may not "
+                + "describe the live implementation");
+    }
+
+    /*
+     * The pinned runs, compacted with comments stripped. Kept as two halves per pin so the failure
+     * message can point at the delete/notify boundary rather than dumping the whole run.
+     */
+    private static final String START_REMOVE_REPLAY =
+        "publicvoidremoveReplay(){"
+            + "if(!this.hasReplaySelection()){return;}"
+            + "Filmfilm=this.panel.getData();"
+            + "List<Replay>removing=newArrayList<>(this.getSelectedReplays());"
+            + "Replayfocus=removing.get(0);"
+            + "intglobalFocus=CollectionUtils.getIndex(film.replays.getList(),focus);"
+            + "film.preNotify(IValueListener.FLAG_UNMERGEABLE);"
+            + "for(Replayreplay:removing){film.replays.remove(replay);}";
+
+    private static final String END_REMOVE_REPLAY = "film.postNotify(IValueListener.FLAG_UNMERGEABLE);";
+
+    private static final String START_HANDLE_SWAP =
+        "replays.remove(value);replays.add(globalTo,value);";
+
+    private static final String END_HANDLE_SWAP = "data.postNotify(IValueListener.FLAG_UNMERGEABLE);";
 
     private static void verifiesAllTracksCollectorContract()
     {
@@ -164,6 +244,23 @@ public final class ReplayIdentityLookupSourceTest
                 sourcePath + " no longer uses the shared identity lookup");
         }
 
+        for (Map.Entry<String, String> entry : STABLE_ID_REPLACEMENTS.entrySet())
+        {
+            String sourcePath = entry.getKey();
+            String compact = read(project.resolve(sourcePath)).replaceAll("\\s+", "");
+
+            check(!compact.contains(".replays.getList().indexOf("),
+                sourcePath + " uses structural equality for a Replay index");
+            check(!compact.contains(".replays.getList().contains("),
+                sourcePath + " uses structural equality to keep a removed Replay alive");
+            check(!compact.contains("CollectionUtils.getIndex("),
+                sourcePath + " looks a Replay up by identity in the list again, although the value it "
+                    + "needs is the stable id it already holds");
+            check(compact.contains(entry.getValue()),
+                sourcePath + " no longer addresses a replay by its stable id: expected to find \""
+                    + entry.getValue() + "\"");
+        }
+
         String controller = read(project.resolve("src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java")).replaceAll("\\s+", "");
 
         check(!controller.contains("list.indexOf(this.getReplay())"),
@@ -288,6 +385,17 @@ public final class ReplayIdentityLookupSourceTest
     private static String compact(String source)
     {
         return source.replaceAll("\\s+", "");
+    }
+
+    /**
+     * Compact code with comments removed. The ordinary {@link #compact(String)} keeps comments, so a
+     * pin taken with it also pins the prose around the code — rewriting a comment would redden a
+     * test that is supposed to be about code. Stripping comments first keeps the pin strict about
+     * statements while leaving the explanation above them free to be improved.
+     */
+    private static String compactCode(String source)
+    {
+        return source.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("//[^\\r\\n]*", "").replaceAll("\\s+", "");
     }
 
     private static int occurrences(String source, String value)

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.forms.forms;
 
 import mchorse.bbs_mod.settings.values.core.ValueColor;
+import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
@@ -10,6 +11,13 @@ import mchorse.bbs_mod.utils.colors.Color;
 public class LabelForm extends Form
 {
     public final ValueString text = new ValueString("text", "Hello, World!");
+
+    /* Font: a TrueType file in the assets, empty for Minecraft's own one */
+    public final ValueLink font = new ValueLink("font", null);
+    public final ValueInt fontSize = new ValueInt("fontSize", 9);
+    /** 0 hands the spacing over to the font itself. */
+    public final ValueInt lineHeight = new ValueInt("lineHeight", 0);
+
     public final ValueBoolean billboard = new ValueBoolean("billboard", false);
     public final ValueColor color = new ValueColor("color", Color.white());
 
@@ -32,6 +40,9 @@ public class LabelForm extends Form
         super();
 
         this.add(this.text);
+        this.add(this.font);
+        this.add(this.fontSize);
+        this.add(this.lineHeight);
         this.add(this.billboard);
         this.add(this.color);
         this.add(this.max);

@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.ui.dashboard;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult;
@@ -10,6 +9,7 @@ import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorStatus;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationStatus;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelIds;
+import mchorse.bbs_mod.api.client.events.RegisterDashboardPanelsEvent;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.OrbitCamera;
@@ -19,7 +19,6 @@ import mchorse.bbs_mod.client.dashboard.BBSDashboardPanelHostRegistry;
 import mchorse.bbs_mod.client.dashboard.BBSDashboardOverlayHostRegistry;
 import mchorse.bbs_mod.client.dashboard.DashboardPanelContribution;
 import mchorse.bbs_mod.client.dashboard.DashboardOverlayContribution;
-import mchorse.bbs_mod.events.register.RegisterDashboardPanelsEvent;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
@@ -53,6 +52,7 @@ import mchorse.bbs_mod.ui.selectors.UISelectorsOverlayPanel;
 import mchorse.bbs_mod.ui.utility.UIUtilityOverlayPanel;
 import mchorse.bbs_mod.ui.utility.audio.UIAudioEditorPanel;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.InterfaceBlur;
 import mchorse.bbs_mod.ui.utils.UIChalkboard;
 import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -116,7 +116,9 @@ public class UIDashboard extends UIBaseMenu
         this.registerPanels();
         BBSDashboardPanelHostRegistry.installAll(this);
 
-        BBSMod.events.post(new RegisterDashboardPanelsEvent(this));
+        /* Posted straight on the addon channel: it carries api.client.events to addons, and the
+         * private static BBSModClient#postAddonEvent is not reachable from this package. */
+        mchorse.bbs_mod.api.EventBus.INSTANCE.post(new RegisterDashboardPanelsEvent(this));
 
         this.main.add(this.panels);
         this.addonOverlayLayer.full(this.getRoot()).eventPropagataion(EventPropagation.PASS);
@@ -181,7 +183,11 @@ public class UIDashboard extends UIBaseMenu
                 return;
             }
 
-            UIOverlay.addOverlay(this.context, new UIUtilityOverlayPanel(UIKeys.UTILITY_TITLE, null), 240, 160);
+            /* Just tall enough for the panel's own content, and never taller than the screen -
+             * an overlay only has its position bounded, so an oversized one gets cut off. */
+            int height = Math.min(300, (int) (this.height * 0.9F));
+
+            UIOverlay.addOverlay(this.context, new UIUtilityOverlayPanel(UIKeys.UTILITY_TITLE, null), 240, height);
         });
 
         /* Kicks the throttled FSR update check; popups only land once the
@@ -842,6 +848,13 @@ public class UIDashboard extends UIBaseMenu
         if (background == null)
         {
             background = ThemeManager.current().background;
+        }
+
+        /* The world shows through the tint (and through the image, tinted) — blur it, unless
+         * the tint is solid and there is nothing to see */
+        if (background == null || Colors.getA(color) < 1F)
+        {
+            InterfaceBlur.applyUnder();
         }
 
         UIThemeBackdrop.renderBackground(context, background, color, this.width, this.height);

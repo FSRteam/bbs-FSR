@@ -25,6 +25,7 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.IKBake;
 import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -51,6 +52,7 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.controller.UIFilmController;
 import mchorse.bbs_mod.ui.film.view.ViewportPickIntent;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
+import mchorse.bbs_mod.ui.film.replays.overlays.UIBakeIKOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPanel;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -62,6 +64,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCategoryBar;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.Scale;
@@ -93,6 +96,7 @@ public class UIReplaysEditor extends UIElement {
 
     private static final Map<String, Integer> COLORS = new HashMap<>();
     private static final Map<String, Icon> ICONS = new HashMap<>();
+    private static final Map<String, IKey> LABELS = new HashMap<>();
 
     /* Item channel families: the nine hotbar tracks form a warm gradient, while
      * armor tracks use a cool top-to-bottom scale. */
@@ -112,12 +116,14 @@ public class UIReplaysEditor extends UIElement {
 
     private static final int CATEGORY_BAR_WIDTH = 20;
 
-    public UIElement iconBar;
+    public UITimelineCategoryBar iconBar;
     public Map<ReplayCategory, UIIcon> tabButtons = new HashMap<>();
     private ReplayCategory category = ReplayCategory.PLAYER;
 
     /* «All tracks» view: shows every category's tracks at once, bypassing the category filter. */
     private UIIcon allToggle;
+    /** One button that folds or unfolds every dope-sheet section (see {@link #toggleAllSections()}). */
+    private UIIcon sectionsToggle;
     private boolean allMode;
 
     /* Keyframes */
@@ -141,44 +147,75 @@ public class UIReplaysEditor extends UIElement {
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
     private final Map<String, Set<String>> expandedPoseTabsByReplay = new HashMap<>();
+    /** Dope-sheet section folds, per replay id: the timeline is rebuilt on many editor actions. */
+    private final Map<String, Map<String, Boolean>> sectionFoldsByReplay = new HashMap<>();
     private String keyframeEditorReplayId;
 
     public enum ReplayCategory {
         PLAYER(
                 Icons.PLAYER,
+                Colors.CYAN,
                 L10n.lang("bbs.ui.film.replays.category.player"),
                 L10n.lang("bbs.ui.film.replays.category.player.tooltip")
         ),
         MODEL(
                 Icons.BLOCK,
+                Colors.ORANGE,
                 L10n.lang("bbs.ui.film.replays.category.model"),
                 L10n.lang("bbs.ui.film.replays.category.model.tooltip")
         ),
         POSE(
                 Icons.POSE,
+                Colors.RED,
                 L10n.lang("bbs.ui.film.replays.category.pose"),
                 L10n.lang("bbs.ui.film.replays.category.pose.tooltip")
         ),
         IK(
                 Icons.IK,
+                Colors.YELLOW,
                 L10n.lang("bbs.ui.film.replays.category.ik"),
                 L10n.lang("bbs.ui.film.replays.category.ik.tooltip")
         ),
         PHYSICS(
                 Icons.PHYSICS,
+                Colors.GREEN,
                 L10n.lang("bbs.ui.film.replays.category.physics"),
                 L10n.lang("bbs.ui.film.replays.category.physics.tooltip")
         );
 
         public final Icon icon;
+        /** Accent colour of this category's dope-sheet section, from the editor palette (no new literals). */
+        public final int color;
         public final IKey label;
         public final IKey tooltip;
 
-        private ReplayCategory(Icon icon, IKey label, IKey tooltip) {
+        private ReplayCategory(Icon icon, int color, IKey label, IKey tooltip) {
             this.icon = icon;
+            this.color = color;
             this.label = label;
             this.tooltip = tooltip;
         }
+    }
+
+    /**
+     * Display sections of the dope sheet: one per category, so tracks group under the same key the
+     * category tabs filter on. Shared instances, which lets the fold map address them by id.
+     */
+    private static final Map<ReplayCategory, UIKeyframeSheet.Section> SECTIONS = buildSections();
+
+    private static Map<ReplayCategory, UIKeyframeSheet.Section> buildSections() {
+        Map<ReplayCategory, UIKeyframeSheet.Section> sections = new HashMap<>();
+
+        for (ReplayCategory category : ReplayCategory.values()) {
+            sections.put(category, new UIKeyframeSheet.Section(
+                    "replay_section/" + category.name(),
+                    category.label,
+                    category.icon,
+                    category.color
+            ));
+        }
+
+        return sections;
     }
 
     static {
@@ -294,6 +331,76 @@ public class UIReplaysEditor extends UIElement {
         String topLevel = StringUtils.fileName(key);
 
         return ICONS.getOrDefault(topLevel, Icons.NONE);
+    }
+
+    /**
+     * Gives a property of an addon's its own look on the timeline.
+     *
+     * <p>Keyed by the property's own name, the last segment of a track's address — the same way
+     * BBS keys its own, so the same thing wears the same colour wherever it appears. The user's
+     * own overrides in {@code BBSSettings.trackStyles} still win over this.</p>
+     */
+    public static void registerTrackStyle(String property, Icon icon, int color)
+    {
+        if (property == null || property.isEmpty())
+        {
+            return;
+        }
+
+        if (icon != null)
+        {
+            ICONS.put(property, icon);
+        }
+
+        COLORS.put(property, color & Colors.RGB);
+    }
+
+    /** The icon registered for a property, or null when none was. */
+    public static Icon getRegisteredIcon(String property)
+    {
+        return property == null ? null : ICONS.get(StringUtils.fileName(property));
+    }
+
+    /**
+     * Gives a property of an addon's its own name on the timeline.
+     *
+     * <p>A label is not required for a track to work, which is why BBS's own rows carry one only
+     * where the property's key alone would read poorly — {@code x}, {@code y}, {@code z} being
+     * the obvious ones. The last segment of the property's address is the key, the same one
+     * {@link #registerTrackStyle(String, Icon, int)} uses.</p>
+     */
+    public static void registerTrackLabel(String property, IKey label)
+    {
+        if (property == null || property.isEmpty() || label == null)
+        {
+            return;
+        }
+
+        LABELS.put(property, label);
+    }
+
+    /** The label registered for a property, or null when none was. */
+    public static IKey getRegisteredLabel(String property)
+    {
+        return property == null ? null : LABELS.get(StringUtils.fileName(property));
+    }
+
+    /**
+     * Builds the timeline row of a replay property, wearing whatever look was registered for it.
+     *
+     * <p>The row id stays the channel's own, so filtering and selection are unaffected — only the
+     * default title comes from the label, and a name the user gave the track still overrides it in
+     * {@code UIKeyframeSheet.applyStyle()}.</p>
+     */
+    public static UIKeyframeSheet createTrackSheet(String property, KeyframeChannel channel, BaseValueBasic value)
+    {
+        IKey label = getRegisteredLabel(property);
+        int color = getColor(property);
+        UIKeyframeSheet sheet = label == null
+            ? new UIKeyframeSheet(color, false, channel, value)
+            : new UIKeyframeSheet(channel.getId(), label, color, false, channel, value);
+
+        return sheet.icon(getIcon(property));
     }
 
     public static int getColor(String key) {
@@ -513,16 +620,13 @@ public class UIReplaysEditor extends UIElement {
         }, this.replayProperties.getFormConsumer());
         this.replayProperties.attachReplayList(this.replaysList.replays);
 
-        this.iconBar = new UIElement();
-        this.iconBar.relative(this).x(0).y(0).w(CATEGORY_BAR_WIDTH).h(1F).column(0).stretch();
+        /* Room for the two pinned toggles below the category icons. */
+        this.iconBar = new UITimelineCategoryBar(CATEGORY_BAR_WIDTH * 2);
+        this.iconBar.relative(this).x(0).y(0).h(1F);
 
         this.iconBar.add(
                 new UIRenderable(context -> {
-                    Area area = this.iconBar.area;
-
-                    context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
-
-                    /* Highlight the active category on the left edge. */
+                    /* Highlight the active category on the left edge; the bar itself paints the background. */
                     UIIcon activeIcon = this.showAllTracks() ? this.allToggle : this.tabButtons.get(this.category);
 
                     if (activeIcon != null && activeIcon.getParent() != null) {
@@ -542,6 +646,11 @@ public class UIReplaysEditor extends UIElement {
         /* «All tracks» toggle, pinned to the bottom of the category bar. */
         this.allToggle = new UIIcon(Icons.LIST, b -> this.setAllTracks());
         this.allToggle.tooltip(UIKeys.FILM_REPLAY_ALL_TRACKS, Direction.RIGHT);
+
+        /* Fold every dope-sheet section at once; its icon follows the current state (see render()). */
+        this.sectionsToggle = new UIIcon(Icons.ARROW_DOWN, b -> this.toggleAllSections());
+        this.sectionsToggle.tooltip(L10n.lang("bbs.ui.film.replays.expand_all"), Direction.RIGHT);
+
         this.layoutBottomToggles();
 
         this.setCategory(ReplayCategory.PLAYER);
@@ -562,8 +671,19 @@ public class UIReplaysEditor extends UIElement {
                 .register(Keys.REPLAYS_TAB_5, () -> this.setCategoryByPosition(4))
                 .category(UIKeys.FILM_REPLAY_TITLE);
 
-        this.add(this.iconBar, this.allToggle);
+        this.add(this.iconBar, this.allToggle, this.sectionsToggle);
         this.markContainer();
+    }
+
+    /** Fold or unfold every dope-sheet section, whichever the timeline is not currently doing. */
+    private void toggleAllSections() {
+        if (this.keyframeEditor == null) {
+            return;
+        }
+
+        UIKeyframeDopeSheet dopeSheet = this.keyframeEditor.view.getDopeSheet();
+
+        dopeSheet.setAllSectionsExpanded(!dopeSheet.hasExpandedSections());
     }
 
     private void setCategory(ReplayCategory c) {
@@ -578,8 +698,9 @@ public class UIReplaysEditor extends UIElement {
         this.updateChannelsList();
     }
 
-    /** Pin the «all tracks» toggle to the bottom of the category bar. */
+    /** Pin the «all tracks» and section toggles to the bottom of the category bar. */
     private void layoutBottomToggles() {
+        this.sectionsToggle.relative(this).x(0).y(1F, -40).wh(CATEGORY_BAR_WIDTH, 20);
         this.allToggle.relative(this).x(0).y(1F, -20).wh(CATEGORY_BAR_WIDTH, 20);
     }
 
@@ -687,7 +808,8 @@ public class UIReplaysEditor extends UIElement {
 
     public void moveReplay(double x, double y, double z) {
         if (this.replay != null) {
-            int cursor = this.filmPanel.getCursor();
+            UIContext context = this.getContext();
+            float cursor = this.filmPanel.getKeyframeCursor(context == null ? 0F : context.getTransition());
 
             this.replay.keyframes.x.insert(cursor, x);
             this.replay.keyframes.y.insert(cursor, y);
@@ -794,6 +916,11 @@ public class UIReplaysEditor extends UIElement {
             lastForm = form;
         }
 
+        /* Group the kept rows into collapsible dope-sheet sections, one per track category. */
+        for (UIKeyframeSheet sheet : sheets) {
+            sheet.section = SECTIONS.get(categoryOf(sheet));
+        }
+
         if (!sheets.isEmpty() || filteredOutEverything) {
             this.keyframeEditor = new UIKeyframeEditor(consumer
                     -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute()
@@ -846,7 +973,8 @@ public class UIReplaysEditor extends UIElement {
                                                         return;
                                                     }
 
-                                                    int current = this.filmPanel.getCursor();
+                                                    UIContext context = this.getContext();
+                                                    float current = this.filmPanel.getKeyframeCursor(context == null ? 0F : context.getTransition());
                                                     IEntity entity = this.filmPanel.getController().getCurrentEntity();
 
                                                     UIReplaysEditorUtils.animationToPoseKeyframes(
@@ -881,6 +1009,38 @@ public class UIReplaysEditor extends UIElement {
 
                             UIReplaysEditorUtils.clearIKTracks(replayForEditor, modelForm);
                             this.updateChannelsList();
+                        });
+                    }
+
+                    ModelInstance ikInstance = ModelFormRenderer.getModel(modelForm);
+                    /* Keyed by each chain's tip bone, in the order getChains returns: chain root
+                     * depth ascending, and config order within one depth (ModelIKCache.compile).
+                     * The panel sorts its own list, so nothing here depends on that order. */
+                    Map<String, List<String>> chains = ikInstance == null
+                            ? Collections.emptyMap()
+                            : ModelIKRuntime.getChains(ikInstance.model, modelForm);
+
+                    if (!chains.isEmpty()) {
+                        menu.action(Icons.KEY, UIKeys.FILM_REPLAY_CONTEXT_BAKE_IK, () -> {
+                            if (this.keyframeEditor != editor || this.replay != replayForEditor) {
+                                return;
+                            }
+
+                            /* The range on offer ends where the replay's own motion ends — past its
+                             * last keyframe the solve only repeats itself, and a film is usually
+                             * longer than any one replay in it. A replay without keyframes gets the film. */
+                            int lastTick = (int) Math.ceil(replayForEditor.getLastKeyframeTick());
+
+                            if (lastTick < 0) {
+                                lastTick = Math.max(0, this.film.camera.calculateDuration() - 1);
+                            }
+
+                            UIOverlay.addOverlay(this.getContext(), new UIBakeIKOverlayPanel(chains.keySet(), lastTick,
+                                    (tips, start, end, step, disable) -> {
+                                        if (IKBake.bake(this.film, replayForEditor, tips, start, end, step, disable)) {
+                                            this.updateChannelsList();
+                                        }
+                                    }), 240, 240);
                         });
                     }
                 }
@@ -945,6 +1105,11 @@ public class UIReplaysEditor extends UIElement {
                 Collections.emptySet()
             );
             view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
+            /* The timeline is rebuilt on many actions, so section folds live here and are handed back each time. */
+            view.getDopeSheet().configureSectionFolds(this.sectionFoldsByReplay.computeIfAbsent(
+                this.replay == null ? "" : this.replay.getId(),
+                k -> new HashMap<>()
+            ));
             this.keyframeEditorReplayId = this.replay == null ? null : this.replay.getId();
 
         }
@@ -980,14 +1145,17 @@ public class UIReplaysEditor extends UIElement {
             }
 
             if (replacement != null) {
-                /* Category bar and its bottom toggle stay on top of the timeline. */
+                /* Category bar and its bottom toggles stay on top of the timeline. */
                 if (this.iconBar.getParent() != null) {
                     this.iconBar.removeFromParent();
                 }
                 if (this.allToggle.getParent() != null) {
                     this.allToggle.removeFromParent();
                 }
-                this.add(this.iconBar, this.allToggle);
+                if (this.sectionsToggle.getParent() != null) {
+                    this.sectionsToggle.removeFromParent();
+                }
+                this.add(this.iconBar, this.allToggle, this.sectionsToggle);
             }
 
             this.resize();
@@ -1017,11 +1185,24 @@ public class UIReplaysEditor extends UIElement {
     }
 
     private void collectCuratedSheets(List<UIKeyframeSheet> sheets) {
+        UIKeyframeSheet hotbarRoot = null;
+
         for (String key : ReplayKeyframes.CURATED_CHANNELS) {
             BaseValue value = this.replay.keyframes.get(key);
             KeyframeChannel channel = (KeyframeChannel) value;
+            UIKeyframeSheet sheet = new UIKeyframeSheet(getColor(key), false, channel, null).icon(getIcon(key));
 
-            sheets.add(new UIKeyframeSheet(getColor(key), false, channel, null).icon(getIcon(key)));
+            /* Curated channels list the hotbar in slot order, starting with its parent row. */
+            if (this.replay.keyframes.hotbar.stream().anyMatch(slot -> slot == channel)) {
+                if (hotbarRoot == null) {
+                    hotbarRoot = sheet;
+                }
+                else {
+                    sheet.setParent(hotbarRoot);
+                }
+            }
+
+            sheets.add(sheet);
         }
     }
 
@@ -1120,11 +1301,11 @@ public class UIReplaysEditor extends UIElement {
 
         if (hasIK && !present) {
             this.iconBar.add(button);
-            this.iconBar.resize();
+            this.resize();
         }
         else if (!hasIK && present) {
             button.removeFromParent();
-            this.iconBar.resize();
+            this.resize();
         }
 
         if (!hasIK && this.category == ReplayCategory.IK) {
@@ -1171,11 +1352,11 @@ public class UIReplaysEditor extends UIElement {
 
         if (hasPhysics && !present) {
             this.iconBar.add(button);
-            this.iconBar.resize();
+            this.resize();
         }
         else if (!hasPhysics && present) {
             button.removeFromParent();
-            this.iconBar.resize();
+            this.resize();
         }
 
         if (!hasPhysics && this.category == ReplayCategory.PHYSICS) {
@@ -1595,14 +1776,53 @@ public class UIReplaysEditor extends UIElement {
         this.iconBar.setVisible(barVisible);
         this.allToggle.setVisible(barVisible);
 
+        /* The sections button only makes sense on a timeline whose rows carry sections, and only while
+         * it fits above the category icons. */
+        UIKeyframeDopeSheet dopeSheet = this.keyframeEditor == null ? null : this.keyframeEditor.view.getDopeSheet();
+        boolean sectionsAvailable = dopeSheet != null
+                && this.keyframeEditor.view.getGraph() == dopeSheet
+                && dopeSheet.hasSections();
+        boolean collapseSections = sectionsAvailable && dopeSheet.hasExpandedSections();
+
+        this.sectionsToggle.setVisible(barVisible && this.foldingButtonFits());
+        this.sectionsToggle.setEnabled(sectionsAvailable);
+        this.sectionsToggle.both(collapseSections ? Icons.ARROW_UP : Icons.ARROW_DOWN);
+        this.sectionsToggle.tooltip(L10n.lang(collapseSections
+                ? "bbs.ui.film.replays.collapse_all"
+                : "bbs.ui.film.replays.expand_all"), Direction.RIGHT);
+
         UIReplaysEditorUtils.configureFilmHotkeyDrag(this.filmPanel, context);
 
         super.render(context);
     }
 
+    /** Whether the category icons stop before the pinned section toggle, so it would not overlap them. */
+    private boolean foldingButtonFits() {
+        for (UIIcon button : this.iconBar.getChildren(UIIcon.class)) {
+            if (button.isVisible() && button.area.ey() >= this.sectionsToggle.area.y) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     @Override
-    public void resize() {
-        super.resize();
+    protected void afterResizeApplied() {
+        super.afterResizeApplied();
+
+        this.layoutCategoryBar();
+    }
+
+    /** Let the category bar take the width its buttons need and pull the timeline up next to it. */
+    private void layoutCategoryBar() {
+        int width = this.iconBar.getWidthForHeight(this.area.h);
+
+        this.iconBar.w(width);
+
+        if (this.keyframeEditor != null) {
+            this.keyframeEditor.x(width).w(1F, -width);
+        }
 
         this.layoutBottomToggles();
     }

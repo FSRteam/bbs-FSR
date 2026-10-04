@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms;
 
+import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
@@ -24,12 +25,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class FormUtils
 {
-    public static final String PATH_SEPARATOR = "/";
+    private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
 
-    private static final List<String> path = new ArrayList<>();
+    public static final String PATH_SEPARATOR = "/";
 
     public static boolean isPoseProperty(String name)
     {
@@ -123,6 +126,17 @@ public class FormUtils
                 return null;
             }
 
+            /* A form id this build has no class for comes back as a stand-in now (see
+             * MissingForm), so what reaches here is data that is genuinely broken. That still
+             * ends in a lost form — but it no longer ends in silence, which is how a
+             * switched-off addon used to eat a scene. A missing form factory altogether (a
+             * runtime without the registries bootstrapped) is the one expected case and stays
+             * quiet. */
+            if (BBSMod.getForms() != null)
+            {
+                LOGGER.error("Failed to read a form out of {}!", data, e);
+            }
+
             /* The placeholder is the safety net; if even it can't be built
              * (e.g. a runtime without bootstrapped settings), fall back to
              * the pre-placeholder null behavior instead of crashing decode */
@@ -184,102 +198,134 @@ public class FormUtils
         return null;
     }
 
+    /**
+     * Resolve a body-part path — {@code /}-separated part ids — starting at {@code form}. Each
+     * segment names a part of the current form and steps into that part's form. A segment that is
+     * neither a part nor (in documents written before stable ids) a positional index ends the walk.
+     *
+     * <p>An empty path is an <em>address</em> for {@code form} itself and answers with it. A path
+     * that names no part is not the same thing: the walk stops without having arrived, and answers
+     * with {@code null}. Callers write through whatever comes back (an override map, a pose's
+     * runtime value, a material texture), so answering with the form reached so far would retarget
+     * the write at an ancestor — a track whose path was mangled by a deleted body part would quietly
+     * animate the root instead of failing, which is how this used to read. {@link #getProperty}
+     * takes the same line for the same path shape; this method used to differ only because the empty
+     * path and the broken path happened to leave the loop the same way.
+     */
     public static Form getForm(Form form, String path)
     {
-        String[] split = path.split(PATH_SEPARATOR);
-
-        for (String s : split)
+        if (path == null || path.isEmpty())
         {
-            try
-            {
-                int index = Integer.parseInt(s);
-                BodyPart safe = CollectionUtils.getSafe(form.parts.getAllTyped(), index);
+            return form;
+        }
 
-                if (safe != null)
-                {
-                    form = safe.getForm();
-                }
-                else
-                {
-                    break;
-                }
-            }
-            catch (Exception e)
+        /* -1 keeps trailing empty segments, so "/" and "a/" are walked (and rejected) rather than
+         * silently collapsing into fewer segments than the path has. */
+        for (String s : path.split(PATH_SEPARATOR, -1))
+        {
+            BodyPart part = s.isEmpty() ? null : (form.parts.get(s) instanceof BodyPart bodyPart ? bodyPart : null);
+
+            if (part == null)
             {
-                break;
+                part = legacyPart(form, s);
             }
+
+            if (part == null || part.getForm() == null)
+            {
+                warnUnresolvedPath(path, s, form);
+
+                return null;
+            }
+
+            form = part.getForm();
         }
 
         return form;
     }
 
+    /**
+     * Paths already reported as unresolvable. A track is resolved once per frame while a film
+     * plays, so an orphaned address would otherwise repeat its warning for as long as the film
+     * runs; the set is bounded because a document can carry any number of them.
+     */
+    private static final Set<String> REPORTED_UNRESOLVED_PATHS = ConcurrentHashMap.newKeySet();
+
+    private static final int MAXIMUM_REPORTED_UNRESOLVED_PATHS = 64;
+
+    /**
+     * Report once per orphaned path. The walk used to be indistinguishable from a successful one,
+     * so the rate limiting is the price of the warning being useful rather than a flood.
+     */
+    private static void warnUnresolvedPath(String path, String segment, Form form)
+    {
+        if (REPORTED_UNRESOLVED_PATHS.size() >= MAXIMUM_REPORTED_UNRESOLVED_PATHS
+            || !REPORTED_UNRESOLVED_PATHS.add(path))
+        {
+            return;
+        }
+
+        LOGGER.warn("Form path \"{}\" does not resolve: no body part \"{}\" under \"{}\". The address"
+            + " is orphaned and resolves to nothing; the caller's write is dropped rather than"
+            + " retargeted at an ancestor.", path, segment, form.getId());
+    }
+
+    /**
+     * A path segment written before stable ids was the part's position in the list. The two can
+     * never be confused: a stable id is eight hex chars containing at least one letter, so a
+     * segment made only of digits is unambiguously a legacy index. Anything else is an orphaned
+     * path segment and resolves to nothing.
+     */
+    private static BodyPart legacyPart(Form form, String segment)
+    {
+        try
+        {
+            return CollectionUtils.getSafe(form.parts.getAllTyped(), Integer.parseInt(segment));
+        }
+        catch (NumberFormatException e)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * The body-part path of {@code form} from its root — the stable ids of the parts it hangs
+     * under, outermost first; empty for the root form itself.
+     */
     public static String getPath(Form form)
     {
-        if (form.getParent() == null)
-        {
-            return "";
-        }
+        List<String> path = new ArrayList<>();
 
-        path.clear();
-
-        while (form != null)
-        {
-            Form parent = form.getParentForm();
-
-            if (parent != null)
-            {
-                int i = 0;
-
-                for (BodyPart part : parent.parts.getAllTyped())
-                {
-                    if (part.getForm() == form)
-                    {
-                        path.add(String.valueOf(i));
-                    }
-
-                    i += 1;
-                }
-            }
-
-            form = parent;
-        }
-
+        appendPartPath(form, path);
         Collections.reverse(path);
 
         return String.join(PATH_SEPARATOR, path);
     }
 
-    /* Form properties utils */
-
-    public static String getPropertyPath(BaseValue property)
+    /** Collect the ids of the body parts above {@code form}, innermost first, into {@code path}. */
+    private static void appendPartPath(Form form, List<String> path)
     {
-        path.clear();
-        path.add(property.getId());
+        BaseValue value = form;
 
-        Form form = getForm(property);
-
-        while (form != null)
+        while (value != null)
         {
-            Form parent = form.getParentForm();
-
-            if (parent != null)
+            if (value instanceof BodyPart part)
             {
-                int i = 0;
-
-                for (BodyPart part : parent.parts.getAllTyped())
-                {
-                    if (part.getForm() == form)
-                    {
-                        path.add(String.valueOf(i));
-                    }
-
-                    i += 1;
-                }
+                path.add(part.getId());
             }
 
-            form = parent;
+            value = value.getParent();
         }
+    }
 
+    /* Form properties utils */
+
+    /** The property address: its owner form path with the property id as the last segment. */
+    public static String getPropertyPath(BaseValue property)
+    {
+        List<String> path = new ArrayList<>();
+
+        path.add(property.getId());
+        appendPartPath(getForm(property), path);
         Collections.reverse(path);
 
         return String.join(PATH_SEPARATOR, path);
@@ -320,16 +366,20 @@ public class FormUtils
             }
         }
 
-        List<BodyPart> all = form.parts.getAllTyped();
-
-        for (int i = 0; i < all.size(); i++)
+        for (BodyPart part : form.parts.getAllTyped())
         {
-            String newPrefix = StringUtils.combinePaths(prefix, String.valueOf(i));
+            String newPrefix = StringUtils.combinePaths(prefix, part.getId());
 
-            collectPropertyPaths(all.get(i).getForm(), properties, newPrefix);
+            collectPropertyPaths(part.getForm(), properties, newPrefix);
         }
     }
 
+    /**
+     * Resolve a property path — the stable ids of the body parts leading to the owning form,
+     * followed by the property's id. A segment that is neither a property nor a part of the
+     * current form ends the walk: the path is orphaned (its part was removed or the channel was
+     * authored against another form) and resolves to nothing.
+     */
     public static BaseValueBasic getProperty(Form form, String path)
     {
         if (form == null)
@@ -337,45 +387,28 @@ public class FormUtils
             return null;
         }
 
-        if (!path.contains(PATH_SEPARATOR))
+        for (String segment : path.split(PATH_SEPARATOR))
         {
-            return form.getAllMap().get(path);
-        }
-
-        String[] segments = path.split(PATH_SEPARATOR);
-
-        for (int i = 0; i < segments.length; i++)
-        {
-            String segment = segments[i];
             BaseValueBasic property = form.getAllMap().get(segment);
 
-            if (property == null)
-            {
-                try
-                {
-                    int index = Integer.parseInt(segment);
-
-                    if (CollectionUtils.inRange(form.parts.getAll(), index))
-                    {
-                        form = form.parts.getAllTyped().get(index).getForm();
-
-                        if (form == null)
-                        {
-                            return null;
-                        }
-                    }
-                    else
-                    {
-                        return null;
-                    }
-                }
-                catch (Exception e)
-                {}
-            }
-            else
+            if (property != null)
             {
                 return property;
             }
+
+            BodyPart part = form.parts.get(segment) instanceof BodyPart bodyPart ? bodyPart : null;
+
+            if (part == null)
+            {
+                part = legacyPart(form, segment);
+            }
+
+            if (part == null || part.getForm() == null)
+            {
+                return null;
+            }
+
+            form = part.getForm();
         }
 
         return null;

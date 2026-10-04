@@ -20,6 +20,9 @@ public class ModelProperties implements IMapSerializable
     private final Transform transformInventory = new Transform();
     private final Transform transformFirstPerson = new Transform();
 
+    private final ModelBody body = new ModelBody();
+    private final ModelEquipment equipment = new ModelEquipment();
+
     private boolean enabled = true;
     private boolean global;
     private boolean shadow;
@@ -94,6 +97,16 @@ public class ModelProperties implements IMapSerializable
     public Transform getTransformFirstPerson()
     {
         return this.transformFirstPerson;
+    }
+
+    public ModelBody getBody()
+    {
+        return this.body;
+    }
+
+    public ModelEquipment getEquipment()
+    {
+        return this.equipment;
     }
 
     public boolean isEnabled()
@@ -206,6 +219,13 @@ public class ModelProperties implements IMapSerializable
         this.transformInventory.fromData(data.getMap("transformInventory"));
         this.transformFirstPerson.fromData(data.getMap("transformFirstPerson"));
 
+        /* Absent in old saves: fromData on the empty default maps keeps every
+         * field at its constructor value, so legacy model blocks load exactly
+         * as they did before the body/equipment existed (instant break, stone
+         * sound, no light, no equipment). */
+        this.body.fromData(data.getMap("body"));
+        this.equipment.fromData(data.getMap("equipment"));
+
         if (data.has("enabled")) this.enabled = data.getBool("enabled");
         this.shadow = data.getBool("shadow");
         this.global = data.getBool("global");
@@ -225,6 +245,9 @@ public class ModelProperties implements IMapSerializable
         data.put("transformThirdPerson", this.transformThirdPerson.toData());
         data.put("transformInventory", this.transformInventory.toData());
         data.put("transformFirstPerson", this.transformFirstPerson.toData());
+
+        data.put("body", this.body.toData());
+        data.put("equipment", this.equipment.toData());
 
         data.putBool("enabled", this.enabled);
         data.putBool("shadow", this.shadow);

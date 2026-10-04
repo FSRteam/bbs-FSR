@@ -79,6 +79,13 @@ public class ValueEditorLayout extends BaseValue
     private int keyframeLabelWidth = 120;
     private MapType filmViewSettings = new MapType();
 
+    /**
+     * Sidebar splitter positions keyed by splitter id (see {@code UISplitter}). The unit is the
+     * splitter's own &mdash; a fraction of its parent or pixels &mdash; so this stores floats and
+     * leaves the meaning, and the clamping, to the owner.
+     */
+    private final Map<String, Float> splitSizes = new LinkedHashMap<>();
+
     public ValueEditorLayout(String id)
     {
         super(id);
@@ -361,6 +368,20 @@ public class ValueEditorLayout extends BaseValue
         BaseValue.edit(this, (v) -> this.keyframeLabelWidth = MathUtils.clamp(keyframeLabelWidth, 40, 400));
     }
 
+    /* Splitter sizes */
+
+    public float getSplitSize(String key, float defaultValue)
+    {
+        Float size = this.splitSizes.get(key);
+
+        return size == null ? defaultValue : size;
+    }
+
+    public void setSplitSize(String key, float value)
+    {
+        BaseValue.edit(this, (v) -> this.splitSizes.put(key, value));
+    }
+
     @Override
     public BaseType toData()
     {
@@ -431,6 +452,19 @@ public class ValueEditorLayout extends BaseValue
         data.putFloat("state_editor_size_h", this.stateEditorSizeH);
         data.putFloat("state_editor_size_v", this.stateEditorSizeV);
         data.putInt("keyframe_label_width", this.keyframeLabelWidth);
+
+        MapType splitSizes = new MapType();
+
+        for (Map.Entry<String, Float> entry : this.splitSizes.entrySet())
+        {
+            splitSizes.putFloat(entry.getKey(), entry.getValue());
+        }
+
+        if (!splitSizes.keys().isEmpty())
+        {
+            data.put("split_sizes", splitSizes);
+        }
+
         return data;
     }
 
@@ -542,6 +576,15 @@ public class ValueEditorLayout extends BaseValue
             this.stateEditorSizeH = map.getFloat("state_editor_size_h", 0.7F);
             this.stateEditorSizeV = map.getFloat("state_editor_size_v", 0.25F);
             this.keyframeLabelWidth = map.getInt("keyframe_label_width", 120);
+
+            this.splitSizes.clear();
+
+            MapType splitSizes = map.getMap("split_sizes");
+
+            for (String key : splitSizes.keys())
+            {
+                this.splitSizes.put(key, splitSizes.getFloat(key));
+            }
         }
     }
 

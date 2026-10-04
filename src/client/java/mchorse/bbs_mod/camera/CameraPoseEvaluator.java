@@ -1,7 +1,5 @@
 package mchorse.bbs_mod.camera;
 
-import io.netty.util.collection.IntObjectMap;
-import io.netty.util.collection.IntObjectHashMap;
 import mchorse.bbs_mod.actions.FilmPlaybackPolicy;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.data.Position;
@@ -10,6 +8,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,15 +21,15 @@ public final class CameraPoseEvaluator
 {
     private final Map<String, Position> cache = new HashMap<>();
     private final Map<String, CameraClipContext> contexts = new HashMap<>();
-    private final IntObjectMap<IEntity> emptyEntities = new IntObjectHashMap<>();
+    private final Map<String, IEntity> emptyEntities = Collections.emptyMap();
     private Film film;
-    private IntObjectMap<IEntity> entities;
+    private Map<String, IEntity> entities;
     private int ticks;
     private float transition;
     private boolean playing;
     private long frameId = Long.MIN_VALUE;
 
-    public void beginFrame(long frameId, Film film, int ticks, float transition, boolean playing, IntObjectMap<IEntity> entities)
+    public void beginFrame(long frameId, Film film, int ticks, float transition, boolean playing, Map<String, IEntity> entities)
     {
         ticks = Math.max(0, ticks);
         transition = playing && Float.isFinite(transition) ? transition : 0F;

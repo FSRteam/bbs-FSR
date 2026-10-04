@@ -1,8 +1,9 @@
 package mchorse.bbs_mod.cubic.physics;
 
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
-import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
@@ -110,7 +111,7 @@ public final class ModelPhysicsRuntime
             return;
         }
 
-        Map<String, ModelConstraintsConfig.BoneConstraint> constraints = ModelConstraintsRuntime.getBones(instance);
+        Map<String, BoneConstraint> constraints = ModelConstraintsRuntime.getBones(instance);
 
         Object owner = simulationOwner == null ? entity : simulationOwner;
         /* ModelInstance is shared by every form using the same asset. Keep mutable history per
@@ -165,7 +166,7 @@ public final class ModelPhysicsRuntime
         return new ModelPhysicsConfig.Wind(wind.strength(), dir.x, dir.y, dir.z, wind.turbulence(), wind.turbulenceSpeed(), wind.turbulenceScale(), false);
     }
 
-    private static void applyCompiled(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.Compiled compiled, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
+    private static void applyCompiled(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.Compiled compiled, ModelPhysicsConfig.Wind wind, Map<String, BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         if (state.compiled != compiled)
         {
@@ -174,7 +175,11 @@ public final class ModelPhysicsRuntime
             state.compiled = compiled;
         }
 
-        ModelPivotFrames.collect(model, compiled.wantedBones(), state.frames, baseTransform, false, state.frameCollector);
+        /* The same switch the render path passes: an addon that authors bone offsets says so through
+         * PIVOT_OFFSETS, and with no addon loaded the invoker answers false — exactly the constant
+         * this call used to hardcode. Keeping the workspace is this build's own addition and does not
+         * change what is collected. */
+        ModelPivotFrames.collect(model, compiled.wantedBones(), state.frames, baseTransform, FormPoseEvents.PIVOT_OFFSETS.invoker().include(model), state.frameCollector);
 
         for (ModelPhysicsCache.CompiledChain chain : compiled.chains())
         {
@@ -182,7 +187,7 @@ public final class ModelPhysicsRuntime
         }
     }
 
-    private static void applyChain(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState, boolean allowWorldTargetOverrides)
+    private static void applyChain(Level world, int age, float transition, IModel model, ModelInstance instance, ModelPhysicsCache.CompiledChain chain, ModelPhysicsConfig.Wind wind, Map<String, BoneConstraint> constraints, Map<String, PivotFrame> frames, InstanceState instanceState, boolean allowWorldTargetOverrides)
     {
         List<String> ids = chain.chainRootToEnd();
         int pivotCount = ids.size();

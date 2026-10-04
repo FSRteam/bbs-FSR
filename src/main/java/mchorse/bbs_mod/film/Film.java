@@ -1,9 +1,12 @@
 package mchorse.bbs_mod.film;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.data.migration.FilmStableIds;
+import mchorse.bbs_mod.data.migration.SaveVersion;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.StringType;
+import mchorse.bbs_mod.film.markers.FilmMarkers;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.Replays;
 import mchorse.bbs_mod.film.camera.CameraCut;
@@ -51,6 +54,9 @@ public class Film extends ValueGroup
      */
     public final ValueStringKeys replayCategoryNames = new ValueStringKeys("replay_categories");
 
+    /** Author's notes pinned to ticks, drawn on every timeline's ruler. */
+    public final FilmMarkers markers = new FilmMarkers("markers");
+
     public final ValueFloat hp = new ValueFloat("hp", 20F);
     public final ValueFloat hunger = new ValueFloat("hunger", 20F);
     public final ValueInt xpLevel = new ValueInt("xp_level", 0);
@@ -80,6 +86,7 @@ public class Film extends ValueGroup
         this.add(this.activeCameraId);
         this.add(this.replays);
         this.add(this.replayCategoryNames);
+        this.add(this.markers);
 
         this.add(this.hp);
         this.add(this.hunger);
@@ -96,6 +103,13 @@ public class Film extends ValueGroup
     @Override
     public void fromData(BaseType data)
     {
+        /* Imports, clipboard data and network repositories can bypass BaseManager.load().
+         * Resolve legacy references before ValueStableList assigns ids and properties are read. */
+        if (data.isMap() && SaveVersion.read(data.asMap()) < 2)
+        {
+            new FilmStableIds().migrate(data.asMap());
+        }
+
         if (data.isMap())
         {
             /* Loading an old Film into a reused value must not retain cameras
@@ -103,6 +117,10 @@ public class Film extends ValueGroup
             if (!data.asMap().has(this.cameraTracks.getId())) this.cameraTracks.fromData(new ListType());
             if (!data.asMap().has(this.cameraCuts.getId())) this.cameraCuts.fromData(new ListType());
             if (!data.asMap().has(this.activeCameraId.getId())) this.activeCameraId.fromData(new StringType(LEGACY_CAMERA_ID));
+            /* Markers are a list of marker maps that carry their own stable ids; a film without
+             * that key must not retain the markers of the film previously loaded into this
+             * instance. */
+            if (!data.asMap().has(this.markers.getId())) this.markers.fromData(new ListType());
         }
 
         super.fromData(data);

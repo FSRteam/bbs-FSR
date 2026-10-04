@@ -11,6 +11,7 @@ import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -70,9 +71,23 @@ public class UISection extends UIElement
      */
     public UISection onToggle(Consumer<UISection> callback)
     {
-        this.callback = callback;
+        /* Composes rather than replaces, so {@link #remember} stays a modifier a caller can add
+         * its own reaction on top of, instead of the two silently cancelling each other out. */
+        this.callback = this.callback == null ? callback : this.callback.andThen(callback);
 
         return this;
+    }
+
+    /**
+     * Keep the fold in the owner's map across rebuilds: open as last left there
+     * ({@code defaultExpanded} on first sight) and write every toggle back under
+     * {@code key}. The map lives with the owner, so nothing here is static.
+     */
+    public UISection remember(Map<String, Boolean> folds, String key, boolean defaultExpanded)
+    {
+        this.setExpanded(folds.getOrDefault(key, defaultExpanded));
+
+        return this.onToggle((section) -> folds.put(key, section.isExpanded()));
     }
 
     public boolean isExpanded()

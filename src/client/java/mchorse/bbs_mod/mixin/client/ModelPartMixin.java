@@ -3,6 +3,7 @@ package mchorse.bbs_mod.mixin.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import mchorse.bbs_mod.forms.renderers.MobRenderContext;
+import mchorse.bbs_mod.mob.IBBSModelPart;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.interps.Lerps;
@@ -13,7 +14,10 @@ import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.util.FastColor;
 import org.joml.Quaternionf;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArgs;
@@ -21,13 +25,107 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * Applies MobForm pose and appearance state to vanilla model parts. The lower priority makes the
  * compatibility wrapper run before Iris' cancellable fast-render callback.
+ *
+ * <p>Also implements the mob rig bridge's {@link IBBSModelPart}: one constructor hook names and
+ * links the whole part tree of every model in the game (upstream e341fa733), and one argument
+ * modifier swaps the lightmap value for a bone's pick id while the bridge's pick pass runs. The
+ * bridge's context is currently only armed by later upstream consumers, so both hooks sit idle
+ * until then; the naming hook is the one {@code MobRig} already needs.</p>
  */
 @Mixin(value = ModelPart.class, priority = 500)
-public abstract class ModelPartMixin
+public abstract class ModelPartMixin implements IBBSModelPart
 {
+    @Shadow
+    @Final
+    private Map<String, ModelPart> children;
+
+    @Unique
+    private String bbs$name;
+
+    @Unique
+    private ModelPart bbs$parent;
+
+    @Override
+    public String bbs$getName()
+    {
+        return this.bbs$name;
+    }
+
+    @Override
+    public void bbs$setName(String name)
+    {
+        this.bbs$name = name;
+    }
+
+    @Override
+    public ModelPart bbs$getParent()
+    {
+        return this.bbs$parent;
+    }
+
+    @Override
+    public void bbs$setParent(ModelPart parent)
+    {
+        this.bbs$parent = parent;
+    }
+
+    @Override
+    public Map<String, ModelPart> bbs$children()
+    {
+        return this.children;
+    }
+
+    /**
+     * Names and links the whole tree, one part at a time. The tree is assembled bottom-up, so by
+     * the time any part is constructed its children already exist and their names arrive right
+     * here in the constructor's own argument — no traversal, no reflection, one pass over a
+     * handful of entries per part, once per resource reload.
+     */
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void bbs$nameChildren(List<ModelPart.Cube> cubes, Map<String, ModelPart> children, CallbackInfo info)
+    {
+        for (Map.Entry<String, ModelPart> entry : children.entrySet())
+        {
+            IBBSModelPart child = (IBBSModelPart) (Object) entry.getValue();
+
+            child.bbs$setName(entry.getKey());
+            child.bbs$setParent((ModelPart) (Object) this);
+        }
+    }
+
+    /**
+     * The bone id a mob rig's part draws with while the bridge's pick buffer is being filled.
+     *
+     * <p>The picker shader reads the light channel as an offset from the form's own id, so
+     * overriding the argument here is what turns one flat mob silhouette into a per-limb id map.
+     * It has to be the argument rather than the cuboid draw: vanilla passes the same light down to
+     * the children, so every part inherits its parent's id until its own hook replaces it — which
+     * is exactly right for a sub-part the rig does not know about.</p>
+     *
+     * <p>This runs for every model part in the game, so the guard is one static field read and
+     * nothing else.</p>
+     */
+    @ModifyVariable(
+        method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V",
+        at = @At("HEAD"),
+        ordinal = 0,
+        argsOnly = true
+    )
+    private int bbs$pickingLight(int light)
+    {
+        /* Qualified on purpose: the bridge's context shares the simple name with FSR's
+         * forms.renderers.MobRenderContext imported above. */
+        mchorse.bbs_mod.mob.MobRenderContext context = mchorse.bbs_mod.mob.MobRenderContext.current();
+
+        return context == null || !context.isPicking() ? light : context.partLight((ModelPart) (Object) this);
+    }
+
     @Inject(
         method = "translateAndRotate(Lcom/mojang/blaze3d/vertex/PoseStack;)V",
         at = @At("HEAD"),

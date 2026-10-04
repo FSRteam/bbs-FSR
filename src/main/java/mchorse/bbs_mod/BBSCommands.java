@@ -21,6 +21,7 @@ import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.Settings;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.utils.StructureSaver;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -30,7 +31,6 @@ import net.minecraft.commands.arguments.coordinates.Coordinates;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.commands.arguments.selector.EntitySelector;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -40,10 +40,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelSettings;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.storage.PrimaryLevelData;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
@@ -519,45 +516,20 @@ public class BBSCommands
         return 1;
     }
 
+    /**
+     * Writes the region into BBS's own {@code <assets>/structures} folder (addressed by the
+     * structure form as {@code assets:<name>}), where it is there in every world. Deliberate
+     * behavior change vs. older FSR: nothing is written into the world's {@code generated}
+     * folder any more — structures written there by vanilla structure blocks are still read,
+     * but they are the world's, not ours.
+     */
     private static int saveStructure(CommandContext<CommandSourceStack> source)
     {
         String name = StringArgumentType.getString(source, "name");
         BlockPos from = BlockPosArgument.getBlockPos(source, "from");
         BlockPos to = BlockPosArgument.getBlockPos(source, "to");
-        ResourceLocation id = ResourceLocation.tryParse(name);
-
-        if (id == null)
-        {
-            return 0;
-        }
-
         ServerLevel world = source.getSource().getLevel();
-        StructureTemplateManager structureTemplateManager = world.getStructureManager();
-        StructureTemplate structureTemplate = structureTemplateManager.getOrCreate(id);
 
-        BlockPos min = new BlockPos(
-            Math.min(from.getX(), to.getX()),
-            Math.min(from.getY(), to.getY()),
-            Math.min(from.getZ(), to.getZ())
-        );
-        BlockPos max = new BlockPos(
-            Math.max(from.getX(), to.getX()),
-            Math.max(from.getY(), to.getY()),
-            Math.max(from.getZ(), to.getZ())
-        );
-        BlockPos size = new BlockPos(
-            max.getX() - min.getX() + 1,
-            max.getY() - min.getY() + 1,
-            max.getZ() - min.getZ() + 1
-        );
-
-        structureTemplate.fillFromWorld(world, min, size, true, Blocks.STRUCTURE_VOID);
-
-        if (structureTemplateManager.save(id))
-        {
-            return 1;
-        }
-
-        return 0;
+        return StructureSaver.save(world, name, from, to) ? 1 : 0;
     }
 }

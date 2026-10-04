@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.film.UIClipsPanel;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
@@ -16,7 +17,6 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clips;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
-import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import org.joml.Vector3f;
 
 public class UIKeyframeClip extends UIClip<KeyframeClip>
@@ -77,7 +77,8 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
     public void editClip(Position position)
     {
         Position newPos = position.copy();
-        long tick = this.editor.getCursor() - this.clip.tick.get();
+        UIContext context = this.getContext();
+        float tick = this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition()) - this.clip.tick.get();
 
         if (!this.clip.distance.isEmpty())
         {
@@ -105,15 +106,15 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
         this.insertKeyframe(tick, this.clip.fov, newPos.angle.fov);
     }
 
-    private void insertKeyframe(long tick, KeyframeChannel<Double> channel, double x)
+    private void insertKeyframe(float tick, KeyframeChannel<Double> channel, double x)
     {
-        KeyframeSegment<Double> segment = channel.findSegment(tick);
-        int insert = channel.insert(tick, x);
-
-        if (segment != null)
-        {
-            channel.get(insert).copyOverExtra(segment.a);
-        }
+        /* Was findSegment + an unconditional copyOverExtra. When a keyframe already sat on the tick,
+         * findSegment's `a` WAS the keyframe being written, so the copy re-laid the extras it had
+         * just been given: state-neutral, but it raised a second pre/post pair for a child of a
+         * channel insert() had already notified. UIFormUndoHandler.reduceUndoRedundancy drops that
+         * child (its ancestor is cached), so the user sees no difference — as long as insert keeps
+         * notifying the channel first and that ancestor rule stays. Keep them, or this is a no-op. */
+        channel.insertInheriting(tick, x);
     }
 
     @Override

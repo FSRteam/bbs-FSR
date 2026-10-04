@@ -42,6 +42,7 @@ public class UIGeneralFormPanel extends UIFormPanel
     public UIToggle lighting;
     public UIToggle shaderShadow;
     public UIToggle additiveColor;
+    public UIToggle renderLast;
     public UICirculate glintMode;
     public UIColor glintColor;
     public UITrackpad glintSpeed;
@@ -86,6 +87,8 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.lighting.tooltip(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING_TOOLTIP);
         this.shaderShadow = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_SHADER_SHADOW, (b) -> this.form.shaderShadow.set(b.getValue()));
         this.additiveColor = new UIToggle(UIKeys.FORMS_EDITORS_ADDITIVE_COLOR, (b) -> this.form.additiveColor.set(b.getValue()));
+        this.renderLast = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_RENDER_LAST, (b) -> this.form.renderLast.set(b.getValue()));
+        this.renderLast.tooltip(UIKeys.FORMS_EDITORS_GENERAL_RENDER_LAST_TOOLTIP);
         this.glintMode = new UICirculate((c) -> this.form.glintMode.set(c.getValue()));
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_OFF);
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_FULL);
@@ -130,6 +133,7 @@ public class UIGeneralFormPanel extends UIFormPanel
             UI.labelRow(UIKeys.FORMS_EDITORS_GENERAL_DISPLAY, this.name),
             this.hotkey, this.visible,
             this.lighting, this.shaderShadow, this.additiveColor,
+            this.renderLast,
             UI.labelRow(UIKeys.FORMS_EDITORS_GENERAL_UI_SCALE, this.uiScale)
         );
 
@@ -197,6 +201,7 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.lighting.setValue(form.lighting.get() > 0F);
         this.shaderShadow.setValue(form.shaderShadow.get());
         this.additiveColor.setValue(form.additiveColor.get());
+        this.renderLast.setValue(form.renderLast.get());
 
         /* Only offered where the renderer actually draws it. Model forms have their own
          * per-bone glint in the pose editor, so they leave these hidden as well. */

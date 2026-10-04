@@ -32,7 +32,7 @@ public enum TransformSpace
     /** The scene's flat axes — a constrained edit runs along fixed X/Y/Z that
      *  never follow the pose. In a film those are the edited replay's OWN axes:
      *  the world frame turned by the replay's facing
-     *  ({@code BaseFilmController.getReplayWorldAxes}), so X stays the actor's
+     *  ({@code FilmMatrices.getReplayWorldAxes}), so X stays the actor's
      *  left/right however the actor was placed on the map. Hosts with no replay
      *  to face (form editor, model blocks) keep the plain world axes. */
     GLOBAL(true),

@@ -26,6 +26,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FrozenFilmController;
+import mchorse.bbs_mod.film.markers.FilmMarker;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.camera.CameraTrack;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -354,6 +355,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }).active(active).category(looping);
         this.keys().register(Keys.LOOPING_SET_MIN, () -> this.cameraEditor.clips.setLoopMin()).active(active).category(looping);
         this.keys().register(Keys.LOOPING_SET_MAX, () -> this.cameraEditor.clips.setLoopMax()).active(active).category(looping);
+        Supplier<Boolean> hasFilm = () -> active.get() && this.data != null;
+
+        this.keys().register(Keys.MARKER_ADD, this::addMarkerAtCursor).active(hasFilm).category(editor);
+        this.keys().register(Keys.MARKER_NEXT, () -> this.setCursor(this.data.markers.findNextTick(this.getCursor()))).active(hasFilm).category(editor);
+        this.keys().register(Keys.MARKER_PREV, () -> this.setCursor(this.data.markers.findPreviousTick(this.getCursor()))).active(hasFilm).category(editor);
         this.keys().register(Keys.JUMP_FORWARD, () -> this.setCursor(this.getCursor() + BBSSettings.editorJump.get())).active(active).category(editor);
         this.keys().register(Keys.JUMP_BACKWARD, () -> this.setCursor(this.getCursor() - BBSSettings.editorJump.get())).active(active).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_CYCLE_EDITORS, () ->
@@ -3138,13 +3144,25 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     }
 
     @Override
+    public float getCursor(float transition)
+    {
+        return this.runner.getCursor(transition);
+    }
+
+    @Override
     public void setCursor(int value)
+    {
+        this.setCursor((float) value);
+    }
+
+    @Override
+    public void setCursor(float value)
     {
         int previousCursor = this.getCursor();
 
         this.finishFlight(true, "seek");
         this.cancelViewInteractions();
-        this.runner.ticks = Math.max(0, value);
+        this.runner.setCursor(Math.max(0F, value));
 
         if (this.runner.ticks != previousCursor)
         {
@@ -3159,6 +3177,30 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (BBSSettings.editorRestartOnSeek.get())
         {
             this.restartPending = true;
+        }
+    }
+
+    /**
+     * Drops a marker where the playhead stands, or opens the one already standing there &mdash;
+     * pressing the key twice on the same tick is how you get to naming it without the mouse.
+     */
+    private void addMarkerAtCursor()
+    {
+        if (this.data == null)
+        {
+            return;
+        }
+
+        int tick = this.getCursor();
+        FilmMarker marker = this.data.markers.getAt(tick);
+
+        if (marker == null)
+        {
+            this.data.markers.addMarker(tick);
+        }
+        else
+        {
+            this.cameraEditor.clips.editMarker(marker);
         }
     }
 
@@ -3414,7 +3456,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         super.applyUndoData(data);
 
         this.showPanel(data.getInt("panel"));
-        this.setCursor(data.getInt("tick"));
+        this.setCursor(data.getFloat("tick"));
         this.restoreCameraViewState(data);
     }
 
@@ -3424,7 +3466,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         super.collectUndoData(data);
 
         data.putInt("panel", this.getPanelIndex());
-        data.putInt("tick", this.getCursor());
+        data.putFloat("tick", this.getCursor(0F));
         this.captureCameraViewState(data);
     }
 

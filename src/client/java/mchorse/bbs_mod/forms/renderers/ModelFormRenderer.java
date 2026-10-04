@@ -3,6 +3,7 @@ package mchorse.bbs_mod.forms.renderers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
@@ -19,6 +20,8 @@ import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.jem.CemAnimator;
+import mchorse.bbs_mod.cubic.jem.CemVanillaStage;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
@@ -37,6 +40,7 @@ import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.graphics.texture.Texture;
@@ -187,6 +191,79 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         return this.getPose(new Pose());
     }
 
+    /**
+     * The channels phase for a reader outside the render: poses the model for the entity the way the
+     * render does (rest &rarr; actions &rarr; pose) and leaves it there — the FK truth the constraint
+     * and IK stages start from. {@code null} when the form has no model.
+     *
+     * <p>A reader's sample is never a repeat of the frame's evaluation, so the frame stamp
+     * ({@link PreviewPoseSnapshot}, this build's equivalent of the upstream channel stamp) is dropped
+     * first and the evaluation always runs.</p>
+     *
+     * <p>The constraint stage is folded in here rather than left to the caller: this build clamps the
+     * FK input <em>before</em> the solver runs (see {@code renderModel}'s solvePose branch), so a reader
+     * that solved IK on the unclamped FK would bake poses the limits forbid while the render clamps
+     * them — the two would differ exactly where a constraint is configured, and the difference would
+     * not look wrong on screen. Mirrors the reader-facing phase in
+     * {@link #collectMatricesWithAppliedStates}, which is the same stage order.</p>
+     */
+    public ModelInstance evaluateChannels(IEntity entity, float transition)
+    {
+        this.ensureAnimator(transition);
+
+        ModelInstance model = this.getModel();
+
+        if (this.animator == null || model == null || model.model == null)
+        {
+            return null;
+        }
+
+        this.previewPoseSnapshot.invalidate();
+        this.evaluateChannels(entity, model, transition);
+        ModelConstraintsRuntime.apply(model);
+
+        return model;
+    }
+
+    /**
+     * The IK stage on the model as it stands (see {@link #evaluateChannels(IEntity, float)}): the
+     * form's chains solved onto the bones' orientations, exactly as the render does before drawing.
+     * {@code entityWorld} is the frame the film stands the entity in — what
+     * {@code FilmEntityRenderer} renders it under — so the film's world-space targets are brought
+     * into the model the way the render brings them; {@code null} solves against the model alone.
+     */
+    public void solveIK(ModelInstance model, Matrix4f entityWorld, float transition)
+    {
+        Matrix4f base = null;
+
+        if (entityWorld != null)
+        {
+            /* The model's frame as the render establishes it: the entity's, then the form's own
+             * transform and the model's scale, then the half turn every model renders under. */
+            base = new Matrix4f(entityWorld);
+
+            this.applyTransforms(base, transition);
+            base.rotate(ROTATE_Y_180);
+        }
+
+        this.applyIK(model, base, true);
+    }
+
+    /**
+     * Rest &rarr; actions &rarr; pose. The one body every place that establishes the FK truth runs:
+     * the render, the matrix capture and {@link #evaluateChannels(IEntity, float)}. Extracted
+     * unchanged — the constraint and IK stages stay at their own call sites, so no path that used to
+     * run them at a particular point runs them anywhere else now.
+     */
+    private void evaluateChannels(IEntity entity, ModelInstance model, float transition)
+    {
+        model.model.resetPose();
+
+        this.readCemStatus();
+        this.animator.applyActions(entity, model, transition);
+        model.model.applyPose(this.getPose(this.renderPose));
+    }
+
     private Pose getPose(Pose pose)
     {
         pose.copy(this.form.pose.get());
@@ -249,12 +326,51 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             return;
         }
 
-        this.animator = model.isProcedural() ? new ProceduralAnimator() : new Animator();
+        this.animator = createAnimator(model);
         this.animator.setup(model, actionsConfig, false);
 
         this.lastConfigs = new ActionsConfig();
         this.lastConfigs.copy(actionsConfig);
         this.lastModel = model;
+    }
+
+    /**
+     * The animator stage for a model: a .jem's live CEM program drives it, otherwise the config's
+     * choice between vanilla-like procedural and keyframe actions.
+     */
+    private static IAnimator createAnimator(ModelInstance model)
+    {
+        if (model.cemAnimation != null)
+        {
+            if (model.config.cemAnimation.get())
+            {
+                /* The vanilla stage under the program (upstream 6d7aa0fd1): the game's own model of
+                 * the entity, posed by the game's own code, read back as the program's starting
+                 * values. Without it a pack that reads the parts it leaves empty — the fox's flat
+                 * body, the hoglin's bowed head — would evaluate against the rest pose. */
+                return new CemAnimator(model.cemAnimation, new CemVanillaStage(model.cemAnimation.jem));
+            }
+
+            /* CEM drove the bones' visibility and nothing else resets it: switched off, every bone shows again. */
+            for (ModelGroup group : model.model.getAllGroups())
+            {
+                group.visible = true;
+            }
+        }
+
+        return model.isProcedural() ? new ProceduralAnimator() : new Animator();
+    }
+
+    /**
+     * The states a CEM pack asks about that only the form can answer — sitting, tamed, angry. Read
+     * here rather than kept in sync, so a keyframe on one of them lands the frame it changes.
+     */
+    private void readCemStatus()
+    {
+        if (this.animator instanceof CemAnimator cem)
+        {
+            cem.status.read(this.form);
+        }
     }
 
     @Override
@@ -350,6 +466,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                     model.model.resetPose();
 
+                    this.readCemStatus();
                     this.animator.applyActions(null, model, poseTransition);
                     model.model.applyPose(this.getPose(this.renderPose));
                 }
@@ -360,7 +477,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 BBSModClient.getTextures().bindTexture(texture);
                 RenderSystem.depthFunc(GL11.GL_LEQUAL);
 
-                Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
+                Supplier<ShaderInstance> mainShader = BBSRendering.isIrisWorldShadersEnabled() || !model.isVAORendered()
                     ? GameRenderer::getRendertypeEntityTranslucentCullShader
                     : BBSShaders::getModel;
 
@@ -613,6 +730,10 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         this.physicsAppliedThisRender = true;
+
+        /* The pose is animated and IK-solved by now; an external contributor gets its turn before the
+         * built-in chain physics, so what the listeners write is what the solver and the draw see. */
+        FormPoseEvents.MODEL_POSE.invoker().apply(this.form, target, model, transition, baseTransform, FormPoseEvents.Pass.RENDER);
         model.form = this.form;
         this.physicsRuntime.apply(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
     }
@@ -942,12 +1063,19 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 BBSModClient.getTextures().bindTexture(texture);
 
-                Supplier<ShaderInstance> mainShader = (BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld()) || !model.isVAORendered()
+                Supplier<ShaderInstance> mainShader = BBSRendering.isIrisWorldShadersEnabled() || !model.isVAORendered()
                     ? GameRenderer::getRendertypeEntityTranslucentCullShader
                     : BBSShaders::getModel;
 
                 RenderSystem.enableDepthTest();
                 RenderSystem.enableBlend();
+
+                if (FramebufferDebug.inside())
+                {
+                    FramebufferDebug.log("model", "shader=" + FramebufferDebug.shader(mainShader.get())
+                        + " light=" + light + " overlay=" + OverlayTexture.NO_OVERLAY
+                        + " | " + FramebufferDebug.bindings());
+                }
 
                 this.renderingArm = true;
                 ItemUsePose.setSuppressed(true);
@@ -959,6 +1087,13 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 finally
                 {
                     ItemUsePose.setSuppressed(false);
+                }
+
+                if (FramebufferDebug.inside())
+                {
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.bindings());
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.glState());
+                    FramebufferDebug.log("model", "after draw | " + FramebufferDebug.samplers());
                 }
 
                 return true;
@@ -1007,10 +1142,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             if (!reusePreviewPose)
             {
-                model.model.resetPose();
-
-                this.animator.applyActions(context.entity, model, context.getTransition());
-                model.model.applyPose(this.getPose(this.renderPose));
+                this.evaluateChannels(context.entity, model, context.getTransition());
             }
 
             context.stack.mulPose(ROTATE_Y_180);
@@ -1021,6 +1153,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             }
 
             Texture textureObject = BBSModClient.getTextures().getTexture(texture);
+            /* Deliberately the wider question - "is a pack loaded at all" - and not
+             * isIrisWorldShadersEnabled() (fae8b715b). What hangs off this below is the alpha
+             * handling, and that has to stay put where a pack can see the result. Inside a
+             * framebuffer form the pack stops shading, but the pixels still end up in its world:
+             * dropping the cutout degrade there turns blending back on, the parts land in the
+             * buffer premultiplied with alpha squared, and the quad multiplies by alpha once more. */
             boolean irisWorld = BBSRendering.isIrisShadersEnabled() && BBSRendering.isRenderingWorld();
             boolean cutout = irisWorld && textureObject != null && textureObject.hasTranslucency()
                 && color.a >= 1F && !this.form.additiveColor.get();
@@ -1043,9 +1181,11 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             BBSModClient.getTextures().bindTexture(textureObject);
 
+            /* The program, unlike the alpha handling above, does follow whether the pack is
+             * shading this very draw: off-screen it has stopped, and our own is the better one. */
             Supplier<ShaderInstance> mainShader = cutout
                 ? GameRenderer::getRendertypeEntityCutoutShader
-                : (irisWorld || !model.isVAORendered())
+                : (BBSRendering.isIrisWorldShadersEnabled() || !model.isVAORendered())
                     ? GameRenderer::getRendertypeEntityTranslucentCullShader
                     : BBSShaders::getModel;
             Supplier<ShaderInstance> shader = this.getShader(context, mainShader, BBSShaders::getPickerModelsProgram);
@@ -1518,14 +1658,16 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 if (!reusePreviewPose)
                 {
-                    model.model.resetPose();
-
-                    this.animator.applyActions(entity, model, transition);
-                    model.model.applyPose(this.getPose(this.renderPose));
+                    this.evaluateChannels(entity, model, transition);
 
                     ModelConstraintsRuntime.apply(model);
 
                     this.applyIK(model, modelSemanticBase, allowWorldTargetOverrides);
+
+                    /* Bones are solved but not captured yet: a walk-side contributor writes here and
+                     * the capture below picks it up. No base transform is offered - this pass has no
+                     * absolute world frame, and a listener must not invent one from the render stack. */
+                    FormPoseEvents.MODEL_POSE.invoker().apply(this.form, entity, model, transition, null, FormPoseEvents.Pass.MATRICES);
 
                     if (modelSemanticBase != null)
                     {

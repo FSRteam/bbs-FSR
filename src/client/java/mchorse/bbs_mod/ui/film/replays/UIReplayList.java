@@ -8,12 +8,12 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.CameraClipContext;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.data.migration.FilmStableIds;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
-import mchorse.bbs_mod.film.replays.ReplayReferenceRemapper;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.film.replays.Replays;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -21,6 +21,9 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.StructureForm;
+import mchorse.bbs_mod.forms.structure.StructureCut;
+import mchorse.bbs_mod.forms.structure.StructureSelection;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.math.IExpression;
@@ -47,6 +50,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UILabelList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.model_blocks.UIModelBlockEntityList;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIFolderOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
@@ -84,7 +88,6 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -165,6 +168,11 @@ public class UIReplayList extends UIList<ReplayListEntry>
                 String cat = this.contextFolderCategoryName;
 
                 menu.action(Icons.TRASH, UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE_CATEGORY, () -> this.removeReplayCategory(cat));
+            }
+
+            if (film != null && StructureSelection.isReady())
+            {
+                menu.action(Icons.BLOCK, UIKeys.STRUCTURE_CUT_TITLE, this::cutSelectionIntoReplay);
             }
 
             if (film != null)
@@ -966,7 +974,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
         Film data = this.panel.getData();
         Replays replays = data.replays;
         List<Replay> all = replays.getList();
-        List<Replay> previousOrder = new ArrayList<>(all);
 
         ReplayListEntry ef = this.list.get(from);
         ReplayListEntry et = this.list.get(to);
@@ -992,10 +999,9 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         replays.remove(value);
         replays.add(globalTo, value);
-        replays.sync();
 
-        remapReplayReferences(data, previousOrder);
-
+        /* Reordering is just reordering now: anchors and camera selectors hold the replay's stable
+         * id, so the hand-written index remapping that used to chase them is gone. */
         data.postNotify(IValueListener.FLAG_UNMERGEABLE);
 
         this.refreshReplayList();
@@ -1032,7 +1038,8 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         UINumberOverlayPanel offsetPanel = new UINumberOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_PASTE_KEYFRAMES_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_PASTE_KEYFRAMES_DESCRIPTION, (n) ->
         {
-            int tick = this.panel.getCursor();
+            UIContext context = this.getContext();
+            float tick = this.panel.getKeyframeCursor(context == null ? 0F : context.getTransition());
 
             for (Replay replay : selectedReplays)
             {
@@ -1958,28 +1965,50 @@ public class UIReplayList extends UIList<ReplayListEntry>
     }
 
     /**
-     * Remap every persisted Film reference from a previous Replay order to the
-     * Film's current order. Identity is intentional: two Replay values may be
-     * structurally equal while still representing different logical actors.
-     * Removed or already-invalid targets are normalized to the no-target
-     * sentinel instead of silently pointing at the Replay that shifted into
-     * their old slot.
+     * Insert a {@code {"replays": [...]}} clipboard payload or preset into the film.
+     *
+     * <p>Clipboard replays and presets are read outside any film document, so no save version gates
+     * them and {@code Film.fromData} never sees them — but the pasted map still carries whatever
+     * references the source film wrote. Those references are answered in two different places, one
+     * per kind of reference: a legacy positional index is converted by {@link Replay#fromData},
+     * which runs for every element below with an empty replay list (a bare replay carries no source
+     * film order, so a cross-film index cannot be resolved and fails closed to "no target"); a
+     * reference that is <em>already</em> a stable id is a membership question about <em>this</em>
+     * film and is answered by the prune call above the loop, against the ids the film holds right
+     * now.
+     *
+     * <p>Neither question belongs to a second copy of the conversion written out at this call site
+     * — that is how the two would drift apart. The prune call is a call into the same walk
+     * {@code Film.fromData} runs, not a reimplementation of it.
      */
-    static void remapReplayReferences(Film film, List<Replay> previousOrder)
-    {
-        ReplayReferenceRemapper.remap(film, previousOrder);
-    }
-
     public void pasteReplay(MapType data)
     {
         Film film = this.panel.getData();
         ListType replays = data.getList("replays");
+
+        /* The film's own ids, taken before the first insert: a within-film copy carries ids that
+         * are in here, which is what keeps it pointing at the replay it was copied from. */
+        List<String> filmReplayIds = new ArrayList<>();
+
+        for (Replay existing : film.replays.getAllTyped())
+        {
+            filmReplayIds.add(existing.getId());
+        }
+
         Replay last = null;
 
         for (BaseType replayType : replays)
         {
             Replay replay = film.replays.addReplay();
 
+            /* A stable id that addresses a replay this film does not have would send
+             * ActionTarget.resolve down its scoped branch and lose the uuid fallback. */
+            if (replayType.isMap())
+            {
+                FilmStableIds.pruneDanglingReplayReferences(replayType.asMap(), filmReplayIds);
+            }
+
+            /* The legacy index conversion happens inside Replay.fromData; do not duplicate it. */
             BaseValue.edit(replay, (r) -> r.fromData(replayType));
             replay.category.set("");
 
@@ -2093,32 +2122,25 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     private void fromModelBlock()
     {
-        ArrayList<ModelBlockEntity> modelBlocks = new ArrayList<>(BBSRendering.capturedModelBlocks);
-        UISearchList<String> search = new UISearchList<>(new UIStringList(null));
-        UIList<String> list = search.list;
+        /* The same list the model block panel shows, so a block is picked here by the
+         * face it wears there instead of by a line of coordinates. */
+        UIModelBlockEntityList list = new UIModelBlockEntityList(null);
+        UISearchList<ModelBlockEntity> search = new UISearchList<>(list);
         UIConfirmOverlayPanel panel = new UIConfirmOverlayPanel(UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_TITLE, UIKeys.SCENE_REPLAYS_CONTEXT_FROM_MODEL_BLOCK_DESCRIPTION, (b) ->
         {
-            if (b)
-            {
-                int index = list.getIndex();
-                ModelBlockEntity modelBlock = CollectionUtils.getSafe(modelBlocks, index);
+            ModelBlockEntity modelBlock = b ? list.getCurrentFirst() : null;
 
-                if (modelBlock != null)
-                {
-                    this.fromModelBlock(modelBlock);
-                }
+            if (modelBlock != null)
+            {
+                this.fromModelBlock(modelBlock);
             }
         });
 
-        modelBlocks.sort(Comparator.comparing(ModelBlockEntity::getName));
-
-        for (ModelBlockEntity modelBlock : modelBlocks)
-        {
-            list.add(modelBlock.getName());
-        }
-
+        list.setBlocks(BBSRendering.capturedModelBlocks);
         list.background();
-        search.relative(panel.confirm).y(-5).w(1F).h(16 * 9 + 20).anchor(0F, 1F);
+
+        search.label(UIKeys.GENERAL_SEARCH);
+        search.relative(panel.confirm).y(-5).w(1F).h(UIModelBlockEntityList.ROW * 7 + 20).anchor(0F, 1F);
 
         panel.confirm.w(1F, -10);
         panel.content.add(search);
@@ -2177,6 +2199,75 @@ public class UIReplayList extends UIList<ReplayListEntry>
                 replay.form.set(form);
             }
         }
+
+        this.refreshReplayList();
+        this.update();
+        this.panel.replayEditor.setReplay(replay);
+        this.scrollToReplay(replay);
+        this.updateFilmEditor();
+        this.saveFilm();
+    }
+
+    /**
+     * The wand's region as a replay: saved as a structure, cleared out of the world, and added as a
+     * form standing exactly where the blocks did. Destructive, so it asks first — and the message
+     * names the command that puts the build back, because Minecraft has no undo for this.
+     */
+    private void cutSelectionIntoReplay()
+    {
+        Film film = this.panel.getData();
+
+        if (film == null || !StructureSelection.isReady())
+        {
+            return;
+        }
+
+        String id = StructureCut.nextPath(film.getId());
+        BlockPos min = StructureSelection.getMin();
+        BlockPos max = StructureSelection.getMax();
+        BlockPos size = StructureSelection.getSize();
+        IKey message = UIKeys.STRUCTURE_CUT_CONFIRM.format(String.valueOf(StructureSelection.getVolume()), id);
+
+        UIOverlay.addOverlay(this.getContext(), new UIConfirmOverlayPanel(UIKeys.STRUCTURE_CUT_TITLE, message, (confirmed) ->
+        {
+            if (confirmed)
+            {
+                StructureCut.request(id, min, max, (ok) ->
+                {
+                    if (ok)
+                    {
+                        this.addStructureReplay(id, min, size);
+                    }
+                });
+            }
+        }), 300, 140);
+    }
+
+    /** The cut region's form, dropped in at the very spot it was cut from. */
+    private void addStructureReplay(String id, BlockPos min, BlockPos size)
+    {
+        Film film = this.panel.getData();
+
+        if (film == null)
+        {
+            return;
+        }
+
+        StructureForm form = new StructureForm();
+
+        form.structure.set(id);
+        form.name.set(id.substring(id.lastIndexOf('/') + 1));
+
+        Replay replay = film.replays.addReplay();
+
+        replay.category.set("");
+        replay.form.set(form);
+
+        /* The form centres its footprint and stands on its lowest layer, so this is the one
+         * position at which the structure covers the blocks it was made from */
+        replay.keyframes.x.insert(0, min.getX() + size.getX() / 2D);
+        replay.keyframes.y.insert(0, (double) min.getY());
+        replay.keyframes.z.insert(0, min.getZ() + size.getZ() / 2D);
 
         this.refreshReplayList();
         this.update();
@@ -2271,7 +2362,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
         }
 
         Film film = this.panel.getData();
-        List<Replay> previousOrder = new ArrayList<>(film.replays.getList());
         List<Replay> removing = new ArrayList<>(this.getSelectedReplays());
         Replay focus = removing.get(0);
         int globalFocus = CollectionUtils.getIndex(film.replays.getList(), focus);
@@ -2283,7 +2373,9 @@ public class UIReplayList extends UIList<ReplayListEntry>
             film.replays.remove(replay);
         }
 
-        remapReplayReferences(film, previousOrder);
+        /* Deleting a replay no longer renumbers anybody: the survivors keep their ids, and a
+         * reference to the deleted one stays dangling on purpose rather than sliding onto whichever
+         * replay moved into its slot. */
         film.postNotify(IValueListener.FLAG_UNMERGEABLE);
 
         List<Replay> remaining = film.replays.getList();

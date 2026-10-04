@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.cubic.render;
 
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.data.model.Model;
@@ -34,7 +35,7 @@ public final class ModelPivotFrames
 
     public static void collect(IModel model, Set<String> wanted, Map<String, CubicRenderer.PivotFrame> out, Matrix4f baseTransform)
     {
-        collect(model, wanted, out, baseTransform, false);
+        collect(model, wanted, out, baseTransform, FormPoseEvents.PIVOT_OFFSETS.invoker().include(model));
     }
 
     /**

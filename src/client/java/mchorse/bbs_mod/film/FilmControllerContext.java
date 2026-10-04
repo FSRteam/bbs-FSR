@@ -1,6 +1,5 @@
 package mchorse.bbs_mod.film;
 
-import io.netty.util.collection.IntObjectMap;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -13,11 +12,13 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 
+import java.util.Map;
+
 public class FilmControllerContext
 {
     public final static FilmControllerContext instance = new FilmControllerContext();
 
-    public IntObjectMap<IEntity> entities;
+    public Map<String, IEntity> entities;
     public IEntity entity;
     public Replay replay;
     public Camera camera;
@@ -73,7 +74,7 @@ public class FilmControllerContext
         this.gizmoOnly = false;
     }
 
-    public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, IBbsWorldRenderContext context)
+    public FilmControllerContext setup(Map<String, IEntity> entities, IEntity entity, Replay replay, IBbsWorldRenderContext context)
     {
         this.reset();
 
@@ -88,7 +89,7 @@ public class FilmControllerContext
         return this;
     }
 
-    public FilmControllerContext setup(IntObjectMap<IEntity> entities, IEntity entity, Replay replay, Camera camera, PoseStack stack, MultiBufferSource.BufferSource consumers, float transition)
+    public FilmControllerContext setup(Map<String, IEntity> entities, IEntity entity, Replay replay, Camera camera, PoseStack stack, MultiBufferSource.BufferSource consumers, float transition)
     {
         this.reset();
 

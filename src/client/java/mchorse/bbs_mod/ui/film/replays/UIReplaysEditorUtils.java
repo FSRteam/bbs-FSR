@@ -5,10 +5,6 @@ import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
-import mchorse.bbs_mod.cubic.ik.IKControl;
-import mchorse.bbs_mod.cubic.ik.IKControls;
-import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
-import mchorse.bbs_mod.cubic.ik.ModelIKIO;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
@@ -17,7 +13,7 @@ import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.PhysicsControls;
 import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.film.replays.PerLimbService;
@@ -116,14 +112,10 @@ public class UIReplaysEditorUtils
                     KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
                     KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
                     PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
-                    int index = poseChannel.insert(tick, value);
-                    Keyframe<PoseTransform> kf = poseChannel.get(index);
-                    Keyframe<PoseTransform> template = segment != null ? segment.a : null;
 
-                    if (template != null && template != kf)
-                    {
-                        kf.copyOverExtra(template);
-                    }
+                    /* insertInheriting is this exact insert + left-neighbour inherit, so the value is
+                     * still looked up here and the shaping is delegated. */
+                    poseChannel.insertInheriting(tick, value);
 
                     continue;
                 }
@@ -144,14 +136,10 @@ public class UIReplaysEditorUtils
                         Object current = property instanceof BaseValueBasic basic ? basic.get() : null;
                         value = current instanceof Pose pose ? poseChannel.getFactory().copy(pose) : poseChannel.getFactory().createEmpty();
                     }
-                    int index = poseChannel.insert(tick, value);
-                    Keyframe<Pose> kf = poseChannel.get(index);
-                    Keyframe<Pose> template = segment != null ? segment.a : null;
 
-                    if (template != null && template != kf)
-                    {
-                        kf.copyOverExtra(template);
-                    }
+                    /* As above: the value is resolved here (from the neighbour, the live property or
+                     * an empty pose), the shaping comes from insertInheriting. */
+                    poseChannel.insertInheriting(tick, value);
                 }
             }
         });
@@ -326,13 +314,11 @@ public class UIReplaysEditorUtils
 
         KeyframeSegment<T> segment = sheet.channel.find(tick);
         BaseValueBasic property = sheet.property;
-        Keyframe<T> template = null;
         T value;
 
         if (segment != null)
         {
             value = segment.createInterpolated();
-            template = segment.a;
         }
         else if (property != null)
         {
@@ -347,15 +333,10 @@ public class UIReplaysEditorUtils
             value = (T) sheet.channel.getFactory().createEmpty();
         }
 
-        int index = sheet.channel.insert(tick, value);
-        Keyframe<T> keyframe = (Keyframe<T>) sheet.channel.get(index);
-
-        if (template != null && template != keyframe)
-        {
-            keyframe.copyOverExtra(template);
-        }
-
-        return keyframe;
+        /* The lookup above guarantees no keyframe sits on the tick, so insertInheriting cannot
+         * inherit from the keyframe it just wrote — only from the neighbour, as the hand-written
+         * pair did (its `template != keyframe` guard could never fire here). */
+        return (Keyframe<T>) sheet.channel.insertInheriting(tick, value);
     }
 
     public static <T> void forEachSelectedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, Consumer<Keyframe<T>> consumer)
@@ -459,39 +440,7 @@ public class UIReplaysEditorUtils
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
 
         out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.YELLOW, false, channel, null)
-            .icon(Icons.IK).form(modelForm).seed(() -> buildIKControls(modelForm)));
-    }
-
-    /** A fully populated IK-controls value seeded from the form's IK config (one entry per enabled chain), so a fresh keyframe matches what the editor shows instead of an empty container that drifts to defaults. */
-    private static IKControls buildIKControls(ModelForm modelForm)
-    {
-        IKControls controls = new IKControls();
-
-        if (modelForm.ik.get() instanceof MapType map)
-        {
-            ModelIKConfig config = ModelIKIO.fromData(map);
-
-            if (config != null && config.chains() != null)
-            {
-                for (ModelIKConfig.Chain chain : config.chains())
-                {
-                    if (chain == null || !chain.enabled() || chain.tip() == null || chain.tip().isEmpty())
-                    {
-                        continue;
-                    }
-
-                    IKControl control = controls.get(chain.tip());
-
-                    control.weight = chain.weight();
-                    control.softness = chain.softness();
-                    control.poleAngle = chain.poleAngle();
-                    control.pole = chain.pole();
-                    control.enabled = chain.enabled();
-                }
-            }
-        }
-
-        return controls;
+            .icon(Icons.IK).form(modelForm).seed(() -> ModelIKRuntime.ikControls(modelForm)));
     }
 
     public static void addPoleTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
@@ -552,7 +501,7 @@ public class UIReplaysEditorUtils
             .icon(Icons.PHYSICS).form(modelForm).seed(() -> buildPhysicsControls(modelForm)));
     }
 
-    /** A fully populated physics-controls value seeded from the form's physics config (one entry per chain root), mirroring {@link #buildIKControls}. */
+    /** A fully populated physics-controls value seeded from the form's physics config (one entry per chain root), mirroring {@link ModelIKRuntime#ikControls(mchorse.bbs_mod.forms.forms.ModelForm)}. */
     private static PhysicsControls buildPhysicsControls(ModelForm modelForm)
     {
         PhysicsControls controls = new PhysicsControls();
@@ -703,7 +652,7 @@ public class UIReplaysEditorUtils
 
             BaseValueBasic formProperty = FormUtils.getProperty(form, key);
 
-            sheets.add(new UIKeyframeSheet(UIReplaysEditor.getColor(key), false, channel, formProperty).icon(UIReplaysEditor.getIcon(key)));
+            sheets.add(UIReplaysEditor.createTrackSheet(key, channel, formProperty));
         }
 
         if (form instanceof ModelForm modelForm)
@@ -945,7 +894,7 @@ public class UIReplaysEditorUtils
 
         IEntity entity = panel.getController().getCurrentEntity();
 
-        drag.setGlobalAxes(BaseFilmController.getReplayWorldAxes(entity, transition));
+        drag.setGlobalAxes(FilmMatrices.getReplayWorldAxes(entity, transition));
 
         if (transform == null || transform.getTransform() == null)
         {
@@ -1090,7 +1039,7 @@ public class UIReplaysEditorUtils
 
         if (form != null)
         {
-            float tick = panel.getCursor() + (panel.getRunner().isRunning() ? transition : 0F);
+            float tick = replay.getTick(panel.getCursor()) + panel.getRunner().getTransition(transition);
 
             replay.properties.applyProperties(form, tick);
         }
@@ -1108,7 +1057,7 @@ public class UIReplaysEditorUtils
     {
         applyReplayProperties(panel, entity, replay, transition);
 
-        return BaseFilmController.getBoneCompositeMatrix(
+        return FilmMatrices.getBoneCompositeMatrix(
             panel.getController().getEntities(),
             entity,
             replay,
@@ -1132,7 +1081,7 @@ public class UIReplaysEditorUtils
     {
         applyReplayProperties(panel, entity, replay, transition);
 
-        return BaseFilmController.getGizmoBoneRotationOffset(
+        return FilmMatrices.getGizmoBoneRotationOffset(
             panel.getController().getEntities(),
             entity,
             replay,
@@ -1155,7 +1104,7 @@ public class UIReplaysEditorUtils
     {
         applyReplayProperties(panel, entity, replay, transition);
 
-        return BaseFilmController.getGizmoBoneEvaluatedRotation(
+        return FilmMatrices.getGizmoBoneEvaluatedRotation(
             panel.getController().getEntities(),
             entity,
             replay,
@@ -1181,7 +1130,7 @@ public class UIReplaysEditorUtils
         {
             applyReplayProperties(panel, entity, replay, transition);
 
-            Matrix4f matrix = BaseFilmController.getGizmoAnchorCompositeMatrix(
+            Matrix4f matrix = FilmMatrices.getGizmoAnchorCompositeMatrix(
                 panel.getController().getEntities(),
                 entity,
                 replay,
@@ -1225,6 +1174,11 @@ public class UIReplaysEditorUtils
             && keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory
             && poseFactory.poseEditor.hasBone(bone))
         {
+            IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+
+            /* The picked bone's row can sit under a folded pose tab: reveal it before the pose
+             * editor takes the selection, or the highlight is invisible. */
+            keyframeEditor.view.getDopeSheet().revealSheet(graph.getSheet(graph.getSelected()));
             poseFactory.poseEditor.selectBone(bone, true);
 
             return;
@@ -1245,7 +1199,11 @@ public class UIReplaysEditorUtils
             }
             if (isPoseSheet(currentSheet, path))
             {
-                int tick = cursor.getCursor();
+                /* Reveal first: a pose row under a folded category or pose tab would otherwise
+                 * take the selection while its timeline row stayed hidden. */
+                keyframeEditor.view.getDopeSheet().revealSheet(currentSheet);
+
+                float tick = keyframeCursor(keyframeEditor.view, cursor);
                 Keyframe closest = getClosestKeyframe(currentSheet, tick);
                 if (closest != null)
                 {
@@ -1253,7 +1211,7 @@ public class UIReplaysEditorUtils
                     {
                         forceSelectInSheet(graph, currentSheet, closest);
                     }
-                    cursor.setCursor((int) closest.getTick());
+                    cursor.setCursor(closest.getTick());
                 }
                 updatePoseEditorBoneSelection(keyframeEditor, bone);
                 return;
@@ -1392,8 +1350,12 @@ public class UIReplaysEditorUtils
 
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor filmPanel, String bone, UIKeyframeSheet sheet, boolean insert)
     {
+        /* Both the insert and the plain pick write into this sheet, and either can be aimed at a row
+         * hidden by a folded category or parent track. */
+        keyframeEditor.view.getDopeSheet().revealSheet(sheet);
+
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        int tick = filmPanel.getCursor();
+        float tick = keyframeCursor(keyframeEditor.view, filmPanel);
 
         if (insert)
         {
@@ -1414,7 +1376,7 @@ public class UIReplaysEditorUtils
                 forceSelectInSheet(graph, sheet, closest);
             }
             updatePoseEditorBoneSelection(keyframeEditor, boneForEditor);
-            filmPanel.setCursor((int) closest.getTick());
+            filmPanel.setCursor(closest.getTick());
         }
         else
         {
@@ -1422,20 +1384,28 @@ public class UIReplaysEditorUtils
         }
     }
 
-    private static Keyframe getClosestKeyframe(UIKeyframeSheet sheet, int tick)
+    private static Keyframe getClosestKeyframe(UIKeyframeSheet sheet, float tick)
     {
         KeyframeSegment segment = sheet.channel.find(tick);
 
         return segment != null ? segment.getClosest() : null;
     }
 
-    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, int tick)
+    /** The authoring tick the shared playhead points at, snapped when tick snapping is enabled. */
+    private static float keyframeCursor(UIKeyframes view, ICursor cursor)
+    {
+        UIContext context = view.getContext();
+
+        return cursor.getKeyframeCursor(context == null ? 0F : context.getTransition());
+    }
+
+    private static Keyframe getKeyframeAt(UIKeyframeSheet sheet, float tick)
     {
         for (Object object : sheet.channel.getKeyframes())
         {
             Keyframe keyframe = (Keyframe) object;
 
-            if ((int) keyframe.getTick() == tick)
+            if (keyframe.getTick() == tick)
             {
                 return keyframe;
             }
@@ -1447,7 +1417,7 @@ public class UIReplaysEditorUtils
     private static void insertIntoPoseSheet(UIKeyframeEditor keyframeEditor, ICursor cursor, String bone, UIKeyframeSheet poseSheet)
     {
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        int tick = cursor.getCursor();
+        float tick = keyframeCursor(keyframeEditor.view, cursor);
         Keyframe existing = getKeyframeAt(poseSheet, tick);
 
         if (existing != null)
@@ -1500,7 +1470,7 @@ public class UIReplaysEditorUtils
     public static void animationToPoseKeyframes(
         UIKeyframeEditor keyframeEditor, UIKeyframeSheet sheet,
         ModelForm modelForm, IEntity entity,
-        int tick, String animationKey, boolean onlyKeyframes, int length, int step
+        float tick, String animationKey, boolean onlyKeyframes, int length, int step
     ) {
         ModelInstance model = ModelFormRenderer.getModel(modelForm);
         Animation animation = model.animations.get(animationKey);
@@ -1552,7 +1522,7 @@ public class UIReplaysEditorUtils
         return ticks;
     }
 
-    private static void fillAnimationPose(UIKeyframeSheet sheet, float i, ModelInstance model, IEntity entity, Animation animation, int current)
+    private static void fillAnimationPose(UIKeyframeSheet sheet, float i, ModelInstance model, IEntity entity, Animation animation, float current)
     {
         model.model.resetPose();
         model.model.apply(entity, animation, i, 1F, 0F, false);
@@ -1613,6 +1583,9 @@ public class UIReplaysEditorUtils
                 int index = limbChannel.insert(tick, copy);
                 Keyframe<PoseTransform> limbKf = limbChannel.get(index);
 
+                /* Not insertInheriting: the template is the SOURCE pose keyframe the user selected,
+                 * not this channel's left neighbour — the point is to carry the pose's shaping onto
+                 * every bone track it is split into, which is a different operation. */
                 limbKf.copyOverExtra(keyframe);
             }
         }
