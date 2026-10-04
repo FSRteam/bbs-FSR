@@ -63,13 +63,10 @@
 	"bbs.config.personalization.overlay_background_opacity-comment": "Насколько затемняется интерфейс позади всплывающих панелей (настройки, выборщики). Ноль оставляет его видимым полностью.",
 	"bbs.config.personalization.overlay_gradient_border": "Свечение панелей",
 	"bbs.config.personalization.overlay_gradient_border-comment": "Градиентная обводка акцентным цветом вокруг всплывающих панелей и контекстных меню.",
-<<<<<<< HEAD
 	"bbs.config.personalization.interface_blur": "Размытие фона",
 	"bbs.config.personalization.interface_blur-comment": "Смягчает мир за полупрозрачными поверхностями. По умолчанию выключено: не проверено вместе с Iris/Sodium.",
 	"bbs.config.personalization.interface_blur_radius": "Сила размытия фона",
 	"bbs.config.personalization.interface_blur_radius-comment": "Управляет силой размытия фона. Чем выше значение, тем мягче фон.",
-=======
->>>>>>> origin/master
 	"bbs.config.timeline.track_width": "Толщина дорожки кейфреймов",
 	"bbs.config.timeline.track_width-comment": "Толщина полоски дорожки кейфреймов в режиме dopesheet",
 	"bbs.config.timeline.keyframe_default_shape": "Форма кейфрейма по умолчанию",
@@ -189,10 +186,6 @@
 	"bbs.config.viewport.preview_resolution_scale-comment": "Множитель разрешения рендера в автоматическом режиме превью (1 = как размер блока, 1.5 = чётче, выше = меньше пикселизации, больше нагрузка на GPU)",
 	"bbs.config.workspace.periodic_save": "Переодическое сохранение",
 	"bbs.config.workspace.periodic_save-comment": "Кол-во секунд после которого панель сохранит данные после иссечение периода. Чтобы отключить авто-сохранение, установите 0.",
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/master
 	"bbs.config.timeline.rewind": "Перемотать",
 	"bbs.config.timeline.rewind-comment": "Перемотать ли курсор в самое начало когда фильм закончился проигрываться в редакторе фильмов",
 	"bbs.config.viewport.rule_of_thirds": "Правило третей",
@@ -203,11 +196,8 @@
 	"bbs.config.timeline.timeline_grid-comment": "Когда включено, линии линейки таймлайна продолжаются через дорожки на всю высоту как вертикальная сетка",
 	"bbs.config.timeline.keyframe_default_interpolation": "Интерполяция по умолчанию",
 	"bbs.config.timeline.keyframe_default_interpolation-comment": "Интерполяция, присваиваемая кейфрейму, создаваемому вручную на пустом месте — там, где раньше применялась linear. Кейфреймы, создаваемые рядом с существующими, по-прежнему наследуют интерполяцию соседа. Записанные и запечённые кейфреймы не затрагиваются.",
-<<<<<<< HEAD
 	"bbs.config.timeline.snap_to_film_markers": "Привязка к маркерам",
 	"bbs.config.timeline.snap_to_film_markers-comment": "Когда включено, перетаскиваемый клип привязывается к маркерам фильма",
-=======
->>>>>>> origin/master
 	"bbs.config.timeline.snap_to_markers": "Привязка к тикам",
 	"bbs.config.timeline.snap_to_markers-comment": "Когда включено, клипы будут также привязываться к маркерам тиков",
 	"bbs.config.camera.speed": "Скорость",
@@ -226,11 +216,8 @@
 	"bbs.config.model_blocks.tooltip": "Настройки касающиеся блок-моделей",
 	"bbs.config.misc.multiskin_multithreaded": "Многопоточная обработка",
 	"bbs.config.misc.multiskin_multithreaded-comment": "Позволяет включить многопоточную обработку мульти-скинов (убирай зависание во время загрузки)",
-<<<<<<< HEAD
 	"bbs.config.misc.frustum_culling": "Отбраковка реплеев за кадром",
 	"bbs.config.misc.frustum_culling-comment": "Пропускает рендер реплеев, находящихся далеко за пределами обзора камеры (щедрый запас 32 блока вокруг каждого). Реплеи на якорях не отбраковываются никогда. Выключи, если актёр когда-либо пропадёт у края экрана",
-=======
->>>>>>> origin/master
 	"bbs.config.multiskin.title": "Мульти-скин",
 	"bbs.config.multiskin.tooltip": "Настройки касающиеся функции мульти-скин, механизм в пикере текстур который позволяет совмещать несколько текстур",
 	"bbs.config.recording.camera_preview": "Предпросмотр камеры",
@@ -1903,7 +1890,6 @@
 	"bbs.ui.transforms.rotation.quaternion": "Кватернион",
 	"bbs.ui.transforms.rotation.mode_tooltip": "Хранение вращения (клик — переключить Эйлер / Кватернион).\n\nКватернион не имеет gimbal lock; Эйлер сохраняет обороты больше 360 градусов и покомпонентные кривые.",
 	"interpolations.step_tick": "Лесенка (тики)",
-<<<<<<< HEAD
 	"bbs.config.camera.title": "Камера",
 	"bbs.config.camera.tooltip": "Движение камеры и управление орбитой",
 	"bbs.config.viewport.title": "Предпросмотр",
@@ -1991,16 +1977,4 @@
 	"bbs.ui.structure_wand.save.recent": "Форму в «Недавние»",
 	"bbs.ui.structure_wand.save.too_big": "Слишком большая для предпросмотра — сохранится как есть",
 	"bbs.ui.structure_wand.save.invalid": "Только латиница: a-z, 0-9, _ - . / — имя станет путём файла"
-=======
-    "bbs.config.camera.title": "Камера",
-    "bbs.config.camera.tooltip": "Движение камеры и управление орбитой",
-    "bbs.config.viewport.title": "Предпросмотр",
-    "bbs.config.viewport.tooltip": "Наложения предпросмотра и настройки области просмотра",
-    "bbs.config.timeline.title": "Таймлайн",
-    "bbs.config.timeline.tooltip": "Настройки воспроизведения и таймлайна",
-    "bbs.config.workspace.title": "Рабочая область",
-    "bbs.config.workspace.tooltip": "Компоновка редактора и сохранение",
-    "bbs.config.misc.title": "Прочее",
-    "bbs.config.misc.tooltip": "Дополнительные переключатели функций"
->>>>>>> origin/master
 }

@@ -100,10 +100,7 @@ public final class ModelIKIO
             boolean tipRotation = entry.getBool(KEY_TIP_ROTATION, ModelIKConfig.DEFAULT_TIP_ROTATION);
             boolean stretch = entry.getBool(KEY_STRETCH, ModelIKConfig.DEFAULT_STRETCH);
             boolean classic = entry.getBool(KEY_CLASSIC, defaultClassic);
-<<<<<<< HEAD
             boolean squash = entry.getBool(KEY_SQUASH, ModelIKConfig.DEFAULT_SQUASH);
-=======
->>>>>>> origin/master
 
             chains.add(new ModelIKConfig.Chain(tip, target, chainLength, pole, poleTarget, poleAngle, softness, weight, enabled, tipRotation, stretch, classic, squash));
         }

@@ -1,15 +1,6 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-<<<<<<< HEAD
-=======
-import io.netty.util.collection.IntObjectHashMap;
-import io.netty.util.collection.IntObjectMap;
-import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.camera.data.Point;
-import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
->>>>>>> origin/master
 import mchorse.bbs_mod.client.renderer.ItemUseEffects;
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
 import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;

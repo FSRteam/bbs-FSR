@@ -1088,7 +1088,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 {
                     ItemUsePose.setSuppressed(false);
                 }
-<<<<<<< HEAD
 
                 if (FramebufferDebug.inside())
                 {
@@ -1096,8 +1095,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                     FramebufferDebug.log("model", "after draw | " + FramebufferDebug.glState());
                     FramebufferDebug.log("model", "after draw | " + FramebufferDebug.samplers());
                 }
-=======
->>>>>>> origin/master
 
                 return true;
             }

@@ -239,7 +239,7 @@ public class UIClips extends UIElement
                 this.copyPasteController.openPresets(context, context.mouseX, context.mouseY);
                 UIUtils.playClick();
             }
-        }).inside().category(KEYS_CATEGORY).active(canUseKeybinds);
+        }).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_CUT, this::cut).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_SHIFT, this::shiftToCursor).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_DURATION, this::shiftDurationToCursor).strict().category(KEYS_CATEGORY).active(canUseKeybindsSelected);
@@ -1558,11 +1558,7 @@ public class UIClips extends UIElement
 
             this.scrubbing = true;
             this.delegate.stopPlaybackOnScrub();
-<<<<<<< HEAD
             this.delegate.setCursor(Math.max(0F, this.fromGraphCursor(mouseX)));
-=======
-            this.delegate.setCursor(this.fromGraphX(mouseX));
->>>>>>> origin/master
 
             return true;
         }

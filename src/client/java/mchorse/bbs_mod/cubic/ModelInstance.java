@@ -599,7 +599,6 @@ public class ModelInstance implements IModelInstance
                         this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
 
                         ShaderInstance capturedShader = shader;
-<<<<<<< HEAD
 
                         if (!deferredSnapshotTaken)
                         {
@@ -607,39 +606,24 @@ public class ModelInstance implements IModelInstance
                             deferredSnapshotTaken = true;
                         }
 
-=======
-                        Matrix4f[] armature = vao.snapshotArmature();
->>>>>>> origin/master
                         int uploadCount = vao.getUploadCount();
 
                         if (texture != null && texture.hasTranslucency())
                         {
                             FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
                                 () -> capturedShader, FormTranslucentQueue.PASS_TEX_OPAQUE, true,
-<<<<<<< HEAD
                                 deferredArmature, uploadCount, texture, modelView, normalMat,
                                 color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
                             FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
                                 () -> capturedShader, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true,
                                 deferredArmature, uploadCount, texture, modelView, normalMat,
-=======
-                                armature, uploadCount, texture, modelView, normalMat,
-                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
-                            FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
-                                () -> capturedShader, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true,
-                                armature, uploadCount, texture, modelView, normalMat,
->>>>>>> origin/master
                                 color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
                         }
                         else
                         {
                             FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
                                 () -> capturedShader, FormTranslucentQueue.PASS_SINGLE, true,
-<<<<<<< HEAD
                                 deferredArmature, uploadCount, texture, modelView, normalMat,
-=======
-                                armature, uploadCount, texture, modelView, normalMat,
->>>>>>> origin/master
                                 color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
                         }
                     }
@@ -827,7 +811,6 @@ public class ModelInstance implements IModelInstance
         boolean bbsModelShader = shader != null && shader.getUniform("PassMode") != null;
         boolean split = FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha);
         boolean whole = !split && FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, alpha);
-<<<<<<< HEAD
         boolean owned = cached == null;
 
         /* The plain CPU path baked straight into the caller's frame, which is exactly what the global
@@ -837,24 +820,12 @@ public class ModelInstance implements IModelInstance
         {
             drawWithStableModelColor(mesh, shader, bbsModelShader);
 
-=======
-
-        if (!split && !whole)
-        {
-            drawWithStableModelColor(mesh, shader, bbsModelShader);
->>>>>>> origin/master
             return;
         }
 
         VertexBuffer buffer;
 
-<<<<<<< HEAD
         if (owned)
-=======
-        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
-
-        if (split && normalMat != null && shader.getUniform("NormalMat") != null)
->>>>>>> origin/master
         {
             buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
             buffer.bind();
@@ -888,7 +859,6 @@ public class ModelInstance implements IModelInstance
             FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
         }
 
-<<<<<<< HEAD
         VertexBuffer.unbind();
 
         if (!owned)
@@ -897,57 +867,30 @@ public class ModelInstance implements IModelInstance
             cached.lentEpoch = BBSRendering.getSceneFrameId();
         }
 
-=======
-        if (split)
-        {
-            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
-            drawWithStableModelColor(buffer, shader, modelView, bbsModelShader);
-            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
-        }
-        VertexBuffer.unbind();
-
-        Vector3f origin = modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f()));
->>>>>>> origin/master
         if (split)
         {
             /* Depth stays on: this is solid geometry, so its semi-transparent texels must occlude
              * the ones behind them inside the same model. */
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TRANSLUCENT, true, texture, modelView, normalMat,
-<<<<<<< HEAD
                 origin, this.isCulling(), null, null, owned));
         }
         else if (texture != null && texture.hasTranslucency())
         {
             /* Keep texture-opaque texels as the depth/blend base for faded overlays. Both commands
              * share one buffer, so only the second may free it at the flush. */
-=======
-                origin, this.isCulling(), null, null, true));
-        }
-        else if (texture != null && texture.hasTranslucency())
-        {
-            /* Keep texture-opaque texels as the depth/blend base for faded overlays. */
->>>>>>> origin/master
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView, normalMat,
                 origin, this.isCulling(), null, null, false));
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView, normalMat,
-<<<<<<< HEAD
                 origin, this.isCulling(), null, null, owned));
-=======
-                origin, this.isCulling(), null, null, true));
->>>>>>> origin/master
         }
         else
         {
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_SINGLE, true, texture, modelView, normalMat,
-<<<<<<< HEAD
                 origin, this.isCulling(), null, null, owned));
-=======
-                origin, this.isCulling(), null, null, true));
->>>>>>> origin/master
         }
     }
 

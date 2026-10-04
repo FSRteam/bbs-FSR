@@ -29,7 +29,6 @@ public class UIKeyframeSheet extends UIKeyframeElement
     public final IKey defaultTitle;
     public final int defaultColor;
     private final String filterKey;
-<<<<<<< HEAD
 
     /** Display-only grouping for dope-sheet sections: never a channel, selection, or filter entry. */
     public record Section(String id, IKey title, Icon icon, int color) {}
@@ -97,8 +96,6 @@ public class UIKeyframeSheet extends UIKeyframeElement
     public boolean folded;
 
 
-=======
->>>>>>> origin/master
 
     public final KeyframeChannel channel;
     public final KeyframeSelection selection;

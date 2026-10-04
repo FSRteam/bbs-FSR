@@ -147,11 +147,8 @@ public class UIReplaysEditor extends UIElement {
     private boolean propertiesVisible = true;
     private Set<String> keys = new LinkedHashSet<>();
     private final Map<String, Set<String>> expandedPoseTabsByReplay = new HashMap<>();
-<<<<<<< HEAD
     /** Dope-sheet section folds, per replay id: the timeline is rebuilt on many editor actions. */
     private final Map<String, Map<String, Boolean>> sectionFoldsByReplay = new HashMap<>();
-=======
->>>>>>> origin/master
     private String keyframeEditorReplayId;
 
     public enum ReplayCategory {
@@ -919,14 +916,11 @@ public class UIReplaysEditor extends UIElement {
             lastForm = form;
         }
 
-<<<<<<< HEAD
         /* Group the kept rows into collapsible dope-sheet sections, one per track category. */
         for (UIKeyframeSheet sheet : sheets) {
             sheet.section = SECTIONS.get(categoryOf(sheet));
         }
 
-=======
->>>>>>> origin/master
         if (!sheets.isEmpty() || filteredOutEverything) {
             this.keyframeEditor = new UIKeyframeEditor(consumer
                     -> new UIFilmKeyframes(this.filmPanel.cameraEditor, consumer).absolute()
@@ -1111,14 +1105,11 @@ public class UIReplaysEditor extends UIElement {
                 Collections.emptySet()
             );
             view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
-<<<<<<< HEAD
             /* The timeline is rebuilt on many actions, so section folds live here and are handed back each time. */
             view.getDopeSheet().configureSectionFolds(this.sectionFoldsByReplay.computeIfAbsent(
                 this.replay == null ? "" : this.replay.getId(),
                 k -> new HashMap<>()
             ));
-=======
->>>>>>> origin/master
             this.keyframeEditorReplayId = this.replay == null ? null : this.replay.getId();
 
         }
@@ -1201,7 +1192,6 @@ public class UIReplaysEditor extends UIElement {
             KeyframeChannel channel = (KeyframeChannel) value;
             UIKeyframeSheet sheet = new UIKeyframeSheet(getColor(key), false, channel, null).icon(getIcon(key));
 
-<<<<<<< HEAD
             /* Curated channels list the hotbar in slot order, starting with its parent row. */
             if (this.replay.keyframes.hotbar.stream().anyMatch(slot -> slot == channel)) {
                 if (hotbarRoot == null) {
@@ -1213,9 +1203,6 @@ public class UIReplaysEditor extends UIElement {
             }
 
             sheets.add(sheet);
-=======
-            sheets.add(new UIKeyframeSheet(getColor(key), false, channel, null).icon(getIcon(key)));
->>>>>>> origin/master
         }
     }
 

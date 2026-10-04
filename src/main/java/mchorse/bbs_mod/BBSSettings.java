@@ -208,7 +208,6 @@ public class BBSSettings {
 	public static ValueInt recordingPoseTransformOverlays;
 	public static ValueBoolean recordingCameraPreview;
 	public static ValueBoolean recordingTeleport;
-<<<<<<< HEAD
 
 	public static ValueBoolean updateEnabled;
 	public static ValueInt updateChannel;
@@ -216,8 +215,6 @@ public class BBSSettings {
 	public static ValueString updateSkippedVersion;
 	public static ValueLong updateLastCheck;
 	public static ValueBoolean updateCheckTrigger;
-=======
->>>>>>> origin/master
 
 	public static ValueBoolean renderAllModelBlocks;
 	public static ValueBoolean clickModelBlocks;
@@ -729,7 +726,6 @@ public class BBSSettings {
 		layoutMigrated |= migrateLegacyValue(root, "multiskin", "multithreaded", "misc", "multiskin_multithreaded");
 		layoutMigrated |= migrateLegacyValue(root, "entity_selectors", "whitelist", "misc", "entity_selectors_whitelist");
 
-<<<<<<< HEAD
 		/* Extra hotbar slots now fold under slot 0 instead of being filtered away by
 		 * default. Clear that old filter once; manual filtering afterwards must survive
 		 * reloads, so the flag is what keeps this from running again. */
@@ -749,9 +745,6 @@ public class BBSSettings {
 		}
 
 		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated || layoutMigrated || hotbarFilterMigrated;
-=======
-		return personalizationMigrated || skinsMigrated || transformationMigrated || videoMigrated || layoutMigrated;
->>>>>>> origin/master
 	}
 
 	private static boolean migrateLegacyCategory(MapType root, String oldCategory, String newCategory, String... keys) {
@@ -831,11 +824,8 @@ public class BBSSettings {
 		builder.register(favoriteColors);
 		builder.register(recentColors);
 		builder.register(disabledSheets);
-<<<<<<< HEAD
 		builder.getBoolean("hotbar_filter_migrated", true).invisible();
 		builder.register(texturePins);
-=======
->>>>>>> origin/master
 		trackStyles = new mchorse.bbs_mod.settings.values.ui.ValueTrackStyles("track_styles");
 		builder.register(trackStyles);
 		disabledMorphFormCategories = new ValueStringKeys("disabled_morph_form_categories");
@@ -1012,15 +1002,10 @@ public class BBSSettings {
 		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 		editorSnapToMarkers = builder.getBoolean("snap_to_markers", false);
-<<<<<<< HEAD
 		editorSnapToTicks = builder.getBoolean("snap_to_ticks", true);
 		editorSnapToFilmMarkers = builder.getBoolean("snap_to_film_markers", true);
 		editorRewind = builder.getBoolean("rewind", true);
 		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", false);
-=======
-		editorRewind = builder.getBoolean("rewind", true);
-		editorHorizontalClipEditor = builder.getBoolean("horizontal_clip_editor", true);
->>>>>>> origin/master
 		editorStopPlaybackOnScrub = builder.getBoolean("stop_playback_on_scrub", true);
 		editorRestartOnSeek = builder.getBoolean("restart_on_seek", false);
 
@@ -1052,13 +1037,10 @@ public class BBSSettings {
 		shaderCurvesEnabled = builder.getBoolean("shader_curves", true);
 		translucencyQueue = builder.getBoolean("translucency_queue", false);
 		multiskinMultiThreaded = builder.getBoolean("multiskin_multithreaded", true);
-<<<<<<< HEAD
 		/* Upstream keeps this in its "performance" category; FSR never grew that category and
 		 * parks the other two performance toggles above, so it lives here too. The config key
 		 * itself is upstream's, verbatim. */
 		frustumCulling = builder.getBoolean("frustum_culling", true);
-=======
->>>>>>> origin/master
 
 		builder.category("audio", Icons.SOUND);
 		audioWaveformVisibleInPreview = builder.getBoolean("waveform_visible_preview", true);

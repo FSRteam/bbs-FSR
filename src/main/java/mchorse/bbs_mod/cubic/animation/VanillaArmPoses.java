@@ -15,11 +15,7 @@ import net.minecraft.world.item.UseAnim;
  * {@code positionLeftArm} / {@code CrossbowPosing} taken off the 1.20.4
  * bytecode, and the pose selection is {@code PlayerEntityRenderer.getArmPose}
  * plus its {@code setModelPose} two-handed rule. The model's bones speak their
-<<<<<<< HEAD
  * own units and signs, so they come in through {@link VanillaBone} adapters that talk
-=======
- * own units and signs, so they come in through {@link Arm} adapters that talk
->>>>>>> origin/master
  * vanilla: pitch and yaw in radians, vanilla's own directions.</p>
  */
 public class VanillaArmPoses
@@ -34,21 +30,6 @@ public class VanillaArmPoses
         }
     }
 
-<<<<<<< HEAD
-=======
-    /** An arm bone in vanilla's terms: radians, vanilla's signs. */
-    public interface Arm
-    {
-        public float pitch();
-
-        public void pitch(float pitch);
-
-        public float yaw();
-
-        public void yaw(float yaw);
-    }
-
->>>>>>> origin/master
     /**
      * Poses both arms the way vanilla does at the end of its base angles: the
      * hand that is using something wins alone, otherwise each arm takes the pose
@@ -57,11 +38,7 @@ public class VanillaArmPoses
      * <p>The actor is right handed (so is the rest of BBS): the right arm gets
      * the main hand, the left arm the off hand.</p>
      */
-<<<<<<< HEAD
     public static void apply(VanillaBone right, VanillaBone left, float headPitch, float headYaw, ItemStack main, ItemStack off, Use mainUse, Use offUse, boolean sneaking, boolean swinging)
-=======
-    public static void apply(Arm right, Arm left, float headPitch, float headYaw, ItemStack main, ItemStack off, Use mainUse, Use offUse, boolean sneaking, boolean swinging)
->>>>>>> origin/master
     {
         Pose rightPose = poseOf(main, mainUse, swinging);
         Pose leftPose = poseOf(off, offUse, swinging);
@@ -129,15 +106,9 @@ public class VanillaArmPoses
         return Pose.ITEM;
     }
 
-<<<<<<< HEAD
     private static void position(Pose pose, boolean rightSide, VanillaBone right, VanillaBone left, float headPitch, float headYaw, boolean sneaking, Use use, boolean strict)
     {
         VanillaBone arm = rightSide ? right : left;
-=======
-    private static void position(Pose pose, boolean rightSide, Arm right, Arm left, float headPitch, float headYaw, boolean sneaking, Use use, boolean strict)
-    {
-        Arm arm = rightSide ? right : left;
->>>>>>> origin/master
 
         switch (pose)
         {
@@ -201,17 +172,10 @@ public class VanillaArmPoses
     }
 
     /** {@code CrossbowPosing.hold}: the crossbow arm aims, the other one steadies it. */
-<<<<<<< HEAD
     private static void hold(VanillaBone right, VanillaBone left, boolean rightSide, float headPitch, float headYaw)
     {
         VanillaBone holding = rightSide ? right : left;
         VanillaBone other = rightSide ? left : right;
-=======
-    private static void hold(Arm right, Arm left, boolean rightSide, float headPitch, float headYaw)
-    {
-        Arm holding = rightSide ? right : left;
-        Arm other = rightSide ? left : right;
->>>>>>> origin/master
 
         holding.yaw((rightSide ? -0.3F : 0.3F) + headYaw);
         other.yaw((rightSide ? 0.6F : -0.6F) + headYaw);
@@ -220,17 +184,10 @@ public class VanillaArmPoses
     }
 
     /** {@code CrossbowPosing.charge}: the free arm pulls the string as the charge fills. */
-<<<<<<< HEAD
     private static void charge(VanillaBone right, VanillaBone left, boolean rightSide, Use use)
     {
         VanillaBone charging = rightSide ? right : left;
         VanillaBone other = rightSide ? left : right;
-=======
-    private static void charge(Arm right, Arm left, boolean rightSide, Use use)
-    {
-        Arm charging = rightSide ? right : left;
-        Arm other = rightSide ? left : right;
->>>>>>> origin/master
 
         charging.yaw(rightSide ? -0.8F : 0.8F);
         charging.pitch(-0.97079635F);

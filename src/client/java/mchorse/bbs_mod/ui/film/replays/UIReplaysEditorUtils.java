@@ -112,21 +112,10 @@ public class UIReplaysEditorUtils
                     KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
                     KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
                     PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
-<<<<<<< HEAD
 
                     /* insertInheriting is this exact insert + left-neighbour inherit, so the value is
                      * still looked up here and the shaping is delegated. */
                     poseChannel.insertInheriting(tick, value);
-=======
-                    int index = poseChannel.insert(tick, value);
-                    Keyframe<PoseTransform> kf = poseChannel.get(index);
-                    Keyframe<PoseTransform> template = segment != null ? segment.a : null;
-
-                    if (template != null && template != kf)
-                    {
-                        kf.copyOverExtra(template);
-                    }
->>>>>>> origin/master
 
                     continue;
                 }
@@ -147,21 +136,10 @@ public class UIReplaysEditorUtils
                         Object current = property instanceof BaseValueBasic basic ? basic.get() : null;
                         value = current instanceof Pose pose ? poseChannel.getFactory().copy(pose) : poseChannel.getFactory().createEmpty();
                     }
-<<<<<<< HEAD
 
                     /* As above: the value is resolved here (from the neighbour, the live property or
                      * an empty pose), the shaping comes from insertInheriting. */
                     poseChannel.insertInheriting(tick, value);
-=======
-                    int index = poseChannel.insert(tick, value);
-                    Keyframe<Pose> kf = poseChannel.get(index);
-                    Keyframe<Pose> template = segment != null ? segment.a : null;
-
-                    if (template != null && template != kf)
-                    {
-                        kf.copyOverExtra(template);
-                    }
->>>>>>> origin/master
                 }
             }
         });

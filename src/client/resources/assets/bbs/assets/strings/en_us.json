@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
 	"bbs.ui.film.view.choose_camera": "Choose camera / output…",
 	"bbs.ui.film.view.camera_actions": "Camera and output actions…",
 	"bbs.ui.film.view.options": "View options",
@@ -47,8 +46,6 @@
 	"bbs.ui.film.view.shaders_off": "Disable shaders for this view",
 	"bbs.ui.film.view.reset_frame": "Fit camera frame",
 	"bbs.ui.film.panels.keys.toggle_multiview": "Toggle additional preview",
-=======
->>>>>>> origin/master
 	"bbs.config.workspace.keyframe_panel_width": "Keyframe panel width",
 	"bbs.config.workspace.keyframe_panel_width-comment": "Width of the keyframe properties panel in the editor.",
 	"bbs.config.viewport.preview_icons_auto_hide": "Auto-hide preview icons",
@@ -123,13 +120,10 @@
 	"bbs.config.personalization.overlay_background_opacity-comment": "How much the interface behind an overlay panel (settings, pickers) is dimmed. Zero leaves it fully visible.",
 	"bbs.config.personalization.overlay_gradient_border": "Panel glow",
 	"bbs.config.personalization.overlay_gradient_border-comment": "The gradient outline in the accent colour around overlay panels and context menus.",
-<<<<<<< HEAD
 	"bbs.config.personalization.interface_blur": "Background blur",
 	"bbs.config.personalization.interface_blur-comment": "Softens the world behind translucent surfaces. Off by default: unverified alongside Iris/Sodium.",
 	"bbs.config.personalization.interface_blur_radius": "Background blur strength",
 	"bbs.config.personalization.interface_blur_radius-comment": "Controls the strength of the background blur. Higher values give a softer background.",
-=======
->>>>>>> origin/master
 	"bbs.config.skins.title": "Skins",
 	"bbs.config.skins.tooltip": "Themes, skins and UI animation settings",
 	"bbs.config.skins.theme_id": "Theme",
@@ -273,10 +267,6 @@
 	"bbs.config.workspace.periodic_save-comment": "Number of seconds that triggers automatic save repeatedly. To disable periodic saving, set the option to 0",
 	"bbs.config.workspace.resizable_panels": "Resizable panels",
 	"bbs.config.workspace.resizable_panels-comment": "When enabled, you can resize panels in the film and particle editors by dragging their borders. Disable it to prevent accidental resizing",
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/master
 	"bbs.config.timeline.rewind": "Rewind",
 	"bbs.config.timeline.rewind-comment": "Whether the playback should be rewound to beginning upon finishing playing the film",
 	"bbs.config.viewport.rule_of_thirds": "Rule of thirds",
@@ -289,11 +279,8 @@
 	"bbs.config.timeline.timeline_grid-comment": "When enabled, the timeline ruler's lines are extended over the tracks at full height as a vertical grid",
 	"bbs.config.timeline.keyframe_default_interpolation": "Default interpolation",
 	"bbs.config.timeline.keyframe_default_interpolation-comment": "Interpolation given to a keyframe you create by hand in an empty spot, where linear was used before. Keyframes created next to existing ones still inherit their neighbour's interpolation, as before. Recorded and baked keyframes are not affected.",
-<<<<<<< HEAD
 	"bbs.config.timeline.snap_to_film_markers": "Snap to markers",
 	"bbs.config.timeline.snap_to_film_markers-comment": "When enabled, dragging a clip snaps it to the film's markers",
-=======
->>>>>>> origin/master
 	"bbs.config.timeline.snap_to_markers": "Snap to ticks",
 	"bbs.config.timeline.snap_to_markers-comment": "When enabled, clip snapping will snap to tick markers",
 	"bbs.config.camera.speed": "Speed",
@@ -324,11 +311,8 @@
 	"bbs.config.misc.multiskin_multithreaded-comment": "Allows you to toggle multi-threaded processing of multi-skins, which should fix the lag at cost of longer processing",
 	"bbs.config.misc.translucency_queue": "Form translucency queue",
 	"bbs.config.misc.translucency_queue-comment": "When enabled, semi-transparent forms are sorted and drawn at the end of the world pass. Turn it off to use the immediate single-pass renderer.",
-<<<<<<< HEAD
 	"bbs.config.misc.frustum_culling": "Replay frustum culling",
 	"bbs.config.misc.frustum_culling-comment": "Skips rendering replays that are far outside the camera's view (a generous 32-block margin around each). Anchored replays are never culled. Turn it off if an actor ever disappears at the edge of the screen",
-=======
->>>>>>> origin/master
 	"bbs.config.multiskin.title": "Multi-skin",
 	"bbs.config.multiskin.tooltip": "Options regarding Multi-skin feature",
 	"bbs.config.recording.camera_preview": "Camera preview",
@@ -1229,11 +1213,7 @@
 	"bbs.ui.keyframes.context.spread": "Spread keyframes equally",
 	"bbs.ui.keyframes.forced_duration": "Forced duration",
 	"bbs.ui.keyframes.empty_filtered": "Every track is hidden by the filter",
-<<<<<<< HEAD
 	"bbs.ui.keyframes.empty_filtered-hint": "Right click here → Filter tracks...",
-=======
-	"bbs.ui.keyframes.empty_filtered-hint": "Right click here \u2192 Filter tracks...",
->>>>>>> origin/master
 	"bbs.ui.keyframes.keys.category": "Keyframes editor",
 	"bbs.ui.keyframes.keys.scale_time": "Scale time",
 	"bbs.ui.keyframes.keys.select_left": "Select to the left",

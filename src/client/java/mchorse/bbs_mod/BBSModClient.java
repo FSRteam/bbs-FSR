@@ -24,10 +24,7 @@ import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
 import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
 import mchorse.bbs_mod.cubic.animation.ItemUsePose;
-<<<<<<< HEAD
 import mchorse.bbs_mod.cubic.jem.VanillaRigs;
-=======
->>>>>>> origin/master
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiMirrorRuntime;
 import mchorse.bbs_mod.client.ui.mirror.BBSUiOpenDispatcher;
