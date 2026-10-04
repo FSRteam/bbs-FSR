@@ -442,15 +442,13 @@ public abstract class BaseFilmController
 
             /* Apply property */
             Form form1 = entity.getForm();
-            replay.properties.applyProperties(form1, tick + delta);
-            this.applyTargetControls(replay, form1, tick + delta);
+            applyReplayChannels(replay, form1, tick + delta);
 
             if (anEntity instanceof ActorEntity actor)
             {
                 Form form = actor.getForm();
 
-                replay.properties.applyProperties(form, tick + delta);
-                this.applyTargetControls(replay, form, tick + delta);
+                applyReplayChannels(replay, form, tick + delta);
             }
             else if (anEntity instanceof Player player)
             {
@@ -460,8 +458,7 @@ public abstract class BaseFilmController
                 {
                     Form form = morph.getForm();
 
-                    replay.properties.applyProperties(form, tick + delta);
-                    this.applyTargetControls(replay, form, tick + delta);
+                    applyReplayChannels(replay, form, tick + delta);
                 }
 
                 float yawHead = replay.keyframes.headYaw.interpolate(tick + delta).floatValue();
@@ -505,13 +502,13 @@ public abstract class BaseFilmController
             float delta = this.getTransition(entity, transition);
             int tick = replay.getTick(this.getTick());
 
-            this.applyTargetOverrides(replay, entity.getForm(), tick + delta, delta);
+            applyReplayTargets(replay, entity.getForm(), tick + delta, delta, this.entities);
 
             Entity anEntity = this.getReplayActor(replay);
 
             if (anEntity instanceof ActorEntity actor)
             {
-                this.applyTargetOverrides(replay, actor.getForm(), tick + delta, delta);
+                applyReplayTargets(replay, actor.getForm(), tick + delta, delta, this.entities);
             }
             else if (anEntity instanceof Player player)
             {
@@ -519,7 +516,7 @@ public abstract class BaseFilmController
 
                 if (morph != null)
                 {
-                    this.applyTargetOverrides(replay, morph.getForm(), tick + delta, delta);
+                    applyReplayTargets(replay, morph.getForm(), tick + delta, delta, this.entities);
                 }
             }
         }
@@ -535,20 +532,51 @@ public abstract class BaseFilmController
         return entityId == null || level == null ? null : level.getEntity(entityId);
     }
 
-    public void update(Replay replay, Form root, float tick, float transition)
-    {
-        this.applyTargetControls(replay, root, tick);
-        this.applyTargetOverrides(replay, root, tick, transition);
-    }
-
-    private void applyTargetControls(Replay replay, Form root, float tick)
+    /**
+     * Phase 1 of a rendered frame for one replay — its own properties and its scalar procedural
+     * controls, laid onto {@code root}. The static seam the out-of-sight bake drives (see
+     * {@code IKBake.Sampler}), so it lays exactly what the render lays and in the same phase.
+     *
+     * <p>{@code FormProperties.applyProperties} alone is not enough: the IK, physics and wind
+     * control tracks are not ordinary properties, so they fall into its "everything else" bucket,
+     * resolve to nothing and do nothing here. Phase 1 is the pair.</p>
+     */
+    public static void applyReplayChannels(Replay replay, Form root, float tick)
     {
         if (replay == null || root == null)
         {
             return;
         }
 
-        this.clearControlOverrides(root);
+        replay.properties.applyProperties(root, tick);
+        applyTargetControls(replay, root, tick);
+    }
+
+    /**
+     * Phase 2 of a rendered frame for one replay — its spatial target channels resolved into the
+     * form's override maps. Split from {@link #applyReplayChannels(Replay, Form, float)} on purpose:
+     * a target may be anchored to another replay, so every replay's channels have to be laid before
+     * any target is resolved, or the anchors read a half-updated frame.
+     */
+    public static void applyReplayTargets(Replay replay, Form root, float tick, float transition, Map<String, IEntity> entities)
+    {
+        applyTargetOverrides(replay, root, tick, transition, entities);
+    }
+
+    public void update(Replay replay, Form root, float tick, float transition)
+    {
+        applyTargetControls(replay, root, tick);
+        applyTargetOverrides(replay, root, tick, transition, this.entities);
+    }
+
+    private static void applyTargetControls(Replay replay, Form root, float tick)
+    {
+        if (replay == null || root == null)
+        {
+            return;
+        }
+
+        clearControlOverrides(root);
 
         if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
         {
@@ -571,31 +599,31 @@ public abstract class BaseFilmController
 
             if (FormControlKeys.isIKControlChannel(id))
             {
-                this.applyIKControls(root, FormControlKeys.parseIKControlFormPath(id), channel, tick);
+                applyIKControls(root, FormControlKeys.parseIKControlFormPath(id), channel, tick);
                 continue;
             }
 
             if (FormControlKeys.isPhysicsControlChannel(id))
             {
-                this.applyPhysicsControls(root, FormControlKeys.parsePhysicsControlFormPath(id), channel, tick);
+                applyPhysicsControls(root, FormControlKeys.parsePhysicsControlFormPath(id), channel, tick);
                 continue;
             }
 
             if (FormControlKeys.isWindControlChannel(id))
             {
-                this.applyWindControls(root, FormControlKeys.parseWindControlFormPath(id), channel, tick);
+                applyWindControls(root, FormControlKeys.parseWindControlFormPath(id), channel, tick);
             }
         }
     }
 
-    private void applyTargetOverrides(Replay replay, Form root, float tick, float transition)
+    private static void applyTargetOverrides(Replay replay, Form root, float tick, float transition, Map<String, IEntity> entities)
     {
         if (replay == null || root == null)
         {
             return;
         }
 
-        this.clearSpatialTargetOverrides(root);
+        clearSpatialTargetOverrides(root);
 
         if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
         {
@@ -623,7 +651,7 @@ public abstract class BaseFilmController
 
             if (ikPath != null)
             {
-                this.applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, TargetKind.IK);
+                applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, TargetKind.IK, entities);
                 continue;
             }
 
@@ -631,7 +659,7 @@ public abstract class BaseFilmController
 
             if (polePath != null)
             {
-                this.applyOverride(root, polePath.formPath(), polePath.controller(), channel, tick, transition, TargetKind.POLE);
+                applyOverride(root, polePath.formPath(), polePath.controller(), channel, tick, transition, TargetKind.POLE, entities);
                 continue;
             }
 
@@ -639,12 +667,12 @@ public abstract class BaseFilmController
 
             if (physicsPath != null)
             {
-                this.applyPhysicsTarget(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition);
+                applyPhysicsTarget(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, entities);
             }
         }
     }
 
-    private void applyIKControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
+    private static void applyIKControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
     {
         Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
@@ -673,7 +701,7 @@ public abstract class BaseFilmController
         }
     }
 
-    private void applyPhysicsControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
+    private static void applyPhysicsControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
     {
         Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
@@ -702,7 +730,7 @@ public abstract class BaseFilmController
         }
     }
 
-    private void applyWindControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
+    private static void applyWindControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
     {
         Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
@@ -738,7 +766,7 @@ public abstract class BaseFilmController
         IK, POLE
     }
 
-    private void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, TargetKind kind)
+    private static void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, TargetKind kind, Map<String, IEntity> entities)
     {
         Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
@@ -789,14 +817,14 @@ public abstract class BaseFilmController
             weight = 1F;
         }
 
-        IEntity targetEntity = this.entities.get(resolve.replay);
+        IEntity targetEntity = entities.get(resolve.replay);
 
-        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(this.entities, resolve))
+        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(entities, resolve))
         {
             return;
         }
 
-        Pair<Matrix4f, Float> matrix = FilmMatrices.getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
+        Pair<Matrix4f, Float> matrix = FilmMatrices.getTotalMatrix(entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
         Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
         Vector3f position = resolved.getTranslation(TEMP_VECTOR);
 
@@ -811,7 +839,7 @@ public abstract class BaseFilmController
      * its full position and hand the physics solver a 0..1 weight so it can ease the chain in/out from its own
      * tip (see {@link ModelPhysicsRuntime}).
      */
-    private void applyPhysicsTarget(Form root, String formPath, String rootBone, KeyframeChannel<?> channel, float tick, float transition)
+    private static void applyPhysicsTarget(Form root, String formPath, String rootBone, KeyframeChannel<?> channel, float tick, float transition, Map<String, IEntity> entities)
     {
         Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
 
@@ -848,14 +876,14 @@ public abstract class BaseFilmController
             weight = 1F;
         }
 
-        IEntity targetEntity = this.entities.get(resolve.replay);
+        IEntity targetEntity = entities.get(resolve.replay);
 
-        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(this.entities, resolve))
+        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(entities, resolve))
         {
             return;
         }
 
-        Pair<Matrix4f, Float> matrix = FilmMatrices.getTotalMatrix(this.entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
+        Pair<Matrix4f, Float> matrix = FilmMatrices.getTotalMatrix(entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
         Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
         Vector3f position = resolved.getTranslation(TEMP_VECTOR);
 
@@ -863,7 +891,7 @@ public abstract class BaseFilmController
         modelForm.physicsTargetWeights.put(rootBone, weight);
     }
 
-    private void clearControlOverrides(Form form)
+    private static void clearControlOverrides(Form form)
     {
         if (form instanceof ModelForm modelForm)
         {
@@ -878,12 +906,12 @@ public abstract class BaseFilmController
 
             if (child != null)
             {
-                this.clearControlOverrides(child);
+                clearControlOverrides(child);
             }
         }
     }
 
-    private void clearSpatialTargetOverrides(Form form)
+    private static void clearSpatialTargetOverrides(Form form)
     {
         if (form instanceof ModelForm modelForm)
         {
@@ -901,7 +929,7 @@ public abstract class BaseFilmController
 
             if (child != null)
             {
-                this.clearSpatialTargetOverrides(child);
+                clearSpatialTargetOverrides(child);
             }
         }
     }
