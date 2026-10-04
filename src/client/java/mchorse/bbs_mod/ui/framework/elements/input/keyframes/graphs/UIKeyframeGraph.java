@@ -516,7 +516,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                 this.renderPreviewKeyframe(context, sheet, tick, context.mouseY, Colors.WHITE);
             }
         }
-        else if (Window.isAltPressed())
+        else if (Window.isAltPressed() && this.keyframes.isDuplicatingKeyframes(context))
         {
             currentTick = this.keyframes.getDuplicationTick(context);
             UIKeyframeSheet current = this.sheet;

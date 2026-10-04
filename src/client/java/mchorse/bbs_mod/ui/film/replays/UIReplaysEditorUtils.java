@@ -1174,6 +1174,11 @@ public class UIReplaysEditorUtils
             && keyframeEditor.editor instanceof UIPoseKeyframeFactory poseFactory
             && poseFactory.poseEditor.hasBone(bone))
         {
+            IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+
+            /* The picked bone's row can sit under a folded pose tab: reveal it before the pose
+             * editor takes the selection, or the highlight is invisible. */
+            keyframeEditor.view.getDopeSheet().revealSheet(graph.getSheet(graph.getSelected()));
             poseFactory.poseEditor.selectBone(bone, true);
 
             return;
@@ -1194,6 +1199,10 @@ public class UIReplaysEditorUtils
             }
             if (isPoseSheet(currentSheet, path))
             {
+                /* Reveal first: a pose row under a folded category or pose tab would otherwise
+                 * take the selection while its timeline row stayed hidden. */
+                keyframeEditor.view.getDopeSheet().revealSheet(currentSheet);
+
                 float tick = keyframeCursor(keyframeEditor.view, cursor);
                 Keyframe closest = getClosestKeyframe(currentSheet, tick);
                 if (closest != null)
@@ -1341,6 +1350,10 @@ public class UIReplaysEditorUtils
 
     private static void pickProperty(UIKeyframeEditor keyframeEditor, ICursor filmPanel, String bone, UIKeyframeSheet sheet, boolean insert)
     {
+        /* Both the insert and the plain pick write into this sheet, and either can be aimed at a row
+         * hidden by a folded category or parent track. */
+        keyframeEditor.view.getDopeSheet().revealSheet(sheet);
+
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
         float tick = keyframeCursor(keyframeEditor.view, filmPanel);
 

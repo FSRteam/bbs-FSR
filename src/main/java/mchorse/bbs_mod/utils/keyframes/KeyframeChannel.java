@@ -9,7 +9,9 @@ import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Keyframe channel
@@ -298,9 +300,31 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
 
     public void sort()
     {
-        this.list.sort((a, b) -> (int) (a.getTick() - b.getTick()));
+        /* Float.compare rather than (int) (a - b): two distinct fractional ticks less than one
+         * apart would truncate to an equal comparison and leave the list unsorted, and segment
+         * lookup assumes the keys are ordered. */
+        this.list.sort((a, b) -> Float.compare(a.getTick(), b.getTick()));
 
         this.sync();
+    }
+
+    /**
+     * Sort after a move, keeping the moved keyframe at each occupied tick: a key dropped onto a
+     * tick another key already holds replaces it instead of sharing the tick. The caller records
+     * the whole edit through its before/after snapshots, exactly as with {@link #sort()}.
+     */
+    public void sort(List<Keyframe<T>> moved)
+    {
+        Map<Float, Keyframe<T>> replacements = new HashMap<>();
+
+        for (Keyframe<T> keyframe : moved)
+        {
+            replacements.put(keyframe.getTick(), keyframe);
+        }
+
+        this.list.removeIf(keyframe -> replacements.containsKey(keyframe.getTick())
+            && replacements.get(keyframe.getTick()) != keyframe);
+        this.sort();
     }
 
     public void simplify()

@@ -504,7 +504,10 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public void clearSelection()
     {
-        for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+        /* Every sheet, not only the interactive ones: folding a nested track only hides its rows,
+         * and a selection made while it was open must stay reachable by clear/remove/navigation
+         * instead of going stale behind the fold. */
+        for (UIKeyframeSheet sheet : this.sheets)
         {
             sheet.selection.clear();
         }
@@ -515,7 +518,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public void selectAll()
     {
-        for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+        for (UIKeyframeSheet sheet : this.sheets)
         {
             sheet.selection.all();
         }
@@ -526,7 +529,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public void selectAfter(float tick, int direction)
     {
-        for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+        for (UIKeyframeSheet sheet : this.sheets)
         {
             sheet.selection.after(tick, direction);
         }
@@ -537,7 +540,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public Keyframe getSelected()
     {
-        for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+        for (UIKeyframeSheet sheet : this.sheets)
         {
             Keyframe first = sheet.selection.getFirst();
 
@@ -553,7 +556,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public UIKeyframeSheet getSheet(String id)
     {
-        for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+        for (UIKeyframeSheet sheet : this.sheets)
         {
             if (sheet.id.equals(id))
             {
@@ -567,12 +570,52 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     @Override
     public void removeSelected()
     {
-        for (UIKeyframeSheet sheet : this.getInteractiveSheets())
+        for (UIKeyframeSheet sheet : this.sheets)
         {
             sheet.selection.removeSelected();
         }
 
         this.pickKeyframe(null);
+    }
+
+    /**
+     * Unfold everything hiding given row and bring it into view: its section, every folded ancestor
+     * track and a collapsed pose tab. A viewport pick can land on a track that is currently hidden
+     * behind any of those, and the selection it just made would be invisible until the user found
+     * and unfolded the row by hand. Navigates only — it neither selects nor moves the time viewport.
+     */
+    public void revealSheet(UIKeyframeSheet sheet)
+    {
+        if (sheet == null || !this.sheets.contains(sheet))
+        {
+            return;
+        }
+
+        if (sheet.section != null)
+        {
+            this.sectionFolds.put(sheet.section.id(), true);
+        }
+
+        for (UIKeyframeSheet parent = sheet.parent; parent != null; parent = parent.parent)
+        {
+            parent.folded = false;
+        }
+
+        UIKeyframeSheet poseTabRoot = this.poseTabRoots.get(sheet);
+
+        if (poseTabRoot != null)
+        {
+            this.expandedPoseTabs.add(poseTabRoot);
+        }
+
+        this.updateScrollSize();
+        this.lastSheet = sheet;
+
+        int y = this.sheetYCache.getOrDefault(sheet, 0) + TOP_MARGIN;
+
+        /* setScroll rather than scrollTo: the reveal is immediate, like the row jump it accompanies,
+         * instead of a tween the next frame would animate away from. */
+        this.dopeSheet.setScroll(y - (this.dopeSheet.area.h - this.trackHeight) / 2);
     }
 
     private void flatten(UIKeyframeElement element)
@@ -1062,7 +1105,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
                 this.renderPreviewKeyframe(context, sheet, tick, Colors.WHITE);
             }
         }
-        else if (Window.isAltPressed() && !Window.isShiftPressed())
+        else if (Window.isAltPressed() && this.keyframes.isDuplicatingKeyframes(context))
         {
             List<UIKeyframeSheet> sheets = new ArrayList<>();
             boolean atPlayhead = this.keyframes.isDuplicatingAtPlayhead();

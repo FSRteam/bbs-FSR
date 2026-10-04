@@ -811,6 +811,16 @@ public class UIKeyframes extends UIElement
         this.cache = null;
     }
 
+    /**
+     * Drop the edit captured by {@link #cacheKeyframes()} without recording it, for a value gesture
+     * the user rejected. The data and the selection from the snapshot go back silently, so a cancel
+     * adds no edit and no history entry.
+     */
+    public void cancelCachedKeyframes()
+    {
+        this.restoreKeyframes();
+    }
+
     private void restoreSheetKeyframes(UIKeyframeSheet sheet, BaseType data)
     {
         if (data != null && data.isMap())
@@ -843,12 +853,26 @@ public class UIKeyframes extends UIElement
 
     public void submitKeyframes()
     {
+        this.submitKeyframes(false);
+    }
+
+    /**
+     * Submit an edited timeline. {@code overwrite} is used when the edit was a move: a key dropped
+     * onto an occupied tick replaces the key already there instead of the two sharing the tick.
+     */
+    private void submitKeyframes(boolean overwrite)
+    {
+        if (this.cache == null)
+        {
+            return;
+        }
+
         /* Cache selection indices */
         Map<UIKeyframeSheet, Pair<List<Integer>, List<Integer>>> selection = new HashMap<>();
 
         for (UIKeyframeSheet sheet : this.currentGraph.getSheets())
         {
-            List<Integer> last = sheet.sort();
+            List<Integer> last = sheet.sort(overwrite);
 
             selection.put(sheet, new Pair<>(last, new ArrayList<>(sheet.selection.getIndices())));
         }
@@ -1455,7 +1479,7 @@ public class UIKeyframes extends UIElement
 
     private void duplicateOrSelectColumn(UIContext context)
     {
-        if (this.currentGraph.getSelected() != null && !Window.isShiftPressed())
+        if (this.isDuplicatingKeyframes(context))
         {
             /* Duplicate */
             this.pasteKeyframes(this.parseKeyframes(this.serializeKeyframes()), this.getDuplicationTick(context),
@@ -1466,6 +1490,19 @@ public class UIKeyframes extends UIElement
 
         /* Select a column */
         this.currentGraph.selectByX(context.mouseX);
+    }
+
+    /**
+     * Whether the pointer context asks for a duplication rather than a column selection. Alt-click
+     * used to duplicate whenever anything was selected, so a click on an existing key cloned the
+     * selection instead of selecting that key's column; duplication now also needs the playhead
+     * mode or empty graph space under the pointer. The hover preview asks the same question, so the
+     * preview and the click cannot advertise different actions.
+     */
+    public boolean isDuplicatingKeyframes(UIContext context)
+    {
+        return this.currentGraph.getSelected() != null && !Window.isShiftPressed()
+            && (this.isDuplicatingAtPlayhead() || this.currentGraph.findKeyframe(context.mouseX, context.mouseY) == null);
     }
 
     public boolean isDuplicatingAtPlayhead()
@@ -1601,7 +1638,7 @@ public class UIKeyframes extends UIElement
 
         if (wasDragging)
         {
-            failure = runEditingReleaseStep(failure, this::submitKeyframes);
+            failure = runEditingReleaseStep(failure, () -> this.submitKeyframes(true));
             failure = runEditingReleaseStep(failure, this.currentGraph::pickSelected);
         }
 

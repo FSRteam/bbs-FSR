@@ -245,17 +245,32 @@ public class UIKeyframeSheet extends UIKeyframeElement
 
     public List<Integer> sort()
     {
+        return this.sort(false);
+    }
+
+    /**
+     * Sort the channel after an edit, optionally letting the moved keyframes take over the ticks
+     * they landed on. Reselection is by keyframe rather than by remembered index, so a key the
+     * overwrite removed cannot shift the selection onto a neighbour.
+     */
+    public List<Integer> sort(boolean overwrite)
+    {
         List<Keyframe> selected = this.selection.getSelected();
         List<Integer> lastSelection = new ArrayList<>(this.selection.getIndices());
 
-        this.channel.sort();
+        if (overwrite)
+        {
+            this.channel.sort(selected);
+        }
+        else
+        {
+            this.channel.sort();
+        }
         this.selection.clear();
-
-        List keyframes = this.channel.getKeyframes();
 
         for (Keyframe keyframe : selected)
         {
-            this.selection.add(keyframes.indexOf(keyframe));
+            this.selection.add(keyframe);
         }
 
         return lastSelection;

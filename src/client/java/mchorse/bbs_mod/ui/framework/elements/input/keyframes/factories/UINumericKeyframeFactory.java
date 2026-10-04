@@ -5,6 +5,7 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.TrackpadRecorder;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -31,7 +32,8 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
     private int lastMouseX;
     private double lastRecordedValue;
     private boolean editingMode;
-    private double editingInitialValue;
+    private boolean editingChanged;
+    private final UIElement editingOverlay = new AcceptRejectOverlay();
 
     public UINumericKeyframeFactory(Keyframe<T> keyframe, UIKeyframes editor)
     {
@@ -121,14 +123,21 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
         }
 
         UIContext context = this.getContext();
-        if (context == null)
+
+        if (context == null || this.editingMode)
         {
             return;
         }
 
-        this.editingInitialValue = this.value.getValue();
+        /* Snapshot the channels before the first sample. The drag itself writes without notifying
+         * (see applyEditingValue), so this snapshot is the gesture's only history record: accepting
+         * submits one edit out of it and cancelling puts the document back without one. */
+        this.editor.cacheKeyframes();
+        this.update();
         this.lastMouseX = context.mouseX;
+        this.editingChanged = false;
         this.editingMode = true;
+        context.menu.overlay.add(this.editingOverlay);
     }
 
     private void stopEditingMode(boolean accept)
@@ -139,38 +148,93 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
         }
 
         this.editingMode = false;
+        this.editingOverlay.removeFromParent();
 
-        if (!accept)
+        if (accept && this.editingChanged)
         {
-            this.value.setValue(this.editingInitialValue);
-            this.setValue(this.editingInitialValue);
+            this.editor.submitKeyframes();
+        }
+        else
+        {
+            /* Rejected, or accepted without a single sample: restore the snapshot instead of
+             * writing a compensating edit, which would leave the rejected gesture in history. */
+            this.editor.cancelCachedKeyframes();
+        }
+
+        this.editingChanged = false;
+        this.update();
+    }
+
+    @Override
+    protected void onRemove(UIElement parent)
+    {
+        /* A selection change rebuilds this panel mid-gesture; an interrupted gesture must not
+         * outlive its factory as a half-applied edit. */
+        this.stopEditingMode(false);
+        super.onRemove(parent);
+    }
+
+    /**
+     * One sample of the numeric drag, applied without notifying. Notifying per sample would leave a
+     * pending undo entry that accepting would then push a second time and cancelling could not take
+     * back; the gesture's snapshot owns the record instead.
+     */
+    private void applyEditingValue(double value)
+    {
+        this.setKeyframeValue(value);
+        this.editor.getGraph().setValue(this.keyframe.getValue(), false);
+    }
+
+    /**
+     * Handle the gesture before the fields, timelines and their context menus: whichever click ends
+     * the drag — including one that lands outside this panel — accepts or rejects it instead of
+     * reaching what is under the pointer.
+     */
+    private class AcceptRejectOverlay extends UIElement
+    {
+        @Override
+        protected boolean subMouseClicked(UIContext context)
+        {
+            if (context.mouseButton == 0 || context.mouseButton == 1)
+            {
+                UINumericKeyframeFactory.this.stopEditingMode(context.mouseButton == 0);
+            }
+
+            return true;
+        }
+
+        @Override
+        protected boolean subKeyPressed(UIContext context)
+        {
+            if (context.isPressed(GLFW.GLFW_KEY_ENTER) || context.isPressed(GLFW.GLFW_KEY_KP_ENTER))
+            {
+                UINumericKeyframeFactory.this.stopEditingMode(true);
+            }
+            else if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
+            {
+                UINumericKeyframeFactory.this.stopEditingMode(false);
+            }
+
+            return true;
+        }
+
+        @Override
+        protected boolean subMouseScrolled(UIContext context)
+        {
+            UITrackpad.updateAmplifier(context);
+
+            return true;
         }
     }
-    
+
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.editingMode)
-        {
-            if (context.mouseButton == 0)
-            {
-                this.stopEditingMode(true);
-
-                return true;
-            }
-            else if (context.mouseButton == 1)
-            {
-                this.stopEditingMode(false);
-
-                return true;
-            }
-        }
-
         if (this.recordingMode && context.mouseButton == 0)
         {
             return true;
         }
-        
+
         return super.subMouseClicked(context);
     }
     
@@ -186,28 +250,6 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
         return super.subMouseReleased(context);
     }
 
-    @Override
-    protected boolean subKeyPressed(UIContext context)
-    {
-        if (this.editingMode)
-        {
-            if (context.isPressed(GLFW.GLFW_KEY_ENTER))
-            {
-                this.stopEditingMode(true);
-
-                return true;
-            }
-            else if (context.isPressed(GLFW.GLFW_KEY_ESCAPE))
-            {
-                this.stopEditingMode(false);
-
-                return true;
-            }
-        }
-
-        return super.subKeyPressed(context);
-    }
-    
     @Override
     public void render(UIContext context)
     {
@@ -228,7 +270,8 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
                 }
 
                 this.value.setValue(newValue);
-                this.setValue(newValue);
+                this.applyEditingValue(newValue);
+                this.editingChanged = true;
                 this.lastMouseX = context.mouseX;
             }
         }
