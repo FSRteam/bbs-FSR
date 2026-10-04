@@ -4,6 +4,7 @@ import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJBone;
 import mchorse.bbs_mod.cubic.CubicModelAnimator;
 import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
 import mchorse.bbs_mod.cubic.data.model.Model;
@@ -128,7 +129,7 @@ public final class IKBakePoseCompositionTest
         String branch = branch(total, track, additive);
 
         Captured fk = Captured.of(fixture.bone);
-        Quaternionf evaluated = fixture.bone.evaluated();
+        Quaternionf evaluated = fixture.bone.evaluatedRotation();
         Quaternionf delta = new Quaternionf(evaluated).conjugate().mul(SOLVED);
 
         /* The bake's own value: the track's interpolated value at the tick (IKBake.trackValue:596-602). */
@@ -140,7 +141,7 @@ public final class IKBakePoseCompositionTest
 
         render(fixture, value, overlay, state, animation);
 
-        Quaternionf drawn = fixture.bone.evaluated();
+        Quaternionf drawn = fixture.bone.evaluatedRotation();
         float error = turn(new Quaternionf(drawn).conjugate().mul(SOLVED));
 
         /* turn()'s readback is acos of a float w, so any residual under ~1.2e-7 rad normalizes to
@@ -277,107 +278,31 @@ public final class IKBakePoseCompositionTest
      */
     private record Captured(Vector3f channels, Quaternionf evaluated, boolean additive)
     {
-        static Captured of(Rig bone)
+        static Captured of(RigBone bone)
         {
-            Quaternionf orient = bone.orient();
-            boolean additive = orient == null || sameRotation(orient, bone.fromEuler(bone.transform().rotate));
+            Quaternionf orient = bone.getOrient();
+            boolean additive = orient == null || sameRotation(orient, bone.orientFromEuler(bone.getBoneTransform().rotate));
 
-            return new Captured(bone.channels(new Vector3f()), bone.evaluated(), additive);
+            return new Captured(bone.getChannelRotation(new Vector3f()), bone.evaluatedRotation(), additive);
         }
     }
 
     /**
-     * The {@code RigBone}-shaped view of one FSR bone: in test form, exactly the shim upstream ships
-     * (temp/upstream-BOBJBone.java:202-257, temp/upstream-ModelGroup.java:255-347). Every read goes to
-     * the bone's own field or method; nothing is stored, composed or cached here. Kept in the test
-     * source set because {@code RigBone} itself does not exist in FSR yet — adding it to
-     * {@code src/main} would be R5-3, which this experiment is meant to schedule, not start.
+     * Both FSR skeletons implement {@link RigBone} directly ({@code ModelGroup} and {@code BOBJBone}),
+     * so the fixture hands the bone over as-is. This test used to carry a {@code Rig} shim copied from
+     * upstream while the real interface did not exist here; now that it does, the shim would be a
+     * second, unlinked copy of {@code getChannelRotation} / {@code orientFromEuler} — the two are
+     * {@code default} methods, so a change to either would leave this test asserting the old
+     * arithmetic silently.
      */
-    private interface Rig
+    private static RigBone cubic(ModelGroup group)
     {
-        Quaternionf orient();
-
-        Transform transform();
-
-        boolean degrees();
-
-        Quaternionf evaluated();
-
-        /** RigBone.getChannelRotation — the euler channels in radians, whatever the skeleton stores. */
-        default Vector3f channels(Vector3f dest)
-        {
-            dest.set(this.transform().rotate);
-
-            return this.degrees() ? dest.mul((float) (Math.PI / 180D)) : dest;
-        }
-
-        /** RigBone.orientFromEuler — an orient built from euler angles in the skeleton's own unit. */
-        default Quaternionf fromEuler(Vector3f euler)
-        {
-            return this.degrees()
-                ? Matrices.toLocalRotationZYXDegrees(euler)
-                : Matrices.toLocalRotationZYXRadians(euler);
-        }
+        return group;
     }
 
-    private static Rig cubic(ModelGroup group)
+    private static RigBone bobj(BOBJBone bone)
     {
-        return new Rig()
-        {
-            @Override
-            public Quaternionf orient()
-            {
-                return group.orient;
-            }
-
-            @Override
-            public Transform transform()
-            {
-                return group.current;
-            }
-
-            @Override
-            public boolean degrees()
-            {
-                return true;
-            }
-
-            @Override
-            public Quaternionf evaluated()
-            {
-                return group.evaluatedRotation();
-            }
-        };
-    }
-
-    private static Rig bobj(BOBJBone bone)
-    {
-        return new Rig()
-        {
-            @Override
-            public Quaternionf orient()
-            {
-                return bone.orient;
-            }
-
-            @Override
-            public Transform transform()
-            {
-                return bone.transform;
-            }
-
-            @Override
-            public boolean degrees()
-            {
-                return false;
-            }
-
-            @Override
-            public Quaternionf evaluated()
-            {
-                return bone.evaluatedRotation();
-            }
-        };
+        return bone;
     }
 
     private static Fixture fixture(Skeleton skeleton)
@@ -574,7 +499,7 @@ public final class IKBakePoseCompositionTest
         }
     }
 
-    private record Fixture(IModel model, Rig bone, ActionLayer layer)
+    private record Fixture(IModel model, RigBone bone, ActionLayer layer)
     {
     }
 

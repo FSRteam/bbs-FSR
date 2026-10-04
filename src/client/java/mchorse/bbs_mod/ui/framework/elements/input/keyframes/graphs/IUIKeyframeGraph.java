@@ -127,6 +127,13 @@ public interface IUIKeyframeGraph
 
     public default Keyframe addKeyframe(UIKeyframeSheet sheet, float tick, Object value)
     {
+        /* Deliberately NOT KeyframeChannel.insertInheriting: that inherits the left neighbour
+         * whatever the value's origin, while this path inherits ONLY when the caller passed no value
+         * (`extra != null` <=> `value == null && segment != null`). A caller that supplies a value
+         * means "this is my keyframe, use my style" — the same intent addKeyframeManually reads back
+         * out of `value == null`. Delegating here would make a point-and-click keyframe silently pick
+         * up the neighbour's shape, colour, duration, handles and interpolation. Non-null values are
+         * a live path (UIKeyframeGraph.addKeyframeAt, UIVector3KeyframeGraph.addKeyframe). */
         KeyframeSegment segment = sheet.channel.find(tick);
         Keyframe extra = null;
         BaseValueBasic property = sheet.property;

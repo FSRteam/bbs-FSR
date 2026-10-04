@@ -112,14 +112,10 @@ public class UIReplaysEditorUtils
                     KeyframeChannel<PoseTransform> poseChannel = (KeyframeChannel<PoseTransform>) channel;
                     KeyframeSegment<PoseTransform> segment = poseChannel.find(tick);
                     PoseTransform value = segment != null ? segment.createInterpolated() : new PoseTransform();
-                    int index = poseChannel.insert(tick, value);
-                    Keyframe<PoseTransform> kf = poseChannel.get(index);
-                    Keyframe<PoseTransform> template = segment != null ? segment.a : null;
 
-                    if (template != null && template != kf)
-                    {
-                        kf.copyOverExtra(template);
-                    }
+                    /* insertInheriting is this exact insert + left-neighbour inherit, so the value is
+                     * still looked up here and the shaping is delegated. */
+                    poseChannel.insertInheriting(tick, value);
 
                     continue;
                 }
@@ -140,14 +136,10 @@ public class UIReplaysEditorUtils
                         Object current = property instanceof BaseValueBasic basic ? basic.get() : null;
                         value = current instanceof Pose pose ? poseChannel.getFactory().copy(pose) : poseChannel.getFactory().createEmpty();
                     }
-                    int index = poseChannel.insert(tick, value);
-                    Keyframe<Pose> kf = poseChannel.get(index);
-                    Keyframe<Pose> template = segment != null ? segment.a : null;
 
-                    if (template != null && template != kf)
-                    {
-                        kf.copyOverExtra(template);
-                    }
+                    /* As above: the value is resolved here (from the neighbour, the live property or
+                     * an empty pose), the shaping comes from insertInheriting. */
+                    poseChannel.insertInheriting(tick, value);
                 }
             }
         });
@@ -322,13 +314,11 @@ public class UIReplaysEditorUtils
 
         KeyframeSegment<T> segment = sheet.channel.find(tick);
         BaseValueBasic property = sheet.property;
-        Keyframe<T> template = null;
         T value;
 
         if (segment != null)
         {
             value = segment.createInterpolated();
-            template = segment.a;
         }
         else if (property != null)
         {
@@ -343,15 +333,10 @@ public class UIReplaysEditorUtils
             value = (T) sheet.channel.getFactory().createEmpty();
         }
 
-        int index = sheet.channel.insert(tick, value);
-        Keyframe<T> keyframe = (Keyframe<T>) sheet.channel.get(index);
-
-        if (template != null && template != keyframe)
-        {
-            keyframe.copyOverExtra(template);
-        }
-
-        return keyframe;
+        /* The lookup above guarantees no keyframe sits on the tick, so insertInheriting cannot
+         * inherit from the keyframe it just wrote — only from the neighbour, as the hand-written
+         * pair did (its `template != keyframe` guard could never fire here). */
+        return (Keyframe<T>) sheet.channel.insertInheriting(tick, value);
     }
 
     public static <T> void forEachSelectedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, Consumer<Keyframe<T>> consumer)
@@ -1585,6 +1570,9 @@ public class UIReplaysEditorUtils
                 int index = limbChannel.insert(tick, copy);
                 Keyframe<PoseTransform> limbKf = limbChannel.get(index);
 
+                /* Not insertInheriting: the template is the SOURCE pose keyframe the user selected,
+                 * not this channel's left neighbour — the point is to carry the pose's shaping onto
+                 * every bone track it is split into, which is a different operation. */
                 limbKf.copyOverExtra(keyframe);
             }
         }
