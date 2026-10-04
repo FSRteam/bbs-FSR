@@ -5,6 +5,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.IntType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.data.types.StringType;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.settings.values.core.StableIds;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
@@ -52,6 +53,8 @@ public final class FilmStableIdsMigrationTest
         theAnchorsAttachmentIsRewrittenAgainstTheTargetsForm();
         anAnchorChannelIsConvertedAndItsTrackKeyIsRenamed();
         aLegacyIntCameraSelectorBecomesTheTargetReplaysId();
+        legacySelectorsInMultiCameraTracksAreConverted();
+        anAlreadyStableMultiCameraSelectorIsLeftAlone();
 
         aLegacyActionTargetIndexBecomesTheTargetReplaysId();
         anUnresolvableActionTargetIndexBecomesAnEmptyTarget();
@@ -73,8 +76,9 @@ public final class FilmStableIdsMigrationTest
 
     /**
      * A two-replay legacy film. Replay 0 owns a form with two body parts, a static anchor and an
-     * anchor keyframe channel; replay 1 owns one body part. Every replay has action clips, and the
-     * film has one camera clip. Nothing carries an {@code "id"} and no actor/selector is a string.
+     * anchor keyframe channel; replay 1 owns one body part. Every replay has action clips, the film
+     * has one top-level camera clip, and one multi-camera track owns a clip of its own. Nothing
+     * carries an {@code "id"} and no actor/selector is a string.
      */
     private static MapType legacyFilm()
     {
@@ -107,6 +111,20 @@ public final class FilmStableIdsMigrationTest
         look.put("selector", new IntType(0));
         camera.add(look);
         film.put("camera", camera);
+
+        /* The multi-camera shape keeps its own clip lists; its clip must be converted too. It points
+         * at replay 1 so a fixture-wide assertion cannot be satisfied by always resolving index 0. */
+        ListType cameraTracks = new ListType();
+        MapType track = new MapType();
+        ListType trackClips = new ListType();
+        MapType trackLook = new MapType();
+
+        trackLook.putString("type", "bbs:look");
+        trackLook.put("selector", new IntType(1));
+        trackClips.add(trackLook);
+        track.put("clips", trackClips);
+        cameraTracks.add(track);
+        film.put("camera_tracks", cameraTracks);
 
         return film;
     }
@@ -202,6 +220,40 @@ public final class FilmStableIdsMigrationTest
         }
 
         return list;
+    }
+
+    /**
+     * A one-track multi-camera document with a {@code replays} list present, so the identity pass has
+     * elements to stamp. The selector is taken raw because the two scenarios need the two legacy
+     * states: an {@link IntType} index, and a selector that is already a stable string.
+     */
+    private static MapType multiCameraFilm(BaseType selector)
+    {
+        MapType film = new MapType();
+        ListType replays = new ListType();
+        MapType replay = new MapType();
+        ListType tracks = new ListType();
+        MapType track = new MapType();
+        ListType clips = new ListType();
+        MapType clip = new MapType();
+
+        replay.put("form", form("track", 1));
+        replays.add(replay);
+        clip.putString("type", "bbs:look");
+        clip.put("selector", selector);
+        clips.add(clip);
+        track.put("clips", clips);
+        tracks.add(track);
+        film.put("replays", replays);
+        film.put("camera_tracks", tracks);
+
+        return film;
+    }
+
+    /** The selector of the single multi-camera track clip the fixtures write. */
+    private static String trackClipSelector(MapType film)
+    {
+        return film.getList("camera_tracks").getMap(0).getList("clips").getMap(0).getString("selector");
     }
 
     private static MapType migratedLegacyFilm()
@@ -395,6 +447,48 @@ public final class FilmStableIdsMigrationTest
 
         require(replayId(film, 0).equals(selector),
             "the camera selector did not resolve to the first replay's id: got \"" + selector + "\"");
+    }
+
+    /**
+     * The multi-camera shape keeps its clips in {@code camera_tracks[*].clips}, not in the top-level
+     * {@code camera} list, so a migration that only walked {@code camera} left those selectors as
+     * legacy integers — which read back as the empty string and silently lost the replay target.
+     *
+     * <p>The track clip points at replay 1 rather than replay 0 on purpose: an implementation that
+     * resolved every selector as index 0 would still satisfy an index-0 fixture, and the mistaken
+     * resolution would be invisible until a real film played back against the wrong actor.
+     */
+    private static void legacySelectorsInMultiCameraTracksAreConverted()
+    {
+        MapType film = migratedLegacyFilm();
+        String selector = trackClipSelector(film);
+
+        require(replayId(film, 1).equals(selector),
+            "a multi-camera track selector did not resolve to the second replay's id: got \"" + selector
+                + "\" want \"" + replayId(film, 1) + "\"");
+        require(replayId(film, 0).equals(film.getList("camera").getMap(0).getString("selector")),
+            "the top-level camera selector changed once the multi-camera tracks were traversed");
+    }
+
+    /**
+     * The multi-camera walk runs on every read of a document that has not been saved yet, so it must
+     * leave an already-stable selector untouched and be idempotent. A traversal that re-read a stable
+     * id as a legacy index would resolve it against whatever element sits at that index — or against
+     * nothing at all — and orphan a reference that was already correct.
+     */
+    private static void anAlreadyStableMultiCameraSelectorIsLeftAlone()
+    {
+        MapType once = multiCameraFilm(new StringType("abc123de"));
+        MapType twice = multiCameraFilm(new StringType("abc123de"));
+
+        new FilmStableIds().migrate(once);
+        new FilmStableIds().migrate(twice);
+        new FilmStableIds().migrate(twice);
+
+        require("abc123de".equals(trackClipSelector(once)),
+            "an already-stable multi-camera selector was rewritten: got \"" + trackClipSelector(once) + "\"");
+        require(BaseType.equals(once, twice),
+            "migrating a multi-camera document twice differs from migrating it once: " + once + " vs " + twice);
     }
 
     /* ----------------------------------------------------------- action targets --- */

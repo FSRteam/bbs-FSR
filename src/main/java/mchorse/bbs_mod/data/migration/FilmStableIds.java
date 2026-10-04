@@ -52,6 +52,10 @@ public class FilmStableIds implements IDataMigration
     private static final String TARGET = "target";
     private static final String REPLAY_ID = "replay_id";
 
+    /** The multi-camera track list, and the clip list each track owns. */
+    private static final String CAMERA_TRACKS = "camera_tracks";
+    private static final String CAMERA_TRACK_CLIPS = "clips";
+
     @Override
     public int getVersion()
     {
@@ -100,6 +104,17 @@ public class FilmStableIds implements IDataMigration
         if (data.has("camera"))
         {
             convertCameraSelectors(data.getList("camera"), replayIds, formMappings);
+        }
+
+        if (data.has(CAMERA_TRACKS))
+        {
+            for (BaseType trackType : data.getList(CAMERA_TRACKS))
+            {
+                if (trackType.isMap() && trackType.asMap().has(CAMERA_TRACK_CLIPS))
+                {
+                    convertCameraSelectors(trackType.asMap().getList(CAMERA_TRACK_CLIPS), replayIds, formMappings);
+                }
+            }
         }
     }
 
@@ -257,7 +272,10 @@ public class FilmStableIds implements IDataMigration
         }
     }
 
-    /** Camera clips carrying a {@code selector} — look, orbit and tracker target a replay by index. */
+    /**
+     * One camera clip list — the legacy output camera or one multi-camera track's clips — whose clips
+     * carry a {@code selector} targeting a replay by index.
+     */
     private static void convertCameraSelectors(ListType camera, List<String> replayIds, List<Map<String, String>> formMappings)
     {
         for (BaseType clipType : camera)
