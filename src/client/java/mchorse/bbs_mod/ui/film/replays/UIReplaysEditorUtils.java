@@ -5,10 +5,6 @@ import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
 import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
-import mchorse.bbs_mod.cubic.ik.IKControl;
-import mchorse.bbs_mod.cubic.ik.IKControls;
-import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
-import mchorse.bbs_mod.cubic.ik.ModelIKIO;
 import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
 import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
@@ -459,39 +455,7 @@ public class UIReplaysEditorUtils
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
 
         out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.YELLOW, false, channel, null)
-            .icon(Icons.IK).form(modelForm).seed(() -> buildIKControls(modelForm)));
-    }
-
-    /** A fully populated IK-controls value seeded from the form's IK config (one entry per enabled chain), so a fresh keyframe matches what the editor shows instead of an empty container that drifts to defaults. */
-    private static IKControls buildIKControls(ModelForm modelForm)
-    {
-        IKControls controls = new IKControls();
-
-        if (modelForm.ik.get() instanceof MapType map)
-        {
-            ModelIKConfig config = ModelIKIO.fromData(map);
-
-            if (config != null && config.chains() != null)
-            {
-                for (ModelIKConfig.Chain chain : config.chains())
-                {
-                    if (chain == null || !chain.enabled() || chain.tip() == null || chain.tip().isEmpty())
-                    {
-                        continue;
-                    }
-
-                    IKControl control = controls.get(chain.tip());
-
-                    control.weight = chain.weight();
-                    control.softness = chain.softness();
-                    control.poleAngle = chain.poleAngle();
-                    control.pole = chain.pole();
-                    control.enabled = chain.enabled();
-                }
-            }
-        }
-
-        return controls;
+            .icon(Icons.IK).form(modelForm).seed(() -> ModelIKRuntime.ikControls(modelForm)));
     }
 
     public static void addPoleTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
@@ -552,7 +516,7 @@ public class UIReplaysEditorUtils
             .icon(Icons.PHYSICS).form(modelForm).seed(() -> buildPhysicsControls(modelForm)));
     }
 
-    /** A fully populated physics-controls value seeded from the form's physics config (one entry per chain root), mirroring {@link #buildIKControls}. */
+    /** A fully populated physics-controls value seeded from the form's physics config (one entry per chain root), mirroring {@link ModelIKRuntime#ikControls(mchorse.bbs_mod.forms.forms.ModelForm)}. */
     private static PhysicsControls buildPhysicsControls(ModelForm modelForm)
     {
         PhysicsControls controls = new PhysicsControls();

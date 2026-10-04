@@ -25,6 +25,7 @@ import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
+import mchorse.bbs_mod.film.IKBake;
 import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -51,6 +52,7 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.controller.UIFilmController;
 import mchorse.bbs_mod.ui.film.view.ViewportPickIntent;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIAnimationToPoseOverlayPanel;
+import mchorse.bbs_mod.ui.film.replays.overlays.UIBakeIKOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.overlays.UIKeyframeSheetFilterOverlayPanel;
 import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -1007,6 +1009,38 @@ public class UIReplaysEditor extends UIElement {
 
                             UIReplaysEditorUtils.clearIKTracks(replayForEditor, modelForm);
                             this.updateChannelsList();
+                        });
+                    }
+
+                    ModelInstance ikInstance = ModelFormRenderer.getModel(modelForm);
+                    /* Keyed by each chain's tip bone, in the order getChains returns: chain root
+                     * depth ascending, and config order within one depth (ModelIKCache.compile).
+                     * The panel sorts its own list, so nothing here depends on that order. */
+                    Map<String, List<String>> chains = ikInstance == null
+                            ? Collections.emptyMap()
+                            : ModelIKRuntime.getChains(ikInstance.model, modelForm);
+
+                    if (!chains.isEmpty()) {
+                        menu.action(Icons.KEY, UIKeys.FILM_REPLAY_CONTEXT_BAKE_IK, () -> {
+                            if (this.keyframeEditor != editor || this.replay != replayForEditor) {
+                                return;
+                            }
+
+                            /* The range on offer ends where the replay's own motion ends — past its
+                             * last keyframe the solve only repeats itself, and a film is usually
+                             * longer than any one replay in it. A replay without keyframes gets the film. */
+                            int lastTick = (int) Math.ceil(replayForEditor.getLastKeyframeTick());
+
+                            if (lastTick < 0) {
+                                lastTick = Math.max(0, this.film.camera.calculateDuration() - 1);
+                            }
+
+                            UIOverlay.addOverlay(this.getContext(), new UIBakeIKOverlayPanel(chains.keySet(), lastTick,
+                                    (tips, start, end, step, disable) -> {
+                                        if (IKBake.bake(this.film, replayForEditor, tips, start, end, step, disable)) {
+                                            this.updateChannelsList();
+                                        }
+                                    }), 240, 240);
                         });
                     }
                 }
