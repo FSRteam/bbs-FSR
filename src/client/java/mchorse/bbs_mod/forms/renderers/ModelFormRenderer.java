@@ -191,6 +191,79 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         return this.getPose(new Pose());
     }
 
+    /**
+     * The channels phase for a reader outside the render: poses the model for the entity the way the
+     * render does (rest &rarr; actions &rarr; pose) and leaves it there — the FK truth the constraint
+     * and IK stages start from. {@code null} when the form has no model.
+     *
+     * <p>A reader's sample is never a repeat of the frame's evaluation, so the frame stamp
+     * ({@link PreviewPoseSnapshot}, this build's equivalent of the upstream channel stamp) is dropped
+     * first and the evaluation always runs.</p>
+     *
+     * <p>The constraint stage is folded in here rather than left to the caller: this build clamps the
+     * FK input <em>before</em> the solver runs (see {@code renderModel}'s solvePose branch), so a reader
+     * that solved IK on the unclamped FK would bake poses the limits forbid while the render clamps
+     * them — the two would differ exactly where a constraint is configured, and the difference would
+     * not look wrong on screen. Mirrors the reader-facing phase in
+     * {@link #collectMatricesWithAppliedStates}, which is the same stage order.</p>
+     */
+    public ModelInstance evaluateChannels(IEntity entity, float transition)
+    {
+        this.ensureAnimator(transition);
+
+        ModelInstance model = this.getModel();
+
+        if (this.animator == null || model == null || model.model == null)
+        {
+            return null;
+        }
+
+        this.previewPoseSnapshot.invalidate();
+        this.evaluateChannels(entity, model, transition);
+        ModelConstraintsRuntime.apply(model);
+
+        return model;
+    }
+
+    /**
+     * The IK stage on the model as it stands (see {@link #evaluateChannels(IEntity, float)}): the
+     * form's chains solved onto the bones' orientations, exactly as the render does before drawing.
+     * {@code entityWorld} is the frame the film stands the entity in — what
+     * {@code FilmEntityRenderer} renders it under — so the film's world-space targets are brought
+     * into the model the way the render brings them; {@code null} solves against the model alone.
+     */
+    public void solveIK(ModelInstance model, Matrix4f entityWorld, float transition)
+    {
+        Matrix4f base = null;
+
+        if (entityWorld != null)
+        {
+            /* The model's frame as the render establishes it: the entity's, then the form's own
+             * transform and the model's scale, then the half turn every model renders under. */
+            base = new Matrix4f(entityWorld);
+
+            this.applyTransforms(base, transition);
+            base.rotate(ROTATE_Y_180);
+        }
+
+        this.applyIK(model, base, true);
+    }
+
+    /**
+     * Rest &rarr; actions &rarr; pose. The one body every place that establishes the FK truth runs:
+     * the render, the matrix capture and {@link #evaluateChannels(IEntity, float)}. Extracted
+     * unchanged — the constraint and IK stages stay at their own call sites, so no path that used to
+     * run them at a particular point runs them anywhere else now.
+     */
+    private void evaluateChannels(IEntity entity, ModelInstance model, float transition)
+    {
+        model.model.resetPose();
+
+        this.readCemStatus();
+        this.animator.applyActions(entity, model, transition);
+        model.model.applyPose(this.getPose(this.renderPose));
+    }
+
     private Pose getPose(Pose pose)
     {
         pose.copy(this.form.pose.get());
@@ -1069,11 +1142,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             if (!reusePreviewPose)
             {
-                model.model.resetPose();
-
-                this.readCemStatus();
-                this.animator.applyActions(context.entity, model, context.getTransition());
-                model.model.applyPose(this.getPose(this.renderPose));
+                this.evaluateChannels(context.entity, model, context.getTransition());
             }
 
             context.stack.mulPose(ROTATE_Y_180);
@@ -1589,11 +1658,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 if (!reusePreviewPose)
                 {
-                    model.model.resetPose();
-
-                    this.readCemStatus();
-                    this.animator.applyActions(entity, model, transition);
-                    model.model.applyPose(this.getPose(this.renderPose));
+                    this.evaluateChannels(entity, model, transition);
 
                     ModelConstraintsRuntime.apply(model);
 

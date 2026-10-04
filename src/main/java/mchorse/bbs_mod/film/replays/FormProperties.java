@@ -93,6 +93,11 @@ public class FormProperties extends ValueGroup
             return this.registerChannel(key, KeyframeFactories.GLINT);
         }
 
+        if (FormControlKeys.isIKControlChannel(key))
+        {
+            return this.registerChannel(key, KeyframeFactories.IK);
+        }
+
         if (PerLimbService.isPoseBoneChannel(key))
         {
             return this.registerChannel(key, KeyframeFactories.POSE_TRANSFORM);

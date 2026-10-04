@@ -19,7 +19,10 @@ import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import net.minecraft.world.entity.LivingEntity;
+import org.joml.Vector3d;
 
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -132,6 +135,23 @@ public class Replay extends ValueGroup
         super.fromData(data);
     }
 
+    /**
+     * Where this replay's own frame sits when it is {@link #relative}: its first keyframe plus the
+     * authored offset. A relative replay is built around a fixed origin instead of around wherever
+     * the camera happens to be, so every consumer that places it has to ask the same question — the
+     * renderer, the bone matrices and the motion path all did it with their own copy of this sum.
+     */
+    public Vector3d getRelativeOrigin()
+    {
+        Point offset = this.relativeOffset.get();
+
+        return new Vector3d(
+            this.keyframes.x.interpolate(0F) + offset.x,
+            this.keyframes.y.interpolate(0F) + offset.y,
+            this.keyframes.z.interpolate(0F) + offset.z
+        );
+    }
+
     public String getName()
     {
         String label = this.label.get();
@@ -156,6 +176,34 @@ public class Replay extends ValueGroup
         this.keyframes.shift(tick);
         this.properties.shift(tick);
         this.actions.shift(tick);
+    }
+
+    /**
+     * The tick of the replay's last keyframe over its own channels and every property track —
+     * where its authored motion ends; {@code -1} when it has no keyframes at all.
+     */
+    public float getLastKeyframeTick()
+    {
+        float last = -1F;
+
+        for (KeyframeChannel<?> channel : this.keyframes.getChannels())
+        {
+            last = Math.max(last, lastTick(channel));
+        }
+
+        for (KeyframeChannel<?> channel : this.properties.properties.values())
+        {
+            last = Math.max(last, lastTick(channel));
+        }
+
+        return last;
+    }
+
+    private static float lastTick(KeyframeChannel<?> channel)
+    {
+        List<?> keyframes = channel.getKeyframes();
+
+        return keyframes.isEmpty() ? -1F : ((Keyframe<?>) keyframes.get(keyframes.size() - 1)).getTick();
     }
 
     public void applyActions(LivingEntity actor, SuperFakePlayer fakePlayer, Film film, int tick)
