@@ -158,6 +158,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    ffmpegDownloadTest {
+        java.srcDirs = ['src/ffmpegDownloadTest/java']
+        resources.srcDirs = []
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath + sourceSets.main.output
+    }
     platformResourceTest {
         java.srcDirs = ['src/platformResourceTest/java']
         resources.srcDirs = []
@@ -330,6 +336,8 @@ configurations {
     clientRegistrationTestRuntimeOnly.extendsFrom clientRuntimeOnly
     audioFormatTestImplementation.extendsFrom implementation
     audioFormatTestRuntimeOnly.extendsFrom runtimeOnly
+    ffmpegDownloadTestImplementation.extendsFrom implementation
+    ffmpegDownloadTestRuntimeOnly.extendsFrom runtimeOnly
     audioLifecycleTestImplementation.extendsFrom clientImplementation
     audioLifecycleTestRuntimeOnly.extendsFrom clientRuntimeOnly
     audioVerificationTestImplementation.extendsFrom clientImplementation
@@ -376,6 +384,15 @@ repositories {
         url = 'https://api.modrinth.com/maven'
         content { includeGroup 'maven.modrinth' }
     }
+    /* Optional GeckoLib for Iron's Spellbooks / Iron's Lib armor rendering.
+     * compileOnly only: the runtime jar never embeds gecko, and the armor branch
+     * is guarded by a Class.forName presence probe so a BBS install without
+     * GeckoLib behaves exactly as before. */
+    maven {
+        name = 'GeckoLib Cloudsmith'
+        url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+        content { includeGroup 'software.bernie.geckolib' }
+    }
 }
 
 repositories.withType(MavenArtifactRepository).configureEach(rewriteNeoForgedRepoUrl)
@@ -391,6 +408,11 @@ dependencies {
     clientCompileOnly "maven.modrinth:iris:1.8.8+1.21.1-neoforge"
     clientRuntimeOnly "maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge"
     clientRuntimeOnly "maven.modrinth:iris:1.8.8+1.21.1-neoforge"
+
+    /* Iron's Spellbooks / Iron's Lib armor support is optional. The dependency stays
+     * compileOnly so the shipped BBS jar has no hard requirement on GeckoLib; a null
+     * GeoRenderProvider probe disables the branch when the mod is absent. */
+    clientCompileOnly "software.bernie.geckolib:geckolib-neoforge-1.21.1:4.7.5.1"
 
     // TODO: validate 1.21.1-compatible versions for optional client mods before re-enabling
     // modCompileOnly "maven.modrinth:distanthorizons:2.1.0-a-1.20.4"
@@ -419,6 +441,14 @@ tasks.register('testVideoExportUtils', JavaExec) {
     dependsOn tasks.named('clientClasses'), tasks.named('videoExportTestClasses')
     classpath = sourceSets.videoExportTest.runtimeClasspath
     mainClass = 'mchorse.bbs_mod.utils.VideoExportUtilsTest'
+}
+
+tasks.register('testFFMpegDownload', JavaExec) {
+    group = 'verification'
+    description = 'Runs hermetic FFmpeg manifest, resume, integrity, and publication regressions.'
+    dependsOn tasks.named('compileJava'), tasks.named('ffmpegDownloadTestClasses')
+    classpath = sourceSets.ffmpegDownloadTest.runtimeClasspath
+    mainClass = 'mchorse.bbs_mod.utils.FFMpegDownloadManagerTest'
 }
 
 tasks.register('testMatrixUtils', JavaExec) {
@@ -620,6 +650,7 @@ def bbsVerificationTaskNames = [
     'testAudioLifecycle',
     'testAudioVerification',
     'testVideoExportUtils',
+    'testFFMpegDownload',
     'testPlatformResourceConsistency',
     'testThemeCore',
     'testUiMotions',

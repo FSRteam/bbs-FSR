@@ -130,6 +130,31 @@ public class UIMotions
         return ThemeManager.current().scrollSmooth;
     }
 
+    public static UIThemeMotion.MotionType scrollType(UIThemeMotion spec)
+    {
+        if (spec == null)
+        {
+            return UIThemeMotion.MotionType.EASE;
+        }
+
+        return usesThemeScrollCurve() ? spec.type : UIThemeMotion.MotionType.EASE;
+    }
+
+    public static IInterp scrollEasing(UIThemeMotion spec)
+    {
+        if (!usesThemeScrollCurve())
+        {
+            return UIMotionEasings.selected(BBSSettings.scrollingMotionEasing);
+        }
+
+        return spec == null || spec.easing == null ? Interpolations.SINE_OUT : spec.easing;
+    }
+
+    private static boolean usesThemeScrollCurve()
+    {
+        return BBSSettings.scrollingUseThemeCurve == null || BBSSettings.scrollingUseThemeCurve.get();
+    }
+
     public static UIThemeMotion hoverScale()
     {
         return ThemeManager.current().hoverScale;

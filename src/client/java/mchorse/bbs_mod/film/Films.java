@@ -16,12 +16,14 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.CollectionUtils;
+import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import org.joml.Vector3d;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayDeque;
@@ -35,6 +37,11 @@ public class Films
 {
     private static final int MAX_PENDING_RECORDING_TERMINALS = 32;
 
+    /**
+     * The shortest countdown a take that teleports the player onto the replay's mark
+     * may have, in ticks. The teleport is a round trip through the server, and the
+     * recorder must not sample the player before it lands.
+     */
     private List<BaseFilmController> controllers = new ArrayList<BaseFilmController>();
     private Recorder recorder;
     private final ArrayDeque<PendingRecordingTerminal> pendingRecordingTerminals = new ArrayDeque<>();
@@ -135,11 +142,38 @@ public class Films
 
     public void startRecording(Film film, int replayId, int tick)
     {
+        this.startRecording(film, replayId, tick, false);
+    }
+
+    /**
+     * @param onMark whether the player should be put where the replay stands at
+     *               {@code tick} first, if {@link BBSSettings#recordingTeleport} allows
+     *               it. Only the film editor's "outside" button asks for this: recording
+     *               straight from the world (the record key) is meant to start where the
+     *               player is standing, the way it always has
+     */
+    public void startRecording(Film film, int replayId, int tick, boolean onMark)
+    {
         Morph morph = Morph.getMorph(Minecraft.getInstance().player);
+        Replay replay = CollectionUtils.getSafe(film.replays.getList(), replayId);
 
         this.recorder = new Recorder(film, morph == null ? null : morph.getForm(), replayId, tick);
 
-        if (ClientNetwork.isIsBBSModOnServer())
+        /* Stand on the mark. Recording started from the editor used to begin wherever
+         * the player happened to be, so every take over an existing replay began with a
+         * manual teleport (the film editor's teleport key) to the spot the replay itself
+         * holds at that tick - now the take just begins there. Sent first, because the
+         * teleport goes through the server and takes a couple of ticks to land */
+        Vector3d mark = onMark && replay != null && BBSSettings.recordingTeleport.get()
+            ? PlayerUtils.teleportToReplay(replay, tick)
+            : null;
+
+        if (mark != null)
+        {
+            this.recorder.awaitMark(mark);
+        }
+
+        if (ClientNetwork.isIsBBSModOnServer() && mark == null)
         {
             ClientNetwork.sendActionRecording(
                 this.recorder.getRecordingFilmId(),
@@ -149,8 +183,6 @@ public class Films
                 true
             );
         }
-
-        Replay replay = CollectionUtils.getSafe(film.replays.getList(), replayId);
 
         if (replay != null)
         {
@@ -458,7 +490,20 @@ public class Films
 
         if (recorder != null)
         {
+            boolean wasAwaitingMark = recorder.isAwaitingMark();
             recorder.update();
+
+            if (wasAwaitingMark && recorder.takeDelayedServerStart()
+                && ClientNetwork.isIsBBSModOnServer())
+            {
+                ClientNetwork.sendActionRecording(
+                    recorder.getRecordingFilmId(),
+                    recorder.getRecordingReplayId(),
+                    recorder.getRecordingTick(),
+                    0,
+                    true
+                );
+            }
         }
     }
 

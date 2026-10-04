@@ -13,6 +13,7 @@ import mchorse.bbs_mod.actions.types.chat.CommandActionClip;
 import mchorse.bbs_mod.actions.types.item.ItemDropActionClip;
 import mchorse.bbs_mod.actions.types.item.UseBlockItemActionClip;
 import mchorse.bbs_mod.actions.types.item.UseItemActionClip;
+import mchorse.bbs_mod.actions.types.item.ReleaseUseItemActionClip;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
@@ -49,6 +50,7 @@ import mchorse.bbs_mod.ui.film.clips.actions.UIPlaceBlockActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UISwipeActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIUseBlockItemActionClip;
 import mchorse.bbs_mod.ui.film.clips.actions.UIUseItemActionClip;
+import mchorse.bbs_mod.ui.film.clips.actions.UIReleaseUseItemActionClip;
 import mchorse.bbs_mod.ui.film.clips.widgets.UIEnvelope;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -117,6 +119,7 @@ public abstract class UIClip <T extends Clip> extends UIElement
         register(AttackActionClip.class, UIAttackActionClip::new);
         register(DamageActionClip.class, UIDamageActionClip::new);
         register(ItemDropActionClip.class, UIItemDropActionClip::new);
+        register(ReleaseUseItemActionClip.class, UIReleaseUseItemActionClip::new);
         register(SwipeActionClip.class, UISwipeActionClip::new);
     }
 

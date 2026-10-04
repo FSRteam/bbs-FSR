@@ -57,6 +57,17 @@ public class ModelVAORenderer
 
         shader.setDefaultUniforms(VertexFormat.Mode.TRIANGLES, modelView, RenderSystem.getProjectionMatrix(), Minecraft.getInstance().getWindow());
 
+        /* The model colour is carried by the NEW_ENTITY vertex attribute. Keep the
+         * shader's global ColorModulator neutral, matching FS 1.21.1. Reading the
+         * process-wide RenderSystem shader colour here makes deferred Color Pose
+         * draws inherit a later UI/glint tint and turn the whole model black. */
+        Uniform colorModulator = shader.getUniform("ColorModulator");
+
+        if (colorModulator != null)
+        {
+            colorModulator.set(1F, 1F, 1F, 1F);
+        }
+
         /* NormalMat is present by default in Iris' shaders, but when there is no Iris,
          * the BBS mod's model.json shader is being used instead that provides NormalMat
          * uniform.

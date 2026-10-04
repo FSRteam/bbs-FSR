@@ -47,6 +47,7 @@ public class UIGeneralFormPanel extends UIFormPanel
     public UITrackpad glintSpeed;
     public UIPropTransform glintTransform;
     public UISection glintSection;
+    private UISection tracksSection;
     public UITrackpad uiScale;
     public UITextbox name;
     public UIPropTransform transform;
@@ -140,9 +141,9 @@ public class UIGeneralFormPanel extends UIFormPanel
         );
         this.glintSection.setExpanded(false);
 
-        UISection tracks = new UISection(UIKeys.FORMS_EDITORS_GENERAL_SECTION_TRACKS);
+        this.tracksSection = new UISection(UIKeys.FORMS_EDITORS_GENERAL_SECTION_TRACKS);
 
-        tracks.fields.add(this.filterTracks, this.boneTracks, this.trackName);
+        this.tracksSection.fields.add(this.filterTracks, this.boneTracks, this.trackName);
 
         UISection transform = new UISection(UIKeys.FORMS_EDITORS_GENERAL_SECTION_TRANSFORM);
 
@@ -168,7 +169,7 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.options.add(
             display,
             this.glintSection,
-            tracks,
+            this.tracksSection,
             transform,
             hitbox,
             movement
@@ -201,6 +202,7 @@ public class UIGeneralFormPanel extends UIFormPanel
          * per-bone glint in the pose editor, so they leave these hidden as well. */
         boolean glint = form.supportsGlint();
 
+        this.glintSection.removeFromParent();
         this.glintMode.setVisible(glint);
         this.glintColor.setVisible(glint);
         this.glintSpeed.setVisible(glint);
@@ -208,6 +210,7 @@ public class UIGeneralFormPanel extends UIFormPanel
 
         if (glint)
         {
+            this.options.addBefore(this.tracksSection, this.glintSection);
             this.glintMode.setValue(form.glintMode.get());
             this.glintColor.setColor(form.glintColor.get().getARGBColor());
             this.glintSpeed.setValue(form.glintSpeed.get());

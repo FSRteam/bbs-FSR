@@ -3,6 +3,10 @@ package mchorse.bbs_mod.ui.film.utils.keyframes;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.utils.interps.Interpolations;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
+import mchorse.bbs_mod.utils.keyframes.factories.BooleanKeyframeFactory;
 
 /** Regression coverage for replay/camera keyframe seek and gesture contracts. */
 public final class KeyframeInteractionTest
@@ -26,7 +30,24 @@ public final class KeyframeInteractionTest
     public static void run()
     {
         testCursorConversion();
+        testLegacySteppedInterpolation();
         verifyInputSourceContract();
+    }
+
+    private static void testLegacySteppedInterpolation()
+    {
+        BooleanKeyframeFactory factory = new BooleanKeyframeFactory();
+        Keyframe<Boolean> created = new Keyframe<>("value", factory);
+
+        check(created.getInterpolation().getInterp() == Interpolations.CONST,
+            "new stepped keyframe did not default to constant interpolation");
+
+        MapType legacy = new MapType();
+        legacy.putBool("value", true);
+        created.fromData(legacy);
+
+        check(created.getInterpolation().getInterp() == Interpolations.LINEAR,
+            "legacy stepped keyframe without interp did not retain its linear default");
     }
 
     private static void testCursorConversion()
@@ -132,7 +153,9 @@ public final class KeyframeInteractionTest
         check(filmKeyframes.contains("protectedvoidonKeyframePicked(Keyframekeyframe)")
                 && filmKeyframes.contains("this.seekToKeyframe(keyframe)"),
             "film keyframe view does not seek when a keyframe is picked");
-        check(clips.contains("this.scrubbing=true;this.delegate.setCursor(this.fromGraphX(mouseX));"),
+        check(clips.contains("this.scrubbing=true;")
+                && clips.contains("this.delegate.stopPlaybackOnScrub();")
+                && clips.contains("this.delegate.setCursor(this.fromGraphX(mouseX));"),
             "camera clips timeline no longer seeks on its initial click");
 
         String replacement = section(
@@ -156,7 +179,7 @@ public final class KeyframeInteractionTest
             "if(generation!=this.editorGeneration||this.editor!=replacement){return;}",
             "for(UIKeyframeFactorymounted:newArrayList<>(this.getChildren(UIKeyframeFactory.class)))",
             "if(mounted!=replacement&&mounted.getParent()==this){this.remove(mounted);}",
-            "if(replacement!=null&&replacement.getParent()!=this){this.add(replacement);}",
+            "if(replacement!=null&&replacement.getParent()!=this){this.add(replacement);this.moveToFront(this.splitter);}",
             "this.target.resize();",
             "this.resize();",
             "replacement.restoreScroll();",

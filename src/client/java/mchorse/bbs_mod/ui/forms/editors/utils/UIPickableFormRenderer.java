@@ -214,7 +214,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
             .camera(this.camera)
             .simulationOwner(this)
             .localSimulation()
-            .modelRenderer();
+            .modelRenderer(context.getTick());
 
         if (this.renderForm == null || this.renderForm.get())
         {

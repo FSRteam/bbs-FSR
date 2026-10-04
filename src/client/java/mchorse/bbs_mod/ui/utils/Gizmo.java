@@ -1463,16 +1463,12 @@ public class Gizmo
     private void drawRotateHandles(PoseStack stack, Handle active)
     {
         this.updateVbos();
+        boolean constrained = this.currentTransform != null && this.currentTransform.isRotationConstrained();
 
         /* The 3D sphere itself is invisible — it only acts as the trackball grab
          * area. Hover feedback is a screen-space glow composited in
          * {@link #renderSphereHighlight}. Depth state is owned by the caller
          * ({@link #drawOccludedGizmo}) so the handles sort against each other. */
-
-        /* IK owns this bone's rotation: the rings render washed-out as the
-         * visible "not yours to turn" cue, matching the rotation strategies'
-         * refusal to start there (the pads still edit the FK channels). */
-        boolean constrained = this.currentTransform != null && this.currentTransform.isRotationConstrained();
 
         if (!BBSSettings.rotateHideRings.get())
         {

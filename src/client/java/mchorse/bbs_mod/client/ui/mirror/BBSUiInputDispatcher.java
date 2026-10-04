@@ -298,6 +298,42 @@ public final class BBSUiInputDispatcher
         return (int) BBSUiRemoteHeldState.mouseY(sessionId, fallback);
     }
 
+    /**
+     * Lets a physical FSR input take back the active screen from a browser
+     * lease. This runs on the client thread, so synthetic remote cancellation
+     * and the following local event remain ordered.
+     */
+    public static boolean preemptForLocalInput(UIScreen screen, long sessionId)
+    {
+        if (screen == null || sessionId <= 0L || activeScreen != screen || activeSessionId != sessionId)
+        {
+            return false;
+        }
+        if (!BBSUiRemoteHeldState.isActive(sessionId))
+        {
+            return true;
+        }
+
+        return preemptForLocalInput(activeTarget, sessionId);
+    }
+
+    static boolean preemptForLocalInput(InputTarget target, long sessionId)
+    {
+        if (target == null || activeTarget != target || activeSessionId != sessionId)
+        {
+            return false;
+        }
+        if (!BBSUiRemoteHeldState.isActive(sessionId))
+        {
+            return true;
+        }
+
+        releaseInputOwnership(null);
+
+        return activeTarget == target && activeSessionId == sessionId && isTargetCurrent(target)
+            && !BBSUiRemoteHeldState.isActive(sessionId);
+    }
+
     public static void reset()
     {
         UIScreen previousScreen = activeScreen;
@@ -611,15 +647,10 @@ public final class BBSUiInputDispatcher
 
             if (controllerAddonId == null)
             {
-                releasingInputOwnership = true;
-
-                try
+                if (!target.tryAcquireRemoteInput())
                 {
-                    target.releaseLocalGestures();
-                }
-                finally
-                {
-                    releasingInputOwnership = false;
+                    return result(BBSUiInputStatus.REJECTED,
+                        "local FSR input is active; remote input cannot take ownership");
                 }
 
                 if (!isCurrentTarget(pending, target, addonId, batch.sessionId()))
@@ -1287,8 +1318,10 @@ public final class BBSUiInputDispatcher
         void dispatchRemoteKey(int keyCode, int scanCode, int action, int modifiers);
         void dispatchRemoteText(String text, int modifiers);
 
-        default void releaseLocalGestures()
-        {}
+        default boolean tryAcquireRemoteInput()
+        {
+            return true;
+        }
     }
 
     private static final class UIScreenTarget implements InputTarget
@@ -1343,10 +1376,11 @@ public final class BBSUiInputDispatcher
         }
 
         @Override
-        public void releaseLocalGestures()
+        public boolean tryAcquireRemoteInput()
         {
-            this.screen.releaseLocalInputGestures();
+            return !this.screen.hasLocalInputGestures();
         }
+
     }
 
     private static final class PendingInput

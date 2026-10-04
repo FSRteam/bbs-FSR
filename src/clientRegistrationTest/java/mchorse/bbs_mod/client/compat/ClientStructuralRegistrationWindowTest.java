@@ -1,8 +1,11 @@
 package mchorse.bbs_mod.client.compat;
 
 import mchorse.bbs_mod.client.dashboard.DashboardPanelRegistryTest;
+import mchorse.bbs_mod.client.dashboard.DashboardGuideContractTest;
+import mchorse.bbs_mod.client.dashboard.DashboardOverlayRegistryTest;
 import mchorse.bbs_mod.test.ExpectedErrorLogCapture;
 import mchorse.bbs_mod.ui.dashboard.DashboardPanelLifecycleTest;
+import mchorse.bbs_mod.ui.dashboard.DashboardOverlayLifecycleTest;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,6 +39,9 @@ public final class ClientStructuralRegistrationWindowTest
             MissingClipTimelineFallbackTest.runAll();
             DashboardPanelRegistryTest.runAll();
             DashboardPanelLifecycleTest.runAll();
+            DashboardGuideContractTest.runAll();
+            DashboardOverlayRegistryTest.runAll();
+            DashboardOverlayLifecycleTest.runAll();
             acceptsBeforeEventAndRejectsLateCalls();
             closesBeforeInvokingNeoForgeRegistrations();
             isolatesRegistrationFailures();

@@ -5,6 +5,7 @@ import mchorse.bbs_mod.api.addon.BBSAddonDescriptor;
 import mchorse.bbs_mod.api.addon.BBSAddonSide;
 import mchorse.bbs_mod.api.client.ui.BBSUiOpenResult;
 import mchorse.bbs_mod.api.client.ui.BBSUiOpenStatus;
+import mchorse.bbs_mod.client.dashboard.BBSDashboardGuideDispatcherTest;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +36,7 @@ public final class BBSUiOpenDispatcherTest
         runIsolated(BBSUiOpenDispatcherTest::assertStateChangeAndResetAreStale);
         runIsolated(BBSUiOpenDispatcherTest::assertReplayTransitionIsStaleButActiveReplayCanOpen);
         runIsolated(BBSUiOpenDispatcherTest::assertFailureAndShutdownComplete);
+        BBSDashboardGuideDispatcherTest.runAll();
     }
 
     private static void assertAccessAndFixedTargetStatuses()

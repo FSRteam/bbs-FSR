@@ -26,7 +26,7 @@ public class UIFormRenderer extends UIModelRenderer
             .camera(this.camera)
             .simulationOwner(this)
             .localSimulation()
-            .modelRenderer();
+            .modelRenderer(context.getTick());
 
         FormUtilsClient.render(this.form, formContext);
     }

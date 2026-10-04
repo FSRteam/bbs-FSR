@@ -157,7 +157,7 @@ final class ModelIKDlsApplier
         for (int i = 0; i < chains.size(); i++)
         {
             ModelIKApplier.ChainWorkspace workspace = workspaces != null && i < workspaces.size()
-                ? workspaces.get(i) : new ModelIKApplier.ChainWorkspace();
+                ? workspaces.get(i) : null;
 
             workspaceByChain.put(chains.get(i), workspace);
         }

@@ -81,6 +81,27 @@ public interface IEntity
 
     public void setHurtTimer(int hurtTimer);
 
+    /**
+     * Whether this entity is in a dead/dying state. Defaults to false so entities that
+     * never model death keep the current behavior.
+     */
+    public default boolean isDead()
+    {
+        return false;
+    }
+
+    /**
+     * Death progress in ticks (0 = alive, &gt;0 = dying/dead). Used by the {@code death}
+     * keyframe channel to drive the red overlay and topple animation.
+     */
+    public default float getDeath()
+    {
+        return 0F;
+    }
+
+    public default void setDeath(float deathTime)
+    {}
+
     public double getX();
 
     public double getPrevX();

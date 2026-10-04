@@ -99,6 +99,19 @@ public abstract class UIClickable <T> extends UIElement
     @Override
     public void clickItself(UIContext context, int mouseButton)
     {
+        if (context == null)
+        {
+            if (!this.isEnabled())
+            {
+                return;
+            }
+
+            this.playClickSound();
+            this.click(mouseButton);
+
+            return;
+        }
+
         ProgrammaticPress previous = this.programmaticPress;
         ProgrammaticPress current = new ProgrammaticPress(mouseButton);
         int mouseX = context.mouseX;

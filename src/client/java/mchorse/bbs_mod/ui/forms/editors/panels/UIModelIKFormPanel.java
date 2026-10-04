@@ -37,14 +37,22 @@ import mchorse.bbs_mod.utils.pose.ModelIKManager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 {
+    private static final int MARKER_CHAIN = Colors.A100 | Colors.YELLOW;
+    private static final int MARKER_TARGET = Colors.A100 | Colors.CYAN;
+    private static final int MARKER_POLE = Colors.A100 | Colors.MAGENTA;
+    private static final int MARKER_JOINT = Colors.A100 | Colors.ORANGE;
+    private static final int MARKER_OFF = Colors.GRAY;
+
     public UIBoneTreeList bones;
     public UISearchList<String> bonesSearch;
 
@@ -81,6 +89,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     private String selectedBone = "";
     private Map<String, IKData> ikData = new HashMap<>();
     private Map<String, JointData> jointData = new HashMap<>();
+    private final Map<String, UIBoneTreeList.Marker[]> boneMarkers = new HashMap<>();
     private ModelInstance model;
     private String presetGroup = "";
     private boolean syncingUI;
@@ -158,6 +167,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             this.updateLabels();
         });
         this.bones.background();
+        this.bones.markers(this.boneMarkers::get, UIKeys.FORMS_EDITORS_MODEL_IK_BONES_TOOLTIP);
         this.bonesSearch = new UISearchList<>(this.bones);
         this.bonesSearch.label(UIKeys.GENERAL_SEARCH);
         this.bonesSearch.h(20 + UIConstants.LIST_ITEM_HEIGHT * 8);
@@ -298,7 +308,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             data.poleAngle = v.floatValue();
             this.commitChanges();
         });
-        this.poleAngle.limit(-180D, 180D).increment(5D).values(1D, 0.5D, 5D);
+        this.poleAngle.angle180();
         this.poleAngle.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_POLE_ANGLE);
 
         this.softness = new UISliderTrackpad((v) ->
@@ -312,7 +322,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             data.softness = v.floatValue();
             this.commitChanges();
         });
-        this.softness.limit(0D, 1D).increment(0.05D).values(0.05D, 0.01D, 0.1D);
+        this.softness.normalized();
         this.softness.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_SOFTNESS);
 
         this.weight = new UISliderTrackpad((v) ->
@@ -326,7 +336,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
             data.weight = v.floatValue();
             this.commitChanges();
         });
-        this.weight.limit(0D, 1D).increment(0.1D).values(0.1D, 0.05D, 0.2D);
+        this.weight.normalized();
         this.weight.tooltip(UIKeys.FORMS_EDITORS_MODEL_IK_WEIGHT);
 
         this.tipRotation = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_IK_TIP_ROTATION, (b) ->
@@ -534,7 +544,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     {
         UISliderTrackpad pad = new UISliderTrackpad(this.jointCallback(setter));
 
-        pad.limit(-180D, 180D).increment(5D).values(1D, 0.5D, 5D);
+        pad.angle180();
         pad.tooltip(tooltip);
         pad.textbox.setColor(color);
 
@@ -545,7 +555,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
     {
         UISliderTrackpad pad = new UISliderTrackpad(this.jointCallback(setter));
 
-        pad.limit(0D, 1D).increment(0.1D).values(0.1D, 0.05D, 0.2D);
+        pad.normalized();
         pad.tooltip(tooltip);
         pad.textbox.setColor(color);
 
@@ -689,12 +699,114 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         picker.bones(this.model.model, this.model.getDisabledBones()).none().disabled(disabled).set(current);
     }
 
+    /** Rebuilds the fixed chain/controller/joint role slots shown beside each bone. */
+    private void updateMarkers()
+    {
+        this.boneMarkers.clear();
+
+        IModel model = this.model == null ? null : this.model.model;
+
+        if (model == null)
+        {
+            return;
+        }
+
+        Set<String> touched = new HashSet<>();
+        Set<String> driven = new HashSet<>();
+        Set<String> targets = new HashSet<>();
+        Set<String> poles = new HashSet<>();
+        Set<String> offControllers = new HashSet<>();
+
+        for (Map.Entry<String, IKData> entry : this.ikData.entrySet())
+        {
+            String tip = entry.getKey();
+            IKData data = entry.getValue();
+
+            if (tip == null || tip.isEmpty() || data == null || data.target == null || data.target.isEmpty())
+            {
+                continue;
+            }
+
+            touched.add(tip);
+
+            if (data.enabled)
+            {
+                driven.addAll(ModelIKRuntime.chainBones(model, tip, data.chainLength));
+                targets.add(data.target);
+
+                if (data.pole && data.poleTarget != null && !data.poleTarget.isEmpty())
+                {
+                    poles.add(data.poleTarget);
+                }
+            }
+            else
+            {
+                offControllers.add(data.target);
+            }
+        }
+
+        touched.addAll(driven);
+        touched.addAll(targets);
+        touched.addAll(poles);
+        touched.addAll(offControllers);
+
+        for (Map.Entry<String, JointData> entry : this.jointData.entrySet())
+        {
+            if (entry.getValue() != null && !entry.getValue().toDoF().isFree())
+            {
+                touched.add(entry.getKey());
+            }
+        }
+
+        for (String bone : touched)
+        {
+            IKData chain = this.ikData.get(bone);
+            boolean hasChain = chain != null && chain.target != null && !chain.target.isEmpty();
+            UIBoneTreeList.Marker chainMarker = null;
+            UIBoneTreeList.Marker controllerMarker = null;
+            UIBoneTreeList.Marker jointMarker = null;
+
+            if (hasChain)
+            {
+                chainMarker = new UIBoneTreeList.Marker(chain.enabled ? MARKER_CHAIN : MARKER_OFF, false);
+            }
+            else if (driven.contains(bone))
+            {
+                chainMarker = new UIBoneTreeList.Marker(MARKER_CHAIN, true);
+            }
+
+            if (targets.contains(bone))
+            {
+                controllerMarker = new UIBoneTreeList.Marker(MARKER_TARGET, false);
+            }
+            else if (poles.contains(bone))
+            {
+                controllerMarker = new UIBoneTreeList.Marker(MARKER_POLE, false);
+            }
+            else if (offControllers.contains(bone))
+            {
+                controllerMarker = new UIBoneTreeList.Marker(MARKER_OFF, true);
+            }
+
+            JointData joint = this.jointData.get(bone);
+
+            if (joint != null && !joint.toDoF().isFree())
+            {
+                jointMarker = new UIBoneTreeList.Marker(MARKER_JOINT, false);
+            }
+
+            this.boneMarkers.put(bone, new UIBoneTreeList.Marker[] {chainMarker, controllerMarker, jointMarker});
+        }
+    }
+
     private void updateLabels()
     {
         if (this.target == null || this.enabled == null)
         {
             return;
         }
+
+        this.updateMarkers();
 
         IKData data = this.ikData.get(this.selectedBone);
         JointData joint = this.jointData.get(this.selectedBone);
@@ -1036,6 +1148,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
 
         MapType map = this.toPresetData();
         this.form.ik.set(map.isEmpty() ? null : map);
+        this.updateMarkers();
     }
 
     private String resolvePresetGroup(ModelForm form, ModelInstance model)

@@ -63,7 +63,14 @@ public class AudioRenderer
 
         for (AudioClip clip : clips)
         {
-            SoundBuffer audio = BBSModClient.getSounds().get(clip.audio.get(), true);
+            Link audioLink = clip.audio.get();
+
+            if (audioLink == null)
+            {
+                continue;
+            }
+
+            SoundBuffer audio = BBSModClient.getSounds().get(audioLink, true);
 
             if (audio == null || audio.getWaveform() == null)
             {
@@ -151,7 +158,14 @@ public class AudioRenderer
     {
         for (AudioClip clip : clips)
         {
-            SoundBuffer audio = BBSModClient.getSounds().get(clip.audio.get(), true);
+            Link audioLink = clip.audio.get();
+
+            if (audioLink == null)
+            {
+                continue;
+            }
+
+            SoundBuffer audio = BBSModClient.getSounds().get(audioLink, true);
 
             if (audio != null && audio.getWaveform() != null)
             {
@@ -197,7 +211,9 @@ public class AudioRenderer
         {
             if (clip.isInside(t))
             {
-                SoundBuffer buffer = BBSModClient.getSounds().get(clip.audio.get(), true);
+                Link audioLink = clip.audio.get();
+                SoundBuffer buffer = audioLink == null ? null
+                    : BBSModClient.getSounds().get(audioLink, true);
 
                 return new ActiveAudioAtTick(clip, buffer);
             }
@@ -220,7 +236,14 @@ public class AudioRenderer
     {
         for (AudioClip clip : clips)
         {
-            SoundBuffer audio = BBSModClient.getSounds().get(clip.audio.get(), true);
+            Link audioLink = clip.audio.get();
+
+            if (audioLink == null)
+            {
+                continue;
+            }
+
+            SoundBuffer audio = BBSModClient.getSounds().get(audioLink, true);
 
             if (audio != null && audio.getWaveform() != null && clip.isInside((int) tick))
             {
@@ -366,6 +389,12 @@ public class AudioRenderer
                 }
 
                 Link audio = clip.audio.get();
+
+                if (audio == null)
+                {
+                    continue;
+                }
+
                 Wave wave = decoded.get(audio);
 
                 if (wave == null)

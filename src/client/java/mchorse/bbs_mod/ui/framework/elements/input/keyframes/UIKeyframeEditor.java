@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.film.replays.PerLimbService;
@@ -14,11 +15,15 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyfram
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseTransformKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransformKeyframeFactory;
+import mchorse.bbs_mod.ui.framework.elements.layout.UIDockStyleRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,10 +36,18 @@ public class UIKeyframeEditor extends UIElement
     public static final int[] COLORS = {Colors.RED, Colors.GREEN, Colors.BLUE, Colors.CYAN, Colors.MAGENTA, Colors.YELLOW, Colors.LIGHTEST_GRAY & 0xffffff, Colors.DEEP_PINK};
     private static final int EDIT_PANEL_TOP_OFFSET_PX = 20;
 
+    private static final int DEFAULT_PROPERTIES_WIDTH = 140;
+    private static final int MIN_PROPERTIES_WIDTH = 80;
+    private static final int MAX_PROPERTIES_WIDTH = 480;
+    private static final int MIN_TIMELINE_WIDTH = 100;
+    private static final int SPLITTER_WIDTH = 6;
+
     public UIKeyframes view;
     public UIKeyframeFactory editor;
 
     private UIElement target;
+    private UIDraggable splitter;
+    private int propertiesWidth = DEFAULT_PROPERTIES_WIDTH;
     private Supplier<Integer> editPanelTopOffsetPx;
     private long editorGeneration;
     private boolean timelineVisible = true;
@@ -51,7 +64,13 @@ public class UIKeyframeEditor extends UIElement
             }
         });
 
-        this.add(this.view.full(this).w(1F, -140));
+        this.propertiesWidth = BBSSettings.editorKeyframePanelWidth != null
+            ? BBSSettings.editorKeyframePanelWidth.get()
+            : DEFAULT_PROPERTIES_WIDTH;
+        this.splitter = this.createSplitter();
+
+        this.add(this.view.full(this).w(1F, -this.propertiesWidth));
+        this.add(this.splitter);
     }
 
     /**
@@ -75,6 +94,7 @@ public class UIKeyframeEditor extends UIElement
         this.target = target;
 
         this.view.resetFlex().full(this).w(1F);
+        this.updateSplitterState();
 
         return this;
     }
@@ -122,7 +142,7 @@ public class UIKeyframeEditor extends UIElement
             }
             else if (replacement != null)
             {
-                replacement.relative(this).x(1F, -140).w(140).h(1F);
+                replacement.relative(this).x(1F, -this.propertiesWidth).w(this.propertiesWidth);
             }
         }
 
@@ -154,6 +174,7 @@ public class UIKeyframeEditor extends UIElement
             if (replacement != null && replacement.getParent() != this)
             {
                 this.add(replacement);
+                this.moveToFront(this.splitter);
             }
 
             if (replacement != null)
@@ -205,6 +226,61 @@ public class UIKeyframeEditor extends UIElement
         if (this.editor != null)
         {
             this.editor.setVisible(visible);
+        }
+
+        this.updateSplitterState();
+    }
+
+    /* Properties splitter (embedded, non-target mode only) */
+
+    private UIDraggable createSplitter()
+    {
+        UIDraggable handle = new UIDraggable(this::dragPropertiesSplitter)
+            .enabled(() -> BBSSettings.editorResizablePanels.get())
+            .cursors(GLFW.GLFW_HRESIZE_CURSOR, GLFW.GLFW_HRESIZE_CURSOR)
+            .dragEnd(this::savePropertiesWidth)
+            .rendering((context) -> UIDockStyleRenderer.renderSplitter(context, this.splitter.area, false, this.splitter.isDragging() || this.splitter.area.isInside(context), false));
+
+        handle.relative(this).x(1F, -(this.propertiesWidth + SPLITTER_WIDTH / 2)).y(0).w(SPLITTER_WIDTH).h(1F);
+
+        return handle;
+    }
+
+    private void updateSplitterState()
+    {
+        this.splitter.setVisible(this.target == null && this.propertiesVisible);
+    }
+
+    private void dragPropertiesSplitter(UIContext context)
+    {
+        int max = Math.max(MIN_PROPERTIES_WIDTH, Math.min(MAX_PROPERTIES_WIDTH, this.area.w - MIN_TIMELINE_WIDTH));
+        int width = MathUtils.clamp(this.area.ex() - context.mouseX, MIN_PROPERTIES_WIDTH, max);
+
+        if (width != this.propertiesWidth)
+        {
+            this.propertiesWidth = width;
+            this.applyPropertiesWidth();
+        }
+    }
+
+    private void applyPropertiesWidth()
+    {
+        this.view.w(1F, -this.propertiesWidth);
+        this.splitter.x(1F, -(this.propertiesWidth + SPLITTER_WIDTH / 2));
+
+        if (this.editor != null && this.target == null)
+        {
+            this.editor.x(1F, -this.propertiesWidth).w(this.propertiesWidth);
+        }
+
+        this.resize();
+    }
+
+    private void savePropertiesWidth()
+    {
+        if (BBSSettings.editorKeyframePanelWidth != null)
+        {
+            BBSSettings.editorKeyframePanelWidth.set(this.propertiesWidth);
         }
     }
 

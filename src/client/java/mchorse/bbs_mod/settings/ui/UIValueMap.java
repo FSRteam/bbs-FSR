@@ -41,19 +41,14 @@ import mchorse.bbs_mod.ui.utils.Label;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.motion.UIMotionEasings;
-import mchorse.bbs_mod.utils.FFMpegUtils;
-import mchorse.bbs_mod.utils.OS;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
 
-import java.io.File;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public class UIValueMap
 {
@@ -63,8 +58,16 @@ public class UIValueMap
     {
         register(ValueBoolean.class, (value, ui) ->
         {
-            UIToggle toggle = UIValueFactory.booleanUI(value, null);
+            UIToggle toggle = UIValueFactory.booleanUI(value, value == BBSSettings.scrollingUseThemeCurve ? (button) ->
+            {
+                if (ui instanceof UISettingsOverlayPanel panel)
+                {
+                    panel.refresh();
+                }
+            } : null);
+
             toggle.resetFlex();
+
             return Arrays.asList(toggle);
         });
 
@@ -218,6 +221,11 @@ public class UIValueMap
 
         register(ValueString.class, (value, ui) ->
         {
+            if (value == BBSSettings.videoEncoderPath)
+            {
+                return Collections.singletonList(new UIFFMpegPath(value));
+            }
+
             if (value == BBSSettings.themeId)
             {
                 UIButton button = new UIButton(UIKeys.SKINS_SELECT, (b) ->
@@ -230,13 +238,13 @@ public class UIValueMap
                 return Arrays.asList(UIValueFactory.column(button, value));
             }
 
-            if (value == BBSSettings.motionEasing)
+            if (value == BBSSettings.motionEasing || value == BBSSettings.scrollingMotionEasing)
             {
                 UIIcon button = new UIIcon(
-                    () -> UIInterpolationContextMenu.INTERP_ICON_MAP.getOrDefault(UIMotionEasings.selected(), Icons.INTERP_LINEAR),
+                    () -> UIInterpolationContextMenu.INTERP_ICON_MAP.getOrDefault(UIMotionEasings.selected(value), Icons.INTERP_LINEAR),
                     (b) ->
                     {
-                        Interpolation interpolation = new Interpolation("motion_easing", Interpolations.MAP, UIMotionEasings.selected());
+                        Interpolation interpolation = new Interpolation(value.getId(), Interpolations.MAP, UIMotionEasings.selected(value));
 
                         b.getContext().replaceContextMenu(new UIInterpolationContextMenu(interpolation)
                             .callback(() -> value.set(interpolation.getInterp().getKey())));
@@ -267,34 +275,6 @@ public class UIValueMap
             UITextbox textbox = UIValueFactory.stringUI(value, null);
 
             textbox.w(90);
-
-            if (value == BBSSettings.videoEncoderPath && OS.CURRENT == OS.WINDOWS)
-            {
-                textbox.context((menu) ->
-                {
-                    menu.action(Icons.SEARCH, UIKeys.GENERAL_FFMPEG_FIND, () ->
-                    {
-                        textbox.getContext().replaceContextMenu((submenu) ->
-                        {
-                            File[] files = File.listRoots();
-                            File file = files.length == 0 ? new File("C:\\") : files[0];
-                            Optional<Path> ffmpeg = FFMpegUtils.findFFMpeg(file.toPath());
-
-                            if (ffmpeg.isPresent())
-                            {
-                                Path path = ffmpeg.get();
-                                String pathString = path.toAbsolutePath().toString();
-
-                                submenu.action(Icons.VIDEO_CAMERA, IKey.constant(pathString), () ->
-                                {
-                                    textbox.setText(pathString);
-                                    value.set(pathString);
-                                });
-                            }
-                        });
-                    });
-                });
-            }
 
             return Arrays.asList(UIValueFactory.column(textbox, value));
         });

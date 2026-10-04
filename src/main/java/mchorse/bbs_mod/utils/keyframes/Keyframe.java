@@ -54,6 +54,13 @@ public class Keyframe <T> extends BaseValue
         super(id);
 
         this.factory = factory;
+
+        /* Values that jump rather than travel hold their frame by default, so
+         * the author doesn't switch every new keyframe to constant by hand */
+        if (factory != null && factory.isStepped())
+        {
+            this.interp.setInterp(Interpolations.CONST);
+        }
     }
 
     public IKeyframeFactory<T> getFactory()
@@ -344,6 +351,13 @@ public class Keyframe <T> extends BaseValue
 
         this.shape = KeyframeShape.SQUARE;
         this.color = null;
+
+        /* Older .bbfilm files omit the interpolation field when it is LINEAR.
+         * The constructor now gives stepped factories CONST for newly-created
+         * keyframes, so restore the serialized-era default before reading the
+         * optional override.  Otherwise loading an old boolean/item/block
+         * keyframe silently changes its behavior. */
+        this.interp.setInterp(Interpolations.LINEAR);
 
         if (map.has("tick")) this.tick = map.getFloat("tick");
         if (map.has("duration")) this.duration = map.getFloat("duration");

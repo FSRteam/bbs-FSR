@@ -69,7 +69,11 @@ public class UITween
      */
     public void to(float target, UIThemeMotion spec)
     {
-        UIThemeMotion.MotionType nextType = UIMotions.type(spec);
+        this.to(target, spec, UIMotions.type(spec), UIMotions.easing(spec));
+    }
+
+    public void to(float target, UIThemeMotion spec, UIThemeMotion.MotionType nextType, IInterp nextEasing)
+    {
         int duration = UIMotions.duration(spec);
         float response = nextType == UIThemeMotion.MotionType.SPRING ? UIMotions.response(spec) : 0F;
 
@@ -100,7 +104,7 @@ public class UITween
         this.startVelocity = this.velocity;
         this.startMs = nowMs;
         this.durationMs = duration;
-        this.easing = UIMotions.easing(spec);
+        this.easing = nextEasing == null ? Interpolations.SINE_OUT : nextEasing;
         this.responseSec = nextType == UIThemeMotion.MotionType.SPRING ? response : UIThemeMotion.DEFAULT_RESPONSE;
         this.damping = nextType == UIThemeMotion.MotionType.SPRING ? spec.damping : UIThemeMotion.DEFAULT_DAMPING;
         this.type = nextType;

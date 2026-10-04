@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils.presets;
 
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -33,6 +34,7 @@ public class UIDataContextMenu extends UIContextMenu
     private Supplier<MapType> supplier;
     private Consumer<MapType> callback;
     private String copyGroup = "_CopyPose";
+    private boolean scrolledToCurrent;
 
     public UIDataContextMenu(DataManager manager, String group, Supplier<MapType> supplier, Consumer<MapType> callback)
     {
@@ -112,6 +114,41 @@ public class UIDataContextMenu extends UIContextMenu
         this.entries.list.clear();
         this.entries.list.add(this.data.keys());
         this.entries.list.sort();
+
+        this.scrollToCurrent();
+    }
+
+    private void scrollToCurrent()
+    {
+        MapType current = this.supplier == null ? null : this.supplier.get();
+
+        if (current == null)
+        {
+            return;
+        }
+
+        for (String key : this.data.keys())
+        {
+            if (BaseType.equals(current, this.data.getMap(key)))
+            {
+                this.entries.list.setCurrentScroll(key);
+
+                break;
+            }
+        }
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        /* The list receives its final viewport size only after the menu opens. */
+        if (!this.scrolledToCurrent)
+        {
+            this.scrolledToCurrent = true;
+            this.scrollToCurrent();
+        }
+
+        super.render(context);
     }
 
     @Override

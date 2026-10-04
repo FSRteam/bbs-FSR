@@ -18,6 +18,11 @@ import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelContent;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelRegistry;
 import mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardNavigationResult;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayContent;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlayFactory;
+import mchorse.bbs_mod.api.client.dashboard.BBSDashboardOverlaySubscription;
 import mchorse.bbs_mod.api.network.BBSAddonClientNetworkReceiver;
 import mchorse.bbs_mod.api.network.BBSAddonServerNetworkReceiver;
 import mchorse.bbs_mod.client.compat.ClientApiCompat;
@@ -59,6 +64,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.function.Supplier;
+import java.util.concurrent.CompletableFuture;
 
 /** Exact erased descriptors retained for legacy Addon v1 and API 2.0 jars. */
 public final class LegacyPublicDescriptorCompatibilityTest
@@ -147,11 +153,24 @@ public final class LegacyPublicDescriptorCompatibilityTest
         requireSam(ClientApiCompat.WorldRenderHandler.class, "render", void.class, BBSWorldRenderContext.class);
         requireSam(BBSDashboardPanelContent.class, "root", mchorse.bbs_mod.ui.framework.elements.UIElement.class);
         requireSam(BBSDashboardPanelFactory.class, "create", BBSDashboardPanelContent.class);
+        requireSam(BBSDashboardOverlayContent.class, "root", mchorse.bbs_mod.ui.framework.elements.UIElement.class);
+        requireSam(BBSDashboardOverlayFactory.class, "create", BBSDashboardOverlayContent.class);
         requireSam(BBSDashboardPanelRegistry.class, "register", mchorse.bbs_mod.api.registry.BBSRegistrationResult.class,
             BBSDashboardPanelSpec.class, BBSDashboardPanelFactory.class);
         requirePublicStatic(BBSClientApi.class, "registerKeyBinding", KeyMapping.class, KeyMapping.class);
         requirePublicStatic(BBSClientApi.class, "registerDashboardPanel", mchorse.bbs_mod.api.registry.BBSRegistrationResult.class,
             BBSAddonDescriptor.class, BBSDashboardPanelSpec.class, BBSDashboardPanelFactory.class);
+        requirePublicStatic(BBSClientApi.class, "registerDashboardOverlay", BBSDashboardOverlaySubscription.class,
+            BBSAddonDescriptor.class, BBSDashboardOverlayFactory.class);
+        requirePublicStatic(BBSClientApi.class, "navigateDashboardPanel", CompletableFuture.class,
+            BBSAddonDescriptor.class, String.class);
+        requirePublicStatic(BBSClientApi.class, "resolveDashboardAnchor", CompletableFuture.class,
+            BBSAddonDescriptor.class, String.class);
+        requirePublic(BBSDashboardOverlaySubscription.class, "registration",
+            mchorse.bbs_mod.api.registry.BBSRegistrationResult.class);
+        requirePublic(BBSDashboardOverlaySubscription.class, "visible", boolean.class);
+        requirePublic(BBSDashboardOverlaySubscription.class, "setVisible", void.class, boolean.class);
+        requirePublic(BBSDashboardOverlaySubscription.class, "close", void.class);
         requirePublic(BBSPluginClientContext.class, "dashboardPanels", BBSDashboardPanelRegistry.class);
         requirePublicStatic(BBSClientApi.class, "registerEntityRenderer", void.class,
             EntityType.class, EntityRendererProvider.class);
