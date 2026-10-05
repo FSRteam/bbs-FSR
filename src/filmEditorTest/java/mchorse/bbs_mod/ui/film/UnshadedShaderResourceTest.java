@@ -8,11 +8,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 
 /** Exercises the production source reader with separate BBS and Sodium resource owners. */
 public final class UnshadedShaderResourceTest
 {
     private static final String VERTEX_PATH = "assets/bbs/shaders/camera/unshaded_terrain.vsh";
+    private static final String VERTEX_PATH_MODERN = "assets/bbs/shaders/camera/unshaded_terrain_v8.vsh";
     private static final String SODIUM_LOADER = "net.caffeinemc.mods.sodium.client.gl.shader.ShaderLoader";
     private static final String SODIUM_CONSTANTS = "net.caffeinemc.mods.sodium.client.gl.shader.ShaderConstants";
 
@@ -24,6 +26,15 @@ public final class UnshadedShaderResourceTest
         URL bundled = UnshadedTerrainProgram.class.getResource("/" + VERTEX_PATH);
 
         check(bundled != null, "the client output must include its bundled terrain shader");
+
+        URL bundledModern = UnshadedTerrainProgram.class.getResource("/" + VERTEX_PATH_MODERN);
+
+        check(bundledModern != null, "the client output must include the Sodium 0.8.x terrain shader");
+
+        String modernSource = new String(bundledModern.openStream().readAllBytes(), StandardCharsets.UTF_8);
+
+        check(modernSource.contains("flat out uint v_Material"), "the 0.8.x terrain shader must pass the flat material varying");
+        check(!modernSource.contains("_material_mip_bias"), "the 0.8.x terrain shader must not use the removed mip bias helper");
 
         String location = bundled.toExternalForm();
         URL resourceRoot = new URL(location.substring(0, location.length() - VERTEX_PATH.length()));
@@ -58,13 +69,17 @@ public final class UnshadedShaderResourceTest
                 }
 
                 Class<?> program = Class.forName(UnshadedTerrainProgram.class.getName(), true, bbs);
-                Method read = program.getDeclaredMethod("loadVertexSource", constantsType);
+                Method read = program.getDeclaredMethod("loadVertexShader", constantsType);
                 Object constants = constantsType.getMethod("builder").invoke(null);
 
                 constants.getClass().getMethod("add", String.class).invoke(constants, "BBS_SHADER_RESOURCE_TEST");
                 read.setAccessible(true);
 
-                String source = (String) read.invoke(null, constants.getClass().getMethod("build").invoke(constants));
+                Object parsed = read.invoke(null, constants.getClass().getMethod("build").invoke(constants));
+
+                check(parsed instanceof String, "Sodium 0.6.x must parse the terrain shader into a source string");
+
+                String source = (String) parsed;
 
                 check(source.startsWith("#version 330 core"), "the BBS owner must load the actual bundled GLSL source");
                 check(source.contains("#define BBS_SHADER_RESOURCE_TEST"), "the terrain program must retain Sodium's variant constants");
