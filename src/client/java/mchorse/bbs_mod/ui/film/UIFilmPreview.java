@@ -1261,7 +1261,7 @@ public class UIFilmPreview extends UIElement
 
             Throwable failure = state.getFailure();
 
-            if (failure == null)
+            if (failure == null && BBSRendering.isIrisLoaded())
             {
                 failure = IrisViewBackend.failure(this.view.getId());
             }
@@ -1272,9 +1272,7 @@ public class UIFilmPreview extends UIElement
             }
             else
             {
-                IKey shaderStatus = IrisViewBackend.shadersActive(this.view.getId()) ? UIKeys.FILM_VIEW_SHADERS_ACTIVE
-                    : this.view.isShadersEnabled() && !IrisViewBackend.isShaderPackAvailable()
-                        ? UIKeys.FILM_VIEW_NO_SHADER_PACK : UIKeys.FILM_VIEW_BASIC_LIGHTING;
+                IKey shaderStatus = this.getShaderStatusLabel();
                 IKey shaderAction = this.view.isShadersEnabled() ? UIKeys.FILM_VIEW_SHADERS_OFF : UIKeys.FILM_VIEW_SHADERS_ON;
 
                 this.shaders.tooltip(UIKeys.FILM_VIEW_SHADER_STATUS.format(shaderStatus.get(), shaderAction.get()));
@@ -1282,6 +1280,23 @@ public class UIFilmPreview extends UIElement
         }
 
         context.batcher.textCard(status, this.area.x + 6, this.icons.area.y - 36, color, Colors.A50);
+    }
+
+    private IKey getShaderStatusLabel()
+    {
+        if (!BBSRendering.isIrisLoaded())
+        {
+            return UIKeys.FILM_VIEW_BASIC_LIGHTING;
+        }
+
+        if (IrisViewBackend.shadersActive(this.view.getId()))
+        {
+            return UIKeys.FILM_VIEW_SHADERS_ACTIVE;
+        }
+
+        return this.view.isShadersEnabled() && !IrisViewBackend.isShaderPackAvailable()
+            ? UIKeys.FILM_VIEW_NO_SHADER_PACK
+            : UIKeys.FILM_VIEW_BASIC_LIGHTING;
     }
 
     private void renderCursor(UIContext context)

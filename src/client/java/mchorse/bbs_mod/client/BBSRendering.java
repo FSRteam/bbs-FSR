@@ -246,6 +246,14 @@ public class BBSRendering
         return toggleFramebuffer;
     }
 
+    /** Whether the Iris mod is installed. Callers must check this before touching any
+     * Iris-linked class, otherwise class linking fails with NoClassDefFoundError on
+     * installs without Iris. */
+    public static boolean isIrisLoaded()
+    {
+        return iris;
+    }
+
     public static void setCustomSize(boolean customSize)
     {
         setCustomSize(customSize, 0, 0);
